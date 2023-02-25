@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nvidia-modulus"
+authors = [
+  { name="NVIDIA Modulus Team"},
+]
+description = "A deep learning framework for AI-driven multi-physics systems"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "Apache Software License 2.0"}
+dependencies = [
+    "h5py>=3.7.0",
+    "numpy>=1.22.4",
+    "nvidia_dali_cuda110>=1.16.0",
+    "pytest>=6.0.0",
+    "setuptools>=59.5.0",
+    "torch>=1.12",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+graphs = [
+  "dgl>=0.9.1",
+  "dgl_cu116>=0.9.1.post1"
+]
+inference = ["onnxruntime==1.13.1"]
+
+[tool.setuptools.dynamic]
+version = {attr = "modulus.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["modulus", "modulus.*"] 

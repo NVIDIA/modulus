@@ -1,0 +1,9 @@
+[run]
+branch = True
+data_file = .coverage.pytest
+concurrency = multiprocessing,thread
+source = modulus
+
+[report]
+exclude_lines =
+    pragma: no cover

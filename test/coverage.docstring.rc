@@ -1,0 +1,5 @@
+[run]
+branch = True
+data_file = .coverage.docs.pytest
+concurrency = multiprocessing,thread
+source = modulus
