@@ -15,8 +15,10 @@
 # A workflow to trigger ci on hybrid infra (github + self hosted runner)
 name: Blossom-CI
 on:
+  # CI job triggers here
   issue_comment:
     types: [created]
+  
   workflow_dispatch:
       inputs:
           platform:
@@ -34,7 +36,7 @@ jobs:
       
     # This job only runs for pull request comments
     if: |
-         contains( 'nickgeneva,', format('{0},', github.actor)) && 
+         contains( 'nickgeneva', format('{0},', github.actor)) && 
          github.event.comment.body == '/blossom-ci'  
     steps:
       - name: Check if comment is issued by authorized person
