@@ -37,9 +37,7 @@ jobs:
     # This job only runs for pull request comments
     if: |
 <<<<<<< HEAD
-         (contains( 'nickgeneva,', format('{0},', github.actor)) ||
-         contains( 'ktangsali,', format('{0},', github.actor)) ||
-         contains( 'dallasfoster,', format('{0},', github.actor))) && 
+         contains( 'nickgeneva,ktangsali,dallasfoster,', format('{0},', github.actor) && 
 =======
          contains( 'nickgeneva', format('{0},', github.actor)) && 
 >>>>>>> 9233b15fe89c6e91e3b9330863a534c667c8d81a
