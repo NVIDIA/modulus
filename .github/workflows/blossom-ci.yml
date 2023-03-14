@@ -35,6 +35,7 @@ jobs:
       args: ${{ env.args }}
       
     # This job only runs for pull request comments
+    # Comment must be `/blossom-ci`
     if: |
          contains( 'nickgeneva,ktangsali,dallasfoster,', format('{0},', github.actor) && 
          github.event.comment.body == '/blossom-ci'  
