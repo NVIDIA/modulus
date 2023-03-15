@@ -1,0 +1,2 @@
+*.whl filter=lfs diff=lfs merge=lfs -text
+dockerfiles/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl filter=lfs diff=lfs merge=lfs -text
