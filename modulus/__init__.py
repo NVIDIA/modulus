@@ -20,8 +20,3 @@ from .datapipes.meta import DatapipeMetaData
 from .datapipes.datapipe import Datapipe
 
 __version__ = "23.03.0-alpha"
-
-# Initialization set up functions
-from .initialize import setup_logger
-
-setup_logger()
