@@ -38,4 +38,4 @@ Modulus is in an open-source alpha. We are not accepting external contributions 
 Reach out to Modulus team members and user community on the [NVIDIA developer forums](https://forums.developer.nvidia.com/c/physics-simulation/modulus-physics-ml-model-framework).
 
 ## License
-Modulus is provided under the Apache License 2.0, please see [LICENSE.txt](./LICENSE.txt) for full license text
+Modulus is provided under the Apache License 2.0, please see [LICENSE.txt](./LICENSE.txt) for full license text.
