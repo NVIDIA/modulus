@@ -16,7 +16,7 @@ dependencies = [
     "numpy>=1.22.4",
     "nvidia_dali_cuda110>=1.16.0",
     "pytest>=6.0.0",
-    "setuptools>=59.5.0",
+    "setuptools>=67.6.0",
     "torch>=1.12",
 ]
 classifiers = [
