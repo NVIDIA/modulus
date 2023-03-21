@@ -1,0 +1,114 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG BUILD
+ARG PYT_VER=22.12
+FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3
+
+############################# Modulus (core) Install steps #############################
+# Update pip
+RUN pip install --upgrade pip 
+
+# Install dgl
+RUN pip install dgl-cu116 dglgo -f https://data.dgl.ai/wheels/repo.html
+ENV DGLBACKEND=pytorch
+
+# Install S3 Dependencies
+RUN apt-get update && \
+    apt-get install -y curl openssl libcurl4-openssl-dev libssl-dev
+
+# Install IO libraries
+RUN pip install kerchunk xarray h5py s3fs fsspec zarr dask 
+
+# Set configs for fsspec/s3fs
+RUN mkdir -p $HOME/.config/fsspec/ && \
+    echo "{\"s3\": {\"client_kwargs\": {\"endpoint_url\": \"https://pbss.s8k.io\"}}}" >> $HOME/.config/fsspec/s3.json
+
+# install libcugraphops and pylibcugraphops
+RUN mkdir -p /opt/cugraphops &&\
+    cd /opt/cugraphops &&\
+    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
+    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2 &&\
+    tar -xf libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
+    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2
+
+ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
+
+# Install ci specific packages
+COPY ./modulus/dockerfiles/requirements_ci_lite.txt requirements.txt
+RUN pip install -r requirements.txt 
+
+# Upgrade setuptools
+RUN pip install setuptools --upgrade
+
+# Install custom onnx
+COPY ./modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
+RUN pip install --force-reinstall onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
+RUN pip install protobuf==3.20.0
+
+# Install Modulus
+COPY ./modulus/ /modulus/
+RUN cd /modulus/ && pip install .
+
+############################# Modulus Launch Install steps #############################
+# Install modulus launch
+COPY ./modulus-launch /modulus-launch/ 
+RUN cd /modulus-launch && pip install .
+
+############################## Modulus Sym Install steps ###############################
+# Setup git lfs, graphviz gl1(vtk dep)
+RUN apt-get update && \
+    apt-get install -y git-lfs graphviz libgl1 && \
+    git lfs install
+
+# Extract OptiX 7.0.0 SDK and CMake 3.18.2
+COPY ./modulus-sym/ /modulus-sym/
+COPY ./deps/NVIDIA-OptiX-SDK-7.0.0-linux64.sh /modulus-sym/
+RUN cd /modulus-sym && ./NVIDIA-OptiX-SDK-7.0.0-linux64.sh --skip-license --include-subdir --prefix=/root
+RUN cd /root && \
+    wget https://github.com/Kitware/CMake/releases/download/v3.24.1/cmake-3.24.1-linux-x86_64.tar.gz && \
+    tar xvfz cmake-3.24.1-linux-x86_64.tar.gz
+
+# Build libsdf.so
+RUN if [ "$BUILD" = "internal" ] ; then \
+    	mkdir /modulus-sym/external/pysdf/build && \
+    	cd /modulus-sym/external/pysdf/build && \
+    	/root/cmake-3.24.1-linux-x86_64/bin/cmake .. -DGIT_SUBMODULE=OFF -DOptiX_INSTALL_DIR=/root/NVIDIA-OptiX-SDK-7.0.0-linux64 -DCUDA_CUDA_LIBRARY="" && \
+    	make -j && \
+    	mkdir /modulus-sym/external/lib && \
+    	cp libpysdf.so /modulus-sym/external/lib/ && \
+    	cd /modulus-sym/external/pysdf && pip install .
+    else \
+	echo "External build detected, no pysdf install" \
+    fi
+
+# Install pysdf
+RUN cd /modulus-sym/external/pysdf && pip install .
+
+ENV LD_LIBRARY_PATH="/modulus-sym/external/lib:${LD_LIBRARY_PATH}" \
+    NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility,video \
+    _CUDA_COMPAT_TIMEOUT=90
+
+# Install tiny-cuda-nn
+RUN pip install git+https://github.com/NVlabs/tiny-cuda-nn/@master#subdirectory=bindings/torch
+
+# Install functorch
+RUN pip install git+https://github.com/pytorch/functorch.git
+
+# Install modulus sym
+RUN cd /modulus-sym && pip install .
+
+## Clean up
+#RUN rm -rf /modulus/ \
+#    && rm -rf onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
