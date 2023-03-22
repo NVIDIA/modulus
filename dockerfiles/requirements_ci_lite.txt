@@ -1,0 +1,11 @@
+# python dependencies
+pip==22.3.1
+build==0.9.0
+
+# optional / extended packages
+warp-lang >= 0.6.0
+
+# other CI/CDd packages
+black==22.10.0
+interrogate==1.5.0
+coverage==6.5.0
