@@ -16,14 +16,18 @@
 """A script to check that copyright headers exists"""
 
 import argparse
+import itertools
 import re
 import sys
+import json
 from datetime import datetime
 from pathlib import Path
 
 
 def get_top_comments(_data):
-    # Get all lines where comments should exist
+    """
+    Get all lines where comments should exist
+    """
     lines_to_extract = []
     for i, line in enumerate(_data):
         # If empty line, skip
@@ -47,41 +51,35 @@ def get_top_comments(_data):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Usage for copyright header insertion script"
-    )
-    parser.add_argument(
-        "--dir",
-        help="Path to source files to add copyright header to. Will recurse through subdirectories",
-        required=False,
-        type=str,
-        default="./",
-    )
-    parser.add_argument(
-        "--copyright_file",
-        help="Path to the copyright file",
-        required=False,
-        type=str,
-        default="./test/ci_tests/copyright.txt",
-    )
-    parser.add_argument(
-        "--exts",
-        help="File extensions to be scanned, seperated by comma",
-        required=False,
-        type=str,
-        default=".py,.yaml,.ci,.release,Dockerfile",
-    )
-    args = parser.parse_args()
+
+    with open(Path(__file__).parent.resolve() / Path("config.json")) as f:
+        config = json.loads(f.read())
+    print(f"Liscense check config:")
+    print(json.dumps(config, sort_keys=True, indent=4))
 
     current_year = int(datetime.today().year)
     starting_year = 2023
-    python_header_path = args.copyright_file
+    python_header_path = Path(__file__).parent.resolve() / Path(
+        config["copyright_file"]
+    )
+    working_path = Path(__file__).parent.resolve() / Path(config["dir"])
+    exts = config["include-ext"]
+
     with open(python_header_path, "r", encoding="utf-8") as original:
         pyheader = original.read().split("\n")
         pyheader_lines = len(pyheader)
 
-    exts = args.exts.split(",")
-    filenames = [p for p in Path(args.dir).rglob("*") if p.suffix in exts]
+    # Build list of files to check
+    exclude_paths = [
+        (Path(__file__).parent / Path(path)).resolve().rglob("*")
+        for path in config["exclude-dir"]
+    ]
+    all_exclude_paths = itertools.chain.from_iterable(exclude_paths)
+    exclude_filenames = [p for p in all_exclude_paths if p.suffix in exts]
+    filenames = [p for p in working_path.resolve().rglob("*") if p.suffix in exts]
+    filenames = [
+        filename for filename in filenames if filename not in exclude_filenames
+    ]
     problematic_files = []
     gpl_files = []
 
@@ -150,6 +148,8 @@ def main():
             print(_file)
     assert len(problematic_files) == 0, "header test failed!"
     assert len(gpl_files) == 0, "found gpl license, header test failed!"
+
+    print("Success: File headers look good!")
 
 
 if __name__ == "__main__":
