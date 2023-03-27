@@ -80,7 +80,7 @@ class Module(torch.nn.Module):
             If file_name provided has a parent path that does not exist
         """
         if file_name is None:
-            file_name = self.meta.name + ".pth"
+            file_name = self.meta.name + ".pt"
 
         file_name = Path(file_name)
         if not file_name.parents[0].is_dir():
@@ -88,7 +88,7 @@ class Module(torch.nn.Module):
                 f"Model checkpoint parent directory {file_name.parents[0]} not found"
             )
 
-        torch.save({"model_state_dict": self.state_dict()}, str(file_name))
+        torch.save(self.state_dict(), str(file_name))
 
     def load(self, file_name: Union[str, None] = None) -> None:
         """Simple utility for loading the model from checkpoint
@@ -105,14 +105,14 @@ class Module(torch.nn.Module):
             If file_name provided does not exist
         """
         if file_name is None:
-            file_name = self.meta.name + ".pth"
+            file_name = self.meta.name + ".pt"
 
         file_name = Path(file_name)
         if not file_name.exists():
             raise IOError(f"Model checkpoint {file_name} not found")
 
         model_dict = torch.load(file_name, map_location=self.device)
-        self.load_state_dict(model_dict["model_state_dict"])
+        self.load_state_dict(model_dict)
 
     @property
     def device(self) -> torch.device:
