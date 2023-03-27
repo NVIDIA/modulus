@@ -91,9 +91,8 @@ def test_fully_connected_optims(device):
         return model, invar
 
     # Ideally always check graphs first
-    if device == "cuda:0":
-        model, invar = setup_model()
-        assert common.validate_cuda_graphs(model, (invar,))
+    model, invar = setup_model()
+    assert common.validate_cuda_graphs(model, (invar,))
     # Check JIT
     model, invar = setup_model()
     assert common.validate_jit(model, (invar,))

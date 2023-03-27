@@ -263,8 +263,9 @@ def validate_combo_optims(
             scaler.scale(loss).backward()
 
     # Warmup stream (if cuda graphs)
-    warmup_stream = torch.cuda.Stream()
-    with torch.cuda.stream(warmup_stream) if cuda_graphs_enabled else nullcontext():
+    with torch.cuda.stream(
+        torch.cuda.Stream()
+    ) if cuda_graphs_enabled else nullcontext():
         for i in range(warmup_length):
             foward(in_args)
             scaler.step(optimizer)
