@@ -51,11 +51,11 @@ class LaunchLogger(object):
 
     Example
     -------
-    >>> from modlaunch.logging import Logger
-    >>> Logger.initialize()
+    >>> from modulus.launch.logging import LaunchLogger
+    >>> LaunchLogger.initialize()
     >>> epochs = 3
     >>> for i in range(epochs):
-    ...   with Logger("Train", epoch=i) as log:
+    ...   with LaunchLogger("Train", epoch=i) as log:
     ...     # Log 3 mini-batches manually
     ...     log.log_minibatch({"loss": 1.0})
     ...     log.log_minibatch({"loss": 2.0})
