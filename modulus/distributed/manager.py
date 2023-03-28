@@ -14,12 +14,10 @@
 
 import torch
 import torch.distributed as dist
-
-import logging
 import os
 import numpy as np
 
-logger = logging.getLogger("__name__")
+from warnings import warn
 
 
 class DistributedManager(object):
@@ -68,6 +66,8 @@ class DistributedManager(object):
             obj._broadcast_buffers = False
         if not hasattr(obj, "_find_unused_parameters"):
             obj._find_unused_parameters = False
+        if not hasattr(obj, "_initialization_method"):
+            obj._initialization_method = "None"
 
         return obj
 
@@ -167,11 +167,17 @@ class DistributedManager(object):
     def find_unused_parameters(self, find_params: bool):
         """Setter for find_unused_parameters"""
         if find_params:
-            # Logger may not be config'd here yet
-            logger.warning(
+            warn(
                 "Setting `find_unused_parameters` in DDP to true, use only if necessary."
             )
         self._find_unused_parameters = find_params
+
+    def __str__(self):
+        output = (
+            f"Initialized process {self.rank} of {self.world_size} using "
+            f"method '{self._initialization_method}'. Device set to {str(self.device)}"
+        )
+        return output
 
     @classmethod
     def is_initialized(cls) -> bool:
@@ -246,7 +252,7 @@ class DistributedManager(object):
     def initialize():
         """Initialize distributed manager"""
         if DistributedManager.is_initialized():
-            logger.warn("Distributed manager is already intialized")
+            warn("Distributed manager is already intialized")
             return
 
         addr = os.getenv("MASTER_ADDR", "localhost")
@@ -263,13 +269,6 @@ class DistributedManager(object):
 
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)
-
-        manager = DistributedManager()
-        if manager.distributed:
-            logger.info(
-                f'Initialized process {manager.rank} of {manager.world_size} using \
-                    method "{manager._initialization_method}". Device set to {str(manager.device)}'
-            )
 
     @staticmethod
     def setup(

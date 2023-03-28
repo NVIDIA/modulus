@@ -91,12 +91,12 @@ def test_onnx_bytestream(device, model, rtol: float = 1e-3, atol: float = 1e-3):
         opset_version=15,
         verbose=False,
     )
-    outvar_ort_file = run_onnx_inference(onnx_name, invar)
+    outvar_ort_file = run_onnx_inference(onnx_name, invar, device=device)
     assert len(outvar_ort_file) == 1
     outvar_ort_file = torch.Tensor(outvar_ort_file[0]).to(device)
     # Run ONNX using built in stream util in Modulus
     onnx_stream = export_to_onnx_stream(model, invar, verbose=False)
-    outvar_ort = run_onnx_inference(onnx_stream, invar)
+    outvar_ort = run_onnx_inference(onnx_stream, invar, device=device)
     assert len(outvar_ort) == 1
     outvar_ort = torch.Tensor(outvar_ort[0]).to(device)
 

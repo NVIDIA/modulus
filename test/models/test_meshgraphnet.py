@@ -128,9 +128,8 @@ def test_meshgraphnet_optims(device):
         return model, [graph, node_features, edge_features]
 
     # Ideally always check graphs first
-    if device == "cuda:0":
-        model, invar = setup_model()
-        assert common.validate_cuda_graphs(model, (*invar,))
+    model, invar = setup_model()
+    assert common.validate_cuda_graphs(model, (*invar,))
     # Check JIT
     model, invar = setup_model()
     assert common.validate_jit(model, (*invar,))

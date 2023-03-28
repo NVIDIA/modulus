@@ -24,6 +24,7 @@ def test_manager():
     # Reset class state
     DistributedManager._shared_state = {}
     DistributedManager.initialize()
+    print(DistributedManager())
 
     manager = DistributedManager()
 
@@ -55,7 +56,7 @@ def test_manager_slurm():
     assert manager.rank == 0
     assert manager.world_size == 1
     assert manager.local_rank == 0
-
+    DistributedManager._shared_state = {}
     del os.environ["SLURM_PROCID"]
     del os.environ["SLURM_NPROCS"]
     del os.environ["SLURM_LOCALID"]
@@ -79,7 +80,7 @@ def test_manager_ompi():
     assert manager.rank == 0
     assert manager.world_size == 1
     assert manager.local_rank == 0
-
+    DistributedManager._shared_state = {}
     del os.environ["OMPI_COMM_WORLD_RANK"]
     del os.environ["OMPI_COMM_WORLD_SIZE"]
     del os.environ["OMPI_COMM_WORLD_LOCAL_RANK"]
@@ -114,3 +115,4 @@ def test_manager_singleton():
     assert manager_1.group_name() == manager_2.group_name()
     assert manager_1.broadcast_buffers == manager_2.broadcast_buffers
     assert manager_1.find_unused_parameters == manager_2.find_unused_parameters
+    DistributedManager._shared_state = {}

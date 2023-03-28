@@ -21,6 +21,7 @@ interrogate:
                 --fail-under 99 \
                 --exclude ["internal"] \
                 --ignore-regex forward \
+                --ignore-regex backward \
                 --ignore-regex reset_parameters \
                 --ignore-regex extra_repr \
                 --ignore-regex MetaData \
