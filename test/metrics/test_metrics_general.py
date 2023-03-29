@@ -17,200 +17,17 @@ import torch
 import torch.distributed as dist
 import numpy as np
 import os
-from modulus.metrics.general.mse import mse, rmse
+
 import modulus.metrics.general.histogram as hist
 import modulus.metrics.general.ensemble_metrics as em
 import modulus.metrics.general.crps as crps
 import modulus.metrics.general.wasserstein as w
-from modulus.metrics.climate.acc import acc
-import modulus.metrics.climate.reduction as clim_red
-import modulus.metrics.general.reduction as gen_red
+import modulus.metrics.general.calibration as cal
+import modulus.metrics.general.entropy as ent
 
 from modulus.distributed.manager import DistributedManager
 
 Tensor = torch.Tensor
-
-
-@pytest.fixture
-def test_data(channels=2, img_shape=(721, 1440)):
-    # create dummy data
-    time_means = (
-        np.pi / 2 * np.ones((channels, img_shape[0], img_shape[1]), dtype=np.float32)
-    )
-
-    # Set lat/lon in terms of degrees (for use with _compute_lat_weights)
-    x = np.linspace(-180, 180, img_shape[1], dtype=np.float32)
-    y = np.linspace(-90, 90, img_shape[0], dtype=np.float32)
-    xv, yv = np.meshgrid(x, y)
-
-    pred_tensor_np = np.cos(2 * np.pi * yv / (180))
-    targ_tensor_np = np.cos(np.pi * yv / (180))
-
-    return channels, x, y, pred_tensor_np, targ_tensor_np, time_means
-
-
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_climate_acc_mse(test_data, device, rtol: float = 1e-3, atol: float = 1e-3):
-    channels, lon, lat, pred_tensor_np, targ_tensor_np, time_means = test_data
-    lat = torch.from_numpy(lat).to(device)
-    lon = torch.from_numpy(lon).to(device)
-
-    pred_tensor = torch.from_numpy(pred_tensor_np).expand(channels, -1, -1).to(device)
-    targ_tensor = torch.from_numpy(targ_tensor_np).expand(channels, -1, -1).to(device)
-    means_tensor = torch.from_numpy(time_means).to(device)
-
-    # Independent of the time means, the ACC score for cos(2*x) and cos(x) is 1/8 π sqrt(15/(32 - 3 π^2))
-    # or about 0.98355. For derivation, note that the lat weight gives an extra factor of cos(x)/2 and
-    # p1 = int[ (cos(x) -y - E[cos(x)-y]) * (cos(2x) - y - E[cos(2x)-y])] = pi/24
-    # p2 = int[ (cos(2x) - y - E[cos(x) - y])^2 cos(x)/2 ] = 16/45
-    # p3 = int[ (cos(x) - y - E[cos(x) - y])^2 cos(x)/2 ] = 2/3 - pi^2/16 (here E[.] denotes mean)
-    # and acc = p / sqrt(p2 * p3) = 1/8 π sqrt(15/(32 - 3 π^2))
-
-    acc_ = acc(pred_tensor, targ_tensor, means_tensor, lat)
-    assert torch.allclose(
-        acc_,
-        0.9836 * torch.ones(channels).to(device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # int( cos(x)^2 - cos(2x)^2 )dx, x = 0...2*pi = pi/4
-    # So MSE should be pi/4 / (pi) = 0.25
-    error = mse(pred_tensor**2, targ_tensor**2, dim=(1, 2))
-    rerror = rmse(pred_tensor**2, targ_tensor**2, dim=(1, 2))
-    assert torch.allclose(
-        error,
-        0.25 * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
-    )
-    assert torch.allclose(
-        rerror,
-        np.sqrt(0.25) * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float = 1e-3):
-    channels, lon, lat, pred_tensor_np, targ_tensor_np, time_means = test_data
-    pred_tensor = torch.from_numpy(pred_tensor_np).expand(channels, -1, -1).to(device)
-    lat = torch.from_numpy(lat).to(device)
-    weights = clim_red._compute_lat_weights(lat)
-    # Check main class
-    ws = gen_red.WeightedStatistic(weights)
-    # Check that it normalizes
-    assert torch.allclose(
-        torch.sum(ws.weights),
-        torch.ones([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Check when weights are 1 dimensional
-    weights = weights.flatten()
-    wm = gen_red.WeightedMean(weights)
-    our_weighted_mean = wm(pred_tensor, dim=1)
-    np_weighted_mean = np.average(pred_tensor.cpu(), weights=weights.cpu(), axis=1)
-    assert torch.allclose(
-        our_weighted_mean,
-        torch.from_numpy(np_weighted_mean).to(device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Check when weights are same shape as pred_tensor
-    weights = weights.unsqueeze(0)
-    weights = weights.unsqueeze(-1)
-    wm = gen_red.WeightedMean(weights)
-    our_weighted_mean = wm(pred_tensor, dim=1)
-
-    np_weighted_mean = np.average(
-        pred_tensor.cpu(), weights=weights.flatten().cpu(), axis=1
-    )
-    assert torch.allclose(
-        our_weighted_mean,
-        torch.from_numpy(np_weighted_mean).to(device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Check zonal mean == our_weighted_mean
-    zonal_mean = clim_red.zonal_mean(pred_tensor, lat, dim=1)
-    assert torch.allclose(
-        our_weighted_mean,
-        zonal_mean,
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Test variance
-    # Check when weights are 1 dimensional
-    weights = weights.flatten()
-    wv = clim_red.WeightedVariance(weights)
-    our_weighted_var = wv(pred_tensor, dim=1)
-
-    np_weighted_mean = np.average(
-        pred_tensor.cpu(),
-        weights=weights.cpu(),
-        axis=1,
-    )
-    np_weighted_var = np.average(
-        (pred_tensor.cpu() - np_weighted_mean[:, None]) ** 2,
-        weights=weights.cpu(),
-        axis=1,
-    )
-    assert torch.allclose(
-        our_weighted_var,
-        torch.from_numpy(np_weighted_var).to(device),
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Check zonal var == our_weighted_var
-    zonal_var = clim_red.zonal_var(pred_tensor, lat, dim=1)
-    zonal_std = clim_red.zonal_var(pred_tensor, lat, dim=1, std=True)
-    assert torch.allclose(
-        our_weighted_var,
-        zonal_var,
-        rtol=rtol,
-        atol=atol,
-    )
-    assert torch.allclose(
-        torch.sqrt(our_weighted_var),
-        zonal_std,
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Check global means and vars
-    global_mean = clim_red.global_mean(pred_tensor, lat)
-    assert torch.allclose(
-        torch.mean(our_weighted_mean, dim=-1),
-        global_mean,
-        rtol=rtol,
-        atol=atol,
-    )
-
-    # Global variance of cos(2x) should be
-    # int[ (cos(2x) - E[cos(2x)])^2 * cos(2x)/2 ] dx
-    # = int[ (cos(2x) - 1/3)^2 * cos(2x)/2 ] dx
-    # = 16/45
-    global_var = clim_red.global_var(pred_tensor, lat)
-    global_std = clim_red.global_var(pred_tensor, lat, std=True)
-    assert torch.allclose(
-        16 / 45 * torch.ones([1], device=device),
-        global_var,
-        rtol=rtol,
-        atol=atol,
-    )
-    assert torch.allclose(
-        4 / 3 / np.sqrt(5) * torch.ones([1], device=device),
-        global_std,
-        rtol=rtol,
-        atol=atol,
-    )
 
 
 def get_disagreements(inputs, bins, counts, test):
@@ -247,7 +64,7 @@ def get_disagreements(inputs, bins, counts, test):
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
 @pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 720, 1440)])
-def test_climate_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
+def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
     if (device == "cuda:0") and (not dist.is_initialized()):
         os.environ["MASTER_ADDR"] = "localhost"
@@ -313,7 +130,7 @@ def test_climate_histogram(device, input_shape, rtol: float = 1e-3, atol: float 
         atol=atol,
     )
 
-    binsx, countsx = hist.histogram(x, bins=10)
+    binsx, countsx = hist.histogram(x, bins=10, verbose=True)
     assert torch.allclose(
         torch.sum(countsx, dim=0),
         10 * torch.ones([1], dtype=torch.int64, device=device),
@@ -394,7 +211,7 @@ def test_climate_histogram(device, input_shape, rtol: float = 1e-3, atol: float 
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_climate_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
+def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     # Uses eq (5) from Gneiting et al. https://doi.org/10.1175/MWR2904.1
     # crps(N(0, 1), 0.0) = 2 / sqrt(2*pi) - 1/sqrt(pi) ~= 0.23...
     x = torch.randn((1_000_000, 1), device=device, dtype=torch.float32)
@@ -414,6 +231,24 @@ def test_climate_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     c = crps.crps(x, y.cpu().numpy(), bins=1_000)
     assert torch.allclose(
         c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # Test Gaussian CRPS
+    mm = torch.zeros([1], dtype=torch.float32, device=device)
+    vv = torch.ones([1], dtype=torch.float32, device=device)
+    gaussian_crps = crps._crps_gaussian(mm, vv, y)
+    assert torch.allclose(
+        gaussian_crps,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=atol,
+    )
+    gaussian_crps = crps._crps_gaussian(mm, vv, y.cpu().numpy())
+    assert torch.allclose(
+        gaussian_crps,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
         rtol=rtol,
         atol=atol,
@@ -468,7 +303,7 @@ def test_climate_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_climate_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
+def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
     if (device == "cuda:0") and (not dist.is_initialized()):
         os.environ["MASTER_ADDR"] = "localhost"
@@ -551,3 +386,102 @@ def test_climate_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     )
     _sumxy, _sum2xy, _n = em._update_var(_sumxy, _sum2xy, _n, y[1:], batch_dim=0)
     assert torch.allclose(varxy, _sum2xy / (_n - 1.0), rtol=rtol, atol=atol)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
+
+    x = torch.randn((10_000, 30, 30), device=device, dtype=torch.float32)
+    y = torch.randn((30, 30), device=device, dtype=torch.float32)
+
+    bin_edges, bin_counts = hist.histogram(x, bins=30)
+
+    # Test getting rank from histogram
+    ranks = cal._find_rank(bin_edges, bin_counts, y)
+
+    assert ranks.shape == y.shape
+    assert torch.all(torch.le(ranks, 1.0))
+    assert torch.all(torch.ge(ranks, 0.0))
+
+    # Test getting rank from histogram (numpy)
+    y = np.random.randn(30, 30)
+    ranks_np = cal._find_rank(bin_edges, bin_counts, y)
+
+    assert ranks_np.shape == y.shape
+    assert torch.all(torch.le(ranks_np, 1.0))
+    assert torch.all(torch.ge(ranks_np, 0.0))
+
+    ranks = ranks.flatten()
+    rank_bin_edges = torch.linspace(0, 1, 11).to(device)
+    rank_bin_edges, rank_counts = hist.histogram(ranks, bins=rank_bin_edges)
+    rps = cal._rank_probability_score_from_counts(rank_bin_edges, rank_counts)
+
+    assert rps > 0.0
+    assert rps < 1.0
+    assert torch.allclose(
+        rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
+    )
+
+    rps = cal.RankProbabilityScore(ranks)
+    assert rps > 0.0
+    assert rps < 1.0
+    assert torch.allclose(
+        rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
+    )
+
+    num_obs = 500
+
+    x = torch.randn((1_000, num_obs, 10, 10), device=device, dtype=torch.float32)
+    bin_edges, bin_counts = hist.histogram(x, bins=30)
+
+    obs = torch.randn((num_obs, 10, 10), device=device, dtype=torch.float32)
+    ranks = cal._find_rank(bin_edges, bin_counts, obs)
+    assert ranks.shape == (num_obs, 10, 10)
+
+    rps = cal.RankProbabilityScore(ranks)
+    assert rps.shape == (10, 10)
+    assert torch.allclose(
+        rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
+    )
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
+    one = torch.ones([1], device=device, dtype=torch.float32)
+
+    x = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
+    bin_edges, bin_counts = hist.histogram(x, bins=30)
+    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=False)
+    assert entropy.shape == (10, 10)
+    assert torch.allclose(
+        entropy, (0.5 + 0.5 * np.log(2 * np.pi)) * one, atol=atol, rtol=rtol
+    )
+    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    assert torch.all(torch.le(entropy, one))
+    assert torch.all(torch.ge(entropy, 0.0 * one))
+
+    # Test Maximum Entropy
+    x = torch.rand((100_000, 10, 10), device=device, dtype=torch.float32)
+    bin_edges, bin_counts = hist.histogram(x, bins=30)
+    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    assert entropy.shape == (10, 10)
+    assert torch.allclose(entropy, one, rtol=rtol, atol=atol)
+
+    # Test Relative Entropy
+    x = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
+    bin_edges, x_bin_counts = hist.histogram(x, bins=30)
+    x1 = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
+    _, x1_bin_counts = hist.histogram(x, bins=bin_edges)
+    x2 = 0.1 * torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
+    _, x2_bin_counts = hist.histogram(x, bins=bin_edges)
+
+    rel_ent_1 = ent._relative_entropy_from_counts(
+        x_bin_counts, x1_bin_counts, bin_edges
+    )
+    rel_ent_2 = ent._relative_entropy_from_counts(
+        x_bin_counts, x2_bin_counts, bin_edges
+    )
+
+    assert torch.all(torch.le(rel_ent_1, rel_ent_2))
+    assert torch.allclose(rel_ent_1, 0.0 * one)
+    assert torch.all(torch.ge(rel_ent_2, 0.0 * one))

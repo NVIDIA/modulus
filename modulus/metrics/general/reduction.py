@@ -36,7 +36,7 @@ class WeightedStatistic(ABC):
         """
         w = self.weights
         if w.ndim == 1:
-            assert len(x[dim]) == len(w), (
+            assert x.shape[dim] == len(w), (
                 "Expected inputs and weights to have the same size along the reduction dimension but have dimensions"
                 + str(len(x[dim]))
                 + " and "
