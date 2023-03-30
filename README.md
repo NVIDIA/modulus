@@ -1,4 +1,4 @@
-# Modulus (Alpha)
+# Modulus (Beta)
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 [![GitHub](https://img.shields.io/github/license/NVIDIA/modulus)](https://github.com/NVIDIA/modulus/blob/master/LICENSE.txt)
@@ -6,7 +6,7 @@
 
 Modulus is a PyTorch based deep-learning toolkit for developing deep learning models for physical systems. This package aims to provide useful utilities for physics-constrained and data-driven workflows.
 
-**This is an early-access alpha release**
+**This is an early-access beta release**
 
 <p align="center">
   <img src="./docs/img/modulus-pipes.jpg" alt="NVIDIA Modulus"/>
@@ -14,9 +14,9 @@ Modulus is a PyTorch based deep-learning toolkit for developing deep learning mo
 
 ## Modulus Packages
 
-- [Modulus (Alpha)](https://github.com/NVIDIA/modulus)
-- [Modulus Launch (Alpha)](https://github.com/NVIDIA/modulus-launch)
-- [Modulus Symbolic (Alpha)](https://github.com/NVIDIA/modulus-sym)
+- [Modulus (Beta)](https://github.com/NVIDIA/modulus)
+- [Modulus Launch (Beta)](https://github.com/NVIDIA/modulus-launch)
+- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym)
 
 ## Installing 
 
@@ -31,7 +31,7 @@ pip install .
 
 ## Contributing
 
-Modulus is in an open-source alpha. We are not accepting external contributions at this time.
+Modulus is in an open-source beta. We are not accepting external contributions at this time.
 
 ## Contact
 
