@@ -31,7 +31,7 @@ pip install .
 
 ## Contributing
 
-Modulus is in an open-source alpha. We are not accepting external contributions at this time.
+Modulus is in an open-source beta. We are not accepting external contributions at this time.
 
 ## Contact
 
