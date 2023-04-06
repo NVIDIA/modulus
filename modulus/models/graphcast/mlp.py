@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Union, Optional
+from typing import Tuple, Optional
 
+import enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+from torch.autograd.function import once_differentiable
 
 from .utils import sum_efeat_dgl
+from modulus.models.layers.fused_silu import silu_backward_for
 
 try:
     from pylibcugraphops.pytorch.operators import update_efeat_bipartite_e2e
@@ -34,6 +37,55 @@ try:
     apex_imported = True
 except:
     apex_imported = False
+
+
+class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        features: torch.Tensor,
+        weight: torch.Tensor,
+        bias: torch.Tensor,
+    ) -> torch.Tensor:
+        out = F.silu(features)
+        out = F.linear(out, weight, bias)
+        ctx.save_for_backward(features, weight)
+        return out
+
+    @staticmethod
+    @once_differentiable
+    def backward(
+        ctx, grad_output: torch.Tensor
+    ) -> Tuple[
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+    ]:
+        (
+            need_dgrad,
+            need_wgrad,
+            need_bgrad,
+        ) = ctx.needs_input_grad
+        features, weight = ctx.saved_tensors
+
+        grad_features = None
+        grad_weight = None
+        grad_bias = None
+
+        if need_bgrad:
+            grad_bias = grad_output.sum(dim=0)
+
+        if need_wgrad:
+            out = F.silu(features)
+            grad_weight = grad_output.T @ out
+
+        if need_dgrad:
+            grad_features = grad_output @ weight
+            silu_backward = silu_backward_for(features.dtype, features.dim())
+            grad_silu = silu_backward.execute([features])[0]
+            grad_features = grad_features * grad_silu
+
+        return grad_features, grad_weight, grad_bias
 
 
 class MLP(nn.Module):
@@ -53,6 +105,8 @@ class MLP(nn.Module):
         , by default nn.SiLU()
     norm_type : str, optional
         normalization type, by default "LayerNorm"
+    recompue_silu : bool, optional
+        flag for recomputing silu in backward to save memory, by default False
     """
 
     def __init__(
@@ -63,6 +117,7 @@ class MLP(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        recompute_silu: bool = False,
     ):
         super().__init__()
 
@@ -87,8 +142,29 @@ class MLP(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(self, x: Tensor) -> Tensor:
+        #TODO generalize this to more hidden layers
+        if recompute_silu:
+            assert hidden_layers == 1
+            assert isinstance(activation_fn, nn.SiLU)
+            self.forward_fn = self.custom_silu_linear_forward
+        else:
+            self.forward_fn = self.default_forward
+
+    def default_forward(self, x: Tensor) -> Tensor:
         return self.model(x)
+
+    def custom_silu_linear_forward(self, x: Tensor) -> Tensor:
+        lin1 = self.model[0]
+        lin2 = self.model[2]
+        hidden = lin1(x)
+        out = CustomSiLuLinearAutogradFunction.apply(hidden, lin2.weight, lin2.bias)
+        if self.norm_type is not None:
+            norm = self.model[3]
+            out = norm(out)
+        return out
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.forward_fn(x)
 
 
 class TMLPDGL(nn.Module):
@@ -114,6 +190,8 @@ class TMLPDGL(nn.Module):
         normalization type, by default "LayerNorm"
     bias : bool, optional
         whether to use bias in the MLP, by default True
+    recompue_silu : bool, optional
+        flag for recomputing silu in backward to save memory, by default False
     """
 
     def __init__(
@@ -127,6 +205,7 @@ class TMLPDGL(nn.Module):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         bias: bool = True,
+        recompute_silu : bool = False,
     ):
         super().__init__()
 
@@ -156,6 +235,7 @@ class TMLPDGL(nn.Module):
             layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
         layers.append(nn.Linear(hidden_dim, output_dim))
 
+        self.norm_type = norm_type
         if norm_type is not None:
             assert norm_type in [
                 "LayerNorm",
@@ -172,7 +252,15 @@ class TMLPDGL(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(
+        # TODO generalize to more hidden layers
+        if recompute_silu:
+            assert hidden_layers == 1
+            assert isinstance(activation_fn, nn.SiLU)
+            self.forward_fn = self.custom_silu_linear_forward
+        else:
+            self.forward_fn = self.default_forward
+
+    def forward_base(
         self,
         efeat: Tensor,
         src_feat: Tensor,
@@ -189,7 +277,34 @@ class TMLPDGL(nn.Module):
         mlp_src = F.linear(src_feat, self.lin_src, None)
         mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
         mlp_sum = sum_efeat_dgl(mlp_efeat, mlp_src, mlp_dst, src_idx, dst_idx)
+        return mlp_sum
+
+    def default_forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        src_idx: Tensor,
+        dst_idx: Tensor,
+    ) -> Tensor:
+        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, src_idx, dst_idx)
         return self.model(mlp_sum)
+
+    def custom_silu_linear_forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        src_idx: Tensor,
+        dst_idx: Tensor,
+    ) -> Tensor:
+        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, src_idx, dst_idx)
+        lin2 = self.model[1]
+        out = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin2.weight, lin2.bias)
+        if self.norm_type is not None:
+            norm = self.model[2]
+            out = norm(out)
+        return out 
 
 
 class TMLPCUGO(nn.Module):
@@ -216,6 +331,8 @@ class TMLPCUGO(nn.Module):
         normalization type, by default "LayerNorm"
     bias : bool, optional
         whether to use bias in the MLP, by default True
+    recompue_silu : bool, optional
+        flag for recomputing silu in backward to save memory, by default False
     """
 
     def __init__(
@@ -229,6 +346,7 @@ class TMLPCUGO(nn.Module):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         bias: bool = True,
+        recompute_silu : bool = False,
     ):
         super().__init__()
 
@@ -258,6 +376,7 @@ class TMLPCUGO(nn.Module):
             layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
         layers.append(nn.Linear(hidden_dim, output_dim))
 
+        self.norm_type = norm_type
         if norm_type is not None:
             assert norm_type in [
                 "LayerNorm",
@@ -274,7 +393,15 @@ class TMLPCUGO(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(
+        # TODO generalize to more hidden layers
+        if recompute_silu:
+            assert hidden_layers == 1
+            assert isinstance(activation_fn, nn.SiLU)
+            self.forward_fn = self.custom_silu_linear_forward
+        else:
+            self.forward_fn = self.default_forward
+
+    def forward_base(
         self,
         efeat: Tensor,
         src_feat: Tensor,
@@ -288,4 +415,38 @@ class TMLPCUGO(nn.Module):
         mlp_sum = update_efeat_bipartite_e2e(
             mlp_efeat, mlp_src, mlp_dst, graph, mode="sum"
         )
+        return mlp_sum
+
+    def default_forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        graph: BipartiteCSC,
+    ) -> Tensor:
+        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, graph)
         return self.model(mlp_sum)
+
+    def custom_silu_linear_forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        graph: BipartiteCSC,
+    ) -> Tensor:
+        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, graph)
+        lin2 = self.model[1]
+        out = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin2.weight, lin2.bias)
+        if self.norm_type is not None:
+            norm = self.model[2]
+            out = norm(out)
+        return out     
+
+    def forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        graph
+    ) -> Tensor:
+        return self.forward_fn(efeat, src_feat, dst_feat, graph)
