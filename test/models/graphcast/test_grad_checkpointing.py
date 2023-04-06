@@ -13,19 +13,9 @@
 # limitations under the License.
 
 import torch
-import numpy as np
 
+from utils import fix_random_seeds, create_random_input
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-
-
-def fix_random_seeds():
-    torch.manual_seed(0)
-    np.random.seed(0)
-
-
-def create_random_input():
-    return torch.randn(1, 2, 721, 1440)
-
 
 # constants
 model_kwds = {
@@ -45,7 +35,7 @@ num_steps = 2
 fix_random_seeds()
 
 # Random input
-x = create_random_input()
+x = create_random_input(model_kwds["input_dim_grid_nodes"])
 
 # Instantiate the model
 model = GraphCastNet(**model_kwds)

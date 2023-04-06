@@ -18,7 +18,7 @@ import random
 import dgl
 import numpy as np
 
-from modulus.models.gnn import MeshGraphNet
+from modulus.models.meshgraphnet import MeshGraphNet
 from . import common
 
 
