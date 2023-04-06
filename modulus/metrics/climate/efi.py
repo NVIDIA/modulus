@@ -21,13 +21,13 @@ from modulus.metrics.general.entropy import _entropy_from_counts
 Tensor = torch.Tensor
 
 
-def EFI(
+def efi(
     pred_cdf: Tensor,
     bin_edges: Tensor,
     climatology_mean: Tensor,
     climatology_std: Tensor,
 ) -> Tensor:
-    """Calculates the Extreme Forecast Index for an ensemble forecast against
+    """Calculates the Extreme Forecast Index (EFI) for an ensemble forecast against
     a climatological distribution.
 
     Parameters
@@ -63,7 +63,7 @@ def EFI(
     )
 
 
-def NormalizedEntropy(
+def normalized_entropy(
     pred_pdf: Tensor,
     bin_edges: Tensor,
     climatology_mean: Tensor,

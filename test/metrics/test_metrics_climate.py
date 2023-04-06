@@ -240,19 +240,19 @@ def test_climate_efi(test_data, device, rtol: float = 1e-1, atol: float = 1e-1):
 
     x = torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e = efi.EFI(cdf, bin_edges, clim_mean, clim_std)
+    e = efi.efi(cdf, bin_edges, clim_mean, clim_std)
 
     assert torch.allclose(e, 0.0 * one, rtol=rtol, atol=atol)
 
     x = 2.0 + 2.0 * torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e1 = efi.EFI(cdf, bin_edges, clim_mean, clim_std)
+    e1 = efi.efi(cdf, bin_edges, clim_mean, clim_std)
     assert torch.all(torch.ge(e1, 0.0 * one))
 
     x = 0.1 * torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e2 = efi.EFI(cdf, bin_edges, clim_mean, clim_std)
+    e2 = efi.efi(cdf, bin_edges, clim_mean, clim_std)
     assert torch.allclose(e2, 0.0 * one, rtol=rtol, atol=atol)
 
-    ne = efi.NormalizedEntropy(test_pdf, bin_edges, clim_mean, clim_std)
+    ne = efi.normalized_entropy(test_pdf, bin_edges, clim_mean, clim_std)
     assert torch.allclose(ne, 0.0 * one, rtol=rtol, atol=atol)

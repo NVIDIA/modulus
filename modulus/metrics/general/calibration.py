@@ -20,7 +20,7 @@ from typing import Union
 Tensor = torch.Tensor
 
 
-def _find_rank(
+def find_rank(
     bin_edges: Tensor, counts: Tensor, obs: Union[Tensor, np.ndarray]
 ) -> Tensor:
     """Finds the rank of the observation with respect to the given counts and bins.
@@ -107,7 +107,7 @@ def _rank_probability_score_from_counts(
     return torch.sum((cdf - rank_bin_edges[1:]) ** 2, dim=0) / normalization
 
 
-def RankProbabilityScore(ranks: Tensor) -> Tensor:
+def rank_probability_score(ranks: Tensor) -> Tensor:
     """Computes the Rank Probability Score for the passed ranks. Internally, this creates a histogram
     for the ranks and computes the Rank Probability Score (RPS) using the histogram.
 

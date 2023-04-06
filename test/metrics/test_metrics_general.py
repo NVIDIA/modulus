@@ -397,7 +397,7 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
     bin_edges, bin_counts = hist.histogram(x, bins=30)
 
     # Test getting rank from histogram
-    ranks = cal._find_rank(bin_edges, bin_counts, y)
+    ranks = cal.find_rank(bin_edges, bin_counts, y)
 
     assert ranks.shape == y.shape
     assert torch.all(torch.le(ranks, 1.0))
@@ -405,7 +405,7 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
 
     # Test getting rank from histogram (numpy)
     y = np.random.randn(30, 30)
-    ranks_np = cal._find_rank(bin_edges, bin_counts, y)
+    ranks_np = cal.find_rank(bin_edges, bin_counts, y)
 
     assert ranks_np.shape == y.shape
     assert torch.all(torch.le(ranks_np, 1.0))
@@ -422,7 +422,7 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
         rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
     )
 
-    rps = cal.RankProbabilityScore(ranks)
+    rps = cal.rank_probability_score(ranks)
     assert rps > 0.0
     assert rps < 1.0
     assert torch.allclose(
@@ -435,10 +435,10 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
     bin_edges, bin_counts = hist.histogram(x, bins=30)
 
     obs = torch.randn((num_obs, 10, 10), device=device, dtype=torch.float32)
-    ranks = cal._find_rank(bin_edges, bin_counts, obs)
+    ranks = cal.find_rank(bin_edges, bin_counts, obs)
     assert ranks.shape == (num_obs, 10, 10)
 
-    rps = cal.RankProbabilityScore(ranks)
+    rps = cal.rank_probability_score(ranks)
     assert rps.shape == (10, 10)
     assert torch.allclose(
         rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
