@@ -90,7 +90,7 @@ class NodeBlockDGL(nn.Module):
 
         return efeat, nfeat_new
 
-    def to(self, *args: Any, **kwargs: Any) -> NodeBlockDGL:
+    def to(self, *args: Any, **kwargs: Any) -> "NodeBlockDGL":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -176,7 +176,7 @@ class NodeBlockCUGO(nn.Module):
         nfeat_new = self.node_MLP(cat_feat) + nfeat
         return efeat, nfeat_new
 
-    def to(self, *args: Any, **kwargs: Any) -> NodeBlockCUGO:
+    def to(self, *args: Any, **kwargs: Any) -> "NodeBlockCUGO":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
