@@ -126,7 +126,7 @@ class EncoderDGLConcat(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EncoderDGLConcat:
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderDGLConcat":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -245,7 +245,7 @@ class EncoderDGLSum(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EncoderDGLSum:
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderDGLSum":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -374,7 +374,7 @@ class EncoderCUGOConcat(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EncoderCUGOConcat:
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOConcat":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -501,7 +501,7 @@ class EncoderCUGOSum(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EncoderCUGOSum:
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOSum":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.

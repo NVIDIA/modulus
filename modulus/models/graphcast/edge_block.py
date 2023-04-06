@@ -83,7 +83,7 @@ class EdgeBlockDGLConcat(nn.Module):
 
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EdgeBlockDGLConcat:
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockDGLConcat":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -165,7 +165,7 @@ class EdgeBlockDGLSum(nn.Module):
         efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.src, self.dst) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EdgeBlockDGLSum:
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockDGLSum":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -253,7 +253,7 @@ class EdgeBlockCUGOConcat(nn.Module):
         efeat_new = self.edge_MLP(cat_feat) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EdgeBlockCUGOConcat:
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOConcat":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -337,7 +337,7 @@ class EdgeBlockCUGOSum(nn.Module):
         efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.bipartite_graph) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> EdgeBlockCUGOSum:
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOSum":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.

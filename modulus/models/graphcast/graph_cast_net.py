@@ -14,8 +14,6 @@
 
 import torch
 import torch.nn as nn
-import warnings
-
 from torch import Tensor
 
 from typing import Any
@@ -24,13 +22,15 @@ from dataclasses import dataclass
 from .utils import set_checkpoint_fn, CuGraphCSC
 from .mlp import MLP
 from .processor import Processor
+from .utils import set_checkpoint_fn
 from .embedder import EncoderEmbedder, DecoderEmbedder
 from .encoder import EncoderDGLConcat, EncoderDGLSum, EncoderCUGOConcat, EncoderCUGOSum
 from .decoder import DecoderDGLConcat, DecoderDGLSum, DecoderCUGOConcat, DecoderCUGOSum
-from modulus.internal.utils.graphcast.graph import Graph
-from modulus.models.meta import ModelMetaData
+
 from modulus.models.module import Module
-from modulus.internal.utils.graphcast.data_utils import StaticData
+from modulus.models.meta import ModelMetaData
+from modulus.utils.graphcast.graph import Graph
+from modulus.utils.graphcast.data_utils import StaticData
 
 
 @dataclass
@@ -124,13 +124,17 @@ class GraphCastNet(Module):
         self.lat_lon_grid = torch.stack(
             torch.meshgrid(self.latitudes, self.longitudes, indexing="ij"), dim=-1
         )
+        self.has_static_data = static_dataset_path is not None
 
         # Get the static data
-        self.static_data = StaticData(
-            static_dataset_path, self.latitudes, self.longitudes
-        ).get()
-        num_static_feat = self.static_data.size(1)
-        input_dim_grid_nodes += num_static_feat
+        if self.has_static_data:
+            self.static_data = StaticData(
+                static_dataset_path, self.latitudes, self.longitudes
+            ).get()
+            num_static_feat = self.static_data.size(1)
+            input_dim_grid_nodes += num_static_feat
+        else:
+            self.static_data = None
         self.input_dim_grid_nodes = input_dim_grid_nodes
         self.output_dim_grid_nodes = output_dim_grid_nodes
         self.input_res = input_res
@@ -556,7 +560,8 @@ class GraphCastNet(Module):
         """
         assert invar.size(0) == 1, "GraphCast does not support batch size > 1"
         # concat static data
-        invar = torch.concat((invar, self.static_data), dim=1)
+        if self.has_static_data:
+            invar = torch.concat((invar, self.static_data), dim=1)
         invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
         return invar
 
@@ -578,7 +583,7 @@ class GraphCastNet(Module):
         outvar = torch.unsqueeze(outvar, dim=0)
         return outvar
 
-    def to(self, *args: Any, **kwargs: Any) -> GraphCastNet:
+    def to(self, *args: Any, **kwargs: Any) -> "GraphCastNet":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -600,7 +605,8 @@ class GraphCastNet(Module):
         self.m2g_edata = self.m2g_edata.to(*args, **kwargs)
         self.mesh_ndata = self.mesh_ndata.to(*args, **kwargs)
         self.mesh_edata = self.mesh_edata.to(*args, **kwargs)
-        self.static_data = self.static_data.to(*args, **kwargs)
+        if self.has_static_data:
+            self.static_data = self.static_data.to(*args, **kwargs)
 
         # TODO apply .to() recursively instead
         # self.encoder = self.encoder.to(*args, **kwargs)

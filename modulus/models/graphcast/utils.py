@@ -179,7 +179,7 @@ def set_checkpoint_fn(do_checkpointing: bool) -> Callable:
         return checkpoint_identity
 
 
-def concat_message_function(edges: Tensor) -> Dict[Tensor]:
+def concat_message_function(edges: Tensor) -> Dict[str, Tensor]:
     """Concatenates source node, destination node, and edge features.
 
     Parameters
