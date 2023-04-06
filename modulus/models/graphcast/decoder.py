@@ -20,15 +20,16 @@ from typing import Any
 from torch import Tensor
 from dgl import DGLGraph
 from .mlp import MLP, TMLPDGL, TMLPCUGO
-from .utils import concat_efeat_dgl_m2g_g2m, agg_concat_dgl
+from .utils import concat_efeat_dgl_m2g_g2m, agg_concat_dgl, CuGraphCSC
 
 try:
-    from pylibcugraphops.torch.autograd import agg_concat_e2n, update_efeat_e2e
-    from pylibcugraphops.typing import MfgCsr
+    from pylibcugraphops.pytorch.operators import (
+        agg_concat_e2n,
+        update_efeat_bipartite_e2e,
+    )
 except ImportError:
     agg_concat_e2n = None
-    update_efeat_e2e = None
-    MfgCsr = None
+    update_efeat_bipartite_e2e = None
 
 
 class DecoderDGLConcat(nn.Module):
@@ -126,11 +127,9 @@ class DecoderDGLConcat(nn.Module):
         DecoderDGLConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -230,11 +229,9 @@ class DecoderDGLSum(nn.Module):
         DecoderDGLSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -269,7 +266,7 @@ class DecoderCUGOConcat(nn.Module):
 
     def __init__(
         self,
-        graph: MfgCsr,
+        graph: CuGraphCSC,
         aggregation: str = "sum",
         input_dim_src_nodes: int = 512,
         input_dim_dst_nodes: int = 512,
@@ -283,6 +280,8 @@ class DecoderCUGOConcat(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
+        self.bipartite_graph = None
         self.aggregation = aggregation
 
         # edge MLP
@@ -305,7 +304,7 @@ class DecoderCUGOConcat(nn.Module):
             norm_type=norm_type,
         )
 
-    def custom_forward(
+    def forward(
         self, m2g_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
     ) -> Tensor:
         """DecoderCUGOConcat forward method with support for gradient checkpointing.
@@ -324,11 +323,19 @@ class DecoderCUGOConcat(nn.Module):
         dst_feat: Tensor
             Predicted node features on the latitude-longitude grid.
         """
-        efeat = update_efeat_e2e(
-            m2g_efeat, mesh_nfeat, grid_nfeat, self.graph, "concat"
+        if self.static_graph is None:
+            self.static_graph = self.graph.to_static_csc()
+        if self.bipartite_graph is None:
+            # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
+            self.bipartite_graph = self.graph.to_bipartite_csc(dtype=torch.int64)
+
+        efeat = update_efeat_bipartite_e2e(
+            m2g_efeat, mesh_nfeat, grid_nfeat, self.bipartite_graph, "concat"
         )
         efeat = self.edge_MLP(efeat)
-        cat_feat = agg_concat_e2n(grid_nfeat, efeat, self.graph, self.aggregation)
+        cat_feat = agg_concat_e2n(
+            grid_nfeat, efeat, self.static_graph, self.aggregation
+        )
         dst_feat = self.node_MLP(cat_feat) + grid_nfeat
         return dst_feat
 
@@ -349,11 +356,9 @@ class DecoderCUGOConcat(nn.Module):
         DecoderCUGOConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -388,7 +393,7 @@ class DecoderCUGOSum(nn.Module):
 
     def __init__(
         self,
-        graph: MfgCsr,
+        graph: CuGraphCSC,
         aggregation: str = "sum",
         input_dim_src_nodes: int = 512,
         input_dim_dst_nodes: int = 512,
@@ -430,8 +435,15 @@ class DecoderCUGOSum(nn.Module):
     def forward(
         self, m2g_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
     ) -> Tensor:
-        efeat = self.edge_TMLP(m2g_efeat, mesh_nfeat, grid_nfeat, self.graph)
-        cat_feat = agg_concat_e2n(grid_nfeat, efeat, self.graph, self.aggregation)
+        if self.static_graph is None:
+            self.static_graph = self.graph.to_static_csc()
+        if self.bipartite_graph is None:
+            self.bipartite_graph = self.graph.to_bipartite_csc()
+
+        efeat = self.edge_TMLP(m2g_efeat, mesh_nfeat, grid_nfeat, self.bipartite_graph)
+        cat_feat = agg_concat_e2n(
+            grid_nfeat, efeat, self.static_graph, self.aggregation
+        )
         dst_feat = self.node_MLP(cat_feat) + grid_nfeat
         return dst_feat
 
@@ -452,9 +464,7 @@ class DecoderCUGOSum(nn.Module):
         DecoderCUGOSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self

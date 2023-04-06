@@ -19,14 +19,12 @@ from typing import Any
 from torch import Tensor
 from dgl import DGLGraph
 from .mlp import MLP, TMLPDGL, TMLPCUGO
-from .utils import concat_efeat_dgl_mesh
+from .utils import concat_efeat_dgl_mesh, CuGraphCSC
 
 try:
-    from pylibcugraphops.torch.autograd import update_efeat_e2e
-    from pylibcugraphops.typing import FgCsr
-except ImportError:
-    FgCsr = None
-    update_efeat_e2e = None
+    from pylibcugraphops.pytorch.operators import update_efeat_static_e2e
+except ModuleNotFoundError:
+    update_efeat_static_e2e = None
 
 
 class EdgeBlockDGLConcat(nn.Module):
@@ -102,11 +100,9 @@ class EdgeBlockDGLConcat(nn.Module):
         EdgeBlockDGLConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -146,6 +142,7 @@ class EdgeBlockDGLSum(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
         self.src, self.dst = (item.long() for item in self.graph.edges())
 
         self.edge_TMLP = TMLPDGL(
@@ -185,11 +182,9 @@ class EdgeBlockDGLSum(nn.Module):
         EdgeBlockDGLSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -198,7 +193,7 @@ class EdgeBlockCUGOConcat(nn.Module):
 
     Parameters
     ----------
-    graph : DGLGraph
+    graph : CuGraphCSC
         Graph.
     input_dim_nodes : int, optional
         Input dimensionality of the node features, by default 512
@@ -218,7 +213,7 @@ class EdgeBlockCUGOConcat(nn.Module):
 
     def __init__(
         self,
-        graph: FgCsr,
+        graph: CuGraphCSC,
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -231,7 +226,7 @@ class EdgeBlockCUGOConcat(nn.Module):
         self.graph = graph
 
         self.edge_MLP = MLP(
-            input_dim=2 * input_dim_nodes + input_dim_edges,
+            input_dim=(2 * input_dim_nodes + input_dim_edges),
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
@@ -244,7 +239,17 @@ class EdgeBlockCUGOConcat(nn.Module):
         efeat: Tensor,
         nfeat: Tensor,
     ) -> Tensor:
-        cat_feat = update_efeat_e2e(efeat, nfeat, nfeat, self.graph, mode="concat")
+        if self.static_graph is None:
+            self.static_graph = self.graph.to_static_csc()
+
+        cat_feat = update_efeat_static_e2e(
+            efeat,
+            nfeat,
+            self.static_graph,
+            mode="concat",
+            use_source_emb=True,
+            use_target_emb=True,
+        )
         efeat_new = self.edge_MLP(cat_feat) + efeat
         return efeat_new, nfeat
 
@@ -265,11 +270,9 @@ class EdgeBlockCUGOConcat(nn.Module):
         EdgeBlockCUGOConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -298,7 +301,7 @@ class EdgeBlockCUGOSum(nn.Module):
 
     def __init__(
         self,
-        graph: FgCsr,
+        graph: CuGraphCSC,
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -309,6 +312,7 @@ class EdgeBlockCUGOSum(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.bipartite_graph = None
 
         self.edge_TMLP = TMLPCUGO(
             efeat_dim=input_dim_edges,
@@ -327,7 +331,10 @@ class EdgeBlockCUGOSum(nn.Module):
         efeat: Tensor,
         nfeat: Tensor,
     ) -> Tensor:
-        efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.graph) + efeat
+        if self.bipartite_graph is None:
+            self.bipartite_graph = self.graph.to_bipartite_csc()
+
+        efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.bipartite_graph) + efeat
         return efeat_new, nfeat
 
     def to(self, *args: Any, **kwargs: Any) -> EdgeBlockCUGOSum:
@@ -347,9 +354,7 @@ class EdgeBlockCUGOSum(nn.Module):
         EdgeBlockCUGOSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self

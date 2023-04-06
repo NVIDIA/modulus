@@ -16,8 +16,116 @@ import torch
 from torch import Tensor
 from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 from torch.utils.checkpoint import checkpoint
+
+
+try:
+    from pylibcugraphops.pytorch import StaticCSC, BipartiteCSC
+except:
+    StaticCSC = None
+    BipartiteCSC = None
+
+
+class CuGraphCSC:
+    def __init__(
+        self,
+        offsets: Tensor,
+        indices: Tensor,
+        num_src_nodes: int,
+        num_dst_nodes: int,
+        ef_indices: Optional[Tensor] = None,
+        reverse_graph_bwd: bool = True,
+    ):
+        self.offsets = offsets
+        self.indices = indices
+        self.num_src_nodes = num_src_nodes
+        self.num_dst_nodes = num_dst_nodes
+        self.ef_indices = ef_indices
+        self.reverse_graph_bwd = reverse_graph_bwd
+
+        self.bipartite_csc = None
+        self.static_csc = None
+        self.static_csr_csr = None
+
+    def to(self, *args: Any, **kwargs: Any) -> CuGraphCSC:
+        """Moves the object to the specified device, dtype, or format and returns the updated object.
+
+        Parameters
+        ----------
+        *args : Any
+            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
+        **kwargs : Any
+            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
+
+        Returns
+        -------
+        NodeBlockCUGO
+            The updated object after moving to the specified device, dtype, or format.
+        """
+        self = super().to(*args, **kwargs)
+        device, dtype, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        assert dtype in (
+            torch.int32,
+            torch.int64,
+        ), f"Invalid dtype, expected torch.int32 or torch.int64, got {dtype}."
+        self.offsets = self.offsets.to(device=device, dtype=dtype)
+        self.indices = self.indices.to(device=device, dtype=dtype)
+        if self.ef_indices is not None:
+            self.ef_indices = self.ef_indices.to(device=device, dtype=dtype)
+
+        return self
+
+    def to_bipartite_csc(self, dtype=None):
+        assert self.offsets.is_cuda(), "Expected the graph structures to reside on GPU."
+        if self.bipartite_csc is None:
+            # Occassionally, we have to watch out for the IdxT type
+            # of offsets and indices. Technically, they are only relevant
+            # for storing node and edge indices. However, they are also used
+            # to index pointers in the underlying kernels (for now). This means
+            # that depending on the data dimension, one has to rely on int64
+            # for the indices despite int32 technically being enough to store the
+            # graph. This will be improved in cugraph-ops-23.06. Until then, allow
+            # the change of dtype.
+            if dtype is not None:
+                graph_offsets = self.offsets.to(dtype=dtype)
+                graph_indices = self.indices.to(dtype=dtype)
+                if self.ef_indices is not None:
+                    graph_ef_indices = self.ef_indices.to(dtype=dtype)
+            graph = BipartiteCSC(
+                graph_offsets,
+                graph_indices,
+                self.num_src_nodes,
+                graph_ef_indices,
+                reverse_graph_bwd=self.reverse_graph_bwd,
+            )
+            self.bipartite_csc = graph
+
+        return self.bipartite_csc
+
+    def to_static_csc(self, dtype=None):
+        if self.static_csc is None:
+            # Occassionally, we have to watch out for the IdxT type
+            # of offsets and indices. Technically, they are only relevant
+            # for storing node and edge indices. However, they are also used
+            # to index pointers in the underlying kernels (for now). This means
+            # that depending on the data dimension, one has to rely on int64
+            # for the indices despite int32 technically being enough to store the
+            # graph. This will be improved in cugraph-ops-23.06. Until then, allow
+            # the change of dtype.
+            if dtype is not None:
+                graph_offsets = self.offsets.to(dtype=dtype)
+                graph_indices = self.indices.to(dtype=dtype)
+                if self.ef_indices is not None:
+                    graph_ef_indices = self.ef_indices.to(dtype=dtype)
+            graph = StaticCSC(
+                graph_offsets,
+                graph_indices,
+                graph_ef_indices,
+            )
+            self.static_csc = graph
+
+        return self.static_csc
 
 
 def checkpoint_identity(layer: Callable, *args: Any, **kwargs: Any) -> Any:
@@ -85,7 +193,7 @@ def concat_message_function(edges: Tensor) -> Dict[Tensor]:
         Concatenated source node, destination node, and edge features.
     """
     # concats src node , dst node, and edge features
-    cat_feat = torch.cat((edges.src["x"], edges.dst["x"], edges.data["x"]), dim=1)
+    cat_feat = torch.cat((edges.data["x"], edges.src["x"], edges.dst["x"]), dim=1)
     return {"cat_feat": cat_feat}
 
 

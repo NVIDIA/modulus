@@ -19,13 +19,8 @@ from typing import Union
 from torch import Tensor
 from dgl import DGLGraph
 
-try:
-    from pylibcugraphops.typing import FgCsr
-except ImportError:
-    FgCsr = None
 
-
-from .utils import set_checkpoint_fn
+from .utils import set_checkpoint_fn, CuGraphCSC
 from .node_block import NodeBlockDGL, NodeBlockCUGO
 from .edge_block import (
     EdgeBlockDGLConcat,
@@ -40,7 +35,7 @@ class Processor(nn.Module):
 
     Parameters
     ----------
-    graph : DGLGraph | cuGraphAnyCsr
+    graph : DGLGraph | CuGraphCSC
         graph structure representing the edges between mesh and grid
     aggregation : str, optional
         message passing aggregation method ("sum", "mean"), by default "sum"
@@ -64,7 +59,7 @@ class Processor(nn.Module):
 
     def __init__(
         self,
-        graph: Union[DGLGraph, FgCsr],
+        graph: Union[DGLGraph, CuGraphCSC],
         aggregation: str = "sum",
         processor_layers: int = 16,
         input_dim_nodes: int = 512,
@@ -136,7 +131,6 @@ class Processor(nn.Module):
             self.checkpoint_fn = set_checkpoint_fn(False)
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
-    @torch.jit.unused
     def run_function(self, segment_start: int, segment_end: int):
         segment = self.processor_layers[segment_start:segment_end]
 
@@ -163,3 +157,9 @@ class Processor(nn.Module):
             )
 
         return efeat, nfeat
+
+    def to(self, *args, **kwargs) -> Processor:
+        self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
+        return self

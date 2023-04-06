@@ -17,18 +17,11 @@ import torch.nn as nn
 import warnings
 
 from torch import Tensor
-from dgl import DGLGraph
-
-try:
-    from pylibcugraphops import make_mfg_csr, make_fg_csr
-except ImportError:
-    make_mfg_csr = None
-    make_fg_csr = None
 
 from typing import Any
 from dataclasses import dataclass
 
-from .utils import set_checkpoint_fn
+from .utils import set_checkpoint_fn, CuGraphCSC
 from .mlp import MLP
 from .processor import Processor
 from .embedder import EncoderEmbedder, DecoderEmbedder
@@ -163,33 +156,37 @@ class GraphCastNet(Module):
             Encoder = EncoderDGLSum if do_concat_trick else EncoderDGLConcat
         else:
             Encoder = EncoderCUGOSum if do_concat_trick else EncoderCUGOConcat
-            max_in_degree = self.g2m_graph.in_degrees().max().item()
-            offsets, indices, _ = self.g2m_graph.adj_sparse("csc")
-            self.g2m_graph = make_mfg_csr(
-                self.g2m_graph.dstnodes(),
-                offsets,
-                indices,
-                max_in_degree,
+            offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+            n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
+                self.g2m_graph.num_dst_nodes(),
+            )
+            self.g2m_graph = CuGraphCSC(
+                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
             )
 
         if not use_cugraphops_decoder:
             Decoder = DecoderDGLSum if do_concat_trick else DecoderDGLConcat
         else:
             Decoder = DecoderCUGOSum if do_concat_trick else DecoderCUGOConcat
-            max_in_degree = self.m2g_graph.in_degrees().max().item()
-            offsets, indices, _ = self.m2g_graph.adj_sparse("csc")
-            self.m2g_graph = make_mfg_csr(
-                self.m2g_graph.dstnodes(),
-                offsets,
-                indices,
-                max_in_degree,
+            offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
+            n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
+                self.m2g_graph.num_dst_nodes(),
+            )
+            self.m2g_graph = CuGraphCSC(
+                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
             )
 
         if use_cugraphops_processor:
-            offsets, indices, _ = self.mesh_graph.adj_sparse("csc")
-            self.mesh_graph = make_fg_csr(offsets, indices)
+            offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
+            n_in_nodes, n_out_nodes = (
+                self.mesh_graph.num_src_nodes(),
+                self.mesh_graph.num_dst_nodes(),
+            )
+            self.mesh_graph = CuGraphCSC(
+                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
+            )
 
         # by default: don't checkpoint at all
         self.model_checkpoint_fn = set_checkpoint_fn(False)
@@ -606,13 +603,13 @@ class GraphCastNet(Module):
         self.static_data = self.static_data.to(*args, **kwargs)
 
         # TODO apply .to() recursively instead
-        self.encoder = self.encoder.to(*args, **kwargs)
-        self.decoder = self.decoder.to(*args, **kwargs)
-        for module in self.processor.processor_layers:
-            module = module.to(*args, **kwargs)
-        for module in self.processor_encoder.processor_layers:
-            module = module.to(*args, **kwargs)
-        for module in self.processor_decoder.processor_layers:
-            module = module.to(*args, **kwargs)
+        # self.encoder = self.encoder.to(*args, **kwargs)
+        # self.decoder = self.decoder.to(*args, **kwargs)
+        # for module in self.processor.processor_layers:
+        #    module = module.to(*args, **kwargs)
+        # for module in self.processor_encoder.processor_layers:
+        #    module = module.to(*args, **kwargs)
+        # for module in self.processor_decoder.processor_layers:
+        #    module = module.to(*args, **kwargs)
 
         return self

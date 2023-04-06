@@ -19,13 +19,11 @@ from dgl import DGLGraph
 from typing import Any, Tuple
 
 from .mlp import MLP
-from .utils import agg_concat_dgl
+from .utils import agg_concat_dgl, CuGraphCSC
 
 try:
-    from pylibcugraphops.torch.autograd import agg_concat_e2n
-    from pylibcugraphops.typing import FgCsr
-except ImportError:
-    FgCsr = None
+    from pylibcugraphops.pytorch.operators import agg_concat_e2n
+except:
     agg_concat_e2n = None
 
 
@@ -107,11 +105,9 @@ class NodeBlockDGL(nn.Module):
         NodeBlockDGL
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -120,7 +116,7 @@ class NodeBlockCUGO(nn.Module):
 
     Parameters
         ----------
-        graph : FgCsr
+        graph : CuGraphCSC
             Graph.
         aggregation : str, optional
             Aggregation method (sum, mean) , by default "sum"
@@ -142,7 +138,7 @@ class NodeBlockCUGO(nn.Module):
 
     def __init__(
         self,
-        graph: FgCsr,
+        graph: CuGraphCSC,
         aggregation: str = "sum",
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
@@ -154,6 +150,7 @@ class NodeBlockCUGO(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
         self.aggregation = aggregation
 
         self.node_MLP = MLP(
@@ -171,7 +168,10 @@ class NodeBlockCUGO(nn.Module):
         nfeat: Tensor,
     ) -> Tuple[Tensor, Tensor]:
         # aggregate edge features and concat node features
-        cat_feat = agg_concat_e2n(efeat, nfeat, self.graph, self.aggregation)
+        if self.static_graph is None:
+            self.static_graph = self.graph.to_static_csc()
+
+        cat_feat = agg_concat_e2n(efeat, nfeat, self.static_graph, self.aggregation)
         # update node features + residual connection
         nfeat_new = self.node_MLP(cat_feat) + nfeat
         return efeat, nfeat_new
@@ -193,9 +193,7 @@ class NodeBlockCUGO(nn.Module):
         NodeBlockCUGO
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self

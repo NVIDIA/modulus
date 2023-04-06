@@ -19,15 +19,18 @@ from torch import Tensor
 from dgl import DGLGraph
 from typing import Any, Tuple
 from .mlp import MLP, TMLPDGL, TMLPCUGO
-from .utils import agg_concat_dgl, concat_efeat_dgl_m2g_g2m
+from .utils import agg_concat_dgl, concat_efeat_dgl_m2g_g2m, CuGraphCSC
 
 try:
-    from pylibcugraphops.torch.autograd import agg_concat_e2n, update_efeat_e2e
-    from pylibcugraphops.typing import MfgCsr
-except ImportError:
-    MfgCsr = None
+    from pylibcugraphops.pytorch.operators import (
+        agg_concat_e2n,
+        update_efeat_bipartite_e2e,
+    )
+    from pylibcugraphops.pytorch import BipartiteCSC
+except:
     agg_concat_e2n = None
-    update_efeat_e2e = None
+    update_efeat_bipartite_e2e = None
+    BipartiteCSC = None
 
 
 class EncoderDGLConcat(nn.Module):
@@ -118,8 +121,8 @@ class EncoderDGLConcat(nn.Module):
         cat_feat = agg_concat_dgl(efeat, mesh_nfeat, self.graph, self.aggregation)
 
         # update src, dst node features + residual connections
-        mesh_nfeat += self.dst_node_MLP(cat_feat)
-        grid_nfeat = self.src_node_MLP(grid_nfeat) + grid_nfeat
+        mesh_nfeat = mesh_nfeat + self.dst_node_MLP(cat_feat)
+        grid_nfeat = grid_nfeat + self.src_node_MLP(grid_nfeat)
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
@@ -140,11 +143,9 @@ class EncoderDGLConcat(nn.Module):
         EncoderDGLConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, dtype, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -239,8 +240,8 @@ class EncoderDGLSum(nn.Module):
             g2m_efeat, grid_nfeat, mesh_nfeat, self.src, self.dst
         )
         cat_feat = agg_concat_dgl(mlp_efeat, mesh_nfeat, self.graph, self.aggregation)
-        mesh_nfeat = self.dst_node_MLP(cat_feat) + mesh_nfeat
-        grid_nfeat = self.src_node_MLP(grid_nfeat) + grid_nfeat
+        mesh_nfeat = mesh_nfeat + self.dst_node_MLP(cat_feat)
+        grid_nfeat = grid_nfeat + self.src_node_MLP(grid_nfeat)
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
@@ -261,11 +262,9 @@ class EncoderDGLSum(nn.Module):
         EncoderDGLSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -274,7 +273,7 @@ class EncoderCUGOConcat(nn.Module):
 
     Parameters
     ----------
-    graph : MfgCsr
+    graph : CuGraphCSC
         graph structure representing the edges between mesh and grid
     aggregation : str, optional
         message passing aggregation method ("sum", "mean"), by default "sum"
@@ -302,7 +301,7 @@ class EncoderCUGOConcat(nn.Module):
 
     def __init__(
         self,
-        graph: MfgCsr,
+        graph: CuGraphCSC,
         aggregation: str = "sum",
         input_dim_src_nodes: int = 512,
         input_dim_dst_nodes: int = 512,
@@ -317,6 +316,9 @@ class EncoderCUGOConcat(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
+        self.bipartite_graph = None
+
         self.aggregation = aggregation
 
         # edge MLP
@@ -352,15 +354,23 @@ class EncoderCUGOConcat(nn.Module):
     def forward(
         self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        efeat = update_efeat_e2e(
-            g2m_efeat, grid_nfeat, mesh_nfeat, self.graph, mode="concat"
+        if self.bipartite_graph is None:
+            self.bipartite_graph = self.graph.to_bipartite_csc()
+        if self.static_graph is None:
+            # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
+            self.static_graph = self.graph.to_static_csc(dtype=torch.int64)
+
+        efeat = update_efeat_bipartite_e2e(
+            g2m_efeat, grid_nfeat, mesh_nfeat, self.bipartite_graph, mode="concat"
         )
         efeat = self.edge_MLP(efeat)
-        cat_feat = agg_concat_e2n(mesh_nfeat, efeat, self.graph, self.aggregation)
+        cat_feat = agg_concat_e2n(
+            mesh_nfeat, efeat, self.static_graph, self.aggregation
+        )
 
         # update src, dst node features + residual connections
-        mesh_nfeat += self.dst_node_MLP(cat_feat)
-        grid_nfeat = self.src_node_MLP(grid_nfeat) + grid_nfeat
+        mesh_nfeat = mesh_nfeat + self.dst_node_MLP(cat_feat)
+        grid_nfeat = grid_nfeat + self.src_node_MLP(grid_nfeat)
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
@@ -381,11 +391,9 @@ class EncoderCUGOConcat(nn.Module):
         EncoderCUGOConcat
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
 
 
@@ -422,7 +430,7 @@ class EncoderCUGOSum(nn.Module):
 
     def __init__(
         self,
-        graph: MfgCsr,
+        graph: CuGraphCSC,
         aggregation: str = "sum",
         input_dim_src_nodes: int = 512,
         input_dim_dst_nodes: int = 512,
@@ -437,6 +445,8 @@ class EncoderCUGOSum(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.bipartite_graph = None
+        self.static_graph = None
         self.aggregation = aggregation
 
         # edge MLP
@@ -475,10 +485,19 @@ class EncoderCUGOSum(nn.Module):
     def forward(
         self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        mlp_efeat = self.edge_TMLP(g2m_efeat, grid_nfeat, mesh_nfeat, self.graph)
-        cat_feat = agg_concat_e2n(mesh_nfeat, mlp_efeat, self.graph, self.aggregation)
-        mesh_nfeat = self.dst_node_MLP(cat_feat) + mesh_nfeat
-        grid_nfeat = self.src_node_MLP(grid_nfeat) + grid_nfeat
+        if self.bipartite_graph is None:
+            self.bipartite_graph = self.graph.to_bipartite_csc()
+        if self.static_graph is None:
+            self.static_graph = self.graph.to_static_csc()
+
+        mlp_efeat = self.edge_TMLP(
+            g2m_efeat, grid_nfeat, mesh_nfeat, self.bipartite_graph
+        )
+        cat_feat = agg_concat_e2n(
+            mesh_nfeat, mlp_efeat, self.static_graph, self.aggregation
+        )
+        mesh_nfeat = mesh_nfeat + self.dst_node_MLP(cat_feat)
+        grid_nfeat = grid_nfeat + self.src_node_MLP(grid_nfeat)
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
@@ -499,9 +518,7 @@ class EncoderCUGOSum(nn.Module):
         EncoderCUGOSum
             The updated object after moving to the specified device, dtype, or format.
         """
-        device, dtype, non_blocking, convert_to_format = torch._C._nn._parse_to(
-            *args, **kwargs
-        )
-        self.graph = self.graph.to(device=device, dtype=dtype)
         self = super().to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.graph = self.graph.to(device=device)
         return self
