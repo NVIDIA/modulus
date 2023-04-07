@@ -14,6 +14,7 @@
 
 import dgl
 import torch
+import sys, os
 import numpy as np
 
 
@@ -27,3 +28,10 @@ def fix_random_seeds():
 def create_random_input(dim: int = 2):
     """Create random input for testing"""
     return torch.randn(1, dim, 721, 1440)
+
+
+def get_icosphere_path():
+    """Get path to icosphere mesh"""
+    script_path = os.path.abspath(__file__)
+    icosphere_path = os.path.join(os.path.dirname(script_path), "icospheres.pickle")
+    return icosphere_path

@@ -14,12 +14,14 @@
 
 import torch
 
-from utils import fix_random_seeds, create_random_input
+from utils import fix_random_seeds, create_random_input, get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
+
+icosphere_path = get_icosphere_path()
 
 # constants
 model_kwds = {
-    "meshgraph_path": "./icospheres.pickle",
+    "meshgraph_path": icosphere_path,
     "static_dataset_path": None,
     "input_dim_grid_nodes": 2,
     "input_dim_mesh_nodes": 3,

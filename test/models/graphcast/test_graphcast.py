@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
+import sys, os
 
-sys.path.append("..")
+script_path = os.path.abspath(__file__)
+sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import torch
 import pytest
@@ -22,7 +23,10 @@ import pytest
 from utils import fix_random_seeds, create_random_input
 
 import common
+from utils import get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
+
+icosphere_path = get_icosphere_path()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -30,7 +34,7 @@ def test_graphcast_forward(device):
     """Test graphcast forward pass"""
 
     model_kwds = {
-        "meshgraph_path": "./icospheres.pickle",
+        "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
         "input_dim_grid_nodes": 2,
         "input_dim_mesh_nodes": 3,
@@ -58,7 +62,7 @@ def test_graphcast_constructor(device):
     # Define dictionary of constructor args
     arg_list = [
         {
-            "meshgraph_path": "./icospheres.pickle",
+            "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
             "input_res": (721, 1440),
             "input_dim_grid_nodes": 2,
@@ -70,7 +74,7 @@ def test_graphcast_constructor(device):
             "do_concat_trick": True,
         },
         {
-            "meshgraph_path": "./icospheres.pickle",
+            "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
             "input_res": (721, 1440),
             "input_dim_grid_nodes": 3,
@@ -102,7 +106,7 @@ def test_GraphCast_optims(device):
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
         model_kwds = {
-            "meshgraph_path": "./icospheres.pickle",
+            "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
             "input_dim_grid_nodes": 2,
             "input_dim_mesh_nodes": 3,
@@ -144,7 +148,7 @@ def test_graphcast_checkpoint(device):
     """Test GraphCast checkpoint save/load"""
 
     model_kwds = {
-        "meshgraph_path": "./icospheres.pickle",
+        "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
         "input_dim_grid_nodes": 2,
         "input_dim_mesh_nodes": 3,
@@ -176,7 +180,7 @@ def test_GraphCast_deploy(device):
     """Test GraphCast deployment support"""
 
     model_kwds = {
-        "meshgraph_path": "./icospheres.pickle",
+        "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
         "input_dim_grid_nodes": 2,
         "input_dim_mesh_nodes": 3,
