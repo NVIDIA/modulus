@@ -20,6 +20,60 @@ from .histogram import cdf as cdf_function
 Tensor = torch.Tensor
 
 
+def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) -> Tensor:
+    """Computes the local Continuous Ranked Probability Score (CRPS)
+    using assuming that the forecast distribution is normal.
+
+    Creates a map of CRPS and does not accumulate over lat/lon regions.
+    Computes:
+
+    .. math:
+        CRPS(mean, std, y) = std * [ \\frac{1}{\\pi} - 2 \\phi ( \\frac{x-mean}{std} ) -
+                ( \\frac{x-mean}{std} ) * (2 \\Phi(\\frac{x-mean}{std}) - 1) ]
+
+    Parameters
+    ----------
+    mean : Tensor
+        Tensor of mean of forecast distribution.
+    std : Tensor
+        Tensor of standard deviation of forecast distribution.
+    obs : Union[Tensor, np.ndarray]
+        Tensor or array containing an observation over which the CRPS is computed
+        with respect to. Broadcasting dimensions must be compatible with the non-zeroth
+        dimensions of bins and cdf.
+
+    Returns
+    -------
+    Tensor
+        Map of CRPS
+    """
+    if isinstance(obs, np.ndarray):
+        obs = torch.from_numpy(obs).to(mean.device)
+    # Check shape compatibility
+    assert mean.shape == std.shape, (
+        "Mean and standard deviation must have"
+        + "compatible shapes but found"
+        + str(mean.shape)
+        + " and "
+        + str(std.shape)
+        + "."
+    )
+    assert mean.shape == obs.shape, (
+        "Mean and obs must have"
+        + "compatible shapes but found"
+        + str(mean.shape)
+        + " and "
+        + str(obs.shape)
+        + "."
+    )
+
+    d = (obs - mean) / std
+    phi = torch.exp(-0.5 * d**2) / torch.sqrt(torch.as_tensor(2 * torch.pi))
+    Phi = torch.erf(d / torch.sqrt(torch.as_tensor(2.0)))
+
+    return 2 * phi + (obs - mean) * Phi - std / torch.sqrt(torch.as_tensor(torch.pi))
+
+
 def _crps_from_cdf(
     bin_edges: Tensor, cdf: Tensor, obs: Union[Tensor, np.ndarray]
 ) -> Tensor:

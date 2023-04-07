@@ -95,9 +95,10 @@ def _low_memory_bin_reduction_counts(
             counts[i] += (inputs[j] < bin_edges[i + 1]).int() - (
                 inputs[j] < bin_edges[i]
             ).int()
+
     for j in range(inputs.shape[0]):
         counts[number_of_bins - 1] += (
-            inputs.shape[0] - (inputs[j] < bin_edges[number_of_bins - 1]).int()
+            1 - (inputs[j] < bin_edges[number_of_bins - 1]).int()
         )
 
     return counts
@@ -171,8 +172,7 @@ def _low_memory_bin_reduction_cdf(
     for i in range(number_of_bins - 1):
         for j in range(inputs.shape[0]):
             counts[i] += (inputs[j] < bin_edges[i + 1]).int()
-    for j in range(inputs.shape[0]):
-        counts[number_of_bins - 1] += inputs.shape[0]
+    counts[number_of_bins - 1] += inputs.shape[0]
     return counts
 
 
@@ -396,9 +396,9 @@ def _update_bins_counts(
     # If in distributed environment, reduce to get extrema min and max
     if DistributedManager.is_initialized() and dist.is_initialized():
         dist.all_reduce(partial_counts, op=dist.ReduceOp.SUM)
-
+    counts += partial_counts
     # Finally, combine the new partial counts with the existing counts
-    return bin_edges, counts + partial_counts
+    return bin_edges, counts
 
 
 def _compute_counts_cdf(
@@ -469,7 +469,7 @@ def _compute_counts_cdf(
             low, high = _get_mins_maxs(*inputs)
             # Compare against existing bin_edges
             low = torch.where(low < bin_edges[0], low, bin_edges[0])
-            high = torch.where(high > bin_edges[0], high, bin_edges[-1])
+            high = torch.where(high > bin_edges[-1], high, bin_edges[-1])
 
             # Update, if necessary
             if torch.any(low != bin_edges[0]) | torch.any(high != bin_edges[-1]):
@@ -689,3 +689,99 @@ class Histogram(EnsembleMetrics):
             return self.bin_edges, self.cdf
         else:
             return self.bin_edges, self.pdf
+
+
+def normal_pdf(
+    mean: Tensor, std: Tensor, bin_edges: Tensor, grid: str = "midpoint"
+) -> Tensor:
+    """Computes the probability density function of a normal variable with given mean
+    and standard deviation. This PDF is given at the locations given by the midpoint
+     of the bin_edges.
+
+    This function uses the standard formula:
+    .. math:
+        \\frac{1}{\\sqrt{2*\\pi} std } \\exp( -\\frac{1}{2} (\\frac{x-mean}{std})^2 )
+
+    where erf is the error function.
+
+    Parameters
+    ----------
+    mean : Tensor
+        mean tensor
+    std : Tensor
+        standard deviation tensor
+    bins : Tensor
+        The tensor of bin edges with dimension [N+1, ...]
+        where N is the number of bins.
+    grid : str
+        A string that indicates where in the bins should the cdf be defined.
+        Can be one of {"midpoint", "left", "right"}.
+    Returns
+    -------
+    Tensor
+        The calculated cdf tensor with dimension [N, ...]
+    """
+    if grid == "midpoint":
+        bin_mids = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    elif grid == "right":
+        bin_mids = bin_edges[1:]
+    elif grid == "left":
+        bin_mids = bin_edges[:-1]
+    else:
+        assert ValueError(
+            "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
+        )
+    return (
+        torch.exp(-0.5 * ((bin_mids - mean[None, ...]) / std[None, ...]) ** 2)
+        / std[None, ...]
+        / torch.sqrt(torch.as_tensor(2.0 * torch.pi))
+    )
+
+
+def normal_cdf(
+    mean: Tensor,
+    std: Tensor,
+    bin_edges: Tensor,
+    grid: str = "midpoint",
+) -> Tensor:
+    """Computes the cumulative density function of a normal variable with given mean
+    and standard deviation. This CDF is given at the locations given by the midpoint
+     of the bin_edges.
+
+    This function uses the standard formula:
+    .. math:
+        \\frac{1}{2} ( 1 + erf( \\frac{x-mean}{std \\sqrt{2}}) ) )
+
+    where erf is the error function.
+
+    Parameters
+    ----------
+    mean : Tensor
+        mean tensor
+    std : Tensor
+        standard deviation tensor
+    bins : Tensor
+        The tensor of bin edges with dimension [N+1, ...]
+        where N is the number of bins.
+    grid : str
+        A string that indicates where in the bins should the cdf be defined.
+        Can be one of {"mids", "left", "right"}.
+    Returns
+    -------
+    Tensor
+        The calculated cdf tensor with dimension [N, ...]
+    """
+    if grid == "midpoint":
+        bin_mids = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    elif grid == "right":
+        bin_mids = bin_edges[1:]
+    elif grid == "left":
+        bin_mids = bin_edges[:-1]
+    else:
+        assert ValueError(
+            "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
+        )
+    return 0.5 + 0.5 * torch.erf(
+        (bin_mids - mean[None, ...])
+        / (torch.sqrt(torch.as_tensor([2.0], device=mean.device)) * std[None, ...])
+    )

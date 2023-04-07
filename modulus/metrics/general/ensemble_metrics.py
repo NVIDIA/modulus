@@ -155,7 +155,7 @@ class Mean(EnsembleMetrics):
             Mean value
         """
         self.sum = torch.sum(input, dim=0)
-        self.n = input.shape[0]
+        self.n = torch.as_tensor(input.shape[0])
         # TODO(Dallas) Move distributed calls into finalize.
 
         if DistributedManager.is_initialized() and dist.is_initialized():
@@ -300,7 +300,7 @@ class Variance(EnsembleMetrics):
             Unbiased variance values
         """
         self.sum = torch.sum(inputs, dim=0)
-        self.n = inputs.shape[0]
+        self.n = torch.as_tensor(inputs.shape[0])
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
             # Compute mean and send around.
@@ -312,7 +312,10 @@ class Variance(EnsembleMetrics):
         else:
             self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=0)
 
-        return self.sum2 / (self.n - 1.0)
+        if self.n < 2.0:
+            return self.sum2
+        else:
+            return self.sum2 / (self.n - 1.0)
 
     def update(self, inputs: Tensor) -> Tensor:
         """Update current variance value and essential statistics with new data
@@ -347,7 +350,10 @@ class Variance(EnsembleMetrics):
         self.sum2 += new_sum2
         self.sum2 += self.n / new_n / (self.n + new_n) * (delta) ** 2
         self.n += new_n
-        return self.sum2 / (self.n - 1.0)
+        if self.n < 2.0:
+            return self.sum2
+        else:
+            return self.sum2 / (self.n - 1.0)
 
     @property
     def mean(self) -> Tensor:
@@ -367,6 +373,9 @@ class Variance(EnsembleMetrics):
         Tensor
             Final (mean, variance/std) value
         """
+        assert (
+            self.n > 1.0
+        ), "Error! In order to finalize, there needs to be at least 2 samples."
         self.var = self.sum2 / (self.n - 1.0)
         if std:
             self.std = torch.sqrt(self.var)
