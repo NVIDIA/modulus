@@ -314,7 +314,7 @@ class EncoderCUGOConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: int = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.aggregation = aggregation
@@ -351,7 +351,7 @@ class EncoderCUGOConcat(nn.Module):
 
     def forward(
         self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:  # pragma: no cover
         efeat = update_efeat_e2e(
             g2m_efeat, grid_nfeat, mesh_nfeat, self.graph, mode="concat"
         )
@@ -364,7 +364,7 @@ class EncoderCUGOConcat(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOConcat":
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOConcat":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -434,7 +434,7 @@ class EncoderCUGOSum(nn.Module):
         hidden_layers: int = 1,
         activation_fn: int = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.aggregation = aggregation
@@ -474,7 +474,7 @@ class EncoderCUGOSum(nn.Module):
 
     def forward(
         self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:  # pragma: no cover
         mlp_efeat = self.edge_TMLP(g2m_efeat, grid_nfeat, mesh_nfeat, self.graph)
         cat_feat = agg_concat_e2n(mesh_nfeat, mlp_efeat, self.graph, self.aggregation)
         mesh_nfeat = self.dst_node_MLP(cat_feat) + mesh_nfeat
@@ -482,7 +482,7 @@ class EncoderCUGOSum(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOSum":
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOSum":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.

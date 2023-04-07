@@ -234,7 +234,7 @@ class TMLPCUGO(TMLPDGL):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         bias: bool = True,
-    ):
+    ):  # pragma: no cover
         super().__init__(
             efeat_dim,
             src_dim,
@@ -253,7 +253,7 @@ class TMLPCUGO(TMLPDGL):
         src_feat: Tensor,
         dst_feat: Tensor,
         graph: Union[MfgCsr, FgCsr],
-    ) -> Tensor:
+    ) -> Tensor:  # pragma: no cover
         # separate linear layers without bias
         mlp_efeat = F.linear(efeat, self.lin_efeat, None)
         mlp_src = F.linear(src_feat, self.lin_src, None)
