@@ -221,7 +221,7 @@ class EdgeBlockCUGOConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.static_graph = None
@@ -254,7 +254,9 @@ class EdgeBlockCUGOConcat(nn.Module):
         efeat_new = self.edge_MLP(cat_feat) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOConcat":
+    def to(
+        self, *args: Any, **kwargs: Any
+    ) -> "EdgeBlockCUGOConcat":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -310,7 +312,7 @@ class EdgeBlockCUGOSum(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.bipartite_graph = None
@@ -338,7 +340,7 @@ class EdgeBlockCUGOSum(nn.Module):
         efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.bipartite_graph) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOSum":
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOSum":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.

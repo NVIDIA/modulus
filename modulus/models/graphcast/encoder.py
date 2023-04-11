@@ -313,7 +313,7 @@ class EncoderCUGOConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: int = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.static_graph = None
@@ -374,7 +374,7 @@ class EncoderCUGOConcat(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOConcat":
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOConcat":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -442,7 +442,7 @@ class EncoderCUGOSum(nn.Module):
         hidden_layers: int = 1,
         activation_fn: int = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.bipartite_graph = None
@@ -501,7 +501,7 @@ class EncoderCUGOSum(nn.Module):
         # TODO (mnabian) verify edge update is not needed (Eq. A.10)
         return grid_nfeat, mesh_nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOSum":
+    def to(self, *args: Any, **kwargs: Any) -> "EncoderCUGOSum":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.

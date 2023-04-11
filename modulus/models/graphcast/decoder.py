@@ -277,7 +277,7 @@ class DecoderCUGOConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.static_graph = None
@@ -306,7 +306,7 @@ class DecoderCUGOConcat(nn.Module):
 
     def forward(
         self, m2g_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
-    ) -> Tensor:
+    ) -> Tensor:  # pragma: no cover
         """DecoderCUGOConcat forward method with support for gradient checkpointing.
 
         Parameters
@@ -339,7 +339,7 @@ class DecoderCUGOConcat(nn.Module):
         dst_feat = self.node_MLP(cat_feat) + grid_nfeat
         return dst_feat
 
-    def to(self, *args: Any, **kwargs: Any) -> "DecoderCUGOConcat":
+    def to(self, *args: Any, **kwargs: Any) -> "DecoderCUGOConcat":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -404,7 +404,7 @@ class DecoderCUGOSum(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.static_graph = None
@@ -449,7 +449,7 @@ class DecoderCUGOSum(nn.Module):
         dst_feat = self.node_MLP(cat_feat) + grid_nfeat
         return dst_feat
 
-    def to(self, *args: Any, **kwargs: Any) -> "DecoderCUGOSum":
+    def to(self, *args: Any, **kwargs: Any) -> "DecoderCUGOSum":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.

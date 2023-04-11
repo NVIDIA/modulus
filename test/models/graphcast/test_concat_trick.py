@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import torch
 import numpy as np
 
+from utils import get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
+
+icosphere_path = get_icosphere_path()
 
 # Fix random seeds
 torch.manual_seed(0)
@@ -34,7 +36,7 @@ np.random.seed(0)
 
 # Instantiate the model
 model = GraphCastNet(
-    meshgraph_path="./icospheres.pickle",
+    meshgraph_path=icosphere_path,
     static_dataset_path=None,
     input_dim_grid_nodes=2,
     input_dim_mesh_nodes=3,
@@ -52,7 +54,7 @@ np.random.seed(0)
 
 # Instantiate the model with concat trick enabled
 model_ct = GraphCastNet(
-    meshgraph_path="./icospheres.pickle",
+    meshgraph_path=icosphere_path,
     static_dataset_path=None,
     input_dim_grid_nodes=2,
     input_dim_mesh_nodes=3,

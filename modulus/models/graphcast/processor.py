@@ -116,6 +116,20 @@ class Processor(nn.Module):
         self.checkpoint_fn = set_checkpoint_fn(False)
 
     def set_checkpoint_segments(self, checkpoint_segments: int):
+        """
+        Set the number of checkpoint segments
+
+        Parameters
+        ----------
+        checkpoint_segments : int
+            number of checkpoint segments
+
+        Raises
+        ------
+        ValueError
+            if the number of processor layers is not a multiple of the number of
+            checkpoint segments
+        """
         if checkpoint_segments > 0:
             if self.num_processor_layers % checkpoint_segments != 0:
                 raise ValueError(
@@ -132,9 +146,24 @@ class Processor(nn.Module):
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
     def run_function(self, segment_start: int, segment_end: int):
+        """Custom forward for gradient checkpointing
+
+        Parameters
+        ----------
+        segment_start : int
+            Layer index as start of the segment
+        segment_end : int
+            Layer index as end of the segment
+
+        Returns
+        -------
+        function
+            Custom forward function
+        """
         segment = self.processor_layers[segment_start:segment_end]
 
         def custom_forward(efeat, nfeat):
+            """Custom forward function"""
             for module in segment:
                 efeat, nfeat = module(efeat, nfeat)
             return efeat, nfeat

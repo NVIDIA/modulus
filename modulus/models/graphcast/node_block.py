@@ -147,7 +147,7 @@ class NodeBlockCUGO(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-    ):
+    ):  # pragma: no cover
         super().__init__()
         self.graph = graph
         self.static_graph = None
@@ -166,7 +166,7 @@ class NodeBlockCUGO(nn.Module):
         self,
         efeat: Tensor,
         nfeat: Tensor,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:  # pragma: no cover
         # aggregate edge features and concat node features
         if self.static_graph is None:
             self.static_graph = self.graph.to_static_csc()
@@ -176,7 +176,7 @@ class NodeBlockCUGO(nn.Module):
         nfeat_new = self.node_MLP(cat_feat) + nfeat
         return efeat, nfeat_new
 
-    def to(self, *args: Any, **kwargs: Any) -> "NodeBlockCUGO":
+    def to(self, *args: Any, **kwargs: Any) -> "NodeBlockCUGO":  # pragma: no cover
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.

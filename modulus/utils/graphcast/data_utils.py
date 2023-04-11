@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import netCDF4 as nc
 import numpy as np
 import torch
@@ -26,13 +40,13 @@ class StaticData:
         static_dataset_path: str,
         latitudes: Tensor,
         longitudes: Tensor,
-    ) -> None:
+    ) -> None:  # pragma: no cover
         self.lsm_path = os.path.join(static_dataset_path, "land_sea_mask.nc")
         self.geop_path = os.path.join(static_dataset_path, "geopotential.nc")
         self.lat = latitudes
         self.lon = longitudes
 
-    def get_lsm(self) -> Tensor:
+    def get_lsm(self) -> Tensor:  # pragma: no cover
         """Get land-sea mask from netCDF file.
 
         Returns
@@ -44,7 +58,7 @@ class StaticData:
         lsm = np.expand_dims(ds["lsm"], axis=0)
         return torch.tensor(lsm, dtype=torch.float32)
 
-    def get_geop(self, normalize: True) -> Tensor:
+    def get_geop(self, normalize: True) -> Tensor:  # pragma: no cover
         """Get geopotential from netCDF file.
 
         Parameters
@@ -63,7 +77,7 @@ class StaticData:
             geop = (geop - geop.mean()) / geop.std()
         return torch.tensor(geop, dtype=torch.float32)
 
-    def get_lat_lon(self) -> Tensor:
+    def get_lat_lon(self) -> Tensor:  # pragma: no cover
         """Computes cosine of latitudes and sine and cosine of longitudes.
 
         Returns
@@ -91,7 +105,7 @@ class StaticData:
         outvar = torch.cat((cos_lat_mg, sin_lon_mg, cos_lon_mg), dim=1)
         return outvar
 
-    def get(self) -> Tensor:
+    def get(self) -> Tensor:  # pragma: no cover
         """Get all static data.
 
         Returns
