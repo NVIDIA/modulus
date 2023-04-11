@@ -36,6 +36,10 @@ RUN mkdir -p $HOME/.config/fsspec/ && \
     echo "{\"s3\": {\"client_kwargs\": {\"endpoint_url\": \"https://pbss.s8k.io\"}}}" >> $HOME/.config/fsspec/s3.json
 
 # install libcugraphops and pylibcugraphops
+RUN apt-get install -y software-properties-common &&\
+    add-apt-repository ppa:ubuntu-toolchain-r/test &&\
+    apt-get update &&\
+    apt-get install -y libstdc++6
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
     wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
