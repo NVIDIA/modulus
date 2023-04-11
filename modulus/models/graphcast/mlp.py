@@ -47,6 +47,9 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
         weight: torch.Tensor,
         bias: torch.Tensor,
     ) -> torch.Tensor:
+        # by combining SiLU and a Linear transformation
+        # we can avoid storing the activation
+        # at the cost of recomputing it during the backward
         out = F.silu(features)
         out = F.linear(out, weight, bias)
         ctx.save_for_backward(features, weight)
@@ -56,11 +59,7 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
     @once_differentiable
     def backward(
         ctx, grad_output: torch.Tensor
-    ) -> Tuple[
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-    ]:
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor],]:
         (
             need_dgrad,
             need_wgrad,
@@ -105,8 +104,9 @@ class MLP(nn.Module):
         , by default nn.SiLU()
     norm_type : str, optional
         normalization type, by default "LayerNorm"
-    recompue_silu : bool, optional
-        flag for recomputing silu in backward to save memory, by default False
+    recompute_activation : bool, optional
+        Flag for recomputing recompute_activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -117,15 +117,17 @@ class MLP(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
-        recompute_silu: bool = False,
+        recompute_activation: bool = False,
     ):
         super().__init__()
 
         layers = [nn.Linear(input_dim, hidden_dim), activation_fn]
+        self.hidden_layers = hidden_layers
         for _ in range(hidden_layers - 1):
             layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
         layers.append(nn.Linear(hidden_dim, output_dim))
 
+        self.norm_type = norm_type
         if norm_type is not None:
             assert norm_type in [
                 "LayerNorm",
@@ -142,9 +144,7 @@ class MLP(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-        #TODO generalize this to more hidden layers
-        if recompute_silu:
-            assert hidden_layers == 1
+        if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
             self.forward_fn = self.custom_silu_linear_forward
         else:
@@ -154,20 +154,24 @@ class MLP(nn.Module):
         return self.model(x)
 
     def custom_silu_linear_forward(self, x: Tensor) -> Tensor:
-        lin1 = self.model[0]
-        lin2 = self.model[2]
-        hidden = lin1(x)
-        out = CustomSiLuLinearAutogradFunction.apply(hidden, lin2.weight, lin2.bias)
+        lin = self.model[0]
+        hidden = lin(x)
+        for i in range(1, self.hidden_layers + 1):
+            lin = self.model[2 * i]
+            hidden = CustomSiLuLinearAutogradFunction.apply(
+                hidden, lin.weight, lin.bias
+            )
+
         if self.norm_type is not None:
-            norm = self.model[3]
-            out = norm(out)
-        return out
+            norm = self.model[2 * self.hidden_layers + 1]
+            hidden = norm(hidden)
+        return hidden
 
     def forward(self, x: Tensor) -> Tensor:
         return self.forward_fn(x)
 
 
-class TMLPDGL(nn.Module):
+class TruncatedMLP(nn.Module):
     """Truncated MLP where concat+MLP is replaced by MLP+sum
 
     Parameters
@@ -190,8 +194,9 @@ class TMLPDGL(nn.Module):
         normalization type, by default "LayerNorm"
     bias : bool, optional
         whether to use bias in the MLP, by default True
-    recompue_silu : bool, optional
-        flag for recomputing silu in backward to save memory, by default False
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -205,7 +210,7 @@ class TMLPDGL(nn.Module):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         bias: bool = True,
-        recompute_silu : bool = False,
+        recompute_activation: bool = False,
     ):
         super().__init__()
 
@@ -231,6 +236,7 @@ class TMLPDGL(nn.Module):
             self.bias = None
 
         layers = [activation_fn]
+        self.hidden_layers = hidden_layers
         for _ in range(hidden_layers - 1):
             layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
         layers.append(nn.Linear(hidden_dim, output_dim))
@@ -252,15 +258,13 @@ class TMLPDGL(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-        # TODO generalize to more hidden layers
-        if recompute_silu:
-            assert hidden_layers == 1
+        if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
             self.forward_fn = self.custom_silu_linear_forward
         else:
             self.forward_fn = self.default_forward
 
-    def forward_base(
+    def forward_truncated_sum(
         self,
         efeat: Tensor,
         src_feat: Tensor,
@@ -287,7 +291,9 @@ class TMLPDGL(nn.Module):
         src_idx: Tensor,
         dst_idx: Tensor,
     ) -> Tensor:
-        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, src_idx, dst_idx)
+        mlp_sum = self.forward_truncated_sum(
+            efeat, src_feat, dst_feat, src_idx, dst_idx
+        )
         return self.model(mlp_sum)
 
     def custom_silu_linear_forward(
@@ -298,13 +304,21 @@ class TMLPDGL(nn.Module):
         src_idx: Tensor,
         dst_idx: Tensor,
     ) -> Tensor:
-        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, src_idx, dst_idx)
-        lin2 = self.model[1]
-        out = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin2.weight, lin2.bias)
+        mlp_sum = self.forward_truncated_sum(
+            efeat, src_feat, dst_feat, src_idx, dst_idx
+        )
+        lin = self.model[1]
+        hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)
+        for i in range(2, self.hidden_layers + 1):
+            lin = self.model[2 * i - 1]
+            hidden = CustomSiLuLinearAutogradFunction.apply(
+                hidden, lin.weight, lin.bias
+            )
+
         if self.norm_type is not None:
-            norm = self.model[2]
-            out = norm(out)
-        return out 
+            norm = self.model[2 * self.hidden_layers]
+            hidden = norm(hidden)
+        return hidden
 
     def forward(
         self,
@@ -317,9 +331,9 @@ class TMLPDGL(nn.Module):
         return self.forward_fn(efeat, src_feat, dst_feat, src_idx, dst_idx)
 
 
-class TMLPCUGO(nn.Module):
-    """Truncated MLP where concat+MLP is replaced
-    by MLP+sum
+class TruncatedMLPCuGraph(TruncatedMLP):
+    """Truncated MLP where concat+MLP is replaced by MLP+sum
+       which uses CuGraph as the GNN backend.
 
     Parameters
     ----------
@@ -341,8 +355,9 @@ class TMLPCUGO(nn.Module):
         normalization type, by default "LayerNorm"
     bias : bool, optional
         whether to use bias in the MLP, by default True
-    recompue_silu : bool, optional
-        flag for recomputing silu in backward to save memory, by default False
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -356,62 +371,22 @@ class TMLPCUGO(nn.Module):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         bias: bool = True,
-        recompute_silu : bool = False,
+        recompute_activation: bool = False,
     ):
-        super().__init__()
-
-        self.efeat_dim = efeat_dim
-        self.src_dim = src_dim
-        self.dst_dim = dst_dim
-
-        # this should ensure the same sequence of initializations
-        # as the original MLP-Layer in combination with a concat operation
-        tmp_lin = nn.Linear(efeat_dim + src_dim + dst_dim, hidden_dim, bias=bias)
-        # orig_weight has shape (hidden_dim, efeat_dim + src_dim + dst_dim)
-        orig_weight = tmp_lin.weight
-        w_efeat, w_src, w_dst = torch.split(
-            orig_weight, [efeat_dim, src_dim, dst_dim], dim=1
+        super().__init__(
+            efeat_dim,
+            src_dim,
+            dst_dim,
+            output_dim,
+            hidden_dim,
+            hidden_layers,
+            activation_fn,
+            norm_type,
+            bias,
+            recompute_activation,
         )
-        self.lin_efeat = nn.Parameter(w_efeat)
-        self.lin_src = nn.Parameter(w_src)
-        self.lin_dst = nn.Parameter(w_dst)
 
-        if bias:
-            self.bias = tmp_lin.bias
-        else:
-            self.bias = None
-
-        layers = [activation_fn]
-        for _ in range(hidden_layers - 1):
-            layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
-        layers.append(nn.Linear(hidden_dim, output_dim))
-
-        self.norm_type = norm_type
-        if norm_type is not None:
-            assert norm_type in [
-                "LayerNorm",
-                "GraphNorm",
-                "InstanceNorm",
-                "BatchNorm",
-                "MessageNorm",
-            ]
-            if norm_type == "LayerNorm" and apex_imported:
-                norm_layer = FusedLayerNorm
-            else:
-                norm_layer = getattr(nn, norm_type)
-            layers.append(norm_layer(output_dim))
-
-        self.model = nn.Sequential(*layers)
-
-        # TODO generalize to more hidden layers
-        if recompute_silu:
-            assert hidden_layers == 1
-            assert isinstance(activation_fn, nn.SiLU)
-            self.forward_fn = self.custom_silu_linear_forward
-        else:
-            self.forward_fn = self.default_forward
-
-    def forward_base(
+    def forward_truncated_sum(
         self,
         efeat: Tensor,
         src_feat: Tensor,
@@ -434,7 +409,7 @@ class TMLPCUGO(nn.Module):
         dst_feat: Tensor,
         graph: BipartiteCSC,
     ) -> Tensor:
-        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, graph)
+        mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
         return self.model(mlp_sum)
 
     def custom_silu_linear_forward(
@@ -444,19 +419,21 @@ class TMLPCUGO(nn.Module):
         dst_feat: Tensor,
         graph: BipartiteCSC,
     ) -> Tensor:
-        mlp_sum = self.forward_base(efeat, src_feat, dst_feat, graph)
-        lin2 = self.model[1]
-        out = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin2.weight, lin2.bias)
+        mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
+        lin = self.model[1]
+        hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)
+        for i in range(2, self.hidden_layers + 1):
+            lin = self.model[2 * i - 1]
+            hidden = CustomSiLuLinearAutogradFunction.apply(
+                hidden, lin.weight, lin.bias
+            )
+
         if self.norm_type is not None:
-            norm = self.model[2]
-            out = norm(out)
-        return out     
+            norm = self.model[2 * self.hidden_layers]
+            hidden = norm(hidden)
+        return hidden
 
     def forward(
-        self,
-        efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        graph
+        self, efeat: Tensor, src_feat: Tensor, dst_feat: Tensor, graph
     ) -> Tensor:
         return self.forward_fn(efeat, src_feat, dst_feat, graph)

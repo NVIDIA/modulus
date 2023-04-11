@@ -46,7 +46,6 @@ class CuGraphCSC:
 
         self.bipartite_csc = None
         self.static_csc = None
-        self.static_csr_csr = None
 
     def to(self, *args: Any, **kwargs: Any) -> "CuGraphCSC":
         """Moves the object to the specified device, dtype, or format and returns the updated object.
@@ -76,9 +75,9 @@ class CuGraphCSC:
 
         return self
 
-    def to_bipartite_csc(self, dtype=None):
+    def to_bipartite_csc(self, dtype=None, cache_graph: bool = True):
         assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
-        if self.bipartite_csc is None:
+        if self.bipartite_csc is None or not cache_graph:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant
             # for storing node and edge indices. However, they are also used
@@ -96,7 +95,7 @@ class CuGraphCSC:
                 graph_indices = self.indices.to(dtype=dtype)
                 if self.ef_indices is not None:
                     graph_ef_indices = self.ef_indices.to(dtype=dtype)
-            
+
             graph = BipartiteCSC(
                 graph_offsets,
                 graph_indices,
@@ -108,8 +107,8 @@ class CuGraphCSC:
 
         return self.bipartite_csc
 
-    def to_static_csc(self, dtype=None):
-        if self.static_csc is None:
+    def to_static_csc(self, dtype=None, cache_graph: bool = True):
+        if self.static_csc is None or not cache_graph:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant
             # for storing node and edge indices. However, they are also used

@@ -24,8 +24,8 @@ from .mlp import MLP
 from .processor import Processor
 from .utils import set_checkpoint_fn
 from .embedder import EncoderEmbedder, DecoderEmbedder
-from .encoder import EncoderDGLConcat, EncoderDGLSum, EncoderCUGOConcat, EncoderCUGOSum
-from .decoder import DecoderDGLConcat, DecoderDGLSum, DecoderCUGOConcat, DecoderCUGOSum
+from .encoder import EncoderSum, EncoderConcat
+from .decoder import DecoderSum, DecoderConcat
 
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
@@ -94,6 +94,9 @@ class GraphCastNet(Module):
         Flag to select cugraphops kernels in the decoder
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -115,6 +118,7 @@ class GraphCastNet(Module):
         use_cugraphops_processor: bool = False,
         use_cugraphops_decoder: bool = False,
         do_concat_trick: bool = False,
+        recompute_activation: bool = False,
     ):
         super().__init__(meta=MetaData())
 
@@ -156,10 +160,7 @@ class GraphCastNet(Module):
         self.mesh_edata = self.mesh_graph.edata["x"]
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
-        if not use_cugraphops_encoder:
-            Encoder = EncoderDGLSum if do_concat_trick else EncoderDGLConcat
-        else:
-            Encoder = EncoderCUGOSum if do_concat_trick else EncoderCUGOConcat
+        if use_cugraphops_encoder:
             offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
             n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
@@ -169,10 +170,7 @@ class GraphCastNet(Module):
                 offsets, indices, n_in_nodes, n_out_nodes, edge_ids
             )
 
-        if not use_cugraphops_decoder:
-            Decoder = DecoderDGLSum if do_concat_trick else DecoderDGLConcat
-        else:
-            Decoder = DecoderCUGOSum if do_concat_trick else DecoderCUGOConcat
+        if use_cugraphops_decoder:
             offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
             n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
@@ -207,6 +205,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
         self.decoder_embedder = DecoderEmbedder(
             input_dim_edges=input_dim_edges,
@@ -215,9 +214,11 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # grid2mesh encoder
+        Encoder = EncoderSum if do_concat_trick else EncoderConcat
         self.encoder = Encoder(
             graph=self.g2m_graph,
             aggregation=aggregation,
@@ -231,6 +232,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # icosahedron processor
@@ -246,6 +248,7 @@ class GraphCastNet(Module):
             activation_fn=activation_fn,
             norm_type=norm_type,
             do_concat_trick=do_concat_trick,
+            recompute_activation=recompute_activation,
         )
         self.processor = Processor(
             graph=self.mesh_graph,
@@ -258,6 +261,7 @@ class GraphCastNet(Module):
             activation_fn=activation_fn,
             norm_type=norm_type,
             do_concat_trick=do_concat_trick,
+            recompute_activation=recompute_activation,
         )
         self.processor_decoder = Processor(
             graph=self.mesh_graph,
@@ -270,9 +274,11 @@ class GraphCastNet(Module):
             activation_fn=activation_fn,
             norm_type=norm_type,
             do_concat_trick=do_concat_trick,
+            recompute_activation=recompute_activation,
         )
 
         # mesh2grid decoder
+        Decoder = DecoderSum if do_concat_trick else DecoderConcat
         self.decoder = Decoder(
             graph=self.m2g_graph,
             aggregation=aggregation,
@@ -285,6 +291,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # final MLP
@@ -295,6 +302,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=None,
+            recompute_activation=recompute_activation,
         )
 
     def set_checkpoint_model(self, checkpoint_flag: bool):
@@ -614,8 +622,8 @@ class GraphCastNet(Module):
         for module in self.processor.processor_layers:
             module = module.to(*args, **kwargs)
         for module in self.processor_encoder.processor_layers:
-           module = module.to(*args, **kwargs)
+            module = module.to(*args, **kwargs)
         for module in self.processor_decoder.processor_layers:
-           module = module.to(*args, **kwargs)
+            module = module.to(*args, **kwargs)
 
         return self

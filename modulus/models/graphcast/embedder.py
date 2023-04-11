@@ -41,6 +41,9 @@ class EncoderEmbedder(nn.Module):
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
         Normalization type, by default "LayerNorm"
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -53,47 +56,52 @@ class EncoderEmbedder(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        recompute_activation: bool = False,
     ):
         super().__init__()
 
         # MLP for grid node embedding
-        self.grid_node_MLP = MLP(
+        self.grid_node_mlp = MLP(
             input_dim=input_dim_grid_nodes,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # MLP for mesh node embedding
-        self.mesh_node_MLP = MLP(
+        self.mesh_node_mlp = MLP(
             input_dim=input_dim_mesh_nodes,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # MLP for mesh edge embedding
-        self.mesh_edge_MLP = MLP(
+        self.mesh_edge_mlp = MLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
         # MLP for grid2mesh edge embedding
-        self.grid2mesh_edge_MLP = MLP(
+        self.grid2mesh_edge_mlp = MLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
     def forward(
@@ -104,11 +112,11 @@ class EncoderEmbedder(nn.Module):
         mesh_efeat: Tensor,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         # Input node feature embedding
-        grid_nfeat = self.grid_node_MLP(grid_nfeat)
-        mesh_nfeat = self.mesh_node_MLP(mesh_nfeat)
+        grid_nfeat = self.grid_node_mlp(grid_nfeat)
+        mesh_nfeat = self.mesh_node_mlp(mesh_nfeat)
         # Input edge feature embedding
-        g2m_efeat = self.grid2mesh_edge_MLP(g2m_efeat)
-        mesh_efeat = self.mesh_edge_MLP(mesh_efeat)
+        g2m_efeat = self.grid2mesh_edge_mlp(g2m_efeat)
+        mesh_efeat = self.mesh_edge_mlp(mesh_efeat)
         return grid_nfeat, mesh_nfeat, g2m_efeat, mesh_efeat
 
 
@@ -129,6 +137,9 @@ class DecoderEmbedder(nn.Module):
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
         Normalization type, by default "LayerNorm"
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -139,22 +150,24 @@ class DecoderEmbedder(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        recompute_activation: bool = False,
     ):
         super().__init__()
 
         # MLP for mesh2grid edge embedding
-        self.mesh2grid_edge_MLP = MLP(
+        self.mesh2grid_edge_mlp = MLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
     def forward(
         self,
         m2g_efeat: Tensor,
     ) -> Tensor:
-        m2g_efeat = self.mesh2grid_edge_MLP(m2g_efeat)
+        m2g_efeat = self.mesh2grid_edge_mlp(m2g_efeat)
         return m2g_efeat

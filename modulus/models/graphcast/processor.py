@@ -21,13 +21,8 @@ from dgl import DGLGraph
 
 
 from .utils import set_checkpoint_fn, CuGraphCSC
-from .node_block import NodeBlockDGL, NodeBlockCUGO
-from .edge_block import (
-    EdgeBlockDGLConcat,
-    EdgeBlockDGLSum,
-    EdgeBlockCUGOConcat,
-    EdgeBlockCUGOSum,
-)
+from .node_block import NodeBlock
+from .edge_block import EdgeBlockConcat, EdgeBlockSum
 
 
 class Processor(nn.Module):
@@ -55,6 +50,9 @@ class Processor(nn.Module):
         normalization type, by default "LayerNorm"
     do_conat_trick: : bool, default=False
         whether to replace concat+MLP with MLP+idx+sum
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
@@ -69,17 +67,10 @@ class Processor(nn.Module):
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         do_concat_trick: bool = False,
+        recompute_activation: bool = False,
     ):
         super().__init__()
         self.graph = graph
-
-        if isinstance(graph, DGLGraph):
-            EdgeBlock = EdgeBlockDGLSum if do_concat_trick else EdgeBlockDGLConcat
-            NodeBlock = NodeBlockDGL
-
-        else:
-            EdgeBlock = EdgeBlockCUGOSum if do_concat_trick else EdgeBlockCUGOConcat
-            NodeBlock = NodeBlockCUGO
 
         edge_block_invars = (
             self.graph,
@@ -90,6 +81,7 @@ class Processor(nn.Module):
             hidden_layers,
             activation_fn,
             norm_type,
+            recompute_activation,
         )
         node_block_invars = (
             self.graph,
@@ -101,11 +93,15 @@ class Processor(nn.Module):
             hidden_layers,
             activation_fn,
             norm_type,
+            recompute_activation,
         )
 
         layers = []
         for _ in range(processor_layers):
-            layers.append(EdgeBlock(*edge_block_invars))
+            if do_concat_trick:
+                layers.append(EdgeBlockConcat(*edge_block_invars))
+            else:
+                layers.append(EdgeBlockSum(*edge_block_invars))
             layers.append(NodeBlock(*node_block_invars))
 
         self.processor_layers = nn.ModuleList(layers)

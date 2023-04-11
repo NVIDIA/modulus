@@ -15,10 +15,10 @@
 import torch
 import torch.nn as nn
 
-from typing import Any
+from typing import Any, Union
 from torch import Tensor
 from dgl import DGLGraph
-from .mlp import MLP, TMLPDGL, TMLPCUGO
+from .mlp import MLP, TruncatedMLP, TruncatedMLPCuGraph
 from .utils import concat_efeat_dgl_mesh, CuGraphCSC
 
 try:
@@ -27,12 +27,12 @@ except ModuleNotFoundError:
     update_efeat_static_e2e = None
 
 
-class EdgeBlockDGLConcat(nn.Module):
-    """Edge block for DGL graphs with concatenation.
+class EdgeBlockConcat(nn.Module):
+    """Edge block with an explicit concatenation of features.
 
     Parameters
     ----------
-    graph : DGLGraph
+    graph : DGLGraph | CuGraphCSC
         Graph.
     input_dim_nodes : int, optional
         Input dimensionality of the node features, by default 512
@@ -48,11 +48,14 @@ class EdgeBlockDGLConcat(nn.Module):
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
         normalization type, by default "LayerNorm"
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
         self,
-        graph: DGLGraph,
+        graph: Union[DGLGraph, CuGraphCSC],
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -60,17 +63,21 @@ class EdgeBlockDGLConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        recompute_activation: bool = False,
     ):
         super().__init__()
         self.graph = graph
+        self.use_cugraphops = isinstance(graph, CuGraphCSC)
 
+        dim_concat = 2 * input_dim_nodes + input_dim_edges
         self.edge_MLP = MLP(
-            input_dim=2 * input_dim_nodes + input_dim_edges,
+            input_dim=dim_concat,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            recompute_activation=recompute_activation,
         )
 
     def forward(
@@ -78,12 +85,24 @@ class EdgeBlockDGLConcat(nn.Module):
         efeat: Tensor,
         nfeat: Tensor,
     ) -> Tensor:
-        cat_feat = concat_efeat_dgl_mesh(efeat, nfeat, self.graph)
-        efeat_new = self.edge_MLP(cat_feat) + efeat
+        if self.use_cugraphops:
+            static_graph = self.graph.to_static_csc()
+            cat_feat = update_efeat_static_e2e(
+                efeat,
+                nfeat,
+                static_graph,
+                mode="concat",
+                use_source_emb=True,
+                use_target_emb=True,
+            )
 
+        else:
+            cat_feat = concat_efeat_dgl_mesh(efeat, nfeat, self.graph)
+
+        efeat_new = self.edge_MLP(cat_feat) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockDGLConcat":
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockConcat":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -106,8 +125,8 @@ class EdgeBlockDGLConcat(nn.Module):
         return self
 
 
-class EdgeBlockDGLSum(nn.Module):
-    """Edge block for DGL graphs with summation.
+class EdgeBlockSum(nn.Module):
+    """Edge block with truncated MLPs.
 
     Parameters
     ----------
@@ -127,11 +146,14 @@ class EdgeBlockDGLSum(nn.Module):
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
         normalization type, by default "LayerNorm"
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
     """
 
     def __init__(
         self,
-        graph: DGLGraph,
+        graph: Union[DGLGraph, CuGraphCSC],
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -139,33 +161,59 @@ class EdgeBlockDGLSum(nn.Module):
         hidden_layers: int = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        recompute_activation: bool = False,
     ):
         super().__init__()
         self.graph = graph
-        self.static_graph = None
-        self.src, self.dst = (item.long() for item in self.graph.edges())
+        self.use_cugraphops = isinstance(graph, CuGraphCSC)
 
-        self.edge_TMLP = TMLPDGL(
-            efeat_dim=input_dim_edges,
-            src_dim=input_dim_nodes,
-            dst_dim=input_dim_nodes,
-            output_dim=output_dim,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-            bias=True,
-        )
+        if self.use_cugraphops:
+            self.edge_trunc_mlp = TruncatedMLPCuGraph(
+                efeat_dim=input_dim_edges,
+                src_dim=input_dim_nodes,
+                dst_dim=input_dim_nodes,
+                output_dim=output_dim,
+                hidden_dim=hidden_dim,
+                hidden_layers=hidden_layers,
+                activation_fn=activation_fn,
+                norm_type=norm_type,
+                recompute_activation=recompute_activation,
+            )
+
+        else:
+            self.src, self.dst = (item.long() for item in self.graph.edges())
+
+            self.edge_trunc_mlp = TruncatedMLP(
+                efeat_dim=input_dim_edges,
+                src_dim=input_dim_nodes,
+                dst_dim=input_dim_nodes,
+                output_dim=output_dim,
+                hidden_dim=hidden_dim,
+                hidden_layers=hidden_layers,
+                activation_fn=activation_fn,
+                norm_type=norm_type,
+                recompute_activation=recompute_activation,
+            )
 
     def forward(
         self,
         efeat: Tensor,
         nfeat: Tensor,
     ) -> Tensor:
-        efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.src, self.dst) + efeat
+        if self.use_cugraphops:
+            bipartite_graph = self.graph.to_bipartite_csc()
+            efeat_new = (
+                self.edge_trunc_mlp(efeat, nfeat, nfeat, bipartite_graph) + efeat
+            )
+
+        else:
+            efeat_new = (
+                self.edge_trunc_mlp(efeat, nfeat, nfeat, self.src, self.dst) + efeat
+            )
+
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockDGLSum":
+    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockSum":
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph to the specified
         device, dtype, or format, and returns the updated object.
@@ -180,181 +228,6 @@ class EdgeBlockDGLSum(nn.Module):
         Returns
         -------
         EdgeBlockDGLSum
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self
-
-
-class EdgeBlockCUGOConcat(nn.Module):
-    """Edge block for CuGraph graphs with concatenation.
-
-    Parameters
-    ----------
-    graph : CuGraphCSC
-        Graph.
-    input_dim_nodes : int, optional
-        Input dimensionality of the node features, by default 512
-    input_dim_edges : int, optional
-        Input dimensionality of the edge features, by default 512
-    output_dim : int, optional
-        Output dimensionality of the edge features, by default 512
-    hidden_dim : int, optional
-        _description_, by default 512
-    hidden_layers : int, optional
-        Number of neurons in each hidden layer, by default 1
-    activation_fn : nn.Module, optional
-        Type of activation function, by default nn.SiLU()
-    norm_type : str, optional
-        normalization type, by default "LayerNorm"
-    """
-
-    def __init__(
-        self,
-        graph: CuGraphCSC,
-        input_dim_nodes: int = 512,
-        input_dim_edges: int = 512,
-        output_dim: int = 512,
-        hidden_dim: int = 512,
-        hidden_layers: int = 1,
-        activation_fn: nn.Module = nn.SiLU(),
-        norm_type: str = "LayerNorm",
-    ):  # pragma: no cover
-        super().__init__()
-        self.graph = graph
-        self.static_graph = None
-
-        self.edge_MLP = MLP(
-            input_dim=(2 * input_dim_nodes + input_dim_edges),
-            output_dim=output_dim,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-        )
-
-    def forward(
-        self,
-        efeat: Tensor,
-        nfeat: Tensor,
-    ) -> Tensor:
-        if self.static_graph is None:
-            self.static_graph = self.graph.to_static_csc()
-
-        cat_feat = update_efeat_static_e2e(
-            efeat,
-            nfeat,
-            self.static_graph,
-            mode="concat",
-            use_source_emb=True,
-            use_target_emb=True,
-        )
-        efeat_new = self.edge_MLP(cat_feat) + efeat
-        return efeat_new, nfeat
-
-    def to(
-        self, *args: Any, **kwargs: Any
-    ) -> "EdgeBlockCUGOConcat":  # pragma: no cover
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph to the specified
-        device, dtype, or format, and returns the updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        EdgeBlockCUGOConcat
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self
-
-
-class EdgeBlockCUGOSum(nn.Module):
-    """Edge block for CuGraph graphs with summation.
-
-    Parameters
-    ----------
-    graph : DGLGraph
-        Graph.
-    input_dim_nodes : int, optional
-        Input dimensionality of the node features, by default 512
-    input_dim_edges : int, optional
-        Input dimensionality of the edge features, by default 512
-    output_dim : int, optional
-        Output dimensionality of the edge features, by default 512
-    hidden_dim : int, optional
-        _description_, by default 512
-    hidden_layers : int, optional
-        Number of neurons in each hidden layer, by default 1
-    activation_fn : nn.Module, optional
-        Type of activation function, by default nn.SiLU()
-    norm_type : str, optional
-        normalization type, by default "LayerNorm"
-    """
-
-    def __init__(
-        self,
-        graph: CuGraphCSC,
-        input_dim_nodes: int = 512,
-        input_dim_edges: int = 512,
-        output_dim: int = 512,
-        hidden_dim: int = 512,
-        hidden_layers: int = 1,
-        activation_fn: nn.Module = nn.SiLU(),
-        norm_type: str = "LayerNorm",
-    ):  # pragma: no cover
-        super().__init__()
-        self.graph = graph
-        self.bipartite_graph = None
-
-        self.edge_TMLP = TMLPCUGO(
-            efeat_dim=input_dim_edges,
-            src_dim=input_dim_nodes,
-            dst_dim=input_dim_nodes,
-            output_dim=output_dim,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-            bias=True,
-        )
-
-    def forward(
-        self,
-        efeat: Tensor,
-        nfeat: Tensor,
-    ) -> Tensor:
-        if self.bipartite_graph is None:
-            self.bipartite_graph = self.graph.to_bipartite_csc()
-
-        efeat_new = self.edge_TMLP(efeat, nfeat, nfeat, self.bipartite_graph) + efeat
-        return efeat_new, nfeat
-
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockCUGOSum":  # pragma: no cover
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph to the specified
-        device, dtype, or format, and returns the updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        EdgeBlockCUGOSum
             The updated object after moving to the specified device, dtype, or format.
         """
         self = super().to(*args, **kwargs)

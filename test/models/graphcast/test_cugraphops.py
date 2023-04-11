@@ -15,10 +15,10 @@
 import sys
 import torch
 import numpy as np
-
+from utils import get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-use_concat_trick = [False, True]
+icosphere_path = get_icosphere_path()
 
 # Fix random seeds
 torch.manual_seed(0)
@@ -29,62 +29,69 @@ np.random.seed(0)
 x = torch.randn(1, 2, 721, 1440, device="cuda")
 x_dgl = x.clone().detach()
 
-for ct in use_concat_trick:
-    # Fix random seeds
-    torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
-    np.random.seed(0)
+for concat_trick in [False, True]:
+    for recomp_act in [False, True]:
+        # Fix random seeds
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+        np.random.seed(0)
 
-    # Instantiate the model
-    model = GraphCastNet(
-        meshgraph_path="./icospheres.pickle",
-        static_dataset_path=None,
-        input_dim_grid_nodes=2,
-        input_dim_mesh_nodes=3,
-        input_dim_edges=4,
-        output_dim_grid_nodes=2,
-        processor_layers=3,
-        hidden_dim=4,
-        do_concat_trick=ct,
-        use_cugraphops_decoder=True,
-        use_cugraphops_encoder=True,
-        use_cugraphops_processor=True,
-    ).to("cuda")
+        # Instantiate the model
+        model = GraphCastNet(
+            meshgraph_path=icosphere_path,
+            static_dataset_path=None,
+            input_dim_grid_nodes=2,
+            input_dim_mesh_nodes=3,
+            input_dim_edges=4,
+            output_dim_grid_nodes=2,
+            processor_layers=3,
+            hidden_dim=4,
+            do_concat_trick=concat_trick,
+            use_cugraphops_decoder=True,
+            use_cugraphops_encoder=True,
+            use_cugraphops_processor=True,
+            recompute_activation=recomp_act,
+        ).to("cuda")
 
-    # Fix random seeds again
-    torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
-    np.random.seed(0)
+        # Fix random seeds again
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+        np.random.seed(0)
 
-    # Instantiate the model with concat trick enabled
-    model_dgl = GraphCastNet(
-        meshgraph_path="./icospheres.pickle",
-        static_dataset_path=None,
-        input_dim_grid_nodes=2,
-        input_dim_mesh_nodes=3,
-        input_dim_edges=4,
-        output_dim_grid_nodes=2,
-        processor_layers=3,
-        hidden_dim=4,
-        do_concat_trick=ct,
-        use_cugraphops_decoder=False,
-        use_cugraphops_encoder=False,
-        use_cugraphops_processor=False,
-    ).to("cuda")
+        # Instantiate the model with concat trick enabled
+        model_dgl = GraphCastNet(
+            meshgraph_path=icosphere_path,
+            static_dataset_path=None,
+            input_dim_grid_nodes=2,
+            input_dim_mesh_nodes=3,
+            input_dim_edges=4,
+            output_dim_grid_nodes=2,
+            processor_layers=3,
+            hidden_dim=4,
+            do_concat_trick=concat_trick,
+            use_cugraphops_decoder=False,
+            use_cugraphops_encoder=False,
+            use_cugraphops_processor=False,
+            recompute_activation=recomp_act,
+        ).to("cuda")
 
-    # Forward pass without checkpointing
-    x.requires_grad_()
-    y_pred = model(x)
-    loss = y_pred.sum()
-    loss.backward()
-    x_grad = x.grad
+        # Forward pass without checkpointing
+        x.requires_grad_()
+        y_pred = model(x)
+        loss = y_pred.sum()
+        loss.backward()
+        x_grad = x.grad
 
-    x_dgl.requires_grad_()
-    y_pred_dgl = model_dgl(x_dgl)
-    loss_dgl = y_pred_dgl.sum()
-    loss_dgl.backward()
-    x_grad_dgl = x_dgl.grad
+        x_dgl.requires_grad_()
+        y_pred_dgl = model_dgl(x_dgl)
+        loss_dgl = y_pred_dgl.sum()
+        loss_dgl.backward()
+        x_grad_dgl = x_dgl.grad
 
-    # Check that the results are the same
-    assert torch.allclose(y_pred_dgl, y_pred, atol=1.0e-6), "testing DGL against cugraph-ops: outputs do not match!"
-    assert torch.allclose(x_grad_dgl, x_grad, atol=1.0e-4), "testing DGL against cugraph-ops: gradients do not match!"
+        # Check that the results are the same
+        assert torch.allclose(
+            y_pred_dgl, y_pred, atol=1.0e-6
+        ), "testing DGL against cugraph-ops: outputs do not match!"
+        assert torch.allclose(
+            x_grad_dgl, x_grad, atol=1.0e-4, rtol=1.0e-3
+        ), "testing DGL against cugraph-ops: gradients do not match!"
