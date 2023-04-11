@@ -158,8 +158,9 @@ class Processor(nn.Module):
 
         return efeat, nfeat
 
-    def to(self, *args, **kwargs) -> Processor:
+    def to(self, *args, **kwargs) -> "Processor":
         self = super().to(*args, **kwargs)
+        self.processor_layers = self.processor_layers.to(*args, **kwargs)
         device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
         self.graph = self.graph.to(device=device)
         return self

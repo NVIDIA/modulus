@@ -55,7 +55,7 @@ class Graph:
             with open(icospheres_path, "rb") as f:
                 icospheres = pickle.load(f)
         except:
-            from modulus.internal.utils.graphcast.icospheres import (
+            from modulus.utils.graphcast.icospheres import (
                 icospheres,
             )  # requires PyMesh
 

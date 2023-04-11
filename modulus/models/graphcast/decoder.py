@@ -407,6 +407,8 @@ class DecoderCUGOSum(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
+        self.bipartite_graph = None
         self.aggregation = aggregation
 
         # edge MLP

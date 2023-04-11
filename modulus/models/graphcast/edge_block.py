@@ -224,6 +224,7 @@ class EdgeBlockCUGOConcat(nn.Module):
     ):
         super().__init__()
         self.graph = graph
+        self.static_graph = None
 
         self.edge_MLP = MLP(
             input_dim=(2 * input_dim_nodes + input_dim_edges),

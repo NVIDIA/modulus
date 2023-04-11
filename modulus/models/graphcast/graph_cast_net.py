@@ -608,14 +608,14 @@ class GraphCastNet(Module):
         if self.has_static_data:
             self.static_data = self.static_data.to(*args, **kwargs)
 
-        # TODO apply .to() recursively instead
-        # self.encoder = self.encoder.to(*args, **kwargs)
-        # self.decoder = self.decoder.to(*args, **kwargs)
-        # for module in self.processor.processor_layers:
-        #    module = module.to(*args, **kwargs)
-        # for module in self.processor_encoder.processor_layers:
-        #    module = module.to(*args, **kwargs)
-        # for module in self.processor_decoder.processor_layers:
-        #    module = module.to(*args, **kwargs)
+        self.encoder = self.encoder.to(*args, **kwargs)
+        self.decoder = self.decoder.to(*args, **kwargs)
+        self.processor = self.processor.to(*args, **kwargs)
+        for module in self.processor.processor_layers:
+            module = module.to(*args, **kwargs)
+        for module in self.processor_encoder.processor_layers:
+           module = module.to(*args, **kwargs)
+        for module in self.processor_decoder.processor_layers:
+           module = module.to(*args, **kwargs)
 
         return self

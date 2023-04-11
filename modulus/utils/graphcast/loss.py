@@ -17,8 +17,7 @@ class DefaultLoss(nn.Module):
 
     def forward(self, invar, outvar):
         loss = (invar - outvar) ** 2
-        loss = loss.mean(dim=(0, 1))
-
+        loss = loss.mean(dim=-1)
         loss = torch.mul(loss, self.area)
         loss = loss.mean()
         return loss
@@ -42,9 +41,9 @@ class CustomLossFunction(torch.autograd.Function):
         with torch.no_grad():
             diff = invar - outvar
             loss = diff**2
-            loss = loss.mean(dim=1)
+            loss = loss.mean(dim=-1)
             loss = torch.mul(loss, area)
-            loss = torch.mean(loss)
+            loss = loss.mean()
 
             loss_grad = 2 * (diff)
             loss_grad *= 1.0 / (invar.size(0) * invar.size(1))

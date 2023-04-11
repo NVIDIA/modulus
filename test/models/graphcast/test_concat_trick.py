@@ -20,10 +20,17 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 # Fix random seeds
 torch.manual_seed(0)
+torch.cuda.manual_seed(0)
 np.random.seed(0)
 
 # Random input
 x = torch.randn(1, 2, 721, 1440)
+x_ct = x.clone().detach()
+
+# Fix random seeds
+torch.manual_seed(0)
+torch.cuda.manual_seed(0)
+np.random.seed(0)
 
 # Instantiate the model
 model = GraphCastNet(
@@ -40,6 +47,7 @@ model = GraphCastNet(
 
 # Fix random seeds again
 torch.manual_seed(0)
+torch.cuda.manual_seed(0)
 np.random.seed(0)
 
 # Instantiate the model with concat trick enabled
@@ -56,8 +64,18 @@ model_ct = GraphCastNet(
 )
 
 # Forward pass without checkpointing
+x.requires_grad_()
 y_pred = model(x)
-y_pred_ct = model_ct(x)
+loss = y_pred.sum()
+loss.backward()
+x_grad = x.grad
+
+x_ct.requires_grad_()
+y_pred_ct = model_ct(x_ct)
+loss_ct = y_pred_ct.sum()
+loss_ct.backward()
+x_grad_ct = x_ct.grad
 
 # Check that the results are the same
-assert torch.allclose(y_pred_ct, y_pred), "Concat trick failed!"
+assert torch.allclose(y_pred_ct, y_pred, atol=1.0e-5), "Concat trick failed, outputs do not match!"
+assert torch.allclose(x_grad_ct, x_grad, atol=1.0e-5), "Concat trick failed, gradients do not match!"

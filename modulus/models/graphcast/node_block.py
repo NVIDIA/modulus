@@ -171,7 +171,7 @@ class NodeBlockCUGO(nn.Module):
         if self.static_graph is None:
             self.static_graph = self.graph.to_static_csc()
 
-        cat_feat = agg_concat_e2n(efeat, nfeat, self.static_graph, self.aggregation)
+        cat_feat = agg_concat_e2n(nfeat, efeat, self.static_graph, self.aggregation)
         # update node features + residual connection
         nfeat_new = self.node_MLP(cat_feat) + nfeat
         return efeat, nfeat_new

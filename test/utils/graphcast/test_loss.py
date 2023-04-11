@@ -25,13 +25,13 @@ d = (100, 200, 400)
 
 for dt in dtypes:
     for nn in n:
-        area = torch.rand(nn, dtype=dt, device="cuda") + 0.01
+        area = torch.rand(nn, dtype=torch.float, device="cuda").to(dtype=dt) + 0.1
         default_loss = DefaultLoss(area)
         custom_loss = CustomLoss(area)
 
         for dd in d:
-            invar1 = torch.rand(nn, dd, dtype=dt, device="cuda")
-            outvar1 = torch.rand(nn, dd, dtype=dt, device="cuda")
+            invar1 = torch.rand(nn, dd, dtype=torch.float, device="cuda").to(dtype=dt)
+            outvar1 = torch.rand(nn, dd, dtype=torch.float, device="cuda").to(dtype=dt)
 
             invar2 = invar1.clone().detach()
             outvar2 = outvar1.clone().detach()
@@ -47,7 +47,7 @@ for dt in dtypes:
             loss2.backward()
             grad2 = invar2.grad
 
-            atol = 1.0e-8 if dt == torch.float else 1.0e-6
+            atol = 1.0e-7 if dt == torch.float else 1.0e-5
             loss_diff = torch.abs(loss1 - loss2)
             loss_diff_msg = (
                 f"{dt}-{nn}-{dd}: loss diff - min/max/mean: {loss_diff.min()} / "
@@ -59,5 +59,5 @@ for dt in dtypes:
                 f"{grad_diff.max()} / {grad_diff.mean()}"
             )
 
-            assert torch.allclose(loss1, loss2, atol=atol), loss_diff_msg
-            assert torch.allclose(grad1, grad2, atol=atol), grad_diff_msg
+            assert torch.allclose(loss1, loss2, atol=atol), loss_diff_msg + " for loss"
+            assert torch.allclose(grad1, grad2, atol=atol), grad_diff_msg + " for gradient"

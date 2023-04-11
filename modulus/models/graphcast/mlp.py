@@ -306,6 +306,16 @@ class TMLPDGL(nn.Module):
             out = norm(out)
         return out 
 
+    def forward(
+        self,
+        efeat: Tensor,
+        src_feat: Tensor,
+        dst_feat: Tensor,
+        src_idx: Tensor,
+        dst_idx: Tensor,
+    ) -> Tensor:
+        return self.forward_fn(efeat, src_feat, dst_feat, src_idx, dst_idx)
+
 
 class TMLPCUGO(nn.Module):
     """Truncated MLP where concat+MLP is replaced

@@ -48,7 +48,7 @@ class CuGraphCSC:
         self.static_csc = None
         self.static_csr_csr = None
 
-    def to(self, *args: Any, **kwargs: Any) -> CuGraphCSC:
+    def to(self, *args: Any, **kwargs: Any) -> "CuGraphCSC":
         """Moves the object to the specified device, dtype, or format and returns the updated object.
 
         Parameters
@@ -63,9 +63,9 @@ class CuGraphCSC:
         NodeBlockCUGO
             The updated object after moving to the specified device, dtype, or format.
         """
-        self = super().to(*args, **kwargs)
         device, dtype, _, _ = torch._C._nn._parse_to(*args, **kwargs)
         assert dtype in (
+            None,
             torch.int32,
             torch.int64,
         ), f"Invalid dtype, expected torch.int32 or torch.int64, got {dtype}."
@@ -77,7 +77,7 @@ class CuGraphCSC:
         return self
 
     def to_bipartite_csc(self, dtype=None):
-        assert self.offsets.is_cuda(), "Expected the graph structures to reside on GPU."
+        assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
         if self.bipartite_csc is None:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant
@@ -87,11 +87,16 @@ class CuGraphCSC:
             # for the indices despite int32 technically being enough to store the
             # graph. This will be improved in cugraph-ops-23.06. Until then, allow
             # the change of dtype.
+            graph_offsets = self.offsets
+            graph_indices = self.indices
+            graph_ef_indices = self.ef_indices
+
             if dtype is not None:
                 graph_offsets = self.offsets.to(dtype=dtype)
                 graph_indices = self.indices.to(dtype=dtype)
                 if self.ef_indices is not None:
                     graph_ef_indices = self.ef_indices.to(dtype=dtype)
+            
             graph = BipartiteCSC(
                 graph_offsets,
                 graph_indices,
@@ -113,11 +118,16 @@ class CuGraphCSC:
             # for the indices despite int32 technically being enough to store the
             # graph. This will be improved in cugraph-ops-23.06. Until then, allow
             # the change of dtype.
+            graph_offsets = self.offsets
+            graph_indices = self.indices
+            graph_ef_indices = self.ef_indices
+
             if dtype is not None:
                 graph_offsets = self.offsets.to(dtype=dtype)
                 graph_indices = self.indices.to(dtype=dtype)
                 if self.ef_indices is not None:
                     graph_ef_indices = self.ef_indices.to(dtype=dtype)
+
             graph = StaticCSC(
                 graph_offsets,
                 graph_indices,
