@@ -403,11 +403,3 @@ def cell_to_adj(cells: List[List[int]]):
     src = [cells[i][indx] for i in range(num_cells) for indx in [0, 1, 2]]
     dst = [cells[i][indx] for i in range(num_cells) for indx in [1, 2, 0]]
     return src, dst
-
-
-# NOTE debug code
-# latlon = torch.tensor([[0,0]])
-# xyz = latlon2xyz(latlon)
-# print(xyz)
-# latlon = xyz2latlon(xyz)
-# print(latlon)

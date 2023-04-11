@@ -159,17 +159,17 @@ class Graph:
                 if distances[i][j] <= 0.6 * edge_len:
                     src.append(i)
                     dst.append(indices[i][j])
-                    # NOTE this gives 1,625,716 edges, in the paper it is 1,618,746
+                    # NOTE this gives 1,624,344 edges, in the paper it is 1,618,746
                     # this number is very sensitive to the chosen edge_len, not clear
                     # in the paper what they use.
 
         g2m_graph = create_heterograph(
             src, dst, ("grid", "g2m", "mesh"), dtype=torch.int32
-        )  # number of edges is 3114720, exactly matches with the paper
+        )  # number of edges is 3,114,720, exactly matches with the paper
         g2m_graph.srcdata["pos"] = cartesian_grid.to(torch.float32)
         g2m_graph.dstdata["pos"] = torch.tensor(
             self.icospheres["order_6_vertices"], dtype=torch.float32
-        )  # TODO check this
+        )
         g2m_graph = add_edge_features(
             g2m_graph, (g2m_graph.srcdata["pos"], g2m_graph.dstdata["pos"])
         )
@@ -213,7 +213,7 @@ class Graph:
         dst = [i for i in range(len(cartesian_grid)) for _ in range(3)]
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
-        )  # number of edges is 3114720, exactly matches with the paper
+        )  # number of edges is 3,114,720, exactly matches with the paper
         m2g_graph.srcdata["pos"] = torch.tensor(
             self.icospheres["order_6_vertices"], dtype=torch.float32
         )

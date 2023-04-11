@@ -151,9 +151,9 @@ class GraphCastNet(Module):
                 "The icospheres_path is corrupted. "
                 "Tried using pymesh to generate the graph but could not find pymesh"
             )
-        self.mesh_graph = self.graph.create_mesh_graph()
-        self.g2m_graph = self.graph.create_g2m_graph()
-        self.m2g_graph = self.graph.create_m2g_graph()
+        self.mesh_graph = self.graph.create_mesh_graph(verbose=False)
+        self.g2m_graph = self.graph.create_g2m_graph(verbose=False)
+        self.m2g_graph = self.graph.create_m2g_graph(verbose=False)
 
         self.g2m_edata = self.g2m_graph.edata["x"]
         self.m2g_edata = self.m2g_graph.edata["x"]
