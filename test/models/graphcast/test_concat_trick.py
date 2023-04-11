@@ -45,8 +45,8 @@ for recomp_act in [False, True]:
         output_dim_grid_nodes=2,
         processor_layers=3,
         hidden_dim=4,
-        do_concat_trick=True,
-        recompute_activation=recomp_act,
+        do_concat_trick=False,
+        recompute_activation=False,
     ).to("cuda")
 
     # Fix random seeds again
@@ -64,7 +64,7 @@ for recomp_act in [False, True]:
         output_dim_grid_nodes=2,
         processor_layers=3,
         hidden_dim=4,
-        do_concat_trick=False,
+        do_concat_trick=True,
         recompute_activation=recomp_act,
     ).to("cuda")
 
@@ -84,8 +84,12 @@ for recomp_act in [False, True]:
     # Check that the results are the same
     # tolerances quite large on GPU
     assert torch.allclose(
-        y_pred_ct, y_pred, atol=5.0e-3,
+        y_pred_ct,
+        y_pred,
+        atol=5.0e-3,
     ), "Concat trick failed, outputs do not match!"
     assert torch.allclose(
-        x_grad_ct, x_grad, atol=1.0e-2,
+        x_grad_ct,
+        x_grad,
+        atol=1.0e-2,
     ), "Concat trick failed, gradients do not match!"

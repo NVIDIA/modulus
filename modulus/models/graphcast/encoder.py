@@ -283,7 +283,6 @@ class EncoderSum(nn.Module):
     def forward(
         self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor
     ) -> Tuple[Tensor, Tensor]:
-
         if self.use_cugraphops:
             bipartite_graph = self.graph.to_bipartite_csc()
             static_graph = self.graph.to_static_csc()

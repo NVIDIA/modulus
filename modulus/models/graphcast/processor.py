@@ -171,7 +171,6 @@ class Processor(nn.Module):
         efeat: Tensor,
         nfeat: Tensor,
     ) -> Tensor:
-
         for segment_start, segment_end in self.checkpoint_segments:
             efeat, nfeat = self.checkpoint_fn(
                 self.run_function(segment_start, segment_end),
@@ -185,7 +184,8 @@ class Processor(nn.Module):
 
     def to(self, *args, **kwargs) -> "Processor":
         self = super().to(*args, **kwargs)
-        self.processor_layers = self.processor_layers.to(*args, **kwargs)
+        for module in self.processor_layers:
+            module = module.to(*args, **kwargs)
         device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
         self.graph = self.graph.to(device=device)
         return self

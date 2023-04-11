@@ -108,7 +108,6 @@ class Graph:
         return mesh_graph
 
     def create_g2m_graph(self, verbose: bool = True) -> Tensor:
-
         """Create the graph2mesh graph.
 
         Parameters

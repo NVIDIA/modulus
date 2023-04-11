@@ -36,7 +36,6 @@ for concat_trick in [False, True]:
         torch.cuda.manual_seed(0)
         np.random.seed(0)
 
-        # Instantiate the model
         model = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
@@ -58,7 +57,6 @@ for concat_trick in [False, True]:
         torch.cuda.manual_seed(0)
         np.random.seed(0)
 
-        # Instantiate the model with concat trick enabled
         model_dgl = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
@@ -72,7 +70,7 @@ for concat_trick in [False, True]:
             use_cugraphops_decoder=False,
             use_cugraphops_encoder=False,
             use_cugraphops_processor=False,
-            recompute_activation=recomp_act,
+            recompute_activation=False,
         ).to("cuda")
 
         # Forward pass without checkpointing

@@ -619,11 +619,6 @@ class GraphCastNet(Module):
         self.encoder = self.encoder.to(*args, **kwargs)
         self.decoder = self.decoder.to(*args, **kwargs)
         self.processor = self.processor.to(*args, **kwargs)
-        for module in self.processor.processor_layers:
-            module = module.to(*args, **kwargs)
-        for module in self.processor_encoder.processor_layers:
-            module = module.to(*args, **kwargs)
-        for module in self.processor_decoder.processor_layers:
-            module = module.to(*args, **kwargs)
-
+        self.processor_encoder = self.processor_encoder.to(*args, **kwargs)
+        self.processor_decoder = self.processor_decoder.to(*args, **kwargs)
         return self
