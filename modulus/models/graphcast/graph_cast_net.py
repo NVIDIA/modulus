@@ -53,9 +53,13 @@ class GraphCastNet(Module):
     """GraphCast network architecture
     Based on these papers:
     - "GraphCast: Learning skillful medium-range global weather forecasting"
+        https://arxiv.org/abs/2212.12794
     - "Forecasting Global Weather with Graph Neural Networks"
+        https://arxiv.org/abs/2202.07575
     - "Learning Mesh-Based Simulation with Graph Networks"
+        https://arxiv.org/abs/2010.03409
     - "MultiScale MeshGraphNets"
+        https://arxiv.org/abs/2210.00612
 
     Parameters
     ----------
@@ -124,7 +128,7 @@ class GraphCastNet(Module):
 
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
-        self.longitudes = torch.linspace(-179.75, 180, steps=input_res[1])
+        self.longitudes = torch.linspace(-180, 180, steps=input_res[1] + 1)[1:]
         self.lat_lon_grid = torch.stack(
             torch.meshgrid(self.latitudes, self.longitudes, indexing="ij"), dim=-1
         )

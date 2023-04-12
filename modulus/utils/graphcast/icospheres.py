@@ -19,8 +19,16 @@ import pickle
 # TODO apply a transformation to make faces parallel to ploes
 
 
-def generate_icospheres() -> None:  # pragma: no cover
-    """Generate icospheres from level 0 to 6 (inclusive) and save them to a pickle file."""
+def generate_and_save_icospheres(
+    save_path: str = "icospheres.pickle",
+) -> None:  # pragma: no cover
+    """enerate icospheres from level 0 to 6 (inclusive) and save them to a pickle file.
+
+    Parameters
+    ----------
+    path : str
+        Path to save the pickle file.
+    """
     radius = 1
     center = np.array((0, 0, 0))
     icospheres = {"vertices": [], "faces": []}
@@ -36,5 +44,5 @@ def generate_icospheres() -> None:  # pragma: no cover
         ] = icosphere.get_face_attribute("face_centroid")
 
     # save icosphere vertices and faces to a pickle file
-    with open("icospheres.pickle", "wb") as f:
+    with open(save_path, "wb") as f:
         pickle.dump(icospheres, f, pickle.HIGHEST_PROTOCOL)
