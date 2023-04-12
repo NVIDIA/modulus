@@ -56,6 +56,8 @@ RUN pip install --force-reinstall onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.
 # CI image
 FROM builder as ci
 RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
+COPY . /modulus/
+RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
