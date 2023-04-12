@@ -213,4 +213,3 @@ class Seq2SeqRNN(Module):
 
         decoded_output = torch.stack(decoded_output, dim=2)
         return decoded_output
-

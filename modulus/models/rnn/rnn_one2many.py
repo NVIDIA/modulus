@@ -206,4 +206,3 @@ class One2ManyRNN(Module):
 
         decoded_output = torch.stack(decoded_output, dim=2)
         return decoded_output
-
