@@ -101,6 +101,25 @@ class GraphCastNet(Module):
     recompute_activation : bool, optional
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
+
+    Example
+    --------
+    >>> model = GraphCastNet(
+    ...             meshgraph_path='icospheres.pickle',
+    ...             static_dataset_path=None,
+    ...             input_dim_grid_nodes=2,
+    ...             input_dim_mesh_nodes=3,
+    ...             input_dim_edges=4,
+    ...             output_dim_grid_nodes=2,
+    ...             processor_layers=3,
+    ...             hidden_dim=4,
+    ...             do_concat_trick=False,
+    ...             recompute_activation=False,
+    ...         ).to('cuda')
+    >>> input = torch.rand(1, 2, 721, 1440, device='cuda')
+    >>> output = model(input)
+    >>> output.size()
+    torch.Size([1, 2, 721, 1440])
     """
 
     def __init__(

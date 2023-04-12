@@ -28,6 +28,24 @@ except:
 
 
 class CuGraphCSC:
+    """Constructs a CuGraphCSC object.
+
+    Parameters
+    ----------
+    offsets : Tensor
+        The offsets tensor.
+    indices : Tensor
+        The indices tensor.
+    num_src_nodes : int
+        The number of source nodes.
+    num_dst_nodes : int
+        The number of destination nodes.
+    ef_indices : Optional[Tensor], optional
+        The edge feature indices tensor, by default None
+    reverse_graph_bwd : bool, optional
+        Whether to reverse the graph for the backward pass, by default True
+    """
+
     def __init__(
         self,
         offsets: Tensor,
@@ -36,7 +54,8 @@ class CuGraphCSC:
         num_dst_nodes: int,
         ef_indices: Optional[Tensor] = None,
         reverse_graph_bwd: bool = True,
-    ):
+    ) -> None:
+
         self.offsets = offsets
         self.indices = indices
         self.num_src_nodes = num_src_nodes
@@ -48,7 +67,8 @@ class CuGraphCSC:
         self.static_csc = None
 
     def to(self, *args: Any, **kwargs: Any) -> "CuGraphCSC":
-        """Moves the object to the specified device, dtype, or format and returns the updated object.
+        """Moves the object to the specified device, dtype, or format and returns the
+        updated object.
 
         Parameters
         ----------
@@ -76,6 +96,21 @@ class CuGraphCSC:
         return self
 
     def to_bipartite_csc(self, dtype=None, cache_graph: bool = True):
+        """Converts the graph to a bipartite CSC graph.
+
+        Parameters
+        ----------
+        dtype : torch.dtype, optional
+            The dtype of the graph, by default None
+        cache_graph : bool, optional
+            Whether to cache the graph, by default True
+
+        Returns
+        -------
+        BipartiteCSC
+            The bipartite CSC graph.
+        """
+
         assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
         if self.bipartite_csc is None or not cache_graph:
             # Occassionally, we have to watch out for the IdxT type
@@ -108,6 +143,21 @@ class CuGraphCSC:
         return self.bipartite_csc
 
     def to_static_csc(self, dtype=None, cache_graph: bool = True):
+        """Converts the graph to a static CSC graph.
+
+        Parameters
+        ----------
+        dtype : torch.dtype, optional
+            The dtype of the graph, by default None
+        cache_graph : bool, optional
+            Whether to cache the graph, by default True
+
+        Returns
+        -------
+        StaticCSC
+            The static CSC graph.
+        """
+
         if self.static_csc is None or not cache_graph:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant

@@ -20,9 +20,10 @@ import numpy as np
 
 def fix_random_seeds():
     """Fix random seeds for reproducibility"""
-    torch.manual_seed(0)
-    np.random.seed(0)
     dgl.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
 
 
 def create_random_input(dim: int = 2):

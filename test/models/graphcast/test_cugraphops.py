@@ -15,81 +15,80 @@
 import sys
 import torch
 import numpy as np
-from utils import get_icosphere_path
+from utils import get_icosphere_path, fix_random_seeds
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-icosphere_path = get_icosphere_path()
 
-# Fix random seeds
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-np.random.seed(0)
+def test_cugraphops():
+    """Test cugraphops"""
+    icosphere_path = get_icosphere_path()
 
-# Random input
-x = torch.randn(1, 2, 721, 1440, device="cuda")
-x_dgl = x.clone().detach()
+    # Fix random seeds
+    fix_random_seeds()
 
-for concat_trick in [False, True]:
-    for recomp_act in [False, True]:
-        # Fix random seeds
-        torch.manual_seed(0)
-        torch.cuda.manual_seed(0)
-        np.random.seed(0)
+    # Random input
+    x = torch.randn(1, 2, 721, 1440, device="cuda")
+    x_dgl = x.clone().detach()
 
-        model = GraphCastNet(
-            meshgraph_path=icosphere_path,
-            static_dataset_path=None,
-            input_dim_grid_nodes=2,
-            input_dim_mesh_nodes=3,
-            input_dim_edges=4,
-            output_dim_grid_nodes=2,
-            processor_layers=3,
-            hidden_dim=4,
-            do_concat_trick=concat_trick,
-            use_cugraphops_decoder=True,
-            use_cugraphops_encoder=True,
-            use_cugraphops_processor=True,
-            recompute_activation=recomp_act,
-        ).to("cuda")
+    for concat_trick in [False, True]:
+        for recomp_act in [False, True]:
+            # Fix random seeds
+            torch.manual_seed(0)
+            torch.cuda.manual_seed(0)
+            np.random.seed(0)
 
-        # Fix random seeds again
-        torch.manual_seed(0)
-        torch.cuda.manual_seed(0)
-        np.random.seed(0)
+            model = GraphCastNet(
+                meshgraph_path=icosphere_path,
+                static_dataset_path=None,
+                input_dim_grid_nodes=2,
+                input_dim_mesh_nodes=3,
+                input_dim_edges=4,
+                output_dim_grid_nodes=2,
+                processor_layers=3,
+                hidden_dim=4,
+                do_concat_trick=concat_trick,
+                use_cugraphops_decoder=True,
+                use_cugraphops_encoder=True,
+                use_cugraphops_processor=True,
+                recompute_activation=recomp_act,
+            ).to("cuda")
 
-        model_dgl = GraphCastNet(
-            meshgraph_path=icosphere_path,
-            static_dataset_path=None,
-            input_dim_grid_nodes=2,
-            input_dim_mesh_nodes=3,
-            input_dim_edges=4,
-            output_dim_grid_nodes=2,
-            processor_layers=3,
-            hidden_dim=4,
-            do_concat_trick=concat_trick,
-            use_cugraphops_decoder=False,
-            use_cugraphops_encoder=False,
-            use_cugraphops_processor=False,
-            recompute_activation=False,
-        ).to("cuda")
+            # Fix random seeds again
+            fix_random_seeds()
 
-        # Forward pass without checkpointing
-        x.requires_grad_()
-        y_pred = model(x)
-        loss = y_pred.sum()
-        loss.backward()
-        x_grad = x.grad
+            model_dgl = GraphCastNet(
+                meshgraph_path=icosphere_path,
+                static_dataset_path=None,
+                input_dim_grid_nodes=2,
+                input_dim_mesh_nodes=3,
+                input_dim_edges=4,
+                output_dim_grid_nodes=2,
+                processor_layers=3,
+                hidden_dim=4,
+                do_concat_trick=concat_trick,
+                use_cugraphops_decoder=False,
+                use_cugraphops_encoder=False,
+                use_cugraphops_processor=False,
+                recompute_activation=False,
+            ).to("cuda")
 
-        x_dgl.requires_grad_()
-        y_pred_dgl = model_dgl(x_dgl)
-        loss_dgl = y_pred_dgl.sum()
-        loss_dgl.backward()
-        x_grad_dgl = x_dgl.grad
+            # Forward pass without checkpointing
+            x.requires_grad_()
+            y_pred = model(x)
+            loss = y_pred.sum()
+            loss.backward()
+            x_grad = x.grad
 
-        # Check that the results are the same
-        assert torch.allclose(
-            y_pred_dgl, y_pred, atol=1.0e-6
-        ), "testing DGL against cugraph-ops: outputs do not match!"
-        assert torch.allclose(
-            x_grad_dgl, x_grad, atol=1.0e-4, rtol=1.0e-3
-        ), "testing DGL against cugraph-ops: gradients do not match!"
+            x_dgl.requires_grad_()
+            y_pred_dgl = model_dgl(x_dgl)
+            loss_dgl = y_pred_dgl.sum()
+            loss_dgl.backward()
+            x_grad_dgl = x_dgl.grad
+
+            # Check that the results are the same
+            assert torch.allclose(
+                y_pred_dgl, y_pred, atol=1.0e-6
+            ), "testing DGL against cugraph-ops: outputs do not match!"
+            assert torch.allclose(
+                x_grad_dgl, x_grad, atol=1.0e-4, rtol=1.0e-3
+            ), "testing DGL against cugraph-ops: gradients do not match!"

@@ -14,7 +14,6 @@
 
 from typing import Tuple, Optional
 
-import enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -37,9 +36,12 @@ try:
     apex_imported = True
 except:
     apex_imported = False
+apex_imported = False  # TODO handle properly
 
 
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
+    """Custom SiLU + Linear autograd function"""
+
     @staticmethod
     def forward(
         ctx,
@@ -60,6 +62,7 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
     def backward(
         ctx, grad_output: torch.Tensor
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor],]:
+        """backward pass of the SiLU + Linear function"""
         (
             need_dgrad,
             need_wgrad,
@@ -151,9 +154,11 @@ class MLP(nn.Module):
             self.forward_fn = self.default_forward
 
     def default_forward(self, x: Tensor) -> Tensor:
+        """default forward pass of the MLP"""
         return self.model(x)
 
     def custom_silu_linear_forward(self, x: Tensor) -> Tensor:
+        """forward pass of the MLP where SiLU is recomputed in backward"""
         lin = self.model[0]
         hidden = lin(x)
         for i in range(1, self.hidden_layers + 1):
@@ -272,11 +277,11 @@ class TruncatedMLP(nn.Module):
         src_idx: Tensor,
         dst_idx: Tensor,
     ) -> Tensor:
-        # separate linear layers without bias
-        # bias is added to one MLP, as we sum afterwards anyways
-        # this adds the bias to the total sum, too
-        # having it in one F.linear should allow a fusion of the bias addition
-        # while avoiding adding the bias to the "edge-level" result
+        """forward pass of the truncated MLP. This uses separate linear layers without
+        bias. Bias is added to one MLP, as we sum afterwards. This adds the bias to the
+         total sum, too. Having it in one F.linear should allow a fusion of the bias
+         addition while avoiding adding the bias to the "edge-level" result.
+        """
         mlp_efeat = F.linear(efeat, self.lin_efeat, None)
         mlp_src = F.linear(src_feat, self.lin_src, None)
         mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
@@ -291,6 +296,7 @@ class TruncatedMLP(nn.Module):
         src_idx: Tensor,
         dst_idx: Tensor,
     ) -> Tensor:
+        """Default forward pass of the truncated MLP."""
         mlp_sum = self.forward_truncated_sum(
             efeat, src_feat, dst_feat, src_idx, dst_idx
         )
@@ -304,6 +310,7 @@ class TruncatedMLP(nn.Module):
         src_idx: Tensor,
         dst_idx: Tensor,
     ) -> Tensor:
+        """Forward pass of the truncated MLP with custom SiLU function."""
         mlp_sum = self.forward_truncated_sum(
             efeat, src_feat, dst_feat, src_idx, dst_idx
         )
@@ -393,7 +400,9 @@ class TruncatedMLPCuGraph(TruncatedMLP):
         dst_feat: Tensor,
         graph: BipartiteCSC,
     ) -> Tensor:
-        # separate linear layers without bias
+        """Forward pass of the truncated MLP. This uses separate linear layers without
+        bias. Bias is added to one MLP, as we sum afterwards. This adds the bias to the
+        total sum, too."""
         mlp_efeat = F.linear(efeat, self.lin_efeat, None)
         mlp_src = F.linear(src_feat, self.lin_src, None)
         mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
@@ -409,6 +418,7 @@ class TruncatedMLPCuGraph(TruncatedMLP):
         dst_feat: Tensor,
         graph: BipartiteCSC,
     ) -> Tensor:
+        """Default forward pass of the truncated MLP."""
         mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
         return self.model(mlp_sum)
 
@@ -419,6 +429,7 @@ class TruncatedMLPCuGraph(TruncatedMLP):
         dst_feat: Tensor,
         graph: BipartiteCSC,
     ) -> Tensor:
+        """Forward pass of the truncated MLP with custom SiLU function."""
         mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
         lin = self.model[1]
         hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)

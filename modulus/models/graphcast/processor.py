@@ -183,6 +183,22 @@ class Processor(nn.Module):
         return efeat, nfeat
 
     def to(self, *args, **kwargs) -> "Processor":
+        """Moves the object to the specified device, dtype, or format.
+        This method moves the object and its underlying graph to the specified
+        device, dtype, or format, and returns the updated object.
+
+        Parameters
+        ----------
+        *args : Any
+            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
+        **kwargs : Any
+            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
+
+        Returns
+        -------
+        DecoderDGLConcat
+            The updated object after moving to the specified device, dtype, or format.
+        """
         self = super().to(*args, **kwargs)
         for module in self.processor_layers:
             module = module.to(*args, **kwargs)

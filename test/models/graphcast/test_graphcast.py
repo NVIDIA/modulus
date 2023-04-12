@@ -46,14 +46,13 @@ def test_graphcast_forward(device):
     }
 
     fix_random_seeds()
-    # NOTE unsqueeze is a workaround for a bug in the shape of the input tensor
-    x = torch.unsqueeze(create_random_input(model_kwds["input_dim_grid_nodes"]), dim=0)
+    x = create_random_input(model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     # Construct graphcast model
     model = GraphCastNet(**model_kwds).to(device)
 
-    assert common.validate_forward_accuracy(model, (x))
+    assert common.validate_forward_accuracy(model, (x,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -118,10 +117,7 @@ def test_GraphCast_optims(device):
         }
 
         fix_random_seeds()
-        # NOTE unsqueeze is a workaround for a bug in the shape of the input tensor
-        x = torch.unsqueeze(
-            create_random_input(model_kwds["input_dim_grid_nodes"]), dim=0
-        )
+        x = create_random_input(model_kwds["input_dim_grid_nodes"])
         x = x.to(device)
 
         # Construct GraphCast model
@@ -163,14 +159,13 @@ def test_graphcast_checkpoint(device):
     model_1 = GraphCastNet(**model_kwds).to(device)
     model_2 = GraphCastNet(**model_kwds).to(device)
 
-    # NOTE unsqueeze is a workaround for a bug in the shape of the input tensor
-    x = torch.unsqueeze(create_random_input(model_kwds["input_dim_grid_nodes"]), dim=0)
+    x = create_random_input(model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     assert common.validate_checkpoint(
         model_1,
         model_2,
-        (x),
+        (x,),
     )
 
 
@@ -194,8 +189,7 @@ def test_GraphCast_deploy(device):
     # Construct GraphCast model
     model = GraphCastNet(**model_kwds).to(device)
 
-    # NOTE unsqueeze is a workaround for a bug in the shape of the input tensor
-    x = torch.unsqueeze(create_random_input(model_kwds["input_dim_grid_nodes"]), dim=0)
+    x = create_random_input(model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     assert common.validate_onnx_export(model, x)

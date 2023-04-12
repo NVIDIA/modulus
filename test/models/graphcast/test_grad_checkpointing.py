@@ -13,91 +13,96 @@
 # limitations under the License.
 
 import torch
+import pytest
 
 from utils import fix_random_seeds, create_random_input, get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-icosphere_path = get_icosphere_path()
 
-# constants
-model_kwds = {
-    "meshgraph_path": icosphere_path,
-    "static_dataset_path": None,
-    "input_dim_grid_nodes": 2,
-    "input_dim_mesh_nodes": 3,
-    "input_dim_edges": 4,
-    "output_dim_grid_nodes": 2,
-    "processor_layers": 3,
-    "hidden_dim": 4,
-    "do_concat_trick": True,
-}
-num_steps = 2
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_grad_checkpointing(device):
+    """Test gradient checkpointing"""
+    icosphere_path = get_icosphere_path()
 
-# Fix random seeds
-fix_random_seeds()
+    # constants
+    model_kwds = {
+        "meshgraph_path": icosphere_path,
+        "static_dataset_path": None,
+        "input_dim_grid_nodes": 2,
+        "input_dim_mesh_nodes": 3,
+        "input_dim_edges": 4,
+        "output_dim_grid_nodes": 2,
+        "processor_layers": 3,
+        "hidden_dim": 4,
+        "do_concat_trick": True,
+    }
+    num_steps = 2
 
-# Random input
-x = create_random_input(model_kwds["input_dim_grid_nodes"])
+    # Fix random seeds
+    fix_random_seeds()
 
-# Instantiate the model
-model = GraphCastNet(**model_kwds)
+    # Random input
+    x = create_random_input(model_kwds["input_dim_grid_nodes"]).to(device)
 
-# Set gradient checkpointing
-model.set_checkpoint_model(False)
-model.set_checkpoint_encoder(True)
-model.set_checkpoint_processor(2)
-model.set_checkpoint_decoder(True)
+    # Instantiate the model
+    model = GraphCastNet(**model_kwds).to(device)
 
-# Forward pass with checkpointing
-y_pred_checkpointed = x
-for i in range(num_steps):
-    y_pred_checkpointed = model(y_pred_checkpointed)
+    # Set gradient checkpointing
+    model.set_checkpoint_model(False)
+    model.set_checkpoint_encoder(True)
+    model.set_checkpoint_processor(2)
+    model.set_checkpoint_decoder(True)
 
-# dummy loss
-loss = y_pred_checkpointed.sum()
+    # Forward pass with checkpointing
+    y_pred_checkpointed = x
+    for i in range(num_steps):
+        y_pred_checkpointed = model(y_pred_checkpointed)
 
-# compute gradients
-loss.backward()
-computed_grads_checkpointed = {}
-for name, param in model.named_parameters():
-    computed_grads_checkpointed[name] = param.grad.clone()
+    # dummy loss
+    loss = y_pred_checkpointed.sum()
 
-# Fix random seeds
-fix_random_seeds()
+    # compute gradients
+    loss.backward()
+    computed_grads_checkpointed = {}
+    for name, param in model.named_parameters():
+        computed_grads_checkpointed[name] = param.grad.clone()
 
-# Random input
-x = create_random_input()
+    # Fix random seeds
+    fix_random_seeds()
 
-# Instantiate the model
-model = GraphCastNet(**model_kwds)
+    # Random input
+    x = create_random_input().to(device)
 
-# Set gradient checkpointing
-model.set_checkpoint_model(False)
-model.set_checkpoint_encoder(False)
-model.set_checkpoint_processor(1)
-model.set_checkpoint_decoder(False)
+    # Instantiate the model
+    model = GraphCastNet(**model_kwds).to(device)
 
-# Forward pass without checkpointing
-y_pred = x
-for i in range(num_steps):
-    y_pred = model(y_pred)
+    # Set gradient checkpointing
+    model.set_checkpoint_model(False)
+    model.set_checkpoint_encoder(False)
+    model.set_checkpoint_processor(1)
+    model.set_checkpoint_decoder(False)
 
-# dummy loss
-loss = y_pred.sum()
+    # Forward pass without checkpointing
+    y_pred = x
+    for i in range(num_steps):
+        y_pred = model(y_pred)
 
-# compute gradients
-loss.backward()
-computed_grads = {}
-for name, param in model.named_parameters():
-    computed_grads[name] = param.grad.clone()
+    # dummy loss
+    loss = y_pred.sum()
 
-# Compare the gradients
-for name in computed_grads:
-    torch.allclose(
-        computed_grads_checkpointed[name], computed_grads[name]
-    ), "Gradient do not match. Checkpointing failed!"
+    # compute gradients
+    loss.backward()
+    computed_grads = {}
+    for name, param in model.named_parameters():
+        computed_grads[name] = param.grad.clone()
 
-# Check that the results are the same
-assert torch.allclose(
-    y_pred_checkpointed, y_pred
-), "Outputs do not match. Checkpointing failed!"
+    # Compare the gradients
+    for name in computed_grads:
+        torch.allclose(
+            computed_grads_checkpointed[name], computed_grads[name]
+        ), "Gradient do not match. Checkpointing failed!"
+
+    # Check that the results are the same
+    assert torch.allclose(
+        y_pred_checkpointed, y_pred
+    ), "Outputs do not match. Checkpointing failed!"

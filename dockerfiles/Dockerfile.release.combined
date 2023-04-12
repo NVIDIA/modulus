@@ -16,6 +16,10 @@ ARG BUILD
 ARG PYT_VER=22.12
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3
 
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 ############################# Modulus (core) Install steps #############################
 # Update pip
 RUN pip install --upgrade pip 
@@ -94,7 +98,7 @@ RUN if [ "$BUILD" = "internal" ] ; then \
     	make -j && \
     	mkdir /modulus-sym/external/lib && \
     	cp libpysdf.so /modulus-sym/external/lib/ && \
-    	cd /modulus-sym/external/pysdf && pip install .
+    	cd /modulus-sym/external/pysdf && pip install . \
     else \
 	echo "External build detected, no pysdf install" \
     fi
