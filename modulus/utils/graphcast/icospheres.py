@@ -16,6 +16,11 @@ import pymesh
 import numpy as np
 import pickle
 
+try:
+    import pymesh
+except ImportError:
+    Warning("pymesh is not installed. Please install it to use icosphere.")
+
 # TODO apply a transformation to make faces parallel to ploes
 
 

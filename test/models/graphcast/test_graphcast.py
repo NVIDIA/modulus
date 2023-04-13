@@ -17,7 +17,6 @@ import sys, os
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
-import torch
 import pytest
 
 from utils import fix_random_seeds, create_random_input
