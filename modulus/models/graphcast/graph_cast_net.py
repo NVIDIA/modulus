@@ -132,7 +132,7 @@ class GraphCastNet(Module):
         # check the input resolution
         if input_res != (721, 1440):
             raise NotImplementedError(
-                "Currently only naitive ERA5 input resolution (721, 1440) is supported"
+                "Currently only native ERA5 input resolution (721, 1440) is supported"
             )
 
         # create the lat_lon_grid
