@@ -68,6 +68,21 @@ class One2ManyRNN(Module):
         Time steps to predict, by default 32
     dimension : int, optional
         Spatial dimension of the input, by default 2
+    
+    Example
+    -------
+    >>> model = modulus.models.rnn.One2ManyRNN(
+    ... input_channels=6,
+    ... channels=32,
+    ... activation_fn=torch.nn.ReLU(),
+    ... nr_downsamples=2,
+    ... time_steps=16,
+    ... dimension=2,
+    ... )
+    >>> input = invar = torch.randn(4, 6, 1, 16, 16) # [N, C, T, H, W]
+    >>> output = model(input)
+    >>> output.size()
+    torch.Size([4, 6, 16, 16, 16])
     """
 
     def __init__(
