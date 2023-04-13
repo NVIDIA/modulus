@@ -29,12 +29,6 @@ RUN apt-get update && \
 # Install IO libraries
 RUN pip install kerchunk xarray h5py s3fs fsspec zarr dask 
 
-# Install torchdata from source
-RUN cd /opt/ && \
-    git clone --branch v0.5.1 https://github.com/pytorch/data.git && \
-    cd data && \
-    BUILD_S3=1 python setup.py install
-
 # install libcugraphops and pylibcugraphops
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
