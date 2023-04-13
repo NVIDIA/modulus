@@ -130,10 +130,7 @@ class Seq2SeqRNN(Module):
                     )
                 )
 
-        self.rnn_layers = nn.ModuleList()
-        self.rnn_layers.append(
-            _ConvGRULayer(channels_out, channels_out, dimension=dimension)
-        )
+        self.rnn_layer = _ConvGRULayer(channels_out, channels_out, dimension=dimension)
 
         self.conv_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
@@ -210,14 +207,14 @@ class Seq2SeqRNN(Module):
             if t == 0:
                 h = torch.zeros(list(x_in.size())).to(x.device)
             x_in_rnn = encoded_inputs[t]
-            h = self.rnn_layers[0](x_in_rnn, h)
+            h = self.rnn_layer(x_in_rnn, h)
 
         # decode
         rnn_output = []
         for t in range(self.time_steps):
             if t == 0:
                 x_in_rnn = encoded_inputs[-1]
-            h = self.rnn_layers[0](x_in_rnn, h)
+            h = self.rnn_layer(x_in_rnn, h)
             x_in_rnn = h
             rnn_output.append(h)
 
