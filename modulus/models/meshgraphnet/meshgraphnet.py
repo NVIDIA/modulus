@@ -82,7 +82,7 @@ class MeshGraphNet(Module):
 
     Example
     -------
-    >>> model = modulus.models.gnn.MeshGraphNet(
+    >>> model = modulus.models.meshgraphnet.MeshGraphNet(
     ...         input_dim_nodes=4,
     ...         input_dim_edges=3,
     ...         output_dim=2,
