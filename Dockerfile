@@ -38,6 +38,7 @@ RUN mkdir -p /opt/cugraphops &&\
     tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
+ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install custom onnx
 COPY ./deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
