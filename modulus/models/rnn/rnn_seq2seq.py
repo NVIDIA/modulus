@@ -67,7 +67,7 @@ class Seq2SeqRNN(Module):
     time_steps : int, optional
         Time steps to predict, by default 32
     dimension : int, optional
-        Spatial dimension of the input, by default 2
+        Spatial dimension of the input. Only 2d and 3d are supported, by default 2
     
     Example
     -------
