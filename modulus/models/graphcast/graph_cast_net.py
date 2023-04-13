@@ -38,7 +38,7 @@ class MetaData(ModelMetaData):
     name: str = "GraphCastNet"
     # Optimization
     jit: bool = False
-    cuda_graphs: bool = False
+    cuda_graphs: bool = True
     amp_cpu: bool = False
     amp_gpu: bool = True
     torch_fx: bool = False
