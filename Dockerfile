@@ -29,10 +29,6 @@ RUN apt-get update && \
 # Install IO libraries
 RUN pip install kerchunk xarray h5py s3fs fsspec zarr dask 
 
-# Set configs for fsspec/s3fs
-RUN mkdir -p $HOME/.config/fsspec/ && \
-    echo "{\"s3\": {\"client_kwargs\": {\"endpoint_url\": \"https://pbss.s8k.io\"}}}" >> $HOME/.config/fsspec/s3.json
-
 # Install torchdata from source
 RUN cd /opt/ && \
     git clone --branch v0.5.1 https://github.com/pytorch/data.git && \
