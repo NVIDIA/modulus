@@ -105,7 +105,7 @@ class Seq2SeqRNN(Module):
 
         # check valid dimensions
         if dimension not in [2, 3]:
-            raise ValueError("Dimension not supported")
+            raise ValueError("Only 2D and 3D spatial dimensions are supported")
 
         for i in range(nr_downsamples):
             for j in range(nr_residual_blocks):
