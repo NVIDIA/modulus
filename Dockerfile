@@ -26,9 +26,6 @@ ENV DGLBACKEND=pytorch
 RUN apt-get update && \
     apt-get install -y curl openssl libcurl4-openssl-dev libssl-dev
 
-# Install IO libraries
-RUN pip install kerchunk xarray h5py s3fs fsspec zarr dask 
-
 # install libcugraphops and pylibcugraphops
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
