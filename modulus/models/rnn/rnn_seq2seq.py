@@ -184,7 +184,21 @@ class Seq2SeqRNN(Module):
             raise ValueError("Dimension not supported")
 
     def forward(self, x: Tensor) -> Tensor:
+        """Forward pass
 
+        Parameters
+        ----------
+        x : Tensor
+            Expects a tensor of size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D
+            Where, N is the batch size, C is the number of channels, T is the number of 
+            input timesteps and D, H, W are spatial dimensions. Currently, this 
+            requires input time steps to be same as predicted time steps. 
+        Returns
+        -------
+        Tensor
+            Size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D. 
+            Where, T is the number of timesteps being predicted. 
+        """
         # Encoding step
         encoded_inputs = []
         for t in range(self.time_steps):
