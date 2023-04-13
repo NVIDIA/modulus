@@ -106,8 +106,6 @@ class One2ManyRNN(Module):
         # check valid dimensions
         if dimension not in [2, 3]:
             raise ValueError("Dimension not supported")
-        else:
-            pass
 
         for i in range(nr_downsamples):
             for j in range(nr_residual_blocks):
@@ -176,12 +174,11 @@ class One2ManyRNN(Module):
             self.final_conv = nn.Conv2d(
                 channels, input_channels, (1, 1), (1, 1), padding="valid"
             )
-        elif dimension == 3:
+        else:
+            # dimension is 3
             self.final_conv = nn.Conv3d(
                 channels, input_channels, (1, 1, 1), (1, 1, 1), padding="valid"
             )
-        else:
-            raise ValueError("Dimension not supported")
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass
