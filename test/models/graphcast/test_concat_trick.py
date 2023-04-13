@@ -39,7 +39,7 @@ def test_concat_trick():
 
         # Instantiate the model
         model = GraphCastNet(
-            meshgraph_path="icospheres.pickle",
+            meshgraph_path=icosphere_path,
             static_dataset_path=None,
             input_dim_grid_nodes=2,
             input_dim_mesh_nodes=3,
