@@ -140,7 +140,7 @@ class One2ManyRNN(Module):
         for i in range(nr_downsamples):
             self.upsampling_layers = nn.ModuleList()
             channels_in = channels_out
-            channels_out = int(channels_out / 2)
+            channels_out = channels_out // 2
             self.upsampling_layers.append(
                 _TransposeConvLayer(
                     channels_in, channels_out, 4, 2, dimension=dimension
