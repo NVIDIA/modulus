@@ -56,3 +56,10 @@ coverage:
 	coverage combine && \
 		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
 		coverage html
+
+container-deploy:
+	docker build -t modulus:deploy --target deploy -f Dockerfile .
+
+container-ci:
+	docker build -t modulus:ci --target ci -f Dockerfile .
+
