@@ -13,17 +13,14 @@
 # limitations under the License.
 
 ARG PYT_VER=22.12
-FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3
+FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
-# Install git-lfs
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
-RUN apt-get install git-lfs
+# Update pip and setuptools
+RUN pip install --upgrade pip setuptools  
 
-# Update pip
-RUN pip install --upgrade pip 
-
-# Install dgl
-RUN pip install dgl-cu116 dglgo -f https://data.dgl.ai/wheels/repo.html
+# Install nightly build of dgl
+RUN pip install --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
+RUN pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
 
 # install libcugraphops and pylibcugraphops
@@ -31,9 +28,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get install -y software-properties-common &&\
+RUN apt-get update &&\
+    apt-get install -y software-properties-common &&\
     add-apt-repository ppa:ubuntu-toolchain-r/test &&\
-    apt-get update &&\
     apt-get install -y libstdc++6
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
@@ -46,20 +43,25 @@ RUN mkdir -p /opt/cugraphops &&\
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
 
-# Install ci specific packages
-COPY ./dockerfiles/requirements_ci.txt requirements.txt
-RUN pip install -r requirements.txt
+ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install custom onnx
+# TODO: Find a fix to eliminate the custom build
 COPY ./deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
 RUN pip install --force-reinstall onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
-RUN pip install protobuf==3.20.0
 
-# Install Modulus
+# CI image
+FROM builder as ci
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e .
+RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
+
+# Deployment image
+FROM builder as deploy
+RUN pip install warp-lang>=0.6.0 protobuf==3.20.0 
+COPY . /modulus/
+RUN cd /modulus/ && pip install .
 
 # Clean up
 RUN rm -rf /modulus/ \
-    && rm -rf onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl \
-    && rm -rf requirements.txt 
+    && rm -rf onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl

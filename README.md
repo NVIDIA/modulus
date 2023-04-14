@@ -29,6 +29,21 @@ pip install --upgrade pip
 pip install .
 ```
 
+## Docker
+
+To build Modulus docker image:
+```
+docker build -t modulus:deploy --target deploy -f Dockerfile .
+```
+Alternatively, you can run `make container-deploy`
+
+To build CI image:
+```
+docker build -t modulus:ci --target ci -f Dockerfile .
+```
+Alternatively, you can run `make container-ci`
+
+
 ## Contributing
 
 Modulus is in an open-source beta. We are not accepting external contributions at this time.
