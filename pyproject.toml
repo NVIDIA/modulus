@@ -13,6 +13,7 @@ requires-python = ">=3.7"
 license = {text = "Apache Software License 2.0"}
 dependencies = [
     "h5py>=3.7.0",
+    "netcdf4>=1.6.3",
     "numpy>=1.22.4",
     "nvidia_dali_cuda110>=1.16.0",
     "pytest>=6.0.0",

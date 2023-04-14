@@ -36,12 +36,22 @@ RUN mkdir -p $HOME/.config/fsspec/ && \
     echo "{\"s3\": {\"client_kwargs\": {\"endpoint_url\": \"https://pbss.s8k.io\"}}}" >> $HOME/.config/fsspec/s3.json
 
 # install libcugraphops and pylibcugraphops
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get install -y software-properties-common &&\
+    add-apt-repository ppa:ubuntu-toolchain-r/test &&\
+    apt-get update &&\
+    apt-get install -y libstdc++6
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
-    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
-    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2 &&\
-    tar -xf libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
-    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2
+    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
+    tar -xf libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
+    rm libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    rm pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
 
@@ -88,7 +98,7 @@ RUN if [ "$BUILD" = "internal" ] ; then \
     	make -j && \
     	mkdir /modulus-sym/external/lib && \
     	cp libpysdf.so /modulus-sym/external/lib/ && \
-    	cd /modulus-sym/external/pysdf && pip install .
+    	cd /modulus-sym/external/pysdf && pip install . \
     else \
 	echo "External build detected, no pysdf install" \
     fi
