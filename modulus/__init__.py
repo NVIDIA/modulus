@@ -19,4 +19,4 @@ from .datapipes.meta import DatapipeMetaData
 
 from .datapipes.datapipe import Datapipe
 
-__version__ = "23.03.0-alpha"
+__version__ = "0.1.0"
