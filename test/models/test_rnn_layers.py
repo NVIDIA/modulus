@@ -25,8 +25,7 @@ from modulus.models.rnn.layers import (
 @pytest.mark.parametrize("activation_fn", [torch.nn.ReLU(), torch.nn.Identity()])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
-@pytest.mark.parametrize("periodic_padding", [True, False])
-def test_conv_layer(activation_fn, stride, dimension, periodic_padding):
+def test_conv_layer(activation_fn, stride, dimension):
     """Test conv layer"""
 
     in_channels = 16
@@ -41,7 +40,6 @@ def test_conv_layer(activation_fn, stride, dimension, periodic_padding):
         dimension=dimension,
         activation_fn=activation_fn,
         padding="same",
-        periodic_padding=periodic_padding,
     )
 
     bsize = 2
@@ -57,7 +55,7 @@ def test_conv_layer(activation_fn, stride, dimension, periodic_padding):
 
     assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
 
-    # test valid/None padding - note periodic padding only works when "same padding"
+    # test valid/None padding
     layer = _ConvLayer(
         in_channels=in_channels,
         out_channels=out_channels,
@@ -65,7 +63,6 @@ def test_conv_layer(activation_fn, stride, dimension, periodic_padding):
         stride=stride,
         dimension=dimension,
         padding=None,
-        periodic_padding=False,
     )
 
     bsize = 2
@@ -82,8 +79,7 @@ def test_conv_layer(activation_fn, stride, dimension, periodic_padding):
 @pytest.mark.parametrize("activation_fn", [torch.nn.ReLU(), torch.nn.Identity()])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
-@pytest.mark.parametrize("periodic_padding", [True, False])
-def test_transconv_layer(activation_fn, stride, dimension, periodic_padding):
+def test_transconv_layer(activation_fn, stride, dimension):
     """Test transpose conv layer"""
 
     in_channels = 16
@@ -98,7 +94,6 @@ def test_transconv_layer(activation_fn, stride, dimension, periodic_padding):
         dimension=dimension,
         activation_fn=activation_fn,
         padding="same",
-        periodic_padding=periodic_padding,
     )
 
     bsize = 2
@@ -114,7 +109,7 @@ def test_transconv_layer(activation_fn, stride, dimension, periodic_padding):
 
     assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
 
-    # test valid/None padding - note periodic padding only works when "same padding"
+    # test valid/None padding
     layer = _TransposeConvLayer(
         in_channels=in_channels,
         out_channels=out_channels,
@@ -122,7 +117,6 @@ def test_transconv_layer(activation_fn, stride, dimension, periodic_padding):
         stride=stride,
         dimension=dimension,
         padding=None,
-        periodic_padding=False,
     )
 
     bsize = 2
@@ -141,14 +135,12 @@ def test_transconv_layer(activation_fn, stride, dimension, periodic_padding):
 @pytest.mark.parametrize("gated", [True, False])
 @pytest.mark.parametrize("layer_normalization", [True, False])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
-@pytest.mark.parametrize("periodic_padding", [True, False])
 def test_residual_block_layer(
     activation_fn,
     begin_activation_fn,
     gated,
     layer_normalization,
     dimension,
-    periodic_padding,
 ):
     """Test residual block"""
 
@@ -166,7 +158,6 @@ def test_residual_block_layer(
         activation_fn=activation_fn,
         begin_activation_fn=begin_activation_fn,
         stride=stride,
-        periodic_padding=periodic_padding,
     )
 
     bsize = 2

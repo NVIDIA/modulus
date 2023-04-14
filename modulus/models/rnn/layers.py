@@ -46,8 +46,6 @@ class _ConvLayer(nn.Module):
         Activation function to use, by default nn.Identity()
     padding : str, optional
         Type of padding to use, options "same" and None, by default "same"
-    periodic_padding : bool, optional
-        Select True to pad the edges periodically, by default False
     """
 
     def __init__(
@@ -59,7 +57,6 @@ class _ConvLayer(nn.Module):
         dimension: int,  # TODO check if there are ways to infer this
         activation_fn: nn.Module = nn.Identity(),
         padding: str = "same",
-        periodic_padding: bool = False,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -69,7 +66,6 @@ class _ConvLayer(nn.Module):
         self.dimension = dimension
         self.activation_fn = activation_fn
         self.padding = padding
-        self.periodic_padding = periodic_padding
 
         if self.dimension == 1:
             self.conv = nn.Conv1d(
@@ -113,23 +109,6 @@ class _ConvLayer(nn.Module):
         input_length = len(x.size()) - 2  # exclude channel and batch dims
         assert input_length == self.dimension, "Input dimension not compatible"
 
-        # pad edges periodically
-
-        if self.periodic_padding:
-            pad_thickness = self.kernel_size // 2
-            x = torch.cat([x[:, :, -pad_thickness:], x, x[:, :, :pad_thickness]], dim=2)
-            if input_length >= 2:
-                x = torch.cat(
-                    [x[:, :, :, -pad_thickness:], x, x[:, :, :, :pad_thickness]], dim=3
-                )
-            if input_length >= 3:
-                x = torch.cat(
-                    [x[:, :, :, :, -pad_thickness:], x, x[:, :, :, :, :pad_thickness]],
-                    dim=4,
-                )
-        else:
-            pad_thickness = 0
-
         if self.padding == "same":
             if input_length == 1:
                 iw = x.size()[-1:][0]
@@ -171,25 +150,6 @@ class _ConvLayer(nn.Module):
 
         x = self.conv(x)
 
-        # remove periodic padding
-        if self.periodic_padding:
-            x = x[:, :, pad_thickness // self.stride : -pad_thickness // self.stride]
-            if input_length >= 2:
-                x = x[
-                    :,
-                    :,
-                    :,
-                    pad_thickness // self.stride : -pad_thickness // self.stride,
-                ]
-            if input_length >= 3:
-                x = x[
-                    :,
-                    :,
-                    :,
-                    :,
-                    pad_thickness // self.stride : -pad_thickness // self.stride,
-                ]
-
         if self.activation_fn is not nn.Identity():
             x = self.exec_activation_fn(x)
 
@@ -215,8 +175,6 @@ class _TransposeConvLayer(nn.Module):
         Activation function to use, by default nn.Identity()
     padding : str, optional
         Type of padding to use, options "same" and None, by default "same"
-    periodic_padding : bool, optional
-        Select True to pad the edges periodically, by default False
     """
 
     def __init__(
@@ -228,7 +186,6 @@ class _TransposeConvLayer(nn.Module):
         dimension: int,
         activation_fn=nn.Identity(),
         padding: str = "same",
-        periodic_padding=False,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -238,7 +195,6 @@ class _TransposeConvLayer(nn.Module):
         self.dimension = dimension
         self.activation_fn = activation_fn
         self.padding = padding
-        self.periodic_padding = periodic_padding
 
         if dimension == 1:
             self.trans_conv = nn.ConvTranspose1d(
@@ -283,22 +239,6 @@ class _TransposeConvLayer(nn.Module):
         input_length = len(orig_x.size()) - 2  # exclude channel and batch dims
         assert input_length == self.dimension, "Input dimension not compatible"
 
-        if self.periodic_padding:
-            pad_thickness = 1
-            # first dim
-            x = torch.cat([x[:, :, -pad_thickness:], x, x[:, :, :pad_thickness]], dim=2)
-            if input_length >= 2:
-                x = torch.cat(
-                    [x[:, :, :, -pad_thickness:], x, x[:, :, :, :pad_thickness]], dim=3
-                )
-            if input_length >= 3:
-                x = torch.cat(
-                    [x[:, :, :, :, -pad_thickness:], x, x[:, :, :, :, :pad_thickness]],
-                    dim=4,
-                )
-        else:
-            pad_thickness = 0
-
         x = self.trans_conv(x)
 
         if self.padding == "same":
@@ -336,22 +276,6 @@ class _TransposeConvLayer(nn.Module):
                     pad_d // 2 : x.size(-3) - (pad_d - pad_d // 2),
                     pad_h // 2 : x.size(-2) - (pad_h - pad_h // 2),
                     pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
-                ]
-
-        # remove padding if needed
-        if self.periodic_padding:
-            x = x[:, :, pad_thickness * self.stride : -pad_thickness * self.stride]
-            if input_length >= 2:
-                x = x[
-                    :, :, :, pad_thickness * self.stride : -pad_thickness * self.stride
-                ]
-            if input_length >= 3:
-                x = x[
-                    :,
-                    :,
-                    :,
-                    :,
-                    pad_thickness * self.stride : -pad_thickness * self.stride,
                 ]
 
         if self.activation_fn is not nn.Identity():
@@ -432,8 +356,6 @@ class _ConvResidualBlock(nn.Module):
         Whether to use activation function in the beginning, by default True
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.ReLU()
-    periodic_padding : bool, optional
-        Select True to pad the edges periodically, by default False
 
     Raises
     ------
@@ -451,7 +373,6 @@ class _ConvResidualBlock(nn.Module):
         layer_normalization: bool = False,
         begin_activation_fn: bool = True,
         activation_fn: nn.Module = nn.ReLU(),
-        periodic_padding=False,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -462,7 +383,6 @@ class _ConvResidualBlock(nn.Module):
         self.layer_normalization = layer_normalization
         self.begin_activation_fn = begin_activation_fn
         self.activation_fn = activation_fn
-        self.periodic_padding = periodic_padding
 
         if self.stride == 1:
             self.conv_1 = _ConvLayer(
@@ -471,7 +391,6 @@ class _ConvResidualBlock(nn.Module):
                 3,
                 self.stride,
                 self.dimension,
-                periodic_padding=self.periodic_padding,
             )
         elif self.stride == 2:
             self.conv_1 = _ConvLayer(
@@ -480,7 +399,6 @@ class _ConvResidualBlock(nn.Module):
                 4,
                 self.stride,
                 self.dimension,
-                periodic_padding=self.periodic_padding,
             )
         else:
             raise ValueError("stride > 2 is not supported")
@@ -492,7 +410,6 @@ class _ConvResidualBlock(nn.Module):
                 3,
                 1,
                 self.dimension,
-                periodic_padding=self.periodic_padding,
             )
         else:
             self.conv_2 = _ConvLayer(
@@ -501,7 +418,6 @@ class _ConvResidualBlock(nn.Module):
                 3,
                 1,
                 self.dimension,
-                periodic_padding=self.periodic_padding,
             )
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
