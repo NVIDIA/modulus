@@ -36,12 +36,12 @@ class _ConvLayer(nn.Module):
         Number of input channels
     out_channels : int
         Number of output channels
+    dimension : int
+        Dimensionality of the input, 1, 2, 3, or 4
     kernel_size : int
         Kernel size for the convolution
     stride : int
         Stride for the convolution
-    dimension : int
-        Dimensionality of the input, 1, 2, 3, or 4
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.Identity()
     padding : str, optional
@@ -52,9 +52,9 @@ class _ConvLayer(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
+        dimension: int,  # TODO check if there are ways to infer this
         kernel_size: int,
         stride: int,
-        dimension: int,  # TODO check if there are ways to infer this
         activation_fn: nn.Module = nn.Identity(),
         padding: str = "same",
     ) -> None:
@@ -165,12 +165,12 @@ class _TransposeConvLayer(nn.Module):
         Number of input channels
     out_channels : int
         Number of output channels
+    dimension : int
+        Dimensionality of the input, 1, 2, 3, or 4
     kernel_size : int
         Kernel size for the convolution
     stride : int
         Stride for the convolution
-    dimension : int
-        Dimensionality of the input, 1, 2, 3, or 4
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.Identity()
     padding : str, optional
@@ -181,9 +181,9 @@ class _TransposeConvLayer(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
+        dimension: int,
         kernel_size: int,
         stride: int,
-        dimension: int,
         activation_fn=nn.Identity(),
         padding: str = "same",
     ) -> None:
@@ -352,10 +352,10 @@ class _ConvResidualBlock(nn.Module):
         Number of input channels
     out_channels : int
         Number of output channels
-    stride : int
-        Stride of the convolutions
     dimension : int
         Dimensionality of the input
+    stride : int
+        Stride of the convolutions
     gated : bool, optional
         Residual Gate, by default False
     layer_normalization : bool, optional
@@ -375,8 +375,8 @@ class _ConvResidualBlock(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        stride: int,
         dimension: int,
+        stride: int,
         gated: bool = False,
         layer_normalization: bool = False,
         begin_activation_fn: bool = True,
