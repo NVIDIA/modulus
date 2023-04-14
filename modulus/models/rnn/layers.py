@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import torch
 import torch.nn as nn
 
@@ -19,6 +20,11 @@ from torch import Tensor
 from timm.models.layers import padding
 import torch.nn.functional as F
 
+def _get_same_padding(x: int, k: int, s: int) -> int:
+    """Function to compute "same" padding. Inspired from:
+    https://github.com/huggingface/pytorch-image-models/blob/0.5.x/timm/models/layers/padding.py
+    """
+    return max((x // s - 1) * s - x + k, 0)
 
 class _ConvLayer(nn.Module):
     """Generalized Convolution Block
@@ -41,9 +47,6 @@ class _ConvLayer(nn.Module):
         Type of padding to use, options "same" and None, by default "same"
     periodic_padding : str, optional
         Select "True" to pad the edges periodically, by default False
-
-    Reference for "same" padding:
-    https://github.com/huggingface/pytorch-image-models/blob/0.5.x/timm/models/layers/padding.py
     """
 
     def __init__(
@@ -127,15 +130,15 @@ class _ConvLayer(nn.Module):
         if self.padding == "same":
             if input_length == 1:
                 iw = x.size()[-1:][0]
-                pad_w = padding.get_same_padding(iw, self.kernel_size, self.stride, d=1)
+                pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
                 x = F.pad(
                     x, [pad_w // 2, pad_w - pad_w // 2], mode="constant", value=0.0
                 )
             elif input_length == 2:
                 ih, iw = x.size()[-2:]
-                pad_h, pad_w = padding.get_same_padding(
-                    ih, self.kernel_size, self.stride, d=1
-                ), padding.get_same_padding(iw, self.kernel_size, self.stride, d=1)
+                pad_h, pad_w = _get_same_padding(
+                    ih, self.kernel_size, self.stride
+                ), _get_same_padding(iw, self.kernel_size, self.stride)
                 x = F.pad(
                     x,
                     [pad_h // 2, pad_h - pad_h // 2, pad_w // 2, pad_w - pad_w // 2],
@@ -145,9 +148,9 @@ class _ConvLayer(nn.Module):
             else:
                 _id, ih, iw = x.size()[-3:]
                 pad_d, pad_h, pad_w = (
-                    padding.get_same_padding(_id, self.kernel_size, self.stride, d=1),
-                    padding.get_same_padding(ih, self.kernel_size, self.stride, d=1),
-                    padding.get_same_padding(iw, self.kernel_size, self.stride, d=1),
+                    _get_same_padding(_id, self.kernel_size, self.stride),
+                    _get_same_padding(ih, self.kernel_size, self.stride),
+                    _get_same_padding(iw, self.kernel_size, self.stride),
                 )
                 x = F.pad(
                     x,
@@ -298,7 +301,7 @@ class _TransposeConvLayer(nn.Module):
         if self.padding == "same":
             if input_length == 1:
                 iw = orig_x.size()[-1:][0]
-                pad_w = padding.get_same_padding(iw, self.kernel_size, self.stride, d=1)
+                pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
                 x = x[
                     :,
                     :,
@@ -306,9 +309,9 @@ class _TransposeConvLayer(nn.Module):
                 ]
             elif input_length == 2:
                 ih, iw = orig_x.size()[-2:]
-                pad_h, pad_w = padding.get_same_padding(
-                    ih, self.kernel_size, self.stride, d=1
-                ), padding.get_same_padding(iw, self.kernel_size, self.stride, d=1)
+                pad_h, pad_w = _get_same_padding(
+                    ih, self.kernel_size, self.stride,
+                ), _get_same_padding(iw, self.kernel_size, self.stride)
                 x = x[
                     :,
                     :,
@@ -318,9 +321,9 @@ class _TransposeConvLayer(nn.Module):
             else:
                 _id, ih, iw = orig_x.size()[-3:]
                 pad_d, pad_h, pad_w = (
-                    padding.get_same_padding(_id, self.kernel_size, self.stride, d=1),
-                    padding.get_same_padding(ih, self.kernel_size, self.stride, d=1),
-                    padding.get_same_padding(iw, self.kernel_size, self.stride, d=1),
+                    _get_same_padding(_id, self.kernel_size, self.stride),
+                    _get_same_padding(ih, self.kernel_size, self.stride),
+                    _get_same_padding(iw, self.kernel_size, self.stride),
                 )
                 x = x[
                     :,
@@ -541,24 +544,24 @@ class _ConvResidualBlock(nn.Module):
         if orig_x.size(-1) > x.size(-1):  # Check if widths are same)
             if len(orig_x.size()) - 2 == 1:
                 iw = orig_x.size()[-1:][0]
-                pad_w = padding.get_same_padding(iw, 2, 2, d=1)
+                pad_w = _get_same_padding(iw, 2, 2)
                 pool = torch.nn.AvgPool1d(
                     2, 2, padding=pad_w // 2, count_include_pad=False
                 )
             elif len(orig_x.size()) - 2 == 2:
                 ih, iw = orig_x.size()[-2:]
-                pad_h, pad_w = padding.get_same_padding(
-                    ih, 2, 2, d=1
-                ), padding.get_same_padding(iw, 2, 2, d=1)
+                pad_h, pad_w = _get_same_padding(
+                    ih, 2, 2,
+                ), _get_same_padding(iw, 2, 2)
                 pool = torch.nn.AvgPool2d(
                     2, 2, padding=(pad_h // 2, pad_w // 2), count_include_pad=False
                 )
             elif len(orig_x.size()) - 2 == 3:
                 _id, ih, iw = orig_x.size()[-3:]
                 pad_d, pad_h, pad_w = (
-                    padding.get_same_padding(_id, 2, 2, d=1),
-                    padding.get_same_padding(ih, 2, 2, d=1),
-                    padding.get_same_padding(iw, 2, 2, d=1),
+                    _get_same_padding(_id, 2, 2),
+                    _get_same_padding(ih, 2, 2),
+                    _get_same_padding(iw, 2, 2),
                 )
                 pool = torch.nn.AvgPool3d(
                     2,

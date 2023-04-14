@@ -17,11 +17,8 @@ import torch.nn as nn
 import modulus
 
 from torch import Tensor
-from timm.models.layers import padding
-import torch.nn.functional as F
 from dataclasses import dataclass
-from typing import Optional, Union, List
-from modulus.models.layers import FCLayer
+from typing import Union, List
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.models.rnn.layers import (
