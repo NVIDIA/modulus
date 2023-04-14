@@ -18,17 +18,27 @@ FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
 
-# Install dgl
-RUN pip install dgl-cu116 dglgo -f https://data.dgl.ai/wheels/repo.html
-ENV DGLBACKEND=pytorch
+# Install nightly build of dgl
+RUN pip install --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
+RUN pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 
 # install libcugraphops and pylibcugraphops
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update &&\
+    apt-get install -y software-properties-common &&\
+    add-apt-repository ppa:ubuntu-toolchain-r/test &&\
+    apt-get install -y libstdc++6
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
-    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
-    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2 &&\
-    tar -xf libcugraphops-23.04.00a-cuda11_230209_ge087b2eb_21.tar.bz2 &&\
-    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230209_ge087b2eb_21.tar.bz2
+    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
+    tar -xf libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
+    rm libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
+    rm pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
 ENV _CUDA_COMPAT_TIMEOUT=90

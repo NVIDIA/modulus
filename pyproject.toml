@@ -28,10 +28,6 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-graphs = [
-  "dgl>=0.9.1",
-  "dgl_cu116>=0.9.1.post1"
-]
 inference = ["onnxruntime==1.13.1"]
 
 [tool.setuptools.dynamic]
