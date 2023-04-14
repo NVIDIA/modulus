@@ -257,21 +257,22 @@ class Darcy2D(Datapipe):
                 if normalized_inf_residual < (
                     self.convergence_threshold * grid_reduction_factor
                 ):
-
-                    # upsample to higher resolution
-                    if grid_reduction_factor > 1:
-                        wp.launch(
-                            kernel=bilinear_upsample_batched_2d,
-                            dim=self.dim,
-                            inputs=[
-                                self.darcy0,
-                                self.dim[1],
-                                self.dim[2],
-                                grid_reduction_factor,
-                            ],
-                            device=self.device,
-                        )
                     break
+
+            # upsample to higher resolution
+            if grid_reduction_factor > 1:
+                wp.launch(
+                    kernel=bilinear_upsample_batched_2d,
+                    dim=self.dim,
+                    inputs=[
+                        self.darcy0,
+                        self.dim[1],
+                        self.dim[2],
+                        grid_reduction_factor,
+                    ],
+                    device=self.device,
+                )
+ 
 
     def __iter__(self) -> Tuple[Tensor, Tensor]:
         """
