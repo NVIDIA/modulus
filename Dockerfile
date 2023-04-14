@@ -21,6 +21,7 @@ RUN pip install --upgrade pip setuptools
 # Install nightly build of dgl
 RUN pip install --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
 RUN pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
+ENV DGLBACKEND=pytorch
 
 # install libcugraphops and pylibcugraphops
 ENV DEBIAN_FRONTEND=noninteractive
@@ -41,6 +42,7 @@ RUN mkdir -p /opt/cugraphops &&\
     rm pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
+
 ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install custom onnx
