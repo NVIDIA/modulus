@@ -44,8 +44,8 @@ class _ConvLayer(nn.Module):
         Activation function to use, by default nn.Identity()
     padding : str, optional
         Type of padding to use, options "same" and None, by default "same"
-    periodic_padding : str, optional
-        Select "True" to pad the edges periodically, by default False
+    periodic_padding : bool, optional
+        Select True to pad the edges periodically, by default False
     """
 
     def __init__(
@@ -57,7 +57,7 @@ class _ConvLayer(nn.Module):
         dimension: int,  # TODO check if there are ways to infer this
         activation_fn: nn.Module = nn.Identity(),
         padding: str = "same",
-        periodic_padding: str = False,  # TODO add periordic padding
+        periodic_padding: bool = False,  
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -190,8 +190,6 @@ class _ConvLayer(nn.Module):
 
         if self.activation_fn is not nn.Identity():
             x = self.exec_activation_fn(x)
-        else:
-            pass
 
         return x
 
@@ -215,8 +213,8 @@ class _TransposeConvLayer(nn.Module):
         Activation function to use, by default nn.Identity()
     padding : str, optional
         Type of padding to use, options "same" and None, by default "same"
-    periodic_padding : str, optional
-        Select "True" to pad the edges periodically, by default False
+    periodic_padding : bool, optional
+        Select True to pad the edges periodically, by default False
     """
 
     def __init__(
@@ -351,13 +349,9 @@ class _TransposeConvLayer(nn.Module):
                     :,
                     pad_thickness * self.stride : -pad_thickness * self.stride,
                 ]
-        else:
-            pass
 
         if self.activation_fn is not nn.Identity():
             x = self.exec_activation_fn(x)
-        else:
-            pass
 
         return x
 
@@ -435,7 +429,7 @@ class _ConvResidualBlock(nn.Module):
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.ReLU()
     periodic_padding : bool, optional
-        Select "True" to pad the edges periodically, by default False
+        Select True to pad the edges periodically, by default False
 
     Raises
     ------

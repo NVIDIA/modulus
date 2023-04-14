@@ -47,7 +47,7 @@ class MetaData(ModelMetaData):
 
 class Seq2SeqRNN(Module):
     """A RNN model with encoder/decoder for 2d/3d problems. Given input 0 to t-1,
-    predicts signal t to t + n
+    predicts signal t to t + time_steps
 
     Parameters
     ----------
