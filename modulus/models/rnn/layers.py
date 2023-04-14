@@ -311,10 +311,18 @@ class _ConvGRULayer(nn.Module):
         self.hidden_size = hidden_size
         self.activation_fn = activation_fn
         self.conv_1 = _ConvLayer(
-            in_features + hidden_size, 2 * hidden_size, 3, 1, dimension
+            in_channels=in_features + hidden_size,
+            out_channels=2 * hidden_size,
+            kernel_size=3,
+            stride=1,
+            dimension=dimension,
         )
         self.conv_2 = _ConvLayer(
-            in_features + hidden_size, hidden_size, 3, 1, dimension
+            in_channels=in_features + hidden_size,
+            out_channels=hidden_size,
+            kernel_size=3,
+            stride=1,
+            dimension=dimension,
         )
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
@@ -386,38 +394,38 @@ class _ConvResidualBlock(nn.Module):
 
         if self.stride == 1:
             self.conv_1 = _ConvLayer(
-                self.in_channels,
-                self.out_channels,
-                3,
-                self.stride,
-                self.dimension,
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                kernel_size=3,
+                stride=self.stride,
+                dimension=self.dimension,
             )
         elif self.stride == 2:
             self.conv_1 = _ConvLayer(
-                self.in_channels,
-                self.out_channels,
-                4,
-                self.stride,
-                self.dimension,
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                kernel_size=4,
+                stride=self.stride,
+                dimension=self.dimension,
             )
         else:
             raise ValueError("stride > 2 is not supported")
 
         if not self.gated:
             self.conv_2 = _ConvLayer(
-                self.out_channels,
-                self.out_channels,
-                3,
-                1,
-                self.dimension,
+                in_channels=self.out_channels,
+                out_channels=self.out_channels,
+                kernel_size=3,
+                stride=1,
+                dimension=self.dimension,
             )
         else:
             self.conv_2 = _ConvLayer(
-                self.out_channels,
-                2 * self.out_channels,
-                3,
-                1,
-                self.dimension,
+                in_channels=self.out_channels,
+                out_channels=2 * self.out_channels,
+                kernel_size=3,
+                stride=1,
+                dimension=self.dimension,
             )
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:

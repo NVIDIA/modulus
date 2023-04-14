@@ -116,9 +116,9 @@ class Seq2SeqRNN(Module):
                     stride = 2
                 self.encoder_layers.append(
                     _ConvResidualBlock(
-                        channels_in,
-                        channels_out,
-                        stride,
+                        in_channels=channels_in,
+                        out_channels=channels_out,
+                        stride=stride,
                         dimension=dimension,
                         gated=True,
                         layer_normalization=False,
@@ -127,7 +127,9 @@ class Seq2SeqRNN(Module):
                     )
                 )
 
-        self.rnn_layer = _ConvGRULayer(channels_out, channels_out, dimension=dimension)
+        self.rnn_layer = _ConvGRULayer(
+            in_features=channels_out, hidden_size=channels_out, dimension=dimension
+        )
 
         self.conv_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
@@ -137,15 +139,19 @@ class Seq2SeqRNN(Module):
             channels_out = channels_out // 2
             self.upsampling_layers.append(
                 _TransposeConvLayer(
-                    channels_in, channels_out, 4, 2, dimension=dimension
+                    in_channels=channels_in,
+                    out_channels=channels_out,
+                    kernel_size=4,
+                    stride=2,
+                    dimension=dimension,
                 )
             )
             for j in range(nr_residual_blocks):
                 self.upsampling_layers.append(
                     _ConvResidualBlock(
-                        channels_out,
-                        channels_out,
-                        1,
+                        in_channels=channels_out,
+                        out_channels=channels_out,
+                        stride=1,
                         dimension=dimension,
                         gated=True,
                         layer_normalization=False,
@@ -155,10 +161,10 @@ class Seq2SeqRNN(Module):
                 )
             self.conv_layers.append(
                 _ConvLayer(
-                    channels_in,
-                    channels,
-                    1,
-                    1,
+                    in_channels=channels_in,
+                    out_channels=channels,
+                    kernel_size=1,
+                    stride=1,
                     dimension=dimension,
                 )
             )
