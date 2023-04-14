@@ -53,7 +53,7 @@ class One2ManyRNN(Module):
     ----------
     input_channels : int
         Number of channels in the input
-    channels : int, optional
+    nr_latent_channels : int, optional
         Channels for encoding/decoding, by default 512
     nr_residual_blocks : int, optional
         Number of residual blocks, by default 2
@@ -70,7 +70,7 @@ class One2ManyRNN(Module):
     -------
     >>> model = modulus.models.rnn.One2ManyRNN(
     ... input_channels=6,
-    ... channels=32,
+    ... nr_latent_channels=32,
     ... activation_fn=torch.nn.ReLU(),
     ... nr_downsamples=2,
     ... nr_tsteps=16,
@@ -85,7 +85,7 @@ class One2ManyRNN(Module):
     def __init__(
         self,
         input_channels: int,
-        channels: int = 512,
+        nr_latent_channels: int = 512,
         nr_residual_blocks: int = 2,
         activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
         nr_downsamples: int = 2,
@@ -98,7 +98,7 @@ class One2ManyRNN(Module):
         self.nr_residual_blocks = nr_residual_blocks
         self.nr_downsamples = nr_downsamples
         self.encoder_layers = nn.ModuleList()
-        channels_out = channels
+        channels_out = nr_latent_channels
 
         # check valid dimensions
         if dimension not in [2, 3]:
@@ -162,7 +162,7 @@ class One2ManyRNN(Module):
             self.conv_layers.append(
                 _ConvLayer(
                     in_channels=channels_in,
-                    out_channels=channels,
+                    out_channels=nr_latent_channels,
                     kernel_size=1,
                     stride=1,
                     dimension=dimension,
@@ -172,12 +172,16 @@ class One2ManyRNN(Module):
 
         if dimension == 2:
             self.final_conv = nn.Conv2d(
-                channels, input_channels, (1, 1), (1, 1), padding="valid"
+                nr_latent_channels, input_channels, (1, 1), (1, 1), padding="valid"
             )
         else:
             # dimension is 3
             self.final_conv = nn.Conv3d(
-                channels, input_channels, (1, 1, 1), (1, 1, 1), padding="valid"
+                nr_latent_channels,
+                input_channels,
+                (1, 1, 1),
+                (1, 1, 1),
+                padding="valid",
             )
 
     def forward(self, x: Tensor) -> Tensor:

@@ -29,7 +29,7 @@ def test_conv_rnn_one2many_forward(device, dimension):
     # Construct model
     model = One2ManyRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -59,7 +59,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
     # Construct the RNN models
     model_1 = One2ManyRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -68,7 +68,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
 
     model_2 = One2ManyRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -95,7 +95,7 @@ def test_conv_rnn_one2many_optimizations(device, dimension):
         "Sets up fresh model for each optimization test"
         model = One2ManyRNN(
             input_channels=1,
-            channels=32,
+            nr_latent_channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
@@ -127,7 +127,7 @@ def test_conv_rnn_one2many_constructor(device):
         arg_list.append(
             {
                 "input_channels": 1,
-                "channels": random.randint(16, 32),
+                "nr_latent_channels": random.randint(16, 32),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
                 "nr_tsteps": random.randint(8, 16),
@@ -159,7 +159,7 @@ def test_conv_rnn_one2many_constructor(device):
     try:
         model = One2ManyRNN(
             input_channels=1,
-            channels=32,
+            nr_latent_channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
@@ -178,7 +178,7 @@ def test_conv_rnn_seq2seq_forward(device, dimension):
     # Construct model
     model = Seq2SeqRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -208,7 +208,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
     # Construct the RNN models
     model_1 = Seq2SeqRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -217,7 +217,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
 
     model_2 = Seq2SeqRNN(
         input_channels=1,
-        channels=32,
+        nr_latent_channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
         nr_tsteps=16,
@@ -244,7 +244,7 @@ def test_conv_rnn_seq2seq_optimizations(device, dimension):
         "Sets up fresh model for each optimization test"
         model = Seq2SeqRNN(
             input_channels=1,
-            channels=32,
+            nr_latent_channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
@@ -276,7 +276,7 @@ def test_conv_rnn_seq2seq_constructor(device):
         arg_list.append(
             {
                 "input_channels": 1,
-                "channels": random.randint(16, 32),
+                "nr_latent_channels": random.randint(16, 32),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
                 "nr_tsteps": random.randint(8, 16),
@@ -310,7 +310,7 @@ def test_conv_rnn_seq2seq_constructor(device):
     try:
         model = Seq2SeqRNN(
             input_channels=1,
-            channels=32,
+            nr_latent_channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
