@@ -47,7 +47,7 @@ class MetaData(ModelMetaData):
 
 class Seq2SeqRNN(Module):
     """A RNN model with encoder/decoder for 2d/3d problems. Given input 0 to t-1,
-    predicts signal t to t + time_steps
+    predicts signal t to t + nr_tsteps
 
     Parameters
     ----------
@@ -61,11 +61,11 @@ class Seq2SeqRNN(Module):
         Activation function to use, by default nn.ReLU()
     nr_downsamples : int, optional
         Number of downsamples, by default 2
-    time_steps : int, optional
+    nr_tsteps : int, optional
         Time steps to predict, by default 32
     dimension : int, optional
         Spatial dimension of the input. Only 2d and 3d are supported, by default 2
-    
+
     Example
     -------
     >>> model = modulus.models.rnn.Seq2SeqRNN(
@@ -73,7 +73,7 @@ class Seq2SeqRNN(Module):
     ... channels=32,
     ... activation_fn=torch.nn.ReLU(),
     ... nr_downsamples=2,
-    ... time_steps=16,
+    ... nr_tsteps=16,
     ... dimension=2,
     ... )
     >>> input = invar = torch.randn(4, 6, 16, 16, 16) # [N, C, T, H, W]
@@ -89,12 +89,12 @@ class Seq2SeqRNN(Module):
         nr_residual_blocks: int = 2,
         activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
         nr_downsamples: int = 2,
-        time_steps: int = 32,
+        nr_tsteps: int = 32,
         dimension: int = 2,
     ) -> None:
         super().__init__(meta=MetaData())
 
-        self.time_steps = time_steps
+        self.nr_tsteps = nr_tsteps
         self.nr_residual_blocks = nr_residual_blocks
         self.nr_downsamples = nr_downsamples
         self.encoder_layers = nn.ModuleList()
@@ -181,18 +181,18 @@ class Seq2SeqRNN(Module):
         ----------
         x : Tensor
             Expects a tensor of size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D
-            Where, N is the batch size, C is the number of channels, T is the number of 
-            input timesteps and D, H, W are spatial dimensions. Currently, this 
-            requires input time steps to be same as predicted time steps. 
+            Where, N is the batch size, C is the number of channels, T is the number of
+            input timesteps and D, H, W are spatial dimensions. Currently, this
+            requires input time steps to be same as predicted time steps.
         Returns
         -------
         Tensor
-            Size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D. 
-            Where, T is the number of timesteps being predicted. 
+            Size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D.
+            Where, T is the number of timesteps being predicted.
         """
         # Encoding step
         encoded_inputs = []
-        for t in range(self.time_steps):
+        for t in range(self.nr_tsteps):
             x_in = x[:, :, t, ...]
             for layer in self.encoder_layers:
                 x_in = layer(x_in)
@@ -208,7 +208,7 @@ class Seq2SeqRNN(Module):
 
         # decode
         rnn_output = []
-        for t in range(self.time_steps):
+        for t in range(self.nr_tsteps):
             if t == 0:
                 x_in_rnn = encoded_inputs[-1]
             h = self.rnn_layer(x_in_rnn, h)
@@ -216,7 +216,7 @@ class Seq2SeqRNN(Module):
             rnn_output.append(h)
 
         decoded_output = []
-        for t in range(self.time_steps):
+        for t in range(self.nr_tsteps):
             x_out = rnn_output[t]
             # Decoding step
             latent_context_grid = []

@@ -61,11 +61,11 @@ class One2ManyRNN(Module):
         Activation function to use, by default nn.ReLU()
     nr_downsamples : int, optional
         Number of downsamples, by default 2
-    time_steps : int, optional
+    nr_tsteps : int, optional
         Time steps to predict, by default 32
     dimension : int, optional
         Spatial dimension of the input. Only 2d and 3d are supported, by default 2
-    
+
     Example
     -------
     >>> model = modulus.models.rnn.One2ManyRNN(
@@ -73,7 +73,7 @@ class One2ManyRNN(Module):
     ... channels=32,
     ... activation_fn=torch.nn.ReLU(),
     ... nr_downsamples=2,
-    ... time_steps=16,
+    ... nr_tsteps=16,
     ... dimension=2,
     ... )
     >>> input = invar = torch.randn(4, 6, 1, 16, 16) # [N, C, T, H, W]
@@ -89,12 +89,12 @@ class One2ManyRNN(Module):
         nr_residual_blocks: int = 2,
         activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
         nr_downsamples: int = 2,
-        time_steps: int = 32,
+        nr_tsteps: int = 32,
         dimension: int = 2,
     ) -> None:
         super().__init__(meta=MetaData())
 
-        self.time_steps = time_steps
+        self.nr_tsteps = nr_tsteps
         self.nr_residual_blocks = nr_residual_blocks
         self.nr_downsamples = nr_downsamples
         self.encoder_layers = nn.ModuleList()
@@ -181,13 +181,13 @@ class One2ManyRNN(Module):
         ----------
         x : Tensor
             Expects a tensor of size [N, C, 1, H, W] for 2D or [N, C, 1, D, H, W] for 3D
-            Where, N is the batch size, C is the number of channels, 1 is the number of 
-            input timesteps and D, H, W are spatial dimensions. 
+            Where, N is the batch size, C is the number of channels, 1 is the number of
+            input timesteps and D, H, W are spatial dimensions.
         Returns
         -------
         Tensor
-            Size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D. 
-            Where, T is the number of timesteps being predicted. 
+            Size [N, C, T, H, W] for 2D or [N, C, T, D, H, W] for 3D.
+            Where, T is the number of timesteps being predicted.
         """
         # Encoding step
         encoded_inputs = []
@@ -199,7 +199,7 @@ class One2ManyRNN(Module):
 
         # RNN step
         rnn_output = []
-        for t in range(self.time_steps):
+        for t in range(self.nr_tsteps):
             if t == 0:
                 h = torch.zeros(list(x_in.size())).to(x.device)
                 x_in_rnn = encoded_inputs[0]
@@ -208,7 +208,7 @@ class One2ManyRNN(Module):
             rnn_output.append(h)
 
         decoded_output = []
-        for t in range(self.time_steps):
+        for t in range(self.nr_tsteps):
             x_out = rnn_output[t]
             # Decoding step
             latent_context_grid = []

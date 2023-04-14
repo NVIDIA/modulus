@@ -32,7 +32,7 @@ def test_conv_rnn_one2many_forward(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -62,7 +62,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -71,7 +71,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -98,7 +98,7 @@ def test_conv_rnn_one2many_optimizations(device, dimension):
             channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
-            time_steps=2,
+            nr_tsteps=2,
             dimension=dimension,
         ).to(device)
 
@@ -130,7 +130,7 @@ def test_conv_rnn_one2many_constructor(device):
                 "channels": random.randint(16, 32),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
-                "time_steps": random.randint(8, 16),
+                "nr_tsteps": random.randint(8, 16),
                 "dimension": dimension,
             }
         )
@@ -151,7 +151,7 @@ def test_conv_rnn_one2many_constructor(device):
         assert outvar.shape == (
             bsize,
             kw_args["input_channels"],
-            kw_args["time_steps"],
+            kw_args["nr_tsteps"],
             *invar.shape[3:],
         )
 
@@ -162,7 +162,7 @@ def test_conv_rnn_one2many_constructor(device):
             channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
-            time_steps=2,
+            nr_tsteps=2,
             dimension=4,
         ).to(device)
         raise AssertionError("Failed to error for invalid dimension")
@@ -181,7 +181,7 @@ def test_conv_rnn_seq2seq_forward(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -211,7 +211,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -220,7 +220,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
         channels=32,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        time_steps=16,
+        nr_tsteps=16,
         dimension=dimension,
     ).to(device)
 
@@ -247,7 +247,7 @@ def test_conv_rnn_seq2seq_optimizations(device, dimension):
             channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
-            time_steps=2,
+            nr_tsteps=2,
             dimension=dimension,
         ).to(device)
 
@@ -279,7 +279,7 @@ def test_conv_rnn_seq2seq_constructor(device):
                 "channels": random.randint(16, 32),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
-                "time_steps": random.randint(8, 16),
+                "nr_tsteps": random.randint(8, 16),
                 "dimension": dimension,
             }
         )
@@ -291,18 +291,18 @@ def test_conv_rnn_seq2seq_constructor(device):
         bsize = random.randint(1, 4)
         if kw_args["dimension"] == 2:
             invar = torch.randn(
-                bsize, kw_args["input_channels"], kw_args["time_steps"], 16, 16
+                bsize, kw_args["input_channels"], kw_args["nr_tsteps"], 16, 16
             ).to(device)
         else:
             invar = torch.randn(
-                bsize, kw_args["input_channels"], kw_args["time_steps"], 16, 16, 16
+                bsize, kw_args["input_channels"], kw_args["nr_tsteps"], 16, 16, 16
             ).to(device)
 
         outvar = model(invar)
         assert outvar.shape == (
             bsize,
             kw_args["input_channels"],
-            kw_args["time_steps"],
+            kw_args["nr_tsteps"],
             *invar.shape[3:],
         )
 
@@ -313,7 +313,7 @@ def test_conv_rnn_seq2seq_constructor(device):
             channels=32,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
-            time_steps=2,
+            nr_tsteps=2,
             dimension=4,
         ).to(device)
         raise AssertionError("Failed to error for invalid dimension")
