@@ -39,7 +39,6 @@ def test_conv_layer(activation_fn, stride, dimension):
         stride=stride,
         dimension=dimension,
         activation_fn=activation_fn,
-        padding="same",
     )
 
     bsize = 2
@@ -52,26 +51,6 @@ def test_conv_layer(activation_fn, stride, dimension):
         size_out = fig_size
     else:
         size_out = (fig_size - 1 * (kernel_size - 1) - 1) / stride + 1
-
-    assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
-
-    # test valid/None padding
-    layer = _ConvLayer(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_size=kernel_size,
-        stride=stride,
-        dimension=dimension,
-        padding=None,
-    )
-
-    bsize = 2
-    fig_size = 18
-    input_size = (bsize, in_channels) + dimension * (fig_size,)
-    invar = torch.randn(size=input_size)
-    outvar = layer(invar)
-
-    size_out = (fig_size - 1 * (kernel_size - 1) - 1) / stride + 1
 
     assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
 
@@ -93,7 +72,6 @@ def test_transconv_layer(activation_fn, stride, dimension):
         stride=stride,
         dimension=dimension,
         activation_fn=activation_fn,
-        padding="same",
     )
 
     bsize = 2
@@ -106,26 +84,6 @@ def test_transconv_layer(activation_fn, stride, dimension):
         size_out = fig_size
     else:
         size_out = (fig_size - 1) * stride + 1 * (kernel_size - 1) + 1
-
-    assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
-
-    # test valid/None padding
-    layer = _TransposeConvLayer(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        kernel_size=kernel_size,
-        stride=stride,
-        dimension=dimension,
-        padding=None,
-    )
-
-    bsize = 2
-    fig_size = 18
-    input_size = (bsize, in_channels) + dimension * (fig_size,)
-    invar = torch.randn(size=input_size)
-    outvar = layer(invar)
-
-    size_out = (fig_size - 1) * stride + 1 * (kernel_size - 1) + 1
 
     assert outvar.shape == (bsize, out_channels) + dimension * (size_out,)
 

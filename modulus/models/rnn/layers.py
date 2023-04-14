@@ -44,8 +44,6 @@ class _ConvLayer(nn.Module):
         Stride for the convolution, by default 1
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.Identity()
-    padding : str, optional
-        Type of padding to use, options "same" and None, by default "same"
     """
 
     def __init__(
@@ -56,7 +54,6 @@ class _ConvLayer(nn.Module):
         kernel_size: int,
         stride: int = 1,
         activation_fn: nn.Module = nn.Identity(),
-        padding: str = "same",
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -65,7 +62,6 @@ class _ConvLayer(nn.Module):
         self.stride = stride
         self.dimension = dimension
         self.activation_fn = activation_fn
-        self.padding = padding
 
         if self.dimension == 1:
             self.conv = nn.Conv1d(
@@ -109,44 +105,41 @@ class _ConvLayer(nn.Module):
         input_length = len(x.size()) - 2  # exclude channel and batch dims
         assert input_length == self.dimension, "Input dimension not compatible"
 
-        if self.padding == "same":
-            if input_length == 1:
-                iw = x.size()[-1:][0]
-                pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
-                x = F.pad(
-                    x, [pad_w // 2, pad_w - pad_w // 2], mode="constant", value=0.0
-                )
-            elif input_length == 2:
-                ih, iw = x.size()[-2:]
-                pad_h, pad_w = _get_same_padding(
-                    ih, self.kernel_size, self.stride
-                ), _get_same_padding(iw, self.kernel_size, self.stride)
-                x = F.pad(
-                    x,
-                    [pad_h // 2, pad_h - pad_h // 2, pad_w // 2, pad_w - pad_w // 2],
-                    mode="constant",
-                    value=0.0,
-                )
-            else:
-                _id, ih, iw = x.size()[-3:]
-                pad_d, pad_h, pad_w = (
-                    _get_same_padding(_id, self.kernel_size, self.stride),
-                    _get_same_padding(ih, self.kernel_size, self.stride),
-                    _get_same_padding(iw, self.kernel_size, self.stride),
-                )
-                x = F.pad(
-                    x,
-                    [
-                        pad_d // 2,
-                        pad_d - pad_d // 2,
-                        pad_h // 2,
-                        pad_h - pad_h // 2,
-                        pad_w // 2,
-                        pad_w - pad_w // 2,
-                    ],
-                    mode="constant",
-                    value=0.0,
-                )
+        if input_length == 1:
+            iw = x.size()[-1:][0]
+            pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
+            x = F.pad(x, [pad_w // 2, pad_w - pad_w // 2], mode="constant", value=0.0)
+        elif input_length == 2:
+            ih, iw = x.size()[-2:]
+            pad_h, pad_w = _get_same_padding(
+                ih, self.kernel_size, self.stride
+            ), _get_same_padding(iw, self.kernel_size, self.stride)
+            x = F.pad(
+                x,
+                [pad_h // 2, pad_h - pad_h // 2, pad_w // 2, pad_w - pad_w // 2],
+                mode="constant",
+                value=0.0,
+            )
+        else:
+            _id, ih, iw = x.size()[-3:]
+            pad_d, pad_h, pad_w = (
+                _get_same_padding(_id, self.kernel_size, self.stride),
+                _get_same_padding(ih, self.kernel_size, self.stride),
+                _get_same_padding(iw, self.kernel_size, self.stride),
+            )
+            x = F.pad(
+                x,
+                [
+                    pad_d // 2,
+                    pad_d - pad_d // 2,
+                    pad_h // 2,
+                    pad_h - pad_h // 2,
+                    pad_w // 2,
+                    pad_w - pad_w // 2,
+                ],
+                mode="constant",
+                value=0.0,
+            )
 
         x = self.conv(x)
 
@@ -173,8 +166,6 @@ class _TransposeConvLayer(nn.Module):
         Stride for the convolution, by default 1
     activation_fn : nn.Module, optional
         Activation function to use, by default nn.Identity()
-    padding : str, optional
-        Type of padding to use, options "same" and None, by default "same"
     """
 
     def __init__(
@@ -185,7 +176,6 @@ class _TransposeConvLayer(nn.Module):
         kernel_size: int,
         stride: int = 1,
         activation_fn=nn.Identity(),
-        padding: str = "same",
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -194,7 +184,6 @@ class _TransposeConvLayer(nn.Module):
         self.stride = stride
         self.dimension = dimension
         self.activation_fn = activation_fn
-        self.padding = padding
 
         if dimension == 1:
             self.trans_conv = nn.ConvTranspose1d(
@@ -241,42 +230,41 @@ class _TransposeConvLayer(nn.Module):
 
         x = self.trans_conv(x)
 
-        if self.padding == "same":
-            if input_length == 1:
-                iw = orig_x.size()[-1:][0]
-                pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
-                x = x[
-                    :,
-                    :,
-                    pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
-                ]
-            elif input_length == 2:
-                ih, iw = orig_x.size()[-2:]
-                pad_h, pad_w = _get_same_padding(
-                    ih,
-                    self.kernel_size,
-                    self.stride,
-                ), _get_same_padding(iw, self.kernel_size, self.stride)
-                x = x[
-                    :,
-                    :,
-                    pad_h // 2 : x.size(-2) - (pad_h - pad_h // 2),
-                    pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
-                ]
-            else:
-                _id, ih, iw = orig_x.size()[-3:]
-                pad_d, pad_h, pad_w = (
-                    _get_same_padding(_id, self.kernel_size, self.stride),
-                    _get_same_padding(ih, self.kernel_size, self.stride),
-                    _get_same_padding(iw, self.kernel_size, self.stride),
-                )
-                x = x[
-                    :,
-                    :,
-                    pad_d // 2 : x.size(-3) - (pad_d - pad_d // 2),
-                    pad_h // 2 : x.size(-2) - (pad_h - pad_h // 2),
-                    pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
-                ]
+        if input_length == 1:
+            iw = orig_x.size()[-1:][0]
+            pad_w = _get_same_padding(iw, self.kernel_size, self.stride)
+            x = x[
+                :,
+                :,
+                pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
+            ]
+        elif input_length == 2:
+            ih, iw = orig_x.size()[-2:]
+            pad_h, pad_w = _get_same_padding(
+                ih,
+                self.kernel_size,
+                self.stride,
+            ), _get_same_padding(iw, self.kernel_size, self.stride)
+            x = x[
+                :,
+                :,
+                pad_h // 2 : x.size(-2) - (pad_h - pad_h // 2),
+                pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
+            ]
+        else:
+            _id, ih, iw = orig_x.size()[-3:]
+            pad_d, pad_h, pad_w = (
+                _get_same_padding(_id, self.kernel_size, self.stride),
+                _get_same_padding(ih, self.kernel_size, self.stride),
+                _get_same_padding(iw, self.kernel_size, self.stride),
+            )
+            x = x[
+                :,
+                :,
+                pad_d // 2 : x.size(-3) - (pad_d - pad_d // 2),
+                pad_h // 2 : x.size(-2) - (pad_h - pad_h // 2),
+                pad_w // 2 : x.size(-1) - (pad_w - pad_w // 2),
+            ]
 
         if self.activation_fn is not nn.Identity():
             x = self.exec_activation_fn(x)
