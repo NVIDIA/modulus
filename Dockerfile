@@ -58,7 +58,7 @@ RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
-RUN pip install warp-lang>=0.6.0 protobuf==3.20.0 
+RUN pip install protobuf==3.20.0 
 COPY . /modulus/
 RUN cd /modulus/ && pip install .
 
