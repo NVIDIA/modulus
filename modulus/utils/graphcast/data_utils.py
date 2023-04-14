@@ -58,7 +58,7 @@ class StaticData:
         lsm = np.expand_dims(ds["lsm"], axis=0)
         return torch.tensor(lsm, dtype=torch.float32)
 
-    def get_geop(self, normalize: True) -> Tensor:  # pragma: no cover
+    def get_geop(self, normalize: bool = True) -> Tensor:  # pragma: no cover
         """Get geopotential from netCDF file.
 
         Parameters
