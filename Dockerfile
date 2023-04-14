@@ -22,10 +22,6 @@ RUN pip install --upgrade pip setuptools
 RUN pip install dgl-cu116 dglgo -f https://data.dgl.ai/wheels/repo.html
 ENV DGLBACKEND=pytorch
 
-# Install S3 Dependencies
-RUN apt-get update && \
-    apt-get install -y curl openssl libcurl4-openssl-dev libssl-dev
-
 # install libcugraphops and pylibcugraphops
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
