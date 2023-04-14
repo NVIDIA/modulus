@@ -17,14 +17,13 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
-from timm.models.layers import padding
 import torch.nn.functional as F
 
 def _get_same_padding(x: int, k: int, s: int) -> int:
     """Function to compute "same" padding. Inspired from:
     https://github.com/huggingface/pytorch-image-models/blob/0.5.x/timm/models/layers/padding.py
     """
-    return max((x // s - 1) * s - x + k, 0)
+    return max(s * math.ceil(x / s) - s - x + k, 0)
 
 class _ConvLayer(nn.Module):
     """Generalized Convolution Block
@@ -95,14 +94,16 @@ class _ConvLayer(nn.Module):
                 bias=True,
             )
         else:
-            raise ValueError("Dimension not supported")
+            raise ValueError("Only 1D, 2D and 3D dimensions are supported")
 
         self.reset_parameters()
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
+        """Executes activation function on the input"""
         return self.activation_fn(x)
 
     def reset_parameters(self) -> None:
+        """Initialization for network parameters"""
         nn.init.constant_(self.conv.bias, 0)
         nn.init.xavier_uniform_(self.conv.weight)
 
@@ -264,14 +265,16 @@ class _TransposeConvLayer(nn.Module):
                 bias=True,
             )
         else:
-            raise ValueError("Dimension not supported")
+            raise ValueError("Only 1D, 2D and 3D dimensions are supported")
 
         self.reset_parameters()
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
+        """Executes activation function on the input"""
         return self.activation_fn(x)
 
     def reset_parameters(self) -> None:
+        """Initialization for network parameters"""
         nn.init.constant_(self.trans_conv.bias, 0)
         nn.init.xavier_uniform_(self.trans_conv.weight)
 
@@ -393,11 +396,8 @@ class _ConvGRULayer(nn.Module):
         )
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
+        """Executes activation function on the input"""
         return self.activation_fn(x)
-
-    def apply_activation(self, x: Tensor) -> Tensor:
-        x = self.exec_activation_fn(x)
-        return x
 
     def forward(self, x: Tensor, hidden: Tensor) -> Tensor:
         concat = torch.cat((x, hidden), dim=1)
@@ -407,7 +407,7 @@ class _ConvGRULayer(nn.Module):
         reset_gate = torch.special.expit(conv_r)
         update_gate = torch.special.expit(conv_z)
         concat = torch.cat((x, torch.mul(hidden, reset_gate)), dim=1)
-        n = self.apply_activation(self.conv_2(concat))
+        n = self.exec_activation_fn(self.conv_2(concat))
         h_next = torch.mul((1 - update_gate), n) + torch.mul(update_gate, hidden)
 
         return h_next
@@ -507,13 +507,8 @@ class _ConvResidualBlock(nn.Module):
             )
 
     def exec_activation_fn(self, x: Tensor) -> Tensor:
+        """Executes activation function on the input"""
         return self.activation_fn(x)
-
-    def apply_activation(self, x: Tensor) -> Tensor:
-        if self.activation_fn is not nn.Identity():
-            x = self.exec_activation_fn(x)
-
-        return x
 
     def forward(self, x: Tensor) -> Tensor:
         orig_x = x
@@ -522,7 +517,7 @@ class _ConvResidualBlock(nn.Module):
             if self.layer_normalization:
                 layer_norm = nn.LayerNorm(x.size()[1:], elementwise_affine=False)
                 x = layer_norm(x)
-            x = self.apply_activation(x)
+            x = self.exec_activation_fn(x)
 
         # first convolutional layer
         x = self.conv_1(x)
@@ -533,7 +528,7 @@ class _ConvResidualBlock(nn.Module):
             x = layer_norm(x)
 
         # second activation
-        x = self.apply_activation(x)
+        x = self.exec_activation_fn(x)
         # second convolutional layer
         x = self.conv_2(x)
         if self.gated:
@@ -570,7 +565,7 @@ class _ConvResidualBlock(nn.Module):
                     count_include_pad=False,
                 )
             else:
-                raise ValueError("Dimension not supported")
+                raise ValueError("Only 1D, 2D and 3D dimensions are supported")
             orig_x = pool(orig_x)
 
         # possibly change the channels for skip connection
