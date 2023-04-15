@@ -53,6 +53,8 @@ class Seq2SeqRNN(Module):
     ----------
     input_channels : int
         Number of channels in the input
+    dimension : int, optional
+        Spatial dimension of the input. Only 2d and 3d are supported, by default 2
     nr_latent_channels : int, optional
         Channels for encoding/decoding, by default 512
     nr_residual_blocks : int, optional
@@ -63,18 +65,16 @@ class Seq2SeqRNN(Module):
         Number of downsamples, by default 2
     nr_tsteps : int, optional
         Time steps to predict, by default 32
-    dimension : int, optional
-        Spatial dimension of the input. Only 2d and 3d are supported, by default 2
 
     Example
     -------
     >>> model = modulus.models.rnn.Seq2SeqRNN(
     ... input_channels=6,
+    ... dimension=2,
     ... nr_latent_channels=32,
     ... activation_fn=torch.nn.ReLU(),
     ... nr_downsamples=2,
     ... nr_tsteps=16,
-    ... dimension=2,
     ... )
     >>> input = invar = torch.randn(4, 6, 16, 16, 16) # [N, C, T, H, W]
     >>> output = model(input)
@@ -85,12 +85,12 @@ class Seq2SeqRNN(Module):
     def __init__(
         self,
         input_channels: int,
+        dimension: int = 2,
         nr_latent_channels: int = 512,
         nr_residual_blocks: int = 2,
         activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
         nr_downsamples: int = 2,
         nr_tsteps: int = 32,
-        dimension: int = 2,
     ) -> None:
         super().__init__(meta=MetaData())
 
