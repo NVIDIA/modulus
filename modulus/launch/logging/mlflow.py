@@ -147,11 +147,7 @@ def initialize_mlflow(
     client.set_tag(run.info.run_id, "date", time_string)
     client.set_tag(run.info.run_id, "host", os.uname()[1])
     if torch.cuda.is_available():
-        client.set_tag(
-            run.info.run_id,
-            "gpu",
-            torch.cuda.get_device_name(dist.device),
-        )
+        client.set_tag(run.info.run_id, "gpu", torch.cuda.get_device_name(dist.device))
     client.set_tag(run.info.run_id, "group", group_name)
 
     run = client.get_run(run.info.run_id)

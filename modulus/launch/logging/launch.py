@@ -346,16 +346,15 @@ class LaunchLogger(object):
         cls.mlflow_backend = value
 
     @staticmethod
-    def initialize(
-        use_wandb: bool = False,
-        use_mlflow: bool = False,
-    ):
+    def initialize(use_wandb: bool = False, use_mlflow: bool = False):
         """Initialize logging singleton
 
         Parameters
         ----------
         use_wandb : bool, optional
-            Use WandB logging, by default True
+            Use WandB logging, by default False
+        use_mlflow : bool, optional
+            Use MLFlow logging, by default False
         """
         if wandb.run is None and use_wandb:
             PythonLogger().warning("WandB not initialized, turning off")
