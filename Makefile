@@ -8,7 +8,7 @@ get-data:
 		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 black: 
-	black --check ./
+	black --check --exclude=docs/ ./
 
 interrogate:
 	cd modulus && \
