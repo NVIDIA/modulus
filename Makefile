@@ -5,7 +5,8 @@ install:
 get-data:
 	mkdir -p /data && \
 		mkdir -p /data/nfs/ && \
-		git -C /data/nfs/modulus-data pull || git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
+		git -C /data/nfs/modulus-data pull || \
+		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 black: 
 	black --check ./
