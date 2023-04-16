@@ -3,9 +3,9 @@ install:
 		pip install -e .
 
 get-data:
-	mkdir /data && \
-		mkdir /data/nfs/ && \
-		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
+	mkdir -p /data && \
+		mkdir -p /data/nfs/ && \
+		git -C /data/nfs/modulus-data pull || git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 black: 
 	black --check ./
