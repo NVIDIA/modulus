@@ -65,3 +65,10 @@ RUN cd /modulus/ && pip install .
 # Clean up
 RUN rm -rf /modulus/ \
     && rm -rf onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
+
+# Docs image
+FROM deploy as docs
+# Install CI packages
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0
+# Install packages for Sphinx build
+RUN pip install recommonmark==0.7.1 sphinx==5.1.1 sphinx-rtd-theme==1.0.0 pydocstyle==6.1.1 nbsphinx==0.8.9 nbconvert==6.4.3 jinja2==3.0.3

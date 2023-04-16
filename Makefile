@@ -63,3 +63,6 @@ container-deploy:
 container-ci:
 	docker build -t modulus:ci --target ci -f Dockerfile .
 
+container-docs:
+	docker build -t modulus:docs --target docs -f Dockerfile .
+
