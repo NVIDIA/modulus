@@ -7,12 +7,12 @@ Welcome to Modulus Core's documentation!
    :caption: Modulus API
    :name: Modulus API
 
-   api/models.rst
-   api/datapipes.rst
-   api/metrics.rst
-   api/deploy.rst
-   api/distributed.rst
-   api/utils.rst
+   api/modulus.models.rst
+   api/modulus.datapipes.rst
+   api/modulus.metrics.rst
+   api/modulus.deploy.rst
+   api/modulus.distributed.rst
+   api/modulus.utils.rst
 
 
 Indices and tables
