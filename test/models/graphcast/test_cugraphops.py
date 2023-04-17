@@ -91,3 +91,6 @@ def test_cugraphops():
             assert torch.allclose(
                 x_grad_dgl, x_grad, atol=1.0e-4, rtol=1.0e-3
             ), "testing DGL against cugraph-ops: gradients do not match!"
+
+if __name__ == "__main__":
+    test_cugraphops()

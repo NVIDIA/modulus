@@ -15,11 +15,11 @@
 import torch
 import torch.nn as nn
 
-from typing import Any, Union
+from typing import Union
 from torch import Tensor
 from dgl import DGLGraph
-from .mlp import MLP, TruncatedMLP, TruncatedMLPCuGraph
-from .utils import concat_efeat_dgl_mesh, CuGraphCSC
+from .mesh_graph_mlp import MeshGraphMLP, TruncatedMeshGraphMLP
+from .utils import concat_efeat_dgl, CuGraphCSC
 
 try:
     from pylibcugraphops.pytorch.operators import update_efeat_static_e2e
@@ -27,13 +27,12 @@ except ModuleNotFoundError:
     update_efeat_static_e2e = None
 
 
-class EdgeBlockConcat(nn.Module):
-    """Edge block with an explicit concatenation of features.
+class MeshEdgeBlockConcat(nn.Module):
+    """Edge block used e.g. in GraphCast or MeshGraphNet
+    operating on a latent space represented by a mesh.
 
     Parameters
     ----------
-    graph : DGLGraph | CuGraphCSC
-        Graph.
     input_dim_nodes : int, optional
         Input dimensionality of the node features, by default 512
     input_dim_edges : int, optional
@@ -55,7 +54,6 @@ class EdgeBlockConcat(nn.Module):
 
     def __init__(
         self,
-        graph: Union[DGLGraph, CuGraphCSC],
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -66,11 +64,9 @@ class EdgeBlockConcat(nn.Module):
         recompute_activation: bool = False,
     ):
         super().__init__()
-        self.graph = graph
-        self.use_cugraphops = isinstance(graph, CuGraphCSC)
 
         dim_concat = 2 * input_dim_nodes + input_dim_edges
-        self.edge_MLP = MLP(
+        self.edge_MLP = MeshGraphMLP(
             input_dim=dim_concat,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -84,9 +80,10 @@ class EdgeBlockConcat(nn.Module):
         self,
         efeat: Tensor,
         nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
-        if self.use_cugraphops:
-            static_graph = self.graph.to_static_csc()
+        if isinstance(graph, CuGraphCSC):
+            static_graph = graph.to_static_csc()
             cat_feat = update_efeat_static_e2e(
                 efeat,
                 nfeat,
@@ -97,41 +94,20 @@ class EdgeBlockConcat(nn.Module):
             )
 
         else:
-            cat_feat = concat_efeat_dgl_mesh(efeat, nfeat, self.graph)
+            cat_feat = concat_efeat_dgl(efeat, nfeat, graph)
 
         efeat_new = self.edge_MLP(cat_feat) + efeat
         return efeat_new, nfeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockConcat":
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph to the specified
-        device, dtype, or format, and returns the updated object.
 
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        EdgeBlockDGLConcat
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self
-
-
-class EdgeBlockSum(nn.Module):
-    """Edge block with truncated MLPs.
+class MeshEdgeBlockSum(nn.Module):
+    """Edge block used e.g. in GraphCast or MeshGraphNet
+    operating on a latent space represented by a mesh. This variant
+    makes use of the `Concat-Trick` which transforms Concat+MMA
+    into MMA+Sum in its first linear layer.
 
     Parameters
     ----------
-    graph : DGLGraph
-        Graph.
     input_dim_nodes : int, optional
         Input dimensionality of the node features, by default 512
     input_dim_edges : int, optional
@@ -153,7 +129,6 @@ class EdgeBlockSum(nn.Module):
 
     def __init__(
         self,
-        graph: Union[DGLGraph, CuGraphCSC],
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
         output_dim: int = 512,
@@ -164,73 +139,33 @@ class EdgeBlockSum(nn.Module):
         recompute_activation: bool = False,
     ):
         super().__init__()
-        self.graph = graph
-        self.use_cugraphops = isinstance(graph, CuGraphCSC)
 
-        if self.use_cugraphops:
-            self.edge_trunc_mlp = TruncatedMLPCuGraph(
-                efeat_dim=input_dim_edges,
-                src_dim=input_dim_nodes,
-                dst_dim=input_dim_nodes,
-                output_dim=output_dim,
-                hidden_dim=hidden_dim,
-                hidden_layers=hidden_layers,
-                activation_fn=activation_fn,
-                norm_type=norm_type,
-                recompute_activation=recompute_activation,
-            )
-
-        else:
-            self.src, self.dst = (item.long() for item in self.graph.edges())
-
-            self.edge_trunc_mlp = TruncatedMLP(
-                efeat_dim=input_dim_edges,
-                src_dim=input_dim_nodes,
-                dst_dim=input_dim_nodes,
-                output_dim=output_dim,
-                hidden_dim=hidden_dim,
-                hidden_layers=hidden_layers,
-                activation_fn=activation_fn,
-                norm_type=norm_type,
-                recompute_activation=recompute_activation,
-            )
+        self.edge_trunc_mlp = TruncatedMeshGraphMLP(
+            efeat_dim=input_dim_edges,
+            src_dim=input_dim_nodes,
+            dst_dim=input_dim_nodes,
+            output_dim=output_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            activation_fn=activation_fn,
+            norm_type=norm_type,
+            recompute_activation=recompute_activation,
+        )
 
     def forward(
         self,
         efeat: Tensor,
         nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
-        if self.use_cugraphops:
-            bipartite_graph = self.graph.to_bipartite_csc()
+        if isinstance(graph, CuGraphCSC):
             efeat_new = (
-                self.edge_trunc_mlp(efeat, nfeat, nfeat, bipartite_graph) + efeat
+                self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
             )
 
         else:
             efeat_new = (
-                self.edge_trunc_mlp(efeat, nfeat, nfeat, self.src, self.dst) + efeat
+                self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
             )
 
         return efeat_new, nfeat
-
-    def to(self, *args: Any, **kwargs: Any) -> "EdgeBlockSum":
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph to the specified
-        device, dtype, or format, and returns the updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        EdgeBlockDGLSum
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self

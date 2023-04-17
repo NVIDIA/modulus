@@ -26,12 +26,16 @@ except:
         "Mesh Graph Net requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
-from torch.nn import Sequential, ModuleList, Linear, ReLU, LayerNorm
 from typing import Union, List
 from dataclasses import dataclass
 
-from ..meta import ModelMetaData
-from ..module import Module
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
+
+from modulus.models.gnn_layers.utils import CuGraphCSC
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlockConcat, MeshEdgeBlockSum
+from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 
 
 @dataclass
@@ -114,31 +118,49 @@ class MeshGraphNet(Module):
         num_layers_edge_encoder: int = 2,
         hidden_dim_node_decoder: int = 128,
         num_layers_node_decoder: int = 2,
+        do_concat_trick: bool = False,
     ):
         super().__init__(meta=MetaData())
 
-        self.edge_encoder = _Encoder(
+        self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
-            hidden_dim_edge_encoder,
-            num_layers_edge_encoder,
+            output_dim=hidden_dim_edge_encoder,
+            hidden_dim=hidden_dim_edge_encoder,
+            hidden_layers=num_layers_edge_encoder-1,
+            activation_fn=nn.ReLU(),
+            norm_type="LayerNorm",
+            recompute_activation=False,
         )
-        self.node_encoder = _Encoder(
+        self.node_encoder = MeshGraphMLP(
             input_dim_nodes,
-            hidden_dim_node_encoder,
-            num_layers_node_encoder,
+            output_dim=hidden_dim_node_encoder,
+            hidden_dim=hidden_dim_node_encoder,
+            hidden_layers=num_layers_node_encoder-1,
+            activation_fn=nn.ReLU(),
+            norm_type="LayerNorm",
+            recompute_activation=False,
         )
-        self.node_decoder = _Decoder(
-            output_dim, hidden_dim_node_decoder, num_layers_node_decoder
+        self.node_decoder = MeshGraphMLP(
+            hidden_dim_node_encoder, 
+            output_dim=output_dim, 
+            hidden_dim=hidden_dim_node_decoder,
+            hidden_layers=num_layers_node_decoder-1,
+            activation_fn=nn.ReLU(),
+            norm_type="LayerNorm",
+            recompute_activation=False,
         )
-        self.processor = _GraphProcessor(
+        self.processor = MeshGraphNetProcessor(
             processor_size=processor_size,
             input_dim_node=hidden_dim_node_encoder,
-            num_layers_node=num_layers_node_processor,
             input_dim_edge=hidden_dim_edge_encoder,
+            num_layers_node=num_layers_node_processor,
             num_layers_edge=num_layers_edge_processor,
+            aggregation="sum",
+            norm_type="LayerNorm",
+            activation_fn=nn.ReLU(),
+            do_concat_trick=do_concat_trick,
         )
 
-    @torch.jit.unused
     def forward(
         self,
         graph: Union[DGLGraph, List[DGLGraph]],
@@ -152,199 +174,67 @@ class MeshGraphNet(Module):
         return x
 
 
-class _Encoder(nn.Module):
-    """MeshGraphNet encoder
-
-    Parameters
-    ----------
-    input_dim : int
-        Number of input features
-    hidden_dim : int, optional
-        Number of neurons in each hidden layer, by default 128
-    num_layers : int, optional
-        Number of hidden layers, by default 2
-    layer_norm : bool, optional
-        Use layer norm in the last layer, by default True
-    """
-
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int = 128,
-        num_layers: int = 2,
-        layer_norm: bool = True,
-    ):
-        super().__init__()
-        self.mlp = [Linear(input_dim, hidden_dim), ReLU()]
-        for _ in range(num_layers - 1):
-            self.mlp += [Linear(hidden_dim, hidden_dim), ReLU()]
-        self.mlp.append(Linear(hidden_dim, hidden_dim))
-        if layer_norm:
-            self.mlp.append(LayerNorm(hidden_dim))
-        self.mlp = Sequential(*self.mlp)
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.mlp(x)
-
-
-class _Decoder(nn.Module):
-    """MeshGraphNet encoder
-
-    Parameters
-    ----------
-    output_dim : int
-        Number of output features
-    hidden_dim : int, optional
-        Number of neurons in each hidden layer, by default 128
-    num_layers : int, optional
-        Number of hidden layers, by default 2
-    layer_norm : bool, optional
-        Use layer norm in the last layer, by default False
-    """
-
-    def __init__(
-        self,
-        output_dim: int,
-        hidden_dim: int = 128,
-        num_layers: int = 2,
-        layer_norm: bool = False,
-    ):
-        super().__init__()
-        self.mlp = [Linear(hidden_dim, hidden_dim), ReLU()]
-        for _ in range(num_layers - 1):
-            self.mlp += [Linear(hidden_dim, hidden_dim), ReLU()]
-        self.mlp.append(Linear(hidden_dim, output_dim))
-        if layer_norm:
-            self.mlp.append(LayerNorm(output_dim))
-        self.mlp = Sequential(*self.mlp)
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.mlp(x)
-
-
-class _EdgeBlock(nn.Module):
-    def __init__(
-        self,
-        input_dim_node: int = 128,
-        input_dim_edge: int = 128,
-        num_layers: int = 2,
-        layer_norm: bool = True,
-    ):
-        super().__init__()
-        self.edge_mlp = [
-            Linear(2 * input_dim_node + input_dim_edge, input_dim_edge),
-            ReLU(),
-        ]
-        for _ in range(num_layers - 1):
-            self.edge_mlp += [Linear(input_dim_edge, input_dim_edge), ReLU()]
-        self.edge_mlp.append(Linear(input_dim_edge, input_dim_edge))
-        if layer_norm:
-            self.edge_mlp.append(LayerNorm(input_dim_edge))
-        self.edge_mlp = Sequential(*self.edge_mlp)
-
-    @torch.jit.unused
-    def forward(
-        self, graph: DGLGraph, node_features: Tensor, edge_features: Tensor
-    ) -> Tensor:
-        with graph.local_scope():
-            if isinstance(node_features, tuple):
-                node_features_src, node_features_dst = node_features
-            else:
-                node_features_src = node_features_dst = node_features
-            graph.srcdata["x"] = node_features_src
-            graph.dstdata["x"] = node_features_dst
-            graph.edata["x"] = edge_features
-            graph.apply_edges(self.concat_message_function)
-            return (
-                self.edge_mlp(graph.edata["cat_feat"]) + edge_features
-            )  # residual connection
-
-    @staticmethod
-    def concat_message_function(
-        edges,
-    ):  # TODO feature concat on edges is not efficient, consider optimizing this
-        return {
-            "cat_feat": torch.cat(
-                (edges.src["x"], edges.dst["x"], edges.data["x"]), dim=1
-            )
-        }
-
-
-class _NodeBlock(nn.Module):
-    def __init__(
-        self,
-        input_dim_node: int = 128,
-        input_dim_edge: int = 128,
-        num_layers: int = 2,
-        layer_norm: bool = True,
-    ):
-        super().__init__()
-        self.node_mlp = [
-            Linear(input_dim_node + input_dim_edge, input_dim_node),
-            ReLU(),
-        ]
-        for _ in range(num_layers - 1):
-            self.node_mlp += [Linear(input_dim_node, input_dim_node), ReLU()]
-        self.node_mlp.append(Linear(input_dim_node, input_dim_node))
-        if layer_norm:
-            self.node_mlp.append(LayerNorm(input_dim_node))
-        self.node_mlp = Sequential(*self.node_mlp)
-
-    @torch.jit.unused
-    def forward(
-        self, graph: DGLGraph, node_features: Tensor, edge_features: Tensor
-    ) -> Tensor:
-        with graph.local_scope():
-            if isinstance(node_features, tuple):
-                node_features_src, node_features_dst = node_features
-            else:
-                node_features_src = node_features_dst = node_features
-            graph.srcdata["x"] = node_features_src
-            graph.dstdata["x"] = node_features_dst
-            graph.edata["x"] = edge_features
-            graph.update_all(
-                fn.copy_e("x", "m"), fn.sum("m", "h_dest")
-            )  # aggregate edge message by target
-            graph.dstdata["h_dest"] = torch.cat(
-                (graph.dstdata["h_dest"], node_features_dst), -1
-            )
-            return (
-                self.node_mlp(graph.dstdata["h_dest"]) + node_features_dst
-            )  # residual connection
-
-
-class _GraphProcessor(nn.Module):
+class MeshGraphNetProcessor(nn.Module):
     def __init__(
         self,
         processor_size: int = 15,
         input_dim_node: int = 128,
-        num_layers_node: int = 2,
         input_dim_edge: int = 128,
+        num_layers_node: int = 2,
         num_layers_edge: int = 2,
+        aggregation: str = "sum",
+        norm_type: str = "LayerNorm",
+        activation_fn: nn.Module = nn.ReLU(),
+        do_concat_trick: bool = False,
     ):
         super().__init__()
         self.processor_size = processor_size
-        self.edge_blocks = ModuleList(
-            [
-                _EdgeBlock(
-                    input_dim_node,
-                    input_dim_edge,
-                    num_layers_edge,
+
+        edge_block_invars = (
+            input_dim_node,
+            input_dim_edge,
+            input_dim_edge,
+            input_dim_edge,
+            num_layers_edge-1,
+            activation_fn,
+            norm_type,
+            False,
+        )
+        node_block_invars = (
+            aggregation,
+            input_dim_node,
+            input_dim_edge,
+            input_dim_edge,
+            input_dim_edge,
+            num_layers_node-1,
+            activation_fn,
+            norm_type,
+            False,
+        )
+
+        edge_blocks = []
+        node_blocks = []
+
+        for _ in range(self.processor_size):
+            if do_concat_trick:
+                edge_blocks.append(
+                    MeshEdgeBlockSum(*edge_block_invars)
                 )
-                for _ in range(self.processor_size)
-            ]
-        )
-        self.node_blocks = ModuleList(
-            [
-                _NodeBlock(input_dim_node, input_dim_edge, num_layers_node)
-                for _ in range(self.processor_size)
-            ]
-        )
+            else:
+                edge_blocks.append(
+                    MeshEdgeBlockConcat(*edge_block_invars)
+                )
+            node_blocks.append(
+                MeshNodeBlock(*node_block_invars)
+            )
+
+        self.edge_blocks = nn.ModuleList(edge_blocks)
+        self.node_blocks = nn.ModuleList(node_blocks)
 
     @torch.jit.unused
     def forward(
         self,
-        graph: Union[DGLGraph, List[DGLGraph]],
+        graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC, List[CuGraphCSC]],
         node_features: Tensor,
         edge_features: Tensor,
     ) -> Tensor:

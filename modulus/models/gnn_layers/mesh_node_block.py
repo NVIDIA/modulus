@@ -16,9 +16,9 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from dgl import DGLGraph
-from typing import Any, Tuple, Union
+from typing import Tuple, Union
 
-from .mlp import MLP
+from .mesh_graph_mlp import MeshGraphMLP
 from .utils import agg_concat_dgl, CuGraphCSC
 
 try:
@@ -27,13 +27,12 @@ except:
     agg_concat_e2n = None
 
 
-class NodeBlock(nn.Module):
-    """Node block for DGLGraph
+class MeshNodeBlock(nn.Module):
+    """Node block used e.g. in GraphCast or MeshGraphNet
+    operating on a latent space represented by a mesh.
 
     Parameters
     ----------
-    graph : DGLGraph | CuGraphCSC
-        Graph.
     aggregation : str, optional
         Aggregation method (sum, mean) , by default "sum"
     input_dim_nodes : int, optional
@@ -57,7 +56,6 @@ class NodeBlock(nn.Module):
 
     def __init__(
         self,
-        graph: Union[DGLGraph, CuGraphCSC],
         aggregation: str = "sum",
         input_dim_nodes: int = 512,
         input_dim_edges: int = 512,
@@ -69,12 +67,9 @@ class NodeBlock(nn.Module):
         recompute_activation: bool = False,
     ):
         super().__init__()
-        self.graph = graph
         self.aggregation = aggregation
 
-        self.use_cugraphops = isinstance(graph, CuGraphCSC)
-
-        self.node_mlp = MLP(
+        self.node_mlp = MeshGraphMLP(
             input_dim=input_dim_nodes + input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -84,36 +79,14 @@ class NodeBlock(nn.Module):
             recompute_activation=recompute_activation,
         )
 
-    def forward(self, efeat: Tensor, nfeat: Tensor) -> Tuple[Tensor, Tensor]:
-        if self.use_cugraphops:
-            static_graph = self.graph.to_static_csc()
+    def forward(self, efeat: Tensor, nfeat: Tensor, graph: Union[DGLGraph, CuGraphCSC],) -> Tuple[Tensor, Tensor]:
+        if isinstance(graph, CuGraphCSC):
+            static_graph = graph.to_static_csc()
             cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, self.aggregation)
 
         else:
-            cat_feat = agg_concat_dgl(efeat, nfeat, self.graph, self.aggregation)
+            cat_feat = agg_concat_dgl(efeat, nfeat, graph, self.aggregation)
 
         # update node features + residual connection
         nfeat_new = self.node_mlp(cat_feat) + nfeat
         return efeat, nfeat_new
-
-    def to(self, *args: Any, **kwargs: Any) -> "NodeBlock":
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph and graph features to
-        the specified device, dtype, or format, and returns the updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        NodeBlockDGL
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self

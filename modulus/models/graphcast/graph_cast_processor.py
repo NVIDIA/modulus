@@ -19,19 +19,17 @@ from typing import Union
 from torch import Tensor
 from dgl import DGLGraph
 
+from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
+from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlockConcat, MeshEdgeBlockSum
 
-from .utils import set_checkpoint_fn, CuGraphCSC
-from .node_block import NodeBlock
-from .edge_block import EdgeBlockConcat, EdgeBlockSum
 
-
-class Processor(nn.Module):
-    """GraphCast icosahedron processor
+class GraphCastProcessor(nn.Module):
+    """Processor block used in GraphCast operating on a latent space 
+    represented by hierarchy of isohedral meshes.
 
     Parameters
     ----------
-    graph : DGLGraph | CuGraphCSC
-        graph structure representing the edges between mesh and grid
     aggregation : str, optional
         message passing aggregation method ("sum", "mean"), by default "sum"
     processor_layers : int, optional
@@ -57,7 +55,6 @@ class Processor(nn.Module):
 
     def __init__(
         self,
-        graph: Union[DGLGraph, CuGraphCSC],
         aggregation: str = "sum",
         processor_layers: int = 16,
         input_dim_nodes: int = 512,
@@ -70,10 +67,8 @@ class Processor(nn.Module):
         recompute_activation: bool = False,
     ):
         super().__init__()
-        self.graph = graph
 
         edge_block_invars = (
-            self.graph,
             input_dim_nodes,
             input_dim_edges,
             input_dim_edges,
@@ -84,7 +79,6 @@ class Processor(nn.Module):
             recompute_activation,
         )
         node_block_invars = (
-            self.graph,
             aggregation,
             input_dim_nodes,
             input_dim_edges,
@@ -99,10 +93,10 @@ class Processor(nn.Module):
         layers = []
         for _ in range(processor_layers):
             if do_concat_trick:
-                layers.append(EdgeBlockConcat(*edge_block_invars))
+                layers.append(MeshEdgeBlockSum(*edge_block_invars))
             else:
-                layers.append(EdgeBlockSum(*edge_block_invars))
-            layers.append(NodeBlock(*node_block_invars))
+                layers.append(MeshEdgeBlockConcat(*edge_block_invars))
+            layers.append(MeshNodeBlock(*node_block_invars))
 
         self.processor_layers = nn.ModuleList(layers)
         self.num_processor_layers = len(self.processor_layers)
@@ -158,10 +152,10 @@ class Processor(nn.Module):
         """
         segment = self.processor_layers[segment_start:segment_end]
 
-        def custom_forward(efeat, nfeat):
+        def custom_forward(efeat, nfeat, graph):
             """Custom forward function"""
             for module in segment:
-                efeat, nfeat = module(efeat, nfeat)
+                efeat, nfeat = module(efeat, nfeat, graph)
             return efeat, nfeat
 
         return custom_forward
@@ -170,38 +164,16 @@ class Processor(nn.Module):
         self,
         efeat: Tensor,
         nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         for segment_start, segment_end in self.checkpoint_segments:
             efeat, nfeat = self.checkpoint_fn(
                 self.run_function(segment_start, segment_end),
                 efeat,
                 nfeat,
+                graph,
                 use_reentrant=False,
                 preserve_rng_state=False,
             )
 
         return efeat, nfeat
-
-    def to(self, *args, **kwargs) -> "Processor":
-        """Moves the object to the specified device, dtype, or format.
-        This method moves the object and its underlying graph to the specified
-        device, dtype, or format, and returns the updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        DecoderDGLConcat
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        self = super().to(*args, **kwargs)
-        for module in self.processor_layers:
-            module = module.to(*args, **kwargs)
-        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        self.graph = self.graph.to(device=device)
-        return self
