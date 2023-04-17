@@ -48,6 +48,9 @@ def generate_and_save_icospheres(
         ] = icosphere.get_face_attribute("face_centroid")
 
     # save icosphere vertices and faces to a json file
-    icospheres_dict = {key: (value.tolist() if isinstance(value, np.ndarray) else value) for key, value in icospheres.items()}
+    icospheres_dict = {
+        key: (value.tolist() if isinstance(value, np.ndarray) else value)
+        for key, value in icospheres.items()
+    }
     with open(save_path, "w") as f:
         json.dump(icospheres_dict, f)

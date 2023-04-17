@@ -54,7 +54,10 @@ class Graph:
         try:
             with open(icospheres_path, "r") as f:
                 loaded_dict = json.load(f)
-                icospheres = {key: (np.array(value) if isinstance(value, list) else value) for key, value in loaded_dict.items()}
+                icospheres = {
+                    key: (np.array(value) if isinstance(value, list) else value)
+                    for key, value in loaded_dict.items()
+                }
         except:
             from modulus.utils.graphcast.icospheres import (
                 generate_and_save_icospheres,
