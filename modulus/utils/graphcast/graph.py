@@ -14,7 +14,7 @@
 
 import os
 import torch
-import pickle
+import json
 import numpy as np
 
 from torch import Tensor
@@ -37,7 +37,7 @@ class Graph:
     Parameters
     ----------
     icospheres_path : str
-        Path to the icospheres pickle file.
+        Path to the icospheres json file.
         If the file does not exist, it will try to generate it using PyMesh.
     lat_lon_grid : Tensor
         Tensor with shape (lat, lon, 2) that includes the latitudes and longitudes
@@ -52,8 +52,9 @@ class Graph:
         self.dtype = dtype
         # Get or generate the icospheres
         try:
-            with open(icospheres_path, "rb") as f:
-                icospheres = pickle.load(f)
+            with open(icospheres_path, "r") as f:
+                loaded_dict = json.load(f)
+                icospheres = {key: (np.array(value) if isinstance(value, list) else value) for key, value in loaded_dict.items()}
         except:
             from modulus.utils.graphcast.icospheres import (
                 generate_and_save_icospheres,
