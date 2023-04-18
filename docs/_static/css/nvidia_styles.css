@@ -120,55 +120,6 @@ dd dl:not(.docutils) dt a:hover, dd dl:not(.docutils) dt > a:visited:hover {
     color: #707070;
 }
 
-/* Landing Page buttons */
-.button-row
-{
-    width:100%;
-    padding: 10px 10px 10px 10px;
-    text-align: center;
-}
-.botton-div
-{
-    width: 20%;
-    height: 100px;
-    background-color: #76b900;
-    border: 2px solid #76b900; /* Green */
-    color: #ffffff;
-    display: inline-block;
-    vertical-align: top;
-    font-size: 1.2vw;
-    margin: 5px 10px 5px 10px;
-    padding: 5px 5px 5px 5px;
-}
-@media screen and (max-width: 800px) {
-    .botton-div
-    {
-        font-size: medium;
-    }
-}
-@media screen and (min-width: 2000px) {
-    .botton-div
-    {
-        font-size:  x-large;
-    }
-}
-
-.botton-div:hover{
-    background-color: #fafafa;
-    color: #555454;
-    box-shadow: 0 0 11px rgba(33,33,33,.2); 
-}
-.botton-div:hover svg {
-    color: #555454;
-}
-.botton-div svg {
-    color: rgb(255, 255, 255);
-    height: auto;
-    width: 40%;
-    max-width: 54px;
-    stroke-width: 1.25;
-}
-
 /* Source links */
 .rst-content .viewcode-back, .rst-content .viewcode-link {
     display: inline-block;
