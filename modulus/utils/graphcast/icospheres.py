@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-import pickle
+import json
 
 try:
     import pymesh
@@ -24,14 +24,14 @@ except ImportError:
 
 
 def generate_and_save_icospheres(
-    save_path: str = "icospheres.pickle",
+    save_path: str = "icospheres.json",
 ) -> None:  # pragma: no cover
-    """enerate icospheres from level 0 to 6 (inclusive) and save them to a pickle file.
+    """enerate icospheres from level 0 to 6 (inclusive) and save them to a json file.
 
     Parameters
     ----------
     path : str
-        Path to save the pickle file.
+        Path to save the json file.
     """
     radius = 1
     center = np.array((0, 0, 0))
@@ -47,6 +47,10 @@ def generate_and_save_icospheres(
             "order_" + str(order) + "_face_centroid"
         ] = icosphere.get_face_attribute("face_centroid")
 
-    # save icosphere vertices and faces to a pickle file
-    with open(save_path, "wb") as f:
-        pickle.dump(icospheres, f, pickle.HIGHEST_PROTOCOL)
+    # save icosphere vertices and faces to a json file
+    icospheres_dict = {
+        key: (value.tolist() if isinstance(value, np.ndarray) else value)
+        for key, value in icospheres.items()
+    }
+    with open(save_path, "w") as f:
+        json.dump(icospheres_dict, f)
