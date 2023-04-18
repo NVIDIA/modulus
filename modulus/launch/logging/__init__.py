@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .launch import LaunchLogger
-from .console import PythonLogger
+from .console import PythonLogger, RankZeroLoggingWrapper
 
 from .wandb import initialize_wandb
 from .mlflow import initialize_mlflow
