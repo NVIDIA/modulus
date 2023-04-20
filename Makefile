@@ -9,7 +9,7 @@ get-data:
 		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 black: 
-	black --check ./
+	black --check --exclude=docs/ ./
 
 interrogate:
 	cd modulus && \
@@ -63,4 +63,7 @@ container-deploy:
 
 container-ci:
 	docker build -t modulus:ci --target ci -f Dockerfile .
+
+container-docs:
+	docker build -t modulus:docs --target docs -f Dockerfile .
 

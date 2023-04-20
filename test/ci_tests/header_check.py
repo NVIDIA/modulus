@@ -54,7 +54,7 @@ def main():
 
     with open(Path(__file__).parent.resolve() / Path("config.json")) as f:
         config = json.loads(f.read())
-    print(f"Liscense check config:")
+    print(f"License check config:")
     print(json.dumps(config, sort_keys=True, indent=4))
 
     current_year = int(datetime.today().year)
