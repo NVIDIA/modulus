@@ -118,6 +118,7 @@ class MeshGraphEncoderConcat(nn.Module):
             recompute_activation=recompute_activation,
         )
 
+    @torch.jit.ignore()
     def forward(
         self,
         g2m_efeat: Tensor,
@@ -241,6 +242,7 @@ class MeshGraphEncoderSum(nn.Module):
             recompute_activation=recompute_activation,
         )
 
+    @torch.jit.ignore()
     def forward(
         self,
         g2m_efeat: Tensor,

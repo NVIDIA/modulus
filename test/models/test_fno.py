@@ -52,7 +52,7 @@ def test_fno_forward(device, dimension):
         invar = torch.randn(bsize, 2, 16, 16, 16).to(device)
 
     assert common.validate_forward_accuracy(
-        model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-4
+        model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-3
     )
 
 

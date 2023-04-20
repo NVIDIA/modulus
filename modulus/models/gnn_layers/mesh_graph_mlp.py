@@ -35,7 +35,6 @@ try:
     apex_imported = True
 except:
     apex_imported = False
-apex_imported = False  # TODO handle properly
 
 
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):

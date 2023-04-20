@@ -153,6 +153,7 @@ class MeshEdgeBlockSum(nn.Module):
             recompute_activation=recompute_activation,
         )
 
+    @torch.jit.ignore()
     def forward(
         self,
         efeat: Tensor,
