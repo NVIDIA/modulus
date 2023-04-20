@@ -1,0 +1,102 @@
+# Configuration file for the Sphinx documentation builder.
+#
+# For the full list of built-in configuration values, see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+# -- Project information -----------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
+import sphinx_rtd_theme
+from modulus import __version__ as version
+
+project = 'NVIDIA Modulus'
+copyright = '2023, NVIDIA Modulus Team'
+author = 'NVIDIA Modulus Team'
+release = version
+
+# -- General configuration ---------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
+extensions = [
+    'recommonmark', 
+    'sphinx.ext.mathjax', 
+    'sphinx.ext.todo', 
+    'sphinx.ext.autosectionlabel', 
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.autosummary',
+    'nbsphinx'
+]
+
+source_suffix = {'.rst':'restructuredtext', '.md':'markdown'}
+
+pdf_documents = [('index', u'rst2pdf', u'Sample rst2pdf doc', u'Your Name'),]
+
+napoleon_custom_sections = ['Variable Shape']
+
+# -- Options for HTML output -------------------------------------------------
+
+# HTML theme options
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = "sphinx_rtd_theme"
+html_theme_options = {
+    'logo_only': True,
+    'display_version': True,
+    'prev_next_buttons_location': 'bottom',
+    'style_external_links': False,
+    'style_nav_header_background': '#000000',
+    # Toc options
+    'collapse_navigation': False,
+    'sticky_navigation': False,
+    # 'navigation_depth': 10,
+    'sidebarwidth': 12,
+    'includehidden': True,
+    'titles_only': False
+}
+
+# Additional html options
+html_static_path = ['_static']
+html_css_files = [
+    'css/nvidia_styles.css',
+]
+html_js_files = [
+    'js/pk_scripts.js'
+]
+# html_last_updated_fmt = ''
+
+# Additional sphinx switches
+math_number_all = True
+todo_include_todos = True
+numfig = True
+
+_PREAMBLE = r"""
+\usepackage{amsmath}
+\usepackage{esint}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+"""
+latex_elements = {
+'preamble': _PREAMBLE,
+# other settings go here
+}
+
+latex_preamble =[
+    ('\\usepackage{amssymb}',
+     '\\usepackage{amsmath}',
+     '\\usepackage{amsxtra}',
+     '\\usepackage{bm}',
+     '\\usepackage{esint}',
+     '\\usepackage{mathtools}',
+     '\\usepackage{stmaryrd}'),
+]
+
+autosectionlabel_maxdepth = 1
+
+templates_path = ['_templates']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'README.md', 'CONTRIBUTING.md', 'LICENSE.txt']
+
+source_suffix = {'.rst':'restructuredtext', '.md':'markdown'}
+pdf_documents = [('index', u'rst2pdf', u'Sample rst2pdf doc', u'Your Name'),]
+
+napoleon_custom_sections = ['Variable Shape']
