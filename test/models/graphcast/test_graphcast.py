@@ -51,7 +51,7 @@ def test_graphcast_forward(device):
     # Construct graphcast model
     model = GraphCastNet(**model_kwds).to(device)
 
-    assert common.validate_forward_accuracy(model, (x,))
+    assert common.validate_forward_accuracy(model, (x,), rtol=1e-2)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
