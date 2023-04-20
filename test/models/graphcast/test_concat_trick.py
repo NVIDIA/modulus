@@ -20,6 +20,7 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 icosphere_path = get_icosphere_path()
 
+
 def test_concat_trick():
     """Test concat trick"""
 

@@ -60,7 +60,6 @@ class CuGraphCSC:
         reverse_graph_bwd: bool = True,
         cache_graph: bool = True,
     ) -> None:
-
         self.offsets = offsets
         self.indices = indices
         self.num_src_nodes = num_src_nodes
@@ -258,7 +257,12 @@ def concat_message_function(edges: Tensor) -> Dict[str, Tensor]:
     return {"cat_feat": cat_feat}
 
 
-def concat_efeat_dgl(efeat: Tensor, nfeat: Union[Tensor, Tuple[torch.Tensor, torch.Tensor]], graph: DGLGraph) -> Tensor:
+@torch.jit.ignore()
+def concat_efeat_dgl(
+    efeat: Tensor,
+    nfeat: Union[Tensor, Tuple[torch.Tensor, torch.Tensor]],
+    graph: DGLGraph,
+) -> Tensor:
     """Concatenates edge features with source and destination node features.
     Use for homogeneous graphs.
 
@@ -284,7 +288,7 @@ def concat_efeat_dgl(efeat: Tensor, nfeat: Union[Tensor, Tuple[torch.Tensor, tor
             graph.edata["x"] = efeat
             graph.apply_edges(concat_message_function)
             return graph.edata["cat_feat"]
-    
+
     with graph.local_scope():
         graph.ndata["x"] = nfeat
         graph.edata["x"] = efeat
@@ -320,6 +324,7 @@ def sum_efeat_dgl(
     return efeat + src_feat[src_idx] + dst_feat[dst_idx]
 
 
+@torch.jit.ignore()
 def agg_concat_dgl(
     efeat: Tensor, dst_nfeat: Tensor, graph: DGLGraph, aggregation: str
 ) -> Tensor:

@@ -20,9 +20,18 @@ from typing import Any
 from dataclasses import dataclass
 
 from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
-from modulus.models.gnn_layers.embedder import GraphCastEncoderEmbedder, GraphCastDecoderEmbedder
-from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoderSum, MeshGraphEncoderConcat
-from modulus.models.gnn_layers.mesh_graph_decoder import MeshGraphDecoderSum, MeshGraphDecoderConcat
+from modulus.models.gnn_layers.embedder import (
+    GraphCastEncoderEmbedder,
+    GraphCastDecoderEmbedder,
+)
+from modulus.models.gnn_layers.mesh_graph_encoder import (
+    MeshGraphEncoderSum,
+    MeshGraphEncoderConcat,
+)
+from modulus.models.gnn_layers.mesh_graph_decoder import (
+    MeshGraphDecoderSum,
+    MeshGraphDecoderConcat,
+)
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
@@ -458,7 +467,9 @@ class GraphCastNet(Module):
 
         # process multimesh graph
         mesh_efeat_processed, mesh_nfeat_processed = self.processor_encoder(
-            mesh_efeat_embedded, mesh_nfeat_encoded, self.mesh_graph,
+            mesh_efeat_embedded,
+            mesh_nfeat_encoded,
+            self.mesh_graph,
         )
 
         return mesh_efeat_processed, mesh_nfeat_processed, grid_nfeat_encoded

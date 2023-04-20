@@ -104,7 +104,11 @@ class MeshGraphDecoderConcat(nn.Module):
         )
 
     def forward(
-        self, m2g_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor, graph: Union[DGLGraph, CuGraphCSC],
+        self,
+        m2g_efeat: Tensor,
+        grid_nfeat: Tensor,
+        mesh_nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         # update edge features through concatenating edge and node features
         if isinstance(graph, CuGraphCSC):
@@ -114,9 +118,7 @@ class MeshGraphDecoderConcat(nn.Module):
                 m2g_efeat, mesh_nfeat, grid_nfeat, bipartite_graph, "concat"
             )
         else:
-            efeat = concat_efeat_dgl(
-                m2g_efeat, (mesh_nfeat, grid_nfeat), graph
-            )
+            efeat = concat_efeat_dgl(m2g_efeat, (mesh_nfeat, grid_nfeat), graph)
 
         # transform updated edge features
         efeat = self.edge_mlp(efeat)
@@ -210,11 +212,13 @@ class MeshGraphDecoderSum(nn.Module):
         )
 
     def forward(
-        self, m2g_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor, graph: Union[DGLGraph, CuGraphCSC],
+        self,
+        m2g_efeat: Tensor,
+        grid_nfeat: Tensor,
+        mesh_nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
-        efeat = self.edge_trunc_mlp(
-            m2g_efeat, mesh_nfeat, grid_nfeat, graph
-        )
+        efeat = self.edge_trunc_mlp(m2g_efeat, mesh_nfeat, grid_nfeat, graph)
 
         # update edge features and aggregate them to obtain updated node features
         if isinstance(graph, CuGraphCSC):
@@ -223,7 +227,10 @@ class MeshGraphDecoderSum(nn.Module):
 
         else:
             efeat = self.edge_trunc_mlp(
-                m2g_efeat, mesh_nfeat, grid_nfeat, graph,
+                m2g_efeat,
+                mesh_nfeat,
+                grid_nfeat,
+                graph,
             )
             cat_feat = agg_concat_dgl(efeat, grid_nfeat, graph, self.aggregation)
 

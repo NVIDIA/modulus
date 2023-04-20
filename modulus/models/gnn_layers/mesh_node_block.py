@@ -79,7 +79,13 @@ class MeshNodeBlock(nn.Module):
             recompute_activation=recompute_activation,
         )
 
-    def forward(self, efeat: Tensor, nfeat: Tensor, graph: Union[DGLGraph, CuGraphCSC],) -> Tuple[Tensor, Tensor]:
+    @torch.jit.ignore()
+    def forward(
+        self,
+        efeat: Tensor,
+        nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
+    ) -> Tuple[Tensor, Tensor]:
         if isinstance(graph, CuGraphCSC):
             static_graph = graph.to_static_csc()
             cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, self.aggregation)

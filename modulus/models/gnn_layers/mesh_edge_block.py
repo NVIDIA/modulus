@@ -15,7 +15,7 @@
 import torch
 import torch.nn as nn
 
-from typing import Union
+from typing import Union, List
 from torch import Tensor
 from dgl import DGLGraph
 from .mesh_graph_mlp import MeshGraphMLP, TruncatedMeshGraphMLP
@@ -76,6 +76,7 @@ class MeshEdgeBlockConcat(nn.Module):
             recompute_activation=recompute_activation,
         )
 
+    @torch.jit.ignore()
     def forward(
         self,
         efeat: Tensor,
@@ -156,16 +157,12 @@ class MeshEdgeBlockSum(nn.Module):
         self,
         efeat: Tensor,
         nfeat: Tensor,
-        graph: Union[DGLGraph, CuGraphCSC],
+        graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
         if isinstance(graph, CuGraphCSC):
-            efeat_new = (
-                self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
-            )
+            efeat_new = self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
 
         else:
-            efeat_new = (
-                self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
-            )
+            efeat_new = self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
 
         return efeat_new, nfeat

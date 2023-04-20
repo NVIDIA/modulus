@@ -119,7 +119,11 @@ class MeshGraphEncoderConcat(nn.Module):
         )
 
     def forward(
-        self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor, graph: Union[DGLGraph, CuGraphCSC],
+        self,
+        g2m_efeat: Tensor,
+        grid_nfeat: Tensor,
+        mesh_nfeat: Tensor,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tuple[Tensor, Tensor]:
         # update edge features by concatenating node features (both mesh and grid) and existing edger featues
         # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
@@ -129,9 +133,7 @@ class MeshGraphEncoderConcat(nn.Module):
                 g2m_efeat, grid_nfeat, mesh_nfeat, bipartite_graph, mode="concat"
             )
         else:
-            efeat = concat_efeat_dgl(
-                g2m_efeat, (grid_nfeat, mesh_nfeat), graph
-            )
+            efeat = concat_efeat_dgl(g2m_efeat, (grid_nfeat, mesh_nfeat), graph)
 
         # transform edge features
         efeat = self.edge_mlp(efeat)
@@ -240,24 +242,24 @@ class MeshGraphEncoderSum(nn.Module):
         )
 
     def forward(
-        self, g2m_efeat: Tensor, grid_nfeat: Tensor, mesh_nfeat: Tensor, graph: CuGraphCSC,
+        self,
+        g2m_efeat: Tensor,
+        grid_nfeat: Tensor,
+        mesh_nfeat: Tensor,
+        graph: CuGraphCSC,
     ) -> Tuple[Tensor, Tensor]:
         # update edge features with Truncated MLP
-        mlp_efeat = self.edge_trunc_mlp(
-            g2m_efeat, grid_nfeat, mesh_nfeat, graph
-        )
-        
+        mlp_efeat = self.edge_trunc_mlp(g2m_efeat, grid_nfeat, mesh_nfeat, graph)
+
         if isinstance(graph, CuGraphCSC):
             static_graph = graph.to_static_csc()
             cat_feat = agg_concat_e2n(
                 mesh_nfeat, mlp_efeat, static_graph, self.aggregation
             )
 
-        else:        
+        else:
             # aggregate messages (edge features) to obtain updated node features
-            cat_feat = agg_concat_dgl(
-                mlp_efeat, mesh_nfeat, graph, self.aggregation
-            )
+            cat_feat = agg_concat_dgl(mlp_efeat, mesh_nfeat, graph, self.aggregation)
 
         # update src-feat, dst-feat and apply residual connections
         mesh_nfeat = mesh_nfeat + self.dst_node_mlp(cat_feat)

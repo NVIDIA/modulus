@@ -151,14 +151,15 @@ class MeshGraphMLP(nn.Module):
 
         if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
-            self.forward_fn = self.custom_silu_linear_forward
+            self.recompute_activation = True
         else:
-            self.forward_fn = self.default_forward
+            self.recompute_activation = False
 
     def default_forward(self, x: Tensor) -> Tensor:
         """default forward pass of the MLP"""
         return self.model(x)
 
+    @torch.jit.ignore()
     def custom_silu_linear_forward(self, x: Tensor) -> Tensor:
         """forward pass of the MLP where SiLU is recomputed in backward"""
         lin = self.model[0]
@@ -175,7 +176,9 @@ class MeshGraphMLP(nn.Module):
         return hidden
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.forward_fn(x)
+        if self.recompute_activation:
+            return self.custom_silu_linear_forward(x)
+        return self.default_forward(x)
 
 
 class TruncatedMeshGraphMLP(nn.Module):
@@ -183,7 +186,7 @@ class TruncatedMeshGraphMLP(nn.Module):
     of models operating on the union of grids and meshes. It
     consists of a number of linear layers followed by an activation
     and a norm layer following the last linear layer. It is truncated
-    in that sense that in a setting where it expects a concatentation 
+    in that sense that in a setting where it expects a concatentation
     of source node, destination node, and edge features, it computes
     separate linear transformations on each of those followed by a
     corresponding summation operation making use of the graph structure.
@@ -274,9 +277,9 @@ class TruncatedMeshGraphMLP(nn.Module):
 
         if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
-            self.forward_fn = self.custom_silu_linear_forward
+            self.recompute_activation = True
         else:
-            self.forward_fn = self.default_forward
+            self.recompute_activation = False
 
     def forward_truncated_sum(
         self,
@@ -297,7 +300,7 @@ class TruncatedMeshGraphMLP(nn.Module):
             bipartite_graph = graph.to_bipartite_csc()
             mlp_sum = update_efeat_bipartite_e2e(
                 mlp_efeat, mlp_src, mlp_dst, bipartite_graph, mode="sum"
-            )        
+            )
         else:
             src, dst = (item.long() for item in graph.edges())
             mlp_sum = sum_efeat_dgl(mlp_efeat, mlp_src, mlp_dst, src, dst)
@@ -312,7 +315,10 @@ class TruncatedMeshGraphMLP(nn.Module):
     ) -> Tensor:
         """Default forward pass of the truncated MLP."""
         mlp_sum = self.forward_truncated_sum(
-            efeat, src_feat, dst_feat, graph,
+            efeat,
+            src_feat,
+            dst_feat,
+            graph,
         )
         return self.model(mlp_sum)
 
@@ -325,7 +331,10 @@ class TruncatedMeshGraphMLP(nn.Module):
     ) -> Tensor:
         """Forward pass of the truncated MLP with custom SiLU function."""
         mlp_sum = self.forward_truncated_sum(
-            efeat, src_feat, dst_feat, graph,
+            efeat,
+            src_feat,
+            dst_feat,
+            graph,
         )
         lin = self.model[1]
         hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)
@@ -345,6 +354,8 @@ class TruncatedMeshGraphMLP(nn.Module):
         efeat: Tensor,
         src_feat: Tensor,
         dst_feat: Tensor,
-        graph: Union[DGLGraph, CuGraphCSC]
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
-        return self.forward_fn(efeat, src_feat, dst_feat, graph)
+        if self.recompute_activation:
+            return self.custom_silu_linear_forward(efeat, src_feat, dst_feat, graph)
+        return self.default_forward(efeat, src_feat, dst_feat, graph)

@@ -34,15 +34,18 @@ from modulus.models.module import Module
 
 from modulus.models.gnn_layers.utils import CuGraphCSC
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlockConcat, MeshEdgeBlockSum
+from modulus.models.gnn_layers.mesh_edge_block import (
+    MeshEdgeBlockConcat,
+    MeshEdgeBlockSum,
+)
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 
 
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "MeshGraphNet"
-    # Optimization
-    jit: bool = True
+    # Optimization, no JIT as DGLGraph causes trouble
+    jit: bool = False
     cuda_graphs: bool = False
     amp_cpu: bool = False
     amp_gpu: bool = True
@@ -126,7 +129,7 @@ class MeshGraphNet(Module):
             input_dim_edges,
             output_dim=hidden_dim_edge_encoder,
             hidden_dim=hidden_dim_edge_encoder,
-            hidden_layers=num_layers_edge_encoder-1,
+            hidden_layers=num_layers_edge_encoder - 1,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
@@ -135,16 +138,16 @@ class MeshGraphNet(Module):
             input_dim_nodes,
             output_dim=hidden_dim_node_encoder,
             hidden_dim=hidden_dim_node_encoder,
-            hidden_layers=num_layers_node_encoder-1,
+            hidden_layers=num_layers_node_encoder - 1,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
         )
         self.node_decoder = MeshGraphMLP(
-            hidden_dim_node_encoder, 
-            output_dim=output_dim, 
+            hidden_dim_node_encoder,
+            output_dim=output_dim,
             hidden_dim=hidden_dim_node_decoder,
-            hidden_layers=num_layers_node_decoder-1,
+            hidden_layers=num_layers_node_decoder - 1,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
@@ -160,16 +163,16 @@ class MeshGraphNet(Module):
             activation_fn=nn.ReLU(),
             do_concat_trick=do_concat_trick,
         )
-
+    
     def forward(
         self,
-        graph: Union[DGLGraph, List[DGLGraph]],
         node_features: Tensor,
         edge_features: Tensor,
+        graph: Union[DGLGraph, List[DGLGraph]],
     ) -> Tensor:
         edge_features = self.edge_encoder(edge_features)
         node_features = self.node_encoder(node_features)
-        x = self.processor(graph, node_features, edge_features)
+        x = self.processor(node_features, edge_features, graph)
         x = self.node_decoder(x)
         return x
 
@@ -195,7 +198,7 @@ class MeshGraphNetProcessor(nn.Module):
             input_dim_edge,
             input_dim_edge,
             input_dim_edge,
-            num_layers_edge-1,
+            num_layers_edge - 1,
             activation_fn,
             norm_type,
             False,
@@ -206,7 +209,7 @@ class MeshGraphNetProcessor(nn.Module):
             input_dim_edge,
             input_dim_edge,
             input_dim_edge,
-            num_layers_node-1,
+            num_layers_node - 1,
             activation_fn,
             norm_type,
             False,
@@ -217,16 +220,12 @@ class MeshGraphNetProcessor(nn.Module):
 
         for _ in range(self.processor_size):
             if do_concat_trick:
-                edge_blocks.append(
-                    MeshEdgeBlockSum(*edge_block_invars)
-                )
+                edge_blocks.append(MeshEdgeBlockSum(*edge_block_invars))
             else:
-                edge_blocks.append(
-                    MeshEdgeBlockConcat(*edge_block_invars)
-                )
-            node_blocks.append(
-                MeshNodeBlock(*node_block_invars)
-            )
+                edge_blocks.append(MeshEdgeBlockConcat(*edge_block_invars))
+
+        for _ in range(self.processor_size):
+            node_blocks.append(MeshNodeBlock(*node_block_invars))
 
         self.edge_blocks = nn.ModuleList(edge_blocks)
         self.node_blocks = nn.ModuleList(node_blocks)
@@ -234,22 +233,29 @@ class MeshGraphNetProcessor(nn.Module):
     @torch.jit.unused
     def forward(
         self,
-        graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC, List[CuGraphCSC]],
         node_features: Tensor,
         edge_features: Tensor,
+        graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
         for i in range(self.processor_size):
             if isinstance(graph, List):  # in case of neighbor sampling
-                edge_features = edge_features[: graph[i].num_edges(), :]  # TODO check
+                edge_features = edge_features[:graph[i].num_edges(), :]  # TODO check
                 node_features_src = node_features
-                node_features_dst = node_features_src[: graph[i].num_dst_nodes()]
-                edge_features = self.edge_blocks[i](
-                    graph[i], (node_features_src, node_features_dst), edge_features
+                node_features_dst = node_features_src[:graph[i].num_dst_nodes(), :]
+
+                edge_features, _ = self.edge_blocks[i](
+                    edge_features, (node_features_src, node_features_dst), graph[i]
                 )
-                node_features = self.node_blocks[i](
-                    graph[i], (node_features_src, node_features_dst), edge_features
+                _, node_features = self.node_blocks[i](
+                    edge_features, node_features_dst, graph[i]
                 )
+
             else:
-                edge_features = self.edge_blocks[i](graph, node_features, edge_features)
-                node_features = self.node_blocks[i](graph, node_features, edge_features)
+                edge_features, _ = self.edge_blocks[i](
+                    edge_features, node_features, graph
+                )
+                _, node_features = self.node_blocks[i](
+                    edge_features, node_features, graph
+                )
+
         return node_features

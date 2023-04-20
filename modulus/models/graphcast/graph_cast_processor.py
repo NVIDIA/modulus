@@ -21,11 +21,14 @@ from dgl import DGLGraph
 
 from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
-from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlockConcat, MeshEdgeBlockSum
+from modulus.models.gnn_layers.mesh_edge_block import (
+    MeshEdgeBlockConcat,
+    MeshEdgeBlockSum,
+)
 
 
 class GraphCastProcessor(nn.Module):
-    """Processor block used in GraphCast operating on a latent space 
+    """Processor block used in GraphCast operating on a latent space
     represented by hierarchy of isohedral meshes.
 
     Parameters
