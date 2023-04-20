@@ -47,6 +47,7 @@ ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
+# Forcing numpy update to over ride numba 0.56.4 max numpy constraint
 COPY . /modulus/ 
 RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl" ]; then \
 	echo "Custom wheel exists, installing!" && \
