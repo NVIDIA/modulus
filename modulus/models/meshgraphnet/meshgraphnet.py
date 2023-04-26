@@ -97,7 +97,7 @@ class MeshGraphNet(Module):
     >>> graph = dgl.rand_graph(10, 5)
     >>> node_features = torch.randn(10, 4)
     >>> edge_features = torch.randn(5, 3)
-    >>> output = model(graph, node_features, edge_features)
+    >>> output = model(node_features, edge_features, graph)
     >>> output.size()
     torch.Size([10, 2])
 
@@ -163,7 +163,7 @@ class MeshGraphNet(Module):
             activation_fn=nn.ReLU(),
             do_concat_trick=do_concat_trick,
         )
-    
+
     def forward(
         self,
         node_features: Tensor,
@@ -239,9 +239,9 @@ class MeshGraphNetProcessor(nn.Module):
     ) -> Tensor:
         for i in range(self.processor_size):
             if isinstance(graph, List):  # in case of neighbor sampling
-                edge_features = edge_features[:graph[i].num_edges(), :]  # TODO check
+                edge_features = edge_features[: graph[i].num_edges(), :]  # TODO check
                 node_features_src = node_features
-                node_features_dst = node_features_src[:graph[i].num_dst_nodes(), :]
+                node_features_dst = node_features_src[: graph[i].num_dst_nodes(), :]
 
                 edge_features, _ = self.edge_blocks[i](
                     edge_features, (node_features_src, node_features_dst), graph[i]

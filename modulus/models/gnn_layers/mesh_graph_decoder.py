@@ -102,7 +102,7 @@ class MeshGraphDecoderConcat(nn.Module):
             norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
-    
+
     @torch.jit.ignore()
     def forward(
         self,
