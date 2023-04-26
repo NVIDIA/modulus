@@ -160,10 +160,5 @@ class MeshEdgeBlockSum(nn.Module):
         nfeat: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
-        if isinstance(graph, CuGraphCSC):
-            efeat_new = self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
-
-        else:
-            efeat_new = self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
-
+        efeat_new = self.edge_trunc_mlp(efeat, nfeat, nfeat, graph) + efeat
         return efeat_new, nfeat

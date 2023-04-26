@@ -33,7 +33,7 @@ except:
 
 
 class MeshGraphEncoderConcat(nn.Module):
-    """Encoder used e.g. in GraphCast or MeshGraphNet
+    """Encoder used e.g. in GraphCast
        which acts on the bipartite graph connecting a mostly
        regular grid (e.g. representing the input domain) to a mesh
        (e.g. representing a latent space).
@@ -153,7 +153,7 @@ class MeshGraphEncoderConcat(nn.Module):
 
 
 class MeshGraphEncoderSum(nn.Module):
-    """Encoder used e.g. in GraphCast or MeshGraphNet
+    """Encoder used e.g. in GraphCast
        which acts on the bipartite graph connecting a mostly
        regular grid (e.g. representing the input domain) to a mesh
        (e.g. representing a latent space). This variant
@@ -248,7 +248,7 @@ class MeshGraphEncoderSum(nn.Module):
         g2m_efeat: Tensor,
         grid_nfeat: Tensor,
         mesh_nfeat: Tensor,
-        graph: CuGraphCSC,
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tuple[Tensor, Tensor]:
         # update edge features with Truncated MLP
         mlp_efeat = self.edge_trunc_mlp(g2m_efeat, grid_nfeat, mesh_nfeat, graph)

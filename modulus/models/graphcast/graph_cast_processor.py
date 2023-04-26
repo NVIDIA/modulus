@@ -29,7 +29,7 @@ from modulus.models.gnn_layers.mesh_edge_block import (
 
 class GraphCastProcessor(nn.Module):
     """Processor block used in GraphCast operating on a latent space
-    represented by hierarchy of isohedral meshes.
+    represented by hierarchy of icosahedral meshes.
 
     Parameters
     ----------

@@ -32,7 +32,7 @@ except ImportError:
 
 
 class MeshGraphDecoderConcat(nn.Module):
-    """Decoder used e.g. in GraphCast or MeshGraphNet
+    """Decoder used e.g. in GraphCast
        which acts on the bipartite graph connecting a mesh
        (e.g. representing a latent space) to a mostly regular
        grid (e.g. representing the output domain).
@@ -137,7 +137,7 @@ class MeshGraphDecoderConcat(nn.Module):
 
 
 class MeshGraphDecoderSum(nn.Module):
-    """Decoder used e.g. in GraphCast or MeshGraphNet
+    """Decoder used e.g. in GraphCast
        which acts on the bipartite graph connecting a mesh
        (e.g. representing a latent space) to a mostly regular
        grid (e.g. representing the output domain). This variant
@@ -226,14 +226,7 @@ class MeshGraphDecoderSum(nn.Module):
         if isinstance(graph, CuGraphCSC):
             static_graph = graph.to_static_csc()
             cat_feat = agg_concat_e2n(grid_nfeat, efeat, static_graph, self.aggregation)
-
         else:
-            efeat = self.edge_trunc_mlp(
-                m2g_efeat,
-                mesh_nfeat,
-                grid_nfeat,
-                graph,
-            )
             cat_feat = agg_concat_dgl(efeat, grid_nfeat, graph, self.aggregation)
 
         # transform node features and apply residual connection

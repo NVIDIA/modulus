@@ -629,7 +629,7 @@ class GraphCastNet(Module):
         GraphCastNet
             The updated object after moving to the specified device, dtype, or format.
         """
-        self = super().to(*args, **kwargs)
+        self = super(GraphCastNet, self).to(*args, **kwargs)
 
         self.g2m_edata = self.g2m_edata.to(*args, **kwargs)
         self.m2g_edata = self.m2g_edata.to(*args, **kwargs)
@@ -642,11 +642,5 @@ class GraphCastNet(Module):
         self.g2m_graph = self.g2m_graph.to(device)
         self.mesh_graph = self.mesh_graph.to(device)
         self.m2g_graph = self.m2g_graph.to(device)
-
-        self.encoder = self.encoder.to(*args, **kwargs)
-        self.decoder = self.decoder.to(*args, **kwargs)
-        self.processor = self.processor.to(*args, **kwargs)
-        self.processor_encoder = self.processor_encoder.to(*args, **kwargs)
-        self.processor_decoder = self.processor_decoder.to(*args, **kwargs)
 
         return self
