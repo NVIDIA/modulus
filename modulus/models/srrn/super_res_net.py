@@ -175,7 +175,6 @@ class SRResNet(Module):
         )
 
     def forward(self, in_vars: Tensor) -> Tensor:
-
         output = self.conv_block1(in_vars)  # (N, 3, w, h)
         residual = output  # (N, n_channels, w, h)
         output = self.residual_blocks(output)  # (N, n_channels, w, h)
@@ -320,7 +319,6 @@ class SubPixel_ConvolutionalBlock3d(nn.Module):
         self.prelu = nn.PReLU()
 
     def forward(self, input: Tensor) -> Tensor:
-
         output = self.conv(input)  # (N, n_channels * scaling factor^2, w, h)
         output = self.pixel_shuffle(
             output

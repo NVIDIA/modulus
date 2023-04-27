@@ -19,12 +19,7 @@ from dgl import DGLGraph
 from typing import Tuple, Union
 
 from .mesh_graph_mlp import MeshGraphMLP
-from .utils import agg_concat_dgl, CuGraphCSC
-
-try:
-    from pylibcugraphops.pytorch.operators import agg_concat_e2n
-except:
-    agg_concat_e2n = None
+from .utils import aggregate_and_concat, CuGraphCSC
 
 
 class MeshNodeBlock(nn.Module):
@@ -86,13 +81,8 @@ class MeshNodeBlock(nn.Module):
         nfeat: Tensor,
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tuple[Tensor, Tensor]:
-        if isinstance(graph, CuGraphCSC):
-            static_graph = graph.to_static_csc()
-            cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, self.aggregation)
-
-        else:
-            cat_feat = agg_concat_dgl(efeat, nfeat, graph, self.aggregation)
-
+        # update edge features
+        cat_feat = aggregate_and_concat(efeat, nfeat, graph, self.aggregation)
         # update node features + residual connection
         nfeat_new = self.node_mlp(cat_feat) + nfeat
         return efeat, nfeat_new

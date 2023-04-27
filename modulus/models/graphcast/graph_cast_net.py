@@ -24,14 +24,8 @@ from modulus.models.gnn_layers.embedder import (
     GraphCastEncoderEmbedder,
     GraphCastDecoderEmbedder,
 )
-from modulus.models.gnn_layers.mesh_graph_encoder import (
-    MeshGraphEncoderSum,
-    MeshGraphEncoderConcat,
-)
-from modulus.models.gnn_layers.mesh_graph_decoder import (
-    MeshGraphDecoderSum,
-    MeshGraphDecoderConcat,
-)
+from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoder
+from modulus.models.gnn_layers.mesh_graph_decoder import MeshGraphDecoder
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
@@ -239,8 +233,7 @@ class GraphCastNet(Module):
         )
 
         # grid2mesh encoder
-        Encoder = MeshGraphEncoderSum if do_concat_trick else MeshGraphEncoderConcat
-        self.encoder = Encoder(
+        self.encoder = MeshGraphEncoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -252,6 +245,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 
@@ -295,8 +289,7 @@ class GraphCastNet(Module):
         )
 
         # mesh2grid decoder
-        Decoder = MeshGraphDecoderSum if do_concat_trick else MeshGraphDecoderConcat
-        self.decoder = Decoder(
+        self.decoder = MeshGraphDecoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -307,6 +300,7 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 

@@ -21,10 +21,7 @@ from dgl import DGLGraph
 
 from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
-from modulus.models.gnn_layers.mesh_edge_block import (
-    MeshEdgeBlockConcat,
-    MeshEdgeBlockSum,
-)
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 
 
 class GraphCastProcessor(nn.Module):
@@ -79,6 +76,7 @@ class GraphCastProcessor(nn.Module):
             hidden_layers,
             activation_fn,
             norm_type,
+            do_concat_trick,
             recompute_activation,
         )
         node_block_invars = (
@@ -95,10 +93,7 @@ class GraphCastProcessor(nn.Module):
 
         layers = []
         for _ in range(processor_layers):
-            if do_concat_trick:
-                layers.append(MeshEdgeBlockSum(*edge_block_invars))
-            else:
-                layers.append(MeshEdgeBlockConcat(*edge_block_invars))
+            layers.append(MeshEdgeBlock(*edge_block_invars))
             layers.append(MeshNodeBlock(*node_block_invars))
 
         self.processor_layers = nn.ModuleList(layers)

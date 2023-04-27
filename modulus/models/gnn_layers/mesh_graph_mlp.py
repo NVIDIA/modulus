@@ -21,13 +21,8 @@ from dgl import DGLGraph
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
-from .utils import sum_efeat_dgl, CuGraphCSC
+from .utils import concat_efeat, sum_efeat, CuGraphCSC
 from modulus.models.layers.fused_silu import silu_backward_for
-
-try:
-    from pylibcugraphops.pytorch.operators import update_efeat_bipartite_e2e
-except:
-    update_efeat_bipartite_e2e = None
 
 try:
     from apex.normalization import FusedLayerNorm
@@ -180,15 +175,87 @@ class MeshGraphMLP(nn.Module):
         return self.default_forward(x)
 
 
-class TruncatedMeshGraphMLP(nn.Module):
+class MeshGraphEdgeMLPConcat(MeshGraphMLP):
     """MLP layer which is commonly used in building blocks
     of models operating on the union of grids and meshes. It
     consists of a number of linear layers followed by an activation
-    and a norm layer following the last linear layer. It is truncated
-    in that sense that in a setting where it expects a concatentation
-    of source node, destination node, and edge features, it computes
-    separate linear transformations on each of those followed by a
-    corresponding summation operation making use of the graph structure.
+    and a norm layer following the last linear layer. It first
+    concatenates the input edge features and the node features of the
+    corresponding source and destination nodes of the corresponding edge
+    to create new edge features. These then are transformed through the
+    transformations mentioned above.
+
+    Parameters
+    ----------
+    efeat_dim: int
+        dimension of the input edge features
+    src_dim: int
+        dimension of the input src-node features
+    dst_dim: int
+        dimension of the input dst-node features
+    output_dim : int, optional
+        dimensionality of the output features, by default 512
+    hidden_dim : int, optional
+        number of neurons in each hidden layer, by default 512
+    hidden_layers : int, optional
+        number of hidden layers, by default 1
+    activation_fn : nn.Module, optional
+        type of activation function, by default nn.SiLU()
+    norm_type : str, optional
+        normalization type, by default "LayerNorm"
+    bias : bool, optional
+        whether to use bias in the MLP, by default True
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
+    """
+
+    def __init__(
+        self,
+        efeat_dim: int = 512,
+        src_dim: int = 512,
+        dst_dim: int = 512,
+        output_dim: int = 512,
+        hidden_dim: int = 512,
+        hidden_layers: int = 2,
+        activation_fn: nn.Module = nn.SiLU(),
+        norm_type: str = "LayerNorm",
+        bias: bool = True,
+        recompute_activation: bool = False,
+    ):
+        cat_dim = efeat_dim + src_dim + dst_dim
+        super(MeshGraphEdgeMLPConcat, self).__init__(
+            cat_dim,
+            output_dim,
+            hidden_dim,
+            hidden_layers,
+            activation_fn,
+            norm_type,
+            recompute_activation,
+        )
+
+    def forward(
+        self,
+        efeat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
+    ) -> Tensor:
+        efeat = concat_efeat(efeat, nfeat, graph)
+        efeat = self.model(efeat)
+        return efeat
+
+
+class MeshGraphEdgeMLPSum(nn.Module):
+    """MLP layer which is commonly used in building blocks
+    of models operating on the union of grids and meshes. It
+    consists of a number of linear layers followed by an activation
+    and a norm layer following the last linear layer. It transform
+    edge features - which originally are intended to be a concatenation
+    of previous edge features, and the node features of the corresponding
+    source and destinationn nodes - by transorming these three features
+    individually through separate linear transformations and then sums
+    them for each edge accordingly. The result of this is transformed
+    through the remaining linear layers and activation or norm functions.
 
     Parameters
     ----------
@@ -283,8 +350,7 @@ class TruncatedMeshGraphMLP(nn.Module):
     def forward_truncated_sum(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """forward pass of the truncated MLP. This uses separate linear layers without
@@ -292,31 +358,26 @@ class TruncatedMeshGraphMLP(nn.Module):
          total sum, too. Having it in one F.linear should allow a fusion of the bias
          addition while avoiding adding the bias to the "edge-level" result.
         """
+        if isinstance(nfeat, Tensor):
+            src_feat, dst_feat = nfeat, nfeat
+        else:
+            src_feat, dst_feat = nfeat
         mlp_efeat = F.linear(efeat, self.lin_efeat, None)
         mlp_src = F.linear(src_feat, self.lin_src, None)
         mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
-        if isinstance(graph, CuGraphCSC):
-            bipartite_graph = graph.to_bipartite_csc()
-            mlp_sum = update_efeat_bipartite_e2e(
-                mlp_efeat, mlp_src, mlp_dst, bipartite_graph, mode="sum"
-            )
-        else:
-            src, dst = (item.long() for item in graph.edges())
-            mlp_sum = sum_efeat_dgl(mlp_efeat, mlp_src, mlp_dst, src, dst)
+        mlp_sum = sum_efeat(mlp_efeat, (mlp_src, mlp_dst), graph)
         return mlp_sum
 
     def default_forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """Default forward pass of the truncated MLP."""
         mlp_sum = self.forward_truncated_sum(
             efeat,
-            src_feat,
-            dst_feat,
+            nfeat,
             graph,
         )
         return self.model(mlp_sum)
@@ -324,15 +385,13 @@ class TruncatedMeshGraphMLP(nn.Module):
     def custom_silu_linear_forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """Forward pass of the truncated MLP with custom SiLU function."""
         mlp_sum = self.forward_truncated_sum(
             efeat,
-            src_feat,
-            dst_feat,
+            nfeat,
             graph,
         )
         lin = self.model[1]
@@ -351,10 +410,9 @@ class TruncatedMeshGraphMLP(nn.Module):
     def forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         if self.recompute_activation:
-            return self.custom_silu_linear_forward(efeat, src_feat, dst_feat, graph)
-        return self.default_forward(efeat, src_feat, dst_feat, graph)
+            return self.custom_silu_linear_forward(efeat, nfeat, graph)
+        return self.default_forward(efeat, nfeat, graph)

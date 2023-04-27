@@ -40,7 +40,6 @@ class ModelMetaData:
     auto_grad: bool = False
 
     def __post_init__(self):
-
         self.amp_cpu = self.amp if self.amp_cpu is None else self.amp_cpu
         self.amp_gpu = self.amp if self.amp_gpu is None else self.amp_gpu
         self.onnx_cpu = self.onnx if self.onnx_cpu is None else self.onnx_cpu

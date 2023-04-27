@@ -18,21 +18,11 @@ import torch.nn as nn
 from torch import Tensor
 from dgl import DGLGraph
 from typing import Tuple, Union
-from .mesh_graph_mlp import MeshGraphMLP, TruncatedMeshGraphMLP
-from .utils import agg_concat_dgl, concat_efeat_dgl, CuGraphCSC
-
-try:
-    from pylibcugraphops.pytorch.operators import (
-        agg_concat_e2n,
-        update_efeat_bipartite_e2e,
-    )
-except:
-    agg_concat_e2n = None
-    update_efeat_bipartite_e2e = None
-    BipartiteCSC = None
+from .mesh_graph_mlp import MeshGraphMLP, MeshGraphEdgeMLPConcat, MeshGraphEdgeMLPSum
+from .utils import aggregate_and_concat, CuGraphCSC
 
 
-class MeshGraphEncoderConcat(nn.Module):
+class MeshGraphEncoder(nn.Module):
     """Encoder used e.g. in GraphCast
        which acts on the bipartite graph connecting a mostly
        regular grid (e.g. representing the input domain) to a mesh
@@ -62,6 +52,8 @@ class MeshGraphEncoderConcat(nn.Module):
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
         Normalization type, by default "LayerNorm"
+    do_conat_trick: : bool, default=False
+        Whether to replace concat+MLP with MLP+idx+sum
     recompute_activation : bool, optional
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
@@ -80,135 +72,15 @@ class MeshGraphEncoderConcat(nn.Module):
         hidden_layers: int = 1,
         activation_fn: int = nn.SiLU(),
         norm_type: str = "LayerNorm",
+        do_concat_trick: bool = False,
         recompute_activation: bool = False,
     ):
         super().__init__()
         self.aggregation = aggregation
 
+        MLP = MeshGraphEdgeMLPSum if do_concat_trick else MeshGraphEdgeMLPConcat
         # edge MLP
-        self.edge_mlp = MeshGraphMLP(
-            input_dim=input_dim_src_nodes + input_dim_dst_nodes + input_dim_edges,
-            output_dim=output_dim_edges,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-            recompute_activation=recompute_activation,
-        )
-
-        # src node MLP
-        self.src_node_mlp = MeshGraphMLP(
-            input_dim=input_dim_src_nodes,
-            output_dim=output_dim_src_nodes,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-            recompute_activation=recompute_activation,
-        )
-
-        # dst node MLP
-        self.dst_node_mlp = MeshGraphMLP(
-            input_dim=input_dim_dst_nodes + output_dim_edges,
-            output_dim=output_dim_dst_nodes,
-            hidden_dim=hidden_dim,
-            hidden_layers=hidden_layers,
-            activation_fn=activation_fn,
-            norm_type=norm_type,
-            recompute_activation=recompute_activation,
-        )
-
-    @torch.jit.ignore()
-    def forward(
-        self,
-        g2m_efeat: Tensor,
-        grid_nfeat: Tensor,
-        mesh_nfeat: Tensor,
-        graph: Union[DGLGraph, CuGraphCSC],
-    ) -> Tuple[Tensor, Tensor]:
-        # update edge features by concatenating node features (both mesh and grid) and existing edger featues
-        # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
-        if isinstance(graph, CuGraphCSC):
-            bipartite_graph = graph.to_bipartite_csc(dtype=torch.int64)
-            efeat = update_efeat_bipartite_e2e(
-                g2m_efeat, grid_nfeat, mesh_nfeat, bipartite_graph, mode="concat"
-            )
-        else:
-            efeat = concat_efeat_dgl(g2m_efeat, (grid_nfeat, mesh_nfeat), graph)
-
-        # transform edge features
-        efeat = self.edge_mlp(efeat)
-
-        # aggregate messages (edge features) to obtain updated node features
-        if isinstance(graph, CuGraphCSC):
-            static_graph = graph.to_static_csc()
-            cat_feat = agg_concat_e2n(mesh_nfeat, efeat, static_graph, self.aggregation)
-        else:
-            cat_feat = agg_concat_dgl(efeat, mesh_nfeat, graph, self.aggregation)
-
-        # update src, dst node features + residual connections
-        mesh_nfeat = mesh_nfeat + self.dst_node_mlp(cat_feat)
-        grid_nfeat = grid_nfeat + self.src_node_mlp(grid_nfeat)
-        return grid_nfeat, mesh_nfeat
-
-
-class MeshGraphEncoderSum(nn.Module):
-    """Encoder used e.g. in GraphCast
-       which acts on the bipartite graph connecting a mostly
-       regular grid (e.g. representing the input domain) to a mesh
-       (e.g. representing a latent space). This variant
-       makes use of the `Concat-Trick` which transforms Concat+MMA
-       into MMA+Sum in its first linear layer.
-
-    Parameters
-    ----------
-    aggregation : str, optional
-        message passing aggregation method ("sum", "mean"), by default "sum"
-    input_dim_src_nodes : int, optional
-        input dimensionality of the source node features, by default 512
-    input_dim_dst_nodes : int, optional
-        input dimensionality of the destination node features, by default 512
-    input_dim_edges : int, optional
-        input dimensionality of the edge features, by default 512
-    output_dim_src_nodes : int, optional
-        output dimensionality of the source node features, by default 512
-    output_dim_dst_nodes : int, optional
-        output dimensionality of the destination node features, by default 512
-    output_dim_edges : int, optional
-        output dimensionality of the edge features, by default 512
-    hidden_dim : int, optional
-        number of neurons in each hidden layer, by default 512
-    hidden_layers : int, optional
-        number of hiddel layers, by default 1
-    activation_fn : nn.Module, optional
-        type of activation function, by default nn.SiLU()
-    norm_type : str, optional
-        normalization type, by default "LayerNorm"
-    recompute_activation : bool, optional
-        Flag for recomputing activation in backward to save memory, by default False.
-        Currently, only SiLU is supported.
-    """
-
-    def __init__(
-        self,
-        aggregation: str = "sum",
-        input_dim_src_nodes: int = 512,
-        input_dim_dst_nodes: int = 512,
-        input_dim_edges: int = 512,
-        output_dim_src_nodes: int = 512,
-        output_dim_dst_nodes: int = 512,
-        output_dim_edges: int = 512,
-        hidden_dim: int = 512,
-        hidden_layers: int = 1,
-        activation_fn: int = nn.SiLU(),
-        norm_type: str = "LayerNorm",
-        recompute_activation: bool = False,
-    ):
-        super().__init__()
-        self.aggregation = aggregation
-
-        # edge MLP
-        self.edge_trunc_mlp = TruncatedMeshGraphMLP(
+        self.edge_mlp = MLP(
             efeat_dim=input_dim_edges,
             src_dim=input_dim_src_nodes,
             dst_dim=input_dim_dst_nodes,
@@ -250,20 +122,12 @@ class MeshGraphEncoderSum(nn.Module):
         mesh_nfeat: Tensor,
         graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tuple[Tensor, Tensor]:
-        # update edge features with Truncated MLP
-        mlp_efeat = self.edge_trunc_mlp(g2m_efeat, grid_nfeat, mesh_nfeat, graph)
-
-        if isinstance(graph, CuGraphCSC):
-            static_graph = graph.to_static_csc()
-            cat_feat = agg_concat_e2n(
-                mesh_nfeat, mlp_efeat, static_graph, self.aggregation
-            )
-
-        else:
-            # aggregate messages (edge features) to obtain updated node features
-            cat_feat = agg_concat_dgl(mlp_efeat, mesh_nfeat, graph, self.aggregation)
-
-        # update src-feat, dst-feat and apply residual connections
+        # update edge features by concatenating node features (both mesh and grid) and existing edge featues
+        # (or applying the concat trick instead)
+        efeat = self.edge_mlp(g2m_efeat, (grid_nfeat, mesh_nfeat), graph)
+        # aggregate messages (edge features) to obtain updated node features
+        cat_feat = aggregate_and_concat(efeat, mesh_nfeat, graph, self.aggregation)
+        # update src, dst node features + residual connections
         mesh_nfeat = mesh_nfeat + self.dst_node_mlp(cat_feat)
         grid_nfeat = grid_nfeat + self.src_node_mlp(grid_nfeat)
         return grid_nfeat, mesh_nfeat

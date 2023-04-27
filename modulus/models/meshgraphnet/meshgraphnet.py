@@ -34,10 +34,7 @@ from modulus.models.module import Module
 
 from modulus.models.gnn_layers.utils import CuGraphCSC
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from modulus.models.gnn_layers.mesh_edge_block import (
-    MeshEdgeBlockConcat,
-    MeshEdgeBlockSum,
-)
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 
 
@@ -86,6 +83,8 @@ class MeshGraphNet(Module):
         Hidden layer size for the node feature decoder, by default 128
     num_layers_node_decoder : int, optional
         Number of MLP layers for the node feature decoder, by default 2
+    do_conat_trick: : bool, default=False
+        Whether to replace concat+MLP with MLP+idx+sum
 
     Example
     -------
@@ -201,6 +200,7 @@ class MeshGraphNetProcessor(nn.Module):
             num_layers_edge - 1,
             activation_fn,
             norm_type,
+            do_concat_trick,
             False,
         )
         node_block_invars = (
@@ -219,10 +219,7 @@ class MeshGraphNetProcessor(nn.Module):
         node_blocks = []
 
         for _ in range(self.processor_size):
-            if do_concat_trick:
-                edge_blocks.append(MeshEdgeBlockSum(*edge_block_invars))
-            else:
-                edge_blocks.append(MeshEdgeBlockConcat(*edge_block_invars))
+            edge_blocks.append(MeshEdgeBlock(*edge_block_invars))
 
         for _ in range(self.processor_size):
             node_blocks.append(MeshNodeBlock(*node_block_invars))
