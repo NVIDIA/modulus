@@ -42,12 +42,6 @@
     "Version": "9.2.0"
   },
   {
-    "License": "GNU Lesser General Public License v2 or later (LGPLv2+)",
-    "LicenseText": "UNKNOWN",
-    "Name": "PyGObject",
-    "Version": "3.36.0"
-  },
-  {
     "License": "MIT License",
     "LicenseText": "Copyright (c) 2017-2021 Ingy d\u00f6t Net\nCopyright (c) 2006-2016 Kirill Simonov\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies\nof the Software, and to permit persons to whom the Software is furnished to do\nso, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
     "Name": "PyYAML",
@@ -204,12 +198,6 @@
     "Version": "1.6.2"
   },
   {
-    "License": "GNU Library or Lesser General Public License (LGPL)",
-    "LicenseText": "UNKNOWN",
-    "Name": "chardet",
-    "Version": "3.0.4"
-  },
-  {
     "License": "MIT License",
     "LicenseText": "MIT License\n\nCopyright (c) 2019 TAHRI Ahmed R.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "Name": "charset-normalizer",
@@ -364,12 +352,6 @@
     "LicenseText": "UNKNOWN",
     "Name": "distro-info",
     "Version": "0.23ubuntu1"
-  },
-  {
-    "License": "BSD License; GNU General Public License (GPL); Public Domain; Python Software Foundation License",
-    "LicenseText": "==================\n Copying Docutils\n==================\n\n:Author: David Goodger\n:Contact: goodger@python.org\n:Date: $Date: 2022-05-30 18:54:46 +0200 (Mo, 30. Mai 2022) $\n:Web site: https://docutils.sourceforge.io/\n:Copyright: This document has been placed in the public domain.\n\nMost of the files included in this project have been placed in the\npublic domain, and therefore have no license requirements and no\nrestrictions on copying or usage; see the `Public Domain Dedication`_\nbelow.  There are a few exceptions_, listed below.\nFiles in the Sandbox_ are not distributed with Docutils releases and\nmay have different license terms.\n\n\nPublic Domain Dedication\n========================\n\nThe persons who have associated their work with this project (the\n\"Dedicator\": David Goodger and the many contributors to the Docutils\nproject) hereby dedicate the entire copyright, less the exceptions_\nlisted below, in the work of authorship known as \"Docutils\" identified\nbelow (the \"Work\") to the public domain.\n\nThe primary repository for the Work is the Internet World Wide Web\nsite <https://docutils.sourceforge.io/>.  The Work consists of the\nfiles within the \"docutils\" module of the Docutils project Subversion\nrepository (http://svn.code.sf.net/p/docutils/code/),\nwhose Internet web interface is located at\n<https://sourceforge.net/p/docutils/code>.  Files dedicated to the\npublic domain may be identified by the inclusion, near the beginning\nof each file, of a declaration of the form::\n\n    Copyright: This document/module/DTD/stylesheet/file/etc. has been\n               placed in the public domain.\n\nDedicator makes this dedication for the benefit of the public at large\nand to the detriment of Dedicator's heirs and successors.  Dedicator\nintends this dedication to be an overt act of relinquishment in\nperpetuity of all present and future rights under copyright law,\nwhether vested or contingent, in the Work.  Dedicator understands that\nsuch relinquishment of all rights includes the relinquishment of all\nrights to enforce (by lawsuit or otherwise) those copyrights in the\nWork.\n\nDedicator recognizes that, once placed in the public domain, the Work\nmay be freely reproduced, distributed, transmitted, used, modified,\nbuilt upon, or otherwise exploited by anyone for any purpose,\ncommercial or non-commercial, and in any way, including by methods\nthat have not yet been invented or conceived.\n\n(This dedication is derived from the text of the `Creative Commons\nPublic Domain Dedication`. [#]_)\n\n.. [#] Creative Commons has `retired this legal tool`__ and does not\n   recommend that it be applied to works: This tool is based on United\n   States law and may not be applicable outside the US. For dedicating new\n   works to the public domain, Creative Commons recommend the replacement\n   Public Domain Dedication CC0_ (CC zero, \"No Rights Reserved\"). So does\n   the Free Software Foundation in its license-list_.\n\n   __  http://creativecommons.org/retiredlicenses\n   .. _CC0: http://creativecommons.org/about/cc0\n\nExceptions\n==========\n\nThe exceptions to the `Public Domain Dedication`_ above are:\n\n* docutils/utils/smartquotes.py\n\n  Copyright \u00a9 2011 G\u00fcnter Milde,\n  based on `SmartyPants`_ \u00a9 2003 John Gruber\n  (released under a \"revised\" `BSD 3-Clause License`_ included in the file)\n  and smartypants.py \u00a9 2004, 2007 Chad Miller.\n  Released under the terms of the `BSD 2-Clause License`_\n  (`local copy <licenses/BSD-2-Clause.txt>`__).\n\n  .. _SmartyPants: http://daringfireball.net/projects/smartypants/\n\n* docutils/utils/math/latex2mathml.py\n\n  Copyright \u00a9 Jens J\u00f8rgen Mortensen, G\u00fcnter Milde.\n  Released under the terms of the `BSD 2-Clause License`_\n  (`local copy <licenses/BSD-2-Clause.txt>`__).\n\n* docutils/utils/math/math2html.py,\n  docutils/writers/html5_polyglot/math.css\n\n  Copyright \u00a9 2009,2010 Alex Fern\u00e1ndez; 2021 G\u00fcnter Milde\n\n  These files were part of eLyXer_, released under the `GNU\n  General Public License`_ version 3 or later. The author relicensed\n  them for Docutils under the terms of the `BSD 2-Clause License`_\n  (`local copy <licenses/BSD-2-Clause.txt>`__).\n\n  .. _eLyXer: https://github.com/alexfernandez/elyxer\n\n* docutils/__main__.py,\n  docutils/parsers/commonmark_wrapper.py,\n  docutils/parsers/recommonmark_wrapper.py,\n  docutils/utils/error_reporting.py,\n  docutils/utils/math/__init__.py,\n  docutils/utils/math/latex2mathml.py,\n  docutils/utils/math/tex2mathml_extern.py,\n  docutils/utils/punctuation_chars.py,\n  docutils/utils/smartquotes.py,\n  docutils/writers/html5_polyglot/__init__.py,\n  docutils/writers/html5_polyglot/*.css,\n  docutils/writers/latex2e/docutils.sty,\n  docutils/writers/xetex/__init__.py,\n  test/test_parsers/test_recommonmark/\\*.py,\n  test/test_parsers/test_rst/test_directives/test__init__.py,\n  test/test_parsers/test_rst/test_directives/test_code_parsing.py,\n  test/test_parsers/test_rst/test_line_length_limit_default.py,\n  test/test_parsers/test_rst/test_line_length_limit.py,\n  test/test_writers/test_latex2e_misc.py,\n  test/transforms/test_smartquotes.py,\n  tools/docutils-cli.py,\n  tools/rst2html5.py\n\n  Copyright \u00a9 G\u00fcnter Milde.\n  Released under the terms of the `BSD 2-Clause License`_\n  (`local copy <licenses/BSD-2-Clause.txt>`__).\n\n* docutils/utils/roman.py\n\n  copyright by Mark Pilgrim, released under the\n  `Python 2.1.1 license`_ (`local copy`__).\n\n  __ licenses/python-2-1-1.txt\n\n* tools/editors/emacs/rst.el\n\n  copyright by Free Software Foundation, Inc.,\n  released under the `GNU General Public License`_ version 3 or later\n  (`local copy`__).\n\n  __ licenses/gpl-3-0.txt\n\nAll used licenses are OSI-approved_ and GPL-compatible_.\n\nPlaintext versions of all the linked-to licenses are provided in the\nlicenses_ directory.\n\n.. _sandbox: https://docutils.sourceforge.io/sandbox/README.html\n.. _licenses: licenses/\n.. _Python 2.1.1 license: https://docs.python.org/3/license.html\n.. _GNU General Public License: https://www.gnu.org/copyleft/gpl.html\n.. _BSD 2-Clause License: http://opensource.org/licenses/BSD-2-Clause\n.. _BSD 3-Clause License: https://opensource.org/licenses/BSD-3-Clause\n.. _OSI-approved: http://opensource.org/licenses/\n.. _license-list:\n.. _GPL-compatible: https://www.gnu.org/licenses/license-list.html\n",
-    "Name": "docutils",
-    "Version": "0.19"
   },
   {
     "License": "MIT License",
@@ -1016,12 +998,6 @@
   {
     "License": "Apache",
     "LicenseText": "UNKNOWN",
-    "Name": "pylibcugraphops",
-    "Version": "23.4.0a0+63.g59523e85"
-  },
-  {
-    "License": "Apache",
-    "LicenseText": "UNKNOWN",
     "Name": "pylibraft",
     "Version": "22.10.0a0+81.g08abc72.dirty"
   },
@@ -1066,12 +1042,6 @@
     "LicenseText": "\n  Permission is hereby granted, free of charge, to any person obtaining a copy\n  of this software and associated documentation files (the \"Software\"), to deal\n  in the Software without restriction, including without limitation the rights\n  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n  copies of the Software, and to permit persons to whom the Software is\n  furnished to do so, subject to the following conditions:\n\n  The above copyright notice and this permission notice shall be included in all\n  copies or substantial portions of the Software.\n\n  THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n  SOFTWARE.\n",
     "Name": "pytest-xdist",
     "Version": "3.1.0"
-  },
-  {
-    "License": "GNU GPL",
-    "LicenseText": "UNKNOWN",
-    "Name": "python-apt",
-    "Version": "2.0.1+ubuntu0.20.4.1"
   },
   {
     "License": "Apache Software License; BSD License",
