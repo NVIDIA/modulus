@@ -348,8 +348,8 @@
     "Version": "2022.9.2"
   },
   {
-    "License": "UNKNOWN",
-    "LicenseText": "UNKNOWN",
+    "License": "ISC",
+    "LicenseText": "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\nUpstream-Name: distro-info\nUpstream-Contact: Benjamin Drung <bdrung@debian.org>\n\nFiles: *\nCopyright: 2009-2018, Benjamin Drung <bdrung@debian.org>\n           2010-2011, Stefano Rivera <stefanor@debian.org>\nLicense: ISC\n\nFiles: shell/*-distro-info.in shell/distro-info-util.sh\nCopyright: 2012 Canonical Ltd.\nLicense: ISC\n\nLicense: ISC\n Permission to use, copy, modify, and/or distribute this software for any\n purpose with or without fee is hereby granted, provided that the above\n copyright notice and this permission notice appear in all copies.\n .\n THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\n REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\n AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,\n INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM\n LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR\n OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\n PERFORMANCE OF THIS SOFTWARE.",
     "Name": "distro-info",
     "Version": "0.23ubuntu1"
   },
