@@ -19,8 +19,8 @@ FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 RUN pip install --upgrade pip setuptools  
 
 # Install nightly build of dgl
-RUN pip install --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
-RUN pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
+RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
+RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
 
 ENV _CUDA_COMPAT_TIMEOUT=90
