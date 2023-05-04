@@ -15,10 +15,10 @@
 ARG PYT_VER=22.12
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
-# Update pip and setuptools  # TODO get rid of this
+# Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
 
-#install io_helpers
+#install io_helpers  # TODO get rid of this
 COPY io_helpers /opt/io_helpers
 RUN cd /opt/io_helpers && python setup.py install
 
