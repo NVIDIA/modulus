@@ -73,7 +73,7 @@ def get_dataloader(params, files_pattern, device, train=True, final_eval=False):
                         pin_memory = torch.cuda.is_available())
 
     elif params.enable_synthetic_data:
-        from utils.dataloaders.data_loader_dummy import DummyLoader
+        from modulus.datapipes.climate.sfno.dataloaders.data_loader_dummy import DummyLoader
 
         dataloader = DummyLoader(params, files_pattern, train, device)
 
@@ -95,8 +95,7 @@ def get_dataloader(params, files_pattern, device, train=True, final_eval=False):
 
     else:
         from modulus.datapipes.climate.sfno.dataloaders.data_loader_dali_2d import ERA5DaliESDataloader as ERA5DaliESDataloader2D
-        
-        # dali loader
+
         dataloader = ERA5DaliESDataloader2D(params, files_pattern, train, final_eval=final_eval)
 
         dataset = types.SimpleNamespace(in_channels=dataloader.in_channels,

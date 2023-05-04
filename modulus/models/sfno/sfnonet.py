@@ -244,7 +244,7 @@ class FourierNeuralOperatorBlock(nn.Module):
 
         return x
 
-class SphericalFourierNeuralOperatorNet(ModelMetaData):
+class SphericalFourierNeuralOperatorNet(Module):
     def __init__(
             self,
             params,

@@ -5,10 +5,7 @@ import numpy as np
 import h5py
 
 # distributed stuff
-from utils import comm_v2 as comm
-
-# MG handler
-from mpu.distributed_patching import MultigridPatches2D
+from modulus.utils.sfno.distributed import comm
 
 class DummyLoader(object):
     def __init__(self,
