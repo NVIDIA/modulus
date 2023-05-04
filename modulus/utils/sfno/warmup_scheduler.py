@@ -1,0 +1,79 @@
+import torch
+from torch import nn
+from torch.optim import lr_scheduler as lrs
+from typing import List
+
+class WarmupScheduler(lrs._LRScheduler):
+
+    def __init__(self, scheduler, num_warmup_steps, start_lr):
+        self.scheduler = scheduler
+        self.num_warmup_steps = num_warmup_steps
+        if not isinstance(start_lr, List):
+            self.start_lrs = [start_lr]
+        else:
+            self.start_lrs = start_lr
+        self.steps = 0
+
+        # this is hacky but I don't see a better way of doing that
+        self.end_lrs = self.scheduler.base_lrs
+        for lr, group in zip(self.start_lrs, self.scheduler.optimizer.param_groups):
+            group['lr'] = lr
+        #self.scheduler.base_lrs = [group['initial_lr'] for group in self.scheduler.optimizer.param_groups]
+
+        # init warmup scheduler:
+        def linwarm(step, max_steps, slr, elr):
+            if step <= max_steps:
+                t = step / float(max_steps)
+                res = t + (1-t) * slr / elr
+            else:
+                res = 1.
+            return res
+
+        self.warmup_scheduler = lrs.LambdaLR(self.scheduler.optimizer, lr_lambda=[lambda x: linwarm(x, self.num_warmup_steps, slr, elr) for slr,elr in zip(self.start_lrs, self.end_lrs)])
+        self._last_lr = [group['lr'] for group in self.warmup_scheduler.optimizer.param_groups]
+
+
+    def step(self):
+        shandle = self.scheduler if self.steps >= self.num_warmup_steps else self.warmup_scheduler
+        shandle.step()
+        self.steps += 1
+        self._last_lr = [group['lr'] for group in shandle.optimizer.param_groups]
+
+    def state_dict(self):
+        state_dict = {key: value for key, value in self.__dict__.items() if key not in ('optimizer', '_schedulers')}
+        state_dict['warmup_scheduler'] = self.warmup_scheduler.state_dict()
+        state_dict['scheduler'] = self.scheduler.state_dict()
+        
+        return state_dict
+
+
+    def load_state_dict(self, state_dict):
+        warmup_scheduler = state_dict.pop('warmup_scheduler')
+        scheduler = state_dict.pop('scheduler')
+        
+        self.__dict__.update(state_dict)
+        # Restore state_dict keys in order to prevent side effects
+        # https://github.com/pytorch/pytorch/issues/32756
+        state_dict['warmup_scheduler'] = warmup_scheduler
+        state_dict['scheduler'] = scheduler
+
+        self.warmup_scheduler.load_state_dict(warmup_scheduler)
+        self.scheduler.load_state_dict(scheduler)
+            
+
+if __name__ == "__main__":
+    param = nn.Parameter(torch.zeros((10), dtype=torch.float))
+    opt = torch.optim.Adam([param], lr = 0.5)
+
+    start_lr = 0.01
+    num_warmup = 10
+
+    main_scheduler = lrs.CosineAnnealingLR(opt, 20, eta_min=0)
+    scheduler = WarmupScheduler(main_scheduler, num_warmup, start_lr)
+
+    for epoch in range(30):
+        print("current_lr", scheduler.get_last_lr()) 
+        scheduler.step()
+
+    sd = scheduler.state_dict()
+    scheduler.load_state_dict(sd)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,4 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#from .capture import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
+from setuptools import setup, Extension
+from torch.utils.cpp_extension import BuildExtension, CppExtension
+
+setup(name='io_helpers',
+      ext_modules=[CppExtension(name='io_helpers',
+                                sources=['cpp/direct_io.cpp',
+                                         'cpp/interface.cpp'],
+                                extra_compile_args={'cxx': ['-g', '-O2']})
+      ],
+      cmdclass={'build_ext': BuildExtension})
