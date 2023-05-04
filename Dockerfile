@@ -15,13 +15,27 @@
 ARG PYT_VER=22.12
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
-# Update pip and setuptools
+# Update pip and setuptools  # TODO get rid of this
 RUN pip install --upgrade pip setuptools  
+
+#install io_helpers
+COPY io_helpers /opt/io_helpers
+RUN cd /opt/io_helpers && python setup.py install
 
 # Install nightly build of dgl
 RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
 RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
+
+# Install benchy  # TODO check if needed
+RUN pip install git+https://github.com/romerojosh/benchy.git
+
+# install tensorly for compression experiments
+RUN pip install git+https://github.com/tensorly/tensorly
+RUN pip install git+https://github.com/tensorly/torch tensorly-torch
+
+# install torch harmonic
+RUN pip install git+https://github.com/NVIDIA/torch-harmonics.git
 
 ENV _CUDA_COMPAT_TIMEOUT=90
 
