@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import torch
 
 # # Helper routines for FNOs
@@ -18,6 +32,7 @@ import torch
 
 # helper routines for non-linear (S)FNOs
 
+
 @torch.jit.script
 def compl_mul1d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     ac = torch.view_as_complex(a)
@@ -26,11 +41,15 @@ def compl_mul1d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
-def compl_muladd1d_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def compl_muladd1d_fwd(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+) -> torch.Tensor:
     tmpcc = torch.view_as_complex(compl_mul1d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
+
 
 @torch.jit.script
 def compl_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -40,11 +59,15 @@ def compl_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
-def compl_muladd2d_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def compl_muladd2d_fwd(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+) -> torch.Tensor:
     tmpcc = torch.view_as_complex(compl_mul2d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
+
 
 # # for the real-valued case:
 # @torch.jit.script
@@ -70,6 +93,7 @@ def compl_muladd2d_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> tor
 #     tmp = compl_mul2d_fwd_c(a, b)
 #     return torch.view_as_real(tmp + c)
 
+
 @torch.jit.script
 def _contract_localconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     ac = torch.view_as_complex(a)
@@ -78,11 +102,13 @@ def _contract_localconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 # @torch.jit.script
 # def _contractadd_localconv_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
 #     tmpcc = torch.view_as_complex(_contract_localconv_fwd(a, b))
 #     cc = torch.view_as_complex(c)
 #     return torch.view_as_real(tmpcc + cc)
+
 
 @torch.jit.script
 def _contract_blockconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -92,11 +118,15 @@ def _contract_blockconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
-def _contractadd_blockconv_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def _contractadd_blockconv_fwd(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+) -> torch.Tensor:
     tmpcc = torch.view_as_complex(_contract_blockconv_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
+
 
 # for the experimental layer
 @torch.jit.script
@@ -107,23 +137,32 @@ def compl_exp_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
-def compl_exp_muladd2d_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def compl_exp_muladd2d_fwd(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+) -> torch.Tensor:
     tmpcc = torch.view_as_complex(compl_exp_mul2d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
+
 
 @torch.jit.script
 def real_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.einsum("bixy,io->boxy", a, b)
     return res
 
+
 @torch.jit.script
-def real_muladd2d_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def real_muladd2d_fwd(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+) -> torch.Tensor:
     res = real_mul2d_fwd(a, b) + c
     return res
 
+
 # new contractions set to replace older ones. We use complex
+
 
 @torch.jit.script
 def _contract_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -133,6 +172,7 @@ def _contract_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
 def _contract_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     ac = torch.view_as_complex(a)
@@ -141,6 +181,7 @@ def _contract_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     res = torch.view_as_real(resc)
     return res
 
+
 @torch.jit.script
 def _contract_sep_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     ac = torch.view_as_complex(a)
@@ -148,6 +189,7 @@ def _contract_sep_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     resc = torch.einsum("bixy,ixy->boxy", ac, bc)
     res = torch.view_as_real(resc)
     return res
+
 
 @torch.jit.script
 def _contract_sep_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:

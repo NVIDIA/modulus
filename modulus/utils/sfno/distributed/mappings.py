@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # coding=utf-8
 # Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -18,7 +32,7 @@ from typing import Any
 
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel  
+from torch.nn.parallel import DistributedDataParallel
 from modulus.utils.sfno.distributed import comm
 
 # torch utils
@@ -33,6 +47,7 @@ from modulus.utils.sfno.distributed.helpers import _gather
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):
     """Pass the input to the parallel region."""
+
     @staticmethod
     def symbolic(graph, input_, comm_id_):
         return input_
@@ -47,12 +62,12 @@ class _CopyToParallelRegion(torch.autograd.Function):
         if comm.is_distributed(ctx.comm_id):
             return _reduce(grad_output, group=comm.get_group(ctx.comm_id)), None
         else:
-            return grad_output, None 
+            return grad_output, None
 
 
 class _ReduceFromParallelRegion(torch.autograd.Function):
     """All-reduce the input from the parallel region."""
-    
+
     @staticmethod
     def symbolic(graph, input_, comm_id_):
         if comm.is_distributed(comm_id_):
@@ -71,7 +86,7 @@ class _ReduceFromParallelRegion(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output, None
 
-    
+
 class _ScatterToParallelRegion(torch.autograd.Function):
     """Split the input and keep only the corresponding chuck to the rank."""
 
@@ -91,7 +106,11 @@ class _ScatterToParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         if comm.is_distributed(ctx.comm_id):
-            return _gather(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)), None, None
+            return (
+                _gather(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)),
+                None,
+                None,
+            )
         else:
             return grad_output, None, None
 
@@ -118,11 +137,15 @@ class _GatherFromParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         if comm.is_distributed(ctx.comm_id):
-            return _split(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)), None, None
+            return (
+                _split(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)),
+                None,
+                None,
+            )
         else:
             return grad_output, None, None
 
-    
+
 # -----------------
 # Helper functions.
 # -----------------
@@ -142,41 +165,48 @@ def scatter_to_matmul_parallel_region(input_, dim):
 def gather_from_matmul_parallel_region(input_, dim):
     return _GatherFromParallelRegion.apply(input_, dim, "matmul")
 
+
 # general
 def reduce_from_parallel_region(input_, comm_name):
     return _ReduceFromParallelRegion.apply(input_, comm_name)
 
+
 def scatter_to_parallel_region(input_, dim, comm_name):
     return _ScatterToParallelRegion.apply(input_, dim, comm_name)
+
 
 def gather_from_parallel_region(input_, dim, comm_name):
     return _GatherFromParallelRegion.apply(input_, dim, comm_name)
 
-#def gather_within_matmul_parallel_region(input_, dim):
+
+# def gather_within_matmul_parallel_region(input_, dim):
 #    return _GatherWithinMatmulParallelRegion.apply(input_, dim, "matmul")
 
 # spatial parallel
 def copy_to_spatial_parallel_region(input_):
     return _CopyToParallelRegion.apply(input_, "spatial")
 
+
 def scatter_to_spatial_parallel_region(input_, dim):
     return _ScatterToParallelRegion.apply(input_, dim, "spatial")
 
-    
+
 def gather_from_spatial_parallel_region(input_, dim):
     return _GatherFromParallelRegion.apply(input_, dim, "spatial")
 
 
 # handler for additional gradient reductions
 # helper for gradient reduction across channel parallel ranks
-def init_gradient_reduction_hooks(model,
-                                  device_ids,
-                                  output_device,
-                                  bucket_cap_mb = 25,
-                                  broadcast_buffers = True,
-                                  find_unused_parameters = False,
-                                  gradient_as_bucket_view = True,
-                                  static_graph = False):
+def init_gradient_reduction_hooks(
+    model,
+    device_ids,
+    output_device,
+    bucket_cap_mb=25,
+    broadcast_buffers=True,
+    find_unused_parameters=False,
+    gradient_as_bucket_view=True,
+    static_graph=False,
+):
 
     # early exit if we are not in a distributed setting:
     if not dist.is_initialized():
@@ -192,8 +222,12 @@ def init_gradient_reduction_hooks(model,
         ddp_group = None
     else:
         # check if there are shared weights, otherwise we can skip
-        non_singleton_group_names = [x for x in comm.get_names() if (comm.get_size(x) > 1) and not (x in ["data", "model", "spatial"])]
-        num_shared = {x:0 for x in non_singleton_group_names}
+        non_singleton_group_names = [
+            x
+            for x in comm.get_names()
+            if (comm.get_size(x) > 1) and not (x in ["data", "model", "spatial"])
+        ]
+        num_shared = {x: 0 for x in non_singleton_group_names}
         num_parameters = 0
 
         # count parameters and reduction groups
@@ -210,53 +244,60 @@ def init_gradient_reduction_hooks(model,
             num_parameters += 1
 
         # group without data:
-        num_param_shared_model = [v for k,v in num_shared.items()]
+        num_param_shared_model = [v for k, v in num_shared.items()]
         if not num_param_shared_model:
             num_shared_model = 0
         else:
             num_shared_model = sum(num_param_shared_model)
 
-        
         # if all parameters are just data shared and not additionally shared orthogonally to that, we can use DDP
-        if (num_shared_model == 0):
+        if num_shared_model == 0:
             ddp_group = None
 
         elif all([(x == num_parameters) for x in num_param_shared_model]):
             # in this case, we just need to register a backward hook to multiply the gradients according to the multiplicity:
-            print("Setting up gradient hooks to account for shared parameter multiplicity")
+            print(
+                "Setting up gradient hooks to account for shared parameter multiplicity"
+            )
             for param in model.parameters():
                 param.register_hook(lambda grad: grad * float(comm.get_size("model")))
 
             ddp_group = None
         else:
-            ddp_group = comm.get_group("data") # double check if this is correct
+            ddp_group = comm.get_group("data")  # double check if this is correct
             broadcast_buffers = False
             need_hooks = True
-            
+
     # we can set up DDP and exit here
     print("Setting up DDP communication hooks")
-    model = DistributedDataParallel(model,
-                                    device_ids = device_ids,
-                                    output_device = output_device,
-                                    bucket_cap_mb = bucket_cap_mb,
-                                    broadcast_buffers = broadcast_buffers,
-                                    find_unused_parameters = find_unused_parameters,
-                                    gradient_as_bucket_view = gradient_as_bucket_view,
-                                    static_graph = static_graph,
-                                    process_group = ddp_group)
+    model = DistributedDataParallel(
+        model,
+        device_ids=device_ids,
+        output_device=output_device,
+        bucket_cap_mb=bucket_cap_mb,
+        broadcast_buffers=broadcast_buffers,
+        find_unused_parameters=find_unused_parameters,
+        gradient_as_bucket_view=gradient_as_bucket_view,
+        static_graph=static_graph,
+        process_group=ddp_group,
+    )
     if not need_hooks:
         return model
-    
+
     print("Setting up custom communication hooks")
 
     # define comm hook:
-    def reduction_comm_hook(state: object, bucket: dist.GradBucket) -> torch.futures.Future[torch.Tensor]:
+    def reduction_comm_hook(
+        state: object, bucket: dist.GradBucket
+    ) -> torch.futures.Future[torch.Tensor]:
 
         # allreduce everything first:
         buff = bucket.buffer()
 
         # get future for allreduce
-        fut = dist.all_reduce(buff, op=dist.ReduceOp.AVG, group=comm.get_group("data"), async_op=True).get_future()
+        fut = dist.all_reduce(
+            buff, op=dist.ReduceOp.AVG, group=comm.get_group("data"), async_op=True
+        ).get_future()
 
         # get grads for shared weights
         params = bucket.parameters()
@@ -264,12 +305,17 @@ def init_gradient_reduction_hooks(model,
         def grad_reduction(fut, grads, group):
             # reduce remaining gradients
             coalesced = _flatten_dense_tensors(grads)
-            dist.all_reduce(coalesced, op=dist.ReduceOp.SUM, group=comm.get_group(group), async_op=False)
+            dist.all_reduce(
+                coalesced,
+                op=dist.ReduceOp.SUM,
+                group=comm.get_group(group),
+                async_op=False,
+            )
             for buf, synced in zip(grads, _unflatten_dense_tensors(coalesced, grads)):
                 buf.copy_(synced)
 
-            return bucket.buffer()                   
-        
+            return bucket.buffer()
+
         for group in non_singleton_group_names:
             if group == "data":
                 continue
@@ -287,9 +333,9 @@ def init_gradient_reduction_hooks(model,
             # fut = fut.then(lambda x: grad_copy(x, grads=grads))
 
         ## chain it together
-        #for redfut, copyfut in zip(redfunc, copyfunc):
+        # for redfut, copyfut in zip(redfunc, copyfunc):
         #    fut = fut.then(redfut).then(copyfut)
-            
+
         return fut
 
     # register model comm hook

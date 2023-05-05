@@ -1,14 +1,29 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from ruamel.yaml import YAML
 import logging
 import json
 
 
-class ParamsBase():
+class ParamsBase:
     """Convenience wrapper around a dictionary
 
     Allows referring to dictionary items as attributes, and tracking which
     attributes are modified.
     """
+
     def __init__(self):
         self._original_attrs = None
         self.params = {}
@@ -22,7 +37,7 @@ class ParamsBase():
         self.__setattr__(key, val)
 
     def __contains__(self, key):
-        return (key in self.params)
+        return key in self.params
 
     def get(self, key, default=None):
         if hasattr(self, key):
@@ -32,7 +47,8 @@ class ParamsBase():
 
     def to_dict(self):
         new_attrs = {
-            key: val for key,val in vars(self).items()
+            key: val
+            for key, val in vars(self).items()
             if key not in self._original_attrs
         }
         return {**self.params, **new_attrs}
@@ -41,20 +57,19 @@ class ParamsBase():
     def from_json(path: str) -> "ParamsBase":
         with open(path) as f:
             c = json.load(f)
-        params =  ParamsBase()
+        params = ParamsBase()
         params.update_params(c)
         return params
 
     def update_params(self, config):
         for key, val in config.items():
-            if val =='None': val = None
+            if val == "None":
+                val = None
             self.params[key] = val
             self.__setattr__(key, val)
 
 
-
 class YParams(ParamsBase):
-
     def __init__(self, yaml_filename, config_name, print_params=False):
         """Open parameters stored with ``config_name`` in the yaml file ``yaml_filename``"""
         super().__init__()
@@ -75,8 +90,8 @@ class YParams(ParamsBase):
 
     def log(self):
         logging.info("------------------ Configuration ------------------")
-        logging.info("Configuration file: "+str(self._yaml_filename))
-        logging.info("Configuration name: "+str(self._config_name))
+        logging.info("Configuration file: " + str(self._yaml_filename))
+        logging.info("Configuration name: " + str(self._config_name))
         for key, val in self.to_dict().items():
-            logging.info(str(key) + ' ' + str(val))
+            logging.info(str(key) + " " + str(val))
         logging.info("---------------------------------------------------")

@@ -18,10 +18,6 @@ FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
 
-#install io_helpers  # TODO get rid of this
-COPY io_helpers /opt/io_helpers
-RUN cd /opt/io_helpers && python setup.py install
-
 # Install nightly build of dgl
 RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
 RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html

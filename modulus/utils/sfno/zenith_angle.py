@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 climt/LICENSE
 @mcgibbon
@@ -43,7 +57,9 @@ def _ensure_units_of_degrees(da):
 
 
 def cos_zenith_angle(
-    time: Union[T, datetime.datetime], lon: T, lat: T,
+    time: Union[T, datetime.datetime],
+    lon: T,
+    lat: T,
 ) -> T:
     """
     Cosine of sun-zenith angle for lon, lat at time (UTC).
@@ -63,8 +79,7 @@ def cos_zenith_angle(
 
 
 def _days_from_2000(model_time):
-    """Get the days since year 2000.
-    """
+    """Get the days since year 2000."""
     date_type = type(np.asarray(model_time).ravel()[0])
     if date_type not in [datetime.datetime]:
         raise ValueError(
@@ -127,11 +142,11 @@ def _sun_ecliptic_longitude(model_time):
 
     # mean longitude
     mean_longitude = np.deg2rad(
-        280.46645 + 36000.76983 * julian_centuries + 0.0003032 * (julian_centuries ** 2)
+        280.46645 + 36000.76983 * julian_centuries + 0.0003032 * (julian_centuries**2)
     )
 
     d_l = np.deg2rad(
-        (1.914600 - 0.004817 * julian_centuries - 0.000014 * (julian_centuries ** 2))
+        (1.914600 - 0.004817 * julian_centuries - 0.000014 * (julian_centuries**2))
         * np.sin(mean_anomaly)
         + (0.019993 - 0.000101 * julian_centuries) * np.sin(2 * mean_anomaly)
         + 0.000290 * np.sin(3 * mean_anomaly)
@@ -153,10 +168,10 @@ def _obliquity_star(julian_centuries):
         + 21.406 / 3600.0
         - (
             46.836769 * julian_centuries
-            - 0.0001831 * (julian_centuries ** 2)
-            + 0.00200340 * (julian_centuries ** 3)
-            - 0.576e-6 * (julian_centuries ** 4)
-            - 4.34e-8 * (julian_centuries ** 5)
+            - 0.0001831 * (julian_centuries**2)
+            + 0.00200340 * (julian_centuries**3)
+            - 0.576e-6 * (julian_centuries**4)
+            - 4.34e-8 * (julian_centuries**5)
         )
         / 3600.0
     )
@@ -216,7 +231,7 @@ def _star_cos_zenith(model_time, lon, lat):
 
 if __name__ == "__main__":
 
-    #test _days_from_2000
+    # test _days_from_2000
 
     model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
 
@@ -264,5 +279,5 @@ if __name__ == "__main__":
 
     # test cos_zenith_angle
 
-    za = cos_zenith_angle(model_time, lat=360, lon= 120)
+    za = cos_zenith_angle(model_time, lat=360, lon=120)
     print("zenith angle", za)
