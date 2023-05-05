@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import partial
 from collections import OrderedDict
 from copy import Error, deepcopy
@@ -19,8 +33,11 @@ from modulus.models.sfno.contractions import *
 from modulus.models.sfno.activations import *
 from modulus.models.sfno.initialization import trunc_normal_
 
+
 @torch.jit.script
-def drop_path(x: torch.Tensor, drop_prob: float = 0., training: bool = False) -> torch.Tensor:
+def drop_path(
+    x: torch.Tensor, drop_prob: float = 0.0, training: bool = False
+) -> torch.Tensor:
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
     This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
     the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
@@ -28,10 +45,12 @@ def drop_path(x: torch.Tensor, drop_prob: float = 0., training: bool = False) ->
     changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
     'survival rate' as the argument.
     """
-    if drop_prob == 0. or not training:
+    if drop_prob == 0.0 or not training:
         return x
-    keep_prob = 1. - drop_prob
-    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2d ConvNets
+    keep_prob = 1.0 - drop_prob
+    shape = (x.shape[0],) + (1,) * (
+        x.ndim - 1
+    )  # work with diff dim tensors, not just 2d ConvNets
     random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
     random_tensor.floor_()  # binarize
     output = x.div(keep_prob) * random_tensor
@@ -39,43 +58,51 @@ def drop_path(x: torch.Tensor, drop_prob: float = 0., training: bool = False) ->
 
 
 class DropPath(nn.Module):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
-    """
+    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
+
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
-        
+
     def forward(self, x):
-        return drop_path(x, self.drop_prob, self.training) 
+        return drop_path(x, self.drop_prob, self.training)
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self, img_size=(224, 224), patch_size=(16, 16), in_chans=3, embed_dim=768):
+    def __init__(
+        self, img_size=(224, 224), patch_size=(16, 16), in_chans=3, embed_dim=768
+    ):
         super(PatchEmbed, self).__init__()
         num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = num_patches
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
+
     def forward(self, x):
         # gather input
         B, C, H, W = x.shape
-        assert H == self.img_size[0] and W == self.img_size[1], f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        assert (
+            H == self.img_size[0] and W == self.img_size[1]
+        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         # new: B, C, H*W
         x = self.proj(x).flatten(2)
         return x
 
-    
+
 class MLP(nn.Module):
-    def __init__(self,
-                 in_features,
-                 hidden_features = None,
-                 out_features = None,
-                 act_layer = nn.GELU,
-                 output_bias = True,
-                 drop_rate = 0.,
-                 checkpointing = 0):
+    def __init__(
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        output_bias=True,
+        drop_rate=0.0,
+        checkpointing=0,
+    ):
         super(MLP, self).__init__()
         self.checkpointing = checkpointing
         out_features = out_features or in_features
@@ -83,8 +110,8 @@ class MLP(nn.Module):
 
         fc1 = nn.Conv2d(in_features, hidden_features, 1, bias=True)
         act = act_layer()
-        fc2 = nn.Conv2d(hidden_features, out_features, 1, bias = output_bias)
-        if drop_rate > 0.:
+        fc2 = nn.Conv2d(hidden_features, out_features, 1, bias=output_bias)
+        if drop_rate > 0.0:
             drop = nn.Dropout(drop_rate)
             self.fwd = nn.Sequential(fc1, act, drop, fc2, drop)
         else:
@@ -95,7 +122,7 @@ class MLP(nn.Module):
     @torch.jit.ignore
     def checkpoint_forward(self, x):
         return checkpoint(self.fwd, x)
-        
+
     def forward(self, x):
         if self.checkpointing >= 2:
             return self.checkpoint_forward(x)
@@ -107,45 +134,46 @@ class RealFFT2(nn.Module):
     """
     Helper routine to wrap FFT similarly to the SHT
     """
-    def __init__(self,
-                 nlat,
-                 nlon,
-                 lmax = None,
-                 mmax = None):
+
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):
         super(RealFFT2, self).__init__()
 
         # use local FFT here
         self.fft_handle = torch.fft.rfft2
-        
+
         self.nlat = nlat
         self.nlon = nlon
         self.lmax = lmax or self.nlat
         self.mmax = mmax or self.nlon // 2 + 1
-        
+
         self.truncate = True
         if (self.lmax == self.nlat) and (self.mmax == (self.nlon // 2 + 1)):
             self.truncate = False
-            
-        #self.num_batches = 1
+
+        # self.num_batches = 1
         assert self.lmax % 2 == 0
 
     def forward(self, x):
         y = self.fft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
-        
+
         if self.truncate:
-            y = torch.cat((y[..., :math.ceil(self.lmax/2), :self.mmax], y[..., -math.floor(self.lmax/2):, :self.mmax]), dim=-2)
-        
+            y = torch.cat(
+                (
+                    y[..., : math.ceil(self.lmax / 2), : self.mmax],
+                    y[..., -math.floor(self.lmax / 2) :, : self.mmax],
+                ),
+                dim=-2,
+            )
+
         return y
+
 
 class InverseRealFFT2(nn.Module):
     """
     Helper routine to wrap FFT similarly to the SHT
     """
-    def __init__(self,
-                 nlat,
-                 nlon,
-                 lmax = None,
-                 mmax = None):
+
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):
         super(InverseRealFFT2, self).__init__()
 
         # use local FFT here
@@ -158,34 +186,39 @@ class InverseRealFFT2(nn.Module):
 
     def forward(self, x):
         out = self.ifft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
-        
+
         return out
+
 
 class SpectralConv2d(nn.Module):
     """
-    Spectral Convolution as utilized in 
+    Spectral Convolution as utilized in
     """
-    
-    def __init__(self,
-                 forward_transform,
-                 inverse_transform,
-                 hidden_size,
-                 sparsity_threshold = 0.0,
-                 hard_thresholding_fraction = 1,
-                 use_complex_kernels = False,
-                 compression = None,
-                 rank=0,
-                 bias = False):
+
+    def __init__(
+        self,
+        forward_transform,
+        inverse_transform,
+        hidden_size,
+        sparsity_threshold=0.0,
+        hard_thresholding_fraction=1,
+        use_complex_kernels=False,
+        compression=None,
+        rank=0,
+        bias=False,
+    ):
         super(SpectralConv2d, self).__init__()
-        
+
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
         self.hard_thresholding_fraction = hard_thresholding_fraction
         self.scale = 1 / hidden_size**2
-        self.contract_handle = compl_contract2d_fwd_c if use_complex_kernels else compl_contract2d_fwd
+        self.contract_handle = (
+            compl_contract2d_fwd_c if use_complex_kernels else compl_contract2d_fwd
+        )
 
         self.forward_transform = forward_transform
-        self.inverse_transform = inverse_transform 
+        self.inverse_transform = inverse_transform
 
         self.output_dims = (self.inverse_transform.nlat, self.inverse_transform.nlon)
         modes_lat = self.inverse_transform.lmax
@@ -194,16 +227,22 @@ class SpectralConv2d(nn.Module):
         self.modes_lon = int(modes_lon * self.hard_thresholding_fraction)
 
         # new simple linear layer
-        self.w = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.hidden_size, self.modes_lat, self.modes_lon, 2))
+        self.w = nn.Parameter(
+            self.scale
+            * torch.randn(
+                self.hidden_size, self.hidden_size, self.modes_lat, self.modes_lon, 2
+            )
+        )
         # optional bias
         if bias:
-            self.b = nn.Parameter(self.scale * torch.randn(1, self.hidden_size, *self.output_dims))
+            self.b = nn.Parameter(
+                self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
+            )
 
-        
     def forward(self, x):
-        
+
         dtype = x.dtype
-        #x = x.float()
+        # x = x.float()
         B, C, H, W = x.shape
 
         with amp.autocast(enabled=False):
@@ -211,14 +250,14 @@ class SpectralConv2d(nn.Module):
             x = self.forward_transform(x)
             x = torch.view_as_real(x)
             x = x.to(dtype)
-        
+
         # do spectral conv
         modes = torch.zeros(x.shape, device=x.device)
 
         # modes[:, :, :self.modes_lat,  :self.modes_lon, :] = self.contract_handle(x[:, :, :self.modes_lat,  :self.modes_lon, :], self.wh)
         # modes[:, :, -self.modes_lat:, :self.modes_lon, :] = self.contract_handle(x[:, :, -self.modes_lat:, :self.modes_lon, :], self.wl)
         modes = self.contract_handle(x, self.w)
-        
+
         # finalize
         x = F.softshrink(modes, lambd=self.sparsity_threshold)
         x = torch.view_as_complex(x)
@@ -229,28 +268,31 @@ class SpectralConv2d(nn.Module):
             x = x.contiguous()
             x = self.inverse_transform(x)
             x = x.to(dtype)
-            
-        if hasattr(self, 'b'):
+
+        if hasattr(self, "b"):
             x = x + self.b
-    
+
         return x
+
 
 class SpectralConvS2(nn.Module):
     """
-    Spectral Convolution as utilized in 
+    Spectral Convolution as utilized in
     """
-    
-    def __init__(self,
-                 forward_transform,
-                 inverse_transform,
-                 hidden_size,
-                 sparsity_threshold=0.0,
-                 use_complex_kernels=False,
-                 compression = None,
-                 rank = 128,
-                 bias = False):
+
+    def __init__(
+        self,
+        forward_transform,
+        inverse_transform,
+        hidden_size,
+        sparsity_threshold=0.0,
+        use_complex_kernels=False,
+        compression=None,
+        rank=128,
+        bias=False,
+    ):
         super(SpectralConvS2, self).__init__()
-        
+
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
         self.scale = 0.02
@@ -269,28 +311,36 @@ class SpectralConvS2(nn.Module):
         self.register_buffer("ii", ii)
         self.register_buffer("jj", jj)
 
-        if compression == 'tt':
+        if compression == "tt":
             self.rank = rank
             # tensortrain coefficients
             g1 = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.rank, 2))
-            g2 = nn.Parameter(self.scale * torch.randn(self.rank, self.hidden_size, self.rank, 2))
+            g2 = nn.Parameter(
+                self.scale * torch.randn(self.rank, self.hidden_size, self.rank, 2)
+            )
             g3 = nn.Parameter(self.scale * torch.randn(self.rank, len(ii), 2))
             self.w = nn.ParameterList([g1, g2, g3])
 
-            self.contract_handle = contract_tt #if use_complex_kernels else raise(NotImplementedError)
+            self.contract_handle = (
+                contract_tt  # if use_complex_kernels else raise(NotImplementedError)
+            )
         else:
-            self.w = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.hidden_size, len(ii), 2))
-            self.contract_handle = compl_contract_fwd_c if use_complex_kernels else compl_contract_fwd
+            self.w = nn.Parameter(
+                self.scale * torch.randn(self.hidden_size, self.hidden_size, len(ii), 2)
+            )
+            self.contract_handle = (
+                compl_contract_fwd_c if use_complex_kernels else compl_contract_fwd
+            )
 
-    
         if bias:
-            self.b = nn.Parameter(self.scale * torch.randn(1, self.hidden_size, *self.output_dims))
+            self.b = nn.Parameter(
+                self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
+            )
 
-        
     def forward(self, x):
 
         dtype = x.dtype
-        #x = x.float()
+        # x = x.float()
         B, C, H, W = x.shape
 
         with amp.autocast(enabled=False):
@@ -299,10 +349,12 @@ class SpectralConvS2(nn.Module):
             x = self.forward_transform(x)
             x = torch.view_as_real(x)
             x = x.to(dtype)
-        
+
         # do spectral conv
         modes = torch.zeros(x.shape, device=x.device)
-        modes[:, :, self.ii, self.jj, :] = self.contract_handle(x[:, :, self.ii, self.jj, :], self.w)
+        modes[:, :, self.ii, self.jj, :] = self.contract_handle(
+            x[:, :, self.ii, self.jj, :], self.w
+        )
 
         # finalize
         x = F.softshrink(modes, lambd=self.sparsity_threshold)
@@ -312,38 +364,43 @@ class SpectralConvS2(nn.Module):
             x = torch.view_as_complex(x)
             x = self.inverse_transform(x)
             x = x.to(dtype)
-            
-        if hasattr(self, 'b'):
+
+        if hasattr(self, "b"):
             x = x + self.b
-    
+
         return x
+
 
 class SpectralAttention2d(nn.Module):
     """
     2d Spectral Attention layer
     """
-    
-    def __init__(self,
-                 forward_transform,
-                 inverse_transform,
-                 embed_dim,
-                 sparsity_threshold = 0.0,
-                 hidden_size_factor = 2,
-                 use_complex_network = True,
-                 use_complex_kernels = False,
-                 complex_activation = 'real',
-                 bias = False,
-                 spectral_layers = 1,
-                 drop_rate = 0.):
+
+    def __init__(
+        self,
+        forward_transform,
+        inverse_transform,
+        embed_dim,
+        sparsity_threshold=0.0,
+        hidden_size_factor=2,
+        use_complex_network=True,
+        use_complex_kernels=False,
+        complex_activation="real",
+        bias=False,
+        spectral_layers=1,
+        drop_rate=0.0,
+    ):
         super(SpectralAttention2d, self).__init__()
-        
+
         self.embed_dim = embed_dim
         self.sparsity_threshold = sparsity_threshold
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
         self.spectral_layers = spectral_layers
-        self.mul_add_handle = compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd 
-        self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd 
+        self.mul_add_handle = (
+            compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
+        )
+        self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd
 
         self.modes_lat = forward_transform.lmax
         self.modes_lon = forward_transform.mmax
@@ -364,27 +421,37 @@ class SpectralAttention2d(nn.Module):
         self.w = nn.ParameterList(w)
 
         if bias:
-            self.b = nn.ParameterList([self.scale * torch.randn(self.hidden_size, 1, 2) for _ in range(self.spectral_layers)])
-        
-        self.wout = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.embed_dim, 2))
+            self.b = nn.ParameterList(
+                [
+                    self.scale * torch.randn(self.hidden_size, 1, 2)
+                    for _ in range(self.spectral_layers)
+                ]
+            )
 
-        self.drop = nn.Dropout(drop_rate) if drop_rate > 0. else nn.Identity()
+        self.wout = nn.Parameter(
+            self.scale * torch.randn(self.hidden_size, self.embed_dim, 2)
+        )
 
-        self.activation = ComplexReLU(mode=complex_activation, bias_shape=(self.hidden_size, 1, 1))
+        self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
+        self.activation = ComplexReLU(
+            mode=complex_activation, bias_shape=(self.hidden_size, 1, 1)
+        )
 
     def forward_mlp(self, xr):
 
         for l in range(self.spectral_layers):
-            if hasattr(self, 'b'):
-                xr = self.mul_add_handle(xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype))
+            if hasattr(self, "b"):
+                xr = self.mul_add_handle(
+                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                )
             else:
                 xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
             xr = torch.view_as_complex(xr)
             xr = self.activation(xr)
             xr = self.drop(xr)
             xr = torch.view_as_real(xr)
-    
+
         xr = self.mul_handle(xr, self.wout)
 
         return xr
@@ -392,7 +459,7 @@ class SpectralAttention2d(nn.Module):
     def forward(self, x):
 
         dtype = x.dtype
-        #x = x.to(torch.float32)
+        # x = x.to(torch.float32)
 
         # FWD transform
         with amp.autocast(enabled=False):
@@ -418,28 +485,32 @@ class SpectralAttentionS2(nn.Module):
     """
     geometrical Spectral Attention layer
     """
-    
-    def __init__(self,
-                 forward_transform,
-                 inverse_transform,
-                 embed_dim,
-                 sparsity_threshold = 0.0,
-                 hidden_size_factor = 2,
-                 use_complex_network = True,
-                 use_complex_kernels = False,
-                 complex_activation = 'real',
-                 bias = False,
-                 spectral_layers = 1,
-                 drop_rate = 0.):
+
+    def __init__(
+        self,
+        forward_transform,
+        inverse_transform,
+        embed_dim,
+        sparsity_threshold=0.0,
+        hidden_size_factor=2,
+        use_complex_network=True,
+        use_complex_kernels=False,
+        complex_activation="real",
+        bias=False,
+        spectral_layers=1,
+        drop_rate=0.0,
+    ):
         super(SpectralAttentionS2, self).__init__()
-        
+
         self.embed_dim = embed_dim
         self.sparsity_threshold = sparsity_threshold
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
-        #self.mul_add_handle = compl_muladd1d_fwd_c if use_complex_kernels else compl_muladd1d_fwd
-        self.mul_add_handle = compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
-        #self.mul_handle = compl_mul1d_fwd_c if use_complex_kernels else compl_mul1d_fwd
+        # self.mul_add_handle = compl_muladd1d_fwd_c if use_complex_kernels else compl_muladd1d_fwd
+        self.mul_add_handle = (
+            compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
+        )
+        # self.mul_handle = compl_mul1d_fwd_c if use_complex_kernels else compl_mul1d_fwd
         self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd
         self.spectral_layers = spectral_layers
 
@@ -461,20 +532,30 @@ class SpectralAttentionS2(nn.Module):
         self.w = nn.ParameterList(w)
 
         if bias:
-            self.b = nn.ParameterList([self.scale * torch.randn(2*self.hidden_size, 1, 1, 2) for _ in range(self.spectral_layers)])
-        
-        self.wout = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.embed_dim, 2))
+            self.b = nn.ParameterList(
+                [
+                    self.scale * torch.randn(2 * self.hidden_size, 1, 1, 2)
+                    for _ in range(self.spectral_layers)
+                ]
+            )
 
-        self.drop = nn.Dropout(drop_rate) if drop_rate > 0. else nn.Identity()
+        self.wout = nn.Parameter(
+            self.scale * torch.randn(self.hidden_size, self.embed_dim, 2)
+        )
 
-        self.activation = ComplexReLU(mode=complex_activation, bias_shape=(self.hidden_size, 1, 1))
+        self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
+        self.activation = ComplexReLU(
+            mode=complex_activation, bias_shape=(self.hidden_size, 1, 1)
+        )
 
     def forward_mlp(self, xr):
 
         for l in range(self.spectral_layers):
-            if hasattr(self, 'b'):
-                xr = self.mul_add_handle(xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype))
+            if hasattr(self, "b"):
+                xr = self.mul_add_handle(
+                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                )
             else:
                 xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
             xr = torch.view_as_complex(xr)
@@ -490,7 +571,7 @@ class SpectralAttentionS2(nn.Module):
     def forward(self, x):
 
         dtype = x.dtype
-        #x = x.to(torch.float32)
+        # x = x.to(torch.float32)
 
         # FWD transform
         with amp.autocast(enabled=False):
@@ -498,10 +579,10 @@ class SpectralAttentionS2(nn.Module):
             x = x.contiguous()
             x = self.forward_transform(x)
             x = torch.view_as_real(x)
-            
+
         # MLP
         x = self.forward_mlp(x)
-        
+
         # BWD transform
         with amp.autocast(enabled=False):
             x = torch.view_as_complex(x)
