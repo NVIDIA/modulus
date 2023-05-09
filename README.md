@@ -20,7 +20,7 @@ Modulus is a PyTorch based deep-learning toolkit for developing deep learning mo
 
 ### PyPi
 
-The recommend method for installing the latest version of Modulus is using PyPi:
+The recommended method for installing the latest version of Modulus is using PyPi:
 ```Bash
 pip install nvidia-modulus
 ```
