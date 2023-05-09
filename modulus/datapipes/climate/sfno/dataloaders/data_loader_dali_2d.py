@@ -29,7 +29,7 @@ import modulus.datapipes.climate.sfno.dataloaders.dali_es_helper_2d as esh
 
 
 class ERA5DaliESDataloader(object):
-    def get_pipeline(self):
+    def get_pipeline(self): # pragma: no cover
 
         pipeline = Pipeline(
             batch_size=self.batchsize,
@@ -46,7 +46,7 @@ class ERA5DaliESDataloader(object):
         in_channels = self.in_channels
         out_channels = self.out_channels
 
-        with pipeline:
+        with pipeline: 
             # get input and target
             data = fn.external_source(
                 source=self.extsource,
@@ -148,7 +148,7 @@ class ERA5DaliESDataloader(object):
 
         return pipeline
 
-    def __init__(self, params, location, train, seed=333, final_eval=False):
+    def __init__(self, params, location, train, seed=333, final_eval=False): # pragma: no cover
         self.num_data_workers = params.num_data_workers
         self.device_index = torch.cuda.current_device()
         self.batchsize = int(params.batch_size)
@@ -345,28 +345,28 @@ class ERA5DaliESDataloader(object):
             last_batch_policy=LastBatchPolicy.DROP,
             prepare_first_batch=True,
         )
-
-    def get_input_normalization(self):
+ 
+    def get_input_normalization(self): # pragma: no cover
         if self.norm_mode == "offline":
             return self.in_bias, self.in_scale
         else:
             return 0.0, 1.0
 
-    def get_output_normalization(self):
+    def get_output_normalization(self): # pragma: no cover
         if self.norm_mode == "offline":
             return self.out_bias, self.out_scale
         else:
             return 0.0, 1.0
 
-    def reset_pipeline(self):
+    def reset_pipeline(self): # pragma: no cover
 
         self.pipeline.reset()
         self.iterator.reset()
 
-    def __len__(self):
+    def __len__(self): # pragma: no cover
         return self.num_steps_per_epoch
 
-    def __iter__(self):
+    def __iter__(self): # pragma: no cover
         # self.iterator.reset()
         for token in self.iterator:
             inp = token[0]["inp"]

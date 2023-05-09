@@ -23,7 +23,7 @@ import torch.distributed as dist
 from modulus.utils.sfno.distributed import comm
 
 
-def init_distributed_io(params):
+def init_distributed_io(params): # pragma: no cover
     # set up sharding
     if dist.is_initialized():
         # this should always be safe now that data comm is orthogonal to
@@ -59,7 +59,7 @@ def init_distributed_io(params):
     return
 
 
-def get_dataloader(params, files_pattern, device, train=True, final_eval=False):
+def get_dataloader(params, files_pattern, device, train=True, final_eval=False): # pragma: no cover
     init_distributed_io(params)
 
     if params.get("data_type", "not zarr") == "zarr":

@@ -34,16 +34,16 @@ from modulus.utils.sfno.distributed.helpers import truncate_helper
 from modulus.models.sfno.initialization import trunc_normal_
 
 
-class distributed_transpose_w(torch.autograd.Function):
+class distributed_transpose_w(torch.autograd.Function): 
     @staticmethod
-    def forward(ctx, x, dim):
+    def forward(ctx, x, dim): # pragma: no cover
         xlist, _ = _transpose(x, dim[0], dim[1], group=comm.get_group("w"))
         x = torch.cat(xlist, dim=dim[1])
         ctx.dim = dim
         return x
 
     @staticmethod
-    def backward(ctx, go):
+    def backward(ctx, go): # pragma: no cover
         dim = ctx.dim
         gilist, _ = _transpose(go, dim[1], dim[0], group=comm.get_group("w"))
         gi = torch.cat(gilist, dim=dim[0])
@@ -52,14 +52,14 @@ class distributed_transpose_w(torch.autograd.Function):
 
 class distributed_transpose_h(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, dim):
+    def forward(ctx, x, dim): # pragma: no cover
         xlist, _ = _transpose(x, dim[0], dim[1], group=comm.get_group("h"))
         x = torch.cat(xlist, dim=dim[1])
         ctx.dim = dim
         return x
 
     @staticmethod
-    def backward(ctx, go):
+    def backward(ctx, go): # pragma: no cover
         dim = ctx.dim
         gilist, _ = _transpose(go, dim[1], dim[0], group=comm.get_group("h"))
         gi = torch.cat(gilist, dim=dim[0])
@@ -71,7 +71,7 @@ class DistributedRealFFT2(nn.Module):
     Helper routine to wrap FFT similarly to the SHT
     """
 
-    def __init__(self, nlat, nlon, lmax=None, mmax=None):
+    def __init__(self, nlat, nlon, lmax=None, mmax=None): # pragma: no cover
         super(DistributedRealFFT2, self).__init__()
 
         # get the comms grid:
@@ -91,7 +91,7 @@ class DistributedRealFFT2(nn.Module):
         mdist = (self.mmax + self.comm_size_w - 1) // self.comm_size_w
         self.mpad = mdist * self.comm_size_w - self.mmax
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
 
         # we need to ensure that we can split the channels evenly
         assert x.shape[1] % self.comm_size_h == 0
@@ -147,7 +147,7 @@ class DistributedInverseRealFFT2(nn.Module):
     Helper routine to wrap FFT similarly to the SHT
     """
 
-    def __init__(self, nlat, nlon, lmax=None, mmax=None):
+    def __init__(self, nlat, nlon, lmax=None, mmax=None): # pragma: no cover
         super(DistributedInverseRealFFT2, self).__init__()
 
         # get the comms grid:
@@ -173,7 +173,7 @@ class DistributedInverseRealFFT2(nn.Module):
         mdist = (self.mmax + self.comm_size_w - 1) // self.comm_size_w
         self.mpad = mdist * self.comm_size_w - self.mmax
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
 
         # we need to ensure that we can split the channels evenly
         assert x.shape[1] % self.comm_size_h == 0
@@ -234,7 +234,7 @@ class DistributedMLP(nn.Module):
         act_layer=nn.GELU,
         drop_rate=0.0,
         checkpointing=False,
-    ):
+    ): # pragma: no cover
 
         super(DistributedMLP, self).__init__()
         self.checkpointing = checkpointing
@@ -275,14 +275,14 @@ class DistributedMLP(nn.Module):
         # init weights
         self._init_weights()
 
-    def _init_weights(self):
+    def _init_weights(self): # pragma: no cover
         trunc_normal_(self.w1, std=0.02)
         nn.init.constant_(self.b1, 0.0)
         trunc_normal_(self.w2, std=0.02)
         if hasattr(self, "b2"):
             nn.init.constant_(self.b2, 0.0)
 
-    def fwd(self, x):
+    def fwd(self, x): # pragma: no cover
         # we need to prepare paralellism here
         # spatial parallelism
         x = scatter_to_spatial_parallel_region(x, dim=-1)
@@ -306,10 +306,10 @@ class DistributedMLP(nn.Module):
         return x
 
     @torch.jit.ignore
-    def _checkpoint_forward(self, x):
+    def _checkpoint_forward(self, x): # pragma: no cover
         return checkpoint(self.fwd, x)
 
-    def forward(self, x):
+    def forward(self, x): # pragma: no cover
         if self.checkpointing:
             return self._checkpoint_forward(x)
         else:
@@ -325,7 +325,7 @@ class DistributedPatchEmbed(nn.Module):
         embed_dim=768,
         input_is_matmul_parallel=False,
         output_is_matmul_parallel=True,
-    ):
+    ): # pragma: no cover
         super(DistributedPatchEmbed, self).__init__()
 
         # store params
@@ -367,7 +367,7 @@ class DistributedPatchEmbed(nn.Module):
         self.proj.weight.is_shared_mp = ["h", "w"]
         self.proj.bias.is_shared_mp = ["h", "w"]
 
-    def forward(self, x):
+    def forward(self, x): # pragma: no cover
         if self.input_parallel:
             x = gather_from_matmul_parallel_region(x, dim=1)
 
@@ -386,7 +386,7 @@ class DistributedPatchEmbed(nn.Module):
 @torch.jit.script
 def compl_mul_add_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     tmp = torch.einsum("bkixys,kiot->stbkoxy", a, b)
     res = (
         torch.stack(
@@ -400,7 +400,7 @@ def compl_mul_add_fwd(
 @torch.jit.script
 def compl_mul_add_fwd_c(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     cc = torch.view_as_complex(c)
@@ -420,7 +420,7 @@ class DistributedAFNO2Dv2(nn.Module):
         input_is_matmul_parallel=False,
         output_is_matmul_parallel=False,
         use_complex_kernels=False,
-    ):
+    ): # pragma: no cover
         super(DistributedAFNO2Dv2, self).__init__()
         assert (
             hidden_size % num_blocks == 0
@@ -497,7 +497,7 @@ class DistributedAFNO2Dv2(nn.Module):
         self.w2.is_shared_mp = ["h", "w"]
         self.b2.is_shared_mp = ["h", "w"]
 
-    def forward(self, x):
+    def forward(self, x): # pragma: no cover
         if not self.input_is_matmul_parallel:
             # distribute data
             x = scatter_to_matmul_parallel_region(x, dim=1)

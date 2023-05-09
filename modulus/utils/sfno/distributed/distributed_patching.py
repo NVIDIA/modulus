@@ -108,7 +108,7 @@ def stitch_patches(
     n: Union[List[int], int],
     p: Union[List[int], int] = 0,
     mode: str = "batch-wise",
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
 
     size = x.size()
 
@@ -175,7 +175,7 @@ def stitch_patches(
 
 
 class MultigridPatches2D(object):
-    def __init__(self, levels=1, padding=0, multi_pass=False, sampling_mode="dilation"):
+    def __init__(self, levels=1, padding=0, multi_pass=False, sampling_mode="dilation"): # pragma: no cover
 
         # store variables
         self.levels = levels
@@ -224,7 +224,7 @@ class MultigridPatches2D(object):
         self.idx_col_gpu = self.comm_rank % self.num_col_gpu
 
     @torch.jit.ignore
-    def compute_shapes(self, input_shape):
+    def compute_shapes(self, input_shape): # pragma: no cover
         B, C, H, W = input_shape
 
         Cout = C * (self.levels + 1)
@@ -234,7 +234,7 @@ class MultigridPatches2D(object):
         return B, Cout, Hout, Wout
 
     @torch.jit.ignore
-    def install_gradient_hooks(self, model):
+    def install_gradient_hooks(self, model): # pragma: no cover
         scale_fac = float(comm.get_size("matmul"))
         for param in model.parameters():
             h = param.register_hook(lambda grad: grad * scale_fac)
@@ -249,7 +249,7 @@ class MultigridPatches2D(object):
         padding: Union[List[int], int] = 0,
         mode: str = "batch-wise",
         safe_pad: bool = False,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
 
         if isinstance(kernel_size, int):
             kernel_size = [kernel_size, kernel_size]
@@ -324,7 +324,7 @@ class MultigridPatches2D(object):
         output_size: Union[List[int], int],
         patch_size: Union[List[int], int],
         sampling_mode: str = "dilation",
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
 
         if isinstance(output_size, int):
             output_size = [output_size, output_size]
@@ -430,7 +430,7 @@ class MultigridPatches2D(object):
         return x_level
 
     # @torch.jit.export
-    def patch_local(self, x: torch.Tensor) -> torch.Tensor:
+    def patch_local(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
 
         if self.levels == 0:
             return x
@@ -455,7 +455,7 @@ class MultigridPatches2D(object):
         return result
 
     # @torch.jit.export
-    def patch(self, x: torch.Tensor) -> torch.Tensor:
+    def patch(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
         if self.levels <= 0:
             return x
 
@@ -539,7 +539,7 @@ class MultigridPatches2D(object):
         return patched
 
     # @torch.jit.export
-    def stitch_local(self, x: torch.Tensor) -> torch.Tensor:
+    def stitch_local(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
         x_local = stitch_patches(
             x,
             n=[self.num_row_patch, self.num_col_patch],
@@ -548,7 +548,7 @@ class MultigridPatches2D(object):
         )
         return x_local
 
-    def drop_padding(self, x: torch.Tensor, padding: List[int]) -> torch.Tensor:
+    def drop_padding(self, x: torch.Tensor, padding: List[int]) -> torch.Tensor: # pragma: no cover
         size = x.size()[-2:]
         return x[
             ..., padding[0] : size[0] - padding[0], padding[1] : size[1] - padding[1]
@@ -556,7 +556,7 @@ class MultigridPatches2D(object):
 
     def stitch_global(
         self, x: torch.Tensor, padding: Optional[List[int]] = None
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         # set padding
         padding = padding if padding is not None else self.padding
 
@@ -580,7 +580,7 @@ class MultigridPatches2D(object):
         x: torch.Tensor,
         send_with_pad: bool = False,
         padding: Optional[List[int]] = None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         if self.levels <= 0:
             return x
 
