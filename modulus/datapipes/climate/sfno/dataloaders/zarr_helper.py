@@ -19,7 +19,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from typing import Any
-from utils import comm_v2 as comm
 import numpy as np
 
 

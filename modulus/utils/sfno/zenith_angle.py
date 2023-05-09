@@ -1,44 +1,32 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# ignore_header_test
 
-"""
-climt/LICENSE
-@mcgibbon
-BSD License
-Copyright (c) 2016, Rodrigo Caballero
-All rights reserved.
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above copyright notice, this
-  list of conditions and the following disclaimer in the documentation and/or
-  other materials provided with the distribution.
-* Neither the name of the copyright holder nor the names of its
-  contributors may be used to endorse or promote products derived from this
-  software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
-INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
-OF THE POSSIBILITY OF SUCH DAMAGE.
-"""
+# climt/LICENSE
+# @mcgibbon
+# BSD License
+# Copyright (c) 2016, Rodrigo Caballero
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright notice, this
+#   list of conditions and the following disclaimer in the documentation and/or
+#   other materials provided with the distribution.
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from this
+#   software without specific prior written permission.
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+# OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
 import datetime
 import numpy as np
 from typing import Union, TypeVar
@@ -73,13 +61,26 @@ def cos_zenith_angle(
         lat: float or np.ndarray in degrees (N/S)
     Returns:
         float, np.ndarray
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> cos_zenith_angle(model_time, lat=360, lon=120)
+    -0.44781727777270136
     """
     lon_rad, lat_rad = lon * RAD_PER_DEG, lat * RAD_PER_DEG
     return _star_cos_zenith(time, lon_rad, lat_rad)
 
 
 def _days_from_2000(model_time):
-    """Get the days since year 2000."""
+    """Get the days since year 2000.
+    
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> _days_from_2000(model_time)
+    731.0
+    """
     date_type = type(np.asarray(model_time).ravel()[0])
     if date_type not in [datetime.datetime]:
         raise ValueError(
@@ -102,6 +103,12 @@ def _greenwich_mean_sidereal_time(model_time):
     Reference:
         The AIAA 2006 implementation:
             http://www.celestrak.com/publications/AIAA/2006-6753/
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> _greenwich_mean_sidereal_time(model_time)
+    4.903831410856192
     """
     jul_centuries = _days_from_2000(model_time) / 36525.0
     theta = 67310.54841 + jul_centuries * (
@@ -120,6 +127,13 @@ def _local_mean_sidereal_time(model_time, longitude):
     Local mean sidereal time. requires longitude in radians.
     Ref:
         http://www.setileague.org/askdr/lmst.htm
+
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> _local_mean_sidereal_time(model_time, np.deg2rad(90))
+    6.474627737651089
     """
     return _greenwich_mean_sidereal_time(model_time) + longitude
 
@@ -129,6 +143,12 @@ def _sun_ecliptic_longitude(model_time):
     Ecliptic longitude of the sun.
     Reference:
         http://www.geoastro.de/elevaz/basics/meeus.htm
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> _sun_ecliptic_longitude(model_time)
+    17.469114444293947
     """
     julian_centuries = _days_from_2000(model_time) / 36525.0
 
@@ -161,6 +181,13 @@ def _obliquity_star(julian_centuries):
     return obliquity of the sun
     Use 5th order equation from
     https://en.wikipedia.org/wiki/Ecliptic#Obliquity_of_the_ecliptic
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> julian_centuries = _days_from_2000(model_time) / 36525.0
+    >>> _obliquity_star(julian_centuries)
+    0.40908805607114906
     """
     return np.deg2rad(
         23.0
@@ -182,6 +209,12 @@ def _right_ascension_declination(model_time):
     Right ascension and declination of the sun.
     Ref:
         http://www.geoastro.de/elevaz/basics/meeus.htm
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> _right_ascension_declination(model_time)
+    (-1.3637872137449385, -0.40127012651465355)
     """
     julian_centuries = _days_from_2000(model_time) / 36525.0
     eps = _obliquity_star(julian_centuries)
@@ -227,57 +260,3 @@ def _star_cos_zenith(model_time, lon, lat):
     )
 
     return cosine_zenith
-
-
-if __name__ == "__main__":
-
-    # test _days_from_2000
-
-    model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-
-    days = _days_from_2000(model_time)
-
-    print(days)
-
-    # test _greenwich_mean_sidereal_time
-
-    model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-
-    theta = _greenwich_mean_sidereal_time(model_time)
-
-    print(theta)
-
-    # test _local_mean_sidereal_time
-
-    model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-
-    theta = _local_mean_sidereal_time(model_time, np.deg2rad(90))
-
-    print(theta)
-
-    # test _sun_ecliptic_longitude
-
-    model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-
-    eclon = _sun_ecliptic_longitude(model_time)
-
-    print(eclon)
-
-    # test _obliquity_star
-
-    julian_centuries = _days_from_2000(model_time) / 36525.0
-
-    eps = _obliquity_star(julian_centuries)
-
-    print(eps)
-
-    # test _right_ascension_declination
-
-    ra, dec = _right_ascension_declination(model_time)
-
-    print(ra, dec)
-
-    # test cos_zenith_angle
-
-    za = cos_zenith_angle(model_time, lat=360, lon=120)
-    print("zenith angle", za)

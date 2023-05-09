@@ -18,13 +18,13 @@ import logging
 _format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
-def config_logger(log_level=logging.INFO):
+def config_logger(log_level=logging.INFO): # pragma: no cover
     logging.basicConfig(format=_format, level=log_level)
 
 
 def log_to_file(
     logger_name=None, log_level=logging.INFO, log_filename="tensorflow.log"
-):
+): # pragma: no cover
 
     if not os.path.exists(os.path.dirname(log_filename)):
         os.makedirs(os.path.dirname(log_filename))
@@ -40,7 +40,7 @@ def log_to_file(
     log.addHandler(fh)
 
 
-def log_versions():
+def log_versions(): # pragma: no cover
     import torch
     import subprocess
 

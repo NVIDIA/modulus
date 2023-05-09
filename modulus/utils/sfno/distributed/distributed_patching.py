@@ -13,13 +13,11 @@
 # limitations under the License.
 
 import torch
-from torch import nn
 import math
 from typing import Optional, Union, List
 
-import torch.distributed as dist
-from utils import comm_v2 as comm
-from mpu.mappings import (
+from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.mappings import (
     scatter_to_matmul_parallel_region,
     gather_from_matmul_parallel_region,
 )

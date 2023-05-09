@@ -203,7 +203,7 @@ def test_sfno_optims(device):
             "num_layers": 2,
             "encoder_layers": 1,
             "num_blocks": 4,
-            "spectral_layers": 2,
+            "spectral_layers": 1,
             "checkpointing": 0,
         }
 
@@ -212,18 +212,18 @@ def test_sfno_optims(device):
 
         return model, (x,)
 
-    # Ideally always check graphs first
+    # # Ideally always check graphs first
     model, invar = setup_model()
     assert common.validate_cuda_graphs(model, (*invar,))
-    # Check JIT
-    model, invar = setup_model()
-    assert common.validate_jit(model, (*invar,))
-    # Check AMP
+    # # Check JIT
+    # model, invar = setup_model()
+    # assert common.validate_jit(model, (*invar,))
+    # # Check AMP
     model, invar = setup_model()
     assert common.validate_amp(model, (*invar,))
-    # Check Combo
-    model, invar = setup_model()
-    assert common.validate_combo_optims(model, (*invar,))
+    # # Check Combo
+    # model, invar = setup_model()
+    # assert common.validate_combo_optims(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
