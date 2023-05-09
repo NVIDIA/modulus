@@ -1,12 +1,10 @@
 # Modulus (Beta)
 
-[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![GitHub](https://img.shields.io/github/license/NVIDIA/modulus)](https://github.com/NVIDIA/modulus/blob/master/LICENSE.txt)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Modulus is a PyTorch based deep-learning toolkit for developing deep learning models for physical systems. This package aims to provide useful utilities for physics-constrained and data-driven workflows.
-
-**This is an early-access beta release**
+Modulus is a PyTorch based deep-learning toolkit for developing deep learning models for physical systems. This package aims to provide useful utilities for physics-constrained and data-driven workflows. Additional information can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 <p align="center">
   <img src="./docs/img/modulus-pipes.jpg" alt="NVIDIA Modulus"/>
@@ -18,10 +16,26 @@ Modulus is a PyTorch based deep-learning toolkit for developing deep learning mo
 - [Modulus Launch (Beta)](https://github.com/NVIDIA/modulus-launch)
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym)
 
-## Installing 
+## Installation 
 
-Modulus is coming to PyPi soon! In the mean time the best way is to install from source:
+### PyPi
 
+The recommend method for installing the latest version of Modulus is using PyPi:
+```Bash
+pip install nvidia-modulus
+```
+
+### Container
+
+The recommended Modulus docker image can be pulled from the [NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus):
+```Bash
+docker pull nvcr.io/nvidia/modulus/modulus:23.05
+```
+
+## From Source
+
+### Package
+For a local build of the Modulus Python package from source use:
 ```Bash
 git clone git@github.com:NVIDIA/modulus.git && cd modulus
 
@@ -29,7 +43,7 @@ pip install --upgrade pip
 pip install .
 ```
 
-## Docker
+### Container
 
 To build Modulus docker image:
 ```
