@@ -26,7 +26,7 @@ from modulus.utils.sfno.distributed.mappings import reduce_from_matmul_parallel_
 
 
 def mean(x, axis=None):
-    # spatial mean
+    """spatial mean"""
     y = np.sum(x, axis) / np.size(x, axis)
     return y
 
@@ -59,11 +59,11 @@ def weighted_acc(pred, target, weighted=True):
 
 
 def weighted_rmse(pred, target):
+    """takes in arrays of size [1, h, w]  and returns latitude-weighted rmse"""
     if len(pred.shape) == 2:
         pred = np.expand_dims(pred, 0)
     if len(target.shape) == 2:
         target = np.expand_dims(target, 0)
-    # takes in arrays of size [1, h, w]  and returns latitude-weighted rmse
     num_lat = np.shape(pred)[1]
     num_long = np.shape(target)[2]
     s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))
@@ -151,7 +151,7 @@ def weighted_rmse_torch_distributed(
 def weighted_acc_torch_kernel(
     pred: torch.Tensor, target: torch.Tensor, weight: torch.Tensor
 ):
-    # takes in arrays of size [n, c, h, w]  and returns latitude-weighted acc
+    """takes in arrays of size [n, c, h, w]  and returns latitude-weighted acc"""
     cov = torch.sum(weight * pred * target, dim=(-1, -2))
     var1 = torch.sum(weight * torch.square(pred), dim=(-1, -2))
     var2 = torch.sum(weight * torch.square(target), dim=(-1, -2))

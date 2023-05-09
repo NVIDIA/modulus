@@ -14,17 +14,13 @@
 
 import logging
 import glob
-import torch
 import random
 import numpy as np
 from torch.utils.data import Dataset
-from torch.utils.data.distributed import DistributedSampler
-from torch import Tensor
 import h5py
-import math
 
 # import cv2
-from utils.img_utils import reshape_fields
+from modulus.utils.sfno.img_utils import reshape_fields
 
 
 class MultifilesDataset(Dataset):

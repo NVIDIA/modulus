@@ -32,7 +32,7 @@ from tltorch.factorized_tensors.core import FactorizedTensor
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def _contract_dense(x, weight, separable=False, operator_type="diagonal"):
+def _contract_dense(x, weight, separable=False, operator_type="diagonal"): # pragma: no cover
     order = tl.ndim(x)
     # batch-size, in_channels, x, y...
     x_syms = list(einsum_symbols[:order])
@@ -66,7 +66,7 @@ def _contract_dense(x, weight, separable=False, operator_type="diagonal"):
     return tl.einsum(eq, x, weight)
 
 
-def _contract_cp(x, cp_weight, separable=False, operator_type="diagonal"):
+def _contract_cp(x, cp_weight, separable=False, operator_type="diagonal"): # pragma: no cover
     order = tl.ndim(x)
 
     x_syms = str(einsum_symbols[:order])
@@ -99,7 +99,7 @@ def _contract_cp(x, cp_weight, separable=False, operator_type="diagonal"):
     return tl.einsum(eq, x, cp_weight.weights, *cp_weight.factors)
 
 
-def _contract_tucker(x, tucker_weight, separable=False, operator_type="diagonal"):
+def _contract_tucker(x, tucker_weight, separable=False, operator_type="diagonal"): # pragma: no cover
     order = tl.ndim(x)
 
     x_syms = str(einsum_symbols[:order])
@@ -143,7 +143,7 @@ def _contract_tucker(x, tucker_weight, separable=False, operator_type="diagonal"
     return tl.einsum(eq, x, tucker_weight.core, *tucker_weight.factors)
 
 
-def _contract_tt(x, tt_weight, separable=False, operator_type="diagonal"):
+def _contract_tt(x, tt_weight, separable=False, operator_type="diagonal"): # pragma: no cover
     order = tl.ndim(x)
 
     x_syms = list(einsum_symbols[:order])
@@ -182,7 +182,7 @@ def _contract_tt(x, tt_weight, separable=False, operator_type="diagonal"):
 
 
 # jitted PyTorch contractions:
-def _contract_dense_pytorch(x, weight, separable=False, operator_type="diagonal"):
+def _contract_dense_pytorch(x, weight, separable=False, operator_type="diagonal"): # pragma: no cover
 
     # to cheat the fused optimizers convert to real here
     x = torch.view_as_real(x)
@@ -209,7 +209,7 @@ def _contract_dense_pytorch(x, weight, separable=False, operator_type="diagonal"
 
 def get_contract_fun(
     weight, implementation="reconstructed", separable=False, operator_type="diagonal"
-):
+): # pragma: no cover
     """Generic ND implementation of Fourier Spectral Conv contraction
 
     Parameters

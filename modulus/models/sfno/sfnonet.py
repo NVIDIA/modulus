@@ -20,8 +20,6 @@ from torch.utils.checkpoint import checkpoint
 import torch.distributed as dist
 from dataclasses import dataclass
 
-from modulus.models.sfno.factorizations import get_contract_fun, _contract_dense
-
 # helpers
 from modulus.models.sfno.layers import trunc_normal_, DropPath, MLP
 

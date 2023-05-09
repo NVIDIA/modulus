@@ -89,19 +89,3 @@ class WarmupScheduler(lrs._LRScheduler):
         self.scheduler.load_state_dict(scheduler)
 
 
-if __name__ == "__main__":
-    param = nn.Parameter(torch.zeros((10), dtype=torch.float))
-    opt = torch.optim.Adam([param], lr=0.5)
-
-    start_lr = 0.01
-    num_warmup = 10
-
-    main_scheduler = lrs.CosineAnnealingLR(opt, 20, eta_min=0)
-    scheduler = WarmupScheduler(main_scheduler, num_warmup, start_lr)
-
-    for epoch in range(30):
-        print("current_lr", scheduler.get_last_lr())
-        scheduler.step()
-
-    sd = scheduler.state_dict()
-    scheduler.load_state_dict(sd)
