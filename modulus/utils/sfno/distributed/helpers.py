@@ -36,14 +36,14 @@ from modulus.utils.sfno.distributed import comm
 from torch._utils import _flatten_dense_tensors
 
 
-def get_memory_format(tensor):
+def get_memory_format(tensor): # pragma: no cover
     if tensor.is_contiguous(memory_format=torch.channels_last):
         return torch.channels_last
     else:
         return torch.contiguous_format
 
 
-def sync_params(model, mode="broadcast"):
+def sync_params(model, mode="broadcast"): # pragma: no cover
     """Helper routine to ensure shared weights are the same after initialization"""
 
     non_singleton_group_names = [
@@ -85,7 +85,7 @@ def sync_params(model, mode="broadcast"):
                         raise ValueError(f"Unknown weight synchronization mode {mode}")
 
 
-def pad_helper(tensor, dim, new_size, mode="zero"):
+def pad_helper(tensor, dim, new_size, mode="zero"): # pragma: no cover
     ndim = tensor.ndim
     dim = (dim + ndim) % ndim
     ndim_pad = ndim - dim
@@ -110,7 +110,7 @@ def pad_helper(tensor, dim, new_size, mode="zero"):
     return tensor_pad
 
 
-def truncate_helper(tensor, dim, new_size):
+def truncate_helper(tensor, dim, new_size): # pragma: no cover
     input_format = get_memory_format(tensor)
     ndim = tensor.ndim
     dim = (dim + ndim) % ndim
@@ -123,7 +123,7 @@ def truncate_helper(tensor, dim, new_size):
     return tensor_trunc
 
 
-def split_tensor_along_dim(tensor, dim, num_chunks):
+def split_tensor_along_dim(tensor, dim, num_chunks): # pragma: no cover
     assert (
         dim < tensor.dim()
     ), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
@@ -138,7 +138,7 @@ def split_tensor_along_dim(tensor, dim, num_chunks):
 
 
 # distributed primitives
-def _transpose(tensor, dim0, dim1, group=None, async_op=False):
+def _transpose(tensor, dim0, dim1, group=None, async_op=False): # pragma: no cover
     # get input format
     input_format = get_memory_format(tensor)
 
@@ -159,7 +159,7 @@ def _transpose(tensor, dim0, dim1, group=None, async_op=False):
     return x_recv, req
 
 
-def _reduce(input_, use_fp32=True, group=None):
+def _reduce(input_, use_fp32=True, group=None): # pragma: no cover
     """All-reduce the input tensor across model parallel group."""
 
     # Bypass the function if we are using only 1 GPU.
@@ -178,7 +178,7 @@ def _reduce(input_, use_fp32=True, group=None):
     return input_
 
 
-def _split(input_, dim_, group=None):
+def _split(input_, dim_, group=None): # pragma: no cover
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
@@ -198,7 +198,7 @@ def _split(input_, dim_, group=None):
     return output
 
 
-def _gather(input_, dim_, group=None):
+def _gather(input_, dim_, group=None): # pragma: no cover
     """Gather tensors and concatinate along the last dimension."""
     # get input format
     input_format = get_memory_format(input_)

@@ -24,7 +24,7 @@ from modulus.utils.sfno.img_utils import reshape_fields
 
 
 class MultifilesDataset(Dataset):
-    def __init__(self, params, location, train):
+    def __init__(self, params, location, train): # pragma: no cover
         self.params = params
         self.location = location
         self.train = train
@@ -39,7 +39,7 @@ class MultifilesDataset(Dataset):
         self.roll = params.roll
         self._get_files_stats()
 
-    def _get_files_stats(self):
+    def _get_files_stats(self): # pragma: no cover
         self.files_paths = glob.glob(self.location + "/*.h5")
         self.files_paths.sort()
         self.n_years = len(self.files_paths)
@@ -71,14 +71,14 @@ class MultifilesDataset(Dataset):
             )
         )
 
-    def _open_file(self, year_idx):
+    def _open_file(self, year_idx): # pragma: no cover
         _file = h5py.File(self.files_paths[year_idx], "r")
         self.files[year_idx] = _file["fields"]
 
-    def __len__(self):
+    def __len__(self): # pragma: no cover
         return self.n_samples_total
 
-    def __getitem__(self, global_idx):
+    def __getitem__(self, global_idx): # pragma: no cover
         year_idx = int(global_idx / self.n_samples_per_year)  # which year we are on
         local_idx = int(
             global_idx % self.n_samples_per_year

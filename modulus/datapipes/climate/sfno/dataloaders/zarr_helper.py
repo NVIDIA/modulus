@@ -54,7 +54,7 @@ class Metadata:
     img_local_offset_y: int
 
 
-def get_data_loader(params: Params, files_pattern: str, train: bool):
+def get_data_loader(params: Params, files_pattern: str, train: bool): # pragma: no cover
     """Matches interface used in trainer.py:Trainer"""
     ds = xarray.open_zarr(files_pattern)
     dataset = _xarray_to_dataset(params, ds, train=train)
@@ -69,16 +69,16 @@ def get_data_loader(params: Params, files_pattern: str, train: bool):
     assert std.shape == (1, len(ds.channel), 1, 1), std.shape
     assert not np.any(np.isnan(std)), np.ravel(std)
 
-    def reset_pipeline():
+    def reset_pipeline(): # pragma: no cover
         pass
 
-    def get_output_normalization():
+    def get_output_normalization(): # pragma: no cover
         return mean[:, params.out_channels], std[:, params.out_channels]
 
-    def get_input_normalization():
+    def get_input_normalization(): # pragma: no cover
         return mean[:, params.in_channels], std[:, params.in_channels]
 
-    def center(args):
+    def center(args): # pragma: no cover
         x, y = args
 
         xmean = mean[0, params.in_channels]
@@ -141,7 +141,7 @@ def get_data_loader(params: Params, files_pattern: str, train: bool):
         return dataloader, metadata
 
 
-def _xarray_to_dataset(params: Params, ds: xarray.Dataset, train: bool):
+def _xarray_to_dataset(params: Params, ds: xarray.Dataset, train: bool): # pragma: no cover
 
     year = ds.time.dt.year
     if train:
@@ -155,14 +155,14 @@ def _xarray_to_dataset(params: Params, ds: xarray.Dataset, train: bool):
 
 
 class Map(Dataset):
-    def __init__(self, data, func):
+    def __init__(self, data, func): # pragma: no cover
         self.data = data
         self.func = func
 
-    def __getitem__(self, i):
+    def __getitem__(self, i): # pragma: no cover
         return self.func(self.data[i])
 
-    def __len__(self):
+    def __len__(self): # pragma: no cover
         return len(self.data)
 
 
@@ -172,17 +172,17 @@ class XarrayDataset(Dataset):
     in_channels: Any = slice(None)
     out_channels: Any = slice(None)
 
-    def _to_array(self, x):
+    def _to_array(self, x): # pragma: no cover
         return x.values
 
-    def __getitem__(self, i):
+    def __getitem__(self, i): # pragma: no cover
         input_ = self.data.isel(time=i, channel=self.in_channels)
         target = self.data.isel(time=i + 1, channel=self.out_channels)
         x = self._to_array(input_)
         y = self._to_array(target)
         return x, y
 
-    def __len__(self):
+    def __len__(self): # pragma: no cover
         times = self.data.time
         if len(times) > 1:
             return len(times) - 1

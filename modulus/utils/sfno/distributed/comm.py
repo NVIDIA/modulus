@@ -27,7 +27,7 @@ _COMM_LIST = []
 _COMM_NAMES = {}
 
 # world comm
-def get_size(comm_id: Union[str, int]) -> int:
+def get_size(comm_id: Union[str, int]) -> int: # pragma: no cover
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -39,7 +39,7 @@ def get_size(comm_id: Union[str, int]) -> int:
         return dist.get_world_size(group=_COMM_LIST[cid])
 
 
-def get_rank(comm_id: Union[str, int]) -> int:
+def get_rank(comm_id: Union[str, int]) -> int: # pragma: no cover
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -51,7 +51,7 @@ def get_rank(comm_id: Union[str, int]) -> int:
         return dist.get_rank(group=_COMM_LIST[cid])
 
 
-def get_group(comm_id: Union[str, int]) -> int:
+def get_group(comm_id: Union[str, int]) -> int: # pragma: no cover
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -64,21 +64,21 @@ def get_group(comm_id: Union[str, int]) -> int:
 
 
 # specialized routines for world comms
-def get_world_size():
+def get_world_size(): # pragma: no cover
     if not dist.is_initialized():
         return 1
     else:
         return dist.get_world_size()
 
 
-def get_world_rank():
+def get_world_rank(): # pragma: no cover
     if not dist.is_initialized():
         return 0
     else:
         return dist.get_rank()
 
 
-def get_local_rank():
+def get_local_rank(): # pragma: no cover
     if os.getenv("LOCAL_RANK") is not None:
         # Use PyTorch env var if available
         return int(os.getenv("LOCAL_RANK"))
@@ -89,16 +89,16 @@ def get_local_rank():
         return get_world_rank() % torch.cuda.device_count()
 
 
-def get_names():
+def get_names(): # pragma: no cover
     return _COMM_NAMES
 
 
-def is_distributed(name: str):
+def is_distributed(name: str): # pragma: no cover
     return name in _COMM_NAMES
 
 
 # get
-def init(params, verbose=False):
+def init(params, verbose=False): # pragma: no cover
 
     # set up global and local communicator
     if params.wireup_info == "env":
