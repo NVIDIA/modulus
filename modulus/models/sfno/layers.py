@@ -23,6 +23,7 @@ import math
 from torch_harmonics import *
 from modulus.models.sfno.contractions import *
 from modulus.models.sfno.activations import *
+from modulus.models.sfno.initialization import trunc_normal_
 
 
 @torch.jit.script
