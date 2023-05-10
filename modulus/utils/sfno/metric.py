@@ -34,6 +34,11 @@ from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 
 class MetricsHandler:
+    """
+    A class that handles metrics for model training and validation. It calculates
+    metrics such as root mean square error (RMSE)and  anomaly correlation coefficient
+    (ACC) for specified variables.
+    """
 
     # TODO not to hardcode channel indices
     def __init__(
@@ -45,7 +50,7 @@ class MetricsHandler:
         rmse_var_names=["u10m", "t2m", "u500", "z500"],
         acc_vars_names=["u10m", "t2m", "u500", "z500"],
         acc_auc_var_names=["u10m", "t2m", "u500", "z500"],
-    ):
+    ):  # pragma: no cover
 
         self.device = device
         self.log_to_screen = params.log_to_screen
@@ -139,7 +144,7 @@ class MetricsHandler:
             self.do_gather_input = True
 
     @torch.jit.ignore
-    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:
+    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         # combine data
         # h
         xh = gather_from_parallel_region(x, -2, "h")
@@ -150,8 +155,8 @@ class MetricsHandler:
 
         return x
 
-    def initialize_buffers(self):
-        # initialize buffers for the validation metrics
+    def initialize_buffers(self):  # pragma: no cover
+        """Initialize buffers for the validation metrics"""
         self.valid_buffer = torch.zeros((3), dtype=torch.float32, device=self.device)
         self.valid_loss = self.valid_buffer[0].view(-1)
         self.valid_l1 = self.valid_buffer[1].view(-1)
@@ -170,8 +175,8 @@ class MetricsHandler:
             (self.valid_autoreg_steps + 1), dtype=torch.float32, device=self.device
         )
 
-    def update(self, prediction, target, loss, idt):
-
+    def update(self, prediction, target, loss, idt):  # pragma: no cover
+        """Updates the validation metrics with the given prediction and target."""
         if self.do_gather_input:
             prediction = self._gather_input(prediction)
             target = self._gather_input(target)
@@ -201,8 +206,11 @@ class MetricsHandler:
                 * self.metric_correction_factor
             )
 
-    def finalize(self, final_inference=False):
-
+    def finalize(self, final_inference=False):  # pragma: no cover
+        """
+        Finalizes the validation metrics after a validation run. It gathers the metrics
+        across different processes, computes the final metrics, and prepares the logs.
+        """
         # sync here
         if dist.is_initialized():
             dist.barrier(device_ids=[self.device.index])

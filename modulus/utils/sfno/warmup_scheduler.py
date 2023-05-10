@@ -19,6 +19,8 @@ from typing import List
 
 
 class WarmupScheduler(lrs._LRScheduler):
+    """Scheduler with linear warmup"""
+
     def __init__(self, scheduler, num_warmup_steps, start_lr):
         self.scheduler = scheduler
         self.num_warmup_steps = num_warmup_steps
@@ -55,6 +57,7 @@ class WarmupScheduler(lrs._LRScheduler):
         ]
 
     def step(self):
+        """Scheduler step"""
         shandle = (
             self.scheduler
             if self.steps >= self.num_warmup_steps
@@ -65,6 +68,7 @@ class WarmupScheduler(lrs._LRScheduler):
         self._last_lr = [group["lr"] for group in shandle.optimizer.param_groups]
 
     def state_dict(self):
+        """Returns the scheduler's state dict."""
         state_dict = {
             key: value
             for key, value in self.__dict__.items()
@@ -76,6 +80,7 @@ class WarmupScheduler(lrs._LRScheduler):
         return state_dict
 
     def load_state_dict(self, state_dict):
+        """Load the scheduler's state dict."""
         warmup_scheduler = state_dict.pop("warmup_scheduler")
         scheduler = state_dict.pop("scheduler")
 
@@ -87,5 +92,3 @@ class WarmupScheduler(lrs._LRScheduler):
 
         self.warmup_scheduler.load_state_dict(warmup_scheduler)
         self.scheduler.load_state_dict(scheduler)
-
-

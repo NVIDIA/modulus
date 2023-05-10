@@ -18,10 +18,8 @@ import json
 
 
 class ParamsBase:
-    """Convenience wrapper around a dictionary
-
-    Allows referring to dictionary items as attributes, and tracking which
-    attributes are modified.
+    """Convenience wrapper around a dictionary. Allows referring to dictionary items
+    as attributes, and tracking which attributes are modified.
     """
 
     def __init__(self):
@@ -40,12 +38,14 @@ class ParamsBase:
         return key in self.params
 
     def get(self, key, default=None):
+        """Get a parameter value"""
         if hasattr(self, key):
             return getattr(self, key)
         else:
             return self.params.get(key, default)
 
     def to_dict(self):
+        """Return a dictionary representation of the parameters"""
         new_attrs = {
             key: val
             for key, val in vars(self).items()
@@ -55,6 +55,7 @@ class ParamsBase:
 
     @staticmethod
     def from_json(path: str) -> "ParamsBase":
+        """Load parameters from a json file"""
         with open(path) as f:
             c = json.load(f)
         params = ParamsBase()
@@ -62,6 +63,7 @@ class ParamsBase:
         return params
 
     def update_params(self, config):
+        """Update parameters from a dictionary"""
         for key, val in config.items():
             if val == "None":
                 val = None
@@ -70,8 +72,9 @@ class ParamsBase:
 
 
 class YParams(ParamsBase):
+    """Open parameters stored with ``config_name`` in the yaml file ``yaml_filename``"""
+
     def __init__(self, yaml_filename, config_name, print_params=False):
-        """Open parameters stored with ``config_name`` in the yaml file ``yaml_filename``"""
         super().__init__()
         self._yaml_filename = yaml_filename
         self._config_name = config_name
@@ -89,6 +92,7 @@ class YParams(ParamsBase):
             print("---------------------------------------------------")
 
     def log(self):
+        """Log the parameters to the console"""
         logging.info("------------------ Configuration ------------------")
         logging.info("Configuration file: " + str(self._yaml_filename))
         logging.info("Configuration name: " + str(self._config_name))

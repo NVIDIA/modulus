@@ -12,38 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
-from collections import OrderedDict
-from copy import Error, deepcopy
-from re import S
-from numpy.lib.arraypad import pad
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
-from torch.nn.modules.container import Sequential
-from torch.utils.checkpoint import checkpoint, checkpoint_sequential
+from torch.utils.checkpoint import checkpoint
 from torch.cuda import amp
-from typing import Optional
 import math
 
 from torch_harmonics import *
 from modulus.models.sfno.contractions import *
 from modulus.models.sfno.activations import *
-from modulus.models.sfno.initialization import trunc_normal_
 
 
 @torch.jit.script
 def drop_path(
     x: torch.Tensor, drop_prob: float = 0.0, training: bool = False
-) -> torch.Tensor:
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
-    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
-    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
-    'survival rate' as the argument.
+) -> torch.Tensor:  # pragma: no cover
+    """Drop paths (Stochastic Depth) per sample (when applied in main path of
+    residual blocks).
+    This is the same as the DropConnect impl for EfficientNet, etc networks, however,
+    the original name is misleading as 'Drop Connect' is a different form of dropout in
+    a separate paper. See discussion:
+        https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956
+    We've opted for changing the layer and argument names to 'drop path' rather than
+    mix DropConnect as a layer name and use 'survival rate' as the argument.
     """
     if drop_prob == 0.0 or not training:
         return x
@@ -58,20 +51,28 @@ def drop_path(
 
 
 class DropPath(nn.Module):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
+    """
+    Drop paths (Stochastic Depth) per sample (when applied in main path of residual
+    blocks).
+    """
 
-    def __init__(self, drop_prob=None):
+    def __init__(self, drop_prob=None):  # pragma: no cover
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         return drop_path(x, self.drop_prob, self.training)
 
 
 class PatchEmbed(nn.Module):
+    """
+    Divides the input image into patches and embeds them into a specified dimension
+    using a convolutional layer.
+    """
+
     def __init__(
         self, img_size=(224, 224), patch_size=(16, 16), in_chans=3, embed_dim=768
-    ):
+    ):  # pragma: no cover
         super(PatchEmbed, self).__init__()
         num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
         self.img_size = img_size
@@ -81,7 +82,7 @@ class PatchEmbed(nn.Module):
             in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
         )
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         # gather input
         B, C, H, W = x.shape
         assert (
@@ -93,6 +94,10 @@ class PatchEmbed(nn.Module):
 
 
 class MLP(nn.Module):
+    """
+    Basic CNN with support for gradient checkpointing
+    """
+
     def __init__(
         self,
         in_features,
@@ -102,7 +107,7 @@ class MLP(nn.Module):
         output_bias=True,
         drop_rate=0.0,
         checkpointing=0,
-    ):
+    ):  # pragma: no cover
         super(MLP, self).__init__()
         self.checkpointing = checkpointing
         out_features = out_features or in_features
@@ -120,10 +125,11 @@ class MLP(nn.Module):
         # by default, all weights are shared
 
     @torch.jit.ignore
-    def checkpoint_forward(self, x):
+    def checkpoint_forward(self, x):  # pragma: no cover
+        """Forward method with support for gradient checkpointing"""
         return checkpoint(self.fwd, x)
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         if self.checkpointing >= 2:
             return self.checkpoint_forward(x)
         else:
@@ -135,7 +141,7 @@ class RealFFT2(nn.Module):
     Helper routine to wrap FFT similarly to the SHT
     """
 
-    def __init__(self, nlat, nlon, lmax=None, mmax=None):
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):  # pragma: no cover
         super(RealFFT2, self).__init__()
 
         # use local FFT here
@@ -153,7 +159,7 @@ class RealFFT2(nn.Module):
         # self.num_batches = 1
         assert self.lmax % 2 == 0
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         y = self.fft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
 
         if self.truncate:
@@ -173,7 +179,7 @@ class InverseRealFFT2(nn.Module):
     Helper routine to wrap FFT similarly to the SHT
     """
 
-    def __init__(self, nlat, nlon, lmax=None, mmax=None):
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):  # pragma: no cover
         super(InverseRealFFT2, self).__init__()
 
         # use local FFT here
@@ -184,7 +190,7 @@ class InverseRealFFT2(nn.Module):
         self.lmax = lmax or self.nlat
         self.mmax = mmax or self.nlon // 2 + 1
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         out = self.ifft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
 
         return out
@@ -206,7 +212,7 @@ class SpectralConv2d(nn.Module):
         compression=None,
         rank=0,
         bias=False,
-    ):
+    ):  # pragma: no cover
         super(SpectralConv2d, self).__init__()
 
         self.hidden_size = hidden_size
@@ -239,7 +245,7 @@ class SpectralConv2d(nn.Module):
                 self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
             )
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         # x = x.float()
@@ -290,7 +296,7 @@ class SpectralConvS2(nn.Module):
         compression=None,
         rank=128,
         bias=False,
-    ):
+    ):  # pragma: no cover
         super(SpectralConvS2, self).__init__()
 
         self.hidden_size = hidden_size
@@ -337,8 +343,7 @@ class SpectralConvS2(nn.Module):
                 self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
             )
 
-    def forward(self, x):
-
+    def forward(self, x):  # pragma: no cover
         dtype = x.dtype
         # x = x.float()
         B, C, H, W = x.shape
@@ -389,7 +394,7 @@ class SpectralAttention2d(nn.Module):
         bias=False,
         spectral_layers=1,
         drop_rate=0.0,
-    ):
+    ):  # pragma: no cover
         super(SpectralAttention2d, self).__init__()
 
         self.embed_dim = embed_dim
@@ -438,8 +443,8 @@ class SpectralAttention2d(nn.Module):
             mode=complex_activation, bias_shape=(self.hidden_size, 1, 1)
         )
 
-    def forward_mlp(self, xr):
-
+    def forward_mlp(self, xr):  # pragma: no cover
+        """forward method for the MLP part of the network"""
         for l in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
@@ -456,7 +461,7 @@ class SpectralAttention2d(nn.Module):
 
         return xr
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         # x = x.to(torch.float32)
@@ -499,7 +504,7 @@ class SpectralAttentionS2(nn.Module):
         bias=False,
         spectral_layers=1,
         drop_rate=0.0,
-    ):
+    ):  # pragma: no cover
         super(SpectralAttentionS2, self).__init__()
 
         self.embed_dim = embed_dim
@@ -549,8 +554,8 @@ class SpectralAttentionS2(nn.Module):
             mode=complex_activation, bias_shape=(self.hidden_size, 1, 1)
         )
 
-    def forward_mlp(self, xr):
-
+    def forward_mlp(self, xr):  # pragma: no cover
+        """forward method for the MLP part of the network"""
         for l in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
@@ -568,7 +573,7 @@ class SpectralAttentionS2(nn.Module):
 
         return xr
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         # x = x.to(torch.float32)

@@ -12,30 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO cleanup
 import torch
-
-# # Helper routines for FNOs
-
-# @torch.jit.script
-# def compl_contract2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-#     ac = torch.view_as_complex(a)
-#     bc = torch.view_as_complex(b)
-#     res = torch.einsum("bixy,kixy->bkxy", ac, bc)
-#     return torch.view_as_real(res)
-
-# @torch.jit.script
-# def compl_contract_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-#     ac = torch.view_as_complex(a)
-#     bc = torch.view_as_complex(b)
-#     res = torch.einsum("bin,kin->bkn", ac, bc)
-#     return torch.view_as_real(res)
-
-# helper routines for non-linear (S)FNOs
 
 
 @torch.jit.script
-def compl_mul1d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def compl_mul1d_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex-valued multiplication operation between two 1-dimensional
+    tensors.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bix,io->box", ac, bc)
@@ -46,14 +33,24 @@ def compl_mul1d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma:
 @torch.jit.script
 def compl_muladd1d_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor: # pragma: no cover
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs complex multiplication of two 1-dimensional tensors 'a' and 'b', and then
+    adds a third tensor 'c'.
+    """
     tmpcc = torch.view_as_complex(compl_mul1d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
 
 
 @torch.jit.script
-def compl_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def compl_mul2d_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex-valued multiplication operation between two 2-dimensional
+    tensors.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,io->boxy", ac, bc)
@@ -64,39 +61,23 @@ def compl_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma:
 @torch.jit.script
 def compl_muladd2d_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor: # pragma: no cover
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs complex multiplication of two 2-dimensional tensors 'a' and 'b', and then
+    adds a third tensor 'c'.
+    """
     tmpcc = torch.view_as_complex(compl_mul2d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
 
 
-# # for the real-valued case:
-# @torch.jit.script
-# def compl_mul1d_fwd_r(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-#     res = torch.einsum("bix,io->box", a, b)
-#     return res
-
-# @torch.jit.script
-# def compl_muladd1d_fwd_r(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-#     tmp = compl_mul1d_fwd_r(a, b)
-#     return tmp + c
-
-# Helper routines for FFT MLPs
-
-# # for the real-valued case:
-# @torch.jit.script
-# def compl_mul2d_fwd_r(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-#     res = torch.einsum("bixy,io->boxy", a, b)
-#     return res
-
-# @torch.jit.script
-# def compl_muladd2d_fwd_r(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-#     tmp = compl_mul2d_fwd_c(a, b)
-#     return torch.view_as_real(tmp + c)
-
-
-@torch.jit.script
-def _contract_localconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+@torch.jit.script  # TODO remove
+def _contract_localconv_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex local convolution operation between two tensors 'a' and 'b'.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,iox->boxy", ac, bc)
@@ -104,15 +85,13 @@ def _contract_localconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: #
     return res
 
 
-# @torch.jit.script
-# def _contractadd_localconv_fwd(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-#     tmpcc = torch.view_as_complex(_contract_localconv_fwd(a, b))
-#     cc = torch.view_as_complex(c)
-#     return torch.view_as_real(tmpcc + cc)
-
-
-@torch.jit.script
-def _contract_blockconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+@torch.jit.script  # TODO remove
+def _contract_blockconv_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex block convolution operation between two tensors 'a' and 'b'.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bim,imn->bin", ac, bc)
@@ -120,18 +99,27 @@ def _contract_blockconv_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: #
     return res
 
 
-@torch.jit.script
+@torch.jit.script  # TODO remove
 def _contractadd_blockconv_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor: # pragma: no cover
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex block convolution operation between two tensors 'a' and 'b', and
+    then adds a third tensor 'c'.
+    """
     tmpcc = torch.view_as_complex(_contract_blockconv_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
 
 
 # for the experimental layer
-@torch.jit.script
-def compl_exp_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+@torch.jit.script  # TODO remove
+def compl_exp_mul2d_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a 2D complex multiplication operation between two tensors 'a' and 'b'.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,xio->boxy", ac, bc)
@@ -140,16 +128,25 @@ def compl_exp_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pra
 
 
 @torch.jit.script
-def compl_exp_muladd2d_fwd(
+def compl_exp_muladd2d_fwd(  # TODO remove
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor: # pragma: no cover
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a 2D complex multiplication operation between two tensors 'a' and 'b',
+    and then adds a third tensor 'c'.
+    """
     tmpcc = torch.view_as_complex(compl_exp_mul2d_fwd(a, b))
     cc = torch.view_as_complex(c)
     return torch.view_as_real(tmpcc + cc)
 
 
 @torch.jit.script
-def real_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def real_mul2d_fwd(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a 2D real multiplication operation between two tensors 'a' and 'b'.
+    """
     res = torch.einsum("bixy,io->boxy", a, b)
     return res
 
@@ -157,16 +154,23 @@ def real_mul2d_fwd(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: 
 @torch.jit.script
 def real_muladd2d_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
-) -> torch.Tensor: # pragma: no cover
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a 2D real multiplication operation between two tensors 'a' and 'b', and
+    then adds a third tensor 'c'.
+    """
     res = real_mul2d_fwd(a, b) + c
     return res
 
 
 # new contractions set to replace older ones. We use complex
-
-
 @torch.jit.script
-def _contract_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def _contract_diagonal(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex diagonal operation between two tensors 'a' and 'b'.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,ioxy->boxy", ac, bc)
@@ -175,7 +179,13 @@ def _contract_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # prag
 
 
 @torch.jit.script
-def _contract_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def _contract_dhconv(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex Driscoll-Healy style convolution operation between two tensors
+    'a' and 'b'.
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,iox->boxy", ac, bc)
@@ -184,7 +194,12 @@ def _contract_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma
 
 
 @torch.jit.script
-def _contract_sep_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def _contract_sep_diagonal(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,ixy->boxy", ac, bc)
@@ -193,7 +208,12 @@ def _contract_sep_diagonal(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # 
 
 
 @torch.jit.script
-def _contract_sep_dhconv(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: # pragma: no cover
+def _contract_sep_dhconv(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,ix->boxy", ac, bc)

@@ -32,7 +32,9 @@ class DistributedInstanceNorm2d(nn.Module):
     Computes a distributed instance norm using Welford's online algorithm
     """
 
-    def __init__(self, num_features, eps=1e-05, affine=False, device=None, dtype=None): # pragma: no cover
+    def __init__(
+        self, num_features, eps=1e-05, affine=False, device=None, dtype=None
+    ):  # pragma: no cover
         super(DistributedInstanceNorm2d, self).__init__()
 
         self.eps = eps
@@ -46,19 +48,21 @@ class DistributedInstanceNorm2d(nn.Module):
         self.gather_mode = "welford"
 
     @torch.jit.ignore
-    def _gather_hw(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
+    def _gather_hw(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         # gather the data over the spatial communicator
         xh = gather_from_parallel_region(x, -2, "h")
         xw = gather_from_parallel_region(xh, -1, "w")
         return xw
 
     @torch.jit.ignore
-    def _gather_spatial(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
+    def _gather_spatial(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         # gather the data over the spatial communicator
         xs = gather_from_parallel_region(x, -1, "spatial")
         return xs
 
-    def _stats_naive(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]: # pragma: no cover
+    def _stats_naive(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:  # pragma: no cover
         """Computes the statistics in the naive way by first gathering the tensors and then computing them"""
 
         x = self._gather_hw(x)
@@ -66,7 +70,9 @@ class DistributedInstanceNorm2d(nn.Module):
 
         return var, mean
 
-    def _stats_welford(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]: # pragma: no cover
+    def _stats_welford(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:  # pragma: no cover
         """Computes the statistics locally, then uses the Welford online algorithm to reduce them"""
 
         var, mean = torch.var_mean(x, dim=(-2, -1), unbiased=False, keepdim=False)
@@ -109,7 +115,7 @@ class DistributedInstanceNorm2d(nn.Module):
 
         return var, mean
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
 
         with amp.autocast(enabled=False):
             dtype = x.dtype

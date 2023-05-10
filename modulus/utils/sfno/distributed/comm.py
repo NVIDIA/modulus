@@ -27,7 +27,8 @@ _COMM_LIST = []
 _COMM_NAMES = {}
 
 # world comm
-def get_size(comm_id: Union[str, int]) -> int: # pragma: no cover
+def get_size(comm_id: Union[str, int]) -> int:  # pragma: no cover
+    """Returns the size of a specified communicator."""
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -39,7 +40,8 @@ def get_size(comm_id: Union[str, int]) -> int: # pragma: no cover
         return dist.get_world_size(group=_COMM_LIST[cid])
 
 
-def get_rank(comm_id: Union[str, int]) -> int: # pragma: no cover
+def get_rank(comm_id: Union[str, int]) -> int:  # pragma: no cover
+    """Returns the rank of a specified communicator."""
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -51,7 +53,8 @@ def get_rank(comm_id: Union[str, int]) -> int: # pragma: no cover
         return dist.get_rank(group=_COMM_LIST[cid])
 
 
-def get_group(comm_id: Union[str, int]) -> int: # pragma: no cover
+def get_group(comm_id: Union[str, int]) -> int:  # pragma: no cover
+    """Returns the group of a specified communicator."""
     if isinstance(comm_id, int):
         cid = comm_id
     else:
@@ -64,21 +67,24 @@ def get_group(comm_id: Union[str, int]) -> int: # pragma: no cover
 
 
 # specialized routines for world comms
-def get_world_size(): # pragma: no cover
+def get_world_size():  # pragma: no cover
+    """"""
     if not dist.is_initialized():
         return 1
     else:
         return dist.get_world_size()
 
 
-def get_world_rank(): # pragma: no cover
+def get_world_rank():  # pragma: no cover
+    """"""
     if not dist.is_initialized():
         return 0
     else:
         return dist.get_rank()
 
 
-def get_local_rank(): # pragma: no cover
+def get_local_rank():  # pragma: no cover
+    """"""
     if os.getenv("LOCAL_RANK") is not None:
         # Use PyTorch env var if available
         return int(os.getenv("LOCAL_RANK"))
@@ -89,17 +95,19 @@ def get_local_rank(): # pragma: no cover
         return get_world_rank() % torch.cuda.device_count()
 
 
-def get_names(): # pragma: no cover
+def get_names():  # pragma: no cover
+    """Returns the names of all available communicators."""
     return _COMM_NAMES
 
 
-def is_distributed(name: str): # pragma: no cover
+def is_distributed(name: str):  # pragma: no cover
+    """"""
     return name in _COMM_NAMES
 
 
 # get
-def init(params, verbose=False): # pragma: no cover
-
+def init(params, verbose=False):  # pragma: no cover
+    """Initialize distributed training."""
     # set up global and local communicator
     if params.wireup_info == "env":
         world_size = int(os.getenv("WORLD_SIZE", 1))

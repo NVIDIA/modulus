@@ -37,6 +37,7 @@ T = TypeVar("T", np.ndarray, float)
 
 
 def _ensure_units_of_degrees(da):
+    """Ensure that the units of the DataArray are in degrees."""
     units = da.attrs.get("units", "").lower()
     if "rad" in units:
         return np.rad2deg(da).assign_attrs(units="degrees")
@@ -74,7 +75,7 @@ def cos_zenith_angle(
 
 def _days_from_2000(model_time):
     """Get the days since year 2000.
-    
+
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
