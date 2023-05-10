@@ -18,14 +18,19 @@ import logging
 _format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
-def config_logger(log_level=logging.INFO): # pragma: no cover
+def config_logger(log_level=logging.INFO):  # pragma: no cover
+    """
+    Configure the logging basic settings with given log leve.
+    """
     logging.basicConfig(format=_format, level=log_level)
 
 
 def log_to_file(
     logger_name=None, log_level=logging.INFO, log_filename="tensorflow.log"
-): # pragma: no cover
-
+):  # pragma: no cover
+    """
+    Log to a file with the given log level.
+    """
     if not os.path.exists(os.path.dirname(log_filename)):
         os.makedirs(os.path.dirname(log_filename))
 
@@ -40,7 +45,11 @@ def log_to_file(
     log.addHandler(fh)
 
 
-def log_versions(): # pragma: no cover
+def log_versions():  # pragma: no cover
+
+    """
+    Log the versions of git and torch.
+    """
     import torch
     import subprocess
 
@@ -60,11 +69,24 @@ def log_versions(): # pragma: no cover
 
 
 class disable_logging(object):
+    """
+    A context manager to disable logging temporarily.
+    """
+
     def __init__(self, level=logging.ERROR):
+        """
+        Initialize the context manager.
+        """
         logging.disable(level=level)
 
     def __enter__(self):
+        """
+        Enter the context manager.
+        """
         return self
 
     def __exit__(self, type, value, traceback):
+        """
+        Exit the context manager and enable logging.
+        """
         logging.disable(level=logging.NOTSET)

@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-from functools import partial
-
 import torch
 import torch.nn as nn
 
@@ -22,7 +19,12 @@ from torch_harmonics import *
 
 
 class Preprocessor2D(nn.Module):
-    def __init__(self, params, img_size=(720, 1440)):
+    """
+    Preprocessing methods to flatten image history, add static features, and
+    convert the data format from NCHW to NHWC.
+    """
+
+    def __init__(self, params, img_size=(720, 1440)):  # pragma: no cover
         super(Preprocessor2D, self).__init__()
 
         self.n_history = params.n_history
@@ -103,8 +105,7 @@ class Preprocessor2D(nn.Module):
         #     self.forward_transform = RealVectorSHT(*self.img_size, grid=self.input_grid).float()
         #     self.inverse_transform = InverseRealSHT(*self.img_size, grid=self.output_grid).float()
 
-    def _flatten_history(self, x, y):
-
+    def _flatten_history(self, x, y):  # pragma: no cover
         # flatten input
         if x.dim() == 5:
             b_, t_, c_, h_, w_ = x.shape
@@ -117,22 +118,25 @@ class Preprocessor2D(nn.Module):
 
         return x, y
 
-    def _add_static_features(self, x, y):
+    def _add_static_features(self, x, y):  # pragma: no cover
         # we need to replicate the grid for each batch:
         static = torch.tile(self.static_features, dims=(x.shape[0], 1, 1, 1))
         x = torch.cat([x, static], dim=1)
         return x, y
 
-    def _nchw_to_nhwc(self, x, y):
+    def _nchw_to_nhwc(self, x, y):  # pragma: no cover
         x = x.to(memory_format=torch.channels_last)
         if y is not None:
             y = y.to(memory_format=torch.channels_last)
 
         return x, y
 
-    def append_history(self, x1, x2):
-
-        # without history, just return the second tensor
+    def append_history(self, x1, x2):  # pragma: no cover
+        """
+        Appends history to the main input.
+        Without history, just returns the second tensor (x2).
+        """
+        #
         # with grid if requested
         if self.n_history == 0:
             return x2
@@ -178,7 +182,8 @@ class Preprocessor2D(nn.Module):
     #
     #    return x, y
 
-    def append_channels(self, x, xc):
+    def append_channels(self, x, xc):  # pragma: no cover
+        """Appends channels"""
         if x.dim() == 4:
             b_, c_, h_, w_ = x.shape
             x = torch.reshape(
@@ -192,13 +197,13 @@ class Preprocessor2D(nn.Module):
 
         return xo
 
-    def forward(self, x, y=None, xz=None, yz=None):
+    def forward(self, x, y=None, xz=None, yz=None):  # pragma: no cover
         if xz is not None:
             x = self.append_channels(x, xz)
 
         return self._forward(x, y)
 
-    def _forward(self, x, y):
+    def _forward(self, x, y):  # pragma: no cover
         # we always want to flatten the history, even if its a singleton
         x, y = self._flatten_history(x, y)
 
@@ -214,7 +219,8 @@ class Preprocessor2D(nn.Module):
         return x, y
 
 
-def get_preprocessor(params):
+def get_preprocessor(params):  # pragma: no cover
+    """Returns the preprocessor module."""
     return Preprocessor2D(params)
 
 

@@ -15,10 +15,9 @@
 from functools import partial
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
-import torch.distributed as dist
 from dataclasses import dataclass
+from typing import Any, Tuple
 
 # helpers
 from modulus.models.sfno.layers import trunc_normal_, DropPath, MLP
@@ -26,15 +25,13 @@ from modulus.models.sfno.layers import trunc_normal_, DropPath, MLP
 # import global convolution and non-linear spectral layers
 from modulus.models.sfno.layers import SpectralAttention2d
 from modulus.models.sfno.s2convolutions import SpectralConvS2, SpectralAttentionS2
-from modulus.models.sfno.s2convolutions import RealSpectralAttentionS2
-from modulus.models.sfno.s2convolutions import LocalConvS2
 
 # get spectral transforms from torch_harmonics
 import torch_harmonics as th
 import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
-from modulus.models.sfno.layers import RealFFT2, InverseRealFFT2
+from modulus.models.sfno.layers import RealFFT2
 from modulus.utils.sfno.distributed.layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
@@ -43,10 +40,6 @@ from modulus.utils.sfno.distributed.layers import (
 
 # more distributed stuff
 from modulus.utils.sfno.distributed import comm
-from modulus.utils.sfno.distributed.mappings import (
-    scatter_to_parallel_region,
-    gather_from_parallel_region,
-)
 
 # layer normalization
 from apex.normalization import FusedLayerNorm
@@ -73,6 +66,8 @@ class MetaData(ModelMetaData):
 
 
 class SpectralFilterLayer(nn.Module):
+    """Spectral filter layer"""
+
     def __init__(
         self,
         forward_transform,
@@ -152,6 +147,8 @@ class SpectralFilterLayer(nn.Module):
 
 
 class FourierNeuralOperatorBlock(nn.Module):
+    """Fourier Neural Operator Block"""
+
     def __init__(
         self,
         forward_transform,
@@ -293,39 +290,125 @@ class FourierNeuralOperatorBlock(nn.Module):
 
 
 class SphericalFourierNeuralOperatorNet(Module):
+    """
+    Spherical Fourier Neural Operator Network
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary of parameters
+    spectral_transform : str, optional
+        Type of spectral transformation to use, by default "sht"
+    filter_type : str, optional
+        Type of filter to use ('linear', 'non-linear'), by default "non-linear"
+    operator_type : str, optional
+        Type of operator to use ('diaginal', 'dhconv'), by default "diagonal"
+    img_shape : tuple, optional
+        Shape of the input channels, by default (721, 1440)
+    scale_factor : int, optional
+        Scale factor to use, by default 16
+    in_chans : int, optional
+        Number of input channels, by default 2
+    out_chans : int, optional
+        Number of output channels, by default 2
+    embed_dim : int, optional
+        Dimension of the embeddings, by default 256
+    num_layers : int, optional
+        Number of layers in the network, by default 12
+    use_mlp : int, optional
+        Whether to use MLP, by default True
+    mlp_ratio : int, optional
+        Ratio of MLP to use, by default 2.0
+    activation_function : str, optional
+        Activation function to use, by default "gelu"
+    encoder_layers : int, optional
+        Number of layers in the encoder, by default 1
+    pos_embed : bool, optional
+        Whether to use positional embedding, by default True
+    drop_rate : float, optional
+        Dropout rate, by default 0.0
+    drop_path_rate : float, optional
+        Dropout path rate, by default 0.0
+    num_blocks : int, optional
+        Number of blocks in the network, by default 16
+    sparsity_threshold : float, optional
+        Threshold for sparsity, by default 0.0
+    normalization_layer : str, optional
+        Type of normalization layer to use ("layer_norm", "instance_norm", "none"), by default "instance_norm"
+    hard_thresholding_fraction : float, optional
+        Fraction of hard thresholding to apply, by default 1.0
+    use_complex_kernels : bool, optional
+        Whether to use complex kernels, by default True
+    big_skip : bool, optional
+        Whether to use big skip connections, by default True
+    rank : float, optional
+        Rank of the approximation, by default 1.0
+    factorization : Any, optional
+        Type of factorization to use, by default None
+    separable : bool, optional
+        Whether to use separable convolutions, by default False
+    complex_network : bool, optional
+        Whether to use a complex network architecture, by default True
+    complex_activation : str, optional
+        Type of complex activation function to use, by default "real"
+    spectral_layers : int, optional
+        Number of spectral layers, by default 3
+    checkpointing : int, optional
+        Number of checkpointing segments, by default 0
+
+    Example:
+    --------
+    >>> from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
+    >>> model = SFNO(
+    ...         params={},
+    ...         img_shape=(8, 16),
+    ...         scale_factor=4,
+    ...         in_chans=2,
+    ...         out_chans=2,
+    ...         embed_dim=16,
+    ...         num_layers=2,
+    ...         encoder_layers=1,
+    ...         num_blocks=4,
+    ...         spectral_layers=2,
+    ...         use_mlp=True,)
+    >>> model(torch.randn(1, 2, 8, 16)).shape
+    torch.Size([1, 2, 8, 16])
+    """
+
     def __init__(
         self,
-        params,
-        spectral_transform="sht",
-        filter_type="non-linear",
-        operator_type="diagonal",
-        img_shape=(721, 1440),
-        scale_factor=16,
-        in_chans=2,
-        out_chans=2,
-        embed_dim=256,
-        num_layers=12,
-        use_mlp=True,
-        mlp_ratio=2.0,
-        activation_function="gelu",
-        encoder_layers=1,
-        pos_embed=True,
-        drop_rate=0.0,
-        drop_path_rate=0.0,
-        num_blocks=16,
-        sparsity_threshold=0.0,
-        normalization_layer="instance_norm",
-        hard_thresholding_fraction=1.0,
-        use_complex_kernels=True,
-        big_skip=True,
-        rank=1.0,
-        factorization=None,
-        separable=False,
-        complex_network=True,
-        complex_activation="real",
-        spectral_layers=3,
-        checkpointing=0,
+        params: dict,
+        spectral_transform: str = "sht",
+        filter_type: str = "non-linear",
+        operator_type: str = "diagonal",
+        img_shape: Tuple[int] = (721, 1440),
+        scale_factor: int = 16,
+        in_chans: int = 2,
+        out_chans: int = 2,
+        embed_dim: int = 256,
+        num_layers: int = 12,
+        use_mlp: int = True,
+        mlp_ratio: int = 2.0,
+        activation_function: str = "gelu",
+        encoder_layers: int = 1,
+        pos_embed: bool = True,
+        drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        num_blocks: int = 16,
+        sparsity_threshold: float = 0.0,
+        normalization_layer: str = "instance_norm",
+        hard_thresholding_fraction: float = 1.0,
+        use_complex_kernels: bool = True,
+        big_skip: bool = True,
+        rank: float = 1.0,
+        factorization: Any = None,
+        separable: bool = False,
+        complex_network: bool = True,
+        complex_activation: str = "real",
+        spectral_layers: int = 3,
+        checkpointing: int = 0,
     ):
+
         super(SphericalFourierNeuralOperatorNet, self).__init__(meta=MetaData())
 
         self.params = params
@@ -695,7 +778,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             else:
                 x = x + self.pos_embed
 
-        # maybe clean the padding jsut in case
+        # maybe clean the padding just in case
 
         x = self.pos_drop(x)
 

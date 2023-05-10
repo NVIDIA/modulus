@@ -72,6 +72,17 @@ class ComplexReLU(nn.Module):
 
 
 class ComplexActivation(nn.Module):
+    """
+    A module implementing complex-valued activation functions.
+    The module supports different modes of operation, depending on how
+    the complex numbers are treated for the activation function:
+    - "cartesian": the activation function is applied separately to the
+       real and imaginary parts of the complex input.
+    - "modulus": the activation function is applied to the modulus of
+       the complex input, after adding a learnable bias.
+    - any other mode: the complex input is returned as-is (identity operation).
+    """
+
     def __init__(self, activation, mode="cartesian", bias_shape=None):
         super(ComplexActivation, self).__init__()
 

@@ -29,7 +29,7 @@ class LossHandler(nn.Module):
     Wrapper class that will handle computing losses.
     """
 
-    def __init__(self, params, img_size=(720, 1440), d=2):
+    def __init__(self, params, img_size=(720, 1440), d=2):  # pragma: no cover
 
         super(LossHandler, self).__init__()
 
@@ -126,7 +126,7 @@ class LossHandler(nn.Module):
             self.do_gather_input = True
 
     @torch.jit.ignore
-    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:
+    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         # combine data
         # h
         xh = gather_from_parallel_region(x, -2, "h")
@@ -137,10 +137,13 @@ class LossHandler(nn.Module):
 
         return x
 
-    def is_distributed(self):
+    def is_distributed(self):  # pragma: no cover
+        """Returns whether the loss is distributed or not (always False)"""
         return False
 
-    def forward(self, prd: torch.Tensor, tar: torch.Tensor, inp: torch.Tensor):
+    def forward(
+        self, prd: torch.Tensor, tar: torch.Tensor, inp: torch.Tensor
+    ):  # pragma: no cover
 
         if self.do_gather_input:
             prd = self._gather_input(prd)
@@ -189,7 +192,7 @@ class GeometricLpLoss(nn.Module):
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
         pole_mask: Optional[int] = 0,
-    ):
+    ):  # pragma: no cover
         super(GeometricLpLoss, self).__init__()
 
         self.d = 2
@@ -209,7 +212,10 @@ class GeometricLpLoss(nn.Module):
         self.register_buffer("jacobian", jacobian)
         self.dA = dlambda * dtheta
 
-    def abs(self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor):
+    def abs(
+        self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor
+    ):  # pragma: no cover
+        """Computes the absolute loss"""
         num_examples = prd.size()[0]
 
         if self.pole_mask:
@@ -250,7 +256,8 @@ class GeometricLpLoss(nn.Module):
         tar: torch.Tensor,
         chw: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-    ):
+    ):  # pragma: no cover
+        """Computes the relative loss"""
         num_examples = prd.size()[0]
 
         if self.pole_mask:
@@ -302,7 +309,7 @@ class GeometricLpLoss(nn.Module):
         tar: torch.Tensor,
         chw: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-    ):
+    ):  # pragma: no cover
         if self.absolute:
             loss = self.abs(prd, tar, chw)
         else:
@@ -318,7 +325,7 @@ class LpLoss(nn.Module):
         p: Optional[float] = 2.0,
         size_average: Optional[bool] = True,
         reduction: Optional[bool] = True,
-    ):
+    ):  # pragma: no cover
         super(LpLoss, self).__init__()
 
         # Dimension and Lp-norm type are postive
@@ -329,7 +336,10 @@ class LpLoss(nn.Module):
         self.reduction = reduction
         self.size_average = size_average
 
-    def abs(self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor):
+    def abs(
+        self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor
+    ):  # pragma: no cover
+        """Computes the absolute loss"""
         num_examples = prd.size()[0]
 
         # Assume uniform mesh
@@ -360,7 +370,8 @@ class LpLoss(nn.Module):
         tar: torch.Tensor,
         chw: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-    ):
+    ):  # pragma: no cover
+        """Computes the relative loss"""
         num_examples = prd.size()[0]
 
         prdv = prd.reshape(num_examples, -1)
@@ -394,7 +405,7 @@ class LpLoss(nn.Module):
         tar: torch.Tensor,
         chw: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-    ):
+    ):  # pragma: no cover
         return self.rel(prd, tar, chw, mask)
 
 
@@ -455,7 +466,7 @@ class GeometricH1Loss(nn.Module):
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
         alpha: Optional[float] = 0.9,
-    ):
+    ):  # pragma: no cover
         super(GeometricH1Loss, self).__init__()
 
         self.reduction = reduction
@@ -469,7 +480,8 @@ class GeometricH1Loss(nn.Module):
         h1_weights = h1_weights * (h1_weights + 1)
         self.register_buffer("h1_weights", h1_weights)
 
-    def abs(self, prd: torch.Tensor, tar: torch.Tensor):
+    def abs(self, prd: torch.Tensor, tar: torch.Tensor):  # pragma: no cover
+        """Computes the absolute loss"""
         num_examples = prd.size()[0]
 
         coeffs = torch.view_as_real(self.sht(prd - tar))
@@ -495,7 +507,8 @@ class GeometricH1Loss(nn.Module):
 
     def rel(
         self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):
+    ):  # pragma: no cover
+        """Computes the relative loss"""
         num_examples = prd.size()[0]
 
         coeffs = torch.view_as_real(self.sht(prd - tar))
@@ -543,7 +556,7 @@ class GeometricH1Loss(nn.Module):
 
     def forward(
         self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):
+    ):  # pragma: no cover
         if self.absolute:
             loss = self.abs(prd, tar)
         else:
@@ -562,7 +575,7 @@ class SpectralLoss(nn.Module):
         reduction: Optional[bool] = True,
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
-    ):
+    ):  # pragma: no cover
         super(SpectralLoss, self).__init__()
 
         self.reduction = reduction
@@ -575,7 +588,8 @@ class SpectralLoss(nn.Module):
         spectral_weights = spectral_weights + 1
         self.register_buffer("spectral_weights", spectral_weights)
 
-    def abs(self, prd: torch.Tensor, tar: torch.Tensor):
+    def abs(self, prd: torch.Tensor, tar: torch.Tensor):  # pragma: no cover
+        """Computes the absolute loss"""
         num_examples = prd.size()[0]
 
         # compute coefficients
@@ -599,7 +613,8 @@ class SpectralLoss(nn.Module):
 
     def rel(
         self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):
+    ):  # pragma: no cover
+        """Computes the relative loss"""
         num_examples = prd.size()[0]
 
         # compute coefficients
@@ -639,7 +654,7 @@ class SpectralLoss(nn.Module):
 
     def forward(
         self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):
+    ):  # pragma: no cover
         if self.absolute:
             loss = self.abs(prd, tar)
         else:

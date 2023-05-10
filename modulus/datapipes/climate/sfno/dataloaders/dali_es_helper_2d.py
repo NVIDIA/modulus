@@ -33,7 +33,9 @@ from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 
 
 class GeneralES(object):
-    def _get_slices(self, lst): # pragma: no cover
+    """"""
+
+    def _get_slices(self, lst):  # pragma: no cover
         for a, b in groupby(enumerate(lst), lambda pair: pair[1] - pair[0]):
             b = list(b)
             yield slice(b[0][1], b[-1][1] + 1)
@@ -63,7 +65,7 @@ class GeneralES(object):
         zenith_angle=True,
         seed=333,
         is_parallel=True,
-    ): # pragma: no cover
+    ):  # pragma: no cover
 
         self.batch_size = batch_size
         self.location = location
@@ -120,7 +122,7 @@ class GeneralES(object):
         self.dt_samples = 6
 
     # HDF5 routines
-    def _get_stats_h5(self, enable_logging): # pragma: no cover
+    def _get_stats_h5(self, enable_logging):  # pragma: no cover
         with h5py.File(self.files_paths[0], "r") as _f:
             if enable_logging:
                 logging.info("Getting file stats from {}".format(self.files_paths[0]))
@@ -137,12 +139,14 @@ class GeneralES(object):
                 self.n_samples_year.append(_f["fields"].shape[0])
         return
 
-    def _get_year_h5(self, year_idx): # pragma: no cover
+    def _get_year_h5(self, year_idx):  # pragma: no cover
         self.files[year_idx] = h5py.File(self.files_paths[year_idx], "r")
         self.dsets[year_idx] = self.files[year_idx]["fields"]
         return
 
-    def _get_data_h5(self, inp, tar, dset, local_idx, start_x, end_x, start_y, end_y): # pragma: no cover
+    def _get_data_h5(
+        self, inp, tar, dset, local_idx, start_x, end_x, start_y, end_y
+    ):  # pragma: no cover
         off = 0
         for slice_in in self.in_channels_slices:
             start = off
@@ -182,7 +186,7 @@ class GeneralES(object):
         return inp, tar
 
     # zarr functions
-    def _get_stats_zarr(self, enable_logging): # pragma: no cover
+    def _get_stats_zarr(self, enable_logging):  # pragma: no cover
         with zarr.convenience.open(self.files_paths[0], "r") as _f:
             if enable_logging:
                 logging.info("Getting file stats from {}".format(self.files_paths[0]))
@@ -199,12 +203,14 @@ class GeneralES(object):
 
         return
 
-    def _get_year_zarr(self, year_idx): # pragma: no cover
+    def _get_year_zarr(self, year_idx):  # pragma: no cover
         self.files[year_idx] = zarr.convenience.open(self.files_paths[year_idx], "r")
         self.dsets[year_idx] = self.files[year_idx]["/fields"]
         return
 
-    def _get_data_zarr(self, inp, tar, dset, local_idx, start_x, end_x, start_y, end_y): # pragma: no cover
+    def _get_data_zarr(
+        self, inp, tar, dset, local_idx, start_x, end_x, start_y, end_y
+    ):  # pragma: no cover
         off = 0
         for slice_in in self.in_channels_slices:
             start = off
@@ -233,7 +239,7 @@ class GeneralES(object):
 
         return inp, tar
 
-    def _get_files_stats(self, enable_logging): # pragma: no cover
+    def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
         self.files_paths = glob.glob(os.path.join(self.location, "????.h5"))
         self.file_format = "h5"
@@ -371,7 +377,7 @@ class GeneralES(object):
         if not self.is_parallel:
             self._init_buffers()
 
-    def _init_buffers(self): # pragma: no cover
+    def _init_buffers(self):  # pragma: no cover
         # set device
         self.device = cp.cuda.Device(self.device_id)
         self.device.use()
@@ -417,7 +423,7 @@ class GeneralES(object):
             ),
         ]
 
-    def _compute_zenith_angle(self, local_idx, year_idx): # pragma: no cover
+    def _compute_zenith_angle(self, local_idx, year_idx):  # pragma: no cover
         # compute hours into the year
         year = self.years[year_idx]
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0)
@@ -452,10 +458,10 @@ class GeneralES(object):
 
         return cos_zenith_inp, cos_zenith_tar
 
-    def __getstate__(self): # pragma: no cover
+    def __getstate__(self):  # pragma: no cover
         return self.__dict__.copy()
 
-    def __setstate__(self, state): # pragma: no cover
+    def __setstate__(self, state):  # pragma: no cover
         self.__dict__.update(state)
 
         if self.file_format == "h5":
@@ -468,15 +474,15 @@ class GeneralES(object):
         if self.is_parallel:
             self._init_buffers()
 
-    def __len__(self): # pragma: no cover
+    def __len__(self):  # pragma: no cover
         return self.n_samples_shard
 
-    def __del__(self): # pragma: no cover
+    def __del__(self):  # pragma: no cover
         for f in self.files:
             if f is not None:
                 f.close()
 
-    def __call__(self, sample_info): # pragma: no cover
+    def __call__(self, sample_info):  # pragma: no cover
 
         # compute global iteration index:
         global_sample_idx = (

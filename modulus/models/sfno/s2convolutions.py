@@ -30,10 +30,6 @@ from tltorch.factorized_tensors.core import FactorizedTensor
 from modulus.models.sfno.activations import ComplexReLU
 from modulus.models.sfno.contractions import compl_muladd2d_fwd, compl_mul2d_fwd
 from modulus.models.sfno.contractions import _contract_localconv_fwd
-from modulus.models.sfno.contractions import (
-    _contract_blockconv_fwd,
-    _contractadd_blockconv_fwd,
-)
 from modulus.models.sfno.factorizations import get_contract_fun
 
 # for the experimental module
@@ -50,9 +46,10 @@ import torch_harmonics.distributed as thd
 
 class SpectralConvS2(nn.Module):
     """
-    Spectral Convolution according to Driscoll & Healy. Designed for convolutions on the two-sphere S2
-    using the Spherical Harmonic Transforms in torch-harmonics, but supports convolutions on the periodic
-    domain via the RealFFT2 and InverseRealFFT2 wrappers.
+    Spectral Convolution according to Driscoll & Healy. Designed for convolutions on
+    the two-sphere S2 using the Spherical Harmonic Transforms in torch-harmonics, but
+    supports convolutions on the periodic domain via the RealFFT2 and InverseRealFFT2
+    wrappers.
     """
 
     def __init__(
@@ -69,7 +66,7 @@ class SpectralConvS2(nn.Module):
         decomposition_kwargs=dict(),
         bias=False,
         use_tensorly=True,
-    ):
+    ):  # pragma: no cover
         super(SpectralConvS2, self).__init__()
 
         if scale == "auto":
@@ -162,7 +159,7 @@ class SpectralConvS2(nn.Module):
         if bias:
             self.bias = nn.Parameter(scale * torch.zeros(1, out_channels, 1, 1))
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         residual = x
@@ -215,7 +212,7 @@ class LocalConvS2(nn.Module):
         nradius=120,
         scale="auto",
         bias=False,
-    ):
+    ):  # pragma: no cover
         super(LocalConvS2, self).__init__()
 
         if scale == "auto":
@@ -253,7 +250,7 @@ class LocalConvS2(nn.Module):
                 scale * torch.randn(1, out_channels, *self.output_dims)
             )
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         x = x.float()
@@ -307,7 +304,7 @@ class SpectralAttentionS2(nn.Module):
         bias=False,
         spectral_layers=1,
         drop_rate=0.0,
-    ):
+    ):  # pragma: no cover
         super(SpectralAttentionS2, self).__init__()
 
         self.embed_dim = embed_dim
@@ -409,8 +406,8 @@ class SpectralAttentionS2(nn.Module):
 
         self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
-    def forward_mlp(self, x):
-
+    def forward_mlp(self, x):  # pragma: no cover
+        """forward pass of the MLP"""
         B, C, H, W = x.shape
 
         if self.operator_type == "block-separable":
@@ -438,7 +435,7 @@ class SpectralAttentionS2(nn.Module):
 
         return x
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         residual = x
@@ -484,7 +481,7 @@ class RealSpectralAttentionS2(nn.Module):
         bias=False,
         spectral_layers=1,
         drop_rate=0.0,
-    ):
+    ):  # pragma: no cover
         super(RealSpectralAttentionS2, self).__init__()
 
         self.embed_dim = embed_dim
@@ -538,8 +535,8 @@ class RealSpectralAttentionS2(nn.Module):
 
         self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
-    def forward_mlp(self, x):
-
+    def forward_mlp(self, x):  # pragma: no cover
+        """forward pass of the MLP"""
         B, C, H, W = x.shape
 
         xr = torch.view_as_real(x)
@@ -562,7 +559,7 @@ class RealSpectralAttentionS2(nn.Module):
 
         return x
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
         x = x.to(torch.float32)

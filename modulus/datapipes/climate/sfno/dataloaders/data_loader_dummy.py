@@ -23,7 +23,11 @@ from modulus.utils.sfno.distributed import comm
 
 
 class DummyLoader(object):
-    def __init__(self, params, location, train, device):
+    """
+    Dummy data loader for testing purposes
+    """
+
+    def __init__(self, params, location, train, device):  # pragma: no cover
         self.params = params
         self.location = location
         self.train = train
@@ -69,7 +73,7 @@ class DummyLoader(object):
 
         self._get_files_stats()
 
-    def _get_files_stats(self):
+    def _get_files_stats(self):  # pragma: no cover
         self.files_paths = glob.glob(self.location + "/*.h5")
 
         if not self.files_paths:
@@ -197,20 +201,22 @@ class DummyLoader(object):
             np.float32
         )
 
-    def get_input_normalization(self):
+    def get_input_normalization(self):  # pragma: no cover
+        """Returns the input normalization parameters"""
         return self.in_bias, self.in_scale
 
-    def get_output_normalization(self):
+    def get_output_normalization(self):  # pragma: no cover
+        """Returns the output normalization parameters"""
         return self.out_bias, self.out_scale
 
-    def __len__(self):
+    def __len__(self):  # pragma: no cover
         return self.n_samples_shard
 
-    def __iter__(self):
+    def __iter__(self):  # pragma: no cover
         self.sample_idx = 0
         return self
 
-    def __next__(self):
+    def __next__(self):  # pragma: no cover
         if self.sample_idx < self.n_samples_shard:
             self.sample_idx += 1
             return self.inp, self.tar

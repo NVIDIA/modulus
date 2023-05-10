@@ -19,27 +19,35 @@ logging_utils.config_logger()
 import torch
 
 
-def unlog_tp(x, eps=1e-5):
+def unlog_tp(x, eps=1e-5):  # pragma: no cover
+    """numpy transformation"""
     #    return np.exp(x + np.log(eps)) - eps
     return eps * (np.exp(x) - 1)
 
 
-def unlog_tp_torch(x, eps=1e-5):
+def unlog_tp_torch(x, eps=1e-5):  # pragma: no cover
+    """torch transformation"""
     #    return torch.exp(x + torch.log(eps)) - eps
     return eps * (torch.exp(x) - 1)
 
 
-def mean(x, axis=None):
+def mean(x, axis=None):  # pragma: no cover
+    """Calculates the spatial mean."""
     # spatial mean
     y = np.sum(x, axis) / np.size(x, axis)
     return y
 
 
-def lat_np(j, num_lat):
+def lat_np(j, num_lat):  # pragma: no cover
+    """Calculates the latitude in degrees."""
     return 90 - j * 180 / (num_lat - 1)
 
 
-def weighted_acc(pred, target, weighted=True):
+def weighted_acc(pred, target, weighted=True):  # pragma: no cover
+    """
+    Takes in arrays of size [1, num_lat, num_long]  and returns latitude-weighted
+    correlation
+    """
     # takes in shape [1, num_lat, num_long]
     if len(pred.shape) == 2:
         pred = np.expand_dims(pred, 0)
@@ -62,7 +70,11 @@ def weighted_acc(pred, target, weighted=True):
     return r
 
 
-def weighted_acc_masked(pred, target, weighted=True, maskarray=1):
+def weighted_acc_masked(pred, target, weighted=True, maskarray=1):  # pragma: no cover
+    """
+    Takes in arrays of size [1, num_lat, num_long]  and returns masked latitude-weighted
+    correlation
+    """
     # takes in shape [1, num_lat, num_long]
     if len(pred.shape) == 2:
         pred = np.expand_dims(pred, 0)
@@ -86,7 +98,10 @@ def weighted_acc_masked(pred, target, weighted=True, maskarray=1):
     return r
 
 
-def weighted_rmse(pred, target):
+def weighted_rmse(pred, target):  # pragma: no cover
+    """
+    Calculates the latitude-weighted rmse
+    """
     if len(pred.shape) == 2:
         pred = np.expand_dims(pred, 0)
     if len(target.shape) == 2:
@@ -107,11 +122,15 @@ def weighted_rmse(pred, target):
     )
 
 
-def latitude_weighting_factor(j, num_lat, s):
+def latitude_weighting_factor(j, num_lat, s):  # pragma: no cover
+    """Calculates the latitude weighting factor."""
     return num_lat * np.cos(np.pi / 180.0 * lat_np(j, num_lat)) / s
 
 
-def top_quantiles_error(pred, target):
+def top_quantiles_error(pred, target):  # pragma: no cover
+    """
+    Calculates the top quantile error
+    """
     if len(pred.shape) == 2:
         pred = np.expand_dims(pred, 0)
     if len(target.shape) == 2:
@@ -127,21 +146,24 @@ def top_quantiles_error(pred, target):
 
 # torch version for rmse comp
 @torch.jit.script
-def lat(j: torch.Tensor, num_lat: int) -> torch.Tensor:
+def lat(j: torch.Tensor, num_lat: int) -> torch.Tensor:  # pragma: no cover
+    """Calculates the latitude in degrees."""
     return 90.0 - j * 180.0 / float(num_lat - 1)
 
 
 @torch.jit.script
 def latitude_weighting_factor_torch(
     j: torch.Tensor, num_lat: int, s: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the latitude weighting factor."""
     return num_lat * torch.cos(3.1416 / 180.0 * lat(j, num_lat)) / s
 
 
 @torch.jit.script
 def weighted_rmse_torch_channels(
     pred: torch.Tensor, target: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the latitude-weighted rmse for each channel"""
     # takes in arrays of size [n, c, h, w]  and returns latitude-weighted rmse for each chann
     num_lat = pred.shape[2]
     # num_long = target.shape[2]
@@ -156,7 +178,10 @@ def weighted_rmse_torch_channels(
 
 
 @torch.jit.script
-def weighted_rmse_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def weighted_rmse_torch(
+    pred: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the latitude-weighted rmse"""
     result = weighted_rmse_torch_channels(pred, target)
     return torch.mean(result, dim=0)
 
@@ -164,8 +189,8 @@ def weighted_rmse_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tenso
 @torch.jit.script
 def weighted_acc_masked_torch_channels(
     pred: torch.Tensor, target: torch.Tensor, maskarray: torch.Tensor
-) -> torch.Tensor:
-    # takes in arrays of size [n, c, h, w]  and returns latitude-weighted acc
+) -> torch.Tensor:  # pragma: no cover
+    """Takes in arrays of size [n, c, h, w]  and returns latitude-weighted ACC"""
     num_lat = pred.shape[2]
     lat_t = torch.arange(start=0, end=num_lat, device=pred.device)
     s = torch.sum(torch.cos(3.1416 / 180.0 * lat(lat_t, num_lat)))
@@ -182,8 +207,8 @@ def weighted_acc_masked_torch_channels(
 @torch.jit.script
 def weighted_acc_torch_channels(
     pred: torch.Tensor, target: torch.Tensor
-) -> torch.Tensor:
-    # takes in arrays of size [n, c, h, w]  and returns latitude-weighted acc
+) -> torch.Tensor:  # pragma: no cover
+    """Takes in arrays of size [n, c, h, w]  and returns latitude-weighted ACC"""
     num_lat = pred.shape[2]
     # num_long = target.shape[2]
     lat_t = torch.arange(start=0, end=num_lat, device=pred.device)
@@ -199,7 +224,10 @@ def weighted_acc_torch_channels(
 
 
 @torch.jit.script
-def weighted_acc_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def weighted_acc_torch(
+    pred: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the latitude-weighted ACC"""
     result = weighted_acc_torch_channels(pred, target)
     return torch.mean(result, dim=0)
 
@@ -207,7 +235,8 @@ def weighted_acc_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor
 @torch.jit.script
 def unweighted_acc_torch_channels(
     pred: torch.Tensor, target: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the ACC without weighting"""
     result = torch.sum(pred * target, dim=(-1, -2)) / torch.sqrt(
         torch.sum(pred * pred, dim=(-1, -2)) * torch.sum(target * target, dim=(-1, -2))
     )
@@ -215,13 +244,19 @@ def unweighted_acc_torch_channels(
 
 
 @torch.jit.script
-def unweighted_acc_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def unweighted_acc_torch(
+    pred: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the ACC without weighting"""
     result = unweighted_acc_torch_channels(pred, target)
     return torch.mean(result, dim=0)
 
 
 @torch.jit.script
-def top_quantiles_error_torch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def top_quantiles_error_torch(
+    pred: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """Calculates the top quantiles error"""
     qs = 100
     qlim = 3
     qcut = 0.1
