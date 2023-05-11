@@ -19,9 +19,29 @@ FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 RUN pip install --upgrade pip setuptools  
 
 # Install nightly build of dgl
-RUN pip install --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
-RUN pip install --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
+RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
+RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
+
+ENV _CUDA_COMPAT_TIMEOUT=90
+
+# Install custom onnx
+# TODO: Find a fix to eliminate the custom build
+# Forcing numpy update to over ride numba 0.56.4 max numpy constraint
+COPY . /modulus/ 
+RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl" ]; then \
+	echo "Custom wheel exists, installing!" && \
+	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl; \
+    else \
+	echo "No custom wheel present, skipping" && \
+	pip install numpy==1.22.4; \
+    fi
+# cleanup of stage
+RUN rm -rf /modulus/ 
+
+# CI image
+FROM builder as ci
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
 
 # install libcugraphops and pylibcugraphops
 ENV DEBIAN_FRONTEND=noninteractive
@@ -43,16 +63,6 @@ RUN mkdir -p /opt/cugraphops &&\
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
 
-ENV _CUDA_COMPAT_TIMEOUT=90
-
-# Install custom onnx
-# TODO: Find a fix to eliminate the custom build
-COPY ./deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
-RUN pip install --force-reinstall onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
-
-# CI image
-FROM builder as ci
-RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 
@@ -63,5 +73,11 @@ COPY . /modulus/
 RUN cd /modulus/ && pip install .
 
 # Clean up
-RUN rm -rf /modulus/ \
-    && rm -rf onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl
+RUN rm -rf /modulus/ 
+
+# Docs image
+FROM deploy as docs
+# Install CI packages
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 protobuf==3.20.0
+# Install packages for Sphinx build
+RUN pip install recommonmark==0.7.1 sphinx==5.1.1 sphinx-rtd-theme==1.0.0 pydocstyle==6.1.1 nbsphinx==0.8.9 nbconvert==6.4.3 jinja2==3.0.3
