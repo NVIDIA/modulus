@@ -23,10 +23,10 @@ RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.htm
 RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
 
-# Install benchy  # TODO check if needed
+# Install benchy
 RUN pip install git+https://github.com/romerojosh/benchy.git
 
-# install tensorly for compression experiments
+# install tensorly for compression
 RUN pip install git+https://github.com/tensorly/tensorly
 RUN pip install git+https://github.com/tensorly/torch tensorly-torch
 
