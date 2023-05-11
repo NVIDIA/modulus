@@ -18,8 +18,9 @@ from torch.optim import lr_scheduler as lrs
 
 from modulus.utils.sfno.warmup_scheduler import WarmupScheduler
 
+
 def test_warmup_scheduler():
-    """ test warmup scheduler"""
+    """test warmup scheduler"""
 
     param = nn.Parameter(torch.zeros((10), dtype=torch.float))
     opt = torch.optim.Adam([param], lr=0.5)
@@ -37,4 +38,3 @@ def test_warmup_scheduler():
     sd = scheduler.state_dict()
     scheduler.load_state_dict(sd)
     assert torch.allclose(torch.tensor(scheduler.get_last_lr()[0]), torch.tensor(0.0))
-

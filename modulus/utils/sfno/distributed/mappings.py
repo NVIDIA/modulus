@@ -1,3 +1,5 @@
+# ignore_header_test
+
 # coding=utf-8
 # Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -33,7 +35,7 @@ class _CopyToParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, comm_id_):  # pragma: no cover
-        """"""
+        """symblic method"""
         return input_
 
     @staticmethod
@@ -54,7 +56,7 @@ class _ReduceFromParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, comm_id_):  # pragma: no cover
-        """"""
+        """symblic method"""
         if comm.is_distributed(comm_id_):
             return _reduce(input_, group=comm.get_group(comm_id_))
         else:
@@ -77,7 +79,7 @@ class _ScatterToParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, dim_, comm_id_):  # pragma: no cover
-        """"""
+        """symblic method"""
         return _split(input_, dim_, group=comm.get_group(comm_id_))
 
     @staticmethod
@@ -138,38 +140,38 @@ class _GatherFromParallelRegion(torch.autograd.Function):
 # -----------------
 # matmul parallel
 def copy_to_matmul_parallel_region(input_):  # pragma: no cover
-    """"""
+    """copy helper"""
     return _CopyToParallelRegion.apply(input_, "matmul")
 
 
 def reduce_from_matmul_parallel_region(input_):  # pragma: no cover
-    """"""
+    """reduce helper"""
     return _ReduceFromParallelRegion.apply(input_, "matmul")
 
 
 def scatter_to_matmul_parallel_region(input_, dim):  # pragma: no cover
-    """"""
+    """scatter helper"""
     return _ScatterToParallelRegion.apply(input_, dim, "matmul")
 
 
 def gather_from_matmul_parallel_region(input_, dim):  # pragma: no cover
-    """"""
+    """gather helper"""
     return _GatherFromParallelRegion.apply(input_, dim, "matmul")
 
 
 # general
 def reduce_from_parallel_region(input_, comm_name):  # pragma: no cover
-    """"""
+    """reduce helper"""
     return _ReduceFromParallelRegion.apply(input_, comm_name)
 
 
 def scatter_to_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """"""
+    """scatter helper"""
     return _ScatterToParallelRegion.apply(input_, dim, comm_name)
 
 
 def gather_from_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """"""
+    """gather helper"""
     return _GatherFromParallelRegion.apply(input_, dim, comm_name)
 
 
@@ -178,17 +180,17 @@ def gather_from_parallel_region(input_, dim, comm_name):  # pragma: no cover
 
 # spatial parallel
 def copy_to_spatial_parallel_region(input_):  # pragma: no cover
-    """"""
+    """copy helper"""
     return _CopyToParallelRegion.apply(input_, "spatial")
 
 
 def scatter_to_spatial_parallel_region(input_, dim):  # pragma: no cover
-    """"""
+    """scatter helper"""
     return _ScatterToParallelRegion.apply(input_, dim, "spatial")
 
 
 def gather_from_spatial_parallel_region(input_, dim):  # pragma: no cover
-    """"""
+    """gather helper"""
     return _GatherFromParallelRegion.apply(input_, dim, "spatial")
 
 

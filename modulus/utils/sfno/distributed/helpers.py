@@ -1,4 +1,5 @@
-# coding=utf-8
+# ignore_header_test
+
 # Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +24,7 @@ from torch._utils import _flatten_dense_tensors
 
 
 def get_memory_format(tensor):  # pragma: no cover
-    """"""
+    """Helper routine to get the memory format"""
     if tensor.is_contiguous(memory_format=torch.channels_last):
         return torch.channels_last
     else:

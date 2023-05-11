@@ -17,6 +17,7 @@ import torch
 import numpy as np
 from modulus.utils.sfno.img_utils import PeriodicPad2d, reshape_fields
 
+
 def test_PeriodicPad2d():
     pad_width = 1
     pad = PeriodicPad2d(pad_width)
@@ -27,7 +28,9 @@ def test_PeriodicPad2d():
     padded_tensor = pad(tensor)
 
     # Check if padding is correctly applied
-    assert padded_tensor.shape == torch.Size([1, 1, 5, 5]), 'Padding was not applied correctly'
+    assert padded_tensor.shape == torch.Size(
+        [1, 1, 5, 5]
+    ), "Padding was not applied correctly"
 
 
 def test_reshape_fields():
@@ -59,14 +62,17 @@ def test_reshape_fields():
     img = np.ones((2, 2, 3, 3))  # shape (n_history+1, c, h, w)
 
     # Call the function under test
-    reshaped_img = reshape_fields(img, 'inp', None, None, 0, 0, params, 0, False, normalize=False)
+    reshaped_img = reshape_fields(
+        img, "inp", None, None, 0, 0, params, 0, False, normalize=False
+    )
 
     # Check if the output shape is as expected
-    assert reshaped_img.shape == torch.Size([4, 3, 3]), 'reshape_fields did not return the expected shape'
+    assert reshaped_img.shape == torch.Size(
+        [4, 3, 3]
+    ), "reshape_fields did not return the expected shape"
 
     # Remove mock npy files
     os.remove(params.min_path)
     os.remove(params.max_path)
     os.remove(params.global_means_path)
     os.remove(params.global_stds_path)
-

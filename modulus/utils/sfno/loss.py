@@ -183,6 +183,8 @@ class LossHandler(nn.Module):
 
 # double check if polar optimization has an effect - we use 5 here by default
 class GeometricLpLoss(nn.Module):
+    """Geometric Lp loss"""
+
     def __init__(
         self,
         img_size: Tuple[int, int],
@@ -319,6 +321,8 @@ class GeometricLpLoss(nn.Module):
 
 
 class LpLoss(nn.Module):
+    """Lp loss"""
+
     def __init__(
         self,
         d: Optional[float] = 2.0,
@@ -457,6 +461,8 @@ class LpLoss(nn.Module):
 
 # double check if polar optimization has an effect - we use 5 here by default
 class GeometricH1Loss(nn.Module):
+    """Geometric H1 loss"""
+
     def __init__(
         self,
         img_size: Tuple[int, int],
@@ -567,6 +573,8 @@ class GeometricH1Loss(nn.Module):
 
 # double check if polar optimization has an effect - we use 5 here by default
 class SpectralLoss(nn.Module):
+    """Spectral loss"""
+
     def __init__(
         self,
         img_size: Tuple[int, int],

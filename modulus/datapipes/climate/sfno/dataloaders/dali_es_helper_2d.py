@@ -33,7 +33,7 @@ from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 
 
 class GeneralES(object):
-    """"""
+    """Dali helper class"""
 
     def _get_slices(self, lst):  # pragma: no cover
         for a, b in groupby(enumerate(lst), lambda pair: pair[1] - pair[0]):

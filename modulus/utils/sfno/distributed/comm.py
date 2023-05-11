@@ -68,7 +68,7 @@ def get_group(comm_id: Union[str, int]) -> int:  # pragma: no cover
 
 # specialized routines for world comms
 def get_world_size():  # pragma: no cover
-    """"""
+    """Returns the world size"""
     if not dist.is_initialized():
         return 1
     else:
@@ -76,7 +76,7 @@ def get_world_size():  # pragma: no cover
 
 
 def get_world_rank():  # pragma: no cover
-    """"""
+    """Returns the world rank"""
     if not dist.is_initialized():
         return 0
     else:
@@ -84,7 +84,7 @@ def get_world_rank():  # pragma: no cover
 
 
 def get_local_rank():  # pragma: no cover
-    """"""
+    """Returns the local rank of the current process."""
     if os.getenv("LOCAL_RANK") is not None:
         # Use PyTorch env var if available
         return int(os.getenv("LOCAL_RANK"))
