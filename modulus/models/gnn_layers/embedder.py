@@ -16,10 +16,10 @@ import torch.nn as nn
 from typing import Tuple
 from torch import Tensor
 
-from .mlp import MLP
+from .mesh_graph_mlp import MeshGraphMLP
 
 
-class EncoderEmbedder(nn.Module):
+class GraphCastEncoderEmbedder(nn.Module):
     """GraphCast feature embedder for gird node features, multimesh node features,
     grid2mesh edge features, and multimesh edge features.
 
@@ -61,7 +61,7 @@ class EncoderEmbedder(nn.Module):
         super().__init__()
 
         # MLP for grid node embedding
-        self.grid_node_mlp = MLP(
+        self.grid_node_mlp = MeshGraphMLP(
             input_dim=input_dim_grid_nodes,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -72,7 +72,7 @@ class EncoderEmbedder(nn.Module):
         )
 
         # MLP for mesh node embedding
-        self.mesh_node_mlp = MLP(
+        self.mesh_node_mlp = MeshGraphMLP(
             input_dim=input_dim_mesh_nodes,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -83,7 +83,7 @@ class EncoderEmbedder(nn.Module):
         )
 
         # MLP for mesh edge embedding
-        self.mesh_edge_mlp = MLP(
+        self.mesh_edge_mlp = MeshGraphMLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -94,7 +94,7 @@ class EncoderEmbedder(nn.Module):
         )
 
         # MLP for grid2mesh edge embedding
-        self.grid2mesh_edge_mlp = MLP(
+        self.grid2mesh_edge_mlp = MeshGraphMLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,
@@ -120,7 +120,7 @@ class EncoderEmbedder(nn.Module):
         return grid_nfeat, mesh_nfeat, g2m_efeat, mesh_efeat
 
 
-class DecoderEmbedder(nn.Module):
+class GraphCastDecoderEmbedder(nn.Module):
     """GraphCast feature embedder for mesh2grid edge features
 
     Parameters
@@ -155,7 +155,7 @@ class DecoderEmbedder(nn.Module):
         super().__init__()
 
         # MLP for mesh2grid edge embedding
-        self.mesh2grid_edge_mlp = MLP(
+        self.mesh2grid_edge_mlp = MeshGraphMLP(
             input_dim=input_dim_edges,
             output_dim=output_dim,
             hidden_dim=hidden_dim,

@@ -16,15 +16,21 @@ import torch
 from torch import Tensor
 from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union, Tuple
 from torch.utils.checkpoint import checkpoint
 
 
 try:
     from pylibcugraphops.pytorch import StaticCSC, BipartiteCSC
+    from pylibcugraphops.pytorch.operators import (
+        update_efeat_bipartite_e2e,
+        update_efeat_static_e2e,
+        agg_concat_e2n,
+    )
 except:
-    StaticCSC = None
-    BipartiteCSC = None
+    update_efeat_bipartite_e2e = None
+    update_efeat_static_e2e = None
+    agg_concat_e2n = None
 
 
 class CuGraphCSC:
@@ -44,6 +50,10 @@ class CuGraphCSC:
         The edge feature indices tensor, by default None
     reverse_graph_bwd : bool, optional
         Whether to reverse the graph for the backward pass, by default True
+    cache_graph : bool, optional
+        Whether to cache graph structures when wrapping offsets and indices
+        to the corresponding cugraph-ops graph types. If graph change in each
+        iteration, set to False, by default True.
     """
 
     def __init__(
@@ -54,14 +64,15 @@ class CuGraphCSC:
         num_dst_nodes: int,
         ef_indices: Optional[Tensor] = None,
         reverse_graph_bwd: bool = True,
+        cache_graph: bool = True,
     ) -> None:
-
         self.offsets = offsets
         self.indices = indices
         self.num_src_nodes = num_src_nodes
         self.num_dst_nodes = num_dst_nodes
         self.ef_indices = ef_indices
         self.reverse_graph_bwd = reverse_graph_bwd
+        self.cache_graph = cache_graph
 
         self.bipartite_csc = None
         self.static_csc = None
@@ -95,15 +106,13 @@ class CuGraphCSC:
 
         return self
 
-    def to_bipartite_csc(self, dtype=None, cache_graph: bool = True):
+    def to_bipartite_csc(self, dtype=None):
         """Converts the graph to a bipartite CSC graph.
 
         Parameters
         ----------
         dtype : torch.dtype, optional
             The dtype of the graph, by default None
-        cache_graph : bool, optional
-            Whether to cache the graph, by default True
 
         Returns
         -------
@@ -112,7 +121,7 @@ class CuGraphCSC:
         """
 
         assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
-        if self.bipartite_csc is None or not cache_graph:
+        if self.bipartite_csc is None or not self.cache_graph:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant
             # for storing node and edge indices. However, they are also used
@@ -142,15 +151,13 @@ class CuGraphCSC:
 
         return self.bipartite_csc
 
-    def to_static_csc(self, dtype=None, cache_graph: bool = True):
+    def to_static_csc(self, dtype=None):
         """Converts the graph to a static CSC graph.
 
         Parameters
         ----------
         dtype : torch.dtype, optional
             The dtype of the graph, by default None
-        cache_graph : bool, optional
-            Whether to cache the graph, by default True
 
         Returns
         -------
@@ -158,7 +165,7 @@ class CuGraphCSC:
             The static CSC graph.
         """
 
-        if self.static_csc is None or not cache_graph:
+        if self.static_csc is None or not self.cache_graph:
             # Occassionally, we have to watch out for the IdxT type
             # of offsets and indices. Technically, they are only relevant
             # for storing node and edge indices. However, they are also used
@@ -256,7 +263,12 @@ def concat_message_function(edges: Tensor) -> Dict[str, Tensor]:
     return {"cat_feat": cat_feat}
 
 
-def concat_efeat_dgl_mesh(efeat: Tensor, nfeat: Tensor, graph: DGLGraph) -> Tensor:
+@torch.jit.ignore()
+def concat_efeat_dgl(
+    efeat: Tensor,
+    nfeat: Union[Tensor, Tuple[torch.Tensor, torch.Tensor]],
+    graph: DGLGraph,
+) -> Tensor:
     """Concatenates edge features with source and destination node features.
     Use for homogeneous graphs.
 
@@ -264,7 +276,7 @@ def concat_efeat_dgl_mesh(efeat: Tensor, nfeat: Tensor, graph: DGLGraph) -> Tens
     ----------
     efeat : Tensor
         Edge features.
-    nfeat : Tensor
+    nfeat : Tensor | Tuple[Tensor, Tensor]
         Node features.
     graph : DGLGraph
         Graph.
@@ -274,29 +286,37 @@ def concat_efeat_dgl_mesh(efeat: Tensor, nfeat: Tensor, graph: DGLGraph) -> Tens
     Tensor
         Concatenated edge features with source and destination node features.
     """
+    if isinstance(nfeat, Tuple):
+        src_feat, dst_feat = nfeat
+        with graph.local_scope():
+            graph.srcdata["x"] = src_feat
+            graph.dstdata["x"] = dst_feat
+            graph.edata["x"] = efeat
+            graph.apply_edges(concat_message_function)
+            return graph.edata["cat_feat"]
+
     with graph.local_scope():
         graph.ndata["x"] = nfeat
         graph.edata["x"] = efeat
-
         graph.apply_edges(concat_message_function)
         return graph.edata["cat_feat"]
 
 
-def concat_efeat_dgl_m2g_g2m(
-    efeat: Tensor, src_feat: Tensor, dst_feat: Tensor, graph: DGLGraph
+def concat_efeat(
+    efeat: Tensor,
+    nfeat: Union[Tensor, Tuple[Tensor]],
+    graph: Union[DGLGraph, CuGraphCSC],
 ) -> Tensor:
     """Concatenates edge features with source and destination node features.
-    Use for heterogeneous graphs.
+    Use for homogeneous graphs.
 
     Parameters
     ----------
     efeat : Tensor
         Edge features.
-    src_feat : Tensor
-        Source node features.
-    dst_feat : Tensor
-        Destination node features.
-    graph : DGLGraph
+    nfeat : Tensor | Tuple[Tensor]
+        Node features.
+    graph : DGLGraph | CuGraphCSC
         Graph.
 
     Returns
@@ -304,13 +324,34 @@ def concat_efeat_dgl_m2g_g2m(
     Tensor
         Concatenated edge features with source and destination node features.
     """
-    with graph.local_scope():
-        graph.srcdata["x"] = src_feat
-        graph.dstdata["x"] = dst_feat
-        graph.edata["x"] = efeat
+    if isinstance(nfeat, Tensor):
+        if isinstance(graph, CuGraphCSC):
+            static_graph = graph.to_static_csc()
+            efeat = update_efeat_static_e2e(
+                efeat,
+                nfeat,
+                static_graph,
+                mode="concat",
+                use_source_emb=True,
+                use_target_emb=True,
+            )
 
-        graph.apply_edges(concat_message_function)
-        return graph.edata["cat_feat"]
+        else:
+            efeat = concat_efeat_dgl(efeat, nfeat, graph)
+
+    else:
+        src_feat, dst_feat = nfeat
+        # update edge features through concatenating edge and node features
+        if isinstance(graph, CuGraphCSC):
+            # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
+            bipartite_graph = graph.to_bipartite_csc(dtype=torch.int64)
+            efeat = update_efeat_bipartite_e2e(
+                efeat, src_feat, dst_feat, bipartite_graph, "concat"
+            )
+        else:
+            efeat = concat_efeat_dgl(efeat, (src_feat, dst_feat), graph)
+
+    return efeat
 
 
 @torch.jit.script
@@ -337,20 +378,70 @@ def sum_efeat_dgl(
     Tensor
         Sum of edge features with source and destination node features.
     """
+
     return efeat + src_feat[src_idx] + dst_feat[dst_idx]
 
 
+def sum_efeat(
+    efeat: Tensor,
+    nfeat: Union[Tensor, Tuple[Tensor]],
+    graph: Union[DGLGraph, CuGraphCSC],
+):
+    """Sums edge features with source and destination node features.
+
+    Parameters
+    ----------
+    efeat : Tensor
+        Edge features.
+    nfeat : Tensor | Tuple[Tensor]
+        Node features (static setting) or tuple of node features of
+        source and destination nodes (bipartite setting).
+    graph : DGLGraph | CuGraphCSC
+        The underlying graph.
+
+    Returns
+    -------
+    Tensor
+        Sum of edge features with source and destination node features.
+    """
+    if isinstance(nfeat, Tensor):
+        if isinstance(graph, CuGraphCSC):
+            static_graph = graph.to_static_csc()
+            sum_efeat = update_efeat_bipartite_e2e(
+                efeat, nfeat, static_graph, mode="sum"
+            )
+
+        else:
+            src_feat, dst_feat = nfeat, nfeat
+            src, dst = (item.long() for item in graph.edges())
+            sum_efeat = sum_efeat_dgl(efeat, src_feat, dst_feat, src, dst)
+
+    else:
+        src_feat, dst_feat = nfeat
+        if isinstance(graph, CuGraphCSC):
+            bipartite_graph = graph.to_bipartite_csc()
+            sum_efeat = update_efeat_bipartite_e2e(
+                efeat, src_feat, dst_feat, bipartite_graph, mode="sum"
+            )
+        else:
+            src, dst = (item.long() for item in graph.edges())
+            sum_efeat = sum_efeat_dgl(efeat, src_feat, dst_feat, src, dst)
+
+    return sum_efeat
+
+
+@torch.jit.ignore()
 def agg_concat_dgl(
-    efeat: Tensor, nfeat: Tensor, graph: DGLGraph, aggregation: str
+    efeat: Tensor, dst_nfeat: Tensor, graph: DGLGraph, aggregation: str
 ) -> Tensor:
-    """Aggregates edge features and concatenates with node features.
+    """Aggregates edge features and concatenates result with destination node features.
 
     Parameters
     ----------
     efeat : Tensor
         Edge features.
     nfeat : Tensor
-        Node features.
+        Node features (destination nodes).
     graph : DGLGraph
         Graph.
     aggregation : str
@@ -359,7 +450,7 @@ def agg_concat_dgl(
     Returns
     -------
     Tensor
-        Aggregated edge features concatenated with node features.
+        Aggregated edge features concatenated with destination node features.
 
     Raises
     ------
@@ -378,6 +469,46 @@ def agg_concat_dgl(
         else:
             raise RuntimeError("Not a valid aggregation!")
 
-        # concat node & edge features
-        cat_feat = torch.cat((graph.dstdata["h_dest"], nfeat), -1)
+        # concat dst-node & edge features
+        cat_feat = torch.cat((graph.dstdata["h_dest"], dst_nfeat), -1)
         return cat_feat
+
+
+def aggregate_and_concat(
+    efeat: Tensor,
+    nfeat: Tensor,
+    graph: Union[DGLGraph, CuGraphCSC],
+    aggregation: str,
+):
+    """
+    Aggregates edge features and concatenates result with destination node features.
+
+    Parameters
+    ----------
+    efeat : Tensor
+        Edge features.
+    nfeat : Tensor
+        Node features (destination nodes).
+    graph : DGLGraph
+        Graph.
+    aggregation : str
+        Aggregation method (sum or mean).
+
+    Returns
+    -------
+    Tensor
+        Aggregated edge features concatenated with destination node features.
+
+    Raises
+    ------
+    RuntimeError
+        If aggregation method is not sum or mean.
+    """
+
+    if isinstance(graph, CuGraphCSC):
+        static_graph = graph.to_static_csc()
+        cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, aggregation)
+    else:
+        cat_feat = agg_concat_dgl(efeat, nfeat, graph, aggregation)
+
+    return cat_feat

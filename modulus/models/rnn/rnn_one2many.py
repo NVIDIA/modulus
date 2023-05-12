@@ -222,7 +222,7 @@ class One2ManyRNN(Module):
             x_out = rnn_output[t]
             # Decoding step
             latent_context_grid = []
-            for (conv_layer, decoder) in zip(self.conv_layers, self.decoder_layers):
+            for conv_layer, decoder in zip(self.conv_layers, self.decoder_layers):
                 latent_context_grid.append(conv_layer(x_out))
                 upsampling_layers = decoder
                 for upsampling_layer in upsampling_layers:
