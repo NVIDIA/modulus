@@ -72,15 +72,19 @@ def get_data_loader(
     assert not np.any(np.isnan(std)), np.ravel(std)
 
     def reset_pipeline():  # pragma: no cover
+        """reset the pipeline to the beginning of the dataset"""
         pass
 
     def get_output_normalization():  # pragma: no cover
+        """return the mean and std of the output channels"""
         return mean[:, params.out_channels], std[:, params.out_channels]
 
     def get_input_normalization():  # pragma: no cover
+        """return the mean and std of the input channels"""
         return mean[:, params.in_channels], std[:, params.in_channels]
 
     def center(args):  # pragma: no cover
+        """normalize the input and output channels"""
         x, y = args
 
         xmean = mean[0, params.in_channels]
@@ -159,6 +163,8 @@ def _xarray_to_dataset(
 
 
 class Map(Dataset):
+    """Map"""
+
     def __init__(self, data, func):  # pragma: no cover
         self.data = data
         self.func = func
@@ -172,6 +178,8 @@ class Map(Dataset):
 
 @dataclass
 class XarrayDataset(Dataset):
+    """A dataset that wraps an xarray.Dataset"""
+
     data: xarray.DataArray
     in_channels: Any = slice(None)
     out_channels: Any = slice(None)
