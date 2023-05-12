@@ -26,10 +26,6 @@ ENV DGLBACKEND=pytorch
 # Install benchy
 RUN pip install git+https://github.com/romerojosh/benchy.git@1aade4a412fe883e45927183d3e5a0cc9fe14b30#egg=benchy
 
-# install tensorly for compression
-RUN pip install git+https://github.com/tensorly/tensorly@b648944fe94548765537a10cedd621871f7a2ffd#egg=tensorly
-RUN pip install git+https://github.com/tensorly/torch tensorly-torch@d27d58f16101b7ecc431372eb218ceda59d8b043#egg=tensorly-torch
-
 # install torch harmonic
 RUN pip install git+https://github.com/NVIDIA/torch-harmonics.git@8826246cacf6c37b600cdd63fde210815ba238fd#egg=torch-harmonics
 
