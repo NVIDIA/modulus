@@ -292,7 +292,7 @@ def init_gradient_reduction_hooks(
     def reduction_comm_hook(
         state: object, bucket: dist.GradBucket
     ) -> torch.futures.Future[torch.Tensor]:  # pragma: no cover
-        """"""
+        """reduction comm hook"""
 
         # allreduce everything first:
         buff = bucket.buffer()
@@ -306,7 +306,7 @@ def init_gradient_reduction_hooks(
         params = bucket.parameters()
 
         def grad_reduction(fut, grads, group):
-            # reduce remaining gradients
+            """reduce remaining gradients"""
             coalesced = _flatten_dense_tensors(grads)
             dist.all_reduce(
                 coalesced,

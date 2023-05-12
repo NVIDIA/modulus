@@ -101,7 +101,7 @@ def get_names():  # pragma: no cover
 
 
 def is_distributed(name: str):  # pragma: no cover
-    """"""
+    """check if distributed."""
     return name in _COMM_NAMES
 
 
@@ -254,6 +254,7 @@ def init(params, verbose=False):  # pragma: no cover
         elif (get_size("h") > 1) and (get_size("w") > 1):
             # fuse the lists:
             def merge_ranks(list1, list2):
+                """Merge ranks"""
                 coll = list1 + list2
                 pooled = [set(subList) for subList in coll]
                 merging = True

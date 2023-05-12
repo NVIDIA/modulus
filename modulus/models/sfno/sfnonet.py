@@ -741,7 +741,8 @@ class SphericalFourierNeuralOperatorNet(Module):
             nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self):  # pragma: no cover
+        """Helper"""
         return {"pos_embed", "cls_token"}
 
     def _forward_features(self, x):

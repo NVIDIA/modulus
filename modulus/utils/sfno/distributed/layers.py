@@ -227,6 +227,8 @@ class DistributedInverseRealFFT2(nn.Module):
 
 # more complicated layers
 class DistributedMLP(nn.Module):
+    """Distributed MLP layer"""
+
     def __init__(
         self,
         in_features,
@@ -320,6 +322,8 @@ class DistributedMLP(nn.Module):
 
 
 class DistributedPatchEmbed(nn.Module):
+    """Distributed patch embedding layer"""
+
     def __init__(
         self,
         img_size=(224, 224),
@@ -329,7 +333,6 @@ class DistributedPatchEmbed(nn.Module):
         input_is_matmul_parallel=False,
         output_is_matmul_parallel=True,
     ):  # pragma: no cover
-        """Distributed patch embedding"""
 
         super(DistributedPatchEmbed, self).__init__()
 
@@ -392,7 +395,7 @@ class DistributedPatchEmbed(nn.Module):
 def compl_mul_add_fwd(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
 ) -> torch.Tensor:  # pragma: no cover
-    """"""
+    """complex multiplication and addition"""
     tmp = torch.einsum("bkixys,kiot->stbkoxy", a, b)
     res = (
         torch.stack(
@@ -417,6 +420,8 @@ def compl_mul_add_fwd_c(
 
 
 class DistributedAFNO2Dv2(nn.Module):
+    """Distributed AFNO"""
+
     def __init__(
         self,
         hidden_size,
