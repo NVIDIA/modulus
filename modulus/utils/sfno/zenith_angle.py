@@ -136,7 +136,7 @@ def _local_mean_sidereal_time(model_time, longitude):
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
     >>> l_time = _local_mean_sidereal_time(model_time, np.deg2rad(90))
-    abs('_time - 6.474627737) < 1e-8
+    >>> abs(l_time - 6.474627737) < 1e-8
     True
     """
     return _greenwich_mean_sidereal_time(model_time) + longitude
