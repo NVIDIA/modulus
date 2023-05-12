@@ -241,10 +241,10 @@ class GeneralES(object):
 
     def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
-        self.files_paths = glob.glob(os.path.join(self.location, "*.h5"))
+        self.files_paths = glob.glob(os.path.join(self.location, "????.h5"))
         self.file_format = "h5"
         if not self.files_paths:
-            self.files_paths = glob.glob(os.path.join(self.location, "*.zarr"))
+            self.files_paths = glob.glob(os.path.join(self.location, "????.zarr"))
             self.file_format = "zarr"
 
         if not self.files_paths:
