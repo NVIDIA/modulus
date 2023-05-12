@@ -25,6 +25,8 @@ dependencies = [
     "torch>=1.12",
     "xarray>=2023.1.0",
     "zarr>=2.14.2",
+    "benchy@git+https://github.com/romerojosh/benchy.git",
+    "torch-harmonics@git+https://github.com/NVIDIA/torch-harmonics.git",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

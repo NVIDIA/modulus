@@ -23,12 +23,6 @@ RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.htm
 RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
 ENV DGLBACKEND=pytorch
 
-# Install benchy
-RUN pip install git+https://github.com/romerojosh/benchy.git@1aade4a412fe883e45927183d3e5a0cc9fe14b30#egg=benchy
-
-# install torch harmonic
-RUN pip install git+https://github.com/NVIDIA/torch-harmonics.git@8826246cacf6c37b600cdd63fde210815ba238fd#egg=torch-harmonics
-
 ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install custom onnx

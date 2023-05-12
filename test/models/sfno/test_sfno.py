@@ -207,7 +207,7 @@ def test_sfno_optims(device):
             "checkpointing": 0,
         }
 
-        # Construct GraphCast model
+        # Construct SFNO model
         model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
 
         return model, (x,)
@@ -216,14 +216,14 @@ def test_sfno_optims(device):
     model, invar = setup_model()
     assert common.validate_cuda_graphs(model, (*invar,))
     # # Check JIT
-    # model, invar = setup_model()
-    # assert common.validate_jit(model, (*invar,))
+    model, invar = setup_model()
+    assert common.validate_jit(model, (*invar,))
     # # Check AMP
     model, invar = setup_model()
     assert common.validate_amp(model, (*invar,))
     # # Check Combo
-    # model, invar = setup_model()
-    # assert common.validate_combo_optims(model, (*invar,))
+    model, invar = setup_model()
+    assert common.validate_combo_optims(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -289,7 +289,7 @@ def test_sfno_deploy(device):
         "checkpointing": 0,
     }
 
-    # Construct GraphCast model
+    # Construct SFNO model
     model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
 
     assert common.validate_onnx_export(model, x)

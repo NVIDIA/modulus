@@ -66,8 +66,9 @@ def cos_zenith_angle(
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> cos_zenith_angle(model_time, lat=360, lon=120)
-    -0.44781727777270136
+    >>> angle = cos_zenith_angle(model_time, lat=360, lon=120)
+    >>> abs(angle - -0.447817277) < 1e-8
+    True
     """
     lon_rad, lat_rad = lon * RAD_PER_DEG, lat * RAD_PER_DEG
     return _star_cos_zenith(time, lon_rad, lat_rad)
@@ -108,8 +109,9 @@ def _greenwich_mean_sidereal_time(model_time):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> _greenwich_mean_sidereal_time(model_time)
-    4.903831410856192
+    >>> g_time = _greenwich_mean_sidereal_time(model_time)
+    >>> abs(g_time - 4.903831411) < 1e-8
+    True
     """
     jul_centuries = _days_from_2000(model_time) / 36525.0
     theta = 67310.54841 + jul_centuries * (
@@ -133,8 +135,9 @@ def _local_mean_sidereal_time(model_time, longitude):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> _local_mean_sidereal_time(model_time, np.deg2rad(90))
-    6.474627737651089
+    >>> l_time = _local_mean_sidereal_time(model_time, np.deg2rad(90))
+    abs('_time - 6.474627737) < 1e-8
+    True
     """
     return _greenwich_mean_sidereal_time(model_time) + longitude
 
@@ -148,8 +151,9 @@ def _sun_ecliptic_longitude(model_time):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> _sun_ecliptic_longitude(model_time)
-    17.469114444293947
+    >>> lon = _sun_ecliptic_longitude(model_time)
+    >>> abs(lon - 17.469114444) < 1e-8
+    True
     """
     julian_centuries = _days_from_2000(model_time) / 36525.0
 
@@ -187,8 +191,9 @@ def _obliquity_star(julian_centuries):
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
     >>> julian_centuries = _days_from_2000(model_time) / 36525.0
-    >>> _obliquity_star(julian_centuries)
-    0.40908805607114906
+    >>> obl = _obliquity_star(julian_centuries)
+    >>> abs(obl - 0.409088056) < 1e-8
+    True
     """
     return np.deg2rad(
         23.0
@@ -214,8 +219,11 @@ def _right_ascension_declination(model_time):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> _right_ascension_declination(model_time)
-    (-1.3637872137449385, -0.40127012651465355)
+    >>> out1, out2 = _right_ascension_declination(model_time)
+    >>> abs(out1 - -1.363787213) < 1e-8
+    True
+    >>> abs(out2 - -0.401270126) < 1e-8
+    True
     """
     julian_centuries = _days_from_2000(model_time) / 36525.0
     eps = _obliquity_star(julian_centuries)

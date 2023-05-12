@@ -35,7 +35,7 @@ class _CopyToParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, comm_id_):  # pragma: no cover
-        """symblic method"""
+        """symbolic method"""
         return input_
 
     @staticmethod
@@ -56,7 +56,7 @@ class _ReduceFromParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, comm_id_):  # pragma: no cover
-        """symblic method"""
+        """symbolic method"""
         if comm.is_distributed(comm_id_):
             return _reduce(input_, group=comm.get_group(comm_id_))
         else:
@@ -79,7 +79,7 @@ class _ScatterToParallelRegion(torch.autograd.Function):
 
     @staticmethod
     def symbolic(graph, input_, dim_, comm_id_):  # pragma: no cover
-        """symblic method"""
+        """symbolic method"""
         return _split(input_, dim_, group=comm.get_group(comm_id_))
 
     @staticmethod
