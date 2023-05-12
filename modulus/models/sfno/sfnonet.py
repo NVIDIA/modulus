@@ -53,7 +53,7 @@ from modulus.models.meta import ModelMetaData
 class MetaData(ModelMetaData):
     name: str = "SFNO"
     # Optimization
-    jit: bool = True
+    jit: bool = False
     cuda_graphs: bool = True
     amp_cpu: bool = True
     amp_gpu: bool = True
