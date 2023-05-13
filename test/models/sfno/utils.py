@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .capture import (
-    StaticCaptureTraining,
-    StaticCaptureEvaluateNoGrad,
-)
+import torch
+import sys, os
+import numpy as np
+
+
+def fix_random_seeds():
+    """Fix random seeds for reproducibility"""
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
