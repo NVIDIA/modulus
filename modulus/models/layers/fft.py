@@ -244,7 +244,6 @@ def imag(input: Tensor) -> Tensor:
 def _rfft_onnx(
     input: Tensor, s: Optional[Tuple[Optional[int]]], dim: Tuple[int], norm: str
 ) -> Tensor:
-
     if s is not None:
         _check_padding_rfft(s, dim, input.size())
 
@@ -274,7 +273,6 @@ def _rfft_onnx(
 def _irfft_onnx(
     input: Tensor, s: Optional[Tuple[Optional[int]]], dim: Tuple[int], norm: str
 ) -> Tensor:
-
     if s is not None:
         _check_padding_irfft(s, dim, input.size())
 
