@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """An implementation of the fcn-mip plugin interface
 
 This interface is documented here: https://gitlab-master.nvidia.com/earth-2/fcn-mip/-/blob/main/docs/plugin.md
@@ -10,7 +24,8 @@ See this example notebook: https://drive.google.com/file/d/18eJIrZScTJSuRx7EjBYL
 import json
 import numpy as np
 import torch
-#from networks.models import get_model
+
+# from networks.models import get_model
 from utils.YParams import ParamsBase
 from modulus.models.sfno import sfnonet
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
@@ -24,13 +39,12 @@ logger = logging.getLogger(__name__)
 def get_model(params: ParamsBase):
     if params.nettype == "sfno":
         return sfnonet.SphericalFourierNeuralOperatorNet(params)
-    
+
     raise NotImplementedError(params.nettype)
 
 
 class _DummyModule(torch.nn.Module):
-    """Hack to handle that checkpoint parameter names begin with "module."
-    """
+    """Hack to handle that checkpoint parameter names begin with "module." """
 
     def __init__(self, model):
         super().__init__()
@@ -65,7 +79,7 @@ def sfno(package, pretrained=True):
         weights = package.get("weights.tar")
         checkpoint = torch.load(weights)
         load_me = _DummyModule(model)
-        state = checkpoint['model_state']
+        state = checkpoint["model_state"]
         state = {"module.device_buffer": model.device_buffer, **state}
         load_me.load_state_dict(state)
 
