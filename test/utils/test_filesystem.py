@@ -31,3 +31,17 @@ def test_glob_no_scheme(tmp_path: Path):
 
     (f,) = filesystem.glob(f"{tmp_path.as_posix()}/*.txt")
     assert f == a.as_posix()
+
+
+def test_package(tmp_path):
+    string = "hello"
+    afile = tmp_path / "a.txt"
+    afile.write_text(string)
+
+    path = "file://" + tmp_path.as_posix()
+    package = filesystem.Package(path, seperator="/")
+    path = package.get("a.txt")
+    with open(path) as f:
+        ans = f.read()
+
+    assert ans == string

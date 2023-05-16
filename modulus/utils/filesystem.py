@@ -25,7 +25,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-LOCAL_CACHE = os.environ["HOME"] + "/.cache/fcn-mip"
+try:
+    LOCAL_CACHE = os.environ["LOCAL_CACHE"]
+except KeyError:
+    LOCAL_CACHE = os.environ["HOME"] + "/.cache/modulus"
 
 
 def _cache_fs(fs):
@@ -97,3 +100,25 @@ def glob(pattern: str) -> List[str]:
 def ls(path):
     fs = _get_fs(path)
     return fs.ls(path)
+
+
+class Package:
+    """A package
+
+    Represents a potentially remote directory tree
+    """
+
+    def __init__(self, root: str, seperator: str):
+        self.root = root
+        self.seperator = seperator
+
+    def get(self, path: str, recursive: bool = False) -> str:
+        """Get a local path to the item at ``path``
+
+        ``path`` might be a remote file, in which case it is downloaded to a
+        local cache at $LOCAL_CACHE or $HOME/.cache/modulus first.
+        """
+        return download_cached(self._fullpath(path), recursive=recursive)
+
+    def _fullpath(self, path):
+        return self.root + self.seperator + path
