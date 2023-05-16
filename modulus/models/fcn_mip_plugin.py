@@ -40,7 +40,7 @@ class _DummyModule(torch.nn.Module):
         self.module = model
 
 
-class CosZenWrapper(torch.nn.Module):
+class _CosZenWrapper(torch.nn.Module):
     def __init__(self, model, lon, lat):
         super().__init__()
         self.model = model
@@ -77,6 +77,6 @@ def sfno(package, pretrained=True):
         nlon = params.img_shape_y
         lat = 90 - np.arange(nlat) * 0.25
         lon = np.arange(nlon) * 0.25
-        model = CosZenWrapper(model, lon, lat)
+        model = _CosZenWrapper(model, lon, lat)
 
     return model
