@@ -25,7 +25,6 @@ import json
 import numpy as np
 import torch
 
-# from networks.models import get_model
 from utils.YParams import ParamsBase
 from modulus.models.sfno import sfnonet
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
