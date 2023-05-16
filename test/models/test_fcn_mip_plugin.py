@@ -14,7 +14,7 @@
 
 from modulus.utils.sfno.YParams import ParamsBase
 from modulus.models.fcn_mip_plugin import sfno
-from modulus.models.registry import Package
+from modulus.utils.filesystem import Package
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 import datetime
 import torch
