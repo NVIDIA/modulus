@@ -11,16 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""An implementation of the fcn-mip plugin interface
-
-This interface is documented here: https://gitlab-master.nvidia.com/earth-2/fcn-mip/-/blob/main/docs/plugin.md
-
-Support loading checkpoints with non-distributed models, and models with
-cos-zenith angle models.
-
-See this example notebook: https://drive.google.com/file/d/18eJIrZScTJSuRx7EjBYLurejseUUoQ9J/view?usp=share_link
-"""
 import json
 import numpy as np
 import torch
