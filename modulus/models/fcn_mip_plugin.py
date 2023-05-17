@@ -132,13 +132,13 @@ def graphcast_34ch(package, pretrained=True):
         path = package.get("weights.tar")
         checkpoint = torch.load(path)
         weights = checkpoint["model_state_dict"]
-        weights = fix_state_dict_keys(weights, add_module=False)
+        weights = _fix_state_dict_keys(weights, add_module=False)
         model.model.load_state_dict(weights, strict=True)
 
     return model
 
 
-def fix_state_dict_keys(state_dict, add_module=False):
+def _fix_state_dict_keys(state_dict, add_module=False):
     """Add or remove 'module.' from state_dict keys
 
     Parameters
