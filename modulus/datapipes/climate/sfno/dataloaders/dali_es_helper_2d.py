@@ -241,10 +241,10 @@ class GeneralES(object):
 
     def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
-        self.files_paths = glob.glob(os.path.join(self.location, "????.h5"))
+        self.files_paths = glob.glob(os.path.join(self.location, "*.h5"))
         self.file_format = "h5"
         if not self.files_paths:
-            self.files_paths = glob.glob(os.path.join(self.location, "????.zarr"))
+            self.files_paths = glob.glob(os.path.join(self.location, "*.zarr"))
             self.file_format = "zarr"
 
         if not self.files_paths:
@@ -258,7 +258,7 @@ class GeneralES(object):
 
         # extract the years from filenames
         self.years = [
-            int(os.path.splitext(os.path.basename(x))[0]) for x in self.files_paths
+            int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths
         ]
 
         # get stats
