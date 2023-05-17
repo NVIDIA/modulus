@@ -20,6 +20,9 @@ from modulus.models.sfno import sfnonet
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 from modulus.utils.sfno.YParams import ParamsBase
 
+from modulus.models.graphcast.graph_cast_net import GraphCastNet
+from modulus.distributed.manager import DistributedManager
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -80,3 +83,81 @@ def sfno(package, pretrained=True):
         model = _CosZenWrapper(model, lon, lat)
 
     return model
+
+
+class GraphCastWrapper(torch.nn.Module):
+    def __init__(self, model, dtype):
+        super().__init__()
+        self.model = model
+        self.dtype = dtype
+
+    def forward(self, x):
+        x = x.to(self.dtype)
+        y = self.model(x)
+        return y
+
+
+def graphcast_34ch(package, pretrained=True):
+    num_channels = 34
+
+    icospheres_path = package.get("icospheres.pickle")
+    static_data_path = package.get("static", recursive=True)
+
+    # TODO should not use
+    dist = DistributedManager()
+
+    # instantiate the model, set dtype and move to device
+    base_model = (
+        GraphCastNet(
+            meshgraph_path=icospheres_path,
+            static_dataset_path=static_data_path,
+            input_dim_grid_nodes=num_channels,
+            input_dim_mesh_nodes=3,
+            input_dim_edges=4,
+            output_dim_grid_nodes=num_channels,
+            processor_layers=16,
+            hidden_dim=512,
+            do_concat_trick=True,
+        )
+        .to(dtype=torch.bfloat16)
+        .to(dist.device)
+    )
+
+    # set model to inference mode
+    base_model.eval()
+
+    model = GraphCastWrapper(base_model, torch.bfloat16)
+
+    if pretrained:
+        path = package.get("weights.tar")
+        checkpoint = torch.load(path)
+        weights = checkpoint["model_state_dict"]
+        weights = fix_state_dict_keys(weights, add_module=False)
+        model.model.load_state_dict(weights, strict=True)
+
+    return model
+
+
+def fix_state_dict_keys(state_dict, add_module=False):
+    """Add or remove 'module.' from state_dict keys
+
+    Parameters
+    ----------
+    state_dict : Dict
+        Model state_dict
+    add_module : bool, optional
+        If True, will add 'module.' to keys, by default False
+
+    Returns
+    -------
+    Dict
+        Model state_dict with fixed keys
+    """
+    fixed_state_dict = {}
+    for key, value in state_dict.items():
+        if add_module:
+            new_key = "module." + key
+        else:
+            new_key = key.replace("module.", "")
+        fixed_state_dict[new_key] = value
+    return fixed_state_dict

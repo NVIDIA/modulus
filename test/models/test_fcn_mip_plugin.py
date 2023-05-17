@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno
+from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch
 from modulus.utils.filesystem import Package
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 import datetime
@@ -72,3 +72,11 @@ def test_sfno(tmp_path):
         out = model(x, time=time)
 
     assert out.shape == x.shape
+
+
+def test_graphcast(tmp_path):
+    # TODO fix this test...the icosaspheres data used to be a pickle, but now it
+    # is a json.
+    url = "s3://sw_climate_fno/nbrenowitz/model_packages/graphcast_34ch"
+    package = Package(url, "/")
+    model = graphcast_34ch(package, pretrained=True)
