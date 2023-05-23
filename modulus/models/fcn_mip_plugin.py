@@ -16,6 +16,7 @@ import numpy as np
 import torch
 
 from modulus.models.sfno import sfnonet
+from modulus.utils import filesystem
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 from modulus.utils.sfno.YParams import ParamsBase
 
@@ -58,7 +59,7 @@ class _CosZenWrapper(torch.nn.Module):
         return self.model(x)
 
 
-def sfno(package, pretrained=True):
+def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Module:
     """Load SFNO model from checkpoints trained with era5_wind"""
     path = package.get("config.json")
     params = ParamsBase.from_json(path)
@@ -95,7 +96,9 @@ class GraphCastWrapper(torch.nn.Module):
         return y
 
 
-def graphcast_34ch(package, pretrained=True):
+def graphcast_34ch(
+    package: fileystem.Package, pretrained: bool = True
+) -> torch.nn.Module:
     num_channels = 34
 
     icospheres_path = package.get("icospheres.json")
