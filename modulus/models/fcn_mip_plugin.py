@@ -20,7 +20,6 @@ from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 from modulus.utils.sfno.YParams import ParamsBase
 
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.distributed.manager import DistributedManager
 
 import logging
 
@@ -101,9 +100,6 @@ def graphcast_34ch(package, pretrained=True):
 
     icospheres_path = package.get("icospheres.json")
     static_data_path = package.get("static", recursive=True)
-
-    # TODO should not use
-    dist = DistributedManager()
 
     # instantiate the model, set dtype and move to device
     base_model = (
