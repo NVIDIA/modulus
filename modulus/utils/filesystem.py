@@ -85,23 +85,6 @@ def download_cached(path: str, recursive: bool = False) -> str:
     return cache_path
 
 
-def pipe(dest, value):
-    """Save string to dest"""
-    fs = _get_fs(dest)
-    fs.pipe(dest, value)
-
-
-def glob(pattern: str) -> List[str]:
-    fs = _get_fs(pattern)
-    url = urllib.parse.urlparse(pattern)
-    return [url._replace(netloc="", path=path).geturl() for path in fs.glob(pattern)]
-
-
-def ls(path):
-    fs = _get_fs(path)
-    return fs.ls(path)
-
-
 class Package:
     """A package
 
