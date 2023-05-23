@@ -97,7 +97,7 @@ class GraphCastWrapper(torch.nn.Module):
 
 
 def graphcast_34ch(
-    package: fileystem.Package, pretrained: bool = True
+    package: filesystem.Package, pretrained: bool = True
 ) -> torch.nn.Module:
     num_channels = 34
 

@@ -14,9 +14,10 @@
 
 import fsspec
 from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch
+from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper
 from modulus.utils.filesystem import Package, download_cached
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+import numpy as np
 import datetime
 import torch
 import json
@@ -97,3 +98,20 @@ def test_graphcast(tmp_path):
 
     package = Package(tmp_path.as_posix(), "/")
     model = graphcast_34ch(package, pretrained=False)
+
+
+@pytest.mark.parametrize("batch_size", [1, 2])
+def test__CozZenWrapper(batch_size):
+    class I(torch.nn.Module):
+        def forward(self, x):
+            return x
+
+    model = I()
+    nx, ny = (3, 4)
+    lat = np.arange(nx)
+    lon = np.arange(ny)
+
+    x = torch.ones((batch_size, 1, nx, ny))
+    time = datetime.datetime(2018, 1, 1)
+    wrapper = _CosZenWrapper(model, lon, lat)
+    wrapper(x, time=time)
