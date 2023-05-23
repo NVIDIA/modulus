@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import fsspec
 from modulus.utils.sfno.YParams import ParamsBase
 from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch
-from modulus.utils.filesystem import Package
+from modulus.utils.filesystem import Package, download_cached
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 import datetime
 import torch
@@ -78,6 +79,20 @@ def test_sfno(tmp_path):
 def test_graphcast(tmp_path):
     # TODO fix this test...the icosaspheres data used to be a pickle, but now it
     # is a json.
-    url = "s3://sw_climate_fno/nbrenowitz/model_packages/graphcast_34ch"
-    package = Package(url, "/")
-    model = graphcast_34ch(package, pretrained=True)
+    fs = fsspec.filesystem("https")
+
+    version = "ede0fcbfaf7a8131668620a9aba19970774a4785"
+
+    url = f"https://raw.githubusercontent.com/NVIDIA/modulus-launch/{version}/recipes/gnn/graphcast/icospheres.json"
+    dest = tmp_path / "icospheres.json"
+    fs.get(url, dest.as_posix())
+
+    # download static data
+    static = tmp_path / "static"
+    static.mkdir()
+    for file in ["geopotential.nc", "land_sea_mask.nc"]:
+        root = f"https://media.githubusercontent.com/media/NVIDIA/modulus-launch/{version}/recipes/gnn/graphcast/datasets/static"
+        fs.get(f"{root}/{file}", str(static / file))
+
+    package = Package(tmp_path.as_posix(), "/")
+    model = graphcast_34ch(package, pretrained=False)
