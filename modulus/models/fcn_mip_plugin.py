@@ -54,8 +54,8 @@ class _CosZenWrapper(torch.nn.Module):
         cosz = cos_zenith_angle(time, lon_grid, lat_grid)
         cosz = cosz.astype(np.float32)
         z = torch.from_numpy(cosz).to(device=x.device)
-        # assume no history
-        x = torch.cat([x, z[None, None]], dim=1)
+        x, z = torch.broadcast_tensors(x, z)
+        x = torch.cat([x, z], dim=1)
         return self.model(x)
 
 
