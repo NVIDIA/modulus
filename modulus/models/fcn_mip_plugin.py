@@ -15,7 +15,6 @@ import json
 import numpy as np
 import torch
 
-from utils.YParams import ParamsBase
 from modulus.models.sfno import sfnonet
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 from modulus.utils.sfno.YParams import ParamsBase
@@ -100,7 +99,7 @@ class GraphCastWrapper(torch.nn.Module):
 def graphcast_34ch(package, pretrained=True):
     num_channels = 34
 
-    icospheres_path = package.get("icospheres.pickle")
+    icospheres_path = package.get("icospheres.json")
     static_data_path = package.get("static", recursive=True)
 
     # TODO should not use
