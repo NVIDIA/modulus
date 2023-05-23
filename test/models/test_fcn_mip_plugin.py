@@ -21,7 +21,11 @@ import torch
 import json
 
 
-def save_checkpoint(model, check_point_path):
+def save_ddp_checkpoint(model, check_point_path):
+    """Save checkpoint with similar structure to the training checkpoints
+
+    The keys are prefixed with "module."
+    """
     model_state = {f"module.{k}": v for k, v in model.state_dict().items()}
     # This buffer is not present in some trained model checkpoints
     del model_state["module.device_buffer"]
@@ -29,7 +33,7 @@ def save_checkpoint(model, check_point_path):
     torch.save(checkpoint, check_point_path)
 
 
-def save_mock_package(path):
+def save_untrained_sfno(path):
 
     config = {
         "N_in_channels": 2,
@@ -52,7 +56,7 @@ def save_mock_package(path):
         json.dump(params.to_dict(), f)
 
     check_point_path = path / "weights.tar"
-    save_checkpoint(model, check_point_path)
+    save_ddp_checkpoint(model, check_point_path)
 
     url = f"file://{path.as_posix()}"
     package = Package(url, seperator="/")
@@ -60,10 +64,7 @@ def save_mock_package(path):
 
 
 def test_sfno(tmp_path):
-    # Can be tested against this URL too (but it is slow):
-    # url = "s3://sw_climate_fno/nbrenowitz/model_packages/sfno_coszen"
-    # package = Package(url, "/")
-    package = save_mock_package(tmp_path)
+    package = save_untrained_sfno(tmp_path)
 
     model = sfno(package, pretrained=True)
     x = torch.ones(1, 1, model.model.h, model.model.w)
