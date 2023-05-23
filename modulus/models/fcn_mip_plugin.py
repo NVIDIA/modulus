@@ -27,13 +27,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_model(params: ParamsBase):
-    if params.nettype == "sfno":
-        return sfnonet.SphericalFourierNeuralOperatorNet(params)
-
-    raise NotImplementedError(params.nettype)
-
-
 class _DummyModule(torch.nn.Module):
     """Hack to handle that checkpoint parameter names begin with "module." """
 
@@ -63,8 +56,8 @@ def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Modul
     """Load SFNO model from checkpoints trained with era5_wind"""
     path = package.get("config.json")
     params = ParamsBase.from_json(path)
+    model = sfnonet.SphericalFourierNeuralOperatorNet(params)
     logger.info(str(params.to_dict()))
-    model = get_model(params)
 
     if pretrained:
         weights = package.get("weights.tar")
