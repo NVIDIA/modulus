@@ -15,6 +15,7 @@ Modulus is a PyTorch based deep-learning toolkit for developing deep learning mo
 - [Modulus (Beta)](https://github.com/NVIDIA/modulus)
 - [Modulus Launch (Beta)](https://github.com/NVIDIA/modulus-launch)
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym)
+- [Modulus Tool-Chain (Beta)](https://github.com/NVIDIA/modulus-toolchain)
 
 ## Installation 
 
@@ -57,14 +58,13 @@ docker build -t modulus:ci --target ci -f Dockerfile .
 ```
 Alternatively, you can run `make container-ci`
 
-
 ## Contributing
+For guidance on making a contribution to Modulus, see the [contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
 
-Modulus is in an open-source beta. We are not accepting external contributions at this time.
-
-## Contact
-
-Reach out to Modulus team members and user community on the [NVIDIA developer forums](https://forums.developer.nvidia.com/c/physics-simulation/modulus-physics-ml-model-framework).
+## Communication
+* Github Discussions: Discuss new architectures, implementations, Physics-ML research, etc. 
+* GitHub Issues: Bug reports, feature requests, install issues, etc.
+* Modulus Forum: The [Modulus Forum](https://forums.developer.nvidia.com/c/physics-simulation/modulus-physics-ml-model-framework) hosts an audience of new to moderate level users and developers for general chat, online discussions, collaboration, etc. 
 
 ## License
 Modulus is provided under the Apache License 2.0, please see [LICENSE.txt](./LICENSE.txt) for full license text.
