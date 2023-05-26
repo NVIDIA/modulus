@@ -81,7 +81,7 @@ All source code files should start with this paragraph:
     
     (d) I understand and agree that this project and the contribution are public and that a record of the contribution (including all personal information I submit with it, including my sign-off) is maintained indefinitely and may be redistributed consistent with this project or the open source license(s) involved.
     
-#### CI
+### CI
 
 To ensure quality of the code, your merge request will pass through several CI checks. 
 It is mandatory for your MRs to pass these pipelines to ensure a successful merge. 
@@ -149,7 +149,7 @@ The pipeline has following stages:
   To test coverage locally, run the `get_coverage.sh` script from the `test` folder and
   check the coverage of the module that you added/edited. 
 
-#### pre-commit
+### Pre-commit
 
 We use `pre-commit` to performing formatting checks before the changes are commited. 
 
