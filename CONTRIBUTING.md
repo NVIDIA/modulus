@@ -1,14 +1,14 @@
-# Introduction
+## Introduction
 
 Welcome to Project Modulus! We're excited you're here and want to contribute. This documentation is intended for individuals and institutions interested in contributing to Modulus. Modulus is an open-source project and, as such, its success relies on its community of contributors willing to keep improving it. Your contribution will be a valued addition to the code base; we simply ask that you read this page and understand our contribution process, whether you are a seasoned open-source contributor or whether you are a first-time contributor.
 
-## Communicate with us
+### Communicate with us
 We are happy to talk with you about your needs for Modulus and your ideas for contributing to the project. One way to do this is to create an issue discussing your thoughts. It might be that a very similar feature is under development or already exists, so an issue is a great starting point. If you are looking for an issue to resolve that will help, refer to the [issue](https://github.com/NVIDIA/modulus/issues) section.
 
 
-# Contribute to Modulus-Core
+## Contribute to Modulus-Core
 
-## Pull Requests
+### Pull Requests
 Developer workflow for code contributions is as follows:
 
 1. Developers must first [fork](https://help.github.com/en/articles/fork-a-repo) the [upstream](https://github.com/NVIDIA/Modulus) Modulus repository.
@@ -22,7 +22,7 @@ Developer workflow for code contributions is as follows:
 
 4. The PR will be accepted and the corresponding issue closed after adequate review and testing has been completed.
 
-## Licensing information
+### Licensing information
 All source code files should start with this paragraph:
 ```
 # Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
@@ -39,7 +39,7 @@ All source code files should start with this paragraph:
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ```
-#### Signing Your Work
+### Signing Your Work
 
 * We require that all contributors "sign-off" on their commits. This certifies that the contribution is your original work, or you have rights to submit it under the same license, or a compatible license.
 
@@ -81,7 +81,7 @@ All source code files should start with this paragraph:
     
     (d) I understand and agree that this project and the contribution are public and that a record of the contribution (including all personal information I submit with it, including my sign-off) is maintained indefinitely and may be redistributed consistent with this project or the open source license(s) involved.
     
-## CI
+#### CI
 
 To ensure quality of the code, your merge request will pass through several CI checks. 
 It is mandatory for your MRs to pass these pipelines to ensure a successful merge. 
@@ -149,7 +149,7 @@ The pipeline has following stages:
   To test coverage locally, run the `get_coverage.sh` script from the `test` folder and
   check the coverage of the module that you added/edited. 
 
-## pre-commit
+#### pre-commit
 
 We use `pre-commit` to performing formatting checks before the changes are commited. 
 
