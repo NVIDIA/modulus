@@ -15,7 +15,7 @@
 import fsspec
 from modulus.utils.sfno.YParams import ParamsBase
 from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper
-from modulus.utils.filesystem import Package, download_cached
+from modulus.utils.filesystem import Package
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 import numpy as np
 import datetime
