@@ -143,9 +143,7 @@ def test_conv_rnn_one2many_constructor(device):
         if kw_args["dimension"] == 2:
             invar = torch.randn(bsize, kw_args["input_channels"], 1, 8, 8).to(device)
         else:
-            invar = torch.randn(bsize, kw_args["input_channels"], 1, 8, 8, 8).to(
-                device
-            )
+            invar = torch.randn(bsize, kw_args["input_channels"], 1, 8, 8, 8).to(device)
 
         outvar = model(invar)
         assert outvar.shape == (
