@@ -77,7 +77,7 @@ def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Modul
     return model
 
 
-class GraphCastWrapper(torch.nn.Module):
+class _GraphCastWrapper(torch.nn.Module):
     def __init__(self, model, dtype):
         super().__init__()
         self.model = model
@@ -92,6 +92,7 @@ class GraphCastWrapper(torch.nn.Module):
 def graphcast_34ch(
     package: filesystem.Package, pretrained: bool = True
 ) -> torch.nn.Module:
+    """Load Graphcast 34 channel model from a checkpoint"""
     num_channels = 34
 
     icospheres_path = package.get("icospheres.json")
@@ -117,7 +118,7 @@ def graphcast_34ch(
     # set model to inference mode
     base_model.eval()
 
-    model = GraphCastWrapper(base_model, torch.bfloat16)
+    model = _GraphCastWrapper(base_model, torch.bfloat16)
 
     if pretrained:
         path = package.get("weights.tar")
