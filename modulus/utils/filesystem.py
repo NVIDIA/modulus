@@ -44,16 +44,7 @@ def _get_fs(path):
         return fsspec.filesystem("file")
 
 
-def open(path, mode="r"):
-    if path.startswith("s3://"):
-        fs = _get_fs(path)
-        cached_fs = _cache_fs(fs)
-        return cached_fs.open(path, mode)
-    else:
-        return builtins.open(path, mode)
-
-
-def download_cached(path: str, recursive: bool = False) -> str:
+def _download_cached(path: str, recursive: bool = False) -> str:
     sha = hashlib.sha256(path.encode())
     filename = sha.hexdigest()
     cache_path = os.path.join(LOCAL_CACHE, filename)
@@ -101,7 +92,7 @@ class Package:
         ``path`` might be a remote file, in which case it is downloaded to a
         local cache at $LOCAL_CACHE or $HOME/.cache/modulus first.
         """
-        return download_cached(self._fullpath(path), recursive=recursive)
+        return _download_cached(self._fullpath(path), recursive=recursive)
 
     def _fullpath(self, path):
         return self.root + self.seperator + path
