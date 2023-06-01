@@ -63,7 +63,7 @@ def get_disagreements(inputs, bins, counts, test):
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-@pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 720, 1440)])
+@pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 360, 720)])
 def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
     if (device == "cuda:0") and (not dist.is_initialized()):
