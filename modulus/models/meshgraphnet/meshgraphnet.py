@@ -177,6 +177,8 @@ class MeshGraphNet(Module):
 
 
 class MeshGraphNetProcessor(nn.Module):
+    """MeshGraphNet processor block"""
+
     def __init__(
         self,
         processor_size: int = 15,
