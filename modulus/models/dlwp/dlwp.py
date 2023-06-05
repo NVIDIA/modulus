@@ -199,7 +199,7 @@ class MetaData(ModelMetaData):
 
 class DLWP(Module):
     """A Convolutional model for Deep Learning Weather Prediction that
-    works on Cubed-sphere grids. 
+    works on Cubed-sphere grids.
 
     Parameters
     ----------
@@ -225,6 +225,7 @@ class DLWP(Module):
      of deep‐learning weather prediction models." Journal of Advances in Modeling Earth
      Systems 13.7 (2021): e2021MS002502.
     """
+
     def __init__(
         self,
         nr_input_channels: int,
