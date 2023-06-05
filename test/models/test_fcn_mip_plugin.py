@@ -14,9 +14,11 @@
 
 import fsspec
 from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper
+from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper, dlwp
 from modulus.utils.filesystem import Package
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+from modulus.models.dlwp import DLWP
+from pathlib import Path
 import numpy as np
 import datetime
 import torch
@@ -68,6 +70,8 @@ def save_untrained_sfno(path):
 
 
 def test_sfno(tmp_path):
+    print(tmp_path)
+    print(type(tmp_path))
     package = save_untrained_sfno(tmp_path)
 
     model = sfno(package, pretrained=True)
@@ -75,6 +79,48 @@ def test_sfno(tmp_path):
     time = datetime.datetime(2018, 1, 1)
     with torch.no_grad():
         out = model(x, time=time)
+
+    assert out.shape == x.shape
+
+
+# TODO after merges are complete, fetch the real data to prepare package
+def save_untrained_dlwp(path):
+
+    config = {
+        "nr_input_channels": 18,
+        "nr_output_channels": 14,
+    }
+    model = DLWP(
+        nr_input_channels=config["nr_input_channels"],
+        nr_output_channels=config["nr_output_channels"],
+    )
+
+    config_path = path / "config.json"
+    with config_path.open("w") as f:
+        json.dump(config, f)
+
+    check_point_path = path / "weights.pt"
+    save_ddp_checkpoint(model, check_point_path)
+
+    url = f"file://{path.as_posix()}"
+    package = Package(url, seperator="/")
+    return package
+
+
+# TODO Temporary
+@pytest.fixture
+def dlwp_path():
+    return "/workspace/modulus_ci_cd_workspace/ktangsali_forks/new_repos/modulus/package/dlwp"
+
+
+def test_dlwp(dlwp_path):
+    # package = save_untrained_dlwp(dlwp_path)
+    package = Package(dlwp_path, seperator="/")
+    model = dlwp(package, pretrained=True)
+    x = torch.ones(1, 2, 7, 721, 1440)
+    time = datetime.datetime(2018, 1, 1)
+    with torch.no_grad():
+        out = model(x, time)
 
     assert out.shape == x.shape
 
