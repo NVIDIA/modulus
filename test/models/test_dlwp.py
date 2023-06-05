@@ -47,7 +47,8 @@ def test_dlwp_constructor(device, nr_input_channels, nr_output_channels):
     """Test DLWP constructor options"""
 
     # Construct model
-    model = DLWP(nr_input_channels=nr_input_channels,
+    model = DLWP(
+        nr_input_channels=nr_input_channels,
         nr_output_channels=nr_output_channels,
     ).to(device)
 
@@ -55,6 +56,7 @@ def test_dlwp_constructor(device, nr_input_channels, nr_output_channels):
     invar = torch.randn(bsize, nr_input_channels, 6, 64, 64).to(device)
     outvar = model(invar)
     assert outvar.shape == (bsize, nr_output_channels, *invar.shape[2:])
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_dlwp_optims(device):
@@ -86,6 +88,7 @@ def test_dlwp_optims(device):
     model, invar = setup_model()
     assert common.validate_combo_optims(model, (invar,))
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_dlwp_checkpoint(device):
     """Test DLWP checkpoint save/load"""
@@ -105,7 +108,10 @@ def test_dlwp_checkpoint(device):
 
     assert common.validate_checkpoint(model_1, model_2, (invar,))
 
+
 common.check_ort_version()
+
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_dlwp_deploy(device):
     """Test DLWP deployment support"""
