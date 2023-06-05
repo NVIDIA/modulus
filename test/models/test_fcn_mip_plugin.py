@@ -70,8 +70,6 @@ def save_untrained_sfno(path):
 
 
 def test_sfno(tmp_path):
-    print(tmp_path)
-    print(type(tmp_path))
     package = save_untrained_sfno(tmp_path)
 
     model = sfno(package, pretrained=True)
@@ -121,7 +119,6 @@ def test_dlwp(dlwp_path):
     time = datetime.datetime(2018, 1, 1)
     with torch.no_grad():
         out = model(x, time)
-
     assert out.shape == x.shape
 
 
