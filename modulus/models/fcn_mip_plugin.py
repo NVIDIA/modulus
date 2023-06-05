@@ -16,7 +16,6 @@ import numpy as np
 import torch
 import xarray
 import datetime
-from scipy.sparse import coo_matrix
 
 import modulus
 from modulus.models.sfno import sfnonet
@@ -165,14 +164,11 @@ class _DLWPWrapper(torch.nn.Module):
         i = self.input_map_wts.row.values - 1
         j = self.input_map_wts.col.values - 1
         data = self.input_map_wts.S.values
-        M = coo_matrix((data, (i, j)))
+        M = torch.sparse_coo_tensor(np.array((i, j)), data).to(device).type(dtype)
+
         for i in range(len(input_list)):
-            chans = []
-            for chan in range(num_chans):  # iterate over the channels
-                temp = M @ np.ravel(input_list[i][:, :, chan].cpu().numpy())
-                temp = temp.reshape((1, 6, 64, 64))
-                chans.append(torch.tensor(temp, dtype=dtype).to(device))
-            input_list[i] = torch.stack(chans, dim=1)
+            input_list[i] = input_list[i].reshape(num_chans, -1) @ M.T
+            input_list[i] = input_list[i].reshape(1, num_chans, 6, 64, 64)
 
         for i in range(len(input_list)):
             tisr = np.maximum(
@@ -215,27 +211,21 @@ class _DLWPWrapper(torch.nn.Module):
     def prepare_output(self, output):
         device = output.device
         dtype = output.dtype
-        output = output.cpu().numpy()
-        output = np.split(output, 2, axis=1)
-        output = np.stack(output, axis=1)  # add time dimension back in
-        output_list = list(np.split(output, 2, axis=1))
+        output = torch.split(output, output.shape[1] // 2, dim=1)
+        output = torch.stack(output, dim=1)  # add time dimension back in
+        output_list = list(torch.split(output, 1, dim=1))
         num_chans = output_list[0].shape[2]
         i = self.output_map_wts.row.values - 1
         j = self.output_map_wts.col.values - 1
         data = self.output_map_wts.S.values
-        M = coo_matrix((data, (i, j)))
+        M = torch.sparse_coo_tensor(np.array((i, j)), data).to(device).type(dtype)
 
-        for i, outvar in enumerate(output_list):
-            chans = []
-            for chan in range(num_chans):  # iterate over the channels
-                # regrid the data
-                out_flattened = np.ravel(outvar[:, :, chan])
-                temp = (M @ out_flattened).reshape((1, 721, 1440))
-                chans.append(temp)  # * std_array[c] + mean_array[c]  # re-normalize
-            output_list[i] = np.stack(chans, axis=1)
-        output = np.stack(output_list, axis=1)
+        for i in range(len(output_list)):
+            output_list[i] = output_list[i].reshape(num_chans, -1) @ M.T
+            output_list[i] = output_list[i].reshape(1, num_chans, 721, 1440)
+        output = torch.stack(output_list, dim=1)
 
-        return torch.tensor(output, dtype=dtype).to(device)
+        return output
 
     def forward(self, x, time):
         x = self.prepare_input(x, time)
