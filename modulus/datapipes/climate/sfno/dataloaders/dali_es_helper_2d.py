@@ -65,6 +65,7 @@ class GeneralES(object):
         zenith_angle=True,
         seed=333,
         is_parallel=True,
+        host_prefetch_buffers=False,
     ):  # pragma: no cover
 
         self.batch_size = batch_size
@@ -87,6 +88,7 @@ class GeneralES(object):
         self.device_id = device_id
         self.shard_id = shard_id
         self.is_parallel = is_parallel
+        self.host_prefetch_buffers = host_prefetch_buffers
 
         # set the read slices
         # we do not support channel parallelism yet
@@ -382,46 +384,89 @@ class GeneralES(object):
         self.device = cp.cuda.Device(self.device_id)
         self.device.use()
         self.current_buffer = 0
-        self.inp_buffs = [
-            cpx.zeros_pinned(
-                (
-                    self.n_history + 1,
-                    self.n_in_channels,
-                    self.read_shape[0],
-                    self.read_shape[1],
+        if self.host_prefetch_buffers:
+            self.inp_buffs = [
+                np.zeros(
+                    (
+                        self.n_history + 1,
+                        self.n_in_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
                 ),
-                dtype=np.float32,
-            ),
-            cpx.zeros_pinned(
-                (
-                    self.n_history + 1,
-                    self.n_in_channels,
-                    self.read_shape[0],
-                    self.read_shape[1],
+                np.zeros(
+                    (
+                        self.n_history + 1,
+                        self.n_in_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
                 ),
-                dtype=np.float32,
-            ),
-        ]
-        self.tar_buffs = [
-            cpx.zeros_pinned(
-                (
-                    self.n_future + 1,
-                    self.n_out_channels,
-                    self.read_shape[0],
-                    self.read_shape[1],
+            ]
+            self.tar_buffs = [
+                np.zeros(
+                    (
+                        self.n_future + 1,
+                        self.n_out_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
                 ),
-                dtype=np.float32,
-            ),
-            cpx.zeros_pinned(
-                (
-                    self.n_future + 1,
-                    self.n_out_channels,
-                    self.read_shape[0],
-                    self.read_shape[1],
+                cpx.zeros_pinned(
+                    (
+                        self.n_future + 1,
+                        self.n_out_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
                 ),
-                dtype=np.float32,
-            ),
-        ]
+            ]
+        else:
+            self.inp_buffs = [
+                cpx.zeros_pinned(
+                    (
+                        self.n_history + 1,
+                        self.n_in_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
+                ),
+                cpx.zeros_pinned(
+                    (
+                        self.n_history + 1,
+                        self.n_in_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
+                ),
+            ]
+            self.tar_buffs = [
+                cpx.zeros_pinned(
+                    (
+                        self.n_future + 1,
+                        self.n_out_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
+                ),
+                cpx.zeros_pinned(
+                    (
+                        self.n_future + 1,
+                        self.n_out_channels,
+                        self.read_shape[0],
+                        self.read_shape[1],
+                    ),
+                    dtype=np.float32,
+                ),
+            ]
+        
 
     def _compute_zenith_angle(self, local_idx, year_idx):  # pragma: no cover
         # compute hours into the year
