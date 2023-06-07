@@ -122,7 +122,6 @@ class ERA5DaliESDataloader(object):
 
             # normalize if requested
             if self.normalize:
-
                 inp = fn.normalize(
                     inp,
                     device="gpu",
@@ -390,16 +389,19 @@ class ERA5DaliESDataloader(object):
                 izen = token[0]["izen"]
                 tzen = token[0]["tzen"]
                 if self.host_file_buffers:
-                    result = inp.to(torch.cuda.current_device()), \
-                        tar.to(torch.cuda.current_device()),      \
-                        izen.to(torch.cuda.current_device()),     \
-                        tzen.to(torch.cuda.current_device())
+                    result = (
+                        inp.to(torch.cuda.current_device()),
+                        tar.to(torch.cuda.current_device()),
+                        izen.to(torch.cuda.current_device()),
+                        tzen.to(torch.cuda.current_device()),
+                    )
                 else:
                     result = inp, tar, izen, tzen
             else:
                 if self.host_prefetch_buffers:
-                    result = inp.to(torch.cuda.current_device()), \
-                            tar.to(torch.cuda.current_device())
+                    result = inp.to(torch.cuda.current_device()), tar.to(
+                        torch.cuda.current_device()
+                    )
                 else:
                     result = inp, tar
 

@@ -150,7 +150,6 @@ def get_data_loader(
 def _xarray_to_dataset(
     params: Params, ds: xarray.Dataset, train: bool
 ):  # pragma: no cover
-
     year = ds.time.dt.year
     if train:
         mask = (year <= 2015) & (year >= 1980)

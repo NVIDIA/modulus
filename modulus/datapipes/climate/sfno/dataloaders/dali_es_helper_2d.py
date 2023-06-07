@@ -67,7 +67,6 @@ class GeneralES(object):
         is_parallel=True,
         host_prefetch_buffers=False,
     ):  # pragma: no cover
-
         self.batch_size = batch_size
         self.location = location
         self.max_samples = max_samples
@@ -466,7 +465,6 @@ class GeneralES(object):
                     dtype=np.float32,
                 ),
             ]
-        
 
     def _compute_zenith_angle(self, local_idx, year_idx):  # pragma: no cover
         # compute hours into the year
@@ -528,7 +526,6 @@ class GeneralES(object):
                 f.close()
 
     def __call__(self, sample_info):  # pragma: no cover
-
         # compute global iteration index:
         global_sample_idx = (
             sample_info.idx_in_epoch
