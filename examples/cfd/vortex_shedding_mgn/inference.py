@@ -21,6 +21,7 @@ from matplotlib import animation
 from matplotlib import tri as mtri
 import wandb as wb
 import os
+from matplotlib.patches import Rectangle
 
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.mgn_dataset import MGNDataset
@@ -99,7 +100,7 @@ class MGNRollout:
             invar[:, 0:2] = self.dataset.normalize_node(
                 invar[:, 0:2], stats["velocity_mean"], stats["velocity_std"]
             )
-            pred_i = self.model(graph, invar, graph.edata["x"]).detach()  # predict
+            pred_i = self.model(invar, graph.edata["x"], graph).detach()  # predict
 
             # denormalize prediction
             pred_i[:, 0:2] = self.dataset.denormalize(
@@ -144,7 +145,12 @@ class MGNRollout:
     def init_animation(self):
         # fig configs
         plt.rcParams["image.cmap"] = "inferno"
-        self.fig, self.ax = plt.subplots(2, 1, figsize=(12, 8))
+        self.fig, self.ax = plt.subplots(2, 1, figsize=(16, 9))
+
+        # Set background color to black
+        self.fig.set_facecolor("black")
+        self.ax[0].set_facecolor("black")
+        self.ax[1].set_facecolor("black")
 
         # make animations dir
         if not os.path.exists("./animations"):
@@ -163,21 +169,34 @@ class MGNRollout:
         self.ax[0].cla()
         self.ax[0].set_aspect("equal")
         self.ax[0].set_axis_off()
+        navy_box = Rectangle((0, 0), 1.4, 0.4, facecolor="navy")
+        self.ax[0].add_patch(navy_box)  # Add a navy box to the first subplot
         self.ax[0].tripcolor(triang, y_star, vmin=np.min(y_star), vmax=np.max(y_star))
         self.ax[0].triplot(triang, "ko-", ms=0.5, lw=0.3)
-        self.ax[0].set_title("GNN Prediction")
+        self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="white")
         self.ax[1].cla()
         self.ax[1].set_aspect("equal")
         self.ax[1].set_axis_off()
+        navy_box = Rectangle((0, 0), 1.4, 0.4, facecolor="navy")
+        self.ax[1].add_patch(navy_box)  # Add a navy box to the second subplot
         self.ax[1].tripcolor(
             triang, y_exact, vmin=np.min(y_exact), vmax=np.max(y_exact)
         )
         self.ax[1].triplot(triang, "ko-", ms=0.5, lw=0.3)
-        self.ax[1].set_title("Ground Truth")
+        self.ax[1].set_title("Ground Truth", color="white")
+
+        # Adjust subplots to minimize empty space
+        self.ax[0].set_aspect("auto", adjustable="box")
+        self.ax[1].set_aspect("auto", adjustable="box")
+        self.ax[0].autoscale(enable=True, tight=True)
+        self.ax[1].autoscale(enable=True, tight=True)
+        self.fig.subplots_adjust(
+            left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.1, hspace=0.2
+        )
         return self.fig
 
 
-if __name__ == "__main__":  # TODO run a single predict call for all variables
+if __name__ == "__main__":
     wb.init(project="VortexSheddingMGN", entity="modulus", mode="disabled")
     print("Rollout started...")
     rollout = MGNRollout(wb)

@@ -122,7 +122,7 @@ class MGNTrainer:
     def forward(self, graph):
         # forward pass
         with autocast(enabled=wb.config.amp):
-            pred = self.model(graph, graph.ndata["x"], graph.edata["x"])
+            pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             loss = self.criterion(pred, graph.ndata["y"])
             return loss
 
