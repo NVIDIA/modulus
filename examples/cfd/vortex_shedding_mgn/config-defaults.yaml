@@ -36,7 +36,7 @@ lr_decay_rate:
 amp:
   value: False
 jit:
-  value: True
+  value: False
 
 # test configs
 num_test_samples:
