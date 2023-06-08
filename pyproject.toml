@@ -43,4 +43,4 @@ inference = ["onnxruntime==1.13.1"]
 version = {attr = "modulus.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["modulus", "modulus.*"]
+include = ["modulus", "modulus.*"] 
