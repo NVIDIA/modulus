@@ -102,7 +102,7 @@ def graphcast_34ch(
     icospheres_path = package.get("icospheres.json")
     static_data_path = package.get("static", recursive=True)
 
-    # instantiate the model, set dtype and move to device
+    # instantiate the model, set dtype
     base_model = (
         GraphCastNet(
             meshgraph_path=icospheres_path,
@@ -116,7 +116,7 @@ def graphcast_34ch(
             do_concat_trick=True,
         )
         .to(dtype=torch.bfloat16)
-        .to(dist.device)
+        .to("cuda")  # TODO hardcoded
     )
 
     # set model to inference mode
