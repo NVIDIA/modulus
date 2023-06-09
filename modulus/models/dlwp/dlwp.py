@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+from typing import Tuple, Union
 
 Tensor = torch.Tensor
 
@@ -230,48 +231,87 @@ class DLWP(Module):
         self,
         nr_input_channels: int,
         nr_output_channels: int,
+        nr_initial_channels: int = 64,
+        activation_fn: nn.Module = nn.LeakyReLU(0.1),
+        depth: int = 2,
+        clamp_activation: Tuple[Union[float, int, None], Union[float, int, None]] = (
+            None,
+            None,
+        ),
     ):
         super().__init__(meta=MetaData())
 
         self.nr_input_channels = nr_input_channels
         self.nr_output_channels = nr_output_channels
+        self.nr_initial_channels = nr_initial_channels
+        self.activation_fn = activation_fn
+        self.depth = depth
+        self.clamp_activation = clamp_activation
 
         # define layers
         # define non-convolutional layers
         self.avg_pool = nn.AvgPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2)
+        self.upsample_layer = nn.Upsample(scale_factor=2)
 
         # define layers
-        # Eqatorial Convolutions
-        self.equator_conv_1 = nn.Conv2d(nr_input_channels, 64, 3)
-        self.equator_conv_2 = nn.Conv2d(64, 64, 3)
-        self.equator_conv_3 = nn.Conv2d(64, 128, 3)
-        self.equator_conv_4 = nn.Conv2d(128, 128, 3)
-        self.equator_conv_5 = nn.Conv2d(128, 256, 3)
-        self.equator_conv_6 = nn.Conv2d(256, 128, 3)
-        self.equator_conv_7 = nn.Conv2d(256, 128, 3)
-        self.equator_conv_8 = nn.Conv2d(128, 64, 3)
-        self.equator_conv_9 = nn.Conv2d(128, 64, 3)
-        self.equator_conv_10 = nn.Conv2d(64, 64, 3)
-        self.equator_conv_11 = nn.Conv2d(64, nr_output_channels, 1)
+        self.equatorial_downsample = []
+        self.equatorial_upsample = []
+        self.equatorial_mid_layers = []
+        self.polar_downsample = []
+        self.polar_upsample = []
+        self.polar_mid_layers = []
 
-        # Polar colvolutions
-        self.polar_conv_1 = nn.Conv2d(nr_input_channels, 64, 3)
-        self.polar_conv_2 = nn.Conv2d(64, 64, 3)
-        self.polar_conv_3 = nn.Conv2d(64, 128, 3)
-        self.polar_conv_4 = nn.Conv2d(128, 128, 3)
-        self.polar_conv_5 = nn.Conv2d(128, 256, 3)
-        self.polar_conv_6 = nn.Conv2d(256, 128, 3)
-        self.polar_conv_7 = nn.Conv2d(256, 128, 3)
-        self.polar_conv_8 = nn.Conv2d(128, 64, 3)
-        self.polar_conv_9 = nn.Conv2d(128, 64, 3)
-        self.polar_conv_10 = nn.Conv2d(64, 64, 3)
-        self.polar_conv_11 = nn.Conv2d(64, nr_output_channels, 1)
+        for i in range(depth):
+            if i == 0:
+                ins = self.nr_input_channels
+            else:
+                ins = self.nr_initial_channels * (2 ** (i - 1))
+            outs = self.nr_initial_channels * (2 ** (i))
+            self.equatorial_downsample.append(nn.Conv2d(ins, outs, kernel_size=3))
+            self.polar_downsample.append(nn.Conv2d(ins, outs, kernel_size=3))
+            self.equatorial_downsample.append(nn.Conv2d(outs, outs, kernel_size=3))
+            self.polar_downsample.append(nn.Conv2d(outs, outs, kernel_size=3))
+
+        for i in range(2):
+            if i == 0:
+                ins = outs
+                outs = ins * 2
+            else:
+                ins = outs
+                outs = ins // 2
+            self.equatorial_mid_layers.append(nn.Conv2d(ins, outs, kernel_size=3))
+            self.polar_mid_layers.append(nn.Conv2d(ins, outs, kernel_size=3))
+
+        for i in range(depth - 1, -1, -1):
+            if i == 0:
+                outs = self.nr_initial_channels
+                outs_final = outs
+            else:
+                outs = self.nr_initial_channels * (2 ** (i))
+                outs_final = outs // 2
+            ins = outs * 2
+            self.equatorial_upsample.append(nn.Conv2d(ins, outs, kernel_size=3))
+            self.polar_upsample.append(nn.Conv2d(ins, outs, kernel_size=3))
+            self.equatorial_upsample.append(nn.Conv2d(outs, outs_final, kernel_size=3))
+            self.polar_upsample.append(nn.Conv2d(outs, outs_final, kernel_size=3))
+
+        self.equatorial_downsample = nn.ModuleList(self.equatorial_downsample)
+        self.polar_downsample = nn.ModuleList(self.polar_downsample)
+        self.equatorial_mid_layers = nn.ModuleList(self.equatorial_mid_layers)
+        self.polar_mid_layers = nn.ModuleList(self.polar_mid_layers)
+        self.equatorial_upsample = nn.ModuleList(self.equatorial_upsample)
+        self.polar_upsample = nn.ModuleList(self.polar_upsample)
+
+        self.equatorial_last = nn.Conv2d(outs, self.nr_output_channels, kernel_size=1)
+        self.polar_last = nn.Conv2d(outs, self.nr_output_channels, kernel_size=1)
 
     # define activation layers
     def activation(self, x: Tensor):
-        lr = nn.LeakyReLU(0.1)
-        x = torch.clamp(lr(x), min=None, max=10.0)
+        x = self.activation_fn(x)
+        if any(isinstance(c, (float, int)) for c in self.clamp_activation):
+            x = torch.clamp(
+                x, min=self.clamp_activation[0], max=self.clamp_activation[1]
+            )
         return x
 
     def forward(self, cubed_sphere_input):
@@ -279,39 +319,41 @@ class DLWP(Module):
         faces = torch.split(
             cubed_sphere_input, split_size_or_sections=1, dim=2
         )  # split along face dim
+
         faces = [torch.squeeze(face, dim=2) for face in faces]
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_1, self.polar_conv_1)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_2, self.polar_conv_2)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces_1 = faces
-        faces = _cubed_non_conv_wrapper(faces, self.avg_pool)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_3, self.polar_conv_3)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_4, self.polar_conv_4)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces_2 = faces
-        faces = _cubed_non_conv_wrapper(faces, self.avg_pool)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_5, self.polar_conv_5)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_6, self.polar_conv_6)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_non_conv_wrapper(faces, self.upsample)
-        faces = [
-            torch.cat((face_1, face_2), dim=1) for face_1, face_2 in zip(faces, faces_2)
-        ]
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_7, self.polar_conv_7)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_8, self.polar_conv_8)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_non_conv_wrapper(faces, self.upsample)
-        faces = [
-            torch.cat((face_1, face_2), dim=1) for face_1, face_2 in zip(faces, faces_1)
-        ]
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_9, self.polar_conv_9)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_10, self.polar_conv_10)
-        faces = _cubed_non_conv_wrapper(faces, self.activation)
-        faces = _cubed_conv_wrapper(faces, self.equator_conv_11, self.polar_conv_11)
+
+        encoder_states = []
+
+        for i, (equatorial_layer, polar_layer) in enumerate(
+            zip(self.equatorial_downsample, self.polar_downsample)
+        ):
+            faces = _cubed_conv_wrapper(faces, equatorial_layer, polar_layer)
+            faces = _cubed_non_conv_wrapper(faces, self.activation)
+            if i % 2 != 0:
+                encoder_states.append(faces)
+                faces = _cubed_non_conv_wrapper(faces, self.avg_pool)
+
+        for i, (equatorial_layer, polar_layer) in enumerate(
+            zip(self.equatorial_mid_layers, self.polar_mid_layers)
+        ):
+            faces = _cubed_conv_wrapper(faces, equatorial_layer, polar_layer)
+            faces = _cubed_non_conv_wrapper(faces, self.activation)
+
+        j = 0
+        for i, (equatorial_layer, polar_layer) in enumerate(
+            zip(self.equatorial_upsample, self.polar_upsample)
+        ):
+            if i % 2 == 0:
+                encoder_faces = encoder_states[len(encoder_states) - j - 1]
+                faces = _cubed_non_conv_wrapper(faces, self.upsample_layer)
+                faces = [
+                    torch.cat((face_1, face_2), dim=1)
+                    for face_1, face_2 in zip(faces, encoder_faces)
+                ]
+                j += 1
+            faces = _cubed_conv_wrapper(faces, equatorial_layer, polar_layer)
+
+        faces = _cubed_conv_wrapper(faces, self.equatorial_last, self.polar_last)
         output = torch.stack(faces, dim=2)
+
         return output
