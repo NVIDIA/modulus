@@ -61,7 +61,7 @@ def test_dlwp_constructor(
     ).to(device)
 
     bsize = random.randint(1, 4)
-    invar = torch.randn(bsize, nr_input_channels, 6, 64, 64).to(device)
+    invar = torch.randn(bsize, nr_input_channels, 6, 128, 128).to(device)
     outvar = model(invar)
     assert outvar.shape == (bsize, nr_output_channels, *invar.shape[2:])
 
