@@ -15,6 +15,7 @@
 import torch
 import pytest
 import random
+import numpy as np
 
 from modulus.models.dlwp import DLWP
 from . import common
@@ -133,3 +134,13 @@ def test_dlwp_deploy(device):
 
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
+
+
+def test_dlwp_implementation():
+    """Test DLWP implementation compared to publication"""
+
+    model = DLWP(16, 12, 64, depth=2)
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+
+    assert params == 2676376
