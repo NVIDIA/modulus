@@ -202,6 +202,8 @@ class DLWP(Module):
     """A Convolutional model for Deep Learning Weather Prediction that
     works on Cubed-sphere grids.
 
+    This model expects the input to be of shape [N, C, 6, Res, Res]
+
     Parameters
     ----------
     nr_input_channels : int
@@ -324,6 +326,12 @@ class DLWP(Module):
         return x
 
     def forward(self, cubed_sphere_input):
+        # do some input checks
+        assert cubed_sphere_input.size(2) == 6, "The input must have 6 faces."
+        assert cubed_sphere_input.size(3) == cubed_sphere_input.size(
+            4
+        ), "The input must have equal height and width"
+
         # split the cubed_sphere_input into individual faces
         faces = torch.split(
             cubed_sphere_input, split_size_or_sections=1, dim=2
