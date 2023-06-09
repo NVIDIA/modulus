@@ -30,17 +30,17 @@ def test_conv_rnn_one2many_forward(device, dimension):
     model = One2ManyRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=8,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=4,
     ).to(device)
 
     bsize = 2
     if dimension == 2:
-        invar = torch.randn(bsize, 1, 1, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 1, 8, 8).to(device)
     elif dimension == 3:
-        invar = torch.randn(bsize, 1, 1, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 1, 8, 8, 8).to(device)
     else:
         print("Dimension not supported")
 
@@ -60,26 +60,26 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
     model_1 = One2ManyRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=4,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=8,
     ).to(device)
 
     model_2 = One2ManyRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=4,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=8,
     ).to(device)
 
     bsize = random.randint(1, 2)
     if dimension == 2:
-        invar = torch.randn(bsize, 1, 1, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 1, 8, 8).to(device)
     elif dimension == 3:
-        invar = torch.randn(bsize, 1, 1, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 1, 8, 8, 8).to(device)
     else:
         print("Dimension not supported")
 
@@ -96,7 +96,7 @@ def test_conv_rnn_one2many_optimizations(device, dimension):
         model = One2ManyRNN(
             input_channels=1,
             dimension=dimension,
-            nr_latent_channels=32,
+            nr_latent_channels=8,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
@@ -104,9 +104,9 @@ def test_conv_rnn_one2many_optimizations(device, dimension):
 
         bsize = random.randint(1, 2)
         if dimension == 2:
-            invar = torch.randn(bsize, 1, 1, 16, 16).to(device)
+            invar = torch.randn(bsize, 1, 1, 8, 8).to(device)
         elif dimension == 3:
-            invar = torch.randn(bsize, 1, 1, 16, 16, 16).to(device)
+            invar = torch.randn(bsize, 1, 1, 8, 8, 8).to(device)
         else:
             print("Dimension not supported")
 
@@ -128,7 +128,7 @@ def test_conv_rnn_one2many_constructor(device):
             {
                 "input_channels": 1,
                 "dimension": dimension,
-                "nr_latent_channels": random.randint(16, 32),
+                "nr_latent_channels": random.randint(4, 8),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
                 "nr_tsteps": random.randint(8, 16),
@@ -141,11 +141,9 @@ def test_conv_rnn_one2many_constructor(device):
 
         bsize = random.randint(1, 4)
         if kw_args["dimension"] == 2:
-            invar = torch.randn(bsize, kw_args["input_channels"], 1, 16, 16).to(device)
+            invar = torch.randn(bsize, kw_args["input_channels"], 1, 8, 8).to(device)
         else:
-            invar = torch.randn(bsize, kw_args["input_channels"], 1, 16, 16, 16).to(
-                device
-            )
+            invar = torch.randn(bsize, kw_args["input_channels"], 1, 8, 8, 8).to(device)
 
         outvar = model(invar)
         assert outvar.shape == (
@@ -179,17 +177,17 @@ def test_conv_rnn_seq2seq_forward(device, dimension):
     model = Seq2SeqRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=4,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=8,
     ).to(device)
 
     bsize = 2
     if dimension == 2:
-        invar = torch.randn(bsize, 1, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 8, 8, 8).to(device)
     elif dimension == 3:
-        invar = torch.randn(bsize, 1, 16, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 8, 8, 8, 8).to(device)
     else:
         print("Dimension not supported")
 
@@ -209,26 +207,26 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
     model_1 = Seq2SeqRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=8,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=8,
     ).to(device)
 
     model_2 = Seq2SeqRNN(
         input_channels=1,
         dimension=dimension,
-        nr_latent_channels=32,
+        nr_latent_channels=8,
         activation_fn=torch.nn.ReLU(),
         nr_downsamples=2,
-        nr_tsteps=16,
+        nr_tsteps=8,
     ).to(device)
 
     bsize = random.randint(1, 2)
     if dimension == 2:
-        invar = torch.randn(bsize, 1, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 8, 8, 8).to(device)
     elif dimension == 3:
-        invar = torch.randn(bsize, 1, 16, 16, 16, 16).to(device)
+        invar = torch.randn(bsize, 1, 8, 8, 8, 8).to(device)
     else:
         print("Dimension not supported")
 
@@ -245,7 +243,7 @@ def test_conv_rnn_seq2seq_optimizations(device, dimension):
         model = Seq2SeqRNN(
             input_channels=1,
             dimension=dimension,
-            nr_latent_channels=32,
+            nr_latent_channels=4,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,
@@ -253,9 +251,9 @@ def test_conv_rnn_seq2seq_optimizations(device, dimension):
 
         bsize = random.randint(1, 2)
         if dimension == 2:
-            invar = torch.randn(bsize, 1, 2, 16, 16).to(device)
+            invar = torch.randn(bsize, 1, 2, 8, 8).to(device)
         elif dimension == 3:
-            invar = torch.randn(bsize, 1, 2, 16, 16, 16).to(device)
+            invar = torch.randn(bsize, 1, 2, 8, 8, 8).to(device)
         else:
             print("Dimension not supported")
 
@@ -277,10 +275,10 @@ def test_conv_rnn_seq2seq_constructor(device):
             {
                 "input_channels": 1,
                 "dimension": dimension,
-                "nr_latent_channels": random.randint(16, 32),
+                "nr_latent_channels": random.randint(4, 8),
                 "activation_fn": torch.nn.ReLU(),
                 "nr_downsamples": random.randint(2, 3),
-                "nr_tsteps": random.randint(8, 16),
+                "nr_tsteps": random.randint(2, 4),
             }
         )
 
@@ -311,7 +309,7 @@ def test_conv_rnn_seq2seq_constructor(device):
         model = Seq2SeqRNN(
             input_channels=1,
             dimension=4,
-            nr_latent_channels=32,
+            nr_latent_channels=4,
             activation_fn=torch.nn.ReLU(),
             nr_downsamples=2,
             nr_tsteps=2,

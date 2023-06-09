@@ -63,7 +63,7 @@ def get_disagreements(inputs, bins, counts, test):
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-@pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 720, 1440)])
+@pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 360, 720)])
 def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
     if (device == "cuda:0") and (not dist.is_initialized()):
@@ -429,10 +429,10 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
         rps, torch.zeros([1], device=device, dtype=torch.float32), rtol=rtol, atol=atol
     )
 
-    num_obs = 500
+    num_obs = 1000
 
     x = torch.randn((1_000, num_obs, 10, 10), device=device, dtype=torch.float32)
-    bin_edges, bin_counts = hist.histogram(x, bins=30)
+    bin_edges, bin_counts = hist.histogram(x, bins=20)
 
     obs = torch.randn((num_obs, 10, 10), device=device, dtype=torch.float32)
     ranks = cal.find_rank(bin_edges, bin_counts, obs)

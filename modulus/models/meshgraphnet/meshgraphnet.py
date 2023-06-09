@@ -128,7 +128,7 @@ class MeshGraphNet(Module):
             input_dim_edges,
             output_dim=hidden_dim_edge_encoder,
             hidden_dim=hidden_dim_edge_encoder,
-            hidden_layers=num_layers_edge_encoder - 1,
+            hidden_layers=num_layers_edge_encoder,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
@@ -137,7 +137,7 @@ class MeshGraphNet(Module):
             input_dim_nodes,
             output_dim=hidden_dim_node_encoder,
             hidden_dim=hidden_dim_node_encoder,
-            hidden_layers=num_layers_node_encoder - 1,
+            hidden_layers=num_layers_node_encoder,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
@@ -146,9 +146,9 @@ class MeshGraphNet(Module):
             hidden_dim_node_encoder,
             output_dim=output_dim,
             hidden_dim=hidden_dim_node_decoder,
-            hidden_layers=num_layers_node_decoder - 1,
+            hidden_layers=num_layers_node_decoder,
             activation_fn=nn.ReLU(),
-            norm_type="LayerNorm",
+            norm_type=None,
             recompute_activation=False,
         )
         self.processor = MeshGraphNetProcessor(
@@ -177,6 +177,8 @@ class MeshGraphNet(Module):
 
 
 class MeshGraphNetProcessor(nn.Module):
+    """MeshGraphNet processor block"""
+
     def __init__(
         self,
         processor_size: int = 15,
@@ -197,7 +199,7 @@ class MeshGraphNetProcessor(nn.Module):
             input_dim_edge,
             input_dim_edge,
             input_dim_edge,
-            num_layers_edge - 1,
+            num_layers_edge,
             activation_fn,
             norm_type,
             do_concat_trick,
@@ -209,7 +211,7 @@ class MeshGraphNetProcessor(nn.Module):
             input_dim_edge,
             input_dim_edge,
             input_dim_edge,
-            num_layers_node - 1,
+            num_layers_node,
             activation_fn,
             norm_type,
             False,
