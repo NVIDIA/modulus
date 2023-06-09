@@ -208,6 +208,15 @@ class DLWP(Module):
         Number of channels in the input
     nr_output_channels : int
         Number of channels in the output
+    nr_initial_channels : int
+        Number of channels in the initial convolution. This governs the overall channels
+        in the model.
+    activation_fn : nn.Module
+        Activation function for the convolutions
+    depth : int
+        Depth for the U-Net
+    clamp_activation : Tuple of ints, floats or None
+        The min and max value used for torch.clamp()
 
     Example
     -------
@@ -236,7 +245,7 @@ class DLWP(Module):
         depth: int = 2,
         clamp_activation: Tuple[Union[float, int, None], Union[float, int, None]] = (
             None,
-            None,
+            10.0,
         ),
     ):
         super().__init__(meta=MetaData())
