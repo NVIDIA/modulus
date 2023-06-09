@@ -21,20 +21,21 @@ from . import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("nr_input_channels", [2])
-@pytest.mark.parametrize("nr_output_channels", [2])
-def test_dlwp_forward(device, nr_input_channels, nr_output_channels):
+def test_dlwp_forward(device):
     """Test DLWP forward pass"""
     torch.manual_seed(0)
     # Construct model
     model = DLWP(
-        nr_input_channels=nr_input_channels,
-        nr_output_channels=nr_output_channels,
+        nr_input_channels=2,
+        nr_output_channels=2,
+        nr_initial_channels=64,
+        activation_fn=torch.nn.LeakyReLU(0.1),
+        depth=2,
+        clamp_activation=(None, 10.0),
     ).to(device)
 
     bsize = 4
-    invar = torch.randn(bsize, nr_input_channels, 6, 64, 64).to(device)
-
+    invar = torch.randn(bsize, 2, 6, 64, 64).to(device)
     assert common.validate_forward_accuracy(
         model, (invar,), file_name=f"dlwp_output.pth", atol=1e-3
     )
@@ -43,13 +44,19 @@ def test_dlwp_forward(device, nr_input_channels, nr_output_channels):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("nr_input_channels", [2, 4])
 @pytest.mark.parametrize("nr_output_channels", [2, 4])
-def test_dlwp_constructor(device, nr_input_channels, nr_output_channels):
+@pytest.mark.parametrize("nr_initial_channels", [32, 64])
+@pytest.mark.parametrize("depth", [2, 3, 4])
+def test_dlwp_constructor(
+    device, nr_input_channels, nr_output_channels, nr_initial_channels, depth
+):
     """Test DLWP constructor options"""
 
     # Construct model
     model = DLWP(
         nr_input_channels=nr_input_channels,
         nr_output_channels=nr_output_channels,
+        nr_initial_channels=nr_initial_channels,
+        depth=depth,
     ).to(device)
 
     bsize = random.randint(1, 4)
@@ -70,7 +77,7 @@ def test_dlwp_optims(device):
         ).to(device)
 
         bsize = random.randint(1, 5)
-        invar = torch.randn(bsize, 2, 6, 64, 64).to(device)
+        invar = torch.randn(bsize, 2, 6, 16, 16).to(device)
 
         return model, invar
 
