@@ -131,7 +131,7 @@ def save_untrained_dlwp(path):
 
 def test_dlwp(tmp_path):
     package = save_untrained_dlwp(tmp_path)
-    source_dir = "/workspace/modulus_ci_cd_workspace/ktangsali_forks/new_repos/modulus-data/plugin_data/dlwp/"
+    source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
 
     model = dlwp(package, pretrained=True)
@@ -173,7 +173,7 @@ def save_untrained_graphcast(path):
 
 
 def test_graphcast(tmp_path):
-    source_dir = "/workspace/modulus_ci_cd_workspace/ktangsali_forks/new_repos/modulus-data/plugin_data/graphcast/"
+    source_dir = "/data/nfs/modulus-data/plugin_data/graphcast/"
     _copy_directory(source_dir, tmp_path)
 
     package = save_untrained_graphcast(
