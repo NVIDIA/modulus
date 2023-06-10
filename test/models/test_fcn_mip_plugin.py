@@ -181,7 +181,6 @@ def test_graphcast(tmp_path):
     )  # here package needs to load after icosphere.json is copied.
     model = graphcast_34ch(package, pretrained=False)
     x = torch.randn(1, 34, 721, 1440).to("cuda")
-    print(x.device)
     with torch.no_grad():
         out = model(x)
     assert out.shape == x.shape
