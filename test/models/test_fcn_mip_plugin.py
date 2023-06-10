@@ -145,7 +145,6 @@ def test_dlwp(tmp_path):
 def save_untrained_graphcast(path):
 
     icosphere_path = path / "icospheres.json"
-    print(icosphere_path)
     config = {
         "meshgraph_path": icosphere_path.as_posix(),
         "static_dataset_path": None,
