@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import hydra
-from torch import cat, std_mean, FloatTensor
+from torch import cat, FloatTensor
 import numpy as np
 import matplotlib.pyplot as plt
 from os.path import join
-from omegaconf import DictConfig
+from omegaconf import DictConfig, open_dict
 from torch.utils.data import DataLoader
 
 from modulus.models.mlp import FullyConnected
@@ -27,66 +27,22 @@ from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger
 from modulus.launch.utils import load_checkpoint
 
-from utils import NestedDarcyDataset
+from utils import NestedDarcyDataset, PlotNestedDarcy
 
 
-def plot_result(idx: int, perm: dict, darcy: dict, pos: dict) -> None:
-    """Plot Results
-
-    Takes results from inference and assembles all levels to a single plot.
-
-    Parameters
-    ----------
-    idx : int
-        index of sample which shall be plotted
-    perm : dict
-        dictionary containing permeability field for each level
-    darcy :
-        dictionary containing results of inference for each level
-    pos : dict
-        dictionary containing information about position of inset
-    """
-    ref_fac = 4  # TODO include in dataset generator so can be read from file
-    buffer = 8
-    fine_res = 128
-    min_offset = (fine_res * (ref_fac - 1) + 1) // 2 + buffer * ref_fac
-
+def plot_assembled(perm, darc):
     headers = ["permeability", "darcy"]
-    invar = perm["ref0"][idx, -1, :, :]
-    prediction = darcy["ref0"][idx, 0, :, :]
-
-    # add refined region
-    loc = pos["ref1"][idx] * ref_fac + min_offset
-    pred_ref = darcy["ref1"][idx, -1, :, :]
-    expanded = np.ones((1024, 1024), dtype=float)
-    mask = np.ones((1024, 1024), dtype=bool)
-    expanded[
-        loc[0] : loc[0] + pred_ref.shape[-2], loc[1] : loc[1] + pred_ref.shape[-1]
-    ] = pred_ref
-    mask[
-        loc[0] : loc[0] + pred_ref.shape[-2], loc[1] : loc[1] + pred_ref.shape[-1]
-    ] = False
-    expanded = np.ma.array(expanded, mask=mask)
-    vmin, vmax = prediction.min(), prediction.max()
-
-    prediction = np.kron(
-        prediction, np.ones((ref_fac, ref_fac), dtype=prediction.dtype)
-    )
-    invar = np.kron(invar, np.ones((ref_fac, ref_fac), dtype=invar.dtype))
-
-    plt.close("all")
     plt.rcParams.update({"font.size": 28})
     fig, ax = plt.subplots(1, 2, figsize=(15 * 2, 15), sharey=True)
     im = []
-    im.append(ax[0].imshow(invar))
-    im.append(ax[1].imshow(prediction, cmap="viridis", vmin=vmin, vmax=vmax))
-    ax[1].imshow(expanded, cmap="viridis", vmin=vmin, vmax=vmax)
+    im.append(ax[0].imshow(perm))
+    im.append(ax[1].imshow(darc))
 
     for ii in range(len(im)):
         fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
         ax[ii].set_title(headers[ii])
 
-    fig.savefig(join("./", f"inferred_{idx:03d}.png"))
+    fig.savefig(join("./", f"test_test.png"))
 
 
 def EvaluateModel(
@@ -96,11 +52,10 @@ def EvaluateModel(
     parent_result: FloatTensor = None,
     log: PythonLogger = None,
 ):
+    # define model and load weights
     dist = DistributedManager()
-    # define model
     log.info(f"evaluating model {model_name}")
     model_cfg = cfg.arch[model_name]
-    level = int(model_name[-1])
     decoder = FullyConnected(
         in_features=model_cfg.fno.latent_channels,
         out_features=model_cfg.decoder.out_features,
@@ -117,22 +72,26 @@ def EvaluateModel(
         padding=model_cfg.fno.padding,
     ).to(dist.device)
     load_checkpoint(
-        path=f"./checkpoints/{model_name}", device=dist.device, models=model
+        path=f"./checkpoints/best/{model_name}", device=dist.device, models=model
     )
 
     # prepare data for inference
     dataset = NestedDarcyDataset(
         mode="eval",
         data_path=cfg.inference.inference_set,
-        level=level,
+        model_name=model_name,
         norm=norm,
         log=log,
         parent_prediction=parent_result,
     )
     dataloader = DataLoader(dataset, batch_size=cfg.inference.batch_size, shuffle=False)
+    with open_dict(cfg):
+        cfg.ref_fac = dataset.ref_fac
+        cfg.fine_res = dataset.fine_res
+        cfg.buffer = dataset.buffer
 
-    # store positions of insets
-    if level > 0:
+    # store positions of insets if refinement level > 0, ie if not global model
+    if int(model_name[-1]) > 0:
         pos = dataset.position
     else:
         pos = None
@@ -155,6 +114,105 @@ def EvaluateModel(
     return pos, invars, result
 
 
+def AssembleSolutionToDict(cfg: DictConfig, perm: dict, darcy: dict, pos: dict):
+    dat, idx = {}, 0
+    for ii in range(perm["ref0"].shape[0]):
+        samp = str(ii)
+        dat[samp] = {
+            "ref0": {
+                "0": {
+                    "permeability": perm["ref0"][ii, 0, ...],
+                    "darcy": darcy["ref0"][ii, 0, ...],
+                }
+            }
+        }
+
+        # insets
+        dat[samp]["ref1"] = {}
+        for ins, ps in pos["ref1"][samp].items():
+            dat[samp]["ref1"][ins] = {
+                "permeability": perm["ref1"][idx, 1, ...],
+                "darcy": darcy["ref1"][idx, 0, ...],
+                "pos": ps,
+            }
+            idx += 1
+
+    if cfg.inference.save_result:
+        np.save(
+            "./nested_darcy_results.npy",
+            dat,
+        )
+    return dat
+
+
+def AssembleToSingleField(cfg: DictConfig, dat: dict):
+    ref_fac = cfg.ref_fac
+    glob_size = dat["0"]["ref0"]["0"]["darcy"].shape[0]
+    inset_size = dat["0"]["ref1"]["0"]["darcy"].shape[0]
+    size = ref_fac * glob_size
+    min_offset = (cfg.fine_res * (ref_fac - 1) + 1) // 2 + cfg.buffer * ref_fac
+
+    perm = np.zeros((len(dat), size, size), dtype=np.float32)
+    darc = np.zeros_like(perm)
+    for ii, (_, field) in enumerate(dat.items()):
+        # extract global premeability and expand to size x size
+        perm[ii, ...] = np.kron(
+            field["ref0"]["0"]["permeability"],
+            np.ones((ref_fac, ref_fac), dtype=field["ref0"]["0"]["permeability"].dtype),
+        )
+        darc[ii, ...] = np.kron(
+            field["ref0"]["0"]["darcy"],
+            np.ones((ref_fac, ref_fac), dtype=field["ref0"]["0"]["darcy"].dtype),
+        )
+
+        # overwrite refined regions
+        for __, inset in field["ref1"].items():
+            pos = inset["pos"] * ref_fac + min_offset
+            perm[
+                ii, pos[0] : pos[0] + inset_size, pos[1] : pos[1] + inset_size
+            ] = inset["permeability"]
+            darc[
+                ii, pos[0] : pos[0] + inset_size, pos[1] : pos[1] + inset_size
+            ] = inset["darcy"]
+
+    return {"permeability": perm, "darcy": darc}, ref_fac
+
+
+def GetRelativeL2(pred, tar):
+    div = 1.0 / tar["darcy"].shape[0] * tar["darcy"].shape[1]
+    err = pred["darcy"] - tar["darcy"]
+
+    l2_tar = np.sqrt(np.einsum("ijk,ijk->i", tar["darcy"], tar["darcy"]) * div)
+    l2_err = np.sqrt(np.einsum("ijk,ijk->i", err, err) * div)
+
+    return np.mean(l2_err / l2_tar)
+
+
+def ComputeErrorNorm(cfg: DictConfig, pred_dict: dict, log: PythonLogger, ref0_pred):
+    # assemble ref1 and ref2 solutions alongside gound truth to single scalar field
+    log.info("computing relative L2-norm of error...")
+    tar_dict = np.load(cfg.inference.inference_set, allow_pickle=True).item()["fields"]
+    pred, ref_fac = AssembleToSingleField(cfg, pred_dict)
+    tar = AssembleToSingleField(cfg, tar_dict)[0]
+
+    assert np.all(
+        tar["permeability"] == pred["permeability"]
+    ), "Permeability from file is not equal to analysed permeability"
+
+    # compute l2 norm of error
+    rel_l2_err = GetRelativeL2(pred, tar)
+    log.log(f"    ...which is {rel_l2_err}.")
+
+    if cfg.inference.get_ref0_error_norm:
+        ref0_pred = np.kron(
+            ref0_pred, np.ones((ref_fac, ref_fac), dtype=ref0_pred.dtype)
+        )
+        rel_l2_err = GetRelativeL2({"darcy": ref0_pred}, tar)
+        log.log(f"The error with ref_0 only would be {rel_l2_err}.")
+
+    return
+
+
 @hydra.main(version_base="1.3", config_path=".", config_name="config")
 def nested_darcy_evaluation(cfg: DictConfig) -> None:
     """Inference of the nested 2D Darcy flow benchmark problem.
@@ -164,9 +222,7 @@ def nested_darcy_evaluation(cfg: DictConfig) -> None:
     with the parent level. All results are stored in a numpy file and a selection
     of samples can be plotted in the end.
     """
-    # initialize monitoring
-    n_plots = 10
-
+    # initialize monitoring, models and normalisation
     DistributedManager.initialize()  # Only call this once in the entire script!
     log = PythonLogger(name="darcy_fno")
 
@@ -179,8 +235,8 @@ def nested_darcy_evaluation(cfg: DictConfig) -> None:
         "darcy": (cfg.normaliser.darcy.mean, cfg.normaliser.darcy.std),
     }
 
-    # loop over models, evaluate, revoke normalisation and write results to file
-    perm, darcy, pos, result = {}, {}, {}, None
+    # evaluate models and revoke normalisation
+    perm, darcy, pos, result, ref0_pred = {}, {}, {}, None, None
     for name in model_names:
         position, invars, result = EvaluateModel(cfg, name, norm, result, log)
         perm[name] = (
@@ -194,14 +250,21 @@ def nested_darcy_evaluation(cfg: DictConfig) -> None:
         )
         pos[name] = position
 
-    # save to file
-    np.save(
-        "nested_darcy_results.npy",
-        {"permeability": perm, "darcy": darcy, "position": pos},
-    )
+        if cfg.inference.get_ref0_error_norm and int(name[-1]) == 0:
+            ref0_pred = np.copy(darcy[name]).squeeze()
 
-    for idx in range(n_plots):
-        plot_result(idx, perm, darcy, pos)
+    # port solution format to dict structure like in input files
+    pred_dict = AssembleSolutionToDict(cfg, perm, darcy, pos)
+
+    # compute error norm
+    if cfg.inference.get_error_norm:
+        ComputeErrorNorm(cfg, pred_dict, log, ref0_pred)
+
+    # plot some fields
+    if cfg.inference.n_plots > 0:
+        log.info("plotting results")
+        for idx in range(cfg.inference.n_plots):
+            PlotNestedDarcy(pred_dict, idx)
 
 
 if __name__ == "__main__":

@@ -12,15 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hydra
-import time
 from os.path import isdir
 from os import mkdir
-from utils import DarcyInset2D
-from omegaconf import DictConfig
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
+from utils import DarcyInset2D, PlotNestedDarcy
 
 
 def nested_darcy_generator() -> None:
@@ -32,17 +27,19 @@ def nested_darcy_generator() -> None:
     """
     out_dir = "./data/"
     file_names = ["training_data.npy", "validation_data.npy", "out_of_sample.npy"]
-    # sample_size = [2048, 256, 128]
-    sample_size = [8192, 256, 128]
+    sample_size = [8192, 2048, 2048]
     max_batch_size = 128
     resolution = 1024
     glob_res = 256
     fine_res = 128
-    buffer = 8
-    permea_freq = 5
-    fine_permeability_freq = 3
+    buffer = 32
+    permea_freq = 3
+    max_n_insets = 2
+    fine_permeability_freq = 2
+    min_dist_frac = 1.8
     device = "cuda"
-    plot = False
+    n_plots = 10
+    fill_val = -99999
 
     perm_norm = (0.0, 1.0)
     darc_norm = (0.0, 1.0)
@@ -70,126 +67,69 @@ def nested_darcy_generator() -> None:
             nr_permeability_freq=permea_freq,
             max_permeability=2.0,
             min_permeability=0.5,
-            max_iterations=300,
-            convergence_threshold=1e-4,
+            max_iterations=30000,
             iterations_per_convergence_check=10,
             nr_multigrids=3,
             normaliser={"permeability": perm_norm, "darcy": darc_norm},
             device=device,
+            max_n_insets=max_n_insets,
             fine_res=fine_res,
             fine_permeability_freq=fine_permeability_freq,
             min_offset=min_offset,
             ref_fac=ref_fac,
+            min_dist_frac=min_dist_frac,
+            fill_val=fill_val,
         )
 
-        perm_std, perm_mean, darc_std, darc_mean = 0.0, 0.0, 0.0, 0.0
-        permeability_0, darcy_0, permeability_1, darcy_1, position = [], [], [], [], []
-        for jj, sample in zip(range(nr_iterations), datapipe):
-            perm_std, perm_mean = torch.std_mean(sample["permeability"])
-            darc_std, darc_mean = torch.std_mean(sample["darcy"])
-
+        dat = {}
+        samp_ind = -1
+        for _, sample in zip(range(nr_iterations), datapipe):
             permea = sample["permeability"].cpu().detach().numpy()
             darcy = sample["darcy"].cpu().detach().numpy()
             pos = (sample["inset_pos"].cpu().detach().numpy()).astype(int)
-            assert (pos % ref_fac).sum() == 0, "inset off coarse grid"
+            assert (
+                np.where(pos == fill_val, 0, pos) % ref_fac
+            ).sum() == 0, "inset off coarse grid"
 
-            # crop out refined region, allow for sourrounding area, save in extra array
-            permea_fine = np.zeros((batch_size, 1, inset_size, inset_size), dtype=float)
-            darcy_fine = np.zeros_like(permea_fine)
+            # crop out refined region, allow for surrounding area, save in extra array
             for ii in range(batch_size):
-                xs = pos[ii, 0] - buffer
-                ys = pos[ii, 1] - buffer
-                permea_fine[ii, 0, :, :] = permea[
-                    ii, 0, xs : xs + inset_size, ys : ys + inset_size
-                ]
-                darcy_fine[ii, 0, :, :] = darcy[
-                    ii, 0, xs : xs + inset_size, ys : ys + inset_size
-                ]
+                samp_ind += 1
+                samp_str = str(samp_ind)
 
-            # downsample resolution of global field
-            permea_glob = permea[:, :, ::ref_fac, ::ref_fac]
-            darcy_glob = darcy[:, :, ::ref_fac, ::ref_fac]
+                # global fields
+                dat[samp_str] = {
+                    "ref0": {
+                        "0": {
+                            "permeability": permea[ii, 0, ::ref_fac, ::ref_fac],
+                            "darcy": darcy[ii, 0, ::ref_fac, ::ref_fac],
+                        }
+                    }
+                }
 
-            # save those three arrays to numpy dict, translate pos from simulation grid to coarser parent
-            res = np.array([resolution // ref_fac, inset_size])
-            pos = (pos - min_offset) // ref_fac
+                # insets
+                dat[samp_str]["ref1"] = {}
+                for pp in range(pos.shape[1]):
+                    if pos[ii, pp, 0] == fill_val:
+                        continue
+                    xs = pos[ii, pp, 0] - buffer
+                    ys = pos[ii, pp, 1] - buffer
 
-            permeability_0.append(permea_glob)
-            darcy_0.append(darcy_glob)
-            permeability_1.append(permea_fine)
-            darcy_1.append(darcy_fine)
-            position.append(pos)
+                    dat[samp_str]["ref1"][str(pp)] = {
+                        "permeability": permea[
+                            ii, 0, xs : xs + inset_size, ys : ys + inset_size
+                        ],
+                        "darcy": darcy[
+                            ii, 0, xs : xs + inset_size, ys : ys + inset_size
+                        ],
+                        "pos": (pos[ii, pp, :] - min_offset) // ref_fac,
+                    }
+        meta = {"ref_fac": ref_fac, "buffer": buffer, "fine_res": fine_res}
 
-        # concatenate arrays, then store to file
-        permeability_0 = np.concatenate(permeability_0, axis=0)[
-            : sample_size[dset], ...
-        ]
-        darcy_0 = np.concatenate(darcy_0, axis=0)[: sample_size[dset], ...]
-        permeability_1 = np.concatenate(permeability_1, axis=0)[
-            : sample_size[dset], ...
-        ]
-        darcy_1 = np.concatenate(darcy_1, axis=0)[: sample_size[dset], ...]
-        position = np.concatenate(position, axis=0)[: sample_size[dset], ...]
+        np.save(out_dir + file_names[dset], {"meta": meta, "fields": dat})
 
-        np.save(
-            out_dir + file_names[dset],
-            {
-                "permeability_0": permeability_0,
-                "darcy_0": darcy_0,
-                "permeability_1": permeability_1,
-                "darcy_1": darcy_1,
-                "position": position,
-                "resolution": res,
-            },
-        )
-
-        assert pos.min() >= 0, f"too small min, {pos.min()}, {pos.max()}"
-        assert (
-            pos.max()
-            <= (resolution - 2 * min_offset - fine_res) * glob_res / resolution
-        ), f"too large max, {pos.min()}, {pos.max()}"
-
-        print(
-            f"    position: min={pos.min()}, max={pos.max()}, "
-            + f"upper bound={int((resolution-2*min_offset-fine_res)*(glob_res/resolution))}"
-        )
-        print(f"permeability: mean={perm_mean}, std={perm_std}")
-        print(f"       darcy: mean={darc_mean}, std={darc_std}")
-
-        # plot coef and solution
-        if plot:
-            for ii in range(20):
-                fig, ((ax0, ax1), (ax2, ax3), (ax4, ax5)) = plt.subplots(
-                    3, 2, figsize=(10, 15)
-                )
-                ax0.imshow(permea_glob[ii, 0, :, :])
-                ax0.set_title("permeability glob")
-                ax1.imshow(darcy_glob[ii, 0, :, :])
-                ax1.set_title("darcy glob")
-                ax2.imshow(permea_fine[ii, 0, :, :])
-                ax2.set_title("permeability fine")
-                ax3.imshow(darcy_fine[ii, 0, :, :])
-                ax3.set_title("darcy fine")
-                ax4.imshow(
-                    permea_glob[
-                        ii,
-                        0,
-                        pos[ii, 0] : pos[ii, 0] + inset_size,
-                        pos[ii, 1] : pos[ii, 1] + inset_size,
-                    ]
-                )
-                ax4.set_title("permeability zoomed")
-                ax5.imshow(
-                    darcy_glob[
-                        ii,
-                        0,
-                        pos[ii, 0] : pos[ii, 0] + inset_size,
-                        pos[ii, 1] : pos[ii, 1] + inset_size,
-                    ]
-                )
-                ax5.set_title("darcy zoomed")
-                fig.tight_layout()
-                plt.savefig(f"test_{ii}.png")
+        # plot some fields
+        for idx in range(n_plots):
+            PlotNestedDarcy(dat, idx)
 
 
 if __name__ == "__main__":
