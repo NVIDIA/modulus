@@ -46,25 +46,29 @@ normaliser:
     mean: 1.25
     std: .75
   darcy:
-    mean: 6.145E-5
-    std: 3.49E-5
+    mean: 2.6E-2
+    std: 1.5E-2
 
 scheduler:
   initial_lr: 1.E-3
   decay_rate: .95
-  decay_epochs: 10
+  decay_epochs: 2
 
 training:
   batch_size: 64
-  rec_results_freq : 20
-  max_epochs: 60
+  rec_results_freq : 5
+  max_epochs: 100
   training_set: './data/training_data.npy'
 
 validation:
   batch_size: 64
-  validation_epochs: 10
+  validation_epochs: 5
   validation_set: './data/validation_data.npy'
 
 inference:
   batch_size: 64
   inference_set: './data/out_of_sample.npy'
+  get_error_norm: !!bool True
+  get_ref0_error_norm: !!bool True
+  n_plots: 10
+  save_result: !!bool False

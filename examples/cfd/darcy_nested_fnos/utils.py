@@ -28,7 +28,6 @@ from modulus.datapipes.benchmarks.kernels.initialization import init_uniform_ran
 from modulus.datapipes.benchmarks.kernels.utils import (
     fourier_to_array_batched_2d,
     threshold_3d,
-    bilinear_upsample_batched_2d,
 )
 
 
@@ -56,14 +55,15 @@ class NestedDarcyDataset:
         self,
         mode: str,
         data_path: str = None,
-        level: int = None,
+        model_name: str = None,
         norm: dict = {"permeability": (0.0, 1.0), "darcy": (0.0, 1.0)},
         log: PythonLogger = None,
         parent_prediction: FloatTensor = None,
     ) -> None:
         self.dist = DistributedManager()
         self.data_path = os.path.abspath(data_path)
-        self.level = level
+        self.model_name = model_name
+        # self.level = level
         self.norm = norm
         self.log = log
         self.mode = mode
@@ -71,62 +71,69 @@ class NestedDarcyDataset:
             "train",
             "eval",
         ], "mode in NestedDarcyDataset must be train or eval."
+
+        if mode == "eval" and int(self.model_name[-1]) > 0:
+            assert (
+                parent_prediction is not None
+            ), f"pass parent result to evaluate level {int(self.model_name[-1])}"
+            parent_prediction = parent_prediction.detach().cpu().numpy()
         self.load_dataset(parent_prediction)
 
     def load_dataset(self, parent_prediction: FloatTensor = None) -> None:
         try:
-            dat = np.load(self.data_path, allow_pickle=True)
+            contents = np.load(self.data_path, allow_pickle=True).item()
         except IOError as err:
             self.log.error(f"Unable to find or load file {self.data_path}")
             exit()
 
         # load input varibales, copy to device and normalise
-        self.invars = dat.item()[f"permeability_{self.level}"]
-        self.invars = torch.from_numpy(self.invars).float().to(self.dist.device)
-        self.invars = (self.invars - self.norm["permeability"][0]) / self.norm[
-            "permeability"
+        dat = contents["fields"]
+        self.ref_fac = contents["meta"]["ref_fac"]
+        self.buffer = contents["meta"]["buffer"]
+        self.fine_res = contents["meta"]["fine_res"]
+
+        mod = self.model_name
+        perm, darc, par_pred, self.position = [], [], [], {}
+        for id, samp in dat.items():
+            if int(mod[-1]) > 0:
+                self.position[id] = {}
+            for jd, fields in samp[mod].items():
+                perm.append(fields["permeability"][None, None, ...])
+                darc.append(fields["darcy"][None, None, ...])
+
+                if int(mod[-1]) > 0:  # if not on global level
+                    xy_size = perm[-1].shape[-1]
+                    pos = fields["pos"]
+                    self.position[id][jd] = pos
+                    if self.mode == "eval":
+                        parent = parent_prediction[int(id), 0, ...]
+                    elif self.mode == "train":
+                        parent = (
+                            samp[f"ref{int(mod[-1])-1}"]["0"]["darcy"]
+                            - self.norm["darcy"][0]
+                        ) / self.norm["darcy"][1]
+                    par_pred.append(
+                        parent[
+                            pos[0] : pos[0] + xy_size,
+                            pos[1] : pos[1] + xy_size,
+                        ][None, None, ...]
+                    )
+
+        perm = (
+            np.concatenate(perm, axis=0) - self.norm["permeability"][0]
+        ) / self.norm["permeability"][1]
+        darc = (np.concatenate(darc, axis=0) - self.norm["darcy"][0]) / self.norm[
+            "darcy"
         ][1]
 
-        # load target, copy to device and normalise
-        self.outvars = dat.item()[f"darcy_{self.level}"]
-        self.outvars = torch.from_numpy(self.outvars).float().to(self.dist.device)
-        self.outvars = (self.outvars - self.norm["darcy"][0]) / self.norm["darcy"][1]
+        if int(mod[-1]) > 0:
+            par_pred = np.concatenate(par_pred, axis=0)
+            perm = np.concatenate((par_pred, perm), axis=1)
 
-        self.length = self.invars.shape[0]
-        xy_size = self.invars.shape[-1]
-        norm = self.norm
+        self.invars = torch.from_numpy(perm).float().to(self.dist.device)
+        self.outvars = torch.from_numpy(darc).float().to(self.dist.device)
 
-        # get parent info for refined regions
-        if self.level > 0:
-            # during training, read parent data from file and normalise, for use result from parent
-            if self.mode == "train":
-                coarse_full = dat.item()[f"darcy_{self.level-1}"]
-                coarse_full = torch.from_numpy(coarse_full).float().to(self.dist.device)
-                coarse_full = (coarse_full - self.norm["darcy"][0]) / self.norm[
-                    "darcy"
-                ][1]
-            elif self.mode == "eval":
-                assert (
-                    parent_prediction is not None
-                ), f"pass parent result to evaluate level {level}"
-                coarse_full = parent_prediction.float()
-
-            pos = dat.item()[f"position"]  # smallest index of x,y in inset
-            self.position = pos
-            coarse_dat = torch.zeros(
-                (self.length, 1, xy_size, xy_size),
-                dtype=torch.float,
-                device=self.dist.device,
-            )
-
-            for ii in range(self.length):
-                coarse_dat[ii, 0, ...] = coarse_full[
-                    ii,
-                    0,
-                    pos[ii, 0] : pos[ii, 0] + xy_size,
-                    pos[ii, 1] : pos[ii, 1] + xy_size,
-                ]
-            self.invars = torch.cat([coarse_dat, self.invars], axis=1)
+        self.length = self.invars.size()[0]
 
     def __getitem__(self, idx: int):
         return {"permeability": self.invars[idx, ...], "darcy": self.outvars[idx, ...]}
@@ -223,6 +230,60 @@ class GridValidator:
         return loss
 
 
+def PlotNestedDarcy(dat: dict, idx: int) -> None:
+    """Plot fields from the nested Darcy case
+
+    Parameters
+    ----------
+    dat : dict
+        dictionary containing fields
+    target : FloatTensor
+        index of example to plot
+    """
+    fields = dat[str(idx)]
+    n_insets = len(fields["ref1"])
+
+    fig, ax = plt.subplots(n_insets + 1, 4, figsize=(20, 5 * (n_insets + 1)))
+
+    vmin = fields["ref0"]["0"]["darcy"].min()
+    vmax = fields["ref0"]["0"]["darcy"].max()
+
+    ax[0, 0].imshow(fields["ref0"]["0"]["permeability"])
+    ax[0, 0].set_title("permeability glob")
+    ax[0, 1].imshow(fields["ref0"]["0"]["darcy"], vmin=vmin, vmax=vmax)
+    ax[0, 1].set_title("darcy glob")
+    ax[0, 2].axis("off")
+    ax[0, 3].axis("off")
+
+    for ii in range(n_insets):
+        loc = fields["ref1"][str(ii)]
+        inset_size = loc["darcy"].shape[1]
+        ax[ii + 1, 0].imshow(loc["permeability"])
+        ax[ii + 1, 0].set_title(f"permeability fine {ii}")
+        ax[ii + 1, 1].imshow(loc["darcy"], vmin=vmin, vmax=vmax)
+        ax[ii + 1, 1].set_title(f"darcy fine {ii}")
+        ax[ii + 1, 2].imshow(
+            fields["ref0"]["0"]["permeability"][
+                loc["pos"][0] : loc["pos"][0] + inset_size,
+                loc["pos"][1] : loc["pos"][1] + inset_size,
+            ]
+        )
+        ax[ii + 1, 2].set_title(f"permeability zoomed {ii}")
+        ax[ii + 1, 3].imshow(
+            fields["ref0"]["0"]["darcy"][
+                loc["pos"][0] : loc["pos"][0] + inset_size,
+                loc["pos"][1] : loc["pos"][1] + inset_size,
+            ],
+            vmin=vmin,
+            vmax=vmax,
+        )
+        ax[ii + 1, 3].set_title(f"darcy zoomed {ii}")
+
+    fig.tight_layout()
+    plt.savefig(f"sample_{idx:02d}.png")
+    plt.close()
+
+
 @wp.kernel
 def fourier_to_array_batched_2d_cropped(
     array: wp.array3d(dtype=float),
@@ -230,7 +291,8 @@ def fourier_to_array_batched_2d_cropped(
     nr_freq: int,
     lx: int,
     ly: int,
-    bounds: wp.array2d(dtype=int),
+    bounds: wp.array3d(dtype=int),
+    fill_val: int,
 ):  # pragma: no cover
     """Array of Fourier amplitudes to batched 2d spatial array
 
@@ -251,10 +313,13 @@ def fourier_to_array_batched_2d_cropped(
     y_start : int
         lowest y-index
     """
-    b, x, y = wp.tid()
+    b, p, x, y = wp.tid()
 
-    x += bounds[b, 0]
-    y += bounds[b, 1]
+    if bounds[b, p, 0] == fill_val:
+        return
+
+    x += bounds[b, p, 0]
+    y += bounds[b, p, 1]
 
     array[b, x, y] = 0.0
     dx = 6.28318 / wp.float32(lx)
@@ -328,10 +393,13 @@ class DarcyInset2D(Darcy2D):
         nr_multigrids: int = 4,
         normaliser: Union[Dict[str, Tuple[float, float]], None] = None,
         device: Union[str, torch.device] = "cuda",
+        max_n_insets: int = 3,
         fine_res: int = 32,
         fine_permeability_freq: int = 10,
         min_offset: int = 48,
         ref_fac: int = None,
+        min_dist_frac: float = 1.7,
+        fill_val: int = -99999,
     ):
         super().__init__(
             resolution,
@@ -347,6 +415,7 @@ class DarcyInset2D(Darcy2D):
             device,
         )
 
+        self.max_n_insets = max_n_insets
         self.fine_res = fine_res
         self.fine_freq = fine_permeability_freq
         self.ref_fac = ref_fac
@@ -360,8 +429,12 @@ class DarcyInset2D(Darcy2D):
         self.beg_min = min_offset
         self.beg_max = resolution - min_offset - fine_res - self.ref_fac
         self.bounds = None
-        # self.mask = wp.zeros(self.dim, dtype=bool, device=self.device)
+        self.min_dist_frac = min_dist_frac
+        self.fill_val = fill_val
 
+        assert (
+            self.max_n_insets <= 3
+        ), f"at most 3 insets supported, change max_n_insets accordingly"
         assert (self.beg_max - self.beg_min) % ref_fac == 0, "lsdhfgn3x!!!!"
 
     def initialize_batch(self) -> None:
@@ -392,16 +465,60 @@ class DarcyInset2D(Darcy2D):
         rr = np.random.randint(
             low=0,
             high=(self.beg_max - self.beg_min) // self.ref_fac,
-            size=(self.batch_size, 2),
+            size=(self.batch_size, self.max_n_insets, 2),
         )
-        # print(rr.min(), rr.max(), self.beg_max, self.beg_min, (self.beg_max-self.beg_min)//self.ref_fac)
-        self.bounds = wp.array(
-            (rr * self.ref_fac) + self.beg_min, dtype=int, device=self.device
+        n_insets = np.random.randint(
+            low=1,
+            high=rr.shape[1] + 1,
+            size=(self.batch_size,),
         )
+
+        # check that regions do not overlap and have distance
+        min_dist = self.min_dist_frac * self.fine_res // self.ref_fac + 1
+        print("adjusting inset positions")
+        for ib in range(self.batch_size):
+            if n_insets[ib] <= 1:
+                rr[ib, 1:, :] = self.fill_val
+                continue
+            else:
+                while (
+                    abs(rr[ib, 0, 0] - rr[ib, 1, 0]) < min_dist
+                    and abs(rr[ib, 0, 1] - rr[ib, 1, 1]) < min_dist
+                ):
+                    rr[ib, 0, :] = np.random.randint(
+                        low=0,
+                        high=(self.beg_max - self.beg_min) // self.ref_fac,
+                        size=(2,),
+                    )
+                    rr[ib, 1, :] = np.random.randint(
+                        low=0,
+                        high=(self.beg_max - self.beg_min) // self.ref_fac,
+                        size=(2,),
+                    )
+            if n_insets[ib] <= 2:
+                rr[ib, 2:, :] = self.fill_val
+                continue
+            else:
+                while (
+                    abs(rr[ib, 0, 0] - rr[ib, 2, 0]) < min_dist
+                    and abs(rr[ib, 0, 1] - rr[ib, 2, 1]) < min_dist
+                ) or (
+                    abs(rr[ib, 1, 0] - rr[ib, 2, 0]) < min_dist
+                    and abs(rr[ib, 1, 1] - rr[ib, 2, 1]) < min_dist
+                ):
+                    rr[ib, 2, :] = np.random.randint(
+                        low=0,
+                        high=(self.beg_max - self.beg_min) // self.ref_fac,
+                        size=(2,),
+                    )
+        print("done")
+
+        rr = np.where(rr != self.fill_val, (rr * self.ref_fac) + self.beg_min, rr)
+        self.bounds = wp.array(rr, dtype=int, device=self.device)
 
         wp.launch(
             kernel=fourier_to_array_batched_2d_cropped,
-            dim=(self.batch_size, self.fine_res, self.fine_res),
+            dim=(self.batch_size, self.bounds.shape[1], self.fine_res, self.fine_res),
             inputs=[
                 self.permeability,
                 self.rand_fourier,
@@ -409,9 +526,11 @@ class DarcyInset2D(Darcy2D):
                 self.fine_res,
                 self.fine_res,
                 self.bounds,
+                self.fill_val,
             ],
             device=self.device,
         )
+
         wp.launch(
             kernel=threshold_3d,
             dim=self.dim,
@@ -440,7 +559,7 @@ class DarcyInset2D(Darcy2D):
         permeability = torch.unsqueeze(permeability, axis=1)
         darcy = torch.unsqueeze(darcy, axis=1)
 
-        # crop edges by 1 from multi-grid TODO messy
+        # crop edges by 1 from multi-grid
         permeability = permeability[:, :, : self.resolution, : self.resolution]
         darcy = darcy[:, :, : self.resolution, : self.resolution]
 
