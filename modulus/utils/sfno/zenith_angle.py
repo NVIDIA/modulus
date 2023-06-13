@@ -31,7 +31,8 @@ import datetime
 import numpy as np
 from typing import Union, TypeVar
 
-RAD_PER_DEG = np.pi / 180.0
+# helper type
+dtype = np.float32
 
 T = TypeVar("T", np.ndarray, float)
 
@@ -70,7 +71,8 @@ def cos_zenith_angle(
     >>> abs(angle - -0.447817277) < 1e-8
     True
     """
-    lon_rad, lat_rad = lon * RAD_PER_DEG, lat * RAD_PER_DEG
+    lon_rad = np.deg2rad(lon, dtype=dtype)
+    lat_rad = np.deg2rad(lat, dtype=dtype)
     return _star_cos_zenith(time, lon_rad, lat_rad)
 
 

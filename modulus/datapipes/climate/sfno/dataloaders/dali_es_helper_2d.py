@@ -378,11 +378,71 @@ class GeneralES(object):
         if not self.is_parallel:
             self._init_buffers()
 
+    def _init_double_buff_host(self, n_tsteps):
+        buffs = [
+            np.zeros(
+                (
+                    n_tsteps,
+                    self.n_in_channels,
+                    self.read_shape[0],
+                    self.read_shape[1],
+                ),
+                dtype=np.float32,
+            ),
+            np.zeros(
+                (
+                    n_tsteps,
+                    self.n_in_channels,
+                    self.read_shape[0],
+                    self.read_shape[1],
+                ),
+                dtype=np.float32,
+            ),
+        ]
+        return buffs
+ 
+    def _init_double_buff_gpu(self, n_tsteps):
+        buffs = [
+            cpx.zeros_pinned(
+                (
+                    n_tsteps,,
+                    self.n_in_channels,
+                    self.read_shape[0],
+                    self.read_shape[1],
+                ),
+                dtype=np.float32,
+            ),
+            cpx.zeros_pinned(
+                (
+                    n_tsteps,
+                    self.n_in_channels,
+                    self.read_shape[0],
+                    self.read_shape[1],
+                ),
+                dtype=np.float32,
+            ),
+        ]
+
     def _init_buffers(self):  # pragma: no cover
         # set device
         self.device = cp.cuda.Device(self.device_id)
         self.device.use()
         self.current_buffer = 0
+        if self.host_prefetch_buffers:
+            self.inp_buffs = self._init_double_buff_host(self.n_history + 1)
+            self.tar_buffs = self._init_double_buff_host(self.n_future + 1)
+        else:
+            self.inp_buffs = self._init_double_buff_gpu(self.n_history + 1)
+            self.tar_buffs = self._init_double_buff_gpu(self.n_future + 1)
+        if self.zenith_angle:
+            if self.host_prefetch_buffers:
+                self.zen_inp_buffs = self._init_double_buff_host(self.n_history + 1)
+                self.zen_tar_buffs = self._init_double_buff_host(self.n_future + 1)
+            else:
+                self.zen_inp_buffs = self._init_double_buff_gpu(self.n_history + 1)
+                self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1)
+        return
+
         if self.host_prefetch_buffers:
             self.inp_buffs = [
                 np.zeros(
@@ -466,7 +526,7 @@ class GeneralES(object):
                 ),
             ]
 
-    def _compute_zenith_angle(self, local_idx, year_idx):  # pragma: no cover
+    def _compute_zenith_angle(zen_inp, zen_tar, self, local_idx, year_idx):  # pragma: no cover
         # compute hours into the year
         year = self.years[year_idx]
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0)
@@ -483,6 +543,7 @@ class GeneralES(object):
             )
 
         cos_zenith_inp = np.expand_dims(np.stack(cos_zenith_inp, axis=0), axis=1)
+        zen_inp[...] = cos_zenith_inp[...]
 
         # zenith angle for target:
         cos_zenith_tar = []
@@ -498,6 +559,7 @@ class GeneralES(object):
             )
 
         cos_zenith_tar = np.expand_dims(np.stack(cos_zenith_tar, axis=0), axis=1)
+        zen_tar[...] = cos_zenith_tar[...]
 
         return cos_zenith_inp, cos_zenith_tar
 
@@ -548,9 +610,14 @@ class GeneralES(object):
             self.last_cycle_epoch = cycle_epoch_idx
             # generate a unique seed and permutation:
             rng = np.random.default_rng(seed=self.base_seed + cycle_epoch_idx)
-            self.index_permutation = self.n_samples_offset + rng.permutation(
-                self.n_samples_total
-            )
+            if self.shuffle:
+                self.index_permutation = self.n_samples_offset + rng.permutation(
+                    self.n_samples_total
+                )
+            else:
+                self.index_permutation = self.n_samples_offset + np.arange(
+                    self.n_samples_total
+                )
             # shard the data
             start = self.n_samples_shard * self.shard_id
             end = start + self.n_samples_shard
@@ -578,6 +645,9 @@ class GeneralES(object):
         # handles to buffers
         inp = self.inp_buffs[self.current_buffer]
         tar = self.tar_buffs[self.current_buffer]
+        if self.zenith_angle:
+            zen_inp = self.zen_inp_buffs[self.current_buffer]
+            zen_tar = self.zen_tar_buffs[self.current_buffer]
         self.current_buffer = (self.current_buffer + 1) % 2
 
         # do the read
@@ -597,7 +667,7 @@ class GeneralES(object):
 
         # get time grid
         if self.zenith_angle:
-            zen_inp, zen_tar = self._compute_zenith_angle(local_idx, year_idx)
+            self._compute_zenith_angle(zen_inp, zen_tar, local_idx, year_idx)
             result = inp, tar, zen_inp, zen_tar
         else:
             result = inp, tar

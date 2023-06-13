@@ -73,17 +73,21 @@ class LossHandler(nn.Module):
             squared = False
 
         # TODO: clean this up and replace it with string parsing to set the parameters
-        if loss_type == "l2":
-            self.loss_obj = (
-                DistributedLpLoss(d=d, p=2)
-                if params.split_data_channels
-                else LpLoss(d=d, p=2)
+        if loss_type == 'l2':
+            self.loss_obj = GeometricLpLoss(
+                self.img_shape,
+                p=2,
+                absolute=absolute,
+                pole_mask=pole_mask, 
+                jacobian='flat'
             )
-        elif loss_type == "l1":
-            self.loss_obj = (
-                DistributedLpLoss(d=d, p=1)
-                if params.split_data_channels
-                else LpLoss(d=d, p=1)
+        elif loss_type == 'l1':
+            self.loss_obj = GeometricLpLoss(
+                self.img_shape,
+                p=1,
+                absolute=absolute,
+                pole_mask=pole_mask,
+                jacobian='flat'
             )
         elif loss_type == "geometric l2":
             self.loss_obj = GeometricLpLoss(
@@ -110,9 +114,9 @@ class LossHandler(nn.Module):
 
         # weighting factor for the case of multistep training
         # TODO change hardcoded weighting
-        multistep_weight = torch.arange(1, self.n_future + 2, dtype=torch.float32)
+        multistep_weight = torch.ones(self.n_future+1, dtype=torch.float32)
         multistep_weight = multistep_weight / torch.sum(multistep_weight)
-        multistep_weight = multistep_weight.reshape(1, -1, 1, 1, 1)
+        multistep_weight = multistep_weight.reshape(-1, 1, 1, 1)
 
         self.register_buffer("multistep_weight", multistep_weight)
 
@@ -149,37 +153,12 @@ class LossHandler(nn.Module):
             prd = self._gather_input(prd)
             tar = self._gather_input(tar)
 
-        chw = self.channel_weights
-
         if self.training:
-            B, C, H, W = prd.shape
-
-            # adding weighting factors
-            prd = (
-                prd.reshape(B, -1, C // (self.n_future + 1), H, W)
-                * self.multistep_weight
-            )
-            tar = (
-                tar.reshape(B, -1, C // (self.n_future + 1), H, W)
-                * self.multistep_weight
-            )
-
-            # compute the dynamic weighting factor which depends on the variability of the channels
-            if hasattr(self, "dynamic_weight_obj"):
-                dynamic_weight = self.dynamic_weight_obj(tar[:, -1], inp[:])
-                dynamic_weight = dynamic_weight / torch.sum(
-                    dynamic_weight, dim=-1, keepdim=True
-                )
-                prd = prd * dynamic_weight
-                tar = tar * dynamic_weight
-
-            prd = prd.reshape(B, C, H, W)
-            tar = tar.reshape(B, C, H, W)
-
-            chw = chw.repeat(1, self.n_future + 1, 1, 1)
+            chw = (self.channel_weights * self.multistep_weight).reshape(1, -1, 1, 1)
+        else:
+            chw = self.channel_weights
 
         return self.loss_obj(prd, tar, chw)
-
 
 # double check if polar optimization has an effect - we use 5 here by default
 class GeometricLpLoss(nn.Module):
@@ -194,12 +173,12 @@ class GeometricLpLoss(nn.Module):
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
         pole_mask: Optional[int] = 0,
+        jacobian: Optional[str]='s2',
+         quadrature_rule: Optional[str]="naive",
     ):  # pragma: no cover
         super(GeometricLpLoss, self).__init__()
 
-        self.d = 2
         self.p = p
-
         self.img_size = img_size
         self.reduction = reduction
         self.size_average = size_average
@@ -207,40 +186,54 @@ class GeometricLpLoss(nn.Module):
         self.squared = squared
         self.pole_mask = pole_mask
 
-        jacobian = torch.sin(torch.linspace(0, torch.pi, self.img_size[0])).unsqueeze(1)
-        dtheta = torch.pi / self.img_size[0]
-        dlambda = 2 * torch.pi / self.img_size[1]
+        if jacobian == 's2':
+            jacobian = torch.sin(torch.linspace(0, torch.pi, self.img_size[0])).unsqueeze(1)
+        else:
+            jacobian = torch.ones(self.img_size[0], 1)
 
-        self.register_buffer("jacobian", jacobian)
-        self.dA = dlambda * dtheta
+        if quadrature_rule == 'naive':
+            dtheta = torch.pi / self.img_size[0]
+            dlambda =  2 * torch.pi / self.img_size[1]
+            dA = dlambda * dtheta
+            quad_weight = dA * jacobian
+        elif quadrature_rule == 'clenshaw-curtiss':
+            cost, w = clenshaw_curtiss_weights(self.img_size[0], -1, 1)
+            weights = torch.from_numpy(w)
+            dlambda = 2 * torch.pi / self.img_size[1]
+            quad_weight = dlambda * torch.from_numpy(w).unsqueeze(-1)
+        else:
+            raise ValueError(f"Unknown quadrature rule {quadrature_rule}")
 
+        self.register_buffer('quad_weight', quad_weight)
+     
     def abs(
         self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor
     ):  # pragma: no cover
         """Computes the absolute loss"""
         num_examples = prd.size()[0]
-
         if self.pole_mask:
             all_norms = torch.sum(
                 torch.abs(
-                    prd[..., self.pole_mask : -self.pole_mask, :]
-                    - tar[..., self.pole_mask : -self.pole_mask, :]
+                    prd[..., self.pole_mask:-self.pole_mask, :]
+                    -tar[..., self.pole_mask:-self.pole_mask, :]
                 )
                 ** self.p
-                * self.jacobian[..., self.pole_mask : -self.pole_mask, :]
-                * self.dA,
-                dim=(-2, -1),
+                * self.quad_weight[..., self.pole_mask:-self.pole_mask, :], 
+                dim=(-2,-1),
             )
         else:
             all_norms = torch.sum(
-                torch.abs(prd - tar) ** self.p * self.jacobian * self.dA, dim=(-2, -1)
+                torch.abs(prd - tar)
+                ** self.p
+                * self.quad_weight, 
+                dim=(-2,-1),
             )
 
         all_norms = all_norms.reshape(num_examples, -1).sum()
 
         if not self.squared:
-            all_norms = all_norms ** (1 / self.p)
-
+            all_norms = all_norms**(1/self.p)
+        
         # apply channel weighting
         all_norms = chw.reshape(1, -1) * all_norms
 
@@ -265,23 +258,25 @@ class GeometricLpLoss(nn.Module):
         if self.pole_mask:
             diff_norms = torch.sum(
                 torch.abs(
-                    prd[..., self.pole_mask : -self.pole_mask, :]
-                    - tar[..., self.pole_mask : -self.pole_mask, :]
+                    prd[..., self.pole_mask:-self.pole_mask, :]
+                    -tar[..., self.pole_mask:-self.pole_mask, :]
                 )
                 ** self.p
-                * self.jacobian[..., self.pole_mask : -self.pole_mask, :]
-                * self.dA,
-                dim=(-2, -1),
+                * self.quad_weight[..., self.pole_mask:-self.pole_mask, :], 
+                dim=(-2,-1)
             )
         else:
             diff_norms = torch.sum(
-                torch.abs(prd - tar) ** self.p * self.jacobian * self.dA, dim=(-2, -1)
+                torch.abs(prd - tar)
+                ** self.p
+                * self.quad_weight,
+                dim=(-2,-1)
             )
-
+ 
         diff_norms = diff_norms.reshape(num_examples, -1)
 
         tar_norms = torch.sum(
-            torch.abs(tar) ** self.p * self.jacobian * self.dA, dim=(-2, -1)
+            torch.abs(tar) ** self.p * self.quad_weight, dim=(-2, -1)
         )
         tar_norms = tar_norms.reshape(num_examples, -1)
 
@@ -319,145 +314,6 @@ class GeometricLpLoss(nn.Module):
 
         return loss
 
-
-class LpLoss(nn.Module):
-    """Lp loss"""
-
-    def __init__(
-        self,
-        d: Optional[float] = 2.0,
-        p: Optional[float] = 2.0,
-        size_average: Optional[bool] = True,
-        reduction: Optional[bool] = True,
-    ):  # pragma: no cover
-        super(LpLoss, self).__init__()
-
-        # Dimension and Lp-norm type are postive
-        assert d > 0.0 and p > 0.0
-
-        self.d = d
-        self.p = p
-        self.reduction = reduction
-        self.size_average = size_average
-
-    def abs(
-        self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor
-    ):  # pragma: no cover
-        """Computes the absolute loss"""
-        num_examples = prd.size()[0]
-
-        # Assume uniform mesh
-        h = 1.0 / (prd.size()[1] - 1.0)
-
-        prdv = prd.reshape(num_examples, -1)
-        tarv = y.reshape(num_examples, -1)
-
-        # all_norms = (h**(self.d/self.p)) * torch.norm(x.view(num_examples,-1) - y.view(num_examples,-1), self.p, 1)
-        all_norms = (h ** (self.d / self.p)) * torch.linalg.norm(
-            prdv - tarv, ord=self.p, dim=1
-        )
-
-        # apply channel weighting
-        all_norms = chw.reshape(1, -1) * all_norms
-
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(all_norms)
-            else:
-                return torch.sum(all_norms)
-
-        return all_norms
-
-    def rel(
-        self,
-        prd: torch.Tensor,
-        tar: torch.Tensor,
-        chw: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-    ):  # pragma: no cover
-        """Computes the relative loss"""
-        num_examples = prd.size()[0]
-
-        prdv = prd.reshape(num_examples, -1)
-        tarv = tar.reshape(num_examples, -1)
-
-        # diff_norms = torch.norm(x.reshape(num_examples,-1) - y.reshape(num_examples,-1), self.p, 1)
-        # y_norms = torch.norm(y.reshape(num_examples,-1), self.p, 1)
-
-        diff_norms = torch.linalg.norm(prdv - tarv, ord=self.p, dim=1)
-        tar_norms = torch.linalg.norm(tarv, ord=self.p, dim=1)
-
-        # setup return value
-        retval = chw.reshape(1, -1) * diff_norms / tar_norms
-        if mask is not None:
-            retval = retval * mask
-
-        if self.reduction:
-            if self.size_average:
-                if mask is None:
-                    retval = torch.mean(retval)
-                else:
-                    retval = torch.sum(retval) / torch.sum(mask)
-            else:
-                retval = torch.sum(retval)
-
-        return retval
-
-    def forward(
-        self,
-        prd: torch.Tensor,
-        tar: torch.Tensor,
-        chw: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-    ):  # pragma: no cover
-        return self.rel(prd, tar, chw, mask)
-
-
-# class DistributedLpLoss(nn.Module):
-#     def __init__(self, d: Optional[float]=2., p: Optional[float]=2., size_average: Optional[bool]=True, reduction: Optional[bool]=True):
-#         super(DistributedLpLoss, self).__init__()
-
-#         # get matmul parallel size
-#         self.matmul_comm_size = comm.get_size("matmul")
-
-#         #Dimension and Lp-norm type are postive
-#         assert d > 0. and p == 2.
-
-#         self.d = d
-#         self.p = p
-#         self.reduction = reduction
-#         self.size_average = size_average
-
-#     def rel(self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None):
-#         num_examples = prd.size()[0]
-
-#         prdv = prd.reshape(num_examples, -1)
-#         tarv = tar.reshape(num_examples, -1)
-
-#         diff_norms = torch.sum(torch.square(prdv-tarv), dim=1)
-#         tar_norms = torch.sum(torch.square(tarv), dim=1)
-#         combined = torch.stack([diff_norms, tar_norms], dim=1)
-
-#         # reduce:
-#         combined = reduce_from_matmul_parallel_region(combined)
-#         norm = torch.sqrt(combined[:, 0] / combined[:, 1])
-
-#         if mask is not None:
-#             norm *= mask
-
-#         if self.reduction:
-#             if self.size_average:
-#                 if mask is None:
-#                     norm = torch.mean(norm)
-#                 else:
-#                     norm = torch.sum(norm) / torch.sum(mask)
-#             else:
-#                 return torch.sum(norm)
-
-#         return norm
-
-#     def forward(self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None):
-#         return self.rel(prd, tar, mask)
 
 # double check if polar optimization has an effect - we use 5 here by default
 class GeometricH1Loss(nn.Module):
