@@ -10,7 +10,7 @@ This package is the core module that provides the core algorithms, network archi
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 <p align="center">
-  <img src="./docs/img/modulus-pipes.jpg" alt="NVIDIA Modulus"/>
+  <img src="./docs/img/modulus-pipes.jpg" alt="Modulus"/>
 </p>
 
 ## Modulus Packages
