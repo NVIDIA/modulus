@@ -4,7 +4,10 @@
 [![GitHub](https://img.shields.io/github/license/NVIDIA/modulus)](https://github.com/NVIDIA/modulus/blob/master/LICENSE.txt)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Modulus is a PyTorch based deep-learning toolkit for developing deep learning models for physical systems. This package aims to provide useful utilities for physics-constrained and data-driven workflows. Additional information can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
+Modulus is an open source deep-learning framework for building, training, and fine-tuning deep learning models using state-of-the-art Physics-ML methods. Whether you are exploring the use of Neural operators like the family of Fourier Neural Operators or interested in Physics informed Neural Networks or a hybrid approach in between, Modulus provides you with the optimized stack that will enable you to train your models at real world scale.
+This package is the core module that provides the core algorithms, network architectures and utilities that cover a broad spectrum of physics-constrained and data-driven workflows to suit the diversity of use cases in the science and engineering disciplines.
+
+Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 <p align="center">
   <img src="./docs/img/modulus-pipes.jpg" alt="NVIDIA Modulus"/>
@@ -59,7 +62,8 @@ docker build -t modulus:ci --target ci -f Dockerfile .
 Alternatively, you can run `make container-ci`
 
 ## Contributing
-For guidance on making a contribution to Modulus, see the [contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
+Modulus is an open source collaboration and its success is rooted in community contribution to further the field of Physics-ML. Thank you for contributing to the project so others can build on your contribution.
+For guidance on making a contribution to Modulus, please refer to the [contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
 
 ## Communication
 * Github Discussions: Discuss new architectures, implementations, Physics-ML research, etc. 
