@@ -201,7 +201,7 @@ class DistributedManager(object):
             local_rank = int(os.environ.get("LOCAL_RANK"))
         else:
             local_rank = rank % torch.cuda.device_count()
-        # Read env variables 
+        # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
 
