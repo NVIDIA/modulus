@@ -19,40 +19,47 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import animation
 from matplotlib import tri as mtri
-import wandb as wb
 import os
 from matplotlib.patches import Rectangle
 
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.mgn_dataset import MGNDataset
+from modulus.launch.logging import PythonLogger
+from modulus.launch.utils import load_checkpoint
+from constants import Constants
+
+# Instantiate constants
+C = Constants()
 
 
 class MGNRollout:
-    def __init__(self, wb):
+    def __init__(self, logger):
         # set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Using {self.device} device")
+        logger.info(f"Using {self.device} device")
 
         # instantiate dataset
         self.dataset = MGNDataset(
             name="vortex_shedding_test",
-            data_dir=wb.config.data_dir,
+            data_dir=C.data_dir,
             split="test",
-            num_samples=wb.config.num_test_samples,
-            num_steps=wb.config.num_test_time_steps,
+            num_samples=C.num_test_samples,
+            num_steps=C.num_test_time_steps,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=wb.config.batch_size,
+            batch_size=C.batch_size,
             shuffle=False,
             drop_last=False,
         )
 
         # instantiate the model
-        self.model = MeshGraphNet(6, 3, 3)
-        if wb.config.jit:
+        self.model = MeshGraphNet(
+            C.num_input_features, C.num_edge_features, C.num_output_features
+        )
+        if C.jit:
             self.model = torch.jit.script(self.model).to(self.device)
         else:
             self.model = self.model.to(self.device)
@@ -61,18 +68,13 @@ class MGNRollout:
         self.model.eval()
 
         # load checkpoint
-        self.load_checkpoint()
+        _ = load_checkpoint(
+            os.path.join(C.ckpt_path, C.ckpt_name),
+            models=self.model,
+            device=self.device,
+        )
 
         self.var_identifier = {"u": 0, "v": 1, "p": 2}
-
-    def load_checkpoint(self):
-        # load checkpoint
-        try:
-            checkpoint = torch.load(wb.config.ckpt_path)
-            self.model.load_state_dict(checkpoint["model_state_dict"])
-            print(f"Successfully loaded checkpoint in {wb.config.ckpt_path}")
-        except:
-            raise RuntimeError("Rollout requires network checkpoint")
 
     def predict(self, idx):
         self.pred, self.exact, self.faces, self.graphs = [], [], [], []
@@ -94,7 +96,7 @@ class MGNRollout:
             # inference step
             invar = graph.ndata["x"].clone()
 
-            if i % (wb.config.num_test_time_steps - 1) != 0:
+            if i % (C.num_test_time_steps - 1) != 0:
                 invar[:, 0:2] = self.pred[i - 1][:, 0:2].clone()
                 i += 1
             invar[:, 0:2] = self.dataset.normalize_node(
@@ -157,7 +159,7 @@ class MGNRollout:
             os.makedirs("./animations")
 
     def animate(self, num):
-        num *= wb.config.frame_skip
+        num *= C.frame_skip
         graph = self.graphs[num]
         y_star = self.pred[num].numpy()
         y_exact = self.exact[num].numpy()
@@ -197,18 +199,19 @@ class MGNRollout:
 
 
 if __name__ == "__main__":
-    wb.init(project="VortexSheddingMGN", entity="modulus", mode="disabled")
-    print("Rollout started...")
-    rollout = MGNRollout(wb)
-    idx = [rollout.var_identifier[k] for k in wb.config.viz_vars]
+    logger = PythonLogger("main")  # General python logger
+    logger.file_logging()
+    logger.info("Rollout started...")
+    rollout = MGNRollout(logger)
+    idx = [rollout.var_identifier[k] for k in C.viz_vars]
     for i in idx:
         rollout.predict(i)
         rollout.init_animation()
         ani = animation.FuncAnimation(
             rollout.fig,
             rollout.animate,
-            frames=len(rollout.graphs) // wb.config.frame_skip,
-            interval=wb.config.frame_interval,
+            frames=len(rollout.graphs) // C.frame_skip,
+            interval=C.frame_interval,
         )
-        ani.save("animations/animation_" + wb.config.viz_vars[i] + ".gif")
-        print(f"Completed rollout for {wb.config.viz_vars[i]}")
+        ani.save("animations/animation_" + C.viz_vars[i] + ".gif")
+        logger.info(f"Completed rollout for {C.viz_vars[i]}")
