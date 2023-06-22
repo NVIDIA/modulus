@@ -405,7 +405,7 @@ class GeneralES(object):
         buffs = [
             cpx.zeros_pinned(
                 (
-                    n_tsteps,,
+                    n_tsteps,
                     self.n_in_channels,
                     self.read_shape[0],
                     self.read_shape[1],
@@ -422,6 +422,7 @@ class GeneralES(object):
                 dtype=np.float32,
             ),
         ]
+        return buffs
 
     def _init_buffers(self):  # pragma: no cover
         # set device
