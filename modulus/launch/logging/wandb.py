@@ -76,40 +76,33 @@ def initialize_wandb(
     if results_dir is None:
         results_dir = str(Path("./wandb").absolute())
 
-    if check_wandb_logged_in():
-        wandb_dir = results_dir
-        if DistributedManager.is_initialized() and DistributedManager().distributed:
-            if group is None:
-                group = create_ddp_group_tag()
-            start_time = datetime.now().astimezone()
-            time_string = start_time.strftime("%m/%d/%y_%H:%M:%S")
-            wandb_name = f"{name}_Process_{DistributedManager().rank}_{time_string}"
-        else:
-            start_time = datetime.now().astimezone()
-            time_string = start_time.strftime("%m/%d/%y_%H:%M:%S")
-            wandb_name = f"{name}_{time_string}"
-
-        if not os.path.exists(wandb_dir):
-            os.makedirs(wandb_dir)
-
-        wandb.init(
-            project=project,
-            entity=entity,
-            sync_tensorboard=sync_tensorboard,
-            name=wandb_name,
-            resume=resume,
-            config=config,
-            mode=mode,
-            dir=wandb_dir,
-            group=group,
-            save_code=save_code,
-        )
+    wandb_dir = results_dir
+    if DistributedManager.is_initialized() and DistributedManager().distributed:
+        if group is None:
+            group = create_ddp_group_tag()
+        start_time = datetime.now().astimezone()
+        time_string = start_time.strftime("%m/%d/%y_%H:%M:%S")
+        wandb_name = f"{name}_Process_{DistributedManager().rank}_{time_string}"
     else:
-        raise ConnectionError(
-            "WandB client wasn't logged in. Please make sure to set "
-            "the WANDB_API_KEY env variable or run `wandb login` in "
-            "over the CLI and copy the ~/.netrc file to the container."
-        )
+        start_time = datetime.now().astimezone()
+        time_string = start_time.strftime("%m/%d/%y_%H:%M:%S")
+        wandb_name = f"{name}_{time_string}"
+
+    if not os.path.exists(wandb_dir):
+        os.makedirs(wandb_dir)
+
+    wandb.init(
+        project=project,
+        entity=entity,
+        sync_tensorboard=sync_tensorboard,
+        name=wandb_name,
+        resume=resume,
+        config=config,
+        mode=mode,
+        dir=wandb_dir,
+        group=group,
+        save_code=save_code,
+    )
 
 
 def alert(title, text, duration=300, level=0, is_master=True):
@@ -125,26 +118,3 @@ def is_wandb_initialized():
     """Check if wandb has been initialized."""
     global _WANDB_INITIALIZED
     return _WANDB_INITIALIZED
-
-
-def check_wandb_logged_in():
-    """Check if weights and biases have been logged in."""
-    wandb_logged_in = False
-    try:
-        wandb_api_key = os.getenv("WANDB_API_KEY", None)
-        if wandb_api_key is not None or os.path.exists(
-            os.path.expanduser(DEFAULT_WANDB_CONFIG)
-        ):
-            wandb_logged_in = wandb.login(key=wandb_api_key)
-            return wandb_logged_in
-    except wandb.errors.UsageError:
-        logger.warning("WandB wasn't logged in.")
-        return False
-
-
-def to_pixel(arr):
-    """Converts an array to pixel data with type int and values between 0-255"""
-    arr_min = arr.min()
-    arr_max = arr.max()
-    arr = 255 * (arr - arr_min) / (arr_max - arr_min)
-    return arr.astype(int)
