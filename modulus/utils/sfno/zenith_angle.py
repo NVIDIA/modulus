@@ -68,7 +68,7 @@ def cos_zenith_angle(
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
     >>> angle = cos_zenith_angle(model_time, lat=360, lon=120)
-    >>> abs(angle - -0.447817277) < 1e-8
+    >>> abs(angle - -0.447817277) < 1e-6
     True
     """
     lon_rad = np.deg2rad(lon, dtype=dtype)

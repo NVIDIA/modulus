@@ -85,7 +85,7 @@ def get_world_rank():  # pragma: no cover
 
 def get_local_rank():  # pragma: no cover
     """Returns the local rank of the current process."""
-    if os.getenv("LOCAL_RANK") is not None:
+    if os.getenv("LOCAL_RANK") is not None and False:
         # Use PyTorch env var if available
         return int(os.getenv("LOCAL_RANK"))
 
