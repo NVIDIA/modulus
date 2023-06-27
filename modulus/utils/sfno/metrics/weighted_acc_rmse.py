@@ -248,7 +248,7 @@ class SimpsonQuadrature(nn.Module):
         shape = [1 for _ in range(x.dim())]
         shape[dim] = -1
         weights = torch.reshape(self.weights, shape)
- 
+
         return torch.sum(x * self.weights, dim=dim)
 
 
@@ -269,7 +269,7 @@ class TrapezoidQuadrature(nn.Module):
         shape = [1 for _ in range(x.dim())]
         shape[dim] = -1
         weights = torch.reshape(self.weights, shape)
- 
+
         return torch.sum(x * self.weights, dim=dim)
 
 

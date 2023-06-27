@@ -73,21 +73,21 @@ class LossHandler(nn.Module):
             squared = False
 
         # TODO: clean this up and replace it with string parsing to set the parameters
-        if loss_type == 'l2':
+        if loss_type == "l2":
             self.loss_obj = GeometricLpLoss(
                 self.img_shape,
                 p=2,
                 absolute=absolute,
-                pole_mask=pole_mask, 
-                jacobian='flat'
+                pole_mask=pole_mask,
+                jacobian="flat",
             )
-        elif loss_type == 'l1':
+        elif loss_type == "l1":
             self.loss_obj = GeometricLpLoss(
                 self.img_shape,
                 p=1,
                 absolute=absolute,
                 pole_mask=pole_mask,
-                jacobian='flat'
+                jacobian="flat",
             )
         elif loss_type == "geometric l2":
             self.loss_obj = GeometricLpLoss(
@@ -114,7 +114,7 @@ class LossHandler(nn.Module):
 
         # weighting factor for the case of multistep training
         # TODO change hardcoded weighting
-        multistep_weight = torch.ones(self.n_future+1, dtype=torch.float32)
+        multistep_weight = torch.ones(self.n_future + 1, dtype=torch.float32)
         multistep_weight = multistep_weight / torch.sum(multistep_weight)
         multistep_weight = multistep_weight.reshape(-1, 1, 1, 1)
 
@@ -160,6 +160,7 @@ class LossHandler(nn.Module):
 
         return self.loss_obj(prd, tar, chw)
 
+
 # double check if polar optimization has an effect - we use 5 here by default
 class GeometricLpLoss(nn.Module):
     """Geometric Lp loss"""
@@ -173,8 +174,8 @@ class GeometricLpLoss(nn.Module):
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
         pole_mask: Optional[int] = 0,
-        jacobian: Optional[str]='s2',
-         quadrature_rule: Optional[str]="naive",
+        jacobian: Optional[str] = "s2",
+        quadrature_rule: Optional[str] = "naive",
     ):  # pragma: no cover
         super(GeometricLpLoss, self).__init__()
 
@@ -186,17 +187,19 @@ class GeometricLpLoss(nn.Module):
         self.squared = squared
         self.pole_mask = pole_mask
 
-        if jacobian == 's2':
-            jacobian = torch.sin(torch.linspace(0, torch.pi, self.img_size[0])).unsqueeze(1)
+        if jacobian == "s2":
+            jacobian = torch.sin(
+                torch.linspace(0, torch.pi, self.img_size[0])
+            ).unsqueeze(1)
         else:
             jacobian = torch.ones(self.img_size[0], 1)
 
-        if quadrature_rule == 'naive':
+        if quadrature_rule == "naive":
             dtheta = torch.pi / self.img_size[0]
-            dlambda =  2 * torch.pi / self.img_size[1]
+            dlambda = 2 * torch.pi / self.img_size[1]
             dA = dlambda * dtheta
             quad_weight = dA * jacobian
-        elif quadrature_rule == 'clenshaw-curtiss':
+        elif quadrature_rule == "clenshaw-curtiss":
             cost, w = clenshaw_curtiss_weights(self.img_size[0], -1, 1)
             weights = torch.from_numpy(w)
             dlambda = 2 * torch.pi / self.img_size[1]
@@ -204,8 +207,8 @@ class GeometricLpLoss(nn.Module):
         else:
             raise ValueError(f"Unknown quadrature rule {quadrature_rule}")
 
-        self.register_buffer('quad_weight', quad_weight)
-     
+        self.register_buffer("quad_weight", quad_weight)
+
     def abs(
         self, prd: torch.Tensor, tar: torch.Tensor, chw: torch.Tensor
     ):  # pragma: no cover
@@ -214,26 +217,24 @@ class GeometricLpLoss(nn.Module):
         if self.pole_mask:
             all_norms = torch.sum(
                 torch.abs(
-                    prd[..., self.pole_mask:-self.pole_mask, :]
-                    -tar[..., self.pole_mask:-self.pole_mask, :]
+                    prd[..., self.pole_mask : -self.pole_mask, :]
+                    - tar[..., self.pole_mask : -self.pole_mask, :]
                 )
                 ** self.p
-                * self.quad_weight[..., self.pole_mask:-self.pole_mask, :], 
-                dim=(-2,-1),
+                * self.quad_weight[..., self.pole_mask : -self.pole_mask, :],
+                dim=(-2, -1),
             )
         else:
             all_norms = torch.sum(
-                torch.abs(prd - tar)
-                ** self.p
-                * self.quad_weight, 
-                dim=(-2,-1),
+                torch.abs(prd - tar) ** self.p * self.quad_weight,
+                dim=(-2, -1),
             )
 
         all_norms = all_norms.reshape(num_examples, -1).sum()
 
         if not self.squared:
-            all_norms = all_norms**(1/self.p)
-        
+            all_norms = all_norms ** (1 / self.p)
+
         # apply channel weighting
         all_norms = chw.reshape(1, -1) * all_norms
 
@@ -258,26 +259,21 @@ class GeometricLpLoss(nn.Module):
         if self.pole_mask:
             diff_norms = torch.sum(
                 torch.abs(
-                    prd[..., self.pole_mask:-self.pole_mask, :]
-                    -tar[..., self.pole_mask:-self.pole_mask, :]
+                    prd[..., self.pole_mask : -self.pole_mask, :]
+                    - tar[..., self.pole_mask : -self.pole_mask, :]
                 )
                 ** self.p
-                * self.quad_weight[..., self.pole_mask:-self.pole_mask, :], 
-                dim=(-2,-1)
+                * self.quad_weight[..., self.pole_mask : -self.pole_mask, :],
+                dim=(-2, -1),
             )
         else:
             diff_norms = torch.sum(
-                torch.abs(prd - tar)
-                ** self.p
-                * self.quad_weight,
-                dim=(-2,-1)
+                torch.abs(prd - tar) ** self.p * self.quad_weight, dim=(-2, -1)
             )
- 
+
         diff_norms = diff_norms.reshape(num_examples, -1)
 
-        tar_norms = torch.sum(
-            torch.abs(tar) ** self.p * self.quad_weight, dim=(-2, -1)
-        )
+        tar_norms = torch.sum(torch.abs(tar) ** self.p * self.quad_weight, dim=(-2, -1))
         tar_norms = tar_norms.reshape(num_examples, -1)
 
         if not self.squared:

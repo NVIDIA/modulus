@@ -400,7 +400,7 @@ class GeneralES(object):
             ),
         ]
         return buffs
- 
+
     def _init_double_buff_gpu(self, n_tsteps):
         buffs = [
             cpx.zeros_pinned(
@@ -527,7 +527,9 @@ class GeneralES(object):
                 ),
             ]
 
-    def _compute_zenith_angle(zen_inp, zen_tar, self, local_idx, year_idx):  # pragma: no cover
+    def _compute_zenith_angle(
+        zen_inp, zen_tar, self, local_idx, year_idx
+    ):  # pragma: no cover
         # compute hours into the year
         year = self.years[year_idx]
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0)
