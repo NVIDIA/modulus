@@ -54,12 +54,12 @@ RUN apt-get update &&\
     apt-get install -y libstdc++6
 RUN mkdir -p /opt/cugraphops &&\
     cd /opt/cugraphops &&\
-    wget https://anaconda.org/rapidsai-nightly/libcugraphops/23.04.00a/download/linux-64/libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
-    wget https://anaconda.org/rapidsai-nightly/pylibcugraphops/23.04.00a/download/linux-64/pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
-    tar -xf libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
-    tar -xf pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2 &&\
-    rm libcugraphops-23.04.00a-cuda11_230331_g59523e85_63.tar.bz2 &&\
-    rm pylibcugraphops-23.04.00a-cuda11_py38_230331_g59523e85_63.tar.bz2
+    wget https://anaconda.org/nvidia/libcugraphops/23.04.00/download/linux-64/libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
+    wget https://anaconda.org/nvidia/pylibcugraphops/23.04.00/download/linux-64/pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2 &&\
+    tar -xf libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
+    tar -xf pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2 &&\
+    rm libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
+    rm pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2
 
 ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
 

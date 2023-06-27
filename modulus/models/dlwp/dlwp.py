@@ -184,7 +184,6 @@ def _cubed_non_conv_wrapper(faces, layer):
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "DLWP"
-    # TODO: Revisit the meta data later
     # Optimization
     jit: bool = False
     cuda_graphs: bool = True
@@ -369,6 +368,7 @@ class DLWP(Module):
                 ]
                 j += 1
             faces = _cubed_conv_wrapper(faces, equatorial_layer, polar_layer)
+            faces = _cubed_non_conv_wrapper(faces, self.activation)
 
         faces = _cubed_conv_wrapper(faces, self.equatorial_last, self.polar_last)
         output = torch.stack(faces, dim=2)
