@@ -139,23 +139,26 @@ class Mean(EnsembleMetrics):
     def __init__(self, input_shape: Union[Tuple, List], **kwargs):
         super().__init__(input_shape, **kwargs)
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
-        self.n = torch.zeros(1, dtype=torch.int32, device=self.device)
+        self.n = torch.zeros([1], dtype=torch.int32, device=self.device)
 
-    def __call__(self, input: Tensor) -> Tensor:
+    def __call__(self, input: Tensor, dim: int = 0) -> Tensor:
         """Calculate an initial mean
 
         Parameters
         ----------
         input : Tensor
             Input data
+        dim : Int
+            Dimension of batched data
 
         Returns
         -------
         Tensor
             Mean value
         """
-        self.sum = torch.sum(input, dim=0)
-        self.n = torch.as_tensor(input.shape[0])
+        assert input.device == self.device, "Input and Module must have the same device."
+        self.sum = torch.sum(input, dim=dim)
+        self.n = torch.as_tensor([input.shape[dim]], device = self.device)
         # TODO(Dallas) Move distributed calls into finalize.
 
         if DistributedManager.is_initialized() and dist.is_initialized():
@@ -164,7 +167,7 @@ class Mean(EnsembleMetrics):
 
         return self.sum / self.n
 
-    def update(self, input: Tensor) -> Tensor:
+    def update(self, input: Tensor, dim = 0) -> Tensor:
         """Update current mean and essential statistics with new data
 
         Parameters
@@ -180,13 +183,13 @@ class Mean(EnsembleMetrics):
         self._check_shape(input)
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
-            sums, n = _update_mean(self.sum, self.n, input, batch_dim=0)
+            sums, n = _update_mean(self.sum, self.n, input, batch_dim=dim)
             dist.all_reduce(sums, op=dist.ReduceOp.SUM)
             dist.all_reduce(n, op=dist.ReduceOp.SUM)
             self.sum += sums
             self.n += n
         else:
-            self.sum, self.n = _update_mean(self.sum, self.n, input, batch_dim=0)
+            self.sum, self.n = _update_mean(self.sum, self.n, input, batch_dim=dim)
         return self.sum / self.n
 
     def finalize(
@@ -282,35 +285,38 @@ class Variance(EnsembleMetrics):
 
     def __init__(self, input_shape: Union[Tuple, List], **kwargs):
         super().__init__(input_shape, **kwargs)
-        self.n = torch.zeros(1, dtype=torch.int32, device=self.device)
+        self.n = torch.zeros([1], dtype=torch.int32, device=self.device)
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
         self.sum2 = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: Tensor, dim = 0) -> Tensor:
         """Calculate an initial variance
 
         Parameters
         ----------
         input : Tensor
             Input data
+        dim : Int
+            Dimension of batched data
 
         Returns
         -------
         Tensor
             Unbiased variance values
         """
-        self.sum = torch.sum(inputs, dim=0)
-        self.n = torch.as_tensor(inputs.shape[0])
+        assert input.device == self.device, "Input and Module must have the same device."
+        self.sum = torch.sum(inputs, dim=dim)
+        self.n = torch.as_tensor([inputs.shape[0]], device = self.device)
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
             # Compute mean and send around.
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
             dist.all_reduce(self.n, op=dist.ReduceOp.SUM)
 
-            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=0)
+            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=dim)
             dist.all_reduce(self.sum2, op=dist.ReduceOp.SUM)
         else:
-            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=0)
+            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=dim)
 
         if self.n < 2.0:
             return self.sum2
@@ -331,7 +337,7 @@ class Variance(EnsembleMetrics):
             Unbiased variance tensor
         """
         self._check_shape(inputs)
-        new_n = torch.as_tensor(inputs.shape[0])
+        new_n = torch.as_tensor([inputs.shape[0]], device = self.device)
         new_sum = torch.sum(inputs, dim=0)
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
