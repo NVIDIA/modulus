@@ -71,7 +71,7 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     phi = torch.exp(-0.5 * d**2) / torch.sqrt(torch.as_tensor(2 * torch.pi))
     Phi = torch.erf(d / torch.sqrt(torch.as_tensor(2.0)))
 
-    return std* ( 2 * phi + d * Phi - 1.0 / torch.sqrt(torch.as_tensor(torch.pi)))
+    return std * (2 * phi + d * Phi - 1.0 / torch.sqrt(torch.as_tensor(torch.pi)))
 
 
 def _crps_from_cdf(

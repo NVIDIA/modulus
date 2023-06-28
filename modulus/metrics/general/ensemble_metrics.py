@@ -156,9 +156,11 @@ class Mean(EnsembleMetrics):
         Tensor
             Mean value
         """
-        assert inputs.device == self.device, f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+        assert (
+            inputs.device == self.device
+        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
         self.sum = torch.sum(inputs, dim=dim)
-        self.n = torch.as_tensor([inputs.shape[dim]], device = self.device)
+        self.n = torch.as_tensor([inputs.shape[dim]], device=self.device)
         # TODO(Dallas) Move distributed calls into finalize.
 
         if DistributedManager.is_initialized() and dist.is_initialized():
@@ -167,7 +169,7 @@ class Mean(EnsembleMetrics):
 
         return self.sum / self.n
 
-    def update(self, inputs: Tensor, dim = 0) -> Tensor:
+    def update(self, inputs: Tensor, dim=0) -> Tensor:
         """Update current mean and essential statistics with new data
 
         Parameters
@@ -181,7 +183,9 @@ class Mean(EnsembleMetrics):
             Current mean value
         """
         self._check_shape(inputs)
-        assert inputs.device == self.device, f"Inputs device, {inputs.device}, and Module device, {self.device}, must be the same."
+        assert (
+            inputs.device == self.device
+        ), f"Inputs device, {inputs.device}, and Module device, {self.device}, must be the same."
 
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
@@ -291,7 +295,7 @@ class Variance(EnsembleMetrics):
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
         self.sum2 = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
 
-    def __call__(self, inputs: Tensor, dim = 0) -> Tensor:
+    def __call__(self, inputs: Tensor, dim=0) -> Tensor:
         """Calculate an initial variance
 
         Parameters
@@ -306,10 +310,12 @@ class Variance(EnsembleMetrics):
         Tensor
             Unbiased variance values
         """
-        
-        assert inputs.device == self.device, f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+
+        assert (
+            inputs.device == self.device
+        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
         self.sum = torch.sum(inputs, dim=dim)
-        self.n = torch.as_tensor([inputs.shape[0]], device = self.device)
+        self.n = torch.as_tensor([inputs.shape[0]], device=self.device)
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
             # Compute mean and send around.
@@ -339,11 +345,13 @@ class Variance(EnsembleMetrics):
         Tensor
             Unbiased variance tensor
         """
-        
-        self._check_shape(inputs)
-        assert inputs.device == self.device, f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
 
-        new_n = torch.as_tensor([inputs.shape[0]], device = self.device)
+        self._check_shape(inputs)
+        assert (
+            inputs.device == self.device
+        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+
+        new_n = torch.as_tensor([inputs.shape[0]], device=self.device)
         new_sum = torch.sum(inputs, dim=0)
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
