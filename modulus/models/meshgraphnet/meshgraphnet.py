@@ -83,6 +83,8 @@ class MeshGraphNet(Module):
         Hidden layer size for the node feature decoder, by default 128
     num_layers_node_decoder : int, optional
         Number of MLP layers for the node feature decoder, by default 2
+    aggregation: int, optional
+        Message aggregation type, by default "sum"
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
 
@@ -120,6 +122,7 @@ class MeshGraphNet(Module):
         num_layers_edge_encoder: int = 2,
         hidden_dim_node_decoder: int = 128,
         num_layers_node_decoder: int = 2,
+        aggregation: str = "sum",
         do_concat_trick: bool = False,
     ):
         super().__init__(meta=MetaData())
@@ -157,7 +160,7 @@ class MeshGraphNet(Module):
             input_dim_edge=hidden_dim_edge_encoder,
             num_layers_node=num_layers_node_processor,
             num_layers_edge=num_layers_edge_processor,
-            aggregation="sum",
+            aggregation=aggregation,
             norm_type="LayerNorm",
             activation_fn=nn.ReLU(),
             do_concat_trick=do_concat_trick,
