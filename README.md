@@ -34,6 +34,7 @@ pip install nvidia-modulus
 
 The installation can be verified by running a simple python code snippet as shown below:
 ```
+python
 >>> import torch
 >>> from modulus.models.mlp.fully_connected import FullyConnected
 >>> model = FullyConnected(in_features=32, out_features=64)
