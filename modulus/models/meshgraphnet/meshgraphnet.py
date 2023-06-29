@@ -83,7 +83,7 @@ class MeshGraphNet(Module):
         Hidden layer size for the node feature decoder, by default 128
     num_layers_node_decoder : int, optional
         Number of MLP layers for the node feature decoder, by default 2
-    aggregation: int, optional
+    aggregation: str, optional
         Message aggregation type, by default "sum"
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
