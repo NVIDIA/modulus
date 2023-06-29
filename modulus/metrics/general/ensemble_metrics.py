@@ -191,9 +191,15 @@ class Mean(EnsembleMetrics):
 
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
-            sums, n = _update_mean(self.sum, self.n, inputs, batch_dim=dim)
+            # Collect local sums, n
+            sums = torch.sum(inputs, batch_dim=dim)
+            n = torch.as_tensor([inputs.shape[dim]], device=self.device)
+
+            # Reduce
             dist.all_reduce(sums, op=dist.ReduceOp.SUM)
             dist.all_reduce(n, op=dist.ReduceOp.SUM)
+
+            # Update
             self.sum += sums
             self.n += n
         else:
@@ -318,7 +324,7 @@ class Variance(EnsembleMetrics):
         ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
         self.sum = torch.sum(inputs, dim=dim)
         self.n = torch.as_tensor([inputs.shape[0]], device=self.device)
-        # TODO(Dallas) Move distributed calls into finalize.
+
         if DistributedManager.is_initialized() and dist.is_initialized():
             # Compute mean and send around.
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
