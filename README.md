@@ -13,7 +13,7 @@ This package is the core module that provides the core algorithms, network archi
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 <p align="center">
-  <img src="./docs/img/Modulus-850x720.svg" alt="Modulus"/>
+  <img src=https://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img/Modulus-850x720.svg alt="Modulus"/>
 </p>
 
 ## Modulus Packages
