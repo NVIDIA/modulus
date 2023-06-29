@@ -169,7 +169,7 @@ class Mean(EnsembleMetrics):
 
         return self.sum / self.n
 
-    def update(self, inputs: Tensor, dim: int=0) -> Tensor:
+    def update(self, inputs: Tensor, dim: int = 0) -> Tensor:
         """Update current mean and essential statistics with new data
 
         Parameters
@@ -178,7 +178,7 @@ class Mean(EnsembleMetrics):
             Inputs tensor
         dim : int
             Dimension of batched data
-            
+
         Returns
         -------
         Tensor
@@ -297,7 +297,7 @@ class Variance(EnsembleMetrics):
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
         self.sum2 = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
 
-    def __call__(self, inputs: Tensor, dim: int=0) -> Tensor:
+    def __call__(self, inputs: Tensor, dim: int = 0) -> Tensor:
         """Calculate an initial variance
 
         Parameters
