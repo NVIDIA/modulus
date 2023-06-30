@@ -13,7 +13,7 @@ This package is the core module that provides the core algorithms, network archi
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 <p align="center">
-  <img src="./docs/img/Modulus-850x720.svg" alt="Modulus"/>
+  <img src=https://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img/Modulus-850x720.svg alt="Modulus"/>
 </p>
 
 ## Modulus Packages
@@ -32,11 +32,32 @@ The recommended method for installing the latest version of Modulus is using PyP
 pip install nvidia-modulus
 ```
 
+The installation can be verified by running a simple python code snippet as shown below:
+```
+python
+>>> import torch
+>>> from modulus.models.mlp.fully_connected import FullyConnected
+>>> model = FullyConnected(in_features=32, out_features=64)
+>>> input = torch.randn(128, 32)
+>>> output = model(input)
+>>> output.shape
+torch.Size([128, 64])
+```
+
 ### Container
 
 The recommended Modulus docker image can be pulled from the [NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus):
 ```Bash
 docker pull nvcr.io/nvidia/modulus/modulus:23.05
+```
+
+Inside the container you can clone the Modulus git repositories and get started with the examples. Below command show the instructions to launch the modulus container and run an example from the [Modulus Launch](https://github.com/NVIDIA/modulus-launch) repo. 
+```
+docker run --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --runtime nvidia --rm -it nvcr.io/nvidia/modulus/modulus:23.05 bash
+git clone https://github.com/NVIDIA/modulus-launch.git
+cd modulus-launch/examples/cfd/darcy_fno/
+pip install warp-lang # install NVIDIA Warp to run the darcy example
+python train_fno_darcy.py
 ```
 
 ## From Source
