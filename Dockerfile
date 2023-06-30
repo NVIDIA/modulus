@@ -18,6 +18,11 @@ FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
 
+# Setup git lfs
+RUN apt-get update && \
+    apt-get install -y git-lfs && \
+    git lfs install
+
 # Install nightly build of dgl
 RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
 RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
@@ -42,6 +47,10 @@ RUN rm -rf /modulus/
 # CI image
 FROM builder as ci
 RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
+# TODO remove benchy dependency
+RUN pip install git+https://github.com/romerojosh/benchy.git
+# TODO use torch-harmonics pip package after the upgrade
+RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 
 # install libcugraphops and pylibcugraphops
 ENV DEBIAN_FRONTEND=noninteractive

@@ -176,7 +176,7 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder:
-            offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
                 self.g2m_graph.num_dst_nodes(),
@@ -186,7 +186,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_decoder:
-            offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
                 self.m2g_graph.num_dst_nodes(),
@@ -196,7 +196,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_processor:
-            offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.mesh_graph.num_src_nodes(),
                 self.mesh_graph.num_dst_nodes(),
