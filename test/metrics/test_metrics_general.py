@@ -330,7 +330,7 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     x = torch.randn((10, 1, 72, 144), device=device)
     y = torch.randn((5, 1, 72, 144), device=device)
 
-    M = em.Mean((1, 72, 144))
+    M = em.Mean((1, 72, 144), device=device)
     meanx = M(x)
     assert torch.allclose(meanx, torch.mean(x, dim=0))
     meanxy = M.update(y)
@@ -347,7 +347,7 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     _sumxy, _n = em._update_mean(_sumxy, _n, y[1:], batch_dim=0)
     assert torch.allclose(meanxy, _sumxy / _n, rtol=rtol, atol=atol)
 
-    V = em.Variance((1, 72, 144))
+    V = em.Variance((1, 72, 144), device=device)
     varx = V(x)
     assert torch.allclose(varx, torch.var(x, dim=0))
     varxy = V.update(y)
