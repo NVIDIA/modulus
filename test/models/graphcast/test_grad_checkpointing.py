@@ -28,6 +28,7 @@ def test_grad_checkpointing(device):
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
+        "input_res": (15, 15),
         "input_dim_grid_nodes": 2,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
@@ -42,7 +43,9 @@ def test_grad_checkpointing(device):
     fix_random_seeds()
 
     # Random input
-    x = create_random_input(model_kwds["input_dim_grid_nodes"]).to(device)
+    x = create_random_input(
+        model_kwds["input_res"], model_kwds["input_dim_grid_nodes"]
+    ).to(device)
 
     # Instantiate the model
     model = GraphCastNet(**model_kwds).to(device)
@@ -71,7 +74,9 @@ def test_grad_checkpointing(device):
     fix_random_seeds()
 
     # Random input
-    x = create_random_input().to(device)
+    x = create_random_input(
+        model_kwds["input_res"], model_kwds["input_dim_grid_nodes"]
+    ).to(device)
 
     # Instantiate the model
     model = GraphCastNet(**model_kwds).to(device)

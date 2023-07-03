@@ -29,7 +29,7 @@ def test_concat_trick():
 
     # Random input
     device = "cuda"
-    x = torch.rand(1, 2, 721, 1440, device=device)
+    x = torch.rand(1, 2, 11, 20, device=device)
     x_ct = x.clone().detach()
 
     for recomp_act in [False, True]:
@@ -42,6 +42,7 @@ def test_concat_trick():
         model = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
+            input_res=(11, 20),
             input_dim_grid_nodes=2,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
@@ -59,6 +60,7 @@ def test_concat_trick():
         model_ct = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
+            input_res=(11, 20),
             input_dim_grid_nodes=2,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,

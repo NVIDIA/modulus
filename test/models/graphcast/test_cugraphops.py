@@ -26,7 +26,7 @@ def test_cugraphops():
     fix_random_seeds()
 
     # Random input
-    x = torch.randn(1, 2, 721, 1440, device="cuda")
+    x = torch.randn(1, 2, 21, 10, device="cuda")
     x_dgl = x.clone().detach()
 
     for concat_trick in [False, True]:
@@ -39,6 +39,7 @@ def test_cugraphops():
             model = GraphCastNet(
                 meshgraph_path=icosphere_path,
                 static_dataset_path=None,
+                input_res=(21, 10),
                 input_dim_grid_nodes=2,
                 input_dim_mesh_nodes=3,
                 input_dim_edges=4,
@@ -58,6 +59,7 @@ def test_cugraphops():
             model_dgl = GraphCastNet(
                 meshgraph_path=icosphere_path,
                 static_dataset_path=None,
+                input_res=(21, 10),
                 input_dim_grid_nodes=2,
                 input_dim_mesh_nodes=3,
                 input_dim_edges=4,
