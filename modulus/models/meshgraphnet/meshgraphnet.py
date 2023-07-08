@@ -15,11 +15,8 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-import modulus
 
 try:
-    import dgl
-    import dgl.function as fn
     from dgl import DGLGraph
 except:
     raise ImportError(
@@ -32,7 +29,7 @@ from dataclasses import dataclass
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 
-from modulus.models.gnn_layers.utils import CuGraphCSC
+from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
@@ -124,6 +121,7 @@ class MeshGraphNet(Module):
         num_layers_node_decoder: int = 2,
         aggregation: str = "sum",
         do_concat_trick: bool = False,
+        num_processor_checkpoint_segments: int = 0,
     ):
         super().__init__(meta=MetaData())
 
@@ -164,6 +162,7 @@ class MeshGraphNet(Module):
             norm_type="LayerNorm",
             activation_fn=nn.ReLU(),
             do_concat_trick=do_concat_trick,
+            num_processor_checkpoint_segments=num_processor_checkpoint_segments,
         )
 
     def forward(
@@ -193,9 +192,11 @@ class MeshGraphNetProcessor(nn.Module):
         norm_type: str = "LayerNorm",
         activation_fn: nn.Module = nn.ReLU(),
         do_concat_trick: bool = False,
+        num_processor_checkpoint_segments: int = 7,
     ):
         super().__init__()
         self.processor_size = processor_size
+        self.num_processor_checkpoint_segments = num_processor_checkpoint_segments
 
         edge_block_invars = (
             input_dim_node,
@@ -222,6 +223,7 @@ class MeshGraphNetProcessor(nn.Module):
 
         edge_blocks = []
         node_blocks = []
+        layers = []
 
         for _ in range(self.processor_size):
             edge_blocks.append(MeshEdgeBlock(*edge_block_invars))
@@ -229,8 +231,69 @@ class MeshGraphNetProcessor(nn.Module):
         for _ in range(self.processor_size):
             node_blocks.append(MeshNodeBlock(*node_block_invars))
 
-        self.edge_blocks = nn.ModuleList(edge_blocks)
-        self.node_blocks = nn.ModuleList(node_blocks)
+        for i in range(self.processor_size):
+            layers.append(edge_blocks[i])
+            layers.append(node_blocks[i])
+
+        self.processor_layers = nn.ModuleList(layers)
+        self.num_processor_layers = len(self.processor_layers)
+        self.set_checkpoint_segments(self.num_processor_checkpoint_segments)
+
+    def set_checkpoint_segments(self, checkpoint_segments: int):
+        """
+        Set the number of checkpoint segments
+
+        Parameters
+        ----------
+        checkpoint_segments : int
+            number of checkpoint segments
+
+        Raises
+        ------
+        ValueError
+            if the number of processor layers is not a multiple of the number of
+            checkpoint segments
+        """
+        if checkpoint_segments > 0:
+            if self.num_processor_layers % checkpoint_segments != 0:
+                raise ValueError(
+                    "Processor layers must be a multiple of checkpoint_segments"
+                )
+            segment_size = self.num_processor_layers // checkpoint_segments
+            self.checkpoint_segments = []
+            for i in range(0, self.num_processor_layers, segment_size):
+                self.checkpoint_segments.append((i, i + segment_size))
+            self.checkpoint_fn = set_checkpoint_fn(True)
+        else:
+            self.checkpoint_fn = set_checkpoint_fn(False)
+            self.checkpoint_segments = [(0, self.num_processor_layers)]
+
+    def run_function(self, segment_start: int, segment_end: int):
+        """Custom forward for gradient checkpointing
+
+        Parameters
+        ----------
+        segment_start : int
+            Layer index as start of the segment
+        segment_end : int
+            Layer index as end of the segment
+
+        Returns
+        -------
+        function
+            Custom forward function
+        """
+        segment = self.processor_layers[segment_start:segment_end]
+
+        def custom_forward(edge_features, node_features, graph):
+            """Custom forward function"""
+            for module in segment:
+                edge_features, node_features = module(
+                    edge_features, node_features, graph
+                )
+            return edge_features, node_features
+
+        return custom_forward
 
     @torch.jit.unused
     def forward(
@@ -239,25 +302,14 @@ class MeshGraphNetProcessor(nn.Module):
         edge_features: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
-        for i in range(self.processor_size):
-            if isinstance(graph, List):  # in case of neighbor sampling
-                edge_features = edge_features[: graph[i].num_edges(), :]  # TODO check
-                node_features_src = node_features
-                node_features_dst = node_features_src[: graph[i].num_dst_nodes(), :]
-
-                edge_features, _ = self.edge_blocks[i](
-                    edge_features, (node_features_src, node_features_dst), graph[i]
-                )
-                _, node_features = self.node_blocks[i](
-                    edge_features, node_features_dst, graph[i]
-                )
-
-            else:
-                edge_features, _ = self.edge_blocks[i](
-                    edge_features, node_features, graph
-                )
-                _, node_features = self.node_blocks[i](
-                    edge_features, node_features, graph
-                )
+        for segment_start, segment_end in self.checkpoint_segments:
+            edge_features, node_features = self.checkpoint_fn(
+                self.run_function(segment_start, segment_end),
+                edge_features,
+                node_features,
+                graph,
+                use_reentrant=False,
+                preserve_rng_state=False,
+            )
 
         return node_features
