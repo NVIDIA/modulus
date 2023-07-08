@@ -84,6 +84,8 @@ class MeshGraphNet(Module):
         Message aggregation type, by default "sum"
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
+    num_processor_checkpoint_segments: int, optional
+        Number of processor segments for gradient checkpointing, by default 0 (checkpointing disabled)
 
     Example
     -------
@@ -192,7 +194,7 @@ class MeshGraphNetProcessor(nn.Module):
         norm_type: str = "LayerNorm",
         activation_fn: nn.Module = nn.ReLU(),
         do_concat_trick: bool = False,
-        num_processor_checkpoint_segments: int = 7,
+        num_processor_checkpoint_segments: int = 0,
     ):
         super().__init__()
         self.processor_size = processor_size
