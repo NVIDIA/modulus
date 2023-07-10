@@ -23,7 +23,7 @@ except:
         "Mesh Graph Net requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
-from typing import Union, List
+from typing import Callable, Tuple, List, Union
 from dataclasses import dataclass
 
 from modulus.models.meta import ModelMetaData
@@ -270,7 +270,11 @@ class MeshGraphNetProcessor(nn.Module):
             self.checkpoint_fn = set_checkpoint_fn(False)
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
-    def run_function(self, segment_start: int, segment_end: int):
+    def run_function(
+        self, segment_start: int, segment_end: int
+    ) -> Callable[
+        [Tensor, Tensor, Union[DGLGraph, List[DGLGraph]]], Tuple[Tensor, Tensor]
+    ]:
         """Custom forward for gradient checkpointing
 
         Parameters
@@ -282,12 +286,16 @@ class MeshGraphNetProcessor(nn.Module):
 
         Returns
         -------
-        function
+        Callable
             Custom forward function
         """
         segment = self.processor_layers[segment_start:segment_end]
 
-        def custom_forward(edge_features, node_features, graph):
+        def custom_forward(
+            node_features: Tensor,
+            edge_features: Tensor,
+            graph: Union[DGLGraph, List[DGLGraph]],
+        ) -> Tuple[Tensor, Tensor]:
             """Custom forward function"""
             for module in segment:
                 edge_features, node_features = module(
@@ -307,8 +315,8 @@ class MeshGraphNetProcessor(nn.Module):
         for segment_start, segment_end in self.checkpoint_segments:
             edge_features, node_features = self.checkpoint_fn(
                 self.run_function(segment_start, segment_end),
-                edge_features,
                 node_features,
+                edge_features,
                 graph,
                 use_reentrant=False,
                 preserve_rng_state=False,
