@@ -26,6 +26,7 @@ except:
 from typing import Callable, Tuple, List, Union
 from dataclasses import dataclass
 
+import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 
