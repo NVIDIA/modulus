@@ -32,6 +32,10 @@ RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c3
 
 # Install internal version of DGL and cugraphops
 # reference: https://gitlab-master.nvidia.com/dl/dgx/dgl/-/blob/23.07-stage/Dockerfile.base?ref_type=tags
+ARG DGL_BACKEND=pytorch
+ENV DGL_BACKEND=$DGL_BACKEND
+ENV DGLBACKEND=$DGL_BACKEND
+
 COPY ./deps/dgl/dgl-source/ dgl-source
 RUN mkdir dgl-source/build \
  && cd dgl-source/build \
@@ -47,7 +51,7 @@ RUN mkdir dgl-source/build \
  && pip install ./dist/dgl*.whl \
  && rm -rf ./dist \
  && rm -rf ../build
-
+ 
 # pip install required python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -71,7 +75,7 @@ RUN RAPIDS_BRANCH_TAG=$(pip show cugraph | grep Version | awk '{print $2}' |  aw
 ## cleanup of stage
 #RUN rm -rf /modulus/ 
 # TODO, remove after fixing onnx install 
-pip install numpy==1.22.4
+RUN pip install numpy==1.22.4
 
 # CI image
 FROM builder as ci
