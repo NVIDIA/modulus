@@ -48,7 +48,7 @@ def test_meshgraphnet_forward(device):
     node_features = torch.randn(graph.num_nodes(), 4).to(device)
     edge_features = torch.randn(graph.num_edges(), 3).to(device)
     assert common.validate_forward_accuracy(
-        model, (graph, node_features, edge_features)
+        model, (node_features, edge_features, graph)
     )
 
 
@@ -101,7 +101,7 @@ def test_mehsgraphnet_constructor(device):
         edge_features = torch.randn(bsize * num_edges, kw_args["input_dim_edges"]).to(
             device
         )
-        outvar = model(graph, node_features, edge_features)
+        outvar = model(node_features, edge_features, graph)
         assert outvar.shape == (bsize * num_nodes, kw_args["output_dim"])
 
 
@@ -125,7 +125,7 @@ def test_meshgraphnet_optims(device):
         )
         node_features = torch.randn(bsize * num_nodes, 2).to(device)
         edge_features = torch.randn(bsize * num_edges, 2).to(device)
-        return model, [graph, node_features, edge_features]
+        return model, [node_features, edge_features, graph]
 
     # Ideally always check graphs first
     model, invar = setup_model()
@@ -168,9 +168,9 @@ def test_meshgraphnet_checkpoint(device):
         model_1,
         model_2,
         (
-            graph,
             node_features,
             edge_features,
+            graph,
         ),
     )
 
@@ -194,9 +194,9 @@ def test_meshgraphnet_deploy(device):
     node_features = torch.randn(bsize * num_nodes, 4).to(device)
     edge_features = torch.randn(bsize * num_edges, 3).to(device)
     invar = (
-        graph,
         node_features,
         edge_features,
+        graph,
     )
     assert common.validate_onnx_export(model, invar)
     assert common.validate_onnx_runtime(model, invar)

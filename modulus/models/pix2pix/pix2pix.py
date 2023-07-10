@@ -59,6 +59,7 @@ from typing import Union, List
 from dataclasses import dataclass
 
 import modulus
+from modulus.models.layers import get_activation
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -105,8 +106,8 @@ class Pix2Pix(Module):
         Number of upsampling blocks, by default 3
     n_blocks : int, optional
         Number of residual blocks in middle of model, by default 3
-    activation_fn : Activation, optional
-        Activation function, by default ReLU
+    activation_fn : str, optional
+        Activation function, by default "relu"
     batch_norm : bool, optional
         Batch normalization, by default False
     padding_type : str, optional
@@ -149,7 +150,7 @@ class Pix2Pix(Module):
         n_downsampling: int = 3,
         n_upsampling: int = 3,
         n_blocks: int = 3,
-        activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
+        activation_fn: str = "relu",
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
@@ -159,7 +160,7 @@ class Pix2Pix(Module):
         assert padding_type in ["reflect", "zero", "replicate"], "Invalid padding type"
         super().__init__(meta=MetaData())
 
-        activation = activation_fn
+        activation = get_activation(activation_fn)
         # set padding and convolutions
         if dimension == 1:
             padding = nn.ReflectionPad1d(3)

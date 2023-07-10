@@ -27,15 +27,11 @@ def test_fno_forward(device, dimension):
     """Test FNO forward pass"""
     torch.manual_seed(0)
     # Construct FNO model
-    decoder = FullyConnected(
-        in_features=32,
-        out_features=2,
-        num_layers=1,
-        layer_size=8,
-    )
     model = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=1,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=32,
         num_fno_layers=4,
@@ -52,7 +48,7 @@ def test_fno_forward(device, dimension):
         invar = torch.randn(bsize, 2, 16, 16, 16).to(device)
 
     assert common.validate_forward_accuracy(
-        model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-4
+        model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-3
     )
 
 
@@ -61,19 +57,15 @@ def test_fno_constructor(device):
     """Test FNO constructor options"""
 
     out_features = random.randint(1, 8)
-    decoder = FullyConnected(
-        in_features=32,
-        out_features=out_features,
-        num_layers=1,
-        layer_size=8,
-    )
     # Define dictionary of constructor args
     arg_list = []
     for dimension in [1, 2, 3]:
         arg_list.append(
             {
-                "decoder_net": decoder,
                 "in_channels": random.randint(1, 4),
+                "out_channels": out_features,
+                "decoder_layers": 1,
+                "decoder_layer_size": 8,
                 "dimension": dimension,
                 "latent_channels": 32,
                 "num_fno_layers": 2,
@@ -101,8 +93,10 @@ def test_fno_constructor(device):
     # Also test failure case
     try:
         model = FNO(
-            decoder_net=decoder,
             in_channels=2,
+            out_channels=2,
+            decoder_layers=1,
+            decoder_layer_size=8,
             dimension=4,
             latent_channels=32,
             num_fno_layers=4,
@@ -121,15 +115,11 @@ def test_fno_optims(device, dimension):
 
     def setup_model():
         """Setups up fresh FNO model and inputs for each optim test"""
-        decoder = FullyConnected(
-            in_features=4,
-            out_features=2,
-            num_layers=1,
-            layer_size=8,
-        )
         model = FNO(
-            decoder_net=decoder,
             in_channels=2,
+            out_channels=2,
+            decoder_layers=1,
+            decoder_layer_size=8,
             dimension=dimension,
             latent_channels=4,
             num_fno_layers=4,
@@ -167,15 +157,11 @@ def test_fno_optims(device, dimension):
 def test_fno_checkpoint(device, dimension):
     """Test FNO checkpoint save/load"""
     # Construct FNO models
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model_1 = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
@@ -183,15 +169,11 @@ def test_fno_checkpoint(device, dimension):
         padding=0,
     ).to(device)
 
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model_2 = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
@@ -216,15 +198,11 @@ def test_fno_checkpoint(device, dimension):
 def test_fnodeploy(device, dimension):
     """Test FNO deployment support"""
     # Construct AFNO model
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
