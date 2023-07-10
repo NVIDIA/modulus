@@ -47,6 +47,7 @@ from modulus.utils.sfno.distributed.layer_norm import DistributedInstanceNorm2d
 
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
+from modulus.models.layers import get_activation
 
 
 @dataclass
@@ -591,14 +592,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             self.w_loc = self.itrans.nlon
 
         # determine activation function
-        if self.activation_function == "relu":
-            self.activation_function = nn.ReLU
-        elif self.activation_function == "gelu":
-            self.activation_function = nn.GELU
-        elif self.activation_function == "silu":
-            self.activation_function = nn.SiLU
-        else:
-            raise ValueError(f"Unknown activation function {self.activation_function}")
+        self.activation_function = get_activation(self.activation_function)
 
         # encoder
         encoder_hidden_dim = self.embed_dim
