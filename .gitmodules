@@ -1,0 +1,3 @@
+[submodule "deps/dgl"]
+	path = deps/dgl
+	url = https://gitlab-master.nvidia.com/dl/dgx/dgl.git
