@@ -115,7 +115,7 @@ def test_GraphCast_optims(device, num_channels=2, res_h=10, res_w=20):
             "input_dim_grid_nodes": num_channels,
             "input_dim_mesh_nodes": 3,
             "input_dim_edges": 4,
-            "output_dim_grid_nodes": num_channles,
+            "output_dim_grid_nodes": num_channels,
             "processor_layers": 3,
             "hidden_dim": 2,
             "do_concat_trick": True,
