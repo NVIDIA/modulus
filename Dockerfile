@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG PYT_VER=22.12
-FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
+FROM nvcr.io/nvidian/pytorch:23.07-py3 as builder
 
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
@@ -23,55 +23,59 @@ RUN apt-get update && \
     apt-get install -y git-lfs && \
     git lfs install
 
-# Install nightly build of dgl
-RUN pip install --no-deps --pre dgl -f https://data.dgl.ai/wheels/cu117/repo.html
-RUN pip install --no-deps --pre dglgo -f https://data.dgl.ai/wheels-test/repo.html
-ENV DGLBACKEND=pytorch
-
 ENV _CUDA_COMPAT_TIMEOUT=90
 
-# Install custom onnx
-# TODO: Find a fix to eliminate the custom build
-# Forcing numpy update to over ride numba 0.56.4 max numpy constraint
-COPY . /modulus/ 
-RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl" ]; then \
-	echo "Custom wheel exists, installing!" && \
-	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl; \
-    else \
-	echo "No custom wheel present, skipping" && \
-	pip install numpy==1.22.4; \
-    fi
-# cleanup of stage
-RUN rm -rf /modulus/ 
-
-# CI image
-FROM builder as ci
-RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
 # TODO remove benchy dependency
 RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 
-# install libcugraphops and pylibcugraphops
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# Install internal version of DGL and cugraphops
+# reference: https://gitlab-master.nvidia.com/dl/dgx/dgl/-/blob/23.07-stage/Dockerfile.base?ref_type=tags
+COPY ./deps/dgl/dgl-source/ dgl-source
+RUN mkdir dgl-source/build \
+ && cd dgl-source/build \
+ && export NCCL_ROOT=/usr \
+ && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
+        -DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 80 90" -DCUDA_ARCH_PTX="90" \
+        -DCUDA_ARCH_NAME="Manual" \
+        -DBUILD_TORCH=ON \
+        -DBUILD_SPARSE=ON \
+ && cmake --build . \
+ && cd ../python \
+ && python setup.py bdist_wheel \
+ && pip install ./dist/dgl*.whl \
+ && rm -rf ./dist \
+ && rm -rf ../build
 
-RUN apt-get update &&\
-    apt-get install -y software-properties-common &&\
-    add-apt-repository ppa:ubuntu-toolchain-r/test &&\
-    apt-get install -y libstdc++6
-RUN mkdir -p /opt/cugraphops &&\
-    cd /opt/cugraphops &&\
-    wget https://anaconda.org/nvidia/libcugraphops/23.04.00/download/linux-64/libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
-    wget https://anaconda.org/nvidia/pylibcugraphops/23.04.00/download/linux-64/pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2 &&\
-    tar -xf libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
-    tar -xf pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2 &&\
-    rm libcugraphops-23.04.00-cuda11_230412_ga76892e3_0.tar.bz2 &&\
-    rm pylibcugraphops-23.04.00-cuda11_py38_230412_ga76892e3_0.tar.bz2
+# pip install required python packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-ENV PYTHONPATH="${PYTHONPATH}:/opt/cugraphops/lib/python3.8/site-packages"
+# find the correct RAPIDS image tag and pull in the cugraph source code
+RUN RAPIDS_BRANCH_TAG=$(pip show cugraph | grep Version | awk '{print $2}' |  awk -F. '{printf("%02d.%02d\n", $1, $2)}') \
+ && echo "RAPIDS version is $RAPIDS_BRANCH_TAG" \
+ && git clone  --single-branch --shallow-submodules --recurse-submodules --branch "branch-${RAPIDS_BRANCH_TAG}" "https://github.com/rapidsai/cugraph.git" /opt/rapids/cugraph
 
+## Install custom onnx
+## TODO: Find a fix to eliminate the custom build
+## Forcing numpy update to over ride numba 0.56.4 max numpy constraint
+#COPY . /modulus/ 
+#RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl" ]; then \
+#	echo "Custom wheel exists, installing!" && \
+#	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl; \
+#    else \
+#	echo "No custom wheel present, skipping" && \
+#	pip install numpy==1.22.4; \
+#    fi
+## cleanup of stage
+#RUN rm -rf /modulus/ 
+# TODO, remove after fixing onnx install 
+pip install numpy==1.22.4
+
+# CI image
+FROM builder as ci
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 black==22.10.0 interrogate==1.5.0 coverage==6.5.0 protobuf==3.20.0 
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 
