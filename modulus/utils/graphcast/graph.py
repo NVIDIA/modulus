@@ -73,9 +73,7 @@ class Graph:
             generate_and_save_icospheres()
 
         self.icospheres = icospheres
-        self.order = (
-            len([key for key in self.icospheres.keys() if "faces" in key]) - 1 - 1
-        )
+        self.order = len([key for key in self.icospheres.keys() if "faces" in key]) - 2
 
         # flatten lat/lon gird
         self.lat_lon_grid_flat = lat_lon_grid.permute(2, 0, 1).view(2, -1).permute(1, 0)

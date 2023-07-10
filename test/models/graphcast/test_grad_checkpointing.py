@@ -20,7 +20,7 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_grad_checkpointing(device):
+def test_grad_checkpointing(device, num_channels=2, res_h=15, res_w=15):
     """Test gradient checkpointing"""
     icosphere_path = get_icosphere_path()
 
@@ -28,11 +28,11 @@ def test_grad_checkpointing(device):
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
-        "input_res": (15, 15),
-        "input_dim_grid_nodes": 2,
+        "input_res": (res_h, res_w),
+        "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
+        "output_dim_grid_nodes": num_channels,
         "processor_layers": 3,
         "hidden_dim": 4,
         "do_concat_trick": True,

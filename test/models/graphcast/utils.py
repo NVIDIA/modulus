@@ -26,7 +26,7 @@ def fix_random_seeds():
     torch.cuda.manual_seed(0)
 
 
-def create_random_input(input_res=(721, 1440), dim=2):
+def create_random_input(input_res, dim):
     """Create random input for testing"""
     return torch.randn(1, dim, *input_res)
 
