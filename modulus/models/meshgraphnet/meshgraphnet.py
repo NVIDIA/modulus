@@ -15,6 +15,7 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
+import dgl
 
 try:
     from dgl import DGLGraph
