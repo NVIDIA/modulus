@@ -47,7 +47,7 @@ def test_conv_rnn_one2many_forward(device, dimension):
     assert common.validate_forward_accuracy(
         model,
         (invar,),
-        file_name=f"conv_rnn_one2many_{dimension}d_output.mpt",
+        file_name=f"conv_rnn_one2many_{dimension}d_output.pth",
         atol=1e-4,
     )
 
@@ -194,7 +194,7 @@ def test_conv_rnn_seq2seq_forward(device, dimension):
     assert common.validate_forward_accuracy(
         model,
         (invar,),
-        file_name=f"conv_rnn_seq2seq_{dimension}d_output.mpt",
+        file_name=f"conv_rnn_seq2seq_{dimension}d_output.pth",
         atol=1e-4,
     )
 

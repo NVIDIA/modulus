@@ -28,8 +28,10 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     Computes:
 
     .. math:
-        CRPS(mean, std, y) = std * [ \\frac{1}{\\pi} - 2 \\phi ( \\frac{x-mean}{std} ) -
+        CRPS(mean, std, y) = std * [ \\frac{1}{\\sqrt{\\pi}}} - 2 \\phi ( \\frac{x-mean}{std} ) -
                 ( \\frac{x-mean}{std} ) * (2 \\Phi(\\frac{x-mean}{std}) - 1) ]
+
+        where \\phi and \\Phi are the normal gaussian pdf/cdf respectively.
 
     Parameters
     ----------
@@ -69,9 +71,11 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
 
     d = (obs - mean) / std
     phi = torch.exp(-0.5 * d**2) / torch.sqrt(torch.as_tensor(2 * torch.pi))
+
+    # Note, simplified expression below is not exactly Gaussian CDF
     Phi = torch.erf(d / torch.sqrt(torch.as_tensor(2.0)))
 
-    return 2 * phi + (obs - mean) * Phi - std / torch.sqrt(torch.as_tensor(torch.pi))
+    return std * (2 * phi + d * Phi - 1.0 / torch.sqrt(torch.as_tensor(torch.pi)))
 
 
 def _crps_from_cdf(

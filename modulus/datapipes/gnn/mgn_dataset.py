@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import torch
-import os, json, functools, pickle, numpy as np
+import os, json, functools, numpy as np
 
 try:
     import tensorflow.compat.v1 as tf
@@ -115,7 +115,7 @@ class MGNDataset(DGLDataset):
         if self.split == "train":
             self.edge_stats = self._get_edge_stats()
         else:
-            self.edge_stats = self._load_pickle("edge_stats.pickle")
+            self.edge_stats = self._load_json("edge_stats.json")
 
         # normalize edge features
         for i in range(num_samples):
@@ -151,7 +151,7 @@ class MGNDataset(DGLDataset):
         if self.split == "train":
             self.node_stats = self._get_node_stats()
         else:
-            self.node_stats = self._load_pickle("node_stats.pickle")
+            self.node_stats = self._load_json("node_stats.json")
 
         # normalize node features
         for i in range(num_samples):
@@ -217,7 +217,7 @@ class MGNDataset(DGLDataset):
         stats.pop("edge_meansqr")
 
         # save to file
-        self._save_pickle(stats, "edge_stats.pickle")
+        self._save_json(stats, "edge_stats.json")
         return stats
 
     def _get_node_stats(self):
@@ -274,7 +274,7 @@ class MGNDataset(DGLDataset):
         stats.pop("velocity_diff_meansqr")
 
         # save to file
-        self._save_pickle(stats, "node_stats.pickle")
+        self._save_json(stats, "node_stats.json")
         return stats
 
     def _load_tf_data(self, path, split):
@@ -369,14 +369,16 @@ class MGNDataset(DGLDataset):
         return torch.tensor(invar[1:] - invar[0:-1], dtype=torch.float)
 
     @staticmethod
-    def _save_pickle(var, file):
-        with open(file, "wb") as f:
-            pickle.dump(var, f, pickle.HIGHEST_PROTOCOL)
+    def _save_json(var, file):
+        var_list = {k: v.numpy().tolist() for k, v in var.items()}
+        with open(file, "w") as f:
+            json.dump(var_list, f)
 
     @staticmethod
-    def _load_pickle(file):
-        with open(file, "rb") as f:
-            var = pickle.load(f)
+    def _load_json(file):
+        with open(file, "r") as f:
+            var_list = json.load(f)
+        var = {k: torch.tensor(v, dtype=torch.float) for k, v in var_list.items()}
         return var
 
     @staticmethod

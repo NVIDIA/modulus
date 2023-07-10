@@ -12,23 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dgl import DGLGraph
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
-from .utils import sum_efeat_dgl
+from .utils import concat_efeat, sum_efeat, CuGraphCSC
 from modulus.models.layers.fused_silu import silu_backward_for
-
-try:
-    from pylibcugraphops.pytorch.operators import update_efeat_bipartite_e2e
-    from pylibcugraphops.pytorch import BipartiteCSC
-except:
-    update_efeat_bipartite_e2e = None
-    BipartiteCSC = None
 
 try:
     from apex.normalization import FusedLayerNorm
@@ -36,7 +30,6 @@ try:
     apex_imported = True
 except:
     apex_imported = False
-apex_imported = False  # TODO handle properly
 
 
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
@@ -90,8 +83,11 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
         return grad_features, grad_weight, grad_bias
 
 
-class MLP(nn.Module):
-    """MLP with normalization in the last layer
+class MeshGraphMLP(nn.Module):
+    """MLP layer which is commonly used in building blocks
+    of models operating on the union of grids and meshes. It
+    consists of a number of linear layers followed by an activation
+    and a norm layer following the last linear layer.
 
     Parameters
     ----------
@@ -149,14 +145,15 @@ class MLP(nn.Module):
 
         if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
-            self.forward_fn = self.custom_silu_linear_forward
+            self.recompute_activation = True
         else:
-            self.forward_fn = self.default_forward
+            self.recompute_activation = False
 
     def default_forward(self, x: Tensor) -> Tensor:
         """default forward pass of the MLP"""
         return self.model(x)
 
+    @torch.jit.ignore()
     def custom_silu_linear_forward(self, x: Tensor) -> Tensor:
         """forward pass of the MLP where SiLU is recomputed in backward"""
         lin = self.model[0]
@@ -173,11 +170,92 @@ class MLP(nn.Module):
         return hidden
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.forward_fn(x)
+        if self.recompute_activation:
+            return self.custom_silu_linear_forward(x)
+        return self.default_forward(x)
 
 
-class TruncatedMLP(nn.Module):
-    """Truncated MLP where concat+MLP is replaced by MLP+sum
+class MeshGraphEdgeMLPConcat(MeshGraphMLP):
+    """MLP layer which is commonly used in building blocks
+    of models operating on the union of grids and meshes. It
+    consists of a number of linear layers followed by an activation
+    and a norm layer following the last linear layer. It first
+    concatenates the input edge features and the node features of the
+    corresponding source and destination nodes of the corresponding edge
+    to create new edge features. These then are transformed through the
+    transformations mentioned above.
+
+    Parameters
+    ----------
+    efeat_dim: int
+        dimension of the input edge features
+    src_dim: int
+        dimension of the input src-node features
+    dst_dim: int
+        dimension of the input dst-node features
+    output_dim : int, optional
+        dimensionality of the output features, by default 512
+    hidden_dim : int, optional
+        number of neurons in each hidden layer, by default 512
+    hidden_layers : int, optional
+        number of hidden layers, by default 1
+    activation_fn : nn.Module, optional
+        type of activation function, by default nn.SiLU()
+    norm_type : str, optional
+        normalization type, by default "LayerNorm"
+    bias : bool, optional
+        whether to use bias in the MLP, by default True
+    recompute_activation : bool, optional
+        Flag for recomputing activation in backward to save memory, by default False.
+        Currently, only SiLU is supported.
+    """
+
+    def __init__(
+        self,
+        efeat_dim: int = 512,
+        src_dim: int = 512,
+        dst_dim: int = 512,
+        output_dim: int = 512,
+        hidden_dim: int = 512,
+        hidden_layers: int = 2,
+        activation_fn: nn.Module = nn.SiLU(),
+        norm_type: str = "LayerNorm",
+        bias: bool = True,
+        recompute_activation: bool = False,
+    ):
+        cat_dim = efeat_dim + src_dim + dst_dim
+        super(MeshGraphEdgeMLPConcat, self).__init__(
+            cat_dim,
+            output_dim,
+            hidden_dim,
+            hidden_layers,
+            activation_fn,
+            norm_type,
+            recompute_activation,
+        )
+
+    def forward(
+        self,
+        efeat: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
+    ) -> Tensor:
+        efeat = concat_efeat(efeat, nfeat, graph)
+        efeat = self.model(efeat)
+        return efeat
+
+
+class MeshGraphEdgeMLPSum(nn.Module):
+    """MLP layer which is commonly used in building blocks
+    of models operating on the union of grids and meshes. It
+    consists of a number of linear layers followed by an activation
+    and a norm layer following the last linear layer. It transform
+    edge features - which originally are intended to be a concatenation
+    of previous edge features, and the node features of the corresponding
+    source and destinationn nodes - by transorming these three features
+    individually through separate linear transformations and then sums
+    them for each edge accordingly. The result of this is transformed
+    through the remaining linear layers and activation or norm functions.
 
     Parameters
     ----------
@@ -265,54 +343,56 @@ class TruncatedMLP(nn.Module):
 
         if recompute_activation:
             assert isinstance(activation_fn, nn.SiLU)
-            self.forward_fn = self.custom_silu_linear_forward
+            self.recompute_activation = True
         else:
-            self.forward_fn = self.default_forward
+            self.recompute_activation = False
 
     def forward_truncated_sum(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        src_idx: Tensor,
-        dst_idx: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """forward pass of the truncated MLP. This uses separate linear layers without
         bias. Bias is added to one MLP, as we sum afterwards. This adds the bias to the
          total sum, too. Having it in one F.linear should allow a fusion of the bias
          addition while avoiding adding the bias to the "edge-level" result.
         """
+        if isinstance(nfeat, Tensor):
+            src_feat, dst_feat = nfeat, nfeat
+        else:
+            src_feat, dst_feat = nfeat
         mlp_efeat = F.linear(efeat, self.lin_efeat, None)
         mlp_src = F.linear(src_feat, self.lin_src, None)
         mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
-        mlp_sum = sum_efeat_dgl(mlp_efeat, mlp_src, mlp_dst, src_idx, dst_idx)
+        mlp_sum = sum_efeat(mlp_efeat, (mlp_src, mlp_dst), graph)
         return mlp_sum
 
     def default_forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        src_idx: Tensor,
-        dst_idx: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """Default forward pass of the truncated MLP."""
         mlp_sum = self.forward_truncated_sum(
-            efeat, src_feat, dst_feat, src_idx, dst_idx
+            efeat,
+            nfeat,
+            graph,
         )
         return self.model(mlp_sum)
 
     def custom_silu_linear_forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        src_idx: Tensor,
-        dst_idx: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
         """Forward pass of the truncated MLP with custom SiLU function."""
         mlp_sum = self.forward_truncated_sum(
-            efeat, src_feat, dst_feat, src_idx, dst_idx
+            efeat,
+            nfeat,
+            graph,
         )
         lin = self.model[1]
         hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)
@@ -330,121 +410,9 @@ class TruncatedMLP(nn.Module):
     def forward(
         self,
         efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        src_idx: Tensor,
-        dst_idx: Tensor,
+        nfeat: Union[Tensor, Tuple[Tensor]],
+        graph: Union[DGLGraph, CuGraphCSC],
     ) -> Tensor:
-        return self.forward_fn(efeat, src_feat, dst_feat, src_idx, dst_idx)
-
-
-class TruncatedMLPCuGraph(TruncatedMLP):
-    """Truncated MLP where concat+MLP is replaced by MLP+sum
-       which uses CuGraph as the GNN backend.
-
-    Parameters
-    ----------
-    efeat_dim: int
-        dimension of the input edge features
-    src_dim: int
-        dimension of the input src-node features
-    dst_dim: int
-        dimension of the input dst-node features
-    output_dim : int, optional
-        dimensionality of the output features, by default 512
-    hidden_dim : int, optional
-        number of neurons in each hidden layer, by default 512
-    hidden_layers : int, optional
-        number of hidden layers, by default 1
-    activation_fn : nn.Module, optional
-        type of activation function, by default nn.SiLU()
-    norm_type : str, optional
-        normalization type, by default "LayerNorm"
-    bias : bool, optional
-        whether to use bias in the MLP, by default True
-    recompute_activation : bool, optional
-        Flag for recomputing activation in backward to save memory, by default False.
-        Currently, only SiLU is supported.
-    """
-
-    def __init__(
-        self,
-        efeat_dim: int,
-        src_dim: int,
-        dst_dim: int,
-        output_dim: int = 512,
-        hidden_dim: int = 512,
-        hidden_layers: int = 1,
-        activation_fn: nn.Module = nn.SiLU(),
-        norm_type: str = "LayerNorm",
-        bias: bool = True,
-        recompute_activation: bool = False,
-    ):
-        super().__init__(
-            efeat_dim,
-            src_dim,
-            dst_dim,
-            output_dim,
-            hidden_dim,
-            hidden_layers,
-            activation_fn,
-            norm_type,
-            bias,
-            recompute_activation,
-        )
-
-    def forward_truncated_sum(
-        self,
-        efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        graph: BipartiteCSC,
-    ) -> Tensor:
-        """Forward pass of the truncated MLP. This uses separate linear layers without
-        bias. Bias is added to one MLP, as we sum afterwards. This adds the bias to the
-        total sum, too."""
-        mlp_efeat = F.linear(efeat, self.lin_efeat, None)
-        mlp_src = F.linear(src_feat, self.lin_src, None)
-        mlp_dst = F.linear(dst_feat, self.lin_dst, self.bias)
-        mlp_sum = update_efeat_bipartite_e2e(
-            mlp_efeat, mlp_src, mlp_dst, graph, mode="sum"
-        )
-        return mlp_sum
-
-    def default_forward(
-        self,
-        efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        graph: BipartiteCSC,
-    ) -> Tensor:
-        """Default forward pass of the truncated MLP."""
-        mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
-        return self.model(mlp_sum)
-
-    def custom_silu_linear_forward(
-        self,
-        efeat: Tensor,
-        src_feat: Tensor,
-        dst_feat: Tensor,
-        graph: BipartiteCSC,
-    ) -> Tensor:
-        """Forward pass of the truncated MLP with custom SiLU function."""
-        mlp_sum = self.forward_truncated_sum(efeat, src_feat, dst_feat, graph)
-        lin = self.model[1]
-        hidden = CustomSiLuLinearAutogradFunction.apply(mlp_sum, lin.weight, lin.bias)
-        for i in range(2, self.hidden_layers + 1):
-            lin = self.model[2 * i - 1]
-            hidden = CustomSiLuLinearAutogradFunction.apply(
-                hidden, lin.weight, lin.bias
-            )
-
-        if self.norm_type is not None:
-            norm = self.model[2 * self.hidden_layers]
-            hidden = norm(hidden)
-        return hidden
-
-    def forward(
-        self, efeat: Tensor, src_feat: Tensor, dst_feat: Tensor, graph
-    ) -> Tensor:
-        return self.forward_fn(efeat, src_feat, dst_feat, graph)
+        if self.recompute_activation:
+            return self.custom_silu_linear_forward(efeat, nfeat, graph)
+        return self.default_forward(efeat, nfeat, graph)

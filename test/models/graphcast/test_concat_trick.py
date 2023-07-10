@@ -20,12 +20,13 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 icosphere_path = get_icosphere_path()
 
-# Fix random seeds
-fix_random_seeds()
-
 
 def test_concat_trick():
     """Test concat trick"""
+
+    # Fix random seeds
+    fix_random_seeds()
+
     # Random input
     device = "cuda"
     x = torch.rand(1, 2, 721, 1440, device=device)
@@ -93,3 +94,7 @@ def test_concat_trick():
             x_grad,
             atol=1.0e-2,
         ), "Concat trick failed, gradients do not match!"
+
+
+if __name__ == "__main__":
+    test_concat_trick()
