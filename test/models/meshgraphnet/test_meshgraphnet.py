@@ -17,9 +17,13 @@ import pytest
 import random
 import dgl
 import numpy as np
+import os, sys
+
+script_path = os.path.abspath(__file__)
+sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 from modulus.models.meshgraphnet import MeshGraphNet
-from . import common
+import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
