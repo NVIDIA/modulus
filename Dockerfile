@@ -36,9 +36,9 @@ ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
-COPY ./deps/dgl/dgl-source/ dgl-source
-RUN mkdir dgl-source/build \
- && cd dgl-source/build \
+COPY ./deps/dgl/ /opt/dgl/
+RUN mkdir /opt/dgl/dgl-source/build \
+ && cd /opt/dgl/dgl-source/build \
  && export NCCL_ROOT=/usr \
  && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
         -DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 80 90" -DCUDA_ARCH_PTX="90" \
@@ -53,7 +53,7 @@ RUN mkdir dgl-source/build \
  && rm -rf ../build
  
 # pip install required python packages
-COPY requirements.txt .
+COPY ./deps/dgl/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # find the correct RAPIDS image tag and pull in the cugraph source code
