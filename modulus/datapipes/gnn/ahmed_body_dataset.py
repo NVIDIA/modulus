@@ -14,12 +14,13 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Optional
+from typing import List, Tuple, Dict, Union, Optional, Any
 
 import numpy as np
 import torch
+import dgl
 from torch.nn import functional as F
-import pyvista
+import pyvista as pv
 import vtk
 from dgl.data import DGLDataset
 
@@ -61,15 +62,32 @@ class AhmedBodyDataset(DGLDataset):
         data_dir: str,
         split: str = "train",
         num_samples: int = 10,
-        invar_keys: List[str] = ["pos", "normals", "velocity", "reynolds_number"],
+        invar_keys: List[str] = [
+            "pos",
+            "normals",
+            "velocity",
+            "reynolds_number",
+            "length",
+            "width",
+            "height",
+            "ground_clearance",
+            "slant_angle",
+            "fillet_radius",
+        ],
         outvar_keys: List[str] = ["p", "wallShearStress"],
         normalize_keys: List[str] = [
             "p",
             "wallShearStress",
             "velocity",
             "reynolds_number",
+            "length",
+            "width",
+            "height",
+            "ground_clearance",
+            "slant_angle",
+            "fillet_radius",
         ],
-        normalization_bound: Tuple[int, int] = (-2, 2),
+        normalization_bound: Tuple[int, int] = (-1, 1),
         force_reload: bool = False,
         name: str = "dataset",
         verbose: bool = False,
@@ -148,7 +166,7 @@ class AhmedBodyDataset(DGLDataset):
             file_path = data_list[i]
             info_path = info_list[i]
             polydata = read_vtp_file(file_path)
-            graph = create_dgl_graph(polydata, outvar_keys, dtype=torch.int32)
+            graph = self._create_dgl_graph(polydata, outvar_keys, dtype=torch.int32)
             (
                 velocity,
                 reynolds_number,
@@ -158,7 +176,7 @@ class AhmedBodyDataset(DGLDataset):
                 ground_clearance,
                 slant_angle,
                 fillet_radius,
-            ) = read_info_file(info_path)
+            ) = self._read_info_file(info_path)
             self.velocities.append(velocity)
             self.frontal_areas.append(width * height / 2)
             if "velocity" in invar_keys:
@@ -211,8 +229,8 @@ class AhmedBodyDataset(DGLDataset):
             self.node_stats = self._get_node_stats(keys=normalize_keys)
             self.edge_stats = self._get_edge_stats()
         else:
-            self.node_stats = self.load_json("node_stats.json")
-            self.edge_stats = self.load_json("edge_stats.json")
+            self.node_stats = load_json("node_stats.json")
+            self.edge_stats = load_json("edge_stats.json")
 
         self.graphs = self.normalize_node()
         self.graphs = self.normalize_edge()
@@ -432,7 +450,7 @@ class AhmedBodyDataset(DGLDataset):
             stats["edge_max"] = torch.maximum(stats["edge_max"], max_val)
 
         # Save to file
-        self.save_json(stats, "edge_stats.json")
+        save_json(stats, "edge_stats.json")
 
         return stats
 
@@ -483,7 +501,7 @@ class AhmedBodyDataset(DGLDataset):
                 stats[key + "_max"] = torch.maximum(stats[key + "_max"], max_val)
 
         # Save to file
-        self.save_json(stats, "node_stats.json")
+        save_json(stats, "node_stats.json")
 
         return stats
 

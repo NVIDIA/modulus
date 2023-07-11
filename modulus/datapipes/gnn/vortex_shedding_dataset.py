@@ -37,7 +37,7 @@ from torch.nn import functional as F
 tf.config.set_visible_devices([], "GPU")
 
 
-class MGNDataset(DGLDataset):
+class VortexSheddingDataset(DGLDataset):
     """In-memory MeshGraphNet Dataset for stationary mesh
     Notes:
         - This dataset prepares and processes the data available in MeshGraphNet's repo:
