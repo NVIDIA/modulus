@@ -39,7 +39,7 @@ class _StaticCapture(object):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: modulus.models.Module,
         optim: Union[optim, None] = None,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -52,10 +52,10 @@ class _StaticCapture(object):
             self.logger = logging.getLogger("capture")
 
         # DDP fix
-        if not isinstance(model, modulus.Module) and hasattr(model, "module"):
+        if not isinstance(model, modulus.models.Module) and hasattr(model, "module"):
             model = model.module
 
-        if not isinstance(model, modulus.Module):
+        if not isinstance(model, modulus.models.Module):
             self.logger.error("Model not a Modulus Module!")
             raise ValueError("Model not a Modulus Module!")
         self.model = model
@@ -266,7 +266,7 @@ class StaticCaptureTraining(_StaticCapture):
 
     Parameters
     ----------
-    model : modulus.Module
+    model : modulus.models.Module
         Modulus Model
     optim : torch.optim
         Optimizer
@@ -284,7 +284,7 @@ class StaticCaptureTraining(_StaticCapture):
     Raises
     ------
     ValueError
-        If the model provided is not a modulus.Module. I.e. has no meta data.
+        If the model provided is not a modulus.models.Module. I.e. has no meta data.
 
     Example
     -------
@@ -320,7 +320,7 @@ class StaticCaptureTraining(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: modulus.models.Module,
         optim: torch.optim,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -349,7 +349,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
 
     Parameters
     ----------
-    model : modulus.Module
+    model : modulus.models.Module
         Modulus Model
     logger : Union[Logger, None], optional
         Modulus Launch Logger, by default None
@@ -365,7 +365,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
     Raises
     ------
     ValueError
-        If the model provided is not a modulus.Module. I.e. has no meta data.
+        If the model provided is not a modulus.models.Module. I.e. has no meta data.
 
     Example
     -------
@@ -391,7 +391,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: modulus.models.Module,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
