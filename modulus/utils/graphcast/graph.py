@@ -73,7 +73,9 @@ class Graph:
             generate_and_save_icospheres()
 
         self.icospheres = icospheres
-        self.order = len([key for key in self.icospheres.keys() if "faces" in key]) - 2
+        self.max_order = (
+            len([key for key in self.icospheres.keys() if "faces" in key]) - 2
+        )
 
         # flatten lat/lon gird
         self.lat_lon_grid_flat = lat_lon_grid.permute(2, 0, 1).view(2, -1).permute(1, 0)
@@ -93,7 +95,7 @@ class Graph:
         """
         # create the bi-directional mesh graph
         multimesh_faces = self.icospheres["order_0_faces"]
-        for i in range(1, self.order + 1):
+        for i in range(1, self.max_order + 1):
             multimesh_faces = np.concatenate(
                 (multimesh_faces, self.icospheres["order_" + str(i) + "_faces"])
             )
@@ -103,7 +105,7 @@ class Graph:
             src, dst, to_bidirected=True, add_self_loop=False, dtype=torch.int32
         )
         mesh_pos = torch.tensor(
-            self.icospheres["order_" + str(self.order) + "_vertices"],
+            self.icospheres["order_" + str(self.max_order) + "_vertices"],
             dtype=torch.float32,
         )
         mesh_graph = add_edge_features(mesh_graph, mesh_pos)
@@ -128,26 +130,26 @@ class Graph:
         DGLGraph
             Graph2mesh graph.
         """
-        # get the max edge length of icosphere order 6
-        edge_src = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 0]
+        # get the max edge length of icosphere with max order
+        edge_src = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 0]
         ]
-        edge_dst = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 1]
+        edge_dst = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 1]
         ]
         edge_len_1 = np.max(get_edge_len(edge_src, edge_dst))
-        edge_src = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 0]
+        edge_src = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 0]
         ]
-        edge_dst = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 2]
+        edge_dst = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 2]
         ]
         edge_len_2 = np.max(get_edge_len(edge_src, edge_dst))
-        edge_src = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 1]
+        edge_src = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 1]
         ]
-        edge_dst = self.icospheres["order_" + str(self.order) + "_vertices"][
-            self.icospheres["order_" + str(self.order) + "_faces"][:, 2]
+        edge_dst = self.icospheres["order_" + str(self.max_order) + "_vertices"][
+            self.icospheres["order_" + str(self.max_order) + "_faces"][:, 2]
         ]
         edge_len_3 = np.max(get_edge_len(edge_src, edge_dst))
         edge_len = max([edge_len_1, edge_len_2, edge_len_3])
@@ -156,7 +158,7 @@ class Graph:
         cartesian_grid = latlon2xyz(self.lat_lon_grid_flat)
         n_nbrs = 4
         neighbors = NearestNeighbors(n_neighbors=n_nbrs).fit(
-            self.icospheres["order_" + str(self.order) + "_vertices"]
+            self.icospheres["order_" + str(self.max_order) + "_vertices"]
         )
         distances, indices = neighbors.kneighbors(cartesian_grid)
 
@@ -175,7 +177,7 @@ class Graph:
         )  # number of edges is 3,114,720, exactly matches with the paper
         g2m_graph.srcdata["pos"] = cartesian_grid.to(torch.float32)
         g2m_graph.dstdata["pos"] = torch.tensor(
-            self.icospheres["order_" + str(self.order) + "_vertices"],
+            self.icospheres["order_" + str(self.max_order) + "_vertices"],
             dtype=torch.float32,
         )
         g2m_graph = add_edge_features(
@@ -212,7 +214,7 @@ class Graph:
         cartesian_grid = latlon2xyz(self.lat_lon_grid_flat)
         n_nbrs = 1
         neighbors = NearestNeighbors(n_neighbors=n_nbrs).fit(
-            self.icospheres["order_" + str(self.order) + "_face_centroid"]
+            self.icospheres["order_" + str(self.max_order) + "_face_centroid"]
         )
         _, indices = neighbors.kneighbors(cartesian_grid)
         indices = indices.flatten()
@@ -220,14 +222,14 @@ class Graph:
         src = [
             p
             for i in indices
-            for p in self.icospheres["order_" + str(self.order) + "_faces"][i]
+            for p in self.icospheres["order_" + str(self.max_order) + "_faces"][i]
         ]
         dst = [i for i in range(len(cartesian_grid)) for _ in range(3)]
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
         )  # number of edges is 3,114,720, exactly matches with the paper
         m2g_graph.srcdata["pos"] = torch.tensor(
-            self.icospheres["order_" + str(self.order) + "_vertices"],
+            self.icospheres["order_" + str(self.max_order) + "_vertices"],
             dtype=torch.float32,
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
