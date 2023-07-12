@@ -18,9 +18,9 @@ FROM nvcr.io/nvidian/pytorch:23.07-py3 as builder
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
 
-# Setup git lfs
+# Setup git lfs, graphviz gl1(vtk dep)
 RUN apt-get update && \
-    apt-get install -y git-lfs && \
+    apt-get install -y git-lfs graphviz libgl1 && \
     git lfs install
 
 ENV _CUDA_COMPAT_TIMEOUT=90
