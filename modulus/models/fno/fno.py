@@ -478,17 +478,17 @@ class FNO4DEncoder(nn.Module):
         # Initial lift network
         self.lift_network = torch.nn.Sequential()
         self.lift_network.append(
-            layers.Conv3dFCLayer(self.in_channels, int(self.fno_width / 2))
+            layers.Conv4dFCLayer(self.in_channels, int(self.fno_width / 2))
         )
         self.lift_network.append(self.activation_fn)
         self.lift_network.append(
-            layers.Conv3dFCLayer(int(self.fno_width / 2), self.fno_width)
+            layers.Conv4dFCLayer(int(self.fno_width / 2), self.fno_width)
         )
 
         # Build Neural Fourier Operators
         for _ in range(self.num_fno_layers):
             self.spconv_layers.append(
-                layers.SpectralConv3d(
+                layers.SpectralConv4d(
                     self.fno_width,
                     self.fno_width,
                     num_fno_modes[0],
@@ -496,7 +496,10 @@ class FNO4DEncoder(nn.Module):
                     num_fno_modes[2],
                 )
             )
-            self.conv_layers.append(nn.Conv3d(self.fno_width, self.fno_width, 1))
+            # self.conv_layers.append(nn.Conv3d(self.fno_width, self.fno_width, 1))
+            self.conv_layers.append(
+                layers.Conv4dKernel1Layer(self.fno_width, self.fno_width)
+            )
 
         # Padding values for spectral conv
         if isinstance(padding, int):

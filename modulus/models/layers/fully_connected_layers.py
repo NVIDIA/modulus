@@ -236,3 +236,67 @@ class Conv3dFCLayer(ConvFCLayer):
         x = self.conv(x)
         x = self.apply_activation(x)
         return x
+
+
+class Conv4dFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with 4d convolutions
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=True)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Reset layer weights"""
+        nn.init.constant_(self.conv.bias, 0)
+        nn.init.xavier_uniform_(self.conv.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class Conv4dKernel1Layer(nn.Module):
+    """Channel-wise FC like layer with 4d convolutions
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ) -> None:
+        super().__init__()
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        dims = x.size()
+        x = self.conv(x.view(dims[0], dims[1], -1)).view(dims)
+        return x
