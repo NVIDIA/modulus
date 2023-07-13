@@ -56,26 +56,19 @@ RUN mkdir /opt/dgl/dgl-source/build \
 COPY ./deps/dgl/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# find the correct RAPIDS image tag and pull in the cugraph source code
-RUN RAPIDS_BRANCH_TAG=$(pip show cugraph | grep Version | awk '{print $2}' |  awk -F. '{printf("%02d.%02d\n", $1, $2)}') \
- && echo "RAPIDS version is $RAPIDS_BRANCH_TAG" \
- && git clone  --single-branch --shallow-submodules --recurse-submodules --branch "branch-${RAPIDS_BRANCH_TAG}" "https://github.com/rapidsai/cugraph.git" /opt/rapids/cugraph
-
-## Install custom onnx
-## TODO: Find a fix to eliminate the custom build
-## Forcing numpy update to over ride numba 0.56.4 max numpy constraint
-#COPY . /modulus/ 
-#RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl" ]; then \
-#	echo "Custom wheel exists, installing!" && \
-#	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.14.0-cp38-cp38-linux_x86_64.whl; \
-#    else \
-#	echo "No custom wheel present, skipping" && \
-#	pip install numpy==1.22.4; \
-#    fi
-## cleanup of stage
-#RUN rm -rf /modulus/ 
-# TODO, remove after fixing onnx install 
-RUN pip install numpy==1.22.4
+# Install custom onnx
+# TODO: Find a fix to eliminate the custom build
+# Forcing numpy update to over ride numba 0.56.4 max numpy constraint
+COPY . /modulus/ 
+RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl" ]; then \
+	echo "Custom wheel exists, installing!" && \
+	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64; \
+    else \
+	echo "No custom wheel present, skipping" && \
+	pip install numpy==1.22.4; \
+    fi
+# cleanup of stage
+RUN rm -rf /modulus/ 
 
 # CI image
 FROM builder as ci
