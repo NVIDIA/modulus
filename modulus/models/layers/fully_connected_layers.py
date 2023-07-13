@@ -263,13 +263,13 @@ class Conv4dFCLayer(ConvFCLayer):
         super().__init__(activation_fn, activation_par)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=True)
+        self.conv = Conv4dKernel1Layer(in_channels, out_channels)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Reset layer weights"""
-        nn.init.constant_(self.conv.bias, 0)
-        nn.init.xavier_uniform_(self.conv.weight)
+        nn.init.constant_(self.conv.conv.bias, 0)
+        nn.init.xavier_uniform_(self.conv.conv.weight)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv(x)
@@ -294,9 +294,12 @@ class Conv4dKernel1Layer(nn.Module):
         out_channels: int,
     ) -> None:
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True)
 
     def forward(self, x: Tensor) -> Tensor:
-        dims = x.size()
-        x = self.conv(x.view(dims[0], dims[1], -1)).view(dims)
+        dims = list(x.size())
+        dims[1] = self.out_channels
+        x = self.conv(x.view(dims[0], self.in_channels, -1)).view(dims)
         return x
