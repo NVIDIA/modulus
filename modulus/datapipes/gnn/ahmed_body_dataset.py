@@ -45,7 +45,7 @@ class AhmedBodyDataset(DGLDataset):
         The output features to consider. Default includes 'p' and 'wallShearStress'.
     normalize_keys List[str], optional
         The features to normalize. Default includes 'p', 'wallShearStress', 'velocity', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
-    normalization_bound: Tuple[int, int], optional
+    normalization_bound: Tuple[float, float], optional
         The lower and upper bounds for normalization. Default is (-1, 1).
     force_reload: bool, optional
         If True, forces a reload of the data, by default False.
@@ -86,7 +86,7 @@ class AhmedBodyDataset(DGLDataset):
             "slant_angle",
             "fillet_radius",
         ],
-        normalization_bound: Tuple[int, int] = (-1, 1),
+        normalization_bound: Tuple[float, float] = (-1.0, 1.0),
         force_reload: bool = False,
         name: str = "dataset",
         verbose: bool = False,
@@ -339,17 +339,11 @@ class AhmedBodyDataset(DGLDataset):
                 )
 
             graph.ndata["x"] = torch.cat(
-                [
-                    graph.ndata.get(key)
-                    for key in self.input_keys
-                ],
+                [graph.ndata.get(key) for key in self.input_keys],
                 dim=-1,
             )
             graph.ndata["y"] = torch.cat(
-                [
-                    graph.ndata.get(key)
-                    for key in self.output_keys
-                ],
+                [graph.ndata.get(key) for key in self.output_keys],
                 dim=-1,
             )
 
