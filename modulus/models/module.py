@@ -24,6 +24,7 @@ from typing import Union
 from pathlib import Path
 import modulus
 from modulus.models.meta import ModelMetaData
+from modulus.registry import Registry
 
 
 class Module(torch.nn.Module):
@@ -40,6 +41,7 @@ class Module(torch.nn.Module):
     # Define a class attribute to store dynamically created classes
     _dynamically_created_classes = {}
     _file_extension = ".mdlus"
+    __version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
@@ -145,19 +147,20 @@ class Module(torch.nn.Module):
                 file_name = self.meta.name + ".pt"
 
         # Save the modulus version and git hash (if available)
-        version_info = {"modulus_version": modulus.__version__}
+        metadata_info = {"modulus_version": modulus.__version__,
+                         "mdlus_file_version": self.__version__}
 
         if save_git_hash:
             import git
 
             repo = git.Repo(search_parent_directories=True)
             try:
-                version_info["git_hash"] = repo.head.object.hexsha
+                metadata_info["git_hash"] = repo.head.object.hexsha
             except git.InvalidGitRepositoryError:
-                version_info["git_hash"] = None
+                metadata_info["git_hash"] = None
 
-        with open(directory.joinpath("version.json"), "w") as f:
-            json.dump(version_info, f)
+        with open(directory.joinpath("metadata.json"), "w") as f:
+            json.dump(metadata_info, f)
 
     @staticmethod
     def _check_checkpoint(file_name: str) -> bool:
@@ -178,10 +181,24 @@ class Module(torch.nn.Module):
                 f"Model checkpoint {directory.joinpath('model.json')} not found"
             )
 
+        if not directory.joinpath("metadata.json").exists():
+            raise IOError(
+                f"Model checkpoint {directory.joinpath('metadata.json')} not found"
+            )
+
         if not directory.joinpath("model.pt").exists():
             raise IOError(
                 f"Model checkpoint {directory.joinpath('model.pt')} not found"
             )
+
+        # Check if the checkpoint version is compatible with the current version
+        with open(directory.joinpath("metadata.json"), "r") as f:
+            metadata_info = json.load(f)
+            if metadata_info['mdlus_file_version'] != Module.__version__:
+                raise IOError(
+                    f"Model checkpoint version {metadata_info['mdlus_file_version']} is not compatible with current version {Module.__version__}"
+                )
+
         return directory
 
     def load(self, file_name: str) -> None:
