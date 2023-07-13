@@ -64,7 +64,6 @@ class AhmedBodyDataset(DGLDataset):
         num_samples: int = 10,
         invar_keys: List[str] = [
             "pos",
-            "normals",
             "velocity",
             "reynolds_number",
             "length",
@@ -285,9 +284,9 @@ class AhmedBodyDataset(DGLDataset):
         Normalize node data in each graph in the list of graphs using min-max normalization.
         The normalization is performed in-place. The normalization formula used is:
 
-        normalized_data = 2.0 * normalization_bound[1] * (data - node_min) / (node_max - node_min) - normalization_bound[0]
+        normalized_data = 2.0 * normalization_bound[1] * (data - node_min) / (node_max - node_min) + normalization_bound[0]
 
-        This will bring the node data in each graph into the range of [-2, 2].
+        This will bring the node data in each graph into the range of [normalization_bound[0], normalization_bound[1]].
         After normalization, node data is concatenated according to the keys defined in 'self.input_keys'
         and 'self.output_keys', resulting in new node data 'x' and 'y', respectively.
 
@@ -337,7 +336,7 @@ class AhmedBodyDataset(DGLDataset):
                     * self.normalization_bound[1]
                     * (node_data_key - node_min)
                     / (node_max - node_min)
-                    - self.normalization_bound[0]
+                    + self.normalization_bound[0]
                 )
 
             graph.ndata["x"] = torch.cat(
@@ -364,9 +363,9 @@ class AhmedBodyDataset(DGLDataset):
         Normalize edge data 'x' in each graph in the list of graphs using min-max normalization.
         The normalization is performed in-place. The normalization formula used is:
 
-        normalized_x = 2.0 * normalization_bound[1] * (x - edge_min) / (edge_max - edge_min) - normalization_bound[0]
+        normalized_x = 2.0 * normalization_bound[1] * (x - edge_min) / (edge_max - edge_min) + normalization_bound[0]
 
-        This will bring the edge data 'x' in each graph into the range of [-2, 2].
+        This will bring the edge data 'x' in each graph into the range of [normalization_bound[0], normalization_bound[1]].
 
         Returns
         -------
@@ -406,7 +405,7 @@ class AhmedBodyDataset(DGLDataset):
                 * self.normalization_bound[1]
                 * (edge_data_x - edge_min)
                 / (edge_max - edge_min)
-                - self.normalization_bound[0]
+                + self.normalization_bound[0]
             )
 
         return self.graphs
