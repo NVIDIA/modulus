@@ -36,24 +36,24 @@ class AhmedBodyDataset(DGLDataset):
     data_dir: str
         The directory where the data is stored.
     split: str, optional
-        The dataset split. Can be 'train', 'val', or 'test', by default 'train'.
-    num_samples: int, optional:
+        The dataset split. Can be 'train', 'validation', or 'test', by default 'train'.
+    num_samples: int, optional
         The number of samples to use, by default 10.
-    invar_keys: List[str], optional:
-        The invariant features to consider. Default includes 'pos', 'normals', 'velocity', and 'reynolds_number'.
-    outvar_keys: List[str], optional:
+    invar_keys: List[str], optional
+        The input node features to consider. Default includes 'pos', 'velocity', 'reynolds_number', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
+    outvar_keys: List[str], optional
         The output features to consider. Default includes 'p' and 'wallShearStress'.
-    normalize_keys List[str], optional:
-        The features to normalize. Default includes 'p', 'wallShearStress', 'velocity', and 'reynolds_number'.
-    normalization_bound: Tuple[int, int], optional:
-        The lower and upper bounds for normalization. Default is (-2, 2).
-    force_reload: bool, optional:
+    normalize_keys List[str], optional
+        The features to normalize. Default includes 'p', 'wallShearStress', 'velocity', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
+    normalization_bound: Tuple[int, int], optional
+        The lower and upper bounds for normalization. Default is (-1, 1).
+    force_reload: bool, optional
         If True, forces a reload of the data, by default False.
-    name: str, optional:
+    name: str, optional
         The name of the dataset, by default 'dataset'.
-    verbose: bool, optional:
+    verbose: bool, optional
         If True, enables verbose mode, by default False.
-    compute_drag: bool, optional:
+    compute_drag: bool, optional
         If True, also returns the frontal area, velocity, and sample ID. By default False.
     """
 
@@ -269,9 +269,8 @@ class AhmedBodyDataset(DGLDataset):
                 )
 
             row, col = graph.edges()
-            if row.dtype != torch.long or col.dtype != torch.long:
-                row = row.long()
-                col = col.long()
+            row = row.long()
+            col = col.long()
 
             disp = pos[row] - pos[col]
             disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
@@ -343,7 +342,6 @@ class AhmedBodyDataset(DGLDataset):
                 [
                     graph.ndata.get(key)
                     for key in self.input_keys
-                    if graph.ndata.get(key) is not None
                 ],
                 dim=-1,
             )
@@ -351,7 +349,6 @@ class AhmedBodyDataset(DGLDataset):
                 [
                     graph.ndata.get(key)
                     for key in self.output_keys
-                    if graph.ndata.get(key) is not None
                 ],
                 dim=-1,
             )
@@ -605,9 +602,9 @@ class AhmedBodyDataset(DGLDataset):
         edge_list = []
         for i in range(polys.GetNumberOfCells()):
             id_list = vtk.vtkIdList()
-            if polys.GetNextCell(id_list):
-                for j in range(id_list.GetNumberOfIds() - 1):
-                    edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
+            polys.GetNextCell(id_list)
+            for j in range(id_list.GetNumberOfIds() - 1):
+                edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)
