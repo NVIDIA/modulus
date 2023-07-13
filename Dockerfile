@@ -62,7 +62,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /modulus/ 
 RUN if [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl" ]; then \
 	echo "Custom wheel exists, installing!" && \
-	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64; \
+	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl; \
     else \
 	echo "No custom wheel present, skipping" && \
 	pip install numpy==1.22.4; \
