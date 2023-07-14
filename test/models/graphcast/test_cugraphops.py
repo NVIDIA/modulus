@@ -18,7 +18,7 @@ from utils import get_icosphere_path, fix_random_seeds
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
-def test_cugraphops():
+def test_cugraphops(num_channels=2, res_h=21, res_w=10):
     """Test cugraphops"""
     icosphere_path = get_icosphere_path()
 
@@ -26,7 +26,7 @@ def test_cugraphops():
     fix_random_seeds()
 
     # Random input
-    x = torch.randn(1, 2, 721, 1440, device="cuda")
+    x = torch.randn(1, num_channels, res_h, res_w, device="cuda")
     x_dgl = x.clone().detach()
 
     for concat_trick in [False, True]:
@@ -39,10 +39,11 @@ def test_cugraphops():
             model = GraphCastNet(
                 meshgraph_path=icosphere_path,
                 static_dataset_path=None,
-                input_dim_grid_nodes=2,
+                input_res=(res_h, res_w),
+                input_dim_grid_nodes=num_channels,
                 input_dim_mesh_nodes=3,
                 input_dim_edges=4,
-                output_dim_grid_nodes=2,
+                output_dim_grid_nodes=num_channels,
                 processor_layers=3,
                 hidden_dim=4,
                 do_concat_trick=concat_trick,
@@ -58,10 +59,11 @@ def test_cugraphops():
             model_dgl = GraphCastNet(
                 meshgraph_path=icosphere_path,
                 static_dataset_path=None,
-                input_dim_grid_nodes=2,
+                input_res=(res_h, res_w),
+                input_dim_grid_nodes=num_channels,
                 input_dim_mesh_nodes=3,
                 input_dim_edges=4,
-                output_dim_grid_nodes=2,
+                output_dim_grid_nodes=num_channels,
                 processor_layers=3,
                 hidden_dim=4,
                 do_concat_trick=concat_trick,
