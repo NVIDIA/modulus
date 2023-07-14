@@ -18,13 +18,14 @@ import torch
 import logging
 import inspect
 import importlib
-import entrypoints
+import pkg_resources
 
-from typing import Union
+
+from typing import Union, List
 from pathlib import Path
 import modulus
 from modulus.models.meta import ModelMetaData
-from modulus.registry import Registry
+from modulus.models.registry import _construct_registry
 
 
 class Module(torch.nn.Module):
@@ -37,11 +38,9 @@ class Module(torch.nn.Module):
     meta : ModelMetaData, optional
         Meta data class for storing info regarding model, by default None
     """
-
-    # Define a class attribute to store dynamically created classes
-    _dynamically_created_classes = {}
-    _file_extension = ".mdlus"
+    _file_extension = ".mdlus" # Set file extension for saving and loading
     __version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
+    _model_registry = _construct_registry()
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
@@ -80,9 +79,9 @@ class Module(torch.nn.Module):
         _mod = importlib.import_module(arg_dict["__module__"])
         _cls_name = arg_dict["__name__"]
 
-        # Add a check if the class is one of the dynamically created ones
-        if _cls_name in cls._dynamically_created_classes:
-            _cls = cls._dynamically_created_classes[_cls_name]
+        # Add a check if the class is one in the model registry
+        if _cls_name in Module._model_registry:
+            _cls = Module.factory(_cls_name)
         else:
             _cls = getattr(_mod, _cls_name)
 
@@ -152,7 +151,6 @@ class Module(torch.nn.Module):
 
         if save_git_hash:
             import git
-
             repo = git.Repo(search_parent_directories=True)
             try:
                 metadata_info["git_hash"] = repo.head.object.hexsha
@@ -307,7 +305,7 @@ class Module(torch.nn.Module):
         new_class_name = f"{torch_model_class.__name__}ModulusModel"
         ModulusModel.__name__ = new_class_name
 
-        # Add this class to the dict of dynamically created classes
+        # Add this class to the dict of models classes
         ModulusModel.register(ModulusModel, new_class_name)
 
         return ModulusModel
@@ -330,11 +328,11 @@ class Module(torch.nn.Module):
             name = model.__name__
 
         # Check if name already in use
-        if name in Module._dynamically_created_classes:
+        if name in Module._model_registry:
             raise ValueError(f"Name {name} already in use")
 
-        # Add this class to the dict of dynamically created classes
-        Module._dynamically_created_classes[name] = model
+        # Add this class to the dict of model registry
+        Module._model_registry[name] = model
 
     @classmethod
     def factory(cls, name: str):
@@ -357,20 +355,36 @@ class Module(torch.nn.Module):
             If no model is registered under the provided name.
         """
 
-        if name in Module._dynamically_created_classes:
-            return Module._dynamically_created_classes[name]
-
-        group = "modulus.models"
-        try:
-            entry_point = entrypoints.get_group_named(group)[name]
-            model_class = entry_point.load()
-            return model_class
-        except KeyError:
+        if name in Module._model_registry:
+            model = Module._model_registry[name]
+            if isinstance(model, pkg_resources.EntryPoint):
+                model = model.load()
+            return model
+        else:
             raise KeyError(f"No model is registered under the name {name}")
 
     @classmethod
-    def _clear_dynamically_created_classes(cls):
-        cls._dynamically_created_classes = {}
+    def list_models(cls) -> List[str]:
+        """
+        Returns a list of registered model names.
+
+        Returns
+        -------
+        List[str]
+            List of registered model names.
+        """
+
+        return list(Module._model_registry.keys())
+
+    @classmethod
+    def _clear_model_registry(cls):
+        # NOTE: This is only used for testing purposes
+        Module._model_registry = {}
+
+    @classmethod
+    def _restore_model_registry(cls):
+        # NOTE: This is only used for testing purposes
+        Module._model_registry = _construct_registry()
 
     @property
     def device(self) -> torch.device:

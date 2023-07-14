@@ -46,4 +46,4 @@ def test_register_and_factory(device):
     outvar = model(invar)
     assert outvar.shape == invar.shape
     assert outvar.device == invar.device
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()

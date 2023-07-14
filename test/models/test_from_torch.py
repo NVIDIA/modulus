@@ -58,7 +58,7 @@ def test_from_torch_forward(device):
     bsize = 8
     invar = torch.randn(bsize, 32).to(device)
     model(invar)
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -70,7 +70,7 @@ def test_from_torch_constructor(device):
 
     assert isinstance(model, Module)
 
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -90,19 +90,19 @@ def test_from_torch_optims(device):
     # Ideally always check graphs first
     model, invar = setup_model()
     assert common.validate_cuda_graphs(model, (invar,))
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
     # Check JIT
     model, invar = setup_model()
     assert common.validate_jit(model, (invar,))
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
     # Check AMP
     model, invar = setup_model()
     assert common.validate_amp(model, (invar,))
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
     # Check Combo
     model, invar = setup_model()
     assert common.validate_combo_optims(model, (invar,))
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -117,8 +117,8 @@ def test_from_torch_checkpoint(device):
     bsize = random.randint(1, 16)
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
+    Module._clear_model_registry()
 
-    Module._clear_dynamically_created_classes()
 
 
 @common.check_ort_version()
@@ -133,5 +133,4 @@ def test_from_torch_deploy(device):
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
-
-    Module._clear_dynamically_created_classes()
+    Module._clear_model_registry()
