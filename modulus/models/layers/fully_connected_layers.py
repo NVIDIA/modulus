@@ -238,8 +238,10 @@ class Conv3dFCLayer(ConvFCLayer):
         return x
 
 
-class Conv4dFCLayer(ConvFCLayer):
-    """Channel-wise FC like layer with 4d convolutions
+
+class ConvNdFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with convolutionsof arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
 
     Parameters
     ----------
@@ -263,13 +265,18 @@ class Conv4dFCLayer(ConvFCLayer):
         super().__init__(activation_fn, activation_par)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.conv = Conv4dKernel1Layer(in_channels, out_channels)
+        self.conv = ConvNdKernel1Layer(in_channels, out_channels)
         self.reset_parameters()
 
-    def reset_parameters(self) -> None:
+    def reset_parameters(self):
+        self.conv.apply(self.initialise_parameters) # recursively apply initialisations
+
+    def initialise_parameters(self, model):
         """Reset layer weights"""
-        nn.init.constant_(self.conv.conv.bias, 0)
-        nn.init.xavier_uniform_(self.conv.conv.weight)
+        if hasattr(model, 'bias'):
+            nn.init.constant_(model.bias, 0)
+        if hasattr(model, 'weight'):
+            nn.init.xavier_uniform_(model.weight)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv(x)
@@ -277,8 +284,9 @@ class Conv4dFCLayer(ConvFCLayer):
         return x
 
 
-class Conv4dKernel1Layer(nn.Module):
-    """Channel-wise FC like layer with 4d convolutions
+class ConvNdKernel1Layer(nn.Module):
+    """Channel-wise FC like layer for convolutions of arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
 
     Parameters
     ----------

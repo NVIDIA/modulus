@@ -303,7 +303,7 @@ class SpectralConv3d(nn.Module):
 
 
 class SpectralConv4d(nn.Module):
-    """3D Fourier layer. It does FFT, linear transform, and Inverse FFT.
+    """4D Fourier layer. It does FFT, linear transform, and Inverse FFT.
 
     Parameters
     ----------
@@ -355,7 +355,7 @@ class SpectralConv4d(nn.Module):
         )
         self.reset_parameters()
 
-    def compl_mul3d(
+    def compl_mul4d(
         self,
         input: Tensor,
         weights: Tensor,
@@ -393,16 +393,16 @@ class SpectralConv4d(nn.Module):
             dtype=torch.cfloat,
             device=x.device,
         )
-        out_ft[:, :, : self.modes1, : self.modes2, : self.modes3] = self.compl_mul3d(
+        out_ft[:, :, : self.modes1, : self.modes2, : self.modes3] = self.compl_mul4d(
             x_ft[:, :, : self.modes1, : self.modes2, : self.modes3], self.weights1
         )
-        out_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3] = self.compl_mul3d(
+        out_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3] = self.compl_mul4d(
             x_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3], self.weights2
         )
-        out_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3] = self.compl_mul3d(
+        out_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3] = self.compl_mul4d(
             x_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3], self.weights3
         )
-        out_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3] = self.compl_mul3d(
+        out_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3] = self.compl_mul4d(
             x_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3], self.weights4
         )
 
