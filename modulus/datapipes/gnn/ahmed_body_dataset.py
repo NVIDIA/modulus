@@ -18,16 +18,45 @@ from typing import List, Tuple, Dict, Union, Optional, Any
 
 import numpy as np
 import torch
-import dgl
+from torch import Tensor
 from torch.nn import functional as F
-import pyvista as pv
-import vtk
-from dgl.data import DGLDataset
 
-from modulus.datapipes.gnn.utils import read_vtp_file, save_json, load_json
+from data_utils import read_vtp_file, save_json, load_json
+from utils import compute_drag_coefficient, relative_lp_error
+from dataclasses import dataclass
+
+from modulus.datapipes.datapipe import Datapipe
+from modulus.datapipes.meta import DatapipeMetaData
+
+try:
+    import dgl
+    from dgl.data import DGLDataset
+except:
+    raise ImportError(
+        "Ahmed Body Dataset requires the DGL library. Install the "
+        + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
+    )
+
+try:
+    import vtk
+    import pyvista as pv
+except:
+    raise ImportError(
+        "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
+        + "pip install vtk pyvista"
+    )
+
+@dataclass
+class MetaData(DatapipeMetaData):
+    name: str = "AhmedBody"
+    # Optimization
+    auto_device: bool = True
+    cuda_graphs: bool = False
+    # Parallel
+    ddp_sharding: bool = True
 
 
-class AhmedBodyDataset(DGLDataset):
+class AhmedBodyDataset(DGLDataset, Datapipe):
     """
     In-memory Ahmed body Dataset
 
@@ -54,7 +83,7 @@ class AhmedBodyDataset(DGLDataset):
     verbose: bool, optional
         If True, enables verbose mode, by default False.
     compute_drag: bool, optional
-        If True, also returns the frontal area, velocity, and sample ID. By default False.
+        If True, also returns the coefficient and mesh area and normals that are required for computing the drag coefficient.
     """
 
     def __init__(
@@ -92,11 +121,15 @@ class AhmedBodyDataset(DGLDataset):
         verbose: bool = False,
         compute_drag: bool = False,
     ):
-
-        super().__init__(
+        DGLDataset.__init__(
+            self,
             name=name,
             force_reload=force_reload,
             verbose=verbose,
+        )
+        Datapipe.__init__(
+            self,
+            meta=MetaData(),
         )
         self.split = split
         self.num_samples = num_samples
@@ -106,8 +139,6 @@ class AhmedBodyDataset(DGLDataset):
         self.output_keys = outvar_keys
         self.normalization_bound = normalization_bound
         self.compute_drag = compute_drag
-
-        print(f"Preparing the {split} dataset...")
 
         # get the list of all files in the data_dir
         all_entries = os.listdir(self.data_dir)
@@ -159,8 +190,10 @@ class AhmedBodyDataset(DGLDataset):
             )
 
         self.graphs = []
-        self.velocities = []
-        self.frontal_areas = []
+        if self.compute_drag:
+            self.normals = []
+            self.areas = []
+            self.coeff = []
         for i in range(self.length):
             file_path = data_list[i]
             info_path = info_list[i]
@@ -175,9 +208,7 @@ class AhmedBodyDataset(DGLDataset):
                 ground_clearance,
                 slant_angle,
                 fillet_radius,
-            ) = self._read_info_file(info_path)
-            self.velocities.append(velocity)
-            self.frontal_areas.append(width * height / 2)
+            ) = self._read_info_file(info_path)                
             if "velocity" in invar_keys:
                 graph.ndata["velocity"] = velocity * torch.ones_like(
                     graph.ndata["pos"][:, [0]]
@@ -211,13 +242,20 @@ class AhmedBodyDataset(DGLDataset):
                     graph.ndata["pos"][:, [0]]
                 )
 
-            if "normals" in invar_keys:
+            if "normals" in invar_keys or self.compute_drag:
                 mesh = pv.read(file_path)
                 mesh.compute_normals(
-                    cell_normals=False, point_normals=True, inplace=True
+                    cell_normals=True, point_normals=False, inplace=True
                 )
-                graph.ndata["normals"] = torch.from_numpy(mesh["Normals"])
-
+                if "normals" in invar_keys:
+                    graph.ndata["normals"] = torch.from_numpy(mesh.cell_data_to_point_data()["Normals"])
+                if self.compute_drag:
+                    mesh = mesh.compute_cell_sizes()
+                    mesh = mesh.cell_data_to_point_data()
+                    frontal_area = width * height / 2 * (10 ** (-6))
+                    self.coeff.append(2.0 / ((velocity**2) * frontal_area))
+                    self.normals.append(torch.from_numpy(mesh["Normals"]))
+                    self.areas.append(torch.from_numpy(mesh["Area"]))
             self.graphs.append(graph)
 
         # add the edge features
@@ -238,7 +276,7 @@ class AhmedBodyDataset(DGLDataset):
         graph = self.graphs[idx]
         if self.compute_drag:
             sid = self.numbers[idx]
-            return graph, sid, self.velocities[idx], self.frontal_areas[idx]
+            return graph, sid, self.normals[idx], self.areas[idx], self.coeff[idx]
         return graph
 
     def __len__(self):
@@ -400,6 +438,59 @@ class AhmedBodyDataset(DGLDataset):
             )
 
         return self.graphs
+
+    def denormalize(self, pred, gt, device) -> Tuple[Tensor, Tensor]:
+        """
+        Denormalize the graph node data.
+
+        Parameters:
+        -----------
+        pred: Tensor
+            Normalized prediction
+        gt: Tensor
+            Normalized ground truth   
+        device: Any
+            The device
+
+        Returns:
+        --------
+        Tuple(Tensor, Tensor)
+            Denormalized prediction and ground truth
+        """
+
+        stats = self.node_stats
+        stats = {key: val.to(device) for key, val in stats.items()}
+        p_pred = pred
+        p_pred = pred[:,[0]]
+        s_pred = pred[:,1:]
+        p_gt = gt[:,[0]]
+        s_gt = gt[:,1:]
+        p_pred =     (p_pred - self.normalization_bound[0]
+        ) * (stats["p_max"] - stats["p_min"]) / (
+            2 * self.normalization_bound[1]
+        ) + stats[
+            "p_min"
+        ]
+        s_pred = (
+            s_pred - self.normalization_bound[0]
+        ) * (stats["wallShearStress_max"] - stats["wallShearStress_min"]) / (
+            2 * self.normalization_bound[1]
+        ) + stats[
+            "wallShearStress_min"
+        ]
+        p_gt = (p_gt - self.normalization_bound[0]) * (
+            stats["p_max"] - stats["p_min"]
+        ) / (2 * self.normalization_bound[1]) + stats["p_min"]
+        s_gt = (
+           s_gt - self.normalization_bound[0]
+        ) * (stats["wallShearStress_max"] - stats["wallShearStress_min"]) / (
+            2 * self.normalization_bound[1]
+        ) + stats[
+            "wallShearStress_min"
+        ]
+        pred = torch.cat((p_pred, s_pred), dim=-1)
+        gt = torch.cat((p_gt, s_gt), dim=-1)
+        return pred, gt
 
     def _get_edge_stats(self) -> Dict[str, Any]:
         """
@@ -629,3 +720,4 @@ class AhmedBodyDataset(DGLDataset):
                 graph.ndata[array_name] = torch.tensor(array_data, dtype=torch.float32)
 
         return graph
+
