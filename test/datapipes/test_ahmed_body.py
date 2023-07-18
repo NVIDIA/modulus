@@ -24,8 +24,7 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    # return "/data/nfs/modulus-data/datasets/ahmed_body/"
-    return "/code/modulus-data/datasets/ahmed_body"
+    return "/data/nfs/modulus-data/datasets/ahmed_body/"
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
