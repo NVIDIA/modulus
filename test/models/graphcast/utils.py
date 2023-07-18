@@ -26,9 +26,9 @@ def fix_random_seeds():
     torch.cuda.manual_seed(0)
 
 
-def create_random_input(dim: int = 2):
+def create_random_input(input_res, dim):
     """Create random input for testing"""
-    return torch.randn(1, dim, 721, 1440)
+    return torch.randn(1, dim, *input_res)
 
 
 def get_icosphere_path():
