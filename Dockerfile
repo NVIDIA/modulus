@@ -52,6 +52,11 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 
+# install vtk and pyvista
+RUN apt-get update && \
+    apt-get install -y graphviz libgl1
+RUN pip install vtk pyvista
+
 # install libcugraphops and pylibcugraphops
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

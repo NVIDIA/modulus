@@ -20,11 +20,9 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import functional as F
-
-from data_utils import read_vtp_file, save_json, load_json
-from utils import compute_drag_coefficient, relative_lp_error
 from dataclasses import dataclass
 
+from .utils import read_vtp_file, save_json, load_json
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
 
