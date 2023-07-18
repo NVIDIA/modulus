@@ -19,18 +19,20 @@ from torch import Tensor
 from typing import Any
 from dataclasses import dataclass
 
-from .utils import set_checkpoint_fn, CuGraphCSC
-from .mlp import MLP
-from .processor import Processor
-from .utils import set_checkpoint_fn
-from .embedder import EncoderEmbedder, DecoderEmbedder
-from .encoder import EncoderSum, EncoderConcat
-from .decoder import DecoderSum, DecoderConcat
-
+from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
+from modulus.models.gnn_layers.embedder import (
+    GraphCastEncoderEmbedder,
+    GraphCastDecoderEmbedder,
+)
+from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoder
+from modulus.models.gnn_layers.mesh_graph_decoder import MeshGraphDecoder
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
 from modulus.utils.graphcast.graph import Graph
 from modulus.utils.graphcast.data_utils import StaticData
+
+from .graph_cast_processor import GraphCastProcessor
 
 
 @dataclass
@@ -129,12 +131,6 @@ class GraphCastNet(Module):
     ):
         super().__init__(meta=MetaData())
 
-        # check the input resolution
-        if input_res != (721, 1440):
-            raise NotImplementedError(
-                "Currently only native ERA5 input resolution (721, 1440) is supported"
-            )
-
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
         self.longitudes = torch.linspace(-180, 180, steps=input_res[1] + 1)[1:]
@@ -174,7 +170,7 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder:
-            offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
                 self.g2m_graph.num_dst_nodes(),
@@ -184,7 +180,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_decoder:
-            offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
                 self.m2g_graph.num_dst_nodes(),
@@ -194,7 +190,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_processor:
-            offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.mesh_graph.num_src_nodes(),
                 self.mesh_graph.num_dst_nodes(),
@@ -209,7 +205,7 @@ class GraphCastNet(Module):
         self.decoder_checkpoint_fn = set_checkpoint_fn(False)
 
         # initial feature embedder
-        self.encoder_embedder = EncoderEmbedder(
+        self.encoder_embedder = GraphCastEncoderEmbedder(
             input_dim_grid_nodes=input_dim_grid_nodes,
             input_dim_mesh_nodes=input_dim_mesh_nodes,
             input_dim_edges=input_dim_edges,
@@ -220,7 +216,7 @@ class GraphCastNet(Module):
             norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
-        self.decoder_embedder = DecoderEmbedder(
+        self.decoder_embedder = GraphCastDecoderEmbedder(
             input_dim_edges=input_dim_edges,
             output_dim=hidden_dim,
             hidden_dim=hidden_dim,
@@ -231,9 +227,7 @@ class GraphCastNet(Module):
         )
 
         # grid2mesh encoder
-        Encoder = EncoderSum if do_concat_trick else EncoderConcat
-        self.encoder = Encoder(
-            graph=self.g2m_graph,
+        self.encoder = MeshGraphEncoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -245,13 +239,13 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 
         # icosahedron processor
         assert processor_layers > 2, "Expected at least 3 processor layers"
-        self.processor_encoder = Processor(
-            graph=self.mesh_graph,
+        self.processor_encoder = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=1,
             input_dim_nodes=hidden_dim,
@@ -263,8 +257,7 @@ class GraphCastNet(Module):
             do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
-        self.processor = Processor(
-            graph=self.mesh_graph,
+        self.processor = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=processor_layers - 2,
             input_dim_nodes=hidden_dim,
@@ -276,8 +269,7 @@ class GraphCastNet(Module):
             do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
-        self.processor_decoder = Processor(
-            graph=self.mesh_graph,
+        self.processor_decoder = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=1,
             input_dim_nodes=hidden_dim,
@@ -291,9 +283,7 @@ class GraphCastNet(Module):
         )
 
         # mesh2grid decoder
-        Decoder = DecoderSum if do_concat_trick else DecoderConcat
-        self.decoder = Decoder(
-            graph=self.m2g_graph,
+        self.decoder = MeshGraphDecoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -304,11 +294,12 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 
         # final MLP
-        self.finale = MLP(
+        self.finale = MeshGraphMLP(
             input_dim=hidden_dim,
             output_dim=output_dim_grid_nodes,
             hidden_dim=hidden_dim,
@@ -459,11 +450,14 @@ class GraphCastNet(Module):
             g2m_efeat_embedded,
             grid_nfeat_embedded,
             mesh_nfeat_embedded,
+            self.g2m_graph,
         )
 
         # process multimesh graph
         mesh_efeat_processed, mesh_nfeat_processed = self.processor_encoder(
-            mesh_efeat_embedded, mesh_nfeat_encoded
+            mesh_efeat_embedded,
+            mesh_nfeat_encoded,
+            self.mesh_graph,
         )
 
         return mesh_efeat_processed, mesh_nfeat_processed, grid_nfeat_encoded
@@ -496,13 +490,14 @@ class GraphCastNet(Module):
         _, mesh_nfeat_processed = self.processor_decoder(
             mesh_efeat_processed,
             mesh_nfeat_processed,
+            self.mesh_graph,
         )
 
         m2g_efeat_embedded = self.decoder_embedder(self.m2g_edata)
 
         # decode multimesh to lat/lon
         grid_nfeat_decoded = self.decoder(
-            m2g_efeat_embedded, grid_nfeat_encoded, mesh_nfeat_processed
+            m2g_efeat_embedded, grid_nfeat_encoded, mesh_nfeat_processed, self.m2g_graph
         )
 
         # map to the target output dimension
@@ -540,6 +535,7 @@ class GraphCastNet(Module):
         mesh_efeat_processed, mesh_nfeat_processed = self.processor(
             mesh_efeat_processed,
             mesh_nfeat_processed,
+            self.mesh_graph,
         )
 
         grid_nfeat_finale = self.decoder_checkpoint_fn(
@@ -621,7 +617,8 @@ class GraphCastNet(Module):
         GraphCastNet
             The updated object after moving to the specified device, dtype, or format.
         """
-        self = super().to(*args, **kwargs)
+        self = super(GraphCastNet, self).to(*args, **kwargs)
+
         self.g2m_edata = self.g2m_edata.to(*args, **kwargs)
         self.m2g_edata = self.m2g_edata.to(*args, **kwargs)
         self.mesh_ndata = self.mesh_ndata.to(*args, **kwargs)
@@ -629,9 +626,9 @@ class GraphCastNet(Module):
         if self.has_static_data:
             self.static_data = self.static_data.to(*args, **kwargs)
 
-        self.encoder = self.encoder.to(*args, **kwargs)
-        self.decoder = self.decoder.to(*args, **kwargs)
-        self.processor = self.processor.to(*args, **kwargs)
-        self.processor_encoder = self.processor_encoder.to(*args, **kwargs)
-        self.processor_decoder = self.processor_decoder.to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.g2m_graph = self.g2m_graph.to(device)
+        self.mesh_graph = self.mesh_graph.to(device)
+        self.m2g_graph = self.m2g_graph.to(device)
+
         return self

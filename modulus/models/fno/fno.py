@@ -187,7 +187,6 @@ class FNO2DEncoder(nn.Module):
         activation_fn: nn.Module = nn.GELU(),
         coord_features: bool = True,
     ) -> None:
-
         super().__init__()
         self.in_channels = in_channels
         self.num_fno_layers = num_fno_layers
