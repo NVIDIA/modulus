@@ -46,6 +46,7 @@ except:
         + "pip install vtk pyvista"
     )
 
+
 @dataclass
 class MetaData(DatapipeMetaData):
     name: str = "AhmedBody"
@@ -208,7 +209,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 ground_clearance,
                 slant_angle,
                 fillet_radius,
-            ) = self._read_info_file(info_path)                
+            ) = self._read_info_file(info_path)
             if "velocity" in invar_keys:
                 graph.ndata["velocity"] = velocity * torch.ones_like(
                     graph.ndata["pos"][:, [0]]
@@ -248,7 +249,9 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                     cell_normals=True, point_normals=False, inplace=True
                 )
                 if "normals" in invar_keys:
-                    graph.ndata["normals"] = torch.from_numpy(mesh.cell_data_to_point_data()["Normals"])
+                    graph.ndata["normals"] = torch.from_numpy(
+                        mesh.cell_data_to_point_data()["Normals"]
+                    )
                 if self.compute_drag:
                     mesh = mesh.compute_cell_sizes()
                     mesh = mesh.cell_data_to_point_data()
@@ -448,7 +451,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         pred: Tensor
             Normalized prediction
         gt: Tensor
-            Normalized ground truth   
+            Normalized ground truth
         device: Any
             The device
 
@@ -461,33 +464,22 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         stats = self.node_stats
         stats = {key: val.to(device) for key, val in stats.items()}
         p_pred = pred
-        p_pred = pred[:,[0]]
-        s_pred = pred[:,1:]
-        p_gt = gt[:,[0]]
-        s_gt = gt[:,1:]
-        p_pred =     (p_pred - self.normalization_bound[0]
-        ) * (stats["p_max"] - stats["p_min"]) / (
-            2 * self.normalization_bound[1]
-        ) + stats[
-            "p_min"
-        ]
-        s_pred = (
-            s_pred - self.normalization_bound[0]
-        ) * (stats["wallShearStress_max"] - stats["wallShearStress_min"]) / (
-            2 * self.normalization_bound[1]
-        ) + stats[
-            "wallShearStress_min"
-        ]
+        p_pred = pred[:, [0]]
+        s_pred = pred[:, 1:]
+        p_gt = gt[:, [0]]
+        s_gt = gt[:, 1:]
+        p_pred = (p_pred - self.normalization_bound[0]) * (
+            stats["p_max"] - stats["p_min"]
+        ) / (2 * self.normalization_bound[1]) + stats["p_min"]
+        s_pred = (s_pred - self.normalization_bound[0]) * (
+            stats["wallShearStress_max"] - stats["wallShearStress_min"]
+        ) / (2 * self.normalization_bound[1]) + stats["wallShearStress_min"]
         p_gt = (p_gt - self.normalization_bound[0]) * (
             stats["p_max"] - stats["p_min"]
         ) / (2 * self.normalization_bound[1]) + stats["p_min"]
-        s_gt = (
-           s_gt - self.normalization_bound[0]
-        ) * (stats["wallShearStress_max"] - stats["wallShearStress_min"]) / (
-            2 * self.normalization_bound[1]
-        ) + stats[
-            "wallShearStress_min"
-        ]
+        s_gt = (s_gt - self.normalization_bound[0]) * (
+            stats["wallShearStress_max"] - stats["wallShearStress_min"]
+        ) / (2 * self.normalization_bound[1]) + stats["wallShearStress_min"]
         pred = torch.cat((p_pred, s_pred), dim=-1)
         gt = torch.cat((p_gt, s_gt), dim=-1)
         return pred, gt
@@ -720,4 +712,3 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 graph.ndata[array_name] = torch.tensor(array_data, dtype=torch.float32)
 
         return graph
-
