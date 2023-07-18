@@ -466,10 +466,10 @@ class FNO4DEncoder(nn.Module):
         self.coord_features = coord_features
         # Spectral modes to have weights
         if isinstance(num_fno_modes, int):
-            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes]
+            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes, num_fno_modes]
         # Add relative coordinate feature
         if self.coord_features:
-            self.in_channels = self.in_channels + 3
+            self.in_channels = self.in_channels + 4
         self.activation_fn = activation_fn
 
         self.spconv_layers = nn.ModuleList()
@@ -494,6 +494,7 @@ class FNO4DEncoder(nn.Module):
                     num_fno_modes[0],
                     num_fno_modes[1],
                     num_fno_modes[2],
+                    num_fno_modes[3],
                 )
             )
             self.conv_layers.append(
@@ -502,9 +503,9 @@ class FNO4DEncoder(nn.Module):
 
         # Padding values for spectral conv
         if isinstance(padding, int):
-            padding = [padding, padding, padding]
-        padding = padding + [0, 0, 0]  # Pad with zeros for smaller lists
-        self.pad = padding[:3]
+            padding = [padding, padding, padding, padding]
+        padding = padding + [0, 0, 0, 0]  # Pad with zeros for smaller lists
+        self.pad = padding[:4]
         self.ipad = [-pad if pad > 0 else None for pad in self.pad]
         self.padding_type = padding_type
 
@@ -514,10 +515,10 @@ class FNO4DEncoder(nn.Module):
             x = torch.cat((x, coord_feat), dim=1)
 
         x = self.lift_network(x)
-        # (left, right, top, bottom, front, back)
+        # (left, right, top, bottom, front, back, past, future)
         x = F.pad(
             x,
-            (0, self.pad[0], 0, self.pad[1], 0, self.pad[2]),
+            (0, self.pad[0], 0, self.pad[1], 0, self.pad[2], 0, self.pad[3]),
             mode=self.padding_type,
         )
         # Spectral layers
@@ -528,7 +529,7 @@ class FNO4DEncoder(nn.Module):
             else:
                 x = conv(x) + w(x)
 
-        x = x[..., : self.ipad[2], : self.ipad[1], : self.ipad[0]]
+        x = x[..., : self.ipad[3], : self.ipad[2], : self.ipad[1], : self.ipad[0]]
         return x
 
     def meshgrid(self, shape: List[int], device: torch.device) -> Tensor:
@@ -546,15 +547,17 @@ class FNO4DEncoder(nn.Module):
         Tensor
             Meshgrid tensor
         """
-        bsize, size_x, size_y, size_z = shape[0], shape[2], shape[3], shape[4]
+        bsize, size_x, size_y, size_z, size_t = shape[0], shape[2], shape[3], shape[4], shape[5]
         grid_x = torch.linspace(0, 1, size_x, dtype=torch.float32, device=device)
         grid_y = torch.linspace(0, 1, size_y, dtype=torch.float32, device=device)
         grid_z = torch.linspace(0, 1, size_z, dtype=torch.float32, device=device)
-        grid_x, grid_y, grid_z = torch.meshgrid(grid_x, grid_y, grid_z, indexing="ij")
-        grid_x = grid_x.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1)
-        grid_y = grid_y.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1)
-        grid_z = grid_z.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1)
-        return torch.cat((grid_x, grid_y, grid_z), dim=1)
+        grid_t = torch.linspace(0, 1, size_t, dtype=torch.float32, device=device)
+        grid_x, grid_y, grid_z, grid_t = torch.meshgrid(grid_x, grid_y, grid_z, grid_t, indexing="ij")
+        grid_x = grid_x.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
+        grid_y = grid_y.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
+        grid_z = grid_z.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
+        grid_t = grid_t.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
+        return torch.cat((grid_x, grid_y, grid_z, grid_t), dim=1)
 
 
 # Functions for converting between point based and grid (image) representations
@@ -589,6 +592,17 @@ def _grid_to_points3d(value: Tensor) -> Tuple[Tensor, List[int]]:
 def _points_to_grid3d(value: Tensor, shape: List[int]) -> Tensor:
     output = value.reshape(shape[0], shape[2], shape[3], shape[4], value.size(-1))
     return torch.permute(output, (0, 4, 1, 2, 3))
+
+
+def _grid_to_points4d(value: Tensor) -> Tuple[Tensor, List[int]]:
+    y_shape = list(value.size())
+    output = torch.permute(value, (0, 2, 3, 4, 5, 1))
+    return output.reshape(-1, output.size(-1)), y_shape
+
+
+def _points_to_grid4d(value: Tensor, shape: List[int]) -> Tensor:
+    output = value.reshape(shape[0], shape[2], shape[3], shape[4], shape[5], value.size(-1))
+    return torch.permute(output, (0, 5, 1, 2, 3, 4))
 
 
 # ===================================================================
@@ -714,8 +728,8 @@ class FNO(Module):
             self.points_to_grid = _points_to_grid3d  # For JIT
         elif dimension == 4:
             FNOModel = FNO4DEncoder
-            self.grid_to_points = _grid_to_points3d  # For JIT
-            self.points_to_grid = _points_to_grid3d  # For JIT
+            self.grid_to_points = _grid_to_points4d  # For JIT
+            self.points_to_grid = _points_to_grid4d  # For JIT
         else:
             raise NotImplementedError(
                 "Invalid dimensionality. Only 1D, 2D, 3D and 4D FNO implemented"
