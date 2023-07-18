@@ -18,7 +18,10 @@ import torch
 
 from typing import Dict, Any
 
-raise ImportError("vtk package is required. Install with pip install vtk.")
+try:
+    import vtk
+except:
+    raise ImportError("vtk package is required. Install with pip install vtk.")
 
 
 def read_vtp_file(file_path: str) -> Any:
