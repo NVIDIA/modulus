@@ -547,12 +547,20 @@ class FNO4DEncoder(nn.Module):
         Tensor
             Meshgrid tensor
         """
-        bsize, size_x, size_y, size_z, size_t = shape[0], shape[2], shape[3], shape[4], shape[5]
+        bsize, size_x, size_y, size_z, size_t = (
+            shape[0],
+            shape[2],
+            shape[3],
+            shape[4],
+            shape[5],
+        )
         grid_x = torch.linspace(0, 1, size_x, dtype=torch.float32, device=device)
         grid_y = torch.linspace(0, 1, size_y, dtype=torch.float32, device=device)
         grid_z = torch.linspace(0, 1, size_z, dtype=torch.float32, device=device)
         grid_t = torch.linspace(0, 1, size_t, dtype=torch.float32, device=device)
-        grid_x, grid_y, grid_z, grid_t = torch.meshgrid(grid_x, grid_y, grid_z, grid_t, indexing="ij")
+        grid_x, grid_y, grid_z, grid_t = torch.meshgrid(
+            grid_x, grid_y, grid_z, grid_t, indexing="ij"
+        )
         grid_x = grid_x.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
         grid_y = grid_y.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
         grid_z = grid_z.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1, 1)
@@ -601,7 +609,9 @@ def _grid_to_points4d(value: Tensor) -> Tuple[Tensor, List[int]]:
 
 
 def _points_to_grid4d(value: Tensor, shape: List[int]) -> Tensor:
-    output = value.reshape(shape[0], shape[2], shape[3], shape[4], shape[5], value.size(-1))
+    output = value.reshape(
+        shape[0], shape[2], shape[3], shape[4], shape[5], value.size(-1)
+    )
     return torch.permute(output, (0, 5, 1, 2, 3, 4))
 
 

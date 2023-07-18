@@ -167,7 +167,8 @@ class SpectralConv4d(nn.Module):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
 def test_conv_nd(device, dimension):
-    # device = "cuda:0"
+    """compare output of ConvNdKernel1Layer with that of layer for specfic n_dim"""
+
     bsize = 8
     in_channels = 4
     out_channels = 2
@@ -192,13 +193,13 @@ def test_conv_nd(device, dimension):
     nn.init.constant_(comp_nn.weight, ini_w)
     with torch.no_grad():
         assert torch.allclose(conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06), \
-            f'failed for {dim}d case :('
+            f'ConvNdKernel1Layer output not identical to that of layer specific for {dim}d fields :('
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
 def test_conv_ndfc(device, dimension):
-    # device = "cuda:0"
+    """compare output of ConvNdFCLayer with that of layer for specfic n_dim"""
     bsize = 8
     in_channels = 4
     out_channels = 2
@@ -223,10 +224,12 @@ def test_conv_ndfc(device, dimension):
     comp_nn.reset_parameters()
     with torch.no_grad():
         assert torch.allclose(conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06), \
-            f'failed for {dim}d case :('
+            f'ConvNdFCLayer output not identical to that of layer specific for {dim}d fields :('
 
 
-def test_spec_conv_4d():
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_spec_conv_4d(device):
+    """compare output of SpectralConv4d with that of layer used in literature."""
     bsize = 8
     in_channels = 8
     out_channels = 4
@@ -235,17 +238,16 @@ def test_spec_conv_4d():
 
     torch.manual_seed(0)
     spec_conv_orig = SpectralConv4d(in_channels, out_channels,
-                                    fno_modes, fno_modes, fno_modes, fno_modes)
+                                    fno_modes, fno_modes, fno_modes, fno_modes).to(device)
     torch.manual_seed(0)
     spec_conv_modulus = layers.SpectralConv4d(in_channels, out_channels,
-                                        fno_modes, fno_modes, fno_modes, fno_modes)
+                                        fno_modes, fno_modes, fno_modes, fno_modes).to(device)
 
-    invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size, tens_size)
+    invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size, tens_size).to(device)
     with torch.no_grad():
         assert torch.allclose(spec_conv_orig(invar), spec_conv_modulus(invar), rtol=1e-06, atol=1e-06), \
-            f'failed :('
+            f'SpectralConv4d output not identical to that of refrence layer'
 
-        print('success')
 
 # # def initialise_parameters(model):
 # #     """Reset layer weights"""

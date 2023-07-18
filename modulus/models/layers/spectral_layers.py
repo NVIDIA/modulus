@@ -320,7 +320,13 @@ class SpectralConv4d(nn.Module):
     """
 
     def __init__(
-        self, in_channels: int, out_channels: int, modes1: int, modes2: int, modes3: int, modes4: int
+        self,
+        in_channels: int,
+        out_channels: int,
+        modes1: int,
+        modes2: int,
+        modes3: int,
+        modes4: int,
     ):
         super().__init__()
 
@@ -336,42 +342,90 @@ class SpectralConv4d(nn.Module):
         self.scale = 1 / (in_channels * out_channels)
         self.weights1 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights2 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights3 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights4 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights5 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights6 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights7 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.weights8 = nn.Parameter(
             torch.empty(
-                in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, 2
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                2,
             )
         )
         self.reset_parameters()
@@ -419,29 +473,53 @@ class SpectralConv4d(nn.Module):
         # print(f'mod: size x: {x_ft.size()}, out: {out_ft.size()}')
         # print(f'mod: x_ft[weight4]: {x_ft[:, :, self.modes1 :, self.modes2 :, : -self.modes3, :self.modes4].size()} weight4: {self.weights4.size()}')
 
-        out_ft[:, :, : self.modes1, : self.modes2, : self.modes3, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, : self.modes1, : self.modes2, : self.modes3, :self.modes4], self.weights1
+        out_ft[
+            :, :, : self.modes1, : self.modes2, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, : self.modes2, : self.modes3, : self.modes4],
+            self.weights1,
         )
-        out_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3, :self.modes4], self.weights2
+        out_ft[
+            :, :, -self.modes1 :, : self.modes2, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3, : self.modes4],
+            self.weights2,
         )
-        out_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3, :self.modes4], self.weights3
+        out_ft[
+            :, :, : self.modes1, -self.modes2 :, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3, : self.modes4],
+            self.weights3,
         )
-        out_ft[:, :, : self.modes1, : self.modes2, -self.modes3 :, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, : self.modes1, : self.modes2, -self.modes3 :, :self.modes4], self.weights4
+        out_ft[
+            :, :, : self.modes1, : self.modes2, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, : self.modes2, -self.modes3 :, : self.modes4],
+            self.weights4,
         )
-        out_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3, :self.modes4], self.weights5
+        out_ft[
+            :, :, -self.modes1 :, -self.modes2 :, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3, : self.modes4],
+            self.weights5,
         )
-        out_ft[:, :, -self.modes1 :, : self.modes2, -self.modes3 :, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, -self.modes1 :, : self.modes2, -self.modes3 :, :self.modes4], self.weights6
+        out_ft[
+            :, :, -self.modes1 :, : self.modes2, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, : self.modes2, -self.modes3 :, : self.modes4],
+            self.weights6,
         )
-        out_ft[:, :, : self.modes1, -self.modes2 :, -self.modes3 :, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, : self.modes1, -self.modes2 :, -self.modes3 :, :self.modes4], self.weights7
+        out_ft[
+            :, :, : self.modes1, -self.modes2 :, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, -self.modes2 :, -self.modes3 :, : self.modes4],
+            self.weights7,
         )
-        out_ft[:, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, :self.modes4] = self.compl_mul4d(
-            x_ft[:, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, :self.modes4], self.weights8
+        out_ft[
+            :, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, : self.modes4],
+            self.weights8,
         )
 
         # Return to physical space

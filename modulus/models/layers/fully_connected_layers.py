@@ -238,7 +238,6 @@ class Conv3dFCLayer(ConvFCLayer):
         return x
 
 
-
 class ConvNdFCLayer(ConvFCLayer):
     """Channel-wise FC like layer with convolutionsof arbitrary dimensions
     CAUTION: if n_dims <= 3, use specific version for that n_dims instead
@@ -269,13 +268,13 @@ class ConvNdFCLayer(ConvFCLayer):
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.conv.apply(self.initialise_parameters) # recursively apply initialisations
+        self.conv.apply(self.initialise_parameters)  # recursively apply initialisations
 
     def initialise_parameters(self, model):
         """Reset layer weights"""
-        if hasattr(model, 'bias'):
+        if hasattr(model, "bias"):
             nn.init.constant_(model.bias, 0)
-        if hasattr(model, 'weight'):
+        if hasattr(model, "weight"):
             nn.init.xavier_uniform_(model.weight)
 
     def forward(self, x: Tensor) -> Tensor:
