@@ -2,7 +2,7 @@
 
 To contribute to this repo, simply clone this repo, make your changes/contributions and 
 create a merge request. Someone from Modulus core team will review and approve your 
-merge request. 
+merge request. Ensure that you also update the [`CHANGELOG.md`](CHANGELOG.md). 
 
 To ensure quality of the code, your merge request will pass through several CI checks. 
 It is mandatory for your MRs to pass these pipelines to ensure a successful merge. 
