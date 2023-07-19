@@ -8,6 +8,11 @@ get-data:
 		git -C /data/nfs/modulus-data pull || \
 		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
+setup-ci:
+        git config --global --add safe.directory . && \
+        git config --unset-all core.hooksPath && \
+        pip install pre-commit && pre-commit install
+
 black: 
 	pre-commit run black -a
 
