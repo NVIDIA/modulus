@@ -9,11 +9,10 @@ get-data:
 		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 setup-ci:
-        git config --global --add safe.directory . && \
-        git config --unset-all core.hooksPath && \
-        pip install pre-commit && pre-commit install
+	pip install pre-commit && \
+	pre-commit install
 
-black: 
+black:
 	pre-commit run black -a
 
 interrogate:
@@ -27,18 +26,18 @@ license:
 
 doctest:
 	coverage run \
-                --rcfile='test/coverage.docstring.rc' \
-                -m pytest \
-                --doctest-modules modulus/ --ignore-glob=*internal*
+		--rcfile='test/coverage.docstring.rc' \
+		-m pytest \
+		--doctest-modules modulus/ --ignore-glob=*internal*
 
 pytest: 
 	coverage run \
-                --rcfile='test/coverage.pytest.rc' \
-                -m pytest 
+		--rcfile='test/coverage.pytest.rc' \
+		-m pytest 
 
 pytest-internal:
 	cd test/internal && \
-                pytest && \
+		pytest && \
 		cd ../../
 
 coverage:
