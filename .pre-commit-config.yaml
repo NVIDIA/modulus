@@ -17,7 +17,7 @@ repos:
     rev: 22.10.0
     hooks:
     - id: black
-      language_version: python3.8
+      exclude: "docs"
 
 -   repo: https://github.com/econchick/interrogate
     rev: 1.5.0
@@ -38,8 +38,8 @@ repos:
 
 -   repo: local
     hooks:
-    - id: license_test
-      name: license_test
+    - id: license
+      name: license
       entry: python test/ci_tests/header_check.py
       language: python
       pass_filenames: false

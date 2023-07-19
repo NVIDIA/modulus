@@ -9,36 +9,16 @@ get-data:
 		git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git /data/nfs/modulus-data
 
 black: 
-	black --check --exclude=docs/ ./
+	pre-commit run black -a
 
 interrogate:
-	cd modulus && \
-                interrogate --ignore-init-method \
-                --ignore-init-module \
-                --ignore-module \
-                --ignore-private \
-                --ignore-semiprivate \
-                --ignore-magic \
-                --fail-under 99 \
-                --exclude ["internal"] \
-                --ignore-regex forward \
-                --ignore-regex backward \
-                --ignore-regex reset_parameters \
-                --ignore-regex extra_repr \
-                --ignore-regex MetaData \
-                --ignore-regex apply_activation \
-                --ignore-regex exec_activation \
-                -vv \
-                --color \
-                . && \
-		cd ../
+	pre-commit run interrogate -a
 
-markdownlint:
-	markdownlint '**/*.md' --fix
+lint:
+	pre-commit run markdownlint -a
 
 license: 
-	python test/ci_tests/header_check.py
-
+	pre-commit run license -a
 
 doctest:
 	coverage run \
