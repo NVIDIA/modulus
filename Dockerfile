@@ -29,6 +29,7 @@ ENV _CUDA_COMPAT_TIMEOUT=90
 RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
+RUN pip install tensorly>=0.8.1 https://github.com/tensorly/torch/archive/715a0daa7ae0cbdb443d06780a785ae223108903.tar.gz
 
 # Install DGL (Internal if present otherwise from source)
 # reference: https://gitlab-master.nvidia.com/dl/dgx/dgl/-/blob/23.07-stage/Dockerfile.base?ref_type=tags
