@@ -30,7 +30,7 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 
-# Install internal version of DGL and cugraphops
+# Install internal version of DGL
 # reference: https://gitlab-master.nvidia.com/dl/dgx/dgl/-/blob/23.07-stage/Dockerfile.base?ref_type=tags
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
@@ -90,7 +90,7 @@ RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
-RUN pip install protobuf==3.20.0 
+RUN pip install protobuf==3.20.0 vtk>=9.2.6 pyvista>=0.40.1
 COPY . /modulus/
 RUN cd /modulus/ && pip install .
 
