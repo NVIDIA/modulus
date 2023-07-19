@@ -33,6 +33,9 @@ interrogate:
                 . && \
 		cd ../
 
+markdownlint:
+	markdownlint --fix .
+
 license: 
 	python test/ci_tests/header_check.py
 
