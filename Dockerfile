@@ -39,13 +39,13 @@ ENV DGLBACKEND=$DGL_BACKEND
 
 COPY . /modulus/
 RUN if [ -e "/modulus/deps/dgl" ]; then \
-	echo "Internal DGL exists. Using interanl DGL build" && \
+	echo "Internal DGL exists. Using internal DGL build" && \
 	cp -r /modulus/deps/dgl/ /opt/ && \
 	mkdir /opt/dgl/dgl-source/build \
 	&& cd /opt/dgl/dgl-source/build \
 	&& export NCCL_ROOT=/usr \
 	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
-        	-DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 80 90" -DCUDA_ARCH_PTX="90" \
+        	-DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 75 80 86 90" -DCUDA_ARCH_PTX="90" \
         	-DCUDA_ARCH_NAME="Manual" \
         	-DBUILD_TORCH=ON \
         	-DBUILD_SPARSE=ON \
