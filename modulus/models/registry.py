@@ -13,31 +13,55 @@
 # limitations under the License.
 
 import pkg_resources
+from typing import List, Union
 
 # This model registry follows conventions similar to fsspec,
 # https://github.com/fsspec/filesystem_spec/blob/master/fsspec/registry.py#L62C2-L62C2
 # Tutorial on entrypoints: https://amir.rachum.com/blog/2017/07/28/python-entry-points/
-def _construct_registry():
-    """
-    This function constructs the registry of all the models that are available.
-    It does so by looking at the entrypoints in the setup.py file and any other
-    entrypoints that are added by external packages.
+class ModelRegistry:
+    _instance = None
+    _model_registry = {}
 
-    Note: This function is called only once when the modulus package is imported
-    for the first time.
+    def __new__(cls):
+        if not cls._instance:
+            cls._instance = super(ModelRegistry, cls).__new__(cls)
+            cls._model_registry = cls._construct_registry()
+        return cls._instance
 
-    Example:
-    In 
+    @classmethod
+    def _construct_registry(cls):
+        registry = {}
+        group = "modulus.models"
+        entrypoints = pkg_resources.iter_entry_points(group)
+        for entry_point in entrypoints:
+            registry[entry_point.name] = entry_point
+        return registry
 
-    Returns:
+    @classmethod
+    def register(cls, model, name: Union[str, None] = None):
+        # If no name provided, use the model's name
+        if name is None:
+            name = model.__name__
 
-    """
+        # Check if name already in use
+        if name in cls._model_registry:
+            raise ValueError(f"Name {name} already in use")
 
-    model_registry = {}
-    group = "modulus.models"
-    entrypoints = pkg_resources.iter_entry_points(group)
-    for entry_point in entrypoints:
-        model_registry[entry_point.name] = entry_point
-    return model_registry
+        # Add this class to the dict of model registry
+        cls._model_registry[name] = model
 
-_model_registry = _construct_registry()
+    @classmethod
+    def list_models(cls) -> List[str]:
+        return list(cls._model_registry.keys())
+
+    @classmethod
+    def __clear_model_registry(cls):
+        # NOTE: This is only used for testing purposes
+        cls._model_registry = {}
+
+    @classmethod
+    def __restore_model_registry(cls):
+        # NOTE: This is only used for testing purposes
+        cls._model_registry = cls._construct_registry()
+
+registry = ModelRegistry()
