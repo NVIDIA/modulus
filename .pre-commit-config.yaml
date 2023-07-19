@@ -31,6 +31,12 @@ repos:
           "--color", "--"]
       exclude: ^modulus/internal/
 
+-   repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+    - id: markdownlint
+      exclude: ^modulus/internal/
+
 -   repo: local
     hooks:
     - id: license_test
