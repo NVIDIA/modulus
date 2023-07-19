@@ -56,7 +56,7 @@ def _download_cached(path: str, recursive: bool = False) -> str:
         logger.debug("Downloading %s to cache: %s", path, cache_path)
         if path.startswith("s3://"):
             fs = _get_fs(path)
-            fs.get(path, cache_path)
+            fs.get(path, cache_path, recursive=recursive)
         elif url.scheme == "http":
             # TODO: Check if this supports directory fetches
             response = requests.get(path, stream=True, timeout=5)
