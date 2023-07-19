@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=22.12
-FROM nvcr.io/nvidian/pytorch:23.07-py3 as builder
+ARG PYT_VER=23.06
+FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
 # Update pip and setuptools
 RUN pip install --upgrade pip setuptools  
@@ -30,7 +30,7 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 
-# Install internal version of DGL
+# Install DGL (Internal if present otherwise from source)
 # reference: https://gitlab-master.nvidia.com/dl/dgx/dgl/-/blob/23.07-stage/Dockerfile.base?ref_type=tags
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
@@ -100,6 +100,6 @@ RUN rm -rf /modulus/
 # Docs image
 FROM deploy as docs
 # Install CI packages
-RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 protobuf==3.20.0
+RUN pip install tensorflow>=2.11.0 warp-lang>=0.6.0 protobuf==3.20.0 vtk>=9.2.6 pyvista>=0.40.1
 # Install packages for Sphinx build
 RUN pip install recommonmark==0.7.1 sphinx==5.1.1 sphinx-rtd-theme==1.0.0 pydocstyle==6.1.1 nbsphinx==0.8.9 nbconvert==6.4.3 jinja2==3.0.3
