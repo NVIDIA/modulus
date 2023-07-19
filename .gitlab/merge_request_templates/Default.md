@@ -12,6 +12,7 @@ This checklist encourages us to confirm any changes have been analyzed to reduce
 * [ ] I have evaluated the [MR acceptance checklist](https://docs.gitlab.com/ee/development/code_review.html#acceptance-checklist) for this MR.
 * [ ] New or existing tests cover these changes.
 * [ ] The documentation is up to date with these changes.
+* [ ] CHANGELOG.md is updated with the new features or bug fixes and extra library dependencies added.
 
 ## Dependencies
 Please list the new dependencies together with the NVBug link for SWIPAT approval (A SWIPAT approval is required for each new dependency).
