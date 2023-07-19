@@ -35,7 +35,6 @@ repos:
     rev: v0.35.0
     hooks:
     - id: markdownlint
-      exclude: ^modulus/internal/
 
 -   repo: local
     hooks:
