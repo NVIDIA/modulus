@@ -19,13 +19,11 @@ import logging
 import inspect
 import importlib
 import pkg_resources
-
-
-from typing import Union, List
+from typing import Union, List, Dict, Any
 from pathlib import Path
+
 import modulus
 from modulus.models.meta import ModelMetaData
-from modulus.models.registry import _construct_registry
 
 
 class Module(torch.nn.Module):
@@ -39,8 +37,7 @@ class Module(torch.nn.Module):
         Meta data class for storing info regarding model, by default None
     """
     _file_extension = ".mdlus" # Set file extension for saving and loading
-    __version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
-    _model_registry = _construct_registry()
+    __model_checkpoing_version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
@@ -75,7 +72,7 @@ class Module(torch.nn.Module):
         self.logger.setLevel(logging.WARNING)
 
     @classmethod
-    def instantiate(cls, arg_dict):
+    def instantiate(cls, arg_dict: Dict[str, Any]):
         _mod = importlib.import_module(arg_dict["__module__"])
         _cls_name = arg_dict["__name__"]
 
@@ -107,7 +104,7 @@ class Module(torch.nn.Module):
         # fh = logging.FileHandler(f'modulus-core-{self.meta.name}.log')
 
     def save(
-        self, file_name: Union[str, None] = None, save_git_hash: bool = False
+        self, file_name: Union[str, None] = None, verbose: bool = False
     ) -> None:
         """Simple utility for saving just the model
 
@@ -116,8 +113,8 @@ class Module(torch.nn.Module):
         file_name : Union[str,None], optional
             File name to save model weight to. When none is provide it will default to
             the model's name set in the meta data, by default None
-        save_git_hash : bool, optional
-            Whether to save the git hash of the current commit, by default False
+        verbose : bool, optional
+            Whether to save the model in verbose mode which will include git hash, etc, by default False
 
         Raises
         ------
@@ -147,9 +144,9 @@ class Module(torch.nn.Module):
 
         # Save the modulus version and git hash (if available)
         metadata_info = {"modulus_version": modulus.__version__,
-                         "mdlus_file_version": self.__version__}
+                         "mdlus_file_version": self.__model_checkpoint_version__}
 
-        if save_git_hash:
+        if verbose:
             import git
             repo = git.Repo(search_parent_directories=True)
             try:
@@ -309,82 +306,6 @@ class Module(torch.nn.Module):
         ModulusModel.register(ModulusModel, new_class_name)
 
         return ModulusModel
-
-    @classmethod
-    def register(cls, model, name: Union[str, None] = None):
-        """
-        Registers a model under a specific name.
-
-        Parameters
-        ----------
-        model
-            The model to be registered.
-        name : Union[str,None], optional
-            The name to register the model under. If none is provided, the model's name
-        """
-
-        # If no name provided, use the model's name
-        if name is None:
-            name = model.__name__
-
-        # Check if name already in use
-        if name in Module._model_registry:
-            raise ValueError(f"Name {name} already in use")
-
-        # Add this class to the dict of model registry
-        Module._model_registry[name] = model
-
-    @classmethod
-    def factory(cls, name: str):
-        """
-        Returns a registered model given its name.
-
-        Parameters
-        ----------
-        name : str
-            The name of the registered model.
-
-        Returns
-        -------
-        model
-            The registered model.
-
-        Raises
-        ------
-        KeyError
-            If no model is registered under the provided name.
-        """
-
-        if name in Module._model_registry:
-            model = Module._model_registry[name]
-            if isinstance(model, pkg_resources.EntryPoint):
-                model = model.load()
-            return model
-        else:
-            raise KeyError(f"No model is registered under the name {name}")
-
-    @classmethod
-    def list_models(cls) -> List[str]:
-        """
-        Returns a list of registered model names.
-
-        Returns
-        -------
-        List[str]
-            List of registered model names.
-        """
-
-        return list(Module._model_registry.keys())
-
-    @classmethod
-    def _clear_model_registry(cls):
-        # NOTE: This is only used for testing purposes
-        Module._model_registry = {}
-
-    @classmethod
-    def _restore_model_registry(cls):
-        # NOTE: This is only used for testing purposes
-        Module._model_registry = _construct_registry()
 
     @property
     def device(self) -> torch.device:
