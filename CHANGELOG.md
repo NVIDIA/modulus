@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD024 -->
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -9,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-  - Added a CHANGELOG.md
- 
+- Added a CHANGELOG.md
+
 ### Changed
 
 ### Deprecated
@@ -19,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-  - Fixed issue with torch-harmonics version locking
+- Fixed issue with torch-harmonics version locking
 
 ### Security
 
@@ -29,5 +30,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-  - Initial public release.
-
+- Initial public release.
