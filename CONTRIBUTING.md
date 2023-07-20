@@ -2,21 +2,22 @@
 
 ## Introduction
 
-Welcome to Project Modulus! We're excited you're here and want to contribute. 
-This documentation is intended for individuals and institutions interested in 
-contributing to Modulus. Modulus is an open-source project and, as such, its 
-success relies on its community of contributors willing to keep improving it. 
-Your contribution will be a valued addition to the code base; we simply ask 
-that you read this page and understand our contribution process, whether you 
-are a seasoned open-source contributor or whether you are a first-time 
+Welcome to Project Modulus! We're excited you're here and want to contribute.
+This documentation is intended for individuals and institutions interested in
+contributing to Modulus. Modulus is an open-source project and, as such, its
+success relies on its community of contributors willing to keep improving it.
+Your contribution will be a valued addition to the code base; we simply ask
+that you read this page and understand our contribution process, whether you
+are a seasoned open-source contributor or whether you are a first-time
 contributor.
 
-### Communicate with us
-We are happy to talk with you about your needs for Modulus and your ideas for 
-contributing to the project. One way to do this is to create an issue discussing 
-your thoughts. It might be that a very similar feature is under development or 
-already exists, so an issue is a great starting point. If you are looking for an 
-issue to resolve that will help, refer to the 
+### Communicate with Us
+
+We are happy to talk with you about your needs for Modulus and your ideas for
+contributing to the project. One way to do this is to create an issue discussing
+your thoughts. It might be that a very similar feature is under development or
+already exists, so an issue is a great starting point. If you are looking for an
+issue to resolve that will help, refer to the
 [issue](https://github.com/NVIDIA/modulus/issues) section.
 
 We are happy to talk with you about your needs for Modulus and your ideas for
@@ -31,20 +32,19 @@ resolve that will help, refer to the [issue](https://github.com/NVIDIA/modulus/i
 
 Developer workflow for code contributions is as follows:
 
-1. Developers must first [fork](https://help.github.com/en/articles/fork-a-repo) 
+1. Developers must first [fork](https://help.github.com/en/articles/fork-a-repo)
 the [upstream](https://github.com/NVIDIA/Modulus) Modulus repository.
 
 2. Git clone the forked repository and push changes to the personal fork.
 
-3. Once the code changes are staged on the fork and ready for review, a 
-[Pull Request](https://help.github.com/en/articles/about-pull-requests) (PR) 
-can be [requested](https://help.github.com/en/articles/creating-a-pull-request) 
+3. Once the code changes are staged on the fork and ready for review, a
+[Pull Request](https://help.github.com/en/articles/about-pull-requests) (PR)
+can be [requested](https://help.github.com/en/articles/creating-a-pull-request)
 to merge the changes from a branch of the fork into a selected branch of upstream.
-  * Exercise caution when selecting the source and target branches for the PR.
-  * Ensure that you update the [`CHANGELOG.md`](CHANGELOG.md) to reflect your contributions.
-  * Creation of a PR creation kicks off CI and a code review process.
-  * Atleast one Modulus engineer will be assigned for the review.
 
+    - Exercise caution when selecting the source and target branches for the PR.
+    - Ensure that you update the [`CHANGELOG.md`](CHANGELOG.md) to reflect your contributions.
+    - Creation of a PR creation kicks off CI and a code review process.
     - Atleast one Modulus engineer will be assigned for the review.
 
 4. The PR will be accepted and the corresponding issue closed after adequate review and
