@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 try:
     LOCAL_CACHE = os.environ["LOCAL_CACHE"]
 except KeyError:
-    LOCAL_CACHE = os.environ["HOME"] + "/.cache/modulus"
+    LOCAL_CACHE = os.environ["HOME"] + "/.cache"
 
 
 def _cache_fs(fs):
@@ -58,9 +58,10 @@ def _download_cached(path: str, recursive: bool = False) -> str:
             fs = _get_fs(path)
             fs.get(path, cache_path, recursive=recursive)
         elif url.scheme == "http":
+            # urllib.request.urlretrieve(path, cache_path)
             # TODO: Check if this supports directory fetches
             response = requests.get(path, stream=True, timeout=5)
-            with open(cache_path, 'wb') as output:
+            with open(cache_path, "wb") as output:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         output.write(chunk)
