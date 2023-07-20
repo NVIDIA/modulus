@@ -44,7 +44,7 @@ changes from a branch of the fork into a selected branch of upstream.
 4. The PR will be accepted and the corresponding issue closed after adequate review and
 testing has been completed.
 
-### Licensing information
+### Licensing Information
 
 All source code files should start with this paragraph:
 
@@ -124,6 +124,22 @@ committing your changes:
 
   ```
 
+### Pre-commit
+
+For Modulus development, [pre-commit](https://pre-commit.com/) is **required**.
+This will not only help developers pass the CI pipeline, but also accelerate reviews.
+Contributions that have not used pre-commit will *not be reviewed*.
+
+To install `pre-commit` follow the below steps inside the Modulus repository folder:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Once the above commands are executed, the pre-commit hooks will be activated and all
+the commits will be checked for appropriate formatting.
+
 ### CI
 
 To ensure quality of the code, your merge request will pass through several CI checks.
@@ -131,13 +147,15 @@ It is mandatory for your MRs to pass these pipelines to ensure a successful merg
 Please keep checking this document for the latest guidelines on pushing code. Currently,
 The pipeline has following stages:
 
-1. `black`
-   Checks for formatting of your python code.
-   Refer [black](https://black.readthedocs.io/en/stable/) for more information.
-   If your MR fails this test, run `black <script-name>.py` on problematic scripts and
-   black will take care of the rest.
+1. `format`
+    *Pre-commit will check this for you!*
+    Checks for formatting of your python code.
+    Refer [black](https://black.readthedocs.io/en/stable/) for more information.
+    If your MR fails this test, run `black <script-name>.py` on problematic scripts and
+    black will take care of the rest.
 
 2. `interrogate`
+   *Pre-commit will check this for you!*
    Checks if the code being pushed is well documented. The goal is to make the
    documentation live inside code. Very few exceptions are made.
    Elements that are fine to have no documentation include `init-module`, `init-method`,
@@ -169,40 +187,41 @@ The pipeline has following stages:
       ./modulus/
     ```
 
-3. `pytest`
-   Checks if the test scripts from the `test` folder run and produce desired outputs. It
-   is imperative that your changes don't break the existing tests. If your MR fails this
-   test, you will have to review your changes and fix the issues.
-   To run pytest locally you can simply run `pytest` inside the `test` folder.
+3. `lint`
+    *Pre-commit will check this for you!*
+    Linters will perform static analysis to check the style, complexity, errors and more.
+    For markdown files `markdownlint` is used, its suggested to use the vscode,
+    neovim or sublime [extensions](https://github.com/DavidAnson/markdownlint#related).
 
-4. `doctest`
-   Checks if the examples in the docstrings run and produce desired outputs. It is highly
-   recommended that you provide simple examples of your functions/classes in the code's
-   docstring itself. Keep these examples simple and also add the expected outputs.
-   Refer [doctest](https://docs.python.org/3/library/doctest.html) for more information.
-   If your MR fails this test, check your changes and the docstrings.
-   To run doctest locally, you can simply run `pytest --doctest-modules` inside the
-   `modulus` folder.
+4. `license`
+    *Pre-commit will check this for you!*
+    Checks for correct license headers of all files.
+    To run this locally use `make license`.
+    See the Licensing Information section above for details about the license header required.
 
-5. `coverage`
-   Checks if your code additions have sufficient coverage. Refer
-   [coverage](https://coverage.readthedocs.io/en/6.5.0/index.html#) for more details. If
-   your MR fails this test, this means that you have not added enough tests to the `test`
-   folder for your module/functions. Add extensive test scripts to cover different
-   branches and lines of your additions. Aim for more than 80% code coverage.
-   To test coverage locally, run the `get_coverage.sh` script from the `test` folder and
-   check the coverage of the module that you added/edited.
+5. `pytest`
+    Checks if the test scripts from the `test` folder run and produce desired outputs. It
+    is imperative that your changes don't break the existing tests. If your MR fails this
+    test, you will have to review your changes and fix the issues.
+    To run pytest locally you can simply run `pytest` inside the `test` folder.
 
-### Pre-commit
+6. `doctest`
+    Checks if the examples in the docstrings run and produce desired outputs.
+    It is highly recommended that you provide simple examples of your functions/classes
+    in the code's docstring itself.
+    Keep these examples simple and also add the expected outputs.
+    Refer [doctest](https://docs.python.org/3/library/doctest.html) for more information.
+    If your MR fails this test, check your changes and the docstrings.
+    To run doctest locally, you can simply run `pytest --doctest-modules` inside the
+    `modulus` folder.
 
-We use `pre-commit` to performing formatting checks before the changes are commited.
-
-To enable `pre-commit` follow the below steps:
-
-```bash
-pip install pre-commit
-pre-commit install
-```
-
-Once the above commands are executed, the pre-commit hooks will be activated and all
-the commits will be checked for appropriate formatting.
+7. `coverage`
+    Checks if your code additions have sufficient coverage.
+    Refer [coverage](https://coverage.readthedocs.io/en/6.5.0/index.html#) for more details.
+    If your MR fails this test, this means that you have not added enough tests to the `test`
+    folder for your module/functions.
+    Add extensive test scripts to cover different
+    branches and lines of your additions.
+    Aim for more than 80% code coverage.
+    To test coverage locally, run the `get_coverage.sh` script from the `test` folder and
+    check the coverage of the module that you added/edited.
