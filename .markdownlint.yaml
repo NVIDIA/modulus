@@ -81,11 +81,11 @@ MD012:
 # MD013/line-length - Line length
 MD013:
   # Number of characters
-  line_length: 80
+  line_length: 88
   # Number of characters for headings
-  heading_line_length: 80
+  heading_line_length: 88
   # Number of characters for code blocks
-  code_block_line_length: 80
+  code_block_line_length: 88
   # Include code blocks
   code_blocks: true
   # Include tables
@@ -220,7 +220,7 @@ MD042: true
 # MD043/required-headings/required-headers - Required heading structure
 MD043:
   # List of headings
-  headings: []
+  headings: ["*"]
   # List of headings
   headers: []
   # Match case of headings
