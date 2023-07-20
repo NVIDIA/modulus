@@ -11,7 +11,7 @@
 - [ ] New or existing tests cover these changes.
 - [ ] The documentation is up to date with these changes.
 - [ ] The [CHANGELOG.md](https://github.com/NVIDIA/modulus/blob/main/CHANGELOG.md) is
-up to date with these changes .
+up to date with these changes.
 
 ## Dependencies
 

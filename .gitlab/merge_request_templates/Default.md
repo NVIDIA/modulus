@@ -7,13 +7,11 @@
 
 ## Checklist
 
-# MR acceptance checklist
-This checklist encourages us to confirm any changes have been analyzed to reduce risks in quality, performance, reliability, security, and maintainability.
-
-* [ ] I have evaluated the [MR acceptance checklist](https://docs.gitlab.com/ee/development/code_review.html#acceptance-checklist) for this MR.
-* [ ] New or existing tests cover these changes.
-* [ ] The documentation is up to date with these changes.
-* [ ] CHANGELOG.md is updated with the new features or bug fixes and extra library dependencies added.
+- [ ] I am familiar with the [Contributing Guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
+- [ ] New or existing tests cover these changes.
+- [ ] The documentation is up to date with these changes.
+- [ ] The [CHANGELOG.md](https://github.com/NVIDIA/modulus/blob/main/CHANGELOG.md) is
+up to date with these changes.
 
 ## Dependencies
 
