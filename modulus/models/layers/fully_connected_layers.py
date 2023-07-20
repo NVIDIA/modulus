@@ -239,7 +239,7 @@ class Conv3dFCLayer(ConvFCLayer):
 
 
 class ConvNdFCLayer(ConvFCLayer):
-    """Channel-wise FC like layer with convolutionsof arbitrary dimensions
+    """Channel-wise FC like layer with convolutions of arbitrary dimensions
     CAUTION: if n_dims <= 3, use specific version for that n_dims instead
 
     Parameters

@@ -19,6 +19,7 @@ import random
 
 import modulus.models.layers as layers
 
+
 class SpectralConv4d(nn.Module):
     def __init__(self, in_channels, out_channels, modes1, modes2, modes3, modes4):
         super(SpectralConv4d, self).__init__()
@@ -29,20 +30,110 @@ class SpectralConv4d(nn.Module):
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.modes1 = modes1 #Number of Fourier modes to multiply, at most floor(N/2) + 1
+        self.modes1 = (
+            modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
+        )
         self.modes2 = modes2
         self.modes3 = modes3
         self.modes4 = modes4
 
-        self.scale = (1 / (in_channels * out_channels))
-        self.weights1 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights2 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights3 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights4 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights5 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights6 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights7 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
-        self.weights8 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, self.modes3, self.modes4, dtype=torch.cfloat))
+        self.scale = 1 / (in_channels * out_channels)
+        self.weights1 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights2 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights3 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights4 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights5 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights6 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights7 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
+        self.weights8 = nn.Parameter(
+            self.scale
+            * torch.rand(
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                self.modes3,
+                self.modes4,
+                dtype=torch.cfloat,
+            )
+        )
 
     # Complex multiplication
     def compl_mul4d(self, input, weights):
@@ -51,24 +142,74 @@ class SpectralConv4d(nn.Module):
 
     def forward(self, x):
         batchsize = x.shape[0]
-        #Compute Fourier coeffcients up to factor of e^(- something constant)
-        x_ft = torch.fft.rfftn(x, dim=[-4,-3,-2,-1])
+        # Compute Fourier coeffcients up to factor of e^(- something constant)
+        x_ft = torch.fft.rfftn(x, dim=[-4, -3, -2, -1])
 
         # Multiply relevant Fourier modes
-        out_ft = torch.zeros(batchsize, self.out_channels, x.size(-4), x.size(-3), x.size(-2), x.size(-1)//2 + 1, dtype=torch.cfloat, device=x.device)
+        out_ft = torch.zeros(
+            batchsize,
+            self.out_channels,
+            x.size(-4),
+            x.size(-3),
+            x.size(-2),
+            x.size(-1) // 2 + 1,
+            dtype=torch.cfloat,
+            device=x.device,
+        )
 
-        out_ft[:, :, :self.modes1, :self.modes2, :self.modes3, :self.modes4] = self.compl_mul4d(x_ft[:, :, :self.modes1, :self.modes2, :self.modes3, :self.modes4], self.weights1)
-        out_ft[:, :, -self.modes1:, :self.modes2, :self.modes3, :self.modes4] = self.compl_mul4d(x_ft[:, :, -self.modes1:, :self.modes2, :self.modes3, :self.modes4], self.weights2)
-        out_ft[:, :, :self.modes1, -self.modes2:, :self.modes3, :self.modes4] = self.compl_mul4d(x_ft[:, :, :self.modes1, -self.modes2:, :self.modes3, :self.modes4], self.weights3)
-        out_ft[:, :, :self.modes1, :self.modes2, -self.modes3:, :self.modes4] = self.compl_mul4d(x_ft[:, :, :self.modes1, :self.modes2, -self.modes3:, :self.modes4], self.weights4)
-        out_ft[:, :, -self.modes1:, -self.modes2:, :self.modes3, :self.modes4] = self.compl_mul4d(x_ft[:, :, -self.modes1:, -self.modes2:, :self.modes3, :self.modes4], self.weights5)
-        out_ft[:, :, -self.modes1:, :self.modes2, -self.modes3:, :self.modes4] = self.compl_mul4d(x_ft[:, :, -self.modes1:, :self.modes2, -self.modes3:, :self.modes4], self.weights6)
-        out_ft[:, :, :self.modes1, -self.modes2:, -self.modes3:, :self.modes4] = self.compl_mul4d(x_ft[:, :, :self.modes1, -self.modes2:, -self.modes3:, :self.modes4], self.weights7)
-        out_ft[:, :, -self.modes1:, -self.modes2:, -self.modes3:, :self.modes4] = self.compl_mul4d(x_ft[:, :, -self.modes1:, -self.modes2:, -self.modes3:, :self.modes4], self.weights8)
+        out_ft[
+            :, :, : self.modes1, : self.modes2, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, : self.modes2, : self.modes3, : self.modes4],
+            self.weights1,
+        )
+        out_ft[
+            :, :, -self.modes1 :, : self.modes2, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, : self.modes2, : self.modes3, : self.modes4],
+            self.weights2,
+        )
+        out_ft[
+            :, :, : self.modes1, -self.modes2 :, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, -self.modes2 :, : self.modes3, : self.modes4],
+            self.weights3,
+        )
+        out_ft[
+            :, :, : self.modes1, : self.modes2, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, : self.modes2, -self.modes3 :, : self.modes4],
+            self.weights4,
+        )
+        out_ft[
+            :, :, -self.modes1 :, -self.modes2 :, : self.modes3, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, -self.modes2 :, : self.modes3, : self.modes4],
+            self.weights5,
+        )
+        out_ft[
+            :, :, -self.modes1 :, : self.modes2, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, : self.modes2, -self.modes3 :, : self.modes4],
+            self.weights6,
+        )
+        out_ft[
+            :, :, : self.modes1, -self.modes2 :, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, : self.modes1, -self.modes2 :, -self.modes3 :, : self.modes4],
+            self.weights7,
+        )
+        out_ft[
+            :, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, : self.modes4
+        ] = self.compl_mul4d(
+            x_ft[:, :, -self.modes1 :, -self.modes2 :, -self.modes3 :, : self.modes4],
+            self.weights8,
+        )
 
-        #Return to physical space
+        # Return to physical space
         x = torch.fft.irfftn(out_ft, s=(x.size(-4), x.size(-3), x.size(-2), x.size(-1)))
         return x
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("dimension", [1, 2, 3])
@@ -85,21 +226,30 @@ def test_conv_nd(device, dimension):
     ini_w, ini_b = random.uniform(0, 1), random.uniform(0, 1)
     if dimension == 1:
         invar = torch.randn(bsize, in_channels, tens_size).to(device)
-        comp_nn = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True).to(device)
+        comp_nn = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True).to(
+            device
+        )
     elif dimension == 2:
         invar = torch.randn(bsize, in_channels, tens_size, tens_size).to(device)
-        comp_nn = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True).to(device)
+        comp_nn = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True).to(
+            device
+        )
     elif dimension == 3:
-        invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size).to(device)
-        comp_nn = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=True).to(device)
+        invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size).to(
+            device
+        )
+        comp_nn = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=True).to(
+            device
+        )
 
     nn.init.constant_(conv_nd.conv.bias, ini_b)
     nn.init.constant_(conv_nd.conv.weight, ini_w)
     nn.init.constant_(comp_nn.bias, ini_b)
     nn.init.constant_(comp_nn.weight, ini_w)
     with torch.no_grad():
-        assert torch.allclose(conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06), \
-            f'ConvNdKernel1Layer output not identical to that of layer specific for {dim}d fields :('
+        assert torch.allclose(
+            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
+        ), f"ConvNdKernel1Layer output not identical to that of layer specific for {dim}d fields :("
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -120,7 +270,9 @@ def test_conv_ndfc(device, dimension):
         invar = torch.randn(bsize, in_channels, tens_size, tens_size).to(device)
         comp_nn = layers.Conv2dFCLayer(in_channels, out_channels).to(device)
     elif dimension == 3:
-        invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size).to(device)
+        invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size).to(
+            device
+        )
         comp_nn = layers.Conv3dFCLayer(in_channels, out_channels).to(device)
 
     # initialise weights, biases
@@ -129,8 +281,9 @@ def test_conv_ndfc(device, dimension):
     torch.manual_seed(0)
     comp_nn.reset_parameters()
     with torch.no_grad():
-        assert torch.allclose(conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06), \
-            f'ConvNdFCLayer output not identical to that of layer specific for {dim}d fields :('
+        assert torch.allclose(
+            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
+        ), f"ConvNdFCLayer output not identical to that of layer specific for {dim}d fields :("
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -143,13 +296,18 @@ def test_spec_conv_4d(device):
     fno_modes = 6
 
     torch.manual_seed(0)
-    spec_conv_orig = SpectralConv4d(in_channels, out_channels,
-                                    fno_modes, fno_modes, fno_modes, fno_modes).to(device)
+    spec_conv_orig = SpectralConv4d(
+        in_channels, out_channels, fno_modes, fno_modes, fno_modes, fno_modes
+    ).to(device)
     torch.manual_seed(0)
-    spec_conv_modulus = layers.SpectralConv4d(in_channels, out_channels,
-                                        fno_modes, fno_modes, fno_modes, fno_modes).to(device)
+    spec_conv_modulus = layers.SpectralConv4d(
+        in_channels, out_channels, fno_modes, fno_modes, fno_modes, fno_modes
+    ).to(device)
 
-    invar = torch.randn(bsize, in_channels, tens_size, tens_size, tens_size, tens_size).to(device)
+    invar = torch.randn(
+        bsize, in_channels, tens_size, tens_size, tens_size, tens_size
+    ).to(device)
     with torch.no_grad():
-        assert torch.allclose(spec_conv_orig(invar), spec_conv_modulus(invar), rtol=1e-06, atol=1e-06), \
-            f'SpectralConv4d output not identical to that of refrence layer'
+        assert torch.allclose(
+            spec_conv_orig(invar), spec_conv_modulus(invar), rtol=1e-06, atol=1e-06
+        ), f"SpectralConv4d output not identical to that of refrence layer"

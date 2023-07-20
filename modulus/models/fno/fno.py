@@ -241,7 +241,7 @@ class FNO2DEncoder(nn.Module):
 
         x = self.lift_network(x)
         # (left, right, top, bottom)
-        x = F.pad(x, (0, self.pad[0], 0, self.pad[1]), mode=self.padding_type)
+        x = F.pad(x, (0, self.pad[1], 0, self.pad[0]), mode=self.padding_type)
         # Spectral layers
         for k, conv_w in enumerate(zip(self.conv_layers, self.spconv_layers)):
             conv, w = conv_w
@@ -251,7 +251,7 @@ class FNO2DEncoder(nn.Module):
                 x = conv(x) + w(x)
 
         # remove padding
-        x = x[..., : self.ipad[1], : self.ipad[0]]
+        x = x[..., : self.ipad[0], : self.ipad[1]]
 
         return x
 
@@ -377,7 +377,7 @@ class FNO3DEncoder(nn.Module):
         # (left, right, top, bottom, front, back)
         x = F.pad(
             x,
-            (0, self.pad[0], 0, self.pad[1], 0, self.pad[2]),
+            (0, self.pad[2], 0, self.pad[1], 0, self.pad[0]),
             mode=self.padding_type,
         )
         # Spectral layers
@@ -388,7 +388,7 @@ class FNO3DEncoder(nn.Module):
             else:
                 x = conv(x) + w(x)
 
-        x = x[..., : self.ipad[2], : self.ipad[1], : self.ipad[0]]
+        x = x[..., : self.ipad[0], : self.ipad[1], : self.ipad[2]]
         return x
 
     def meshgrid(self, shape: List[int], device: torch.device) -> Tensor:
@@ -518,7 +518,7 @@ class FNO4DEncoder(nn.Module):
         # (left, right, top, bottom, front, back, past, future)
         x = F.pad(
             x,
-            (0, self.pad[0], 0, self.pad[1], 0, self.pad[2], 0, self.pad[3]),
+            (0, self.pad[3], 0, self.pad[2], 0, self.pad[1], 0, self.pad[0]),
             mode=self.padding_type,
         )
         # Spectral layers
@@ -529,7 +529,7 @@ class FNO4DEncoder(nn.Module):
             else:
                 x = conv(x) + w(x)
 
-        x = x[..., : self.ipad[3], : self.ipad[2], : self.ipad[1], : self.ipad[0]]
+        x = x[..., : self.ipad[0], : self.ipad[1], : self.ipad[2], : self.ipad[3]]
         return x
 
     def meshgrid(self, shape: List[int], device: torch.device) -> Tensor:
