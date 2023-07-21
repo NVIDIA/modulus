@@ -15,11 +15,12 @@
 import pkg_resources
 from typing import List, Union
 
-from modulus.models import Module
+import modulus
 
 # This model registry follows conventions similar to fsspec,
 # https://github.com/fsspec/filesystem_spec/blob/master/fsspec/registry.py#L62C2-L62C2
 # Tutorial on entrypoints: https://amir.rachum.com/blog/2017/07/28/python-entry-points/
+# Borg singleton pattern: https://stackoverflow.com/questions/1318406/why-is-the-borg-pattern-better-than-the-singleton-pattern-in-python
 class ModelRegistry:
     _shared_state = {"_model_registry": None}
 
@@ -39,7 +40,7 @@ class ModelRegistry:
             registry[entry_point.name] = entry_point
         return registry
 
-    def register(self, model: Module, name: Union[str, None] = None):
+    def register(self, model: modulus.Module, name: Union[str, None] = None) -> None:
         """
         Registers a modulus model in the model registry under the provided name. If no name
         is provided, the model's name (from its `__name__` attribute) is used. If the
@@ -47,7 +48,7 @@ class ModelRegistry:
 
         Parameters
         ----------
-        model : modulus.models.Module
+        model : modulus.Module
             The model to be registered. Can be an instance of any class.
         name : str, optional
             The name to register the model under. If None, the model's name is used.
@@ -57,6 +58,13 @@ class ModelRegistry:
         ValueError
             If the provided name is already in use in the registry.
         """
+
+        # Check if model is a modulus model
+        if not issubclass(model, modulus.Module):
+            raise ValueError(
+                f"Only subclasses of modulus.Module can be registered. "
+                f"Provided model is of type {type(model)}"
+            )
 
         # If no name provided, use the model's name
         if name is None:
@@ -69,7 +77,7 @@ class ModelRegistry:
         # Add this class to the dict of model registry
         self._model_registry[name] = model
 
-    def factory(self, name: str):
+    def factory(self, name: str) -> modulus.Module:
         """
         Returns a registered model given its name.
     
@@ -80,7 +88,7 @@ class ModelRegistry:
     
         Returns
         -------
-        model : modulus.models.Module
+        model : modulus.Module
             The registered model.
     
         Raises

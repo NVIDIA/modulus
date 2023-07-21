@@ -13,12 +13,13 @@
 # limitations under the License.
 
 import functools
-import modulus
 import torch
 import logging
 from logging import Logger
 from typing import Union, Any, Callable, NewType
 from contextlib import nullcontext
+
+import modulus
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)

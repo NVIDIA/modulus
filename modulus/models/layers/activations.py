@@ -100,7 +100,7 @@ class SquarePlus(nn.Module):
 # Dictionary of activation functions
 ACT2FN = {
     "relu": nn.ReLU,
-    "leaky_relu": (nn.LeakyReLU: {"negative_slope": 0.1}),
+    "leaky_relu": (nn.LeakyReLU, {"negative_slope": 0.1}),
     "prelu": nn.PReLU,
     "relu6": nn.ReLU6,
     "elu": nn.ELU,
@@ -114,7 +114,7 @@ ACT2FN = {
     "softsign": nn.Softsign,
     "tanh": nn.Tanh,
     "tanhshrink": nn.Tanhshrink,
-    "threshold": (nn.Threshold: {"threshold": 1.0, "value": 1.0}),
+    "threshold": (nn.Threshold, {"threshold": 1.0, "value": 1.0}),
     "hardtanh": nn.Hardtanh,
     "identity": Identity,
     "stan": Stan,

@@ -21,10 +21,10 @@ import importlib
 import pkg_resources
 from typing import Union, List, Dict, Any
 from pathlib import Path
+import torch.nn as nn
 
 import modulus
 from modulus.models.meta import ModelMetaData
-
 
 class Module(torch.nn.Module):
     """The base class for all network models in Modulus.
@@ -118,8 +118,8 @@ class Module(torch.nn.Module):
 
         Raises
         ------
-        IOError
-            If file_name provided has a parent path that does not exist
+        ValueError
+            If file_name does not end with .mdlus extension
         """
 
         if file_name is not None and not file_name.endswith(self._file_extension):
@@ -127,35 +127,38 @@ class Module(torch.nn.Module):
                 f"File name must end with {self._file_extension} extension"
             )
 
-        directory = Path(file_name)
-        if not directory.parents[0].is_dir():
-            raise IOError(
-                f"Model checkpoint parent directory {directory.parents[0]} not found"
-            )
-        if not directory.is_dir():
-            os.makedirs(directory)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = Path(temp_dir)
 
-        torch.save(self.state_dict(), directory.joinpath("model.pt"))
+            torch.save(self.state_dict(), local_path / "model.pt")
 
-        with open(directory.joinpath("args.json"), "w") as f:
-            json.dump(self._args, f)
+            with open(local_path / "args.json", "w") as f:
+                json.dump(self._args, f)
+
+            # Save the modulus version and git hash (if available)
+            metadata_info = {"modulus_version": modulus.__version__,
+                             "mdlus_file_version": self.__model_checkpoint_version__}
+
+            if verbose:
+                import git
+                repo = git.Repo(search_parent_directories=True)
+                try:
+                    metadata_info["git_hash"] = repo.head.object.hexsha
+                except git.InvalidGitRepositoryError:
+                    metadata_info["git_hash"] = None
+
+            with open(local_path / "metadata.json", "w") as f:
+                json.dump(metadata_info, f)
+
             if file_name is None:
                 file_name = self.meta.name + ".pt"
 
-        # Save the modulus version and git hash (if available)
-        metadata_info = {"modulus_version": modulus.__version__,
-                         "mdlus_file_version": self.__model_checkpoint_version__}
+            # Save files to remote destination
+            from modulus.utils.filesystem import _get_fs # TODO: Fix circular import
+            fs = _get_fs(file_name)
+            for file in local_path.iterdir():
+                fs.put(str(file), str(Path(file_name).parent / file.name))
 
-        if verbose:
-            import git
-            repo = git.Repo(search_parent_directories=True)
-            try:
-                metadata_info["git_hash"] = repo.head.object.hexsha
-            except git.InvalidGitRepositoryError:
-                metadata_info["git_hash"] = None
-
-        with open(directory.joinpath("metadata.json"), "w") as f:
-            json.dump(metadata_info, f)
 
     @staticmethod
     def _check_checkpoint(file_name: str) -> bool:
@@ -218,7 +221,7 @@ class Module(torch.nn.Module):
         self.load_state_dict(model_dict)
 
     @classmethod
-    def from_checkpoint(cls, file_name: str) -> None:
+    def from_checkpoint(cls, file_name: str):
         """Simple utility for constructing a model from a checkpoint
 
         Parameters
@@ -251,7 +254,7 @@ class Module(torch.nn.Module):
         return model
 
     @staticmethod
-    def from_torch(torch_model_class, meta=None):
+    def from_torch(torch_model_class: torch.nn.Module, meta: ModelMetaData = None) -> Module:
         """Construct a Modulus module from a PyTorch module
 
         Parameters
