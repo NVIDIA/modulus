@@ -21,7 +21,7 @@ import modulus.models.layers as layers
 
 
 class SpectralConv4d(nn.Module):
-    """Spectral 4D layer from Wen et al. https://arxiv.org/pdf/2210.17051.pdf"""
+    """Spectral 4D layer from https://github.com/gegewen/nested-fno/blob/main/FNO4D.py"""
 
     def __init__(self, in_channels, out_channels, modes1, modes2, modes3, modes4):
         super(SpectralConv4d, self).__init__()
