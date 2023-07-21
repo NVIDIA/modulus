@@ -32,7 +32,7 @@ class ModelRegistry:
         return obj
 
     @staticmethod
-    def _construct_registry():
+    def _construct_registry() -> dict:
         registry = {}
         group = "modulus.models"
         entrypoints = pkg_resources.iter_entry_points(group)

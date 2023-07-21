@@ -33,7 +33,14 @@ from modulus.utils.filesystem import _get_fs, _download_cached
 class Module(torch.nn.Module):
     """The base class for all network models in Modulus.
 
-    This should be used as a direct replacement for torch.nn.module
+    This should be used as a direct replacement for torch.nn.module and provides
+    additional functionality for saving and loading models, as well as
+    handling file system abstractions.
+
+    There is one important requirement for all models in Modulus. They must
+    have json serializable arguments in their __init__ function. This is
+    required for saving and loading models and allow models to be instantiated
+    from a checkpoint.
 
     Parameters
     ----------
@@ -59,7 +66,7 @@ class Module(torch.nn.Module):
         }
         return out
 
-    def __init__(self, meta=None):
+    def __init__(self, meta: Union[ModelMetaData, None] = None):
         super().__init__()
         self.meta = meta
         self.register_buffer("device_buffer", torch.empty(0))
@@ -76,7 +83,7 @@ class Module(torch.nn.Module):
         self.logger.setLevel(logging.WARNING)
 
     @classmethod
-    def instantiate(cls, arg_dict: Dict[str, Any]):
+    def instantiate(cls, arg_dict: Dict[str, Any]) -> "Module":
         _mod = importlib.import_module(arg_dict["__module__"])
         _cls_name = arg_dict["__name__"]
 
@@ -230,7 +237,7 @@ class Module(torch.nn.Module):
 
 
     @classmethod
-    def from_checkpoint(cls, file_name: str):
+    def from_checkpoint(cls, file_name: str) -> "Module":
         """Simple utility for constructing a model from a checkpoint
 
         Parameters
