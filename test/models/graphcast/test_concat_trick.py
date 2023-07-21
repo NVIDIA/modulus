@@ -21,7 +21,7 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 icosphere_path = get_icosphere_path()
 
 
-def test_concat_trick():
+def test_concat_trick(num_channels=2, res_h=11, res_w=20):
     """Test concat trick"""
 
     # Fix random seeds
@@ -29,7 +29,7 @@ def test_concat_trick():
 
     # Random input
     device = "cuda"
-    x = torch.rand(1, 2, 721, 1440, device=device)
+    x = torch.rand(1, num_channels, res_h, res_w, device=device)
     x_ct = x.clone().detach()
 
     for recomp_act in [False, True]:
@@ -42,10 +42,11 @@ def test_concat_trick():
         model = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
-            input_dim_grid_nodes=2,
+            input_res=(res_h, res_w),
+            input_dim_grid_nodes=num_channels,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
-            output_dim_grid_nodes=2,
+            output_dim_grid_nodes=num_channels,
             processor_layers=3,
             hidden_dim=4,
             do_concat_trick=False,
@@ -59,10 +60,11 @@ def test_concat_trick():
         model_ct = GraphCastNet(
             meshgraph_path=icosphere_path,
             static_dataset_path=None,
-            input_dim_grid_nodes=2,
+            input_res=(res_h, res_w),
+            input_dim_grid_nodes=num_channels,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
-            output_dim_grid_nodes=2,
+            output_dim_grid_nodes=num_channels,
             processor_layers=3,
             hidden_dim=4,
             do_concat_trick=True,
