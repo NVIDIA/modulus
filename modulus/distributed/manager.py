@@ -14,6 +14,7 @@
 
 import torch
 import torch.distributed as dist
+from typing import Optional
 import os
 import numpy as np
 
@@ -29,7 +30,8 @@ class DistributedManager(object):
 
     Note
     ----
-    One should call `DistributedManager.initialize()` prior to constructing a manager object
+    One should call `DistributedManager.initialize()` prior to constructing a manager
+    object
 
     Example
     -------
@@ -57,9 +59,7 @@ class DistributedManager(object):
         if not hasattr(obj, "_distributed"):
             obj._distributed = False
         if not hasattr(obj, "_device"):
-            obj._device = torch.device(
-                f"cuda:0" if torch.cuda.is_available() else "cpu"
-            )
+            obj._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         if not hasattr(obj, "_cuda"):
             obj._cuda = torch.cuda.is_available()
         if not hasattr(obj, "_broadcast_buffers"):
@@ -168,7 +168,8 @@ class DistributedManager(object):
         """Setter for find_unused_parameters"""
         if find_params:
             warn(
-                "Setting `find_unused_parameters` in DDP to true, use only if necessary."
+                "Setting `find_unused_parameters` in DDP to true, "
+                "use only if necessary."
             )
         self._find_unused_parameters = find_params
 
@@ -319,81 +320,119 @@ class DistributedManager(object):
         torch.cuda.device(manager.device)
         torch.cuda.empty_cache()
 
-    # @staticmethod
-    # def create_process_subgroup(name: str, size: int, group_name=None, verbose=False):
-    #     """TODO add documentation"""
-    #     manager = DistributedManager()
-    #     if not manager.distributed:
-    #         return None
+    @staticmethod
+    def create_process_subgroup(
+        name: str, size: int, group_name: Optional[str] = None, verbose: bool = False
+    ):
+        """
+        Create a process subgroup of a parent process group. This must be a collective
+        call by all processes participating in this application.
 
-    #     assert name not in manager._groups, f"Group with name {name} already exists"
+        Parameters
+        ----------
+        name : str
+        Name of the process subgroup to be created.
 
-    #     # Get parent group's params
-    #     group = manager._group[group_name] if group_name else None
-    #     group_size = dist.get_world_size(group=group)
-    #     group_rank = dist.get_rank(group=group)
-    #     num_groups = manager.world_size // group_size
+        size : int
+        Size of the process subgroup to be created. This must be an integer factor of
+        the parent group's size.
 
-    #     # Get number of sub-groups per parent group
-    #     assert (
-    #         group_size % size == 0
-    #     ), f"Cannot divide group size {group_size} evenly into subgroups of size {size}"
-    #     num_subgroups = group_size // size
+        group_name : Optional[str]
+        Name of the parent process group, optional. If None, the default process group
+        will be used. Default None.
 
-    #     # Create all the sub-groups
-    #     # Note: all ranks in the job need to create all sub-groups in
-    #     # the same order even if a rank is not part of a sub-group
-    #     manager._group_ranks[name] = []
-    #     for g in range(num_groups):
-    #         for i in range(num_subgroups):
-    #             # Get global ranks that are part of this sub-group
-    #             start = i * size
-    #             end = start + size
-    #             if group_name:
-    #                 ranks = manager._group_ranks[group_name][g][start:end]
-    #             else:
-    #                 ranks = list(range(start, end))
-    #             # Create sub-group and keep track of ranks
-    #             tmp_group = dist.new_group(ranks=ranks)
-    #             manager._group_ranks[name].append(ranks)
-    #             if manager.rank in ranks:
-    #                 # Set group in manager only if this rank is part of the group
-    #                 manager._groups[name] = tmp_group
-    #                 manager._group_names[tmp_group] = name
+        verbose : bool
+        Print out ranks of each created process group, default False.
 
-    #     if verbose and manager.rank == 0:
-    #         print(f"Process group '{name}':")
-    #         for grp in manager._group_ranks[name]:
-    #             print("    ", grp)
+        """
+        manager = DistributedManager()
+        if not manager.distributed:
+            return None
 
-    # @staticmethod
-    # def create_orthogonal_process_group(name: str, group_name: str, verbose=False):
-    #     """TODO add documentation"""
-    #     manager = DistributedManager()
-    #     if not manager.distributed:
-    #         return None
+        assert name not in manager._groups, f"Group with name {name} already exists"
 
-    #     assert (
-    #         group_name in manager._groups
-    #     ), f"Group with name {group_name} does not exist"
-    #     assert name not in manager._groups, f"Group with name {name} already exists"
+        # Get parent group's params
+        group = manager._group[group_name] if group_name else None
+        group_size = dist.get_world_size(group=group)
+        group_rank = dist.get_rank(group=group)
+        num_groups = manager.world_size // group_size
 
-    #     group_ranks = manager._group_ranks[group_name]
-    #     orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
+        # Get number of sub-groups per parent group
+        assert (
+            group_size % size == 0
+        ), f"Cannot divide group size {group_size} evenly into subgroups of size {size}"
+        num_subgroups = group_size // size
 
-    #     for ranks in orthogonal_ranks:
-    #         tmp_group = dist.new_group(ranks=ranks)
-    #         if manager.rank in ranks:
-    #             # Set group in manager only if this rank is part of the group
-    #             manager._groups[name] = tmp_group
-    #             manager._group_names[tmp_group] = name
+        # Create all the sub-groups
+        # Note: all ranks in the job need to create all sub-groups in
+        # the same order even if a rank is not part of a sub-group
+        manager._group_ranks[name] = []
+        for g in range(num_groups):
+            for i in range(num_subgroups):
+                # Get global ranks that are part of this sub-group
+                start = i * size
+                end = start + size
+                if group_name:
+                    ranks = manager._group_ranks[group_name][g][start:end]
+                else:
+                    ranks = list(range(start, end))
+                # Create sub-group and keep track of ranks
+                tmp_group = dist.new_group(ranks=ranks)
+                manager._group_ranks[name].append(ranks)
+                if manager.rank in ranks:
+                    # Set group in manager only if this rank is part of the group
+                    manager._groups[name] = tmp_group
+                    manager._group_names[tmp_group] = name
 
-    #     manager._group_ranks[name] = orthogonal_ranks
+        if verbose and manager.rank == 0:
+            print(f"Process group '{name}':")
+            for grp in manager._group_ranks[name]:
+                print("    ", grp)
 
-    #     if verbose and manager.rank == 0:
-    #         print(f"Process group '{name}':")
-    #         for grp in manager._group_ranks[name]:
-    #             print("    ", grp)
+    @staticmethod
+    def create_orthogonal_process_group(
+        name: str, group_name: str, verbose: bool = False
+    ):
+        """
+        Create a process group that is orthogonal to the specified process group.
+
+        Parameters
+        ----------
+        name : str
+        Name of the process group to be created.
+
+        group_name : str
+        Name of the existing process group.
+
+        verbose : bool
+        Print out ranks of each created process group, default False.
+
+        """
+        manager = DistributedManager()
+        if not manager.distributed:
+            return None
+
+        assert (
+            group_name in manager._groups
+        ), f"Group with name {group_name} does not exist"
+        assert name not in manager._groups, f"Group with name {name} already exists"
+
+        group_ranks = manager._group_ranks[group_name]
+        orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
+
+        for ranks in orthogonal_ranks:
+            tmp_group = dist.new_group(ranks=ranks)
+            if manager.rank in ranks:
+                # Set group in manager only if this rank is part of the group
+                manager._groups[name] = tmp_group
+                manager._group_names[tmp_group] = name
+
+        manager._group_ranks[name] = orthogonal_ranks
+
+        if verbose and manager.rank == 0:
+            print(f"Process group '{name}':")
+            for grp in manager._group_ranks[name]:
+                print("    ", grp)
 
     @staticmethod
     def cleanup():
