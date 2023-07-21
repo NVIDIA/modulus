@@ -18,8 +18,10 @@ import random
 from dataclasses import dataclass
 
 from modulus.models.module import Module, ModelMetaData
+from modulus.registry import ModelRegistry
 from . import common
 
+registry = ModelRegistry()
 
 class CustomModel(torch.nn.Module):
     def __init__(self, in_features, out_features):
@@ -28,7 +30,6 @@ class CustomModel(torch.nn.Module):
 
     def forward(self, x):
         return self.linear(x)
-
 
 @dataclass
 class CustomMetaData(ModelMetaData):
@@ -58,7 +59,7 @@ def test_from_torch_forward(device):
     bsize = 8
     invar = torch.randn(bsize, 32).to(device)
     model(invar)
-    Module._clear_model_registry()
+    registry.__clear_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -70,7 +71,7 @@ def test_from_torch_constructor(device):
 
     assert isinstance(model, Module)
 
-    Module._clear_model_registry()
+    registry.__clear_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -90,19 +91,19 @@ def test_from_torch_optims(device):
     # Ideally always check graphs first
     model, invar = setup_model()
     assert common.validate_cuda_graphs(model, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()
     # Check JIT
     model, invar = setup_model()
     assert common.validate_jit(model, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()
     # Check AMP
     model, invar = setup_model()
     assert common.validate_amp(model, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()
     # Check Combo
     model, invar = setup_model()
     assert common.validate_combo_optims(model, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -117,7 +118,7 @@ def test_from_torch_checkpoint(device):
     bsize = random.randint(1, 16)
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()
 
 
 
@@ -133,4 +134,4 @@ def test_from_torch_deploy(device):
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
-    Module._clear_model_registry()
+    registry.__clear_registry__()

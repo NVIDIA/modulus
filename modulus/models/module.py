@@ -18,6 +18,8 @@ import torch
 import logging
 import inspect
 import importlib
+import tempfile
+import tarfile
 import pkg_resources
 from typing import Union, List, Dict, Any
 from pathlib import Path
@@ -25,6 +27,8 @@ import torch.nn as nn
 
 import modulus
 from modulus.models.meta import ModelMetaData
+from modulus.registry import ModelRegistry
+from modulus.utils.filesystem import _get_fs, _download_cached
 
 class Module(torch.nn.Module):
     """The base class for all network models in Modulus.
@@ -37,7 +41,7 @@ class Module(torch.nn.Module):
         Meta data class for storing info regarding model, by default None
     """
     _file_extension = ".mdlus" # Set file extension for saving and loading
-    __model_checkpoing_version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
+    __model_checkpoint_version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
@@ -77,8 +81,9 @@ class Module(torch.nn.Module):
         _cls_name = arg_dict["__name__"]
 
         # Add a check if the class is one in the model registry
-        if _cls_name in Module._model_registry:
-            _cls = Module.factory(_cls_name)
+        registry = ModelRegistry()
+        if _cls_name in registry.list_models():
+            _cls = registry.factory(_cls_name)
         else:
             _cls = getattr(_mod, _cls_name)
 
@@ -150,54 +155,44 @@ class Module(torch.nn.Module):
             with open(local_path / "metadata.json", "w") as f:
                 json.dump(metadata_info, f)
 
+            # Once all files are saved, package them into a tar file
+            with tarfile.open(local_path / 'model.tar', 'w') as tar:
+                for file in local_path.iterdir():
+                    tar.add(str(file), arcname=file.name)
+
             if file_name is None:
-                file_name = self.meta.name + ".pt"
+                file_name = self.meta.name + ".mdlus"
 
             # Save files to remote destination
-            from modulus.utils.filesystem import _get_fs # TODO: Fix circular import
             fs = _get_fs(file_name)
-            for file in local_path.iterdir():
-                fs.put(str(file), str(Path(file_name).parent / file.name))
+            fs.put(str(local_path / "model.tar"), file_name)
 
 
     @staticmethod
-    def _check_checkpoint(file_name: str) -> bool:
-        if not file_name.endswith(Module._file_extension):
-            raise ValueError(
-                f"File name must end with {Module._file_extension} extension"
+    def _check_checkpoint(local_path: str) -> bool:
+        if not local_path.joinpath("args.json").exists():
+            raise IOError(
+                f"File 'args.json' not found in checkpoint"
             )
 
-        if file_name is None:
-            raise ValueError("File name must be provided to load the model")
-
-        directory = Path(file_name)
-        if not directory.is_dir():
-            raise IOError(f"Model directory {directory} not found")
-
-        if not directory.joinpath("args.json").exists():
+        if not local_path.joinpath("metadata.json").exists():
             raise IOError(
-                f"Model checkpoint {directory.joinpath('model.json')} not found"
+                f"File 'metadata.json' not found in checkpoint"
             )
 
-        if not directory.joinpath("metadata.json").exists():
+        if not local_path.joinpath("model.pt").exists():
             raise IOError(
-                f"Model checkpoint {directory.joinpath('metadata.json')} not found"
-            )
-
-        if not directory.joinpath("model.pt").exists():
-            raise IOError(
-                f"Model checkpoint {directory.joinpath('model.pt')} not found"
+                f"Model weights 'model.pt' not found in checkpoint"
             )
 
         # Check if the checkpoint version is compatible with the current version
-        with open(directory.joinpath("metadata.json"), "r") as f:
+        with open(local_path.joinpath("metadata.json"), "r") as f:
             metadata_info = json.load(f)
-            if metadata_info['mdlus_file_version'] != Module.__version__:
+            if metadata_info['mdlus_file_version'] != Module.__model_checkpoint_version__:
                 raise IOError(
                     f"Model checkpoint version {metadata_info['mdlus_file_version']} is not compatible with current version {Module.__version__}"
                 )
 
-        return directory
 
     def load(self, file_name: str) -> None:
         """Simple utility for loading the model weights from checkpoint
@@ -213,12 +208,26 @@ class Module(torch.nn.Module):
             If file_name provided does not exist or is not a valid checkpoint
         """
 
-        directory = Module._check_checkpoint(file_name)
+        # Download and cache the checkpoint file if needed
+        cached_file_name = _download_cached(file_name)
 
-        model_dict = torch.load(
-            directory.joinpath("model.pt"), map_location=self.device
-        )
-        self.load_state_dict(model_dict)
+        # Use a temporary directory to extract the tar file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = Path(temp_dir)
+
+            # Open the tar file and extract its contents to the temporary directory
+            with tarfile.open(cached_file_name, 'r') as tar:
+                tar.extractall(path=local_path)
+
+            # Check if the checkpoint is valid
+            Module._check_checkpoint(local_path)
+
+            # Load the model weights
+            model_dict = torch.load(
+                local_path.joinpath("model.pt"), map_location=self.device
+            )
+            self.load_state_dict(model_dict)
+
 
     @classmethod
     def from_checkpoint(cls, file_name: str):
@@ -239,22 +248,35 @@ class Module(torch.nn.Module):
             If file_name provided does not exist or is not a valid checkpoint
         """
 
-        directory = Module._check_checkpoint(file_name)
+        # Download and cache the checkpoint file if needed
+        cached_file_name = _download_cached(file_name)
 
-        with open(directory.joinpath("args.json"), "r") as f:
-            args = json.load(f)
+        # Use a temporary directory to extract the tar file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = Path(temp_dir)
 
-        model = cls.instantiate(args)
+            # Open the tar file and extract its contents to the temporary directory
+            with tarfile.open(cached_file_name, 'r') as tar:
+                tar.extractall(path=local_path)
 
-        model_dict = torch.load(
-            directory.joinpath("model.pt"), map_location=model.device
-        )
-        model.load_state_dict(model_dict)
+            # Check if the checkpoint is valid
+            Module._check_checkpoint(local_path)
+
+            # Load model arguments and instantiate the model
+            with open(local_path.joinpath("args.json"), "r") as f:
+                args = json.load(f)
+            model = cls.instantiate(args)
+
+            # Load the model weights
+            model_dict = torch.load(
+                local_path.joinpath("model.pt"), map_location=model.device
+            )
+            model.load_state_dict(model_dict)
 
         return model
 
     @staticmethod
-    def from_torch(torch_model_class: torch.nn.Module, meta: ModelMetaData = None) -> Module:
+    def from_torch(torch_model_class: torch.nn.Module, meta: ModelMetaData = None) -> "Module":
         """Construct a Modulus module from a PyTorch module
 
         Parameters
@@ -306,7 +328,8 @@ class Module(torch.nn.Module):
         ModulusModel.__name__ = new_class_name
 
         # Add this class to the dict of models classes
-        ModulusModel.register(ModulusModel, new_class_name)
+        registry = ModelRegistry()
+        registry.register(ModulusModel, new_class_name)
 
         return ModulusModel
 

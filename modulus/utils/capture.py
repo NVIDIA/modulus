@@ -40,7 +40,7 @@ class _StaticCapture(object):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: "modulus.Module",
         optim: Union[optim, None] = None,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -321,7 +321,7 @@ class StaticCaptureTraining(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: "modulus.Module",
         optim: torch.optim,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -392,7 +392,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.Module,
+        model: "modulus.Module",
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
         use_amp: bool = True,

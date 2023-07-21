@@ -40,7 +40,7 @@ class ModelRegistry:
             registry[entry_point.name] = entry_point
         return registry
 
-    def register(self, model: modulus.Module, name: Union[str, None] = None) -> None:
+    def register(self, model: "modulus.Module", name: Union[str, None] = None) -> None:
         """
         Registers a modulus model in the model registry under the provided name. If no name
         is provided, the model's name (from its `__name__` attribute) is used. If the
@@ -77,7 +77,7 @@ class ModelRegistry:
         # Add this class to the dict of model registry
         self._model_registry[name] = model
 
-    def factory(self, name: str) -> modulus.Module:
+    def factory(self, name: str) -> "modulus.Module":
         """
         Returns a registered model given its name.
     
@@ -117,10 +117,10 @@ class ModelRegistry:
         """
         return list(self._model_registry.keys())
 
-    def __clear_model_registry(self):
+    def __clear_registry__(self):
         # NOTE: This is only used for testing purposes
         self._model_registry = {}
 
-    def __restore_model_registry(self):
+    def __restore_registry__(self):
         # NOTE: This is only used for testing purposes
         self._model_registry = self._construct_registry()

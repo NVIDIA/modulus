@@ -91,8 +91,5 @@ def validate_checkpoint(
     restored_checkpoint = compare_output(output_1, output_2, rtol, atol)
 
     # Delete checkpoint file (it should exist!)
-    try:
-        shutil.rmtree(Path("checkpoint.mdlus"))
-    except IOError:
-        print(f"The directory '{directory_path}' does not exist.")
+    Path("checkpoint.mdlus").unlink(missing_ok=False)
     return loaded_checkpoint and restored_checkpoint

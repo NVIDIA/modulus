@@ -16,6 +16,7 @@ import pytest
 import torch
 
 from modulus.models import Module
+from modulus.registry import ModelRegistry
 
 
 class MockModel(Module):
@@ -31,10 +32,11 @@ class MockModel(Module):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_register_and_factory(device):
     # Register the MockModel
-    Module.register(MockModel, "mock_model")
+    registry = ModelRegistry()
+    registry.register(MockModel, "mock_model")
 
     # Use factory to get the MockModel
-    RetrievedModel = Module.factory("mock_model")
+    RetrievedModel = registry.factory("mock_model")
 
     # Check if the retrieved model is the same as the one registered
     assert RetrievedModel == MockModel
@@ -46,4 +48,5 @@ def test_register_and_factory(device):
     outvar = model(invar)
     assert outvar.shape == invar.shape
     assert outvar.device == invar.device
-    Module._clear_model_registry()
+    print(registry.list_models())
+    registry.__clear_registry__()
