@@ -201,13 +201,15 @@ class Module(torch.nn.Module):
                 )
 
 
-    def load(self, file_name: str) -> None:
+    def load(self, file_name: str, map_location: Union[None, str, torch.device] = None) -> None:
         """Simple utility for loading the model weights from checkpoint
 
         Parameters
         ----------
         file_name : str
             Checkpoint file name
+        map_location : Union[None, str, torch.device], optional
+            Map location for loading the model weights, by default None will use model's device
 
         Raises
         ------
@@ -230,8 +232,9 @@ class Module(torch.nn.Module):
             Module._check_checkpoint(local_path)
 
             # Load the model weights
+            device = map_location if map_location is not None else self.device
             model_dict = torch.load(
-                local_path.joinpath("model.pt"), map_location=self.device
+                local_path.joinpath("model.pt"), map_location=device
             )
             self.load_state_dict(model_dict)
 
