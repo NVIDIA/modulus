@@ -9,7 +9,7 @@ authors = [
 ]
 description = "A deep learning framework for AI-driven multi-physics systems"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {text = "Apache 2.0"}
 dependencies = [
     "h5py>=3.7.0",
@@ -20,8 +20,6 @@ dependencies = [
     "pytest>=6.0.0",
     "ruamel.yaml>=0.17.22",
     "setuptools>=67.6.0",
-    "tensorly>=0.8.1",
-    "tensorly-torch>=0.4.0",
     "torch>=1.12",
     "xarray>=2023.1.0",
     "zarr>=2.14.2",

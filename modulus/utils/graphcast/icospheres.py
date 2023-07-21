@@ -24,7 +24,7 @@ except ImportError:
 
 
 def generate_and_save_icospheres(
-    save_path: str = "icospheres.json",
+    save_path: str = "icospheres.json", level: int = 6
 ) -> None:  # pragma: no cover
     """enerate icospheres from level 0 to 6 (inclusive) and save them to a json file.
 
@@ -38,7 +38,7 @@ def generate_and_save_icospheres(
     icospheres = {"vertices": [], "faces": []}
 
     # Generate icospheres from level 0 to 6 (inclusive)
-    for order in range(6 + 1):
+    for order in range(level + 1):
         icosphere = pymesh.generate_icosphere(radius, center, refinement_order=order)
         icospheres["order_" + str(order) + "_vertices"] = icosphere.vertices
         icospheres["order_" + str(order) + "_faces"] = icosphere.faces
@@ -54,3 +54,7 @@ def generate_and_save_icospheres(
     }
     with open(save_path, "w") as f:
         json.dump(icospheres_dict, f)
+
+
+if __name__ == "__main__":
+    generate_and_save_icospheres(level=6)
