@@ -132,12 +132,6 @@ class GraphCastNet(Module):
     ):
         super().__init__(meta=MetaData())
 
-        # check the input resolution
-        if input_res != (721, 1440):
-            raise NotImplementedError(
-                "Currently only native ERA5 input resolution (721, 1440) is supported"
-            )
-
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
         self.longitudes = torch.linspace(-180, 180, steps=input_res[1] + 1)[1:]

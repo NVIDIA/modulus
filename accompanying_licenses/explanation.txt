@@ -1,3 +1,0 @@
-For a complete list of dependencies and their licenses see `all_licenses.txt'. This list can also be generated as a text file with the command `pip-licenses --format=plain-vertical --with-license-file --no-license-path --format=json > all_licenses.txt`.
-
-
