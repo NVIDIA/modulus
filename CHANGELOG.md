@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added a CHANGELOG.md
+- Added build support for internal DGL
 
 ### Changed
+
+- DGL install changed from pypi to source
 
 ### Deprecated
 
@@ -24,7 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Fixed security issues with subprocess and urllib in `filesystem.py`
+
 ### Dependencies
+
+- Updated the base container to latest PyTorch base container which is based on torch 2.0
+- Container now supports CUDA 12, Python 3.10
 
 ## [0.1.0] - 2023-05-08
 

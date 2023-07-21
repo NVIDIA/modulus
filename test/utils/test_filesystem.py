@@ -12,8 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from pathlib import Path
 from modulus.utils import filesystem
+
+
+def calculate_checksum(file_path):
+    sha256 = hashlib.sha256()
+
+    with open(file_path, "rb") as f:
+        while True:
+            data = f.read(8192)
+            if not data:
+                break
+            sha256.update(data)
+
+    calculated_checksum = sha256.hexdigest()
+    return calculated_checksum
 
 
 def test_package(tmp_path: Path):
@@ -28,3 +43,12 @@ def test_package(tmp_path: Path):
         ans = f.read()
 
     assert ans == string
+
+
+def test_http_package():
+    test_url = "http://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img"
+    package = filesystem.Package(test_url, seperator="/")
+    path = package.get("modulus-pipes.jpg")
+
+    known_checksum = "e075b2836d03f7971f754354807dcdca51a7875c8297cb161557946736d1f7fc"
+    assert calculate_checksum(path) == known_checksum
