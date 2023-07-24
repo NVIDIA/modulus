@@ -14,6 +14,8 @@
 
 from typing import Optional, Tuple
 
+import numpy as np
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -22,6 +24,7 @@ from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 import torch_harmonics as harmonics
+from torch_harmonics.quadrature import clenshaw_curtiss_weights
 
 
 class LossHandler(nn.Module):
@@ -41,12 +44,6 @@ class LossHandler(nn.Module):
 
         loss_type = self.loss_type = params.loss
 
-        channel_weights = torch.ones(params.N_out_channels).float()
-
-        # if loss_type[:20] == 'dynamically weighted':
-        #     self.dynamic_weight_obj = GeometricLpLoss(self.img_shape, p=2)
-        #     loss_type = loss_type[21:]
-
         if loss_type[:11] == "pole-masked":
             pole_mask = 1
             loss_type = loss_type[12:]
@@ -54,23 +51,53 @@ class LossHandler(nn.Module):
             pole_mask = 0
 
         if loss_type[:8] == "weighted":
-            channel_weights = torch.Tensor(params.channel_weights).float()
-            channel_weights = (
-                params.N_out_channels * channel_weights / torch.sum(channel_weights)
-            )
+            if params.channel_weights == "auto":
+                channel_weights = torch.ones(params.N_out_channels, dtype=torch.float32)
+                for c, chn in enumerate(params.channel_names):
+                    if chn in ["u10m", "v10m", "u100m", "v100m", "sp", "msl", "tcwv"]:
+                        channel_weights[c] = 0.1
+                    elif chn in ["t2m", "2d"]:
+                        channel_weights[c] = 1.0
+                    elif chn[0] in ["z", "u", "v", "t", "r", "q"]:
+                        pressure_level = float(chn[1:])
+                        channel_weights[c] = 0.001 * pressure_level
+                    else:
+                        channel_weights[c] = 0.01
+            else:
+                channel_weights = torch.Tensor(params.channel_weights).float()
+            
             loss_type = loss_type[9:]
+        else:
+            channel_weights = torch.ones(params.N_out_channels, dtype=torch.float32)
 
-        if loss_type[:8] == "absolute":
+        # renormalize the weights to one
+        channel_weights = channel_weights.reshape(1, -1, 1, 1)
+        channel_weights = channel_weights / torch.sum(channel_weights)
+
+        if loss_type[:8] == 'absolute':
             absolute = True
             loss_type = loss_type[9:]
         else:
-            absolute = False
+            absolute = False           
 
-        if self.loss_type[:7] == "squared":
+        if loss_type[:7] == 'squared':
             squared = True
             loss_type = loss_type[8:]
         else:
             squared = False
+
+        if loss_type[:8] == 'temp-std':
+            eps = 1e-6
+            global_stds = torch.from_numpy(np.load(params.global_stds_path)).reshape(1, -1, 1, 1)
+            time_diff_stds = torch.from_numpy(np.load(params.time_diff_stds_path)).reshape(1, -1, 1, 1)
+            time_var_weights = global_stds / (time_diff_stds+eps)
+            # time_var_weights = 1 / (time_diff_stds+eps)
+            if squared:
+                time_var_weights = time_var_weights**2
+            channel_weights = channel_weights * time_var_weights
+            loss_type = loss_type[9:]
+
+        self.register_buffer('channel_weights', channel_weights)
 
         # TODO: clean this up and replace it with string parsing to set the parameters
         if loss_type == "l2":
@@ -105,24 +132,16 @@ class LossHandler(nn.Module):
             self.loss_obj = GeometricH1Loss(
                 self.img_shape, absolute=absolute, squared=squared
             )
-        elif loss_type == "spectral":
-            self.loss_obj = SpectralLoss(
-                self.img_shape, absolute=absolute, squared=squared
-            )
         else:
             raise ValueError(f"Unknown loss function: {loss_type}")
 
         # weighting factor for the case of multistep training
         # TODO change hardcoded weighting
-        multistep_weight = torch.ones(self.n_future + 1, dtype=torch.float32)
+        multistep_weight = torch.arange(1, self.n_future+2, dtype=torch.float32)
         multistep_weight = multistep_weight / torch.sum(multistep_weight)
         multistep_weight = multistep_weight.reshape(-1, 1, 1, 1)
 
         self.register_buffer("multistep_weight", multistep_weight)
-
-        # renormalize the weights to one
-        channel_weights = channel_weights.reshape(1, -1, 1, 1)
-        self.register_buffer("channel_weights", channel_weights)
 
         # # decide whether to gather the input
         self.do_gather_input = False
@@ -153,10 +172,17 @@ class LossHandler(nn.Module):
             prd = self._gather_input(prd)
             tar = self._gather_input(tar)
 
-        if self.training:
-            chw = (self.channel_weights * self.multistep_weight).reshape(1, -1, 1, 1)
+        if hasattr(self, "minmax"):
+            chw = torch.ones_like(self.channel_weights)
+            chw = chw / torch.sum(chw)
+            chw += self.channel_weights.abs() / torch.sum(self.channel_weights.abs())
         else:
             chw = self.channel_weights
+
+        if self.training:
+            chw = (self.chw * self.multistep_weight).reshape(1, -1, 1, 1)
+        else:
+            chw = self.chw
 
         return self.loss_obj(prd, tar, chw)
 
@@ -169,7 +195,7 @@ class GeometricLpLoss(nn.Module):
         self,
         img_size: Tuple[int, int],
         p: Optional[float] = 2.0,
-        size_average: Optional[bool] = True,
+        size_average: Optional[bool] = False,
         reduction: Optional[bool] = True,
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
@@ -409,106 +435,6 @@ class GeometricH1Loss(nn.Module):
                     retval = torch.sum(retval) / torch.sum(mask)
             else:
                 retval = torch.sum(retval)
-
-        return retval
-
-    def forward(
-        self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):  # pragma: no cover
-        if self.absolute:
-            loss = self.abs(prd, tar)
-        else:
-            loss = self.rel(prd, tar, mask)
-
-        return loss
-
-
-# double check if polar optimization has an effect - we use 5 here by default
-class SpectralLoss(nn.Module):
-    """Spectral loss"""
-
-    def __init__(
-        self,
-        img_size: Tuple[int, int],
-        p: Optional[float] = 2.0,
-        size_average: Optional[bool] = True,
-        reduction: Optional[bool] = True,
-        absolute: Optional[bool] = False,
-        squared: Optional[bool] = False,
-    ):  # pragma: no cover
-        super(SpectralLoss, self).__init__()
-
-        self.reduction = reduction
-        self.size_average = size_average
-        self.absolute = absolute
-        self.squared = squared
-
-        self.sht = harmonics.RealSHT(*img_size, grid="equiangular").float()
-        spectral_weights = torch.arange(self.sht.lmax).float()
-        spectral_weights = spectral_weights + 1
-        self.register_buffer("spectral_weights", spectral_weights)
-
-    def abs(self, prd: torch.Tensor, tar: torch.Tensor):  # pragma: no cover
-        """Computes the absolute loss"""
-        num_examples = prd.size()[0]
-
-        # compute coefficients
-        coeffs = torch.view_as_real(self.sht(prd - tar))
-        coeffs = coeffs[..., 0] ** 2 + coeffs[..., 1] ** 2
-        norm2 = coeffs[..., :, 0] + 2 * torch.sum(coeffs[..., :, 1:], dim=-1)
-        norm2 = (self.spectral_weights * norm2).reshape(num_examples, -1).sum(dim=-1)
-
-        if not self.squared:
-            norm2 = torch.sqrt(norm2)
-
-        all_norms = norm2
-
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(all_norms)
-            else:
-                return torch.sum(all_norms)
-
-        return all_norms
-
-    def rel(
-        self, prd: torch.Tensor, tar: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ):  # pragma: no cover
-        """Computes the relative loss"""
-        num_examples = prd.size()[0]
-
-        # compute coefficients
-        coeffs = torch.view_as_real(self.sht(prd - tar))
-        coeffs = coeffs[..., 0] ** 2 + coeffs[..., 1] ** 2
-        norm2 = coeffs[..., :, 0] + 2 * torch.sum(coeffs[..., :, 1:], dim=-1)
-        norm2 = (self.spectral_weights * norm2).reshape(num_examples, -1).sum(dim=-1)
-
-        # compute coefficients
-        tar_coeffs = torch.view_as_real(self.sht(tar))
-        tar_coeffs = tar_coeffs[..., 0] ** 2 + tar_coeffs[..., 1] ** 2
-        tar_norm2 = tar_coeffs[..., :, 0] + 2 * torch.sum(
-            tar_coeffs[..., :, 1:], dim=-1
-        )
-        tar_norm2 = (
-            (self.spectral_weights * tar_norm2).reshape(num_examples, -1).sum(dim=-1)
-        )
-
-        retval = tar_norm2 / norm2
-
-        if mask is not None:
-            retval = retval * mask
-
-        if self.reduction:
-            if self.size_average:
-                if mask is None:
-                    retval = torch.mean(retval)
-                else:
-                    retval = torch.sum(retval) / torch.sum(mask)
-            else:
-                retval = torch.sum(retval)
-
-        if not self.squared:
-            retval
 
         return retval
 

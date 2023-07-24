@@ -51,19 +51,8 @@ def log_versions():  # pragma: no cover
     Log the versions of git and torch.
     """
     import torch
-    import subprocess
 
     logging.info("--------------- Versions ---------------")
-    try:
-        logging.info(
-            "git branch: " + str(subprocess.check_output(["git", "branch"]).strip())
-        )
-        logging.info(
-            "git hash: "
-            + str(subprocess.check_output(["git", "rev-parse", "HEAD"]).strip())
-        )
-    except:
-        pass
     logging.info("Torch: " + str(torch.__version__))
     logging.info("----------------------------------------")
 

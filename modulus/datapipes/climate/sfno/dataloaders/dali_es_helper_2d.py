@@ -66,6 +66,7 @@ class GeneralES(object):
         seed=333,
         is_parallel=True,
         host_prefetch_buffers=False,
+        timestep_hours=6,
     ):  # pragma: no cover
         self.batch_size = batch_size
         self.location = location
@@ -88,6 +89,8 @@ class GeneralES(object):
         self.shard_id = shard_id
         self.is_parallel = is_parallel
         self.host_prefetch_buffers = host_prefetch_buffers
+        self.zenith_angle = zenith_angle
+        self.timestep_hours=timestep_hours
 
         # set the read slices
         # we do not support channel parallelism yet
@@ -103,9 +106,6 @@ class GeneralES(object):
         self.in_channels_slices = list(self._get_slices(self.in_channels))
         self.out_channels_slices = list(self._get_slices(self.out_channels))
 
-        # use this for solar features
-        self.zenith_angle = zenith_angle
-
         # we need some additional static fields in this case
         if self.zenith_angle:
             longitude = np.arange(0, 360, 0.25)
@@ -113,10 +113,12 @@ class GeneralES(object):
             latitude = latitude[::-1]
             self.lon_grid, self.lat_grid = np.meshgrid(longitude, latitude)
             self.lat_grid_local = self.lat_grid[
-                self.read_anchor[0] : self.read_anchor[0] + self.read_shape[0]
+                self.read_anchor[0] : self.read_anchor[0] + self.read_shape[0],
+                self.read_anchor[1] : self.read_anchor[1] + self.read_shape[1],
             ]
             self.lon_grid_local = self.lon_grid[
-                self.read_anchor[1] : self.read_anchor[1] + self.read_shape[1]
+                self.read_anchor[0] : self.read_anchor[0] + self.read_shape[0],
+                self.read_anchor[1] : self.read_anchor[1] + self.read_shape[1],
             ]
 
         # these things we want to read from a descriptor file ultimately:
@@ -242,11 +244,16 @@ class GeneralES(object):
 
     def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
-        self.files_paths = glob.glob(os.path.join(self.location, "*.h5"))
+        self.files_paths = []
+        self.location = [self.location] if not isinstance(self.location, list) else self.location
+        for location in self.location:
+            self.files_paths = self.files_paths + glob.glob(os.path.join(location, "????.h5"))
         self.file_format = "h5"
-        if not self.files_paths:
-            self.files_paths = glob.glob(os.path.join(self.location, "*.zarr"))
-            self.file_format = "zarr"
+
+        # # TODO: probably requires fix to re-enable zarr
+        # if not self.files_paths:
+        #     self.files_paths = glob.glob(os.path.join(self.location, "*.zarr"))
+        #     self.file_format = "zarr"
 
         if not self.files_paths:
             raise IOError(
@@ -254,8 +261,6 @@ class GeneralES(object):
             )
 
         self.files_paths.sort()
-        # data issues with 1999.h5 temporary patch to exclude it from training dataset
-        # self.files_paths = [file_ for file_ in self.files_paths if not '1999' in file_]
 
         # extract the years from filenames
         self.years = [
@@ -356,19 +361,17 @@ class GeneralES(object):
                     self.batch_size,
                 )
             )
-            logging.info("Delta t: {} hours".format(6 * self.dt))
+            logging.info("Delta t: {} hours".format(self.timestep_hours * self.dt))
             logging.info(
                 "Including {} hours of past history in training at a frequency of {} hours".format(
-                    6 * self.dt * self.n_history, 6 * self.dt
+                    self.timestep_hours * self.dt * self.n_history, self.timestep_hours * self.dt
                 )
             )
             logging.info(
                 "Including {} hours of future targets in training at a frequency of {} hours".format(
-                    6 * self.dt * self.n_future, 6 * self.dt
+                    self.timestep_hours * self.dt * self.n_future, self.timestep_hours * self.dt
                 )
             )
-            # if self.num_shards > 1:
-            #    logging.info("Using shards of size {} per rank".format(self.n_samples_shard))
 
         # some state variables
         self.last_cycle_epoch = None
@@ -444,89 +447,6 @@ class GeneralES(object):
                 self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1)
         return
 
-        if self.host_prefetch_buffers:
-            self.inp_buffs = [
-                np.zeros(
-                    (
-                        self.n_history + 1,
-                        self.n_in_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-                np.zeros(
-                    (
-                        self.n_history + 1,
-                        self.n_in_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-            ]
-            self.tar_buffs = [
-                np.zeros(
-                    (
-                        self.n_future + 1,
-                        self.n_out_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-                cpx.zeros_pinned(
-                    (
-                        self.n_future + 1,
-                        self.n_out_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-            ]
-        else:
-            self.inp_buffs = [
-                cpx.zeros_pinned(
-                    (
-                        self.n_history + 1,
-                        self.n_in_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-                cpx.zeros_pinned(
-                    (
-                        self.n_history + 1,
-                        self.n_in_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-            ]
-            self.tar_buffs = [
-                cpx.zeros_pinned(
-                    (
-                        self.n_future + 1,
-                        self.n_out_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-                cpx.zeros_pinned(
-                    (
-                        self.n_future + 1,
-                        self.n_out_channels,
-                        self.read_shape[0],
-                        self.read_shape[1],
-                    ),
-                    dtype=np.float32,
-                ),
-            ]
-
     def _compute_zenith_angle(
         zen_inp, zen_tar, self, local_idx, year_idx
     ):  # pragma: no cover
@@ -535,36 +455,36 @@ class GeneralES(object):
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0)
 
         # zenith angle for input
-        cos_zenith_inp = []
-        for idx in range(local_idx - self.dt * self.n_history, local_idx + 1, self.dt):
-            hours_since_jan_01 = idx * 6
-            model_time = jan_01_epoch + datetime.timedelta(hours=hours_since_jan_01)
-            cos_zenith_inp.append(
-                cos_zenith_angle(
-                    model_time, self.lon_grid_local, self.lat_grid_local
-                ).astype(np.float32)
-            )
-
-        cos_zenith_inp = np.expand_dims(np.stack(cos_zenith_inp, axis=0), axis=1)
+        inp_times = np.asarray(
+            [jan_01_epoch + datetime.timedelta(
+                hours=idx * self.timestep_hours) 
+                for idx in range(local_idx-self.dt*self.n_history, local_idx+1, self.dt)]
+        )
+        cos_zenith_inp = np.expand_dims(
+            cos_zenith_angle(
+                inp_times,
+                self.lon_grid_local,
+                self.lat_grid_local).astype(np.float32),
+                axis=1,
+        )
         zen_inp[...] = cos_zenith_inp[...]
 
         # zenith angle for target:
-        cos_zenith_tar = []
-        for idx in range(
-            local_idx + self.dt, local_idx + self.dt * (self.n_future + 1) + 1, self.dt
-        ):
-            hours_since_jan_01 = idx * 6
-            model_time = jan_01_epoch + datetime.timedelta(hours=hours_since_jan_01)
-            cos_zenith_tar.append(
-                cos_zenith_angle(
-                    model_time, self.lon_grid_local, self.lat_grid_local
-                ).astype(np.float32)
-            )
-
-        cos_zenith_tar = np.expand_dims(np.stack(cos_zenith_tar, axis=0), axis=1)
+        tar_times = np.asarray([
+                jan_01_epoch + datetime.timedelta(
+                    hours=idx * self.timestep_hours
+                ) 
+                for idx in range(
+                    local_idx + self.dt,
+                    local_idx + self.dt * (self.n_future + 1) + 1,
+                    self.dt,
+                )
+            ]
+        )
+        cos_zenith_tar = np.expand_dims(cos_zenith_angle(tar_times, self.lon_grid_local, self.lat_grid_local).astype(np.float32), axis=1)
         zen_tar[...] = cos_zenith_tar[...]
 
-        return cos_zenith_inp, cos_zenith_tar
+        return
 
     def __getstate__(self):  # pragma: no cover
         return self.__dict__.copy()

@@ -34,18 +34,12 @@ def get_memory_format(tensor):  # pragma: no cover
 def sync_params(model, mode="broadcast"):  # pragma: no cover
     """Helper routine to ensure shared weights are the same after initialization"""
 
-    non_singleton_group_names = [
-        x
-        for x in comm.get_names()
-        if (comm.get_size(x) > 1) and not (x in ["data", "model", "spatial"])
-    ]
-
     with torch.no_grad():
         # distributed sync step
         for param in model.parameters():
 
             if not hasattr(param, "is_shared_mp"):
-                param.is_shared_mp = non_singleton_group_names.copy()
+                param.is_shared_mp = ["model"]
 
             for comm_group in param.is_shared_mp:
                 if comm.get_size(comm_group) > 1:
@@ -170,50 +164,48 @@ def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     return input_
 
 
-def _split(input_, dim_, group=None):  # pragma: no cover
+def _split(input_, dim_, group=None):
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
-
+    
     # Bypass the function if we are using only 1 GPU.
     comm_size = dist.get_world_size(group=group)
     if comm_size == 1:
         return input_
-
+    
     # Split along last dimension.
     input_list = split_tensor_along_dim(input_, dim_, comm_size)
-
+    
     # Note: torch.split does not create contiguous tensors by default.
     rank = dist.get_rank(group=group)
     output = input_list[rank].contiguous(memory_format=input_format)
-
+    
     return output
 
 
-def _gather(input_, dim_, group=None):  # pragma: no cover
+def _gather(input_, dim_, group=None):
     """Gather tensors and concatinate along the last dimension."""
     # get input format
-    input_format = get_memory_format(input_)
+    input_format = get_memory_format(input_) 
 
     comm_size = dist.get_world_size(group=group)
     # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
+    if comm_size==1:
         return input_
 
     # sanity checks
-    assert (
-        dim_ < input_.dim()
-    ), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+    assert(dim_ < input_.dim()), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
 
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
-
+    
     input_ = input_.contiguous(memory_format=input_format)
     tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
     tensor_list[comm_rank] = input_
     dist.all_gather(tensor_list, input_, group=group)
-
+    
     # Note: torch.cat already creates a contiguous tensor.
     output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
-
+    
     return output

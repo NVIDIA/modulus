@@ -139,59 +139,21 @@ class _GatherFromParallelRegion(torch.autograd.Function):
 # Helper functions.
 # -----------------
 # matmul parallel
-def copy_to_matmul_parallel_region(input_):  # pragma: no cover
-    """copy helper"""
-    return _CopyToParallelRegion.apply(input_, "matmul")
+def copy_to_parallel_region(input_, comm_name):  # pragma: no cover
+    """ Parallel copy helper """
+    return _CopyToParallelRegion.apply(input_, comm_name)
 
-
-def reduce_from_matmul_parallel_region(input_):  # pragma: no cover
-    """reduce helper"""
-    return _ReduceFromParallelRegion.apply(input_, "matmul")
-
-
-def scatter_to_matmul_parallel_region(input_, dim):  # pragma: no cover
-    """scatter helper"""
-    return _ScatterToParallelRegion.apply(input_, dim, "matmul")
-
-
-def gather_from_matmul_parallel_region(input_, dim):  # pragma: no cover
-    """gather helper"""
-    return _GatherFromParallelRegion.apply(input_, dim, "matmul")
-
-
-# general
 def reduce_from_parallel_region(input_, comm_name):  # pragma: no cover
-    """reduce helper"""
+    """ Parallel reduction helper """
     return _ReduceFromParallelRegion.apply(input_, comm_name)
 
-
 def scatter_to_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """scatter helper"""
+    """ Parallel scatter helper """
     return _ScatterToParallelRegion.apply(input_, dim, comm_name)
 
-
 def gather_from_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """gather helper"""
+    """ Parallel gather helper """
     return _GatherFromParallelRegion.apply(input_, dim, comm_name)
-
-
-# def gather_within_matmul_parallel_region(input_, dim):
-#    return _GatherWithinMatmulParallelRegion.apply(input_, dim, "matmul")
-
-# spatial parallel
-def copy_to_spatial_parallel_region(input_):  # pragma: no cover
-    """copy helper"""
-    return _CopyToParallelRegion.apply(input_, "spatial")
-
-
-def scatter_to_spatial_parallel_region(input_, dim):  # pragma: no cover
-    """scatter helper"""
-    return _ScatterToParallelRegion.apply(input_, dim, "spatial")
-
-
-def gather_from_spatial_parallel_region(input_, dim):  # pragma: no cover
-    """gather helper"""
-    return _GatherFromParallelRegion.apply(input_, dim, "spatial")
 
 
 # handler for additional gradient reductions
@@ -223,50 +185,31 @@ def init_gradient_reduction_hooks(
         # the simple case, we can just continue then
         ddp_group = None
     else:
-        # check if there are shared weights, otherwise we can skip
-        non_singleton_group_names = [
-            x
-            for x in comm.get_names()
-            if (comm.get_size(x) > 1) and not (x in ["data", "model", "spatial"])
-        ]
-        num_shared = {x: 0 for x in non_singleton_group_names}
-        num_parameters = 0
-
         # count parameters and reduction groups
+        num_parameters_total = 0
+        num_parameters_shared_model = 0
         for param in model.parameters():
 
-            # if it does not have any annotation, we assume it is shared between all groups
+            # if it does not have any annotation, we assume it is shared between all model ranks
             if not hasattr(param, "is_shared_mp"):
-                param.is_shared_mp = non_singleton_group_names.copy()
+                param.is_shared_mp = ["model"]
 
-            # check remaining groups
-            for group in non_singleton_group_names:
-                if group in param.is_shared_mp:
-                    num_shared[group] += 1
-            num_parameters += 1
+            # add the sharing type to the dict
+            num_parameters_total += 1
+            if "model" in param.is_shared_mp:
+                num_parameters_shared_model += 1
 
-        # group without data:
-        num_param_shared_model = [v for k, v in num_shared.items()]
-        if not num_param_shared_model:
-            num_shared_model = 0
-        else:
-            num_shared_model = sum(num_param_shared_model)
-
-        # if all parameters are just data shared and not additionally shared orthogonally to that, we can use DDP
-        if num_shared_model == 0:
+        # if all parameters are shared between all model ranks, then the situation is easy
+        if (num_parameters_shared_model == num_parameters_total):
+            # we can always use DDP
             ddp_group = None
 
-        elif all([(x == num_parameters) for x in num_param_shared_model]):
-            # in this case, we just need to register a backward hook to multiply the gradients according to the multiplicity:
-            print(
-                "Setting up gradient hooks to account for shared parameter multiplicity"
-            )
+            # register some pre-multiply reduction hooks
+            print("Setting up gradient hooks to account for shared parameter multiplicity")
             for param in model.parameters():
                 param.register_hook(lambda grad: grad * float(comm.get_size("model")))
-
-            ddp_group = None
         else:
-            ddp_group = comm.get_group("data")  # double check if this is correct
+            ddp_group = comm.get_group("data")
             broadcast_buffers = False
             need_hooks = True
 
@@ -319,7 +262,7 @@ def init_gradient_reduction_hooks(
 
             return bucket.buffer()
 
-        for group in non_singleton_group_names:
+        for group in comm.get_names():
             if group == "data":
                 continue
 
@@ -333,11 +276,6 @@ def init_gradient_reduction_hooks(
 
             # append the new reduction functions
             fut = fut.then(lambda x: grad_reduction(x, grads=grads, group=group))
-            # fut = fut.then(lambda x: grad_copy(x, grads=grads))
-
-        ## chain it together
-        # for redfut, copyfut in zip(redfunc, copyfunc):
-        #    fut = fut.then(redfut).then(copyfut)
 
         return fut
 

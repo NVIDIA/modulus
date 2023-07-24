@@ -182,6 +182,7 @@ class ERA5DaliESDataloader(object):
         self.add_noise = params.add_noise if train else False
         self.noise_std = params.noise_std
         self.add_zenith = params.add_zenith if hasattr(params, "add_zenith") else False
+        self.timestep_hours = params.timestep_hours if hasattr(params, "timestep_hours") else 6
         if train:
             self.n_samples = (
                 params.n_train_samples if hasattr(params, "n_train_samples") else None
@@ -258,6 +259,7 @@ class ERA5DaliESDataloader(object):
             seed=333,
             is_parallel=True,
             host_prefetch_buffers=self.host_prefetch_buffers,
+            timestep_hours=self.timestep_hours,
         )
 
         # some image properties
@@ -278,6 +280,9 @@ class ERA5DaliESDataloader(object):
         self.img_local_offset_x = self.extsource.read_anchor[0]
         self.img_local_offset_y = self.extsource.read_anchor[1]
 
+        self.img_local_pad_x = self.extsource.read_pad[0]
+        self.img_local_pad_y = self.extsource.read_pad[1]
+
         # num steps
         self.num_steps_per_epoch = self.extsource.num_steps_per_epoch
 
@@ -297,6 +302,15 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.in_channels]
                 self.in_bias = means
                 self.in_scale = stds
+            elif params.normalization == 'mixed':
+                means = np.load(params.global_means_path)[:, self.in_channels]
+                stds = np.load(params.global_stds_path)[:, self.in_channels]
+                self.in_bias = means
+                self.in_scale = stds
+                for i, c in enumerate(self.in_channels):
+                    if params.channel_names[c][0] == 'r':
+                        self.in_bias[:, i] = 0.0
+                        self.in_scale[:, i] = 150.0
             elif params.normalization == "none":
                 N_in_channels = len(self.in_channels)
                 self.in_bias = np.zeros((1, N_in_channels, 1, 1))
@@ -313,6 +327,15 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.out_channels]
                 self.out_bias = means
                 self.out_scale = stds
+            elif params.normalization == 'mixed':
+                means = np.load(params.global_means_path)[:, self.out_channels]
+                stds = np.load(params.global_stds_path)[:, self.out_channels]
+                self.out_bias = means
+                self.out_scale = stds
+                for o, c in enumerate(self.out_channels):
+                    if params.channel_names[c][0] == 'r': # replace with regex
+                        self.out_bias[:, o] = 0.0
+                        self.out_scale[:, o] = 150.0
             elif params.normalization == "none":
                 N_out_channels = len(self.out_channels)
                 self.out_bias = np.zeros((1, N_out_channels, 1, 1))
