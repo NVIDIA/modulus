@@ -15,7 +15,7 @@
 
 name: Bug Report
 description: File a bug report for Modulus (Core)
-title: "[BUG 🐛]: "
+title: "🐛[BUG]: "
 labels: ["bug"]
 
 body:

@@ -15,7 +15,7 @@
 
 name: Documentation Request
 description: Request updates or additions to Modulus (Core) documentation
-title: "[DOC 📚]: "
+title: "📚[DOC]: "
 labels: ["doc"]
 
 body:
