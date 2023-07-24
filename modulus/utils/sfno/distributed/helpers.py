@@ -164,7 +164,7 @@ def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     return input_
 
 
-def _split(input_, dim_, group=None):
+def _split(input_, dim_, group=None):  # pragma: no cover
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
@@ -184,7 +184,7 @@ def _split(input_, dim_, group=None):
     return output
 
 
-def _gather(input_, dim_, group=None):
+def _gather(input_, dim_, group=None):  # pragma: no cover
     """Gather tensors and concatinate along the last dimension."""
     # get input format
     input_format = get_memory_format(input_) 

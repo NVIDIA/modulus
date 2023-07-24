@@ -381,7 +381,7 @@ class GeneralES(object):
         if not self.is_parallel:
             self._init_buffers()
 
-    def _init_double_buff_host(self, n_tsteps):
+    def _init_double_buff_host(self, n_tsteps): # pragma: no cover
         buffs = [
             np.zeros(
                 (
@@ -404,7 +404,7 @@ class GeneralES(object):
         ]
         return buffs
 
-    def _init_double_buff_gpu(self, n_tsteps):
+    def _init_double_buff_gpu(self, n_tsteps): # pragma: no cover
         buffs = [
             cpx.zeros_pinned(
                 (

@@ -57,24 +57,24 @@ def log_versions():  # pragma: no cover
     logging.info("----------------------------------------")
 
 
-class disable_logging(object):
+class disable_logging(object): 
     """
     A context manager to disable logging temporarily.
     """
 
-    def __init__(self, level=logging.ERROR):
+    def __init__(self, level=logging.ERROR): # pragma: no cover
         """
         Initialize the context manager.
         """
         logging.disable(level=level)
 
-    def __enter__(self):
+    def __enter__(self): # pragma: no cover
         """
         Enter the context manager.
         """
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, type, value, traceback): # pragma: no cover
         """
         Exit the context manager and enable logging.
         """

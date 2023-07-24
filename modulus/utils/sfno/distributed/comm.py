@@ -236,8 +236,8 @@ def init(params, verbose=False):  # pragma: no cover
             # go for the next step
             model_grid = np.transpose(model_grid, perm)
 
-        # helper routine for creating meta comms
         def merge_comms(comm_count, ranks_lookup, comm_name_1, comm_name_2, merge_name):
+            """helper routine for creating meta comms"""
             if ((get_size(comm_name_1) == 1) and (get_size(comm_name_2) > 1)):
                 if verbose and world_rank == 0:
                     print(f'Creating comm groups for id {merge_name}: {ranks_lookup[comm_name_2]}')
@@ -251,8 +251,8 @@ def init(params, verbose=False):  # pragma: no cover
                 _COMM_NAMES[merge_name] = comm_count
                 comm_count += 1
             elif ((get_size(comm_name_1) > 1) and (get_size(comm_name_2) > 1)):
-                # fuse the lists:
                 def merge_ranks(list1, list2):
+                    """helper routine for fusing lists"""
                     coll = list1 + list2
                     pooled = [set(subList) for subList in coll]
                     merging = True

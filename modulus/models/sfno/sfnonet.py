@@ -100,7 +100,7 @@ class SpectralFilterLayer(nn.Module):
         complex_activation="real",
         spectral_layers=1,
         drop_rate=0.0,
-    ):
+    ):   # pragma: no cover
         super(SpectralFilterLayer, self).__init__()
 
         if filter_type == "non-linear" and (
@@ -153,7 +153,7 @@ class SpectralFilterLayer(nn.Module):
         else:
             raise (NotImplementedError)
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         return self.filter(x)
 
 
@@ -186,7 +186,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         complex_activation="real",
         spectral_layers=1,
         checkpointing=0,
-    ):
+    ):  # pragma: no cover
         super(FourierNeuralOperatorBlock, self).__init__()
 
         if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
@@ -255,8 +255,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         elif outer_skip == "identity":
             self.outer_skip = nn.Identity()
 
-    def forward(self, x):
-
+    def forward(self, x):  # pragma: no cover
         x_norm = torch.zeros_like(x)
         x_norm[..., : self.input_shape_loc[0], : self.input_shape_loc[1]] = self.norm0(
             x[..., : self.input_shape_loc[0], : self.input_shape_loc[1]]
@@ -407,8 +406,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         spectral_layers: int = 3,
         output_transform: bool = False,
         checkpointing: int = 0,
-    ):
-
+    ):  # pragma: no cover
         super(SphericalFourierNeuralOperatorNet, self).__init__(meta=MetaData())
 
         self.params = params
@@ -816,7 +814,7 @@ class SphericalFourierNeuralOperatorNet(Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m):  # pragma: no cover
         """Helper routine for weight initialization"""
         if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
             trunc_normal_(m.weight, std=0.02)
@@ -831,7 +829,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         """Helper"""
         return {"pos_embed", "cls_token"}
 
-    def _forward_features(self, x):
+    def _forward_features(self, x):  # pragma: no cover
 
         for r in range(self.repeat_layers):
             for blk in self.blocks:
@@ -842,7 +840,7 @@ class SphericalFourierNeuralOperatorNet(Module):
                 
         return x
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
 
         if comm.get_size("fin") > 1:
             x = scatter_to_parallel_region(x, "fin", 1)

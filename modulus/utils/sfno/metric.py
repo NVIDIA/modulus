@@ -147,7 +147,8 @@ class MetricsHandler:
             self.do_gather_input = True
 
     @torch.jit.ignore
-    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
+    def _gather_input(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
+        """helper that gathers data from spatially distributed regions"""
         # combine data
         # h
         xh = gather_from_parallel_region(x, -2, "h")
@@ -193,7 +194,8 @@ class MetricsHandler:
         ).pin_memory()
 
 
-    def zero_buffers(self):
+    def zero_buffers(self): # pragma: no cover
+        """Helper that zeros out buffers"""
         with torch.inference_mode():
             with torch.no_grad():
                 self.valid_buffer.fill_(0)

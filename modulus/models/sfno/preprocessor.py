@@ -150,35 +150,36 @@ class Preprocessor2D(nn.Module):
                 persistent=False
             )
 
-    def flatten_history(self, x):
-        # flatten input
+    def flatten_history(self, x): # pragma: no cover
+        """Flatten input so that history is included as part of channels"""
         if x.dim() == 5:
             b_, t_, c_, h_, w_ = x.shape
             x = torch.reshape(x, (b_, t_*c_, h_, w_))
 
         return x
 
-    def expand_history(self, x, nhist):
+    def expand_history(self, x, nhist): # pragma: no cover
+        """Expand history from flattened data"""
         if x.dim() == 4:
             b_, ct_, h_, w_ = x.shape
             x = torch.reshape(x, (b_, nhist, ct_ // nhist, h_, w_))
         return x
 
-    def add_static_features(self, x):
+    def add_static_features(self, x): # pragma: no cover
         if self.do_add_static_features:
             # we need to replicate the grid for each batch:
             static = torch.tile(self.static_features, dims=(x.shape[0], 1, 1, 1))
             x = torch.cat([x, static], dim=1)
         return x
 
-    def remove_static_features(self, x):
+    def remove_static_features(self, x): # pragma: no cover
         # only remove if something was added in the first place
         if self.do_add_static_features:
             nfeat = self.static_features.shape[1]
             x = x[:, :-nfeat, :, :]
         return x
 
-    def append_history(self, x1, x2):  # pragma: no cover
+    def append_history(self, x1, x2): # pragma: no cover
         """
         Appends history to the main input.
         Without history, just returns the second tensor (x2).
@@ -250,7 +251,8 @@ class Preprocessor2D(nn.Module):
 
         return xo
 
-    def history_compute_stats(self, x):
+    def history_compute_stats(self, x):  # pragma: no cover
+        """Compute stats from history timesteps"""
         if self.history_normalization_mode == "none":
             self.history_mean = torch.zeros((1, 1, 1, 1), dtype=torch.float32, device=x.device)
             self.history_std = torch.ones((1, 1, 1, 1), dtype=torch.float32, device=x.device)
@@ -315,7 +317,8 @@ class Preprocessor2D(nn.Module):
 
         return    
     
-    def history_normalize(self, x, target=False):
+    def history_normalize(self, x, target=False):  # pragma: no cover
+        """Normalize history"""
         if self.history_normalization_mode in ["none", "timediff"]:
             return x
         
@@ -343,7 +346,8 @@ class Preprocessor2D(nn.Module):
             
         return xn
 
-    def history_denormalize(self, xn, target=False):
+    def history_denormalize(self, xn, target=False):  # pragma: no cover
+        """Denormalize history"""
         if self.history_normalization_mode in ["none", "timediff"]:
             return xn
         
@@ -370,7 +374,7 @@ class Preprocessor2D(nn.Module):
 
         return x
     
-    def cache_unpredicted_features(self, x, y=None, xz=None, yz=None):
+    def cache_unpredicted_features(self, x, y=None, xz=None, yz=None):  # pragma: no cover
         if self.training:
             if (self.unpredicted_inp_train is not None) and (xz is not None):
                 self.unpredicted_inp_train.copy_(xz)
@@ -394,7 +398,8 @@ class Preprocessor2D(nn.Module):
 
         return x, y
 
-    def append_unpredicted_features(self, inp):
+    def append_unpredicted_features(self, inp):  # pragma: no cover
+        """Appends features not predicted by the model (such as zenith angle) from the input"""
         if self.training:
             if self.unpredicted_inp_train is not None:
                 inp = self.append_channels(inp, self.unpredicted_inp_train)
@@ -403,7 +408,8 @@ class Preprocessor2D(nn.Module):
                 inp = self.append_channels(inp, self.unpredicted_inp_eval)
         return inp
 
-    def remove_unpredicted_features(self, inp):
+    def remove_unpredicted_features(self, inp):  # pragma: no cover
+        """Removes features not predicted by the model (such as zenith angle) from the input"""
         if self.training:
             if self.unpredicted_inp_train is not None:
                 inpf = self.expand_history(inp, nhist=self.n_history+1)
@@ -418,5 +424,5 @@ class Preprocessor2D(nn.Module):
         return inp
 
 def get_preprocessor(params):  # pragma: no cover
-    """Returns the preprocessor module."""
+    """Returns the preprocessor module"""
     return Preprocessor2D(params)

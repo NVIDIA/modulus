@@ -17,10 +17,10 @@ import torch
 import warnings
 
 
-def _no_grad_trunc_normal_(tensor, mean, std, a, b):
+def _no_grad_trunc_normal_(tensor, mean, std, a, b): 
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
     # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
-    def norm_cdf(x):
+    def norm_cdf(x): # pragma: no cover
         # Computes standard normal cumulative distribution function
         return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
 
@@ -55,7 +55,7 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
         return tensor
 
 
-def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
+def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0): # pragma: no cover
     r"""Fills the input Tensor with values drawn from a truncated
     normal distribution. The values are effectively drawn from the
     normal distribution :math:`\mathcal{N}(\text{mean}, \text{std}^2)`

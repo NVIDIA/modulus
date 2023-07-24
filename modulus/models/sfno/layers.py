@@ -95,6 +95,9 @@ class PatchEmbed(nn.Module):
         return x
 
 class EncoderDecoder(nn.Module):
+    """
+    Basic Encoder/Decoder
+    """
     def __init__(self,
             num_layers,
             input_dim,
@@ -145,8 +148,6 @@ class MLP(nn.Module):
             self.fwd = nn.Sequential(fc1, act, drop, fc2, drop)
         else:
             self.fwd = nn.Sequential(fc1, act, fc2)
-
-        # by default, all weights are shared
 
     @torch.jit.ignore
     def checkpoint_forward(self, x):  # pragma: no cover
