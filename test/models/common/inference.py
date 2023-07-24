@@ -38,10 +38,10 @@ def check_ort_version():
             True,
             reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
         )
-    elif ort.__version__ != "1.14.0":
+    elif ort.__version__ != "1.15.1":
         return pytest.mark.skipif(
             True,
-            reason="Must install custom ORT 1.14.0. Other versions do not work \
+            reason="Must install custom ORT 1.15.1. Other versions do not work \
         due to bug in IRFFT: https://github.com/microsoft/onnxruntime/issues/13236",
         )
     else:
