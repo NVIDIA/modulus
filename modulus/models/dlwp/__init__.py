@@ -12,27 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dgl
-import torch
-import sys, os
-import numpy as np
-
-
-def fix_random_seeds():
-    """Fix random seeds for reproducibility"""
-    dgl.seed(0)
-    np.random.seed(0)
-    torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
-
-
-def create_random_input(input_res, dim):
-    """Create random input for testing"""
-    return torch.randn(1, dim, *input_res)
-
-
-def get_icosphere_path():
-    """Get path to icosphere mesh"""
-    script_path = os.path.abspath(__file__)
-    icosphere_path = os.path.join(os.path.dirname(script_path), "icospheres.json")
-    return icosphere_path
+from .dlwp import DLWP
