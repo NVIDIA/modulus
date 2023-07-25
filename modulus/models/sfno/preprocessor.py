@@ -191,6 +191,7 @@ class Preprocessor2D(nn.Module):
         return x
 
     def add_static_features(self, x):  # pragma: no cover
+        """Adds static features to the input"""
         if self.do_add_static_features:
             # we need to replicate the grid for each batch:
             static = torch.tile(self.static_features, dims=(x.shape[0], 1, 1, 1))
@@ -198,7 +199,10 @@ class Preprocessor2D(nn.Module):
         return x
 
     def remove_static_features(self, x):  # pragma: no cover
-        # only remove if something was added in the first place
+        """
+        Removes static features from the input
+        only remove if something was added in the first place
+        """
         if self.do_add_static_features:
             nfeat = self.static_features.shape[1]
             x = x[:, :-nfeat, :, :]
@@ -468,6 +472,7 @@ class Preprocessor2D(nn.Module):
     def cache_unpredicted_features(
         self, x, y=None, xz=None, yz=None
     ):  # pragma: no cover
+        """Caches features not predicted by the model (such as zenith angle)"""
         if self.training:
             if (self.unpredicted_inp_train is not None) and (xz is not None):
                 self.unpredicted_inp_train.copy_(xz)
