@@ -12,20 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import time
+
 import torch
-from dgl.dataloading import GraphDataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel
-import time, os
 import wandb as wb
 
-try:
-    import apex
-except:
-    pass
-
 from modulus.models.meshgraphnet import MeshGraphNet
-from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
+from ahmed_body_dataset import AhmedBodyDataset
 from modulus.distributed.manager import DistributedManager
 
 from modulus.launch.logging import (
@@ -34,7 +30,21 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
+from utils import relative_lp_error
 from constants import Constants
+
+try:
+    from dgl.dataloading import GraphDataLoader
+except:
+    raise ImportError(
+        "Ahmed Body example requires the DGL library. Install the "
+        + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
+    )
+
+try:
+    import apex
+except ImportError:
+    pass
 
 # Instantiate constants
 C = Constants()
@@ -43,19 +53,30 @@ C = Constants()
 class MGNTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
+        self.wb = wb
+        self.rank_zero_logger = rank_zero_logger
 
         # instantiate dataset
-        dataset = VortexSheddingDataset(
-            name="vortex_shedding_train",
+        rank_zero_logger.info("Loading the training dataset...")
+        self.dataset = AhmedBodyDataset(
+            name="ahmed_body_train",
             data_dir=C.data_dir,
             split="train",
             num_samples=C.num_training_samples,
-            num_steps=C.num_training_time_steps,
+        )
+
+        # instantiate validation dataset
+        rank_zero_logger.info("Loading the validation dataset...")
+        self.validation_dataset = AhmedBodyDataset(
+            name="ahmed_body_validation",
+            data_dir=C.data_dir,
+            split="validation",
+            num_samples=C.num_validation_samples,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
-            dataset,
+            self.dataset,
             batch_size=C.batch_size,
             shuffle=True,
             drop_last=True,
@@ -63,16 +84,30 @@ class MGNTrainer:
             use_ddp=dist.world_size > 1,
         )
 
+        # instantiate validation dataloader
+        self.validation_dataloader = GraphDataLoader(
+            self.validation_dataset,
+            batch_size=C.batch_size,
+            shuffle=False,
+            drop_last=True,
+            pin_memory=True,
+            use_ddp=False,
+        )
+
         # instantiate the model
         self.model = MeshGraphNet(
-            C.num_input_features, C.num_edge_features, C.num_output_features
+            C.input_dim_nodes,
+            C.input_dim_edges,
+            C.output_dim,
+            aggregation=C.aggregation,
+            hidden_dim_node_encoder=C.hidden_dim_node_encoder,
+            hidden_dim_edge_encoder=C.hidden_dim_edge_encoder,
+            hidden_dim_node_decoder=C.hidden_dim_node_decoder,
         )
         if C.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
         else:
             self.model = self.model.to(dist.device)
-        if C.watch_model and not C.jit and dist.rank == 0:
-            wb.watch(self.model)
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -112,7 +147,6 @@ class MGNTrainer:
         )
 
     def train(self, graph):
-        graph = graph.to(self.dist.device)
         self.optimizer.zero_grad()
         loss = self.forward(graph)
         self.backward(loss)
@@ -135,6 +169,25 @@ class MGNTrainer:
         else:
             loss.backward()
             self.optimizer.step()
+        lr = self.get_lr()
+        self.wb.log({"lr": lr})
+
+    def get_lr(self):
+        # get the learning rate
+        for param_group in self.optimizer.param_groups:
+            return param_group["lr"]
+
+    @torch.no_grad()
+    def validation(self):
+        error = 0
+        for graph in self.validation_dataloader:
+            graph = graph.to(self.dist.device)
+            pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
+            gt = graph.ndata["y"]
+            error += relative_lp_error(pred, gt)
+        error = error / len(self.validation_dataloader)
+        self.wb.log({"val_error (%)": error})
+        self.rank_zero_logger.info(f"Validation error (%): {error}")
 
 
 if __name__ == "__main__":
@@ -152,12 +205,13 @@ if __name__ == "__main__":
 
     # initialize loggers
     initialize_wandb(
-        project="Modulus-Launch",
+        project="Aero",
         entity="Modulus",
-        name="Vortex_Shedding-Training",
-        group="Vortex_Shedding-DDP-Group",
+        name="Aero-Training",
+        group="Aero-DDP-Group",
         mode=C.wandb_mode,
     )  # Wandb logger
+
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     logger.file_logging()
@@ -165,13 +219,22 @@ if __name__ == "__main__":
     trainer = MGNTrainer(wb, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
+
     for epoch in range(trainer.epoch_init, C.epochs):
+        loss_agg = 0
         for graph in trainer.dataloader:
+            graph = graph.to(dist.device)
             loss = trainer.train(graph)
+            loss_agg += loss.detach().cpu().numpy()
+        loss_agg /= len(trainer.dataloader)
         rank_zero_logger.info(
-            f"epoch: {epoch}, loss: {loss:10.3e}, time per epoch: {(time.time()-start):10.3e}"
+            f"epoch: {epoch}, loss: {loss_agg:10.3e}, lr: {trainer.get_lr()}, time per epoch: {(time.time()-start):10.3e}"
         )
-        wb.log({"loss": loss.detach().cpu()})
+        wb.log({"loss": loss_agg})
+
+        # validation
+        if dist.rank == 0:
+            trainer.validation()
 
         # save checkpoint
         if dist.world_size > 1:
