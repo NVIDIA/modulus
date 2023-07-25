@@ -225,7 +225,6 @@ class _DistMatmulHelper(torch.autograd.Function):
     """Distributed matrix multiply helper"""
 
     @staticmethod
-    @custom_fwd
     def forward(
         ctx, X, weight, bias, inp_group_name, out_group_name
     ):  # pragma: no cover
@@ -250,7 +249,6 @@ class _DistMatmulHelper(torch.autograd.Function):
         return xconvbias
 
     @staticmethod
-    @custom_bwd
     def backward(ctx, grad_out):  # pragma: no cover
         X, weight, bias = ctx.saved_tensors
         gname = ctx.out_group_name
