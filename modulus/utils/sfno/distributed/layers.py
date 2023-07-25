@@ -32,7 +32,7 @@ from modulus.utils.sfno.distributed.helpers import _transpose
 from modulus.models.sfno.initialization import trunc_normal_
 
 
-class distributed_transpose_w(torch.autograd.Function):
+class distributed_transpose_w(torch.autograd.Function):  # pragma: no cover
     """Distributed transpose"""
 
     @staticmethod

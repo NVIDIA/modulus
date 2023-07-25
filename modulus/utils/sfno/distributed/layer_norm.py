@@ -27,7 +27,7 @@ from modulus.utils.sfno.distributed.mappings import (
 )
 
 
-class DistributedInstanceNorm2d(nn.Module):
+class DistributedInstanceNorm2d(nn.Module):  # pragma: no cover
     """
     Computes a distributed instance norm using Welford's online algorithm
     """

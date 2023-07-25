@@ -44,8 +44,8 @@ class _CopyToParallelRegion(torch.autograd.Function):
         return input_
 
     @staticmethod
-    def backward(ctx, grad_output):
-        if comm.is_distributed(ctx.comm_id):  # pragma: no cover
+    def backward(ctx, grad_output):  # pragma: no cover
+        if comm.is_distributed(ctx.comm_id):
             return _reduce(grad_output, group=comm.get_group(ctx.comm_id)), None
         else:
             return grad_output, None
