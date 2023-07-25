@@ -23,7 +23,7 @@ import os
 from matplotlib.patches import Rectangle
 
 from modulus.models.meshgraphnet import MeshGraphNet
-from modulus.datapipes.gnn.mgn_dataset import MGNDataset
+from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
 from modulus.launch.logging import PythonLogger
 from modulus.launch.utils import load_checkpoint
 from constants import Constants
@@ -39,7 +39,7 @@ class MGNRollout:
         logger.info(f"Using {self.device} device")
 
         # instantiate dataset
-        self.dataset = MGNDataset(
+        self.dataset = VortexSheddingDataset(
             name="vortex_shedding_test",
             data_dir=C.data_dir,
             split="test",
