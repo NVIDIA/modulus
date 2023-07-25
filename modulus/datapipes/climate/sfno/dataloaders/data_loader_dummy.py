@@ -76,8 +76,17 @@ class DummyLoader(object):
         # zenith angle yes or no?
         self.add_zenith = self.params.add_zenith
         if self.add_zenith:
-            self.zen_dummy = torch.zeros((self.batch_size, self.n_history+1, 1, self.img_local_shape_x, self.img_local_shape_y), dtype=torch.float32, device=self.device)
-
+            self.zen_dummy = torch.zeros(
+                (
+                    self.batch_size,
+                    self.n_history + 1,
+                    1,
+                    self.img_local_shape_x,
+                    self.img_local_shape_y,
+                ),
+                dtype=torch.float32,
+                device=self.device,
+            )
 
     def _get_files_stats(self):  # pragma: no cover
         self.files_paths = glob.glob(self.location + "/*.h5")
@@ -120,10 +129,12 @@ class DummyLoader(object):
         read_shape_y = min(read_shape_y, self.img_shape_y - read_anchor_y)
 
         # compute padding
-        self.img_local_pad_x = ((self.img_crop_shape_x + self.io_grid[0] - 1)
-            // self.io_grid[0] - read_shape_x)
-        self.img_local_pad_y = ((self.img_crop_shape_y + self.io_grid[1] - 1)
-            // self.io_grid[1] - read_shape_y)
+        self.img_local_pad_x = (
+            self.img_crop_shape_x + self.io_grid[0] - 1
+        ) // self.io_grid[0] - read_shape_x
+        self.img_local_pad_y = (
+            self.img_crop_shape_y + self.io_grid[1] - 1
+        ) // self.io_grid[1] - read_shape_y
 
         self.img_local_offset_x = read_anchor_x
         self.img_local_offset_y = read_anchor_y

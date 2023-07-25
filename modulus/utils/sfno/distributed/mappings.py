@@ -140,19 +140,22 @@ class _GatherFromParallelRegion(torch.autograd.Function):
 # -----------------
 # matmul parallel
 def copy_to_parallel_region(input_, comm_name):  # pragma: no cover
-    """ Parallel copy helper """
+    """Parallel copy helper"""
     return _CopyToParallelRegion.apply(input_, comm_name)
 
+
 def reduce_from_parallel_region(input_, comm_name):  # pragma: no cover
-    """ Parallel reduction helper """
+    """Parallel reduction helper"""
     return _ReduceFromParallelRegion.apply(input_, comm_name)
 
+
 def scatter_to_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """ Parallel scatter helper """
+    """Parallel scatter helper"""
     return _ScatterToParallelRegion.apply(input_, dim, comm_name)
 
+
 def gather_from_parallel_region(input_, dim, comm_name):  # pragma: no cover
-    """ Parallel gather helper """
+    """Parallel gather helper"""
     return _GatherFromParallelRegion.apply(input_, dim, comm_name)
 
 
@@ -200,12 +203,14 @@ def init_gradient_reduction_hooks(
                 num_parameters_shared_model += 1
 
         # if all parameters are shared between all model ranks, then the situation is easy
-        if (num_parameters_shared_model == num_parameters_total):
+        if num_parameters_shared_model == num_parameters_total:
             # we can always use DDP
             ddp_group = None
 
             # register some pre-multiply reduction hooks
-            print("Setting up gradient hooks to account for shared parameter multiplicity")
+            print(
+                "Setting up gradient hooks to account for shared parameter multiplicity"
+            )
             for param in model.parameters():
                 param.register_hook(lambda grad: grad * float(comm.get_size("model")))
         else:

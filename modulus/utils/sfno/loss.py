@@ -65,7 +65,7 @@ class LossHandler(nn.Module):
                         channel_weights[c] = 0.01
             else:
                 channel_weights = torch.Tensor(params.channel_weights).float()
-            
+
             loss_type = loss_type[9:]
         else:
             channel_weights = torch.ones(params.N_out_channels, dtype=torch.float32)
@@ -74,30 +74,34 @@ class LossHandler(nn.Module):
         channel_weights = channel_weights.reshape(1, -1, 1, 1)
         channel_weights = channel_weights / torch.sum(channel_weights)
 
-        if loss_type[:8] == 'absolute':
+        if loss_type[:8] == "absolute":
             absolute = True
             loss_type = loss_type[9:]
         else:
-            absolute = False           
+            absolute = False
 
-        if loss_type[:7] == 'squared':
+        if loss_type[:7] == "squared":
             squared = True
             loss_type = loss_type[8:]
         else:
             squared = False
 
-        if loss_type[:8] == 'temp-std':
+        if loss_type[:8] == "temp-std":
             eps = 1e-6
-            global_stds = torch.from_numpy(np.load(params.global_stds_path)).reshape(1, -1, 1, 1)
-            time_diff_stds = torch.from_numpy(np.load(params.time_diff_stds_path)).reshape(1, -1, 1, 1)
-            time_var_weights = global_stds / (time_diff_stds+eps)
+            global_stds = torch.from_numpy(np.load(params.global_stds_path)).reshape(
+                1, -1, 1, 1
+            )
+            time_diff_stds = torch.from_numpy(
+                np.load(params.time_diff_stds_path)
+            ).reshape(1, -1, 1, 1)
+            time_var_weights = global_stds / (time_diff_stds + eps)
             # time_var_weights = 1 / (time_diff_stds+eps)
             if squared:
                 time_var_weights = time_var_weights**2
             channel_weights = channel_weights * time_var_weights
             loss_type = loss_type[9:]
 
-        self.register_buffer('channel_weights', channel_weights)
+        self.register_buffer("channel_weights", channel_weights)
 
         # TODO: clean this up and replace it with string parsing to set the parameters
         if loss_type == "l2":
@@ -137,7 +141,7 @@ class LossHandler(nn.Module):
 
         # weighting factor for the case of multistep training
         # TODO change hardcoded weighting
-        multistep_weight = torch.arange(1, self.n_future+2, dtype=torch.float32)
+        multistep_weight = torch.arange(1, self.n_future + 2, dtype=torch.float32)
         multistep_weight = multistep_weight / torch.sum(multistep_weight)
         multistep_weight = multistep_weight.reshape(-1, 1, 1, 1)
 

@@ -182,7 +182,9 @@ class ERA5DaliESDataloader(object):
         self.add_noise = params.add_noise if train else False
         self.noise_std = params.noise_std
         self.add_zenith = params.add_zenith if hasattr(params, "add_zenith") else False
-        self.timestep_hours = params.timestep_hours if hasattr(params, "timestep_hours") else 6
+        self.timestep_hours = (
+            params.timestep_hours if hasattr(params, "timestep_hours") else 6
+        )
         if train:
             self.n_samples = (
                 params.n_train_samples if hasattr(params, "n_train_samples") else None
@@ -302,13 +304,13 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.in_channels]
                 self.in_bias = means
                 self.in_scale = stds
-            elif params.normalization == 'mixed':
+            elif params.normalization == "mixed":
                 means = np.load(params.global_means_path)[:, self.in_channels]
                 stds = np.load(params.global_stds_path)[:, self.in_channels]
                 self.in_bias = means
                 self.in_scale = stds
                 for i, c in enumerate(self.in_channels):
-                    if params.channel_names[c][0] == 'r':
+                    if params.channel_names[c][0] == "r":
                         self.in_bias[:, i] = 0.0
                         self.in_scale[:, i] = 150.0
             elif params.normalization == "none":
@@ -327,13 +329,13 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.out_channels]
                 self.out_bias = means
                 self.out_scale = stds
-            elif params.normalization == 'mixed':
+            elif params.normalization == "mixed":
                 means = np.load(params.global_means_path)[:, self.out_channels]
                 stds = np.load(params.global_stds_path)[:, self.out_channels]
                 self.out_bias = means
                 self.out_scale = stds
                 for o, c in enumerate(self.out_channels):
-                    if params.channel_names[c][0] == 'r': # replace with regex
+                    if params.channel_names[c][0] == "r":  # replace with regex
                         self.out_bias[:, o] = 0.0
                         self.out_scale[:, o] = 150.0
             elif params.normalization == "none":

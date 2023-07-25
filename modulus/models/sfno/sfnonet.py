@@ -25,16 +25,16 @@ from modulus.models.sfno.factorizations import get_contract_fun, _contract_dense
 
 # helpers
 from modulus.models.sfno.layers import (
-    trunc_normal_, 
-    DropPath, 
-    MLP, 
+    trunc_normal_,
+    DropPath,
+    MLP,
     EncoderDecoder,
 )
 
 # import global convolution and non-linear spectral layers
 from modulus.models.sfno.layers import (
-    SpectralConv2d, 
-    SpectralAttention2d, 
+    SpectralConv2d,
+    SpectralAttention2d,
     SpectralAttentionS2,
 )
 
@@ -100,7 +100,7 @@ class SpectralFilterLayer(nn.Module):
         complex_activation="real",
         spectral_layers=1,
         drop_rate=0.0,
-    ):   # pragma: no cover
+    ):  # pragma: no cover
         super(SpectralFilterLayer, self).__init__()
 
         if filter_type == "non-linear" and (
@@ -180,8 +180,8 @@ class FourierNeuralOperatorBlock(nn.Module):
         inner_skip="linear",
         outer_skip=None,  # None, nn.linear or nn.Identity
         use_mlp=False,
-        comm_feature_inp_name = None,
-        comm_feature_hidden_name = None,
+        comm_feature_inp_name=None,
+        comm_feature_hidden_name=None,
         complex_network=True,
         complex_activation="real",
         spectral_layers=1,
@@ -241,13 +241,14 @@ class FourierNeuralOperatorBlock(nn.Module):
         if use_mlp == True:
             MLPH = DistributedMLP if (comm.get_size("matmul") > 1) else MLP
             mlp_hidden_dim = int(embed_dim * mlp_ratio)
-            self.mlp = MLPH(in_features = embed_dim,
-                hidden_features = mlp_hidden_dim,
-                act_layer = act_layer,
-                drop_rate = drop_rate,
-                comm_inp_name = comm_feature_inp_name,
-                comm_hidden_name = comm_feature_hidden_name,
-                checkpointing = checkpointing,
+            self.mlp = MLPH(
+                in_features=embed_dim,
+                hidden_features=mlp_hidden_dim,
+                act_layer=act_layer,
+                drop_rate=drop_rate,
+                comm_inp_name=comm_feature_inp_name,
+                comm_hidden_name=comm_feature_hidden_name,
+                checkpointing=checkpointing,
             )
 
         if outer_skip == "linear":
@@ -375,7 +376,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         self,
         params: dict,
         spectral_transform: str = "sht",
-        grid = 'legendre-gauss',
+        grid="legendre-gauss",
         filter_type: str = "non-linear",
         operator_type: str = "diagonal",
         inp_shape: Tuple[int] = (721, 1440),
@@ -384,12 +385,12 @@ class SphericalFourierNeuralOperatorNet(Module):
         out_chans: int = 2,
         embed_dim: int = 256,
         num_layers: int = 12,
-        repeat_layers = 1,
+        repeat_layers=1,
         use_mlp: int = True,
         mlp_ratio: int = 2.0,
         activation_function: str = "gelu",
         encoder_layers: int = 1,
-        pos_embed: str = 'direct',
+        pos_embed: str = "direct",
         drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
         sparsity_threshold: float = 0.0,
@@ -415,9 +416,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             if hasattr(params, "spectral_transform")
             else spectral_transform
         )
-        self.grid = (
-            params.grid if hasattr(params, "grid") else grid
-        )
+        self.grid = params.grid if hasattr(params, "grid") else grid
         self.filter_type = (
             params.filter_type if hasattr(params, "filter_type") else filter_type
         )
@@ -503,7 +502,9 @@ class SphericalFourierNeuralOperatorNet(Module):
             else spectral_layers
         )
         self.output_transform = (
-            params.output_transform if hasattr(params, "output_transform") else output_transform
+            params.output_transform
+            if hasattr(params, "output_transform")
+            else output_transform
         )
         self.checkpointing = (
             params.checkpointing if hasattr(params, "checkpointing") else checkpointing
@@ -555,14 +556,22 @@ class SphericalFourierNeuralOperatorNet(Module):
             ifft_handle = th.InverseRealFFT2
 
             # determine the global padding
-            inp_dist_h = (self.inp_shape[0] + comm.get_size("h") - 1) // comm.get_size("h")
-            inp_dist_w = (self.inp_shape[1] + comm.get_size("w") - 1) // comm.get_size("w")
+            inp_dist_h = (
+                (self.inp_shape[0] + comm.get_size("h")) - 1
+            ) // comm.get_size("h")
+            inp_dist_w = (
+                (self.inp_shape[1] + comm.get_size("w")) - 1
+            ) // comm.get_size("w")
             self.inp_padding = (
-                inp_dist_h * comm.get_size("h") - self.inp_shape[0], 
+                inp_dist_h * comm.get_size("h") - self.inp_shape[0],
                 inp_dist_w * comm.get_size("w") - self.inp_shape[1],
             )
-            out_dist_h = (self.out_shape[0] + comm.get_size("h") - 1) // comm.get_size("h")
-            out_dist_w = (self.out_shape[1] + comm.get_size("w") - 1) // comm.get_size("w")
+            out_dist_h = (
+                (self.out_shape[0] + comm.get_size("h")) - 1
+            ) // comm.get_size("h")
+            out_dist_w = (
+                (self.out_shape[1] + comm.get_size("w")) - 1
+            ) // comm.get_size("w")
             self.out_padding = (
                 out_dist_h * comm.get_size("h") - self.out_shape[0],
                 out_dist_w * comm.get_size("w") - self.out_shape[1],
@@ -594,10 +603,10 @@ class SphericalFourierNeuralOperatorNet(Module):
             ).float()
             self.itrans_up = ifft_handle(
                 *self.out_shape_eff, lmax=modes_lat, mmax=modes_lon
-                ).float()
+            ).float()
             self.trans = fft_handle(
                 self.h, self.w, lmax=modes_lat, mmax=modes_lon
-                ).float()
+            ).float()
             self.itrans = ifft_handle(
                 self.h, self.w, lmax=modes_lat, mmax=modes_lon
             ).float()
@@ -644,7 +653,9 @@ class SphericalFourierNeuralOperatorNet(Module):
                 comm_out_name="fout",
             )
             fblock_mlp_inp_name = self.encoder.comm_out_name
-            fblock_mlp_hidden_name = "fout" if (self.encoder.comm_out_name=="fin") else "fin"
+            fblock_mlp_hidden_name = (
+                "fout" if (self.encoder.comm_out_name == "fin") else "fin"
+            )
         else:
             self.encoder = EncoderDecoder(
                 num_layers=self.encoder_layers,
@@ -663,13 +674,17 @@ class SphericalFourierNeuralOperatorNet(Module):
         # pick norm layer
         if self.normalization_layer == "layer_norm":
             norm_layer_inp = partial(
-                nn.LayerNorm, normalized_shape=(self.inp_shape_loc[0], self.inp_shape_loc[1]), eps=1e-6
+                nn.LayerNorm,
+                normalized_shape=(self.inp_shape_loc[0], self.inp_shape_loc[1]),
+                eps=1e-6,
             )
             norm_layer_mid = partial(
                 nn.LayerNorm, normalized_shape=(self.h_loc, self.w_loc), eps=1e-6
             )
             norm_layer_out = partial(
-                nn.LayerNorm, normalized_shape=(self.out_shape_loc[0], self.out_shape_loc[1]), eps=1e-6
+                nn.LayerNorm,
+                normalized_shape=(self.out_shape_loc[0], self.out_shape_loc[1]),
+                eps=1e-6,
             )
         elif self.normalization_layer == "instance_norm":
             if comm.get_size("spatial") > 1:
@@ -766,7 +781,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         else:
             self.decoder = EncoderDecoder(
                 num_layers=self.encoder_layers,
-                input_dim=self.embed_dim + self.big_skip*self.out_chans,
+                input_dim=self.embed_dim + self.big_skip * self.out_chans,
                 output_dim=self.out_chans,
                 hidden_dim=int(1 * self.embed_dim),
                 act=self.activation_function,
@@ -774,16 +789,22 @@ class SphericalFourierNeuralOperatorNet(Module):
 
         # output transform
         if self.big_skip:
-            self.residual_transform = nn.Conv2d(self.out_chans, self.out_chans, 1, bias=False)
+            self.residual_transform = nn.Conv2d(
+                self.out_chans, self.out_chans, 1, bias=False
+            )
 
         # learned position embedding
         if self.pos_embed == "direct":
             # currently using deliberately a differently shape position embedding
-            self.pos_embed = nn.Parameter(torch.zeros(1, self.embed_dim, self.inp_shape_loc[0], self.inp_shape_loc[1]))
+            self.pos_embed = nn.Parameter(
+                torch.zeros(
+                    1, self.embed_dim, self.inp_shape_loc[0], self.inp_shape_loc[1]
+                )
+            )
             self.pos_embed.is_shared_mp = ["matmul"]
             self.pos_embed.sharded_dims_mp = [None, None, "h", "w"]
             self.pos_embed.type = "direct"
-            trunc_normal_(self.pos_embed, std=.02)
+            trunc_normal_(self.pos_embed, std=0.02)
         elif self.pos_embed == "frequency":
             if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
                 lmax_loc = self.itrans_up.lmax_local
@@ -792,13 +813,20 @@ class SphericalFourierNeuralOperatorNet(Module):
                 lmax_loc = self.itrans_up.lmax
                 mmax_loc = self.itrans_up.mmax
 
-            rcoeffs = nn.Parameter(torch.tril(torch.randn(1, self.embed_dim, lmax_loc, mmax_loc), diagonal=0))
-            ccoeffs = nn.Parameter(torch.tril(torch.randn(1, self.embed_dim, lmax_loc, mmax_loc-1), diagonal=-1))
-            trunc_normal_(rcoeffs, std=.02)
-            trunc_normal_(ccoeffs, std=.02)
+            rcoeffs = nn.Parameter(
+                torch.tril(
+                    torch.randn(1, self.embed_dim, lmax_loc, mmax_loc), diagonal=0
+                )
+            )
+            ccoeffs = nn.Parameter(
+                torch.tril(
+                    torch.randn(1, self.embed_dim, lmax_loc, mmax_loc - 1), diagonal=-1
+                )
+            )
+            trunc_normal_(rcoeffs, std=0.02)
+            trunc_normal_(ccoeffs, std=0.02)
             self.pos_embed = nn.ParameterList([rcoeffs, ccoeffs])
             self.pos_embed.type = "frequency"
-
 
         elif self.pos_embed == "none" or self.pos_embed == "None":
             delattr(self, "pos_embed")
@@ -808,9 +836,13 @@ class SphericalFourierNeuralOperatorNet(Module):
         if self.output_transform:
             minmax_channels = []
             for o, c in enumerate(params.out_channels):
-                if params.channel_names[c][0] == 'r':
+                if params.channel_names[c][0] == "r":
                     minmax_channels.append(o)
-            self.register_buffer('minmax_channels', torch.Tensor(minmax_channels).to(torch.long), persistent=False)
+            self.register_buffer(
+                "minmax_channels",
+                torch.Tensor(minmax_channels).to(torch.long),
+                persistent=False,
+            )
 
         self.apply(self._init_weights)
 
@@ -837,21 +869,21 @@ class SphericalFourierNeuralOperatorNet(Module):
                     x = checkpoint(blk, x)
                 else:
                     x = blk(x)
-                
+
         return x
 
     def forward(self, x):  # pragma: no cover
 
         if comm.get_size("fin") > 1:
             x = scatter_to_parallel_region(x, "fin", 1)
-        
+
         # save big skip
         if self.big_skip:
             # if output shape differs, use the spectral transforms to change resolution
             if self.out_shape != self.inp_shape:
                 xtype = x.dtype
                 # only take the predicted channels as residual
-                residual = x[..., :self.out_chans, :, :].to(torch.float32)
+                residual = x[..., : self.out_chans, :, :].to(torch.float32)
                 with amp.autocast(enabled=False):
                     residual = self.trans_down(residual)
                     residual = residual.contiguous()
@@ -860,27 +892,38 @@ class SphericalFourierNeuralOperatorNet(Module):
                     residual = residual.to(dtype=xtype)
             else:
                 # only take the predicted channels
-                residual = x[..., :self.out_chans, :, :]
+                residual = x[..., : self.out_chans, :, :]
 
         if self.checkpointing >= 1:
             x = checkpoint(self.encoder, x)
         else:
             x = self.encoder(x)
 
-        if hasattr(self, 'pos_embed'):
+        if hasattr(self, "pos_embed"):
 
             if self.pos_embed.type == "frequency":
 
-                pos_embed = torch.stack([self.pos_embed[0], nn.functional.pad(self.pos_embed[1], (1,0), "constant", 0)], dim=-1)
+                pos_embed = torch.stack(
+                    [
+                        self.pos_embed[0],
+                        nn.functional.pad(self.pos_embed[1], (1, 0), "constant", 0),
+                    ],
+                    dim=-1,
+                )
                 with amp.autocast(enabled=False):
                     pos_embed = self.itrans_up(torch.view_as_complex(pos_embed))
             else:
                 pos_embed = self.pos_embed
 
             # old way of treating unequally shaped weights
-            if self.pos_embed.type == "direct" and self.inp_shape_loc != self.inp_shape_eff:
+            if (
+                self.pos_embed.type == "direct"
+                and self.inp_shape_loc != self.inp_shape_eff
+            ):
                 xp = torch.zeros_like(x)
-                xp[..., :self.inp_shape_loc[0], :self.inp_shape_loc[1]] = x[..., :self.inp_shape_loc[0], :self.inp_shape_loc[1]] + pos_embed
+                xp[..., : self.inp_shape_loc[0], : self.inp_shape_loc[1]] = (
+                    x[..., : self.inp_shape_loc[0], : self.inp_shape_loc[1]] + pos_embed
+                )
                 x = xp
             else:
                 x = x + pos_embed
@@ -898,13 +941,15 @@ class SphericalFourierNeuralOperatorNet(Module):
             x = checkpoint(self.decoder, x)
         else:
             x = self.decoder(x)
-            
-        if hasattr(self.decoder, "comm_out_name") and (comm.get_size(self.decoder.comm_out_name) > 1):
-            x =	gather_from_parallel_region(x, self.decoder.comm_out_name, 1)
+
+        if hasattr(self.decoder, "comm_out_name") and (
+            comm.get_size(self.decoder.comm_out_name) > 1
+        ):
+            x = gather_from_parallel_region(x, self.decoder.comm_out_name, 1)
 
         if self.big_skip:
             x = x + self.residual_transform(residual)
-        
+
         if self.output_transform:
             x[:, self.minmax_channels] = torch.sigmoid(x[:, self.minmax_channels])
 

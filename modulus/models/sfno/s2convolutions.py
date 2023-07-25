@@ -20,6 +20,7 @@ from torch.cuda import amp
 
 # import FactorizedTensor from tensorly for tensorized operations
 import tensorly as tl
+
 tl.set_backend("pytorch")
 # from tensorly.plugins import use_opt_einsum
 # use_opt_einsum('optimal')
@@ -29,7 +30,10 @@ from tltorch.factorized_tensors.core import FactorizedTensor
 from modulus.models.sfno.activations import ComplexReLU
 from modulus.models.sfno.contractions import compl_muladd2d_fwd, compl_mul2d_fwd
 from modulus.models.sfno.contractions import _contract_localconv_fwd
-from modulus.models.sfno.contractions import _contract_blockconv_fwd, _contractadd_blockconv_fwd
+from modulus.models.sfno.contractions import (
+    _contract_blockconv_fwd,
+    _contractadd_blockconv_fwd,
+)
 from modulus.models.sfno.factorizations import get_contract_fun
 
 # for the experimental module
@@ -71,7 +75,7 @@ class SpectralConvS2(nn.Module):
 
         if scale == "auto":
             # heuristic
-            scale = (2 / (in_channels + out_channels))
+            scale = 2 / (in_channels + out_channels)
 
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
@@ -80,16 +84,17 @@ class SpectralConvS2(nn.Module):
         self.modes_lon = self.inverse_transform.mmax
 
         self.scale_residual = (
-            (self.forward_transform.nlat != self.inverse_transform.nlat)
-            or (self.forward_transform.nlon != self.inverse_transform.nlon)
-        )
-        if hasattr(self.forward_transform, 'grid'):
-            self.scale_residual = self.scale_residual or (self.forward_transform.grid != self.inverse_transform.grid)
+            self.forward_transform.nlat != self.inverse_transform.nlat
+        ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
+        if hasattr(self.forward_transform, "grid"):
+            self.scale_residual = self.scale_residual or (
+                self.forward_transform.grid != self.inverse_transform.grid
+            )
 
         # Make sure we are using a Complex Factorized Tensor
         if factorization is None:
             factorization = "ComplexDense"  # No factorization
-        complex_weight = (factorization[:7].lower() == 'complex')
+        complex_weight = factorization[:7].lower() == "complex"
 
         # remember factorization details
         self.operator_type = operator_type
@@ -141,10 +146,10 @@ class SpectralConvS2(nn.Module):
                 self.weight = nn.Parameter(init)
             else:
                 init = scale * torch.randn(*weight_shape)
-            
+
             self.weight = nn.Parameter(init)
 
-            if self.operator_type == 'dhconv':
+            if self.operator_type == "dhconv":
                 self.weight.is_shared_mp = ["matmul", "w"]
                 self.weight.sharded_dims_mp = [None for _ in weight_shape]
                 self.weight.sharded_dims_mp[-1] = "h"
@@ -200,6 +205,7 @@ class SpectralConvS2(nn.Module):
 
         return x, residual
 
+
 class SpectralAttentionS2(nn.Module):
     """
     Spherical non-linear FNO layer
@@ -237,9 +243,10 @@ class SpectralAttentionS2(nn.Module):
         self.inverse_transform = inverse_transform
 
         self.scale_residual = (
-            self.forward_transform.nlat != self.inverse_transform.nlat
-        ) or (self.forward_transform.nlon != self.inverse_transform.nlon
-        ) or (self.forward_transform.grid != self.inverse_transform.grid)
+            (self.forward_transform.nlat != self.inverse_transform.nlat)
+            or (self.forward_transform.nlon != self.inverse_transform.nlon)
+            or (self.forward_transform.grid != self.inverse_transform.grid)
+        )
 
         assert inverse_transform.lmax == self.modes_lat
         assert inverse_transform.mmax == self.modes_lon

@@ -147,7 +147,7 @@ class MetricsHandler:
             self.do_gather_input = True
 
     @torch.jit.ignore
-    def _gather_input(self, x: torch.Tensor) -> torch.Tensor: # pragma: no cover
+    def _gather_input(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         """helper that gathers data from spatially distributed regions"""
         # combine data
         # h
@@ -181,20 +181,21 @@ class MetricsHandler:
 
         # create CPU copies for all the buffers
         self.valid_buffer_cpu = torch.zeros(
-            (3), dtype=torch.float32, device='cpu'
+            (3), dtype=torch.float32, device="cpu"
         ).pin_memory()
         self.valid_weighted_rmse_cpu = torch.zeros(
-            (self.out_channels_local), dtype=torch.float32, device='cpu'
+            (self.out_channels_local), dtype=torch.float32, device="cpu"
         ).pin_memory()
         self.acc_curve_cpu = torch.zeros(
-            (self.out_channels_local, self.valid_autoreg_steps+1), dtype=torch.float32, device='cpu'
+            (self.out_channels_local, self.valid_autoreg_steps + 1),
+            dtype=torch.float32,
+            device="cpu",
         ).pin_memory()
         self.acc_auc_cpu = torch.zeros(
-            (self.out_channels_local), dtype=torch.float32, device='cpu'
+            (self.out_channels_local), dtype=torch.float32, device="cpu"
         ).pin_memory()
 
-
-    def zero_buffers(self): # pragma: no cover
+    def zero_buffers(self):  # pragma: no cover
         """Helper that zeros out buffers"""
         with torch.inference_mode():
             with torch.no_grad():
@@ -225,7 +226,9 @@ class MetricsHandler:
         if idt == 0:
             self.valid_steps += 1.0
             self.valid_loss += loss
-            self.valid_l1 += self.l1_handle(prediction, target) * self.metric_correction_factor
+            self.valid_l1 += (
+                self.l1_handle(prediction, target) * self.metric_correction_factor
+            )
             self.valid_weighted_rmse += (
                 self.weighted_rmse_handle(
                     rmse_prediction, rmse_target, self.latitude_weights
@@ -320,7 +323,7 @@ class MetricsHandler:
 
             # compute auc
             acc_auc = self.simpquad(self.acc_curve, dim=1)
-            
+
             # copy buffers to cpu
             # sync on stream
             self.stream.wait_stream(torch.cuda.current_stream())
@@ -328,31 +331,41 @@ class MetricsHandler:
             # schedule copy
             with torch.cuda.stream(self.stream):
                 self.valid_buffer_cpu.copy_(self.valid_buffer, non_blocking=True)
-                self.valid_weighted_rmse_cpu.copy_(self.valid_weighted_rmse, non_blocking=True)
+                self.valid_weighted_rmse_cpu.copy_(
+                    self.valid_weighted_rmse, non_blocking=True
+                )
                 self.acc_curve_cpu.copy_(self.acc_curve, non_blocking=True)
                 self.acc_auc_cpu.copy_(acc_auc, non_blocking=True)
-            
+
             # wait for stream
             self.stream.synchronize()
 
             # prepare logs with the minimum content
             valid_buffer_arr = self.valid_buffer_cpu.numpy()
-            logs = {"base": {"validation steps" : valid_steps_local,
-                             "validation loss": valid_buffer_arr[0],
-                             "validation L1": valid_buffer_arr[1]},
-                    "metrics": {}}
+            logs = {
+                "base": {
+                    "validation steps": valid_steps_local,
+                    "validation loss": valid_buffer_arr[0],
+                    "validation L1": valid_buffer_arr[1],
+                },
+                "metrics": {},
+            }
 
             valid_weighted_rmse_arr = self.valid_weighted_rmse_cpu.numpy()
             for var_name, var_idx in self.rmse_vars.items():
-                logs["metrics"]['validation ' + var_name] = valid_weighted_rmse_arr[var_idx]
+                logs["metrics"]["validation " + var_name] = valid_weighted_rmse_arr[
+                    var_idx
+                ]
 
             acc_curve_arr = self.acc_curve_cpu.numpy()
             for var_name, var_idx in self.acc_vars.items():
-                logs["metrics"]['ACC time ' + var_name] = acc_curve_arr[var_idx, self.valid_autoreg_steps]
+                logs["metrics"]["ACC time " + var_name] = acc_curve_arr[
+                    var_idx, self.valid_autoreg_steps
+                ]
 
             acc_auc_arr = self.acc_auc_cpu.numpy()
             for var_name, var_idx in self.acc_auc_vars.items():
-                logs["metrics"]['ACC AUC ' + var_name] = acc_auc_arr[var_idx]
+                logs["metrics"]["ACC AUC " + var_name] = acc_auc_arr[var_idx]
 
         self.logs = logs
 
@@ -360,4 +373,3 @@ class MetricsHandler:
             return logs, self.acc_curve
         else:
             return logs
-

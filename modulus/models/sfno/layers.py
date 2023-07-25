@@ -94,19 +94,22 @@ class PatchEmbed(nn.Module):
         x = self.proj(x).flatten(2)
         return x
 
+
 class EncoderDecoder(nn.Module):
     """
     Basic Encoder/Decoder
     """
-    def __init__(self,
-            num_layers,
-            input_dim,
-            output_dim,
-            hidden_dim,
-            act,
-        ): # pragma: no cover
+
+    def __init__(
+        self,
+        num_layers,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        act,
+    ):  # pragma: no cover
         super(EncoderDecoder, self).__init__()
-        
+
         encoder_modules = []
         current_dim = input_dim
         for i in range(num_layers):
@@ -118,6 +121,7 @@ class EncoderDecoder(nn.Module):
 
     def forward(self, x):
         return self.fwd(x)
+
 
 class MLP(nn.Module):
     """
@@ -240,8 +244,8 @@ class SpectralConv2d(nn.Module):
     ):  # pragma: no cover
         super(SpectralConv2d, self).__init__()
 
-        if scale == 'auto':
-            scale = (1 / (in_channels * out_channels))
+        if scale == "auto":
+            scale = 1 / (in_channels * out_channels)
 
         self.hard_thresholding_fraction = hard_thresholding_fraction
         self.contract_handle = _contract_diagonal
@@ -255,11 +259,13 @@ class SpectralConv2d(nn.Module):
         self.modes_lat = int(modes_lat * self.hard_thresholding_fraction)
         self.modes_lon = int(modes_lon * self.hard_thresholding_fraction)
 
-        self.scale_residual = (self.forward_transform.nlat != self.inverse_transform.nlat) \
-                                or (self.forward_transform.nlon != self.inverse_transform.nlon)
+        self.scale_residual = (
+            self.forward_transform.nlat != self.inverse_transform.nlat
+        ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
         # new simple linear layer
         self.w = nn.Parameter(
-            scale * torch.randn(in_channels, out_channels, self.modes_lat, self.modes_lon, 2)
+            scale
+            * torch.randn(in_channels, out_channels, self.modes_lat, self.modes_lon, 2)
         )
         # optional bias
         if bias:
@@ -342,8 +348,9 @@ class SpectralAttention2d(nn.Module):
         assert inverse_transform.lmax == self.modes_lat
         assert inverse_transform.mmax == self.modes_lon
 
-        self.scale_residual = (self.forward_transform.nlat != self.inverse_transform.nlat) \
-            or (self.forward_transform.nlon != self.inverse_transform.nlon)
+        self.scale_residual = (
+            self.forward_transform.nlat != self.inverse_transform.nlat
+        ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
 
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
@@ -392,7 +399,7 @@ class SpectralAttention2d(nn.Module):
     def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
-        
+
         if not self.scale_residual:
             residual = x
 
@@ -460,9 +467,11 @@ class SpectralAttentionS2(nn.Module):
         assert inverse_transform.lmax == self.modes_lat
         assert inverse_transform.mmax == self.modes_lon
 
-        self.scale_residual = (self.forward_transform.nlat != self.inverse_transform.nlat) \
-                               or (self.forward_transform.nlon != self.inverse_transform.nlon) \
-                               or (self.forward_transform.grid != self.inverse_transform.grid)
+        self.scale_residual = (
+            (self.forward_transform.nlat != self.inverse_transform.nlat)
+            or (self.forward_transform.nlon != self.inverse_transform.nlon)
+            or (self.forward_transform.grid != self.inverse_transform.grid)
+        )
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
         for l in range(1, self.spectral_layers):

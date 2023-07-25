@@ -238,39 +238,50 @@ def init(params, verbose=False):  # pragma: no cover
 
         def merge_comms(comm_count, ranks_lookup, comm_name_1, comm_name_2, merge_name):
             """helper routine for creating meta comms"""
-            if ((get_size(comm_name_1) == 1) and (get_size(comm_name_2) > 1)):
+            if (get_size(comm_name_1) == 1) and (get_size(comm_name_2) > 1):
                 if verbose and world_rank == 0:
-                    print(f'Creating comm groups for id {merge_name}: {ranks_lookup[comm_name_2]}')
+                    print(
+                        f"Creating comm groups for id {merge_name}: {ranks_lookup[comm_name_2]}"
+                    )
                 _COMM_LIST.append(get_group(comm_name_2))
                 _COMM_NAMES[merge_name] = comm_count
                 comm_count += 1
-            elif ((get_size(comm_name_1) > 1) and (get_size(comm_name_2) == 1)):
+            elif (get_size(comm_name_1) > 1) and (get_size(comm_name_2) == 1):
                 if verbose and world_rank == 0:
-                    print(f'Creating comm groups for id {merge_name}: {ranks_lookup[comm_name_1]}')
+                    print(
+                        f"Creating comm groups for id {merge_name}: {ranks_lookup[comm_name_1]}"
+                    )
                 _COMM_LIST.append(get_group(comm_name_1))
                 _COMM_NAMES[merge_name] = comm_count
                 comm_count += 1
-            elif ((get_size(comm_name_1) > 1) and (get_size(comm_name_2) > 1)):
+            elif (get_size(comm_name_1) > 1) and (get_size(comm_name_2) > 1):
+
                 def merge_ranks(list1, list2):
                     """helper routine for fusing lists"""
                     coll = list1 + list2
                     pooled = [set(subList) for subList in coll]
                     merging = True
                     while merging:
-                        merging=False
-                        for i,group in enumerate(pooled):
-                            merged = next((g for g in pooled[i+1:] if g.intersection(group)),None)
-                            if not merged: continue
+                        merging = False
+                        for i, group in enumerate(pooled):
+                            merged = next(
+                                (g for g in pooled[i + 1 :] if g.intersection(group)),
+                                None,
+                            )
+                            if not merged:
+                                continue
                             group.update(merged)
                             pooled.remove(merged)
                             merging = True
                     return [list(x) for x in pooled]
-    
-                model_groups = merge_ranks(ranks_lookup[comm_name_1], ranks_lookup[comm_name_2])
+
+                model_groups = merge_ranks(
+                    ranks_lookup[comm_name_1], ranks_lookup[comm_name_2]
+                )
                 if verbose and world_rank == 0:
-                    print(f'Creating comm groups for id {merge_name}: {model_groups}')
+                    print(f"Creating comm groups for id {merge_name}: {model_groups}")
                 for grp in model_groups:
-                    tmp_group = dist.new_group(ranks = grp)
+                    tmp_group = dist.new_group(ranks=grp)
                     if world_rank in grp:
                         _COMM_LIST.append(tmp_group)
                         _COMM_NAMES[merge_name] = comm_count
@@ -283,21 +294,25 @@ def init(params, verbose=False):  # pragma: no cover
 
         # merge matmul
         comm_count = merge_comms(comm_count, ranks_lookup, "fin", "fout", "matmul")
-                    
+
         # now the data and model comm:
-        model_groups = np.reshape(np.arange(0, world_size), (-1, model_parallel_size)).tolist()
+        model_groups = np.reshape(
+            np.arange(0, world_size), (-1, model_parallel_size)
+        ).tolist()
         for grp in model_groups:
             if len(grp) > 1:
-                tmp_group = dist.new_group(ranks = grp)
+                tmp_group = dist.new_group(ranks=grp)
                 if world_rank in grp:
                     _COMM_LIST.append(tmp_group)
                     _COMM_NAMES["model"] = comm_count
                     comm_count += 1
-        
+
         if data_parallel_size == world_size:
             if verbose and world_rank == 0:
-                print(f"Creating comm groups for id data: {[list(range(0, world_size))]}")
-            
+                print(
+                    f"Creating comm groups for id data: {[list(range(0, world_size))]}"
+                )
+
             _COMM_LIST.append(None)
             _COMM_NAMES["data"] = comm_count
         else:
@@ -305,14 +320,14 @@ def init(params, verbose=False):  # pragma: no cover
 
             if verbose and world_rank == 0:
                 print(f"Creating comm groups for id data: {data_groups}")
-            
+
             for grp in data_groups:
-                tmp_group = dist.new_group(ranks = grp)
+                tmp_group = dist.new_group(ranks=grp)
                 if world_rank in grp:
                     _COMM_LIST.append(tmp_group)
                     _COMM_NAMES["data"] = comm_count
 
     if params.log_to_screen:
         logging.info("Finished Wireup")
-    
+
     return

@@ -90,7 +90,7 @@ class GeneralES(object):
         self.is_parallel = is_parallel
         self.host_prefetch_buffers = host_prefetch_buffers
         self.zenith_angle = zenith_angle
-        self.timestep_hours=timestep_hours
+        self.timestep_hours = timestep_hours
 
         # set the read slices
         # we do not support channel parallelism yet
@@ -245,9 +245,13 @@ class GeneralES(object):
     def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
         self.files_paths = []
-        self.location = [self.location] if not isinstance(self.location, list) else self.location
+        self.location = (
+            [self.location] if not isinstance(self.location, list) else self.location
+        )
         for location in self.location:
-            self.files_paths = self.files_paths + glob.glob(os.path.join(location, "????.h5"))
+            self.files_paths = self.files_paths + glob.glob(
+                os.path.join(location, "????.h5")
+            )
         self.file_format = "h5"
 
         # # TODO: probably requires fix to re-enable zarr
@@ -364,12 +368,14 @@ class GeneralES(object):
             logging.info("Delta t: {} hours".format(self.timestep_hours * self.dt))
             logging.info(
                 "Including {} hours of past history in training at a frequency of {} hours".format(
-                    self.timestep_hours * self.dt * self.n_history, self.timestep_hours * self.dt
+                    self.timestep_hours * self.dt * self.n_history,
+                    self.timestep_hours * self.dt,
                 )
             )
             logging.info(
                 "Including {} hours of future targets in training at a frequency of {} hours".format(
-                    self.timestep_hours * self.dt * self.n_future, self.timestep_hours * self.dt
+                    self.timestep_hours * self.dt * self.n_future,
+                    self.timestep_hours * self.dt,
                 )
             )
 
@@ -381,7 +387,7 @@ class GeneralES(object):
         if not self.is_parallel:
             self._init_buffers()
 
-    def _init_double_buff_host(self, n_tsteps): # pragma: no cover
+    def _init_double_buff_host(self, n_tsteps):  # pragma: no cover
         buffs = [
             np.zeros(
                 (
@@ -404,7 +410,7 @@ class GeneralES(object):
         ]
         return buffs
 
-    def _init_double_buff_gpu(self, n_tsteps): # pragma: no cover
+    def _init_double_buff_gpu(self, n_tsteps):  # pragma: no cover
         buffs = [
             cpx.zeros_pinned(
                 (
@@ -456,24 +462,25 @@ class GeneralES(object):
 
         # zenith angle for input
         inp_times = np.asarray(
-            [jan_01_epoch + datetime.timedelta(
-                hours=idx * self.timestep_hours) 
-                for idx in range(local_idx-self.dt*self.n_history, local_idx+1, self.dt)]
+            [
+                jan_01_epoch + datetime.timedelta(hours=idx * self.timestep_hours)
+                for idx in range(
+                    local_idx - self.dt * self.n_history, local_idx + 1, self.dt
+                )
+            ]
         )
         cos_zenith_inp = np.expand_dims(
             cos_zenith_angle(
-                inp_times,
-                self.lon_grid_local,
-                self.lat_grid_local).astype(np.float32),
-                axis=1,
+                inp_times, self.lon_grid_local, self.lat_grid_local
+            ).astype(np.float32),
+            axis=1,
         )
         zen_inp[...] = cos_zenith_inp[...]
 
         # zenith angle for target:
-        tar_times = np.asarray([
-                jan_01_epoch + datetime.timedelta(
-                    hours=idx * self.timestep_hours
-                ) 
+        tar_times = np.asarray(
+            [
+                jan_01_epoch + datetime.timedelta(hours=idx * self.timestep_hours)
                 for idx in range(
                     local_idx + self.dt,
                     local_idx + self.dt * (self.n_future + 1) + 1,
@@ -481,7 +488,12 @@ class GeneralES(object):
                 )
             ]
         )
-        cos_zenith_tar = np.expand_dims(cos_zenith_angle(tar_times, self.lon_grid_local, self.lat_grid_local).astype(np.float32), axis=1)
+        cos_zenith_tar = np.expand_dims(
+            cos_zenith_angle(
+                tar_times, self.lon_grid_local, self.lat_grid_local
+            ).astype(np.float32),
+            axis=1,
+        )
         zen_tar[...] = cos_zenith_tar[...]
 
         return

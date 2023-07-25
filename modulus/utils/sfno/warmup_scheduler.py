@@ -18,7 +18,7 @@ from torch.optim import lr_scheduler as lrs
 from typing import List
 
 
-class WarmupScheduler(lrs._LRScheduler): # pragma: no cover
+class WarmupScheduler(lrs._LRScheduler):  # pragma: no cover
     """Scheduler with linear warmup"""
 
     def __init__(self, scheduler, num_warmup_steps, start_lr):
@@ -56,7 +56,7 @@ class WarmupScheduler(lrs._LRScheduler): # pragma: no cover
             group["lr"] for group in self.warmup_scheduler.optimizer.param_groups
         ]
 
-    def step(self): # pragma: no cover
+    def step(self):  # pragma: no cover
         """Scheduler step"""
         shandle = (
             self.scheduler
@@ -67,7 +67,7 @@ class WarmupScheduler(lrs._LRScheduler): # pragma: no cover
         self.steps += 1
         self._last_lr = [group["lr"] for group in shandle.optimizer.param_groups]
 
-    def state_dict(self): # pragma: no cover
+    def state_dict(self):  # pragma: no cover
         """Returns the scheduler's state dict."""
         state_dict = {
             key: value
@@ -79,7 +79,7 @@ class WarmupScheduler(lrs._LRScheduler): # pragma: no cover
 
         return state_dict
 
-    def load_state_dict(self, state_dict): # pragma: no cover
+    def load_state_dict(self, state_dict):  # pragma: no cover
         """Load the scheduler's state dict."""
         warmup_scheduler = state_dict.pop("warmup_scheduler")
         scheduler = state_dict.pop("scheduler")

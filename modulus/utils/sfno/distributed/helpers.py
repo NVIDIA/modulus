@@ -168,44 +168,46 @@ def _split(input_, dim_, group=None):  # pragma: no cover
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
-    
+
     # Bypass the function if we are using only 1 GPU.
     comm_size = dist.get_world_size(group=group)
     if comm_size == 1:
         return input_
-    
+
     # Split along last dimension.
     input_list = split_tensor_along_dim(input_, dim_, comm_size)
-    
+
     # Note: torch.split does not create contiguous tensors by default.
     rank = dist.get_rank(group=group)
     output = input_list[rank].contiguous(memory_format=input_format)
-    
+
     return output
 
 
 def _gather(input_, dim_, group=None):  # pragma: no cover
     """Gather tensors and concatinate along the last dimension."""
     # get input format
-    input_format = get_memory_format(input_) 
+    input_format = get_memory_format(input_)
 
     comm_size = dist.get_world_size(group=group)
     # Bypass the function if we are using only 1 GPU.
-    if comm_size==1:
+    if comm_size == 1:
         return input_
 
     # sanity checks
-    assert(dim_ < input_.dim()), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+    assert (
+        dim_ < input_.dim()
+    ), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
 
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
-    
+
     input_ = input_.contiguous(memory_format=input_format)
     tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
     tensor_list[comm_rank] = input_
     dist.all_gather(tensor_list, input_, group=group)
-    
+
     # Note: torch.cat already creates a contiguous tensor.
     output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
-    
+
     return output
