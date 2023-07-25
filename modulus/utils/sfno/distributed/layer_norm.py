@@ -23,7 +23,7 @@ from typing import Tuple
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import (
     gather_from_parallel_region,
-    copy_to_spatial_parallel_region,
+    copy_to_parallel_region,
 )
 
 
@@ -40,10 +40,10 @@ class DistributedInstanceNorm2d(nn.Module):  # pragma: no cover
         self.eps = eps
         self.affine = affine
         if self.affine:
-            self.weight = nn.Parameter(torch.ones(1, num_features, 1, 1))
-            self.bias = nn.Parameter(torch.zeros(1, num_features, 1, 1))
-            self.weight.is_shared_mp = ["h", "w"]
-            self.bias.is_shared_mp = ["h", "w"]
+            self.weight = nn.Parameter(torch.ones(num_features))
+            self.bias = nn.Parameter(torch.zeros(num_features))
+            self.weight.is_shared_mp = ["spatial"]
+            self.bias.is_shared_mp = ["spatial"]
 
         self.gather_mode = "welford"
 
@@ -130,8 +130,8 @@ class DistributedInstanceNorm2d(nn.Module):  # pragma: no cover
                 raise ValueError(f"Unknown gather mode {self.gather_mode}")
 
             # this is absolutely necessary to get the correct graph in the backward pass
-            mean = copy_to_spatial_parallel_region(mean)
-            var = copy_to_spatial_parallel_region(var)
+            mean = copy_to_parallel_region(mean, "spatial")
+            var = copy_to_parallel_region(var, "spatial")
 
         x = x.to(dtype)
         mean = mean.to(dtype)
@@ -142,6 +142,6 @@ class DistributedInstanceNorm2d(nn.Module):  # pragma: no cover
 
         # affine transform if we use it
         if self.affine:
-            x = self.weight * x + self.bias
+            x = self.weight.reshape(-1, 1, 1) * x + self.bias.reshape(-1, 1, 1)
 
         return x
