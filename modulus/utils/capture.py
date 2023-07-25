@@ -17,7 +17,7 @@ import modulus
 import torch
 import logging
 from logging import Logger
-from typing import Union, Any, Callable, NewType
+from typing import Union, Any, Callable, NewType, Dict
 from contextlib import nullcontext
 
 float16 = NewType("float16", torch.float16)
@@ -32,10 +32,11 @@ class _StaticCapture(object):
     should be used instead for training and evaluation functions.
     """
 
-    # Grad scalar singleton use for checkpointing
-    # This limits the number of staticcapture AMP training instances to just one per program
-    scaler_dict = None
-    scaler_singleton = None
+    # Grad scaler and checkpoint singleton use for checkpoint saving and loading
+    # Since an instance of Static capture does not exist for checkpoint functions
+    # one must use class functions to access state dicts
+    _amp_scalers = {}
+    _amp_scaler_checkpoints = {}
 
     def __init__(
         self,
@@ -43,7 +44,8 @@ class _StaticCapture(object):
         optim: Union[optim, None] = None,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
-        use_amp: bool = True,
+        use_autocast: bool = True,
+        use_gradscaler: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
     ):
@@ -78,12 +80,15 @@ class _StaticCapture(object):
             self.cuda_graphs_enabled = use_graphs
 
             # AMP GPU
-            if use_amp and not self.model.meta.amp_gpu:
+            if not self.model.meta.amp_gpu:
                 self.logger.warning(
                     f"Model {model.meta.name} does not support AMP on GPUs, turning off"
                 )
-                use_amp = False
-            self.amp_enabled = use_amp
+                use_autocast = False
+                use_gradscaler = False
+            self.amp_enabled = use_gradscaler or use_autocast
+            self.use_gradscaler = use_gradscaler
+            self.use_autocast = use_autocast
 
             self.amp_device = "cuda"
             # Check if bfloat16 is suppored on the GPU
@@ -94,9 +99,8 @@ class _StaticCapture(object):
                 amp_type = torch.float16
             self.amp_dtype = amp_type
             # Gradient Scaler
-            scalar_enabled = self.amp_enabled and amp_type == torch.float16
-            self.scaler = torch.cuda.amp.GradScaler(enabled=scalar_enabled)
-            _StaticCapture._register_scaler(self.scaler, self.logger)
+            scaler_enabled = self.amp_enabled and amp_type == torch.float16
+            self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
             self.replay_stream = torch.cuda.current_stream(self.model.device)
         else:
@@ -117,11 +121,8 @@ class _StaticCapture(object):
                 )
                 amp_type = torch.bfloat16
             self.amp_dtype = torch.bfloat16
-            # Gradient Scaler
-            self.scaler = torch.cuda.amp.GradScaler(
-                enabled=False
-            )  # Always false on CPU
-            _StaticCapture._register_scaler(self.scaler, self.logger)
+            # Gradient Scaler (not enabled)
+            self.scaler = self._init_amp_scaler(False, self.logger)
             self.replay_stream = None
 
         if self.cuda_graphs_enabled:
@@ -229,31 +230,74 @@ class _StaticCapture(object):
             self.scaler.scale(output).backward()
         return output
 
-    @classmethod
-    def _register_scaler(
-        cls, scaler: torch.cuda.amp.GradScaler, logger: Logger
-    ) -> None:
-        """Class method for saving/loading the grad scaler state dictionary singleton
+    def _init_amp_scaler(
+        self, scaler_enabled: bool, logger: Logger
+    ) -> torch.cuda.amp.GradScaler:
+        # Create gradient scaler
+        scaler = torch.cuda.amp.GradScaler(enabled=scaler_enabled)
+        # Store scaler in class variable
+        scaler_id = f"scaler_{len(_StaticCapture._amp_scalers.keys())}"
+        _StaticCapture._amp_scalers[scaler_id] = scaler
+        logging.debug(f"Created gradient scaler {scaler_id}")
 
-        Parameters
-        ----------
-        scaler : torch.cuda.amp.GradScaler
-            AMP grad scaler
-        logger : Logger
-            Python console logger
-        """
-        if cls.scaler_dict:
+        # If our checkpoint dictionary has weights for this scaler lets load
+        if scaler_id in _StaticCapture._amp_scaler_checkpoints:
             try:
-                scaler.load_state_dict(cls.scaler_dict)
-                logger.success("Loaded grad scaler state dictionary")
-            except:
-                logger.error(
-                    "Failed to load grad scalar state dict from saved singleton. "
-                    + "This could be from loading a invalid checkpoint or using multiple "
-                    + "static captures that have AMP active. Be careful."
+                scaler.load_state_dict(
+                    _StaticCapture._amp_scaler_checkpoints[scaler_id]
                 )
+                del _StaticCapture._amp_scaler_checkpoints[scaler_id]
+                logger.success(f"Loaded grad scaler state dictionary {scaler_id}.")
+            except Exception as e:
+                logger.error(
+                    f"Failed to load grad scaler {scaler_id} state dict from saved "
+                    + "checkpoints. Did you switch the ordering of delcared static captures?"
+                )
+                raise ValueError(e)
+        return scaler
 
-        cls.scaler_singleton = scaler
+    @classmethod
+    def state_dict(cls) -> Dict[str, Any]:
+        """Class method for accsessing the StaticCapture.
+        Use this in a training checkpoint function.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of states to save for file
+        """
+        scaler_states = {}
+        for key, value in cls._amp_scalers.items():
+            scaler_states[key] = value.state_dict()
+
+        return scaler_states
+
+    @classmethod
+    def load_state_dict(cls, state_dict: Dict[str, Any]) -> None:
+        """Class method for loading a StaticCapture state dictionary.
+        Use this in a training checkpoint function.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of states to save for file
+        """
+        scaler_states = {}
+        for key, value in state_dict.items():
+            # If scaler has been created already load the weights
+            if key in cls._amp_scalers:
+                try:
+                    cls._amp_scalers[key].load_state_dict(value)
+                    logger.success(f"Loaded grad scaler state dictionary {key}.")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to load grad scaler state dict with id {key}."
+                        + " Something went wrong!"
+                    )
+                    raise ValueError(e)
+            # Otherwise store in checkpoints for later use
+            else:
+                cls._amp_scaler_checkpoints[key] = value
 
 
 class StaticCaptureTraining(_StaticCapture):
@@ -309,7 +353,7 @@ class StaticCaptureTraining(_StaticCapture):
     Note
     ----
     Presently only a single instance of training static capture with AMP can be
-    used due to a grad scalar singleton.
+    used due to a grad scaler singleton.
 
     Note
     ----
@@ -333,6 +377,7 @@ class StaticCaptureTraining(_StaticCapture):
             optim,
             logger,
             use_graphs,
+            use_amp,
             use_amp,
             cuda_graph_warmup,
             amp_type,
@@ -404,6 +449,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
             logger,
             use_graphs,
             use_amp,
+            False,
             cuda_graph_warmup,
             amp_type,
         )
