@@ -19,9 +19,9 @@ from modulus.utils.sfno.distributed import comm
 
 # matmul parallel
 from modulus.utils.sfno.distributed.mappings import copy_to_parallel_region
-from modulus.utils.sfno.distributed.mappings import reduce_from_matmul_parallel_region
-from modulus.utils.sfno.distributed.mappings import scatter_to_matmul_parallel_region
-from modulus.utils.sfno.distributed.mappings import gather_from_matmul_parallel_region
+from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
+from modulus.utils.sfno.distributed.mappings import scatter_to_parallel_region
+from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 # spatial parallel
 from modulus.utils.sfno.distributed.mappings import gather_from_spatial_parallel_region
