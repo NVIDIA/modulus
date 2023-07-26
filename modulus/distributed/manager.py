@@ -354,7 +354,6 @@ class DistributedManager(object):
         # Get parent group's params
         group = manager._group[group_name] if group_name else None
         group_size = dist.get_world_size(group=group)
-        group_rank = dist.get_rank(group=group)
         num_groups = manager.world_size // group_size
 
         # Get number of sub-groups per parent group
