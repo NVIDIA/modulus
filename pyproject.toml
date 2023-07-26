@@ -40,3 +40,6 @@ version = {attr = "modulus.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["modulus", "modulus.*"] 
+
+[tool.pytest.ini_options]
+markers = ["multigpu: mark test as multi-gpu to run only when --multigpu is specified."]
