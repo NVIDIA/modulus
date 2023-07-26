@@ -67,7 +67,7 @@ def test_sfno_forward(device, checkpointing):
             True,
             "relu",
             "direct",
-            "layer_norm",
+            "instance_norm",
             True,
             None,
             False,

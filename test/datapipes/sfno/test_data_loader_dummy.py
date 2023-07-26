@@ -44,7 +44,7 @@ def test_dummyloader():
     location = "none"
     train = True
     device = "cuda:0"
-
+    
     # Create an instance of the class
     dummyloader = DummyLoader(params, location, train, device)
 
@@ -56,8 +56,8 @@ def test_dummyloader():
     assert dummyloader.in_channels == params.in_channels
     assert dummyloader.out_channels == params.out_channels
     assert dummyloader.roll == params.roll
-    assert dummyloader.io_grid == params.io_grid
-    assert dummyloader.io_rank == params.io_rank
+    assert dummyloader.io_grid == params.io_grid[1:]
+    assert dummyloader.io_rank == params.io_rank[1:]
     assert dummyloader.location == location
     assert dummyloader.train == train
     # assert dummyloader.device == device
