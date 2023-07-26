@@ -41,7 +41,7 @@ def test_sfno_forward(device, checkpointing):
     # Construct sfno model
     model = SphericalFourierNeuralOperatorNet(
         params,
-        img_shape=(h, w),
+        inp_shape=(h, w),
         scale_factor=4,
         in_chans=in_chans,
         out_chans=in_chans,
@@ -123,7 +123,7 @@ def test_sfno_constructor(
     arg_list = [
         {
             "params": {},
-            "img_shape": (h, w),
+            "inp_shape": (h, w),
             "scale_factor": 4,
             "in_chans": in_chans,
             "out_chans": in_chans,
@@ -146,7 +146,7 @@ def test_sfno_constructor(
         },
         {
             "params": {},
-            "img_shape": (h, w),
+            "inp_shape": (h, w),
             "scale_factor": 4,
             "in_chans": in_chans,
             "out_chans": in_chans,
@@ -195,7 +195,7 @@ def test_sfno_optims(device):
 
         model_kwds = {
             "params": {},
-            "img_shape": (h, w),
+            "inp_shape": (h, w),
             "scale_factor": 4,
             "in_chans": in_chans,
             "out_chans": in_chans,
@@ -238,7 +238,7 @@ def test_sfno_checkpoint(device):
 
     model_kwds = {
         "params": {},
-        "img_shape": (h, w),
+        "inp_shape": (h, w),
         "scale_factor": 3,
         "in_chans": in_chans,
         "out_chans": in_chans,
@@ -277,7 +277,7 @@ def test_sfno_deploy(device):
 
     model_kwds = {
         "params": {},
-        "img_shape": (h, w),
+        "inp_shape": (h, w),
         "scale_factor": 3,
         "in_chans": in_chans,
         "out_chans": in_chans,
