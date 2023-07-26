@@ -371,7 +371,6 @@ class SphericalFourierNeuralOperatorNet(Module):
     ...         embed_dim=16,
     ...         num_layers=2,
     ...         encoder_layers=1,
-    ...         num_blocks=4,
     ...         spectral_layers=2,
     ...         use_mlp=True,)
     >>> model(torch.randn(1, 2, 8, 16)).shape
