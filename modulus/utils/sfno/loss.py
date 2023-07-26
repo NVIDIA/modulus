@@ -184,9 +184,9 @@ class LossHandler(nn.Module):
             chw = self.channel_weights
 
         if self.training:
-            chw = (self.chw * self.multistep_weight).reshape(1, -1, 1, 1)
+            chw = (chw * self.multistep_weight).reshape(1, -1, 1, 1)
         else:
-            chw = self.chw
+            chw = chw
 
         return self.loss_obj(prd, tar, chw)
 

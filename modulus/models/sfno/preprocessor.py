@@ -208,7 +208,7 @@ class Preprocessor2D(nn.Module):
             x = x[:, :-nfeat, :, :]
         return x
 
-    def append_history(self, x1, x2):  # pragma: no cover
+    def append_history(self, x1, x2, step):  # pragma: no cover
         """
         Appends history to the main input.
         Without history, just returns the second tensor (x2).
