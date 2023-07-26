@@ -68,7 +68,7 @@ from modulus.models.meta import ModelMetaData
 class MetaData(ModelMetaData):
     name: str = "SFNO"
     # Optimization
-    jit: bool = True
+    jit: bool = False
     cuda_graphs: bool = True
     amp_cpu: bool = True
     amp_gpu: bool = True
@@ -296,11 +296,13 @@ class SphericalFourierNeuralOperatorNet(Module):
         Dictionary of parameters
     spectral_transform : str, optional
         Type of spectral transformation to use, by default "sht"
+    grid : str, optional
+        Type of grid to use, by default "legendre-gauss"
     filter_type : str, optional
         Type of filter to use ('linear', 'non-linear'), by default "non-linear"
     operator_type : str, optional
         Type of operator to use ('diaginal', 'dhconv'), by default "diagonal"
-    img_shape : tuple, optional
+    inp_shape : tuple, optional
         Shape of the input channels, by default (721, 1440)
     scale_factor : int, optional
         Scale factor to use, by default 16
@@ -312,6 +314,8 @@ class SphericalFourierNeuralOperatorNet(Module):
         Dimension of the embeddings, by default 256
     num_layers : int, optional
         Number of layers in the network, by default 12
+    repeat_layers : int, optional
+        Number of times to repeat the layers, by default 1
     use_mlp : int, optional
         Whether to use MLP, by default True
     mlp_ratio : int, optional
@@ -320,18 +324,18 @@ class SphericalFourierNeuralOperatorNet(Module):
         Activation function to use, by default "gelu"
     encoder_layers : int, optional
         Number of layers in the encoder, by default 1
-    pos_embed : bool, optional
-        Whether to use positional embedding, by default True
+    pos_embed : str, optional
+        Type of positional embedding to use, by default "direct"
     drop_rate : float, optional
         Dropout rate, by default 0.0
     drop_path_rate : float, optional
         Dropout path rate, by default 0.0
-    num_blocks : int, optional
-        Number of blocks in the network, by default 16
     sparsity_threshold : float, optional
         Threshold for sparsity, by default 0.0
     normalization_layer : str, optional
         Type of normalization layer to use ("layer_norm", "instance_norm", "none"), by default "instance_norm"
+    max_modes : Any, optional
+        Maximum modes to use, by default None
     hard_thresholding_fraction : float, optional
         Fraction of hard thresholding to apply, by default 1.0
     use_complex_kernels : bool, optional
@@ -350,6 +354,8 @@ class SphericalFourierNeuralOperatorNet(Module):
         Type of complex activation function to use, by default "real"
     spectral_layers : int, optional
         Number of spectral layers, by default 3
+    output_transform : bool, optional
+        Whether to use an output transform, by default False
     checkpointing : int, optional
         Number of checkpointing segments, by default 0
 
@@ -358,14 +364,13 @@ class SphericalFourierNeuralOperatorNet(Module):
     >>> from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
     >>> model = SFNO(
     ...         params={},
-    ...         img_shape=(8, 16),
+    ...         inp_shape=(8, 16),
     ...         scale_factor=4,
     ...         in_chans=2,
     ...         out_chans=2,
     ...         embed_dim=16,
     ...         num_layers=2,
     ...         encoder_layers=1,
-    ...         num_blocks=4,
     ...         spectral_layers=2,
     ...         use_mlp=True,)
     >>> model(torch.randn(1, 2, 8, 16)).shape
