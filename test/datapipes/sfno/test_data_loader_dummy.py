@@ -44,7 +44,7 @@ def test_dummyloader():
     location = "none"
     train = True
     device = "cuda:0"
-    
+
     # Create an instance of the class
     dummyloader = DummyLoader(params, location, train, device)
 
