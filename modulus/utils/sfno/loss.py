@@ -90,10 +90,10 @@ class LossHandler(nn.Module):
             eps = 1e-6
             global_stds = torch.from_numpy(np.load(params.global_stds_path)).reshape(
                 1, -1, 1, 1
-            )
+            )[:, params.in_channels]
             time_diff_stds = torch.from_numpy(
                 np.load(params.time_diff_stds_path)
-            ).reshape(1, -1, 1, 1)
+            ).reshape(1, -1, 1, 1)[:, params.in_channels]
             time_var_weights = global_stds / (time_diff_stds + eps)
             # time_var_weights = 1 / (time_diff_stds+eps)
             if squared:
@@ -349,11 +349,11 @@ class GeometricH1Loss(nn.Module):
         self,
         img_size: Tuple[int, int],
         p: Optional[float] = 2.0,
-        size_average: Optional[bool] = True,
+        size_average: Optional[bool] = False,
         reduction: Optional[bool] = True,
         absolute: Optional[bool] = False,
         squared: Optional[bool] = False,
-        alpha: Optional[float] = 0.9,
+        alpha: Optional[float] = 0.5,
     ):  # pragma: no cover
         super(GeometricH1Loss, self).__init__()
 

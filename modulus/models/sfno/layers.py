@@ -304,7 +304,7 @@ class SpectralConv2d(nn.Module):
         if hasattr(self, "b"):
             x = x + self.b
 
-        return x
+        return x, residual
 
 
 class SpectralAttention2d(nn.Module):

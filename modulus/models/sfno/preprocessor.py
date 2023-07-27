@@ -205,7 +205,7 @@ class Preprocessor2D(nn.Module):
         """
         if self.do_add_static_features:
             nfeat = self.static_features.shape[1]
-            x = x[:, :-nfeat, :, :]
+            x = x[:, : x.shape[1] - nfeat, :, :]
         return x
 
     def append_history(self, x1, x2, step):  # pragma: no cover
@@ -218,33 +218,28 @@ class Preprocessor2D(nn.Module):
         # this is necessary in order to copy the targets unpredicted features
         # (such as zenith angle) into the inputs unpredicted features,
         # such that they can be forward in the next autoregressive step
-        # extract utar
-        utar = None
+
+        # update the unpredicted input
         if self.training:
             if (self.unpredicted_tar_train is not None) and (
                 step < self.unpredicted_tar_train.shape[1]
             ):
                 utar = self.unpredicted_tar_train[:, step : (step + 1), :, :, :]
-        else:
-            if (self.unpredicted_tar_eval is not None) and (
-                step < self.unpredicted_tar_eval.shape[1]
-            ):
-                utar = self.unpredicted_tar_eval[:, step : (step + 1), :, :, :]
-
-        # update the unpredicted input
-        if utar is not None:
-            if self.n_history == 0:
-                if self.training:
+                if self.n_history == 0:
                     self.unpredicted_inp_train.copy_(utar)
                 else:
-                    self.unpredicted_inp_eval.copy_(utar)
-            else:
-                if self.training:
                     self.unpredicted_inp_train.copy_(
                         torch.cat(
                             [self.unpredicted_inp_train[:, 1:, :, :, :], utar], dim=1
                         )
                     )
+        else:
+            if (self.unpredicted_tar_eval is not None) and (
+                step < self.unpredicted_tar_eval.shape[1]
+            ):
+                utar = self.unpredicted_tar_eval[:, step : (step + 1), :, :, :]
+                if self.n_history == 0:
+                    self.unpredicted_inp_eval.copy_(utar)
                 else:
                     self.unpredicted_inp_eval.copy_(
                         torch.cat(
@@ -253,19 +248,18 @@ class Preprocessor2D(nn.Module):
                     )
 
         # without history, just return the second tensor
-        # we can exit here since the unpredicted features have been dealt with
-        if self.n_history == 0:
-            return x2
+        if self.n_history > 0:
+            # this is more complicated
+            x1 = self.expand_history(x1, nhist=self.n_history + 1)
+            x2 = self.expand_history(x2, nhist=1)
 
-        # this is more complicated
-        x1 = self.expand_history(x1, nhist=self.n_history + 1)
-        x2 = self.expand_history(x2, nhist=1)
+            # append
+            res = torch.cat([x1[:, 1:, :, :, :], x2], dim=1)
 
-        # append
-        res = torch.cat([x1[:, 1:, :, :, :], x2], dim=1)
-
-        # flatten again
-        res = self.flatten_history(res)
+            # flatten again
+            res = self.flatten_history(res)
+        else:
+            res = x2
 
         return res
 
@@ -273,22 +267,13 @@ class Preprocessor2D(nn.Module):
         """Appends channels"""
         xdim = x.dim()
 
-        if xdim == 4:
-            b_, c_, h_, w_ = x.shape
-            x = torch.reshape(
-                x, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
-            )
+        x = self.expand_history(x, self.n_history + 1)
+        xc = self.expand_history(xc, self.n_history + 1)
 
-        if xc.dim() == 4:
-            b_, c_, h_, w_ = xc.shape
-            xe = torch.reshape(
-                xc, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
-            )
-        else:
-            xe = xc
+        # concatenate
+        xo = torch.cat([x, xc], dim=2)
 
-        xo = torch.cat([x, xe], dim=2)
-
+        # flatten if requested
         if xdim == 4:
             xo = self.flatten_history(xo)
 

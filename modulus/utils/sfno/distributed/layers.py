@@ -543,7 +543,7 @@ class DistributedPatchEmbed(nn.Module):
             x = gather_from_parallel_region(x, 1, "matmul")
 
         if self.output_parallel:
-            x = copy_to_parallel_region(x, 1, "matmul")
+            x = copy_to_parallel_region(x, "matmul")
 
         B, C, H, W = x.shape
         assert (

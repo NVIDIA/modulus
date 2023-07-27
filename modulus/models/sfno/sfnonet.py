@@ -146,7 +146,7 @@ class SpectralFilterLayer(nn.Module):
                 rank=rank,
                 factorization=factorization,
                 separable=separable,
-                bias=True,
+                bias=False,
                 use_tensorly=False if factorization is None else True,
             )
 

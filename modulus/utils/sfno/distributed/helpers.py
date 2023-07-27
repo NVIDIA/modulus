@@ -31,6 +31,38 @@ def get_memory_format(tensor):  # pragma: no cover
         return torch.contiguous_format
 
 
+def gather_uneven(tensor, dim, comm_name):  # pragma: no cover
+    """Helper routine to gather unevenly distributed tensors"""
+
+    if comm.get_size(comm_name) == 1:
+        return tensor
+
+    # gather dims
+    dim_tensor = torch.tensor(
+        [tensor.shape[dim]], dtype=torch.int, device=tensor.device
+    )
+    dim_list = [torch.empty_like(dim_tensor) for _ in range(comm.get_size(comm_name))]
+    dim_list[comm.get_rank(comm_name)] = dim_tensor
+    dist.all_gather(dim_list, dim_tensor, group=comm.get_group(comm_name))
+
+    # gather tensor
+    gathered_shape = list(tensor.shape)
+    tensor_list = []
+    for rshape in dim_list:
+        gathered_shape[dim] = rshape.item()
+        tensor_list.append(
+            torch.empty(gathered_shape, dtype=tensor.dtype, device=tensor.device)
+        )
+
+    tensor_list[comm.get_rank(comm_name)] = tensor
+    dist.all_gather(tensor_list, tensor, group=comm.get_group(comm_name))
+
+    # concatenate
+    result = torch.cat(tensor_list, dim=dim)
+
+    return result
+
+
 def sync_params(model, mode="broadcast"):  # pragma: no cover
     """Helper routine to ensure shared weights are the same after initialization"""
 
