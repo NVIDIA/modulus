@@ -37,10 +37,10 @@ ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
 RUN git clone --recurse-submodules https://github.com/dmlc/dgl.git && \
-	cd dgl/ && DGL_HOME="/workspace/dgl/" bash script/build_dgl.sh -g && \
+	cd dgl/ && DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
 	cd python && \
 	python setup.py install && \
-	python setup.py build_ext --inplace; \
+	python setup.py build_ext --inplace
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
