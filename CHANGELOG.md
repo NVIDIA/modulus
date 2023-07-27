@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - DGL install changed from pypi to source
+- Updated SFNO to add support for super resolution, flexible checkpoining, etc.
 
 ### Deprecated
 

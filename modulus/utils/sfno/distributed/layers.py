@@ -18,21 +18,17 @@ import torch.nn.functional as F
 from modulus.utils.sfno.distributed import comm
 
 # matmul parallel
-from modulus.utils.sfno.distributed.mappings import copy_to_matmul_parallel_region
-from modulus.utils.sfno.distributed.mappings import reduce_from_matmul_parallel_region
-from modulus.utils.sfno.distributed.mappings import scatter_to_matmul_parallel_region
-from modulus.utils.sfno.distributed.mappings import gather_from_matmul_parallel_region
-
-# spatial parallel
-from modulus.utils.sfno.distributed.mappings import gather_from_spatial_parallel_region
-from modulus.utils.sfno.distributed.mappings import scatter_to_spatial_parallel_region
+from modulus.utils.sfno.distributed.mappings import copy_to_parallel_region
+from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
+from modulus.utils.sfno.distributed.mappings import scatter_to_parallel_region
+from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 from modulus.utils.sfno.distributed.helpers import _transpose
 
 from modulus.models.sfno.initialization import trunc_normal_
 
 
-class distributed_transpose_w(torch.autograd.Function):
+class distributed_transpose_w(torch.autograd.Function):  # pragma: no cover
     """Distributed transpose"""
 
     @staticmethod
@@ -89,7 +85,7 @@ class DistributedRealFFT2(nn.Module):
 
         # frequency paddings
         ldist = (self.lmax + self.comm_size_h - 1) // self.comm_size_h
-        self.lpad = ldist * self.comm_size_polar - self.lmax
+        self.lpad = ldist * self.comm_size_h - self.lmax
         mdist = (self.mmax + self.comm_size_w - 1) // self.comm_size_w
         self.mpad = mdist * self.comm_size_w - self.mmax
 
@@ -225,6 +221,198 @@ class DistributedInverseRealFFT2(nn.Module):
         return out
 
 
+class _DistMatmulHelper(torch.autograd.Function):
+    """Distributed matrix multiply helper"""
+
+    @staticmethod
+    def forward(
+        ctx, X, weight, bias, inp_group_name, out_group_name
+    ):  # pragma: no cover
+
+        # store some variables
+        ctx.save_for_backward(X, weight, bias)
+        ctx.out_group_name = out_group_name
+
+        # matrix multiplication
+        xconv = F.conv2d(X, weight, bias=None)
+
+        # reduce
+        if comm.get_size(inp_group_name) > 1:
+            dist.all_reduce(xconv, group=comm.get_group(inp_group_name))
+
+        # add bias
+        if bias is not None:
+            xconvbias = xconv + bias
+        else:
+            xconvbias = xconv
+
+        return xconvbias
+
+    @staticmethod
+    def backward(ctx, grad_out):  # pragma: no cover
+        X, weight, bias = ctx.saved_tensors
+        gname = ctx.out_group_name
+
+        # do the bwd pass on dgrad
+        grad_input = F.conv_transpose2d(grad_out, weight, bias=None)
+
+        # reduce across nodes
+        if comm.get_size(gname) > 1:
+            dgrad_handle = dist.all_reduce(
+                grad_input, group=comm.get_group(gname), async_op=True
+            )
+
+        # weight grad
+        grad_weight = F.conv2d(
+            X.transpose(0, 1), grad_out.transpose(0, 1), bias=None
+        ).transpose(0, 1)
+
+        if bias is not None:
+            grad_bias = torch.sum(grad_out, dim=(0, 2, 3), keepdim=True)
+        else:
+            grad_bias = None
+
+        if comm.get_size(gname) > 1:
+            dgrad_handle.wait()
+
+        return grad_input, grad_weight, grad_bias, None, None
+
+
+class DistributedMatmul(nn.Module):
+    """Distributed Matrix Multiply"""
+
+    def __init__(
+        self,
+        inp_dim,
+        out_dim,
+        kernel_size=1,
+        comm_inp_name="fin",
+        comm_out_name="fout",
+        bias=True,
+    ):  # pragma: no cover
+        super(DistributedMatmul, self).__init__()
+
+        # get sizes
+        self.comm_inp_name = comm_inp_name
+        self.comm_out_name = comm_out_name
+        comm_inp_size = comm.get_size(self.comm_inp_name)
+        comm_out_size = comm.get_size(self.comm_out_name)
+
+        # split:
+        assert (
+            kernel_size == 1
+        ), "Error, only pointwise operations are currently supported"
+        assert (
+            inp_dim % comm_inp_size == 0
+        ), f"Error, the size of input feature dim ({inp_dim}) has to be evenly divisible by the input feature comm dim ({comm_inp_size})"
+        assert (
+            out_dim % comm_out_size == 0
+        ), f"Error, the size of output feature dim ({out_dim}) has to be evenly divisible by the output feature comm dim ({comm_out_size})"
+
+        # compute reduced dims
+        inp_dim_local = inp_dim // comm_inp_size
+        out_dim_local = out_dim // comm_out_size
+
+        # parameters
+        self.weight = nn.Parameter(
+            torch.ones(out_dim_local, inp_dim_local, kernel_size, kernel_size)
+        )
+        self.weight.is_shared_mp = ["spatial"]
+        self.weight.sharded_dims_mp = [
+            self.comm_out_name,
+            self.comm_inp_name,
+            None,
+            None,
+        ]
+        if bias:
+            self.bias = nn.Parameter(torch.ones(1, out_dim_local, 1, 1))
+            self.bias.is_shared_mp = ["spatial"]
+            self.bias.sharded_dims_mp = [None, self.comm_out_name, None, None]
+
+        # init weights
+        self._init_weights()
+
+    def _init_weights(self):  # pragma: no cover
+        trunc_normal_(self.weight, std=0.02)
+        if hasattr(self, "bias"):
+            nn.init.constant_(self.bias, 0.0)
+
+    def forward(self, x):  # pragma: no cover
+        x_cp = copy_to_parallel_region(x, self.comm_out_name)
+        x_loc = F.conv2d(x_cp, self.weight, bias=None)
+        x_out = reduce_from_parallel_region(x_loc, self.comm_inp_name)
+        if hasattr(self, "bias"):
+            x_out = x_out + self.bias
+
+        return x_out
+
+
+# distributed encoder/decoder
+class DistributedEncoderDecoder(nn.Module):
+    """Distributed Encoder/Decoder"""
+
+    def __init__(
+        self,
+        num_layers,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        act,
+        comm_inp_name="fin",
+        comm_out_name="fout",
+    ):  # pragma: no cover
+        super(DistributedEncoderDecoder, self).__init__()
+
+        # get comms
+        comm_inp_size = comm.get_size(comm_inp_name)
+        comm_out_size = comm.get_size(comm_out_name)
+
+        # get list of modules
+        encoder_modules = []
+        current_dim = input_dim
+        comm_inp_name_tmp = comm_inp_name
+        comm_out_name_tmp = comm_out_name
+        for i in range(num_layers - 1):
+            encoder_modules.append(
+                DistributedMatmul(
+                    current_dim,
+                    hidden_dim,
+                    1,
+                    comm_inp_name=comm_inp_name_tmp,
+                    comm_out_name=comm_out_name_tmp,
+                    bias=True,
+                )
+            )
+            encoder_modules.append(act())
+            current_dim = hidden_dim
+            comm_inp_name_tmp, comm_out_name_tmp = (
+                comm_out_name_tmp,
+                comm_inp_name_tmp,
+            )
+
+        # final layer
+        encoder_modules.append(
+            DistributedMatmul(
+                current_dim,
+                output_dim,
+                1,
+                comm_inp_name=comm_inp_name_tmp,
+                comm_out_name=comm_out_name_tmp,
+                bias=False,
+            )
+        )
+
+        # create fwd sequence
+        self.fwd = nn.Sequential(*encoder_modules)
+
+        # store the comm names for in and out so that they can be queried
+        self.comm_inp_name = comm_inp_name
+        self.comm_out_name = comm_out_name_tmp
+
+    def forward(self, x):  # pragma: no cover
+        return self.fwd(x)
+
+
 # more complicated layers
 class DistributedMLP(nn.Module):
     """Distributed MLP layer"""
@@ -235,6 +423,8 @@ class DistributedMLP(nn.Module):
         hidden_features=None,
         out_features=None,
         output_bias=True,
+        comm_inp_name="fin",
+        comm_hidden_name="fout",
         act_layer=nn.GELU,
         drop_rate=0.0,
         checkpointing=False,
@@ -246,67 +436,40 @@ class DistributedMLP(nn.Module):
         hidden_features = hidden_features or in_features
 
         # get effective embedding size:
-        comm_size = comm.get_size("matmul")
-        assert (
-            hidden_features % comm_size == 0
-        ), "Error, hidden_features needs to be divisible by matmul_parallel_size"
-        hidden_features_local = hidden_features // comm_size
+        comm_inp_size = comm.get_size(comm_inp_name)
+        comm_hid_size = comm.get_size(comm_hidden_name)
 
-        # first set of hp
-        self.w1 = nn.Parameter(torch.ones(hidden_features_local, in_features, 1, 1))
-        self.b1 = nn.Parameter(torch.zeros(hidden_features_local))
+        self.fc1 = DistributedMatmul(
+            in_features,
+            hidden_features,
+            1,
+            comm_inp_name=comm_inp_name,
+            comm_out_name=comm_hidden_name,
+            bias=True,
+        )
 
-        # second set of hp
-        self.w2 = nn.Parameter(torch.ones(out_features, hidden_features_local, 1, 1))
-
-        if output_bias:
-            self.b2 = nn.Parameter(torch.zeros(out_features))
+        self.fc2 = DistributedMatmul(
+            hidden_features,
+            out_features,
+            1,
+            comm_inp_name=comm_hidden_name,
+            comm_out_name=comm_inp_name,
+            bias=output_bias,
+        )
 
         self.act = act_layer()
         self.drop = nn.Dropout(drop) if drop_rate > 0.0 else nn.Identity()
 
-        # the weights are shared spatially
-        self.w1.is_shared_mp = ["h", "w"]
-        self.b1.is_shared_mp = ["h", "w"]
-        self.w2.is_shared_mp = ["h", "w"]
-        if output_bias:
-            self.b2.is_shared_mp = [
-                "matmul",
-                "h",
-                "w",
-            ]  # this one is shared between all ranks
-
-        # init weights
-        self._init_weights()
-
-    def _init_weights(self):  # pragma: no cover
-        trunc_normal_(self.w1, std=0.02)
-        nn.init.constant_(self.b1, 0.0)
-        trunc_normal_(self.w2, std=0.02)
-        if hasattr(self, "b2"):
-            nn.init.constant_(self.b2, 0.0)
-
     def fwd(self, x):  # pragma: no cover
-        """Forward function."""
-        # we need to prepare paralellism here
-        # spatial parallelism
-        x = scatter_to_spatial_parallel_region(x, dim=-1)
-
-        # prepare the matmul parallel part
-        x = copy_to_matmul_parallel_region(x)
-
         # do the mlp
-        x = F.conv2d(x, self.w1, bias=self.b1)
+        # first layer
+        x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
-        x = F.conv2d(x, self.w2, bias=None)
-        x = reduce_from_matmul_parallel_region(x)
-        if hasattr(self, "b2"):
-            x = x + torch.reshape(self.b2, (1, -1, 1, 1))
-        x = self.drop(x)
 
-        # gather from spatial parallel region
-        x = gather_from_spatial_parallel_region(x, dim=-1)
+        # second layer
+        x = self.fc2(x)
+        x = self.drop(x)
 
         return x
 
@@ -372,15 +535,15 @@ class DistributedPatchEmbed(nn.Module):
         )
 
         # make sure we reduce them across rank
-        self.proj.weight.is_shared_mp = ["h", "w"]
-        self.proj.bias.is_shared_mp = ["h", "w"]
+        self.proj.weight.is_shared_mp = ["spatial"]
+        self.proj.bias.is_shared_mp = ["spatial"]
 
     def forward(self, x):  # pragma: no cover
         if self.input_parallel:
-            x = gather_from_matmul_parallel_region(x, dim=1)
+            x = gather_from_parallel_region(x, 1, "matmul")
 
         if self.output_parallel:
-            x = copy_to_matmul_parallel_region(x)
+            x = copy_to_parallel_region(x, "matmul")
 
         B, C, H, W = x.shape
         assert (
@@ -505,15 +668,15 @@ class DistributedAFNO2Dv2(nn.Module):
         )
 
         # make sure we reduce them across rank
-        self.w1.is_shared_mp = ["h", "w"]
-        self.b1.is_shared_mp = ["h", "w"]
-        self.w2.is_shared_mp = ["h", "w"]
-        self.b2.is_shared_mp = ["h", "w"]
+        self.w1.is_shared_mp = ["spatial"]
+        self.b1.is_shared_mp = ["spatial"]
+        self.w2.is_shared_mp = ["spatial"]
+        self.b2.is_shared_mp = ["spatial"]
 
     def forward(self, x):  # pragma: no cover
         if not self.input_is_matmul_parallel:
             # distribute data
-            x = scatter_to_matmul_parallel_region(x, dim=1)
+            x = scatter_to_parallel_region(x, 1, "matmul")
 
         # bias
         bias = x
@@ -560,6 +723,6 @@ class DistributedAFNO2Dv2(nn.Module):
 
         # gather
         if not self.output_is_matmul_parallel:
-            x = gather_from_matmul_parallel_region(x, dim=1)
+            x = gather_from_parallel_region(x, 1, "matmul")
 
         return x
