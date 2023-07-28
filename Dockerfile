@@ -31,7 +31,7 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 RUN pip install "tensorly>=0.8.1" "vtk>=9.2.6" "pyvista>=0.40.1" https://github.com/tensorly/torch/archive/715a0daa7ae0cbdb443d06780a785ae223108903.tar.gz
 
-# Install DGL (Internal if present otherwise from source)
+# Install DGL from source
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
