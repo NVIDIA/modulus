@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=23.07
+ARG PYT_VER=23.06
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
 # Update pip and setuptools
