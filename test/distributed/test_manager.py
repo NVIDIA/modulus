@@ -17,6 +17,7 @@ import pytest
 import torch
 from modulus.distributed import DistributedManager
 
+
 # TODO: Need to figure out how to test parallel set up
 def test_manager():
     os.environ["MASTER_ADDR"] = "localhost"
@@ -127,7 +128,7 @@ def run_process_groups(rank, model_parallel_size, verbose):
     os.environ["MASTER_PORT"] = str(12355)
     DistributedManager._shared_state = {}
 
-    DistributedManager.initialize_env()
+    DistributedManager.initialize()
 
     # Create model parallel process group
     DistributedManager.create_process_subgroup(
