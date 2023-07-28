@@ -29,23 +29,24 @@ icosphere_path = get_icosphere_path()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_graphcast_forward(device):
+def test_graphcast_forward(device, num_channels=2, res_h=10, res_w=20):
     """Test graphcast forward pass"""
 
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
-        "input_dim_grid_nodes": 2,
+        "input_res": (res_h, res_w),
+        "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
+        "output_dim_grid_nodes": num_channels,
         "processor_layers": 3,
         "hidden_dim": 4,
         "do_concat_trick": True,
     }
 
     fix_random_seeds()
-    x = create_random_input(model_kwds["input_dim_grid_nodes"])
+    x = create_random_input(model_kwds["input_res"], model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     # Construct graphcast model
@@ -55,18 +56,20 @@ def test_graphcast_forward(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_graphcast_constructor(device):
+def test_graphcast_constructor(
+    device, num_channels_1=2, num_channels_2=3, res_h=10, res_w=20
+):
     """Test graphcast constructor options"""
     # Define dictionary of constructor args
     arg_list = [
         {
             "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
-            "input_res": (721, 1440),
-            "input_dim_grid_nodes": 2,
+            "input_res": (res_h, res_w),
+            "input_dim_grid_nodes": num_channels_1,
             "input_dim_mesh_nodes": 3,
             "input_dim_edges": 4,
-            "output_dim_grid_nodes": 2,
+            "output_dim_grid_nodes": num_channels_1,
             "processor_layers": 3,
             "hidden_dim": 4,
             "do_concat_trick": True,
@@ -74,11 +77,11 @@ def test_graphcast_constructor(device):
         {
             "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
-            "input_res": (721, 1440),
-            "input_dim_grid_nodes": 3,
+            "input_res": (res_h, res_w),
+            "input_dim_grid_nodes": num_channels_2,
             "input_dim_mesh_nodes": 3,
             "input_dim_edges": 4,
-            "output_dim_grid_nodes": 3,
+            "output_dim_grid_nodes": num_channels_2,
             "processor_layers": 4,
             "hidden_dim": 8,
             "do_concat_trick": False,
@@ -88,7 +91,9 @@ def test_graphcast_constructor(device):
         # Construct GraphCast model
         model = GraphCastNet(**kw_args).to(device)
 
-        x = create_random_input(kw_args["input_dim_grid_nodes"]).to(device)
+        x = create_random_input(
+            kw_args["input_res"], kw_args["input_dim_grid_nodes"]
+        ).to(device)
         outvar = model(x)
         assert outvar.shape == (
             1,
@@ -98,7 +103,7 @@ def test_graphcast_constructor(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_GraphCast_optims(device):
+def test_GraphCast_optims(device, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast optimizations"""
 
     def setup_model():
@@ -106,22 +111,23 @@ def test_GraphCast_optims(device):
         model_kwds = {
             "meshgraph_path": icosphere_path,
             "static_dataset_path": None,
-            "input_dim_grid_nodes": 2,
+            "input_res": (res_h, res_w),
+            "input_dim_grid_nodes": num_channels,
             "input_dim_mesh_nodes": 3,
             "input_dim_edges": 4,
-            "output_dim_grid_nodes": 2,
+            "output_dim_grid_nodes": num_channels,
             "processor_layers": 3,
-            "hidden_dim": 4,
+            "hidden_dim": 2,
             "do_concat_trick": True,
         }
-
         fix_random_seeds()
-        x = create_random_input(model_kwds["input_dim_grid_nodes"])
+        x = create_random_input(
+            model_kwds["input_res"], model_kwds["input_dim_grid_nodes"]
+        )
         x = x.to(device)
 
         # Construct GraphCast model
         model = GraphCastNet(**model_kwds).to(device)
-
         return model, (x,)
 
     # Ideally always check graphs first
@@ -139,16 +145,17 @@ def test_GraphCast_optims(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_graphcast_checkpoint(device):
+def test_graphcast_checkpoint(device, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast checkpoint save/load"""
 
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
-        "input_dim_grid_nodes": 2,
+        "input_res": (res_h, res_w),
+        "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
+        "output_dim_grid_nodes": num_channels,
         "processor_layers": 3,
         "hidden_dim": 2,
         "do_concat_trick": True,
@@ -158,7 +165,7 @@ def test_graphcast_checkpoint(device):
     model_1 = GraphCastNet(**model_kwds).to(device)
     model_2 = GraphCastNet(**model_kwds).to(device)
 
-    x = create_random_input(model_kwds["input_dim_grid_nodes"])
+    x = create_random_input(model_kwds["input_res"], model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     assert common.validate_checkpoint(
@@ -170,16 +177,17 @@ def test_graphcast_checkpoint(device):
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_GraphCast_deploy(device):
+def test_GraphCast_deploy(device, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast deployment support"""
 
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
-        "input_dim_grid_nodes": 2,
+        "input_res": (res_h, res_w),
+        "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
+        "output_dim_grid_nodes": num_channels,
         "processor_layers": 3,
         "hidden_dim": 2,
         "do_concat_trick": True,
@@ -188,7 +196,7 @@ def test_GraphCast_deploy(device):
     # Construct GraphCast model
     model = GraphCastNet(**model_kwds).to(device)
 
-    x = create_random_input(model_kwds["input_dim_grid_nodes"])
+    x = create_random_input(model_kwds["input_res"], model_kwds["input_dim_grid_nodes"])
     x = x.to(device)
 
     assert common.validate_onnx_export(model, x)

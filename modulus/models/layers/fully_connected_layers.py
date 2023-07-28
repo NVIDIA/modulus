@@ -236,3 +236,77 @@ class Conv3dFCLayer(ConvFCLayer):
         x = self.conv(x)
         x = self.apply_activation(x)
         return x
+
+
+class ConvNdFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with convolutions of arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = ConvNdKernel1Layer(in_channels, out_channels)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.conv.apply(self.initialise_parameters)  # recursively apply initialisations
+
+    def initialise_parameters(self, model):
+        """Reset layer weights"""
+        if hasattr(model, "bias"):
+            nn.init.constant_(model.bias, 0)
+        if hasattr(model, "weight"):
+            nn.init.xavier_uniform_(model.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class ConvNdKernel1Layer(nn.Module):
+    """Channel-wise FC like layer for convolutions of arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        dims = list(x.size())
+        dims[1] = self.out_channels
+        x = self.conv(x.view(dims[0], self.in_channels, -1)).view(dims)
+        return x

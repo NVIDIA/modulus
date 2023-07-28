@@ -44,7 +44,6 @@ class ERA5DaliESDataloader(object):
             device_id=self.device_index,
             py_num_workers=self.num_data_workers,
             py_start_method="spawn",
-            prefetch_queue_depth=1,
             seed=self.global_seed,
         )
 
@@ -64,6 +63,7 @@ class ERA5DaliESDataloader(object):
                 batch=False,
                 no_copy=True,
                 parallel=True,
+                prefetch_queue_depth=self.num_data_workers,
             )
 
             if self.add_zenith:
@@ -122,7 +122,6 @@ class ERA5DaliESDataloader(object):
 
             # normalize if requested
             if self.normalize:
-
                 inp = fn.normalize(
                     inp,
                     device="gpu",
@@ -159,6 +158,7 @@ class ERA5DaliESDataloader(object):
         self, params, location, train, seed=333, final_eval=False
     ):  # pragma: no cover
         self.num_data_workers = params.num_data_workers
+        self.host_prefetch_buffers = params["host_prefetch_buffers"]
         self.device_index = torch.cuda.current_device()
         self.batchsize = int(params.batch_size)
 
@@ -257,6 +257,7 @@ class ERA5DaliESDataloader(object):
             enable_logging=params.log_to_screen,
             seed=333,
             is_parallel=True,
+            host_prefetch_buffers=self.host_prefetch_buffers,
         )
 
         # some image properties
@@ -387,8 +388,21 @@ class ERA5DaliESDataloader(object):
             if self.add_zenith:
                 izen = token[0]["izen"]
                 tzen = token[0]["tzen"]
-                result = inp, tar, izen, tzen
+                if self.host_file_buffers:
+                    result = (
+                        inp.to(torch.cuda.current_device()),
+                        tar.to(torch.cuda.current_device()),
+                        izen.to(torch.cuda.current_device()),
+                        tzen.to(torch.cuda.current_device()),
+                    )
+                else:
+                    result = inp, tar, izen, tzen
             else:
-                result = inp, tar
+                if self.host_prefetch_buffers:
+                    result = inp.to(torch.cuda.current_device()), tar.to(
+                        torch.cuda.current_device()
+                    )
+                else:
+                    result = inp, tar
 
             yield result

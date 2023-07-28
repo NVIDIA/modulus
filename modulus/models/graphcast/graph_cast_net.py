@@ -131,12 +131,6 @@ class GraphCastNet(Module):
     ):
         super().__init__(meta=MetaData())
 
-        # check the input resolution
-        if input_res != (721, 1440):
-            raise NotImplementedError(
-                "Currently only native ERA5 input resolution (721, 1440) is supported"
-            )
-
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
         self.longitudes = torch.linspace(-180, 180, steps=input_res[1] + 1)[1:]
@@ -176,7 +170,7 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder:
-            offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
                 self.g2m_graph.num_dst_nodes(),
@@ -186,7 +180,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_decoder:
-            offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
                 self.m2g_graph.num_dst_nodes(),
@@ -196,7 +190,7 @@ class GraphCastNet(Module):
             )
 
         if use_cugraphops_processor:
-            offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
+            offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
             n_in_nodes, n_out_nodes = (
                 self.mesh_graph.num_src_nodes(),
                 self.mesh_graph.num_dst_nodes(),

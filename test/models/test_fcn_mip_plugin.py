@@ -14,27 +14,54 @@
 
 import fsspec
 from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper
+from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper, dlwp
 from modulus.utils.filesystem import Package
 from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+from modulus.models.dlwp import DLWP
+from modulus.models.graphcast.graph_cast_net import GraphCastNet
+from pathlib import Path
 import numpy as np
 import datetime
 import torch
 import json
+import shutil
+import os
 
 import pytest
 
 
-def save_ddp_checkpoint(model, check_point_path):
+def _copy_directory(src, dst):
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for item in os.listdir(src):
+        s = os.path.join(src, item)
+        d = os.path.join(dst, item)
+        if os.path.isdir(s):
+            _copy_directory(s, d)
+        else:
+            shutil.copy2(s, d)
+
+
+def save_ddp_checkpoint(model, check_point_path, del_device_buffer=False):
     """Save checkpoint with similar structure to the training checkpoints
 
     The keys are prefixed with "module."
     """
     model_state = {f"module.{k}": v for k, v in model.state_dict().items()}
-    # This buffer is not present in some trained model checkpoints
-    del model_state["module.device_buffer"]
+    if del_device_buffer:
+        # This buffer is not present in some trained model checkpoints
+        del model_state["module.device_buffer"]
     checkpoint = {"model_state": model_state}
     torch.save(checkpoint, check_point_path)
+
+
+def save_checkpoint(model, check_point_path, del_device_buffer=False):
+    """Save checkpoint with similar structure to the training checkpoints"""
+    model_state = model.state_dict()
+    if del_device_buffer:
+        # This buffer is not present in some trained model checkpoints
+        del model_state["module.device_buffer"]
+    torch.save(model_state, check_point_path)
 
 
 def save_untrained_sfno(path):
@@ -60,7 +87,7 @@ def save_untrained_sfno(path):
         json.dump(params.to_dict(), f)
 
     check_point_path = path / "weights.tar"
-    save_ddp_checkpoint(model, check_point_path)
+    save_ddp_checkpoint(model, check_point_path, del_device_buffer=True)
 
     url = f"file://{path.as_posix()}"
     package = Package(url, seperator="/")
@@ -79,25 +106,83 @@ def test_sfno(tmp_path):
     assert out.shape == x.shape
 
 
-@pytest.mark.skip("graphcast test is extremely slow, when instatiating model.")
+def save_untrained_dlwp(path):
+
+    config = {
+        "nr_input_channels": 18,
+        "nr_output_channels": 14,
+    }
+    model = DLWP(
+        nr_input_channels=config["nr_input_channels"],
+        nr_output_channels=config["nr_output_channels"],
+    )
+
+    config_path = path / "config.json"
+    with config_path.open("w") as f:
+        json.dump(config, f)
+
+    check_point_path = path / "weights.pt"
+    save_checkpoint(model, check_point_path, del_device_buffer=False)
+
+    url = f"file://{path.as_posix()}"
+    package = Package(url, seperator="/")
+    return package
+
+
+def test_dlwp(tmp_path):
+    package = save_untrained_dlwp(tmp_path)
+    source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
+    _copy_directory(source_dir, tmp_path)
+
+    model = dlwp(package, pretrained=True)
+    x = torch.ones(1, 2, 7, 721, 1440)
+    time = datetime.datetime(2018, 1, 1)
+    with torch.no_grad():
+        out = model(x, time)
+    assert out.shape == x.shape
+
+
+def save_untrained_graphcast(path):
+
+    icosphere_path = path / "icospheres.json"
+    config = {
+        "meshgraph_path": icosphere_path.as_posix(),
+        "static_dataset_path": None,
+        "input_dim_grid_nodes": 2,
+        "input_dim_mesh_nodes": 3,
+        "input_dim_edges": 4,
+        "output_dim_grid_nodes": 2,
+        "processor_layers": 3,
+        "hidden_dim": 2,
+        "do_concat_trick": True,
+    }
+
+    model = GraphCastNet(**config)
+
+    config_path = path / "config.json"
+    with config_path.open("w") as f:
+        json.dump(config, f)
+
+    check_point_path = path / "weights.tar"
+    save_ddp_checkpoint(model, check_point_path, del_device_buffer=False)
+
+    url = f"file://{path.as_posix()}"
+    package = Package(url, seperator="/")
+    return package
+
+
 def test_graphcast(tmp_path):
-    fs = fsspec.filesystem("https")
+    source_dir = "/data/nfs/modulus-data/plugin_data/graphcast/"
+    _copy_directory(source_dir, tmp_path)
 
-    version = "ede0fcbfaf7a8131668620a9aba19970774a4785"
-
-    url = f"https://raw.githubusercontent.com/NVIDIA/modulus-launch/{version}/recipes/gnn/graphcast/icospheres.json"
-    dest = tmp_path / "icospheres.json"
-    fs.get(url, dest.as_posix())
-
-    # download static data
-    static = tmp_path / "static"
-    static.mkdir()
-    for file in ["geopotential.nc", "land_sea_mask.nc"]:
-        root = f"https://media.githubusercontent.com/media/NVIDIA/modulus-launch/{version}/recipes/gnn/graphcast/datasets/static"
-        fs.get(f"{root}/{file}", str(static / file))
-
-    package = Package(tmp_path.as_posix(), "/")
+    package = save_untrained_graphcast(
+        tmp_path
+    )  # here package needs to load after icosphere.json is copied.
     model = graphcast_34ch(package, pretrained=False)
+    x = torch.randn(1, 34, 721, 1440).to("cuda")
+    with torch.no_grad():
+        out = model(x)
+    assert out.shape == x.shape
 
 
 @pytest.mark.parametrize("batch_size", [1, 2])
