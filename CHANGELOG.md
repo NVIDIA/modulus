@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a CHANGELOG.md
 - Added build support for internal DGL
 - 4D Fourier Neural Operator model
+- Ahmed body dataset
 
 ### Changed
 
 - DGL install changed from pypi to source
+- Updated SFNO to add support for super resolution, flexible checkpoining, etc.
 
 ### Deprecated
 

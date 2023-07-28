@@ -219,3 +219,47 @@ def _contract_sep_dhconv(
     resc = torch.einsum("bixy,ix->boxy", ac, bc)
     res = torch.view_as_real(resc)
     return res
+
+
+@torch.jit.script
+def _contract_diagonal_real(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
+    res = torch.einsum("bixys,ioxy->boxys", a, b).contiguous()
+    return res
+
+
+@torch.jit.script
+def _contract_dhconv_real(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
+    res = torch.einsum("bixys,iox->boxys", a, b).contiguous()
+    return res
+
+
+@torch.jit.script
+def _contract_sep_diagonal_real(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
+    res = torch.einsum("bixys,ixy->boxys", a, b).contiguous()
+    return res
+
+
+@torch.jit.script
+def _contract_sep_dhconv_real(
+    a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:  # pragma: no cover
+    """
+    Performs a complex convolution operation between two tensors 'a' and 'b'
+    """
+    res = torch.einsum("bixys,ix->boxys", a, b).contiguous()
+    return res
