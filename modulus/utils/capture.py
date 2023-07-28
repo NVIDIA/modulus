@@ -37,11 +37,13 @@ class _StaticCapture(object):
     # one must use class functions to access state dicts
     _amp_scalers = {}
     _amp_scaler_checkpoints = {}
+    _logger = logging.getLogger("capture")
 
     def __new__(cls, *args, **kwargs):
         obj = super(_StaticCapture, cls).__new__(cls)
         obj.amp_scalers = cls._amp_scalers
         obj.amp_scaler_checkpoints = cls._amp_scaler_checkpoints
+        obj.logger = cls._logger
         return obj
 
     def __init__(
@@ -56,9 +58,7 @@ class _StaticCapture(object):
         amp_type: Union[float16, bfloat16] = torch.float16,
         label: Optional[str] = None,
     ):
-        self.logger = logger
-        if self.logger is None:
-            self.logger = logging.getLogger("capture")
+        self.logger = logger if logger else self.logger
         # Checkpoint label (used for gradscaler)
         self.label = label if label else f"scaler_{len(self.amp_scalers.keys())}"
 
@@ -296,8 +296,9 @@ class _StaticCapture(object):
             if key in cls._amp_scalers:
                 try:
                     cls._amp_scalers[key].load_state_dict(value)
+                    cls._logger.info(f"Loaded grad scaler state dictionary {key}.")
                 except Exception as e:
-                    print(
+                    cls._logger.error(
                         f"Failed to load grad scaler state dict with id {key}."
                         + " Something went wrong!"
                     )
