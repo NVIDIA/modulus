@@ -370,7 +370,7 @@ class StaticCaptureTraining(_StaticCapture):
     Static captures must be checkpointed when training using the `state_dict()` if AMP
     is being used with gradient scaler. By default, this requires static captures to be
     instantiated in the same order as when they were checkpointed. The label parameter
-    can be used to avoid this.
+    can be used to relax/circumvent this ordering requirement.
 
     Note
     ----
@@ -399,6 +399,7 @@ class StaticCaptureTraining(_StaticCapture):
             use_amp,
             cuda_graph_warmup,
             amp_type,
+            label,
         )
 
 
