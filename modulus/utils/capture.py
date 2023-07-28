@@ -19,7 +19,6 @@ import logging
 from logging import Logger
 from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
-from collections import OrderedDict
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -36,8 +35,8 @@ class _StaticCapture(object):
     # Grad scaler and checkpoint class variables use for checkpoint saving and loading
     # Since an instance of Static capture does not exist for checkpoint functions
     # one must use class functions to access state dicts
-    _amp_scalers = OrderedDict()
-    _amp_scaler_checkpoints = OrderedDict()
+    _amp_scalers = {}
+    _amp_scaler_checkpoints = {}
 
     def __new__(cls):
         obj = super(DistributedManager, cls).__new__(cls)
@@ -309,8 +308,8 @@ class _StaticCapture(object):
 
     @classmethod
     def reset_state(cls):
-        cls._amp_scalers = OrderedDict()
-        cls._amp_scaler_checkpoints = OrderedDict()
+        cls._amp_scalers = {}
+        cls._amp_scaler_checkpoints = {}
 
 
 class StaticCaptureTraining(_StaticCapture):
