@@ -53,7 +53,7 @@ class _StaticCapture(object):
         use_gradscaler: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
-        label: Optional[str, None] = None,
+        label: Optional[str] = None,
     ):
         self.logger = logger
         if self.logger is None:
@@ -387,7 +387,7 @@ class StaticCaptureTraining(_StaticCapture):
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
-        label: Optional[str, None] = None,
+        label: Optional[str] = None,
     ):
         super().__init__(
             model,
@@ -461,7 +461,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
-        label: Optional[str, None] = None,
+        label: Optional[str] = None,
     ):
         super().__init__(
             model,
