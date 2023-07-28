@@ -258,7 +258,7 @@ class _StaticCapture(object):
 
     @classmethod
     def state_dict(cls) -> Dict[str, Any]:
-        """Class method for accsessing the StaticCapture.
+        """Class method for accsessing the StaticCapture state dictionary.
         Use this in a training checkpoint function.
 
         Returns
