@@ -86,7 +86,6 @@ class _StaticCapture(object):
                 )
                 use_autocast = False
                 use_gradscaler = False
-            self.amp_enabled = use_gradscaler or use_autocast
             self.use_gradscaler = use_gradscaler
             self.use_autocast = use_autocast
 
@@ -99,7 +98,7 @@ class _StaticCapture(object):
                 amp_type = torch.float16
             self.amp_dtype = amp_type
             # Gradient Scaler
-            scaler_enabled = self.amp_enabled and amp_type == torch.float16
+            scaler_enabled = self.use_gradscaler and amp_type == torch.float16
             self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
             self.replay_stream = torch.cuda.current_stream(self.model.device)
@@ -110,8 +109,9 @@ class _StaticCapture(object):
                 self.logger.warning(
                     f"Model {model.meta.name} does not support AMP on CPUs, turning off"
                 )
-                use_amp = False
-            self.amp_enabled = use_amp
+                use_autocast = False
+
+            self.use_autocast = use_autocast
             self.amp_device = "cpu"
             # Only float16 is supported on CPUs
             # https://pytorch.org/docs/stable/amp.html#cpu-op-specific-behavior
@@ -221,7 +221,7 @@ class _StaticCapture(object):
             Output of neural network forward
         """
         with torch.autocast(
-            self.amp_device, enabled=self.amp_enabled, dtype=self.amp_dtype
+            self.amp_device, enabled=self.use_autocast, dtype=self.amp_dtype
         ):
             output = self.function(*args, **kwargs)
 
