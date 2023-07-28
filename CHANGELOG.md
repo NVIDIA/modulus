@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed issue with torch-harmonics version locking
 - Fixed the Modulus editable install
+- Fixed bug in AMP in static capture
 
 ### Security
 
