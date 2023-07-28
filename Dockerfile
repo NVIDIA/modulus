@@ -36,8 +36,8 @@ ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
-RUN git clone --recurse-submodules https://github.com/dmlc/dgl.git && \
-	cd dgl/ && DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
+RUN git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.1 && git submodule update --init --recursive && \
+	DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
 	cd python && \
 	python setup.py install && \
 	python setup.py build_ext --inplace
