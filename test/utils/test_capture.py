@@ -191,10 +191,11 @@ def test_capture_scaler_checkpointing(model, model2, device):
     model2 = model2.to(device)
     optim = torch.optim.Adam(model.parameters(), lr=0.001)
     optim2 = torch.optim.Adam(model2.parameters(), lr=0.001)
+    _StaticCapture.reset_state()
     # Test if it can ignore invalid scalar dicts
     capture1 = StaticCaptureTraining(model=model, optim=optim)
     capture2 = StaticCaptureTraining(model=model2, optim=optim2)
-    state_dict = _StaticCapture.state_dict()
+    state_dict = _StaticCapture.state_dict().copy()
 
     # Reset state
     del capture1
@@ -206,7 +207,7 @@ def test_capture_scaler_checkpointing(model, model2, device):
     capture2 = StaticCaptureTraining(model=model2, optim=optim2)
     _StaticCapture.load_state_dict(state_dict)
 
-    assert scaler_dict == _StaticCapture.state_dict()
+    assert state_dict == _StaticCapture.state_dict()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -217,10 +218,11 @@ def test_capture_scaler_checkpointing_ordering(model, model2, device):
     model2 = model2.to(device)
     optim = torch.optim.Adam(model.parameters(), lr=0.001)
     optim2 = torch.optim.Adam(model2.parameters(), lr=0.001)
+    _StaticCapture.reset_state()
     # Test if it can ignore invalid scalar dicts
     capture1 = StaticCaptureTraining(model=model, optim=optim, label="capture1")
     capture2 = StaticCaptureTraining(model=model2, optim=optim2, label="capture2")
-    state_dict = _StaticCapture.state_dict()
+    state_dict = _StaticCapture.state_dict().copy()
 
     # Reset state
     del capture1
@@ -232,4 +234,4 @@ def test_capture_scaler_checkpointing_ordering(model, model2, device):
     capture2 = StaticCaptureTraining(model=model2, optim=optim2, label="capture2")
     capture1 = StaticCaptureTraining(model=model, optim=optim, label="capture1")
 
-    assert scaler_dict == _StaticCapture.reset_state()
+    assert state_dict == _StaticCapture.state_dict()

@@ -38,10 +38,11 @@ class _StaticCapture(object):
     _amp_scalers = {}
     _amp_scaler_checkpoints = {}
 
-    def __new__(cls):
-        obj = super(DistributedManager, cls).__new__(cls)
+    def __new__(cls, *args, **kwargs):
+        obj = super(_StaticCapture, cls).__new__(cls)
         obj.amp_scalers = cls._amp_scalers
         obj.amp_scaler_checkpoints = cls._amp_scaler_checkpoints
+        return obj
 
     def __init__(
         self,
@@ -115,7 +116,7 @@ class _StaticCapture(object):
         else:
             self.cuda_graphs_enabled = False
             # AMP CPU
-            if use_amp and not self.model.meta.amp_cpu:
+            if use_autocast and not self.model.meta.amp_cpu:
                 self.logger.warning(
                     f"Model {model.meta.name} does not support AMP on CPUs, turning off"
                 )
@@ -125,7 +126,7 @@ class _StaticCapture(object):
             self.amp_device = "cpu"
             # Only float16 is supported on CPUs
             # https://pytorch.org/docs/stable/amp.html#cpu-op-specific-behavior
-            if amp_type == torch.float16 and use_amp:
+            if amp_type == torch.float16 and use_autocast:
                 self.logger.warning(
                     f"torch.float16 not supported for CPU AMP, switching to torch.bfloat16"
                 )
@@ -254,9 +255,9 @@ class _StaticCapture(object):
             try:
                 scaler.load_state_dict(self.amp_scaler_checkpoints[self.label])
                 del self.amp_scaler_checkpoints[self.label]
-                logger.success(f"Loaded grad scaler state dictionary {self.label}.")
+                self.logger.info(f"Loaded grad scaler state dictionary {self.label}.")
             except Exception as e:
-                logger.error(
+                self.logger.error(
                     f"Failed to load grad scaler {self.label} state dict from saved "
                     + "checkpoints. Did you switch the ordering of declared static captures?"
                 )
@@ -295,9 +296,8 @@ class _StaticCapture(object):
             if key in cls._amp_scalers:
                 try:
                     cls._amp_scalers[key].load_state_dict(value)
-                    logger.success(f"Loaded grad scaler state dictionary {key}.")
                 except Exception as e:
-                    logger.error(
+                    print(
                         f"Failed to load grad scaler state dict with id {key}."
                         + " Something went wrong!"
                     )
