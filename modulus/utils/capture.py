@@ -17,8 +17,9 @@ import modulus
 import torch
 import logging
 from logging import Logger
-from typing import Union, Any, Callable, NewType, Dict
+from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
+from collections import OrderedDict
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -32,11 +33,16 @@ class _StaticCapture(object):
     should be used instead for training and evaluation functions.
     """
 
-    # Grad scaler and checkpoint singleton use for checkpoint saving and loading
+    # Grad scaler and checkpoint class variables use for checkpoint saving and loading
     # Since an instance of Static capture does not exist for checkpoint functions
     # one must use class functions to access state dicts
-    _amp_scalers = {}
-    _amp_scaler_checkpoints = {}
+    _amp_scalers = OrderedDict()
+    _amp_scaler_checkpoints = OrderedDict()
+
+    def __new__(cls):
+        obj = super(DistributedManager, cls).__new__(cls)
+        obj.amp_scalers = cls._amp_scalers
+        obj.amp_scaler_checkpoints = cls._amp_scaler_checkpoints
 
     def __init__(
         self,
@@ -48,10 +54,13 @@ class _StaticCapture(object):
         use_gradscaler: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        label: Optional[str, None] = None,
     ):
         self.logger = logger
         if self.logger is None:
             self.logger = logging.getLogger("capture")
+        # Checkpoint label (used for gradscaler)
+        self.label = label if label else f"scaler_{len(self.amp_scalers.keys())}"
 
         # DDP fix
         if not isinstance(model, modulus.models.Module) and hasattr(model, "module"):
@@ -70,6 +79,7 @@ class _StaticCapture(object):
         assert (
             amp_type == torch.float16 or amp_type == torch.bfloat16
         ), "AMP type must be torch.float16 or torch.bfloat16"
+        # CUDA device
         if "cuda" in str(self.model.device):
             # CUDA graphs
             if use_graphs and not self.model.meta.cuda_graphs:
@@ -102,6 +112,7 @@ class _StaticCapture(object):
             self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
             self.replay_stream = torch.cuda.current_stream(self.model.device)
+        # CPU device
         else:
             self.cuda_graphs_enabled = False
             # AMP CPU
@@ -236,22 +247,19 @@ class _StaticCapture(object):
         # Create gradient scaler
         scaler = torch.cuda.amp.GradScaler(enabled=scaler_enabled)
         # Store scaler in class variable
-        scaler_id = f"scaler_{len(_StaticCapture._amp_scalers.keys())}"
-        _StaticCapture._amp_scalers[scaler_id] = scaler
-        logging.debug(f"Created gradient scaler {scaler_id}")
+        self.amp_scalers[self.label] = scaler
+        logging.debug(f"Created gradient scaler {self.label}")
 
         # If our checkpoint dictionary has weights for this scaler lets load
-        if scaler_id in _StaticCapture._amp_scaler_checkpoints:
+        if self.label in self.amp_scaler_checkpoints:
             try:
-                scaler.load_state_dict(
-                    _StaticCapture._amp_scaler_checkpoints[scaler_id]
-                )
-                del _StaticCapture._amp_scaler_checkpoints[scaler_id]
-                logger.success(f"Loaded grad scaler state dictionary {scaler_id}.")
+                scaler.load_state_dict(self.amp_scaler_checkpoints[self.label])
+                del self.amp_scaler_checkpoints[self.label]
+                logger.success(f"Loaded grad scaler state dictionary {self.label}.")
             except Exception as e:
                 logger.error(
-                    f"Failed to load grad scaler {scaler_id} state dict from saved "
-                    + "checkpoints. Did you switch the ordering of delcared static captures?"
+                    f"Failed to load grad scaler {self.label} state dict from saved "
+                    + "checkpoints. Did you switch the ordering of declared static captures?"
                 )
                 raise ValueError(e)
         return scaler
@@ -299,6 +307,11 @@ class _StaticCapture(object):
             else:
                 cls._amp_scaler_checkpoints[key] = value
 
+    @classmethod
+    def reset_state(cls):
+        cls._amp_scalers = OrderedDict()
+        cls._amp_scaler_checkpoints = OrderedDict()
+
 
 class StaticCaptureTraining(_StaticCapture):
     """A performance optimization decorator for PyTorch training functions.
@@ -324,6 +337,8 @@ class StaticCaptureTraining(_StaticCapture):
         Number of warmup steps for cuda graphs, by default 11
     amp_type : Union[float16, bfloat16], optional
         Auto casting type for AMP, by default torch.float16
+    label : Optional[str, None], optional
+        Static capture checkpoint label, by default None
 
     Raises
     ------
@@ -352,8 +367,10 @@ class StaticCaptureTraining(_StaticCapture):
 
     Note
     ----
-    Presently only a single instance of training static capture with AMP can be
-    used due to a grad scaler singleton.
+    Static captures must be checkpointed when training using the `state_dict()` if AMP
+    is being used with gradient scaler. By default, this requires static captures to be
+    instantiated in the same order as when they were checkpointed. The label parameter
+    can be used to avoid this.
 
     Note
     ----
@@ -371,6 +388,7 @@ class StaticCaptureTraining(_StaticCapture):
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        label: Optional[str, None] = None,
     ):
         super().__init__(
             model,
@@ -406,6 +424,8 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         Number of warmup steps for cuda graphs, by default 11
     amp_type : Union[float16, bfloat16], optional
         Auto casting type for AMP, by default torch.float16
+    label : Optional[str, None], optional
+        Static capture checkpoint label, by default None
 
     Raises
     ------
@@ -442,6 +462,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        label: Optional[str, None] = None,
     ):
         super().__init__(
             model,
@@ -452,6 +473,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
             False,
             cuda_graph_warmup,
             amp_type,
+            label,
         )
         self.eval = True  # No optimizer/scaler calls
         self.no_grad = True  # No grad context and no grad zeroing
