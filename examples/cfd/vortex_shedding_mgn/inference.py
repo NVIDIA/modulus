@@ -50,7 +50,7 @@ class MGNRollout:
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=C.batch_size,
+            batch_size=1,  # TODO add support for batch_size > 1
             shuffle=False,
             drop_last=False,
         )
