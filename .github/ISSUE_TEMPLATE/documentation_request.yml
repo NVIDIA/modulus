@@ -15,7 +15,7 @@
 
 name: Documentation Request
 description: Request updates or additions to Modulus (Core) documentation
-title: "[DOC 📚]: "
+title: "📚[DOC]: "
 labels: ["doc"]
 
 body:
@@ -52,12 +52,3 @@ body:
     attributes:
       label: Describe the incorrect/future/missing documentation
       placeholder: "Example: A code snippet mentions function foo(args) but I cannot find any documentation on it."
-    validations:
-      required: true
-
-  - type: textarea
-    id: search_locs
-    attributes:
-      label: If this is a correction, please provide a link to the incorrect documentation. If this is a new documentation request, please link to where you have looked. 
-      placeholder: |
-       https://docs.nvidia.com/modulus/index.html

@@ -15,7 +15,7 @@
 
 name: Bug Report
 description: File a bug report for Modulus (Core)
-title: "[BUG 🐛]: "
+title: "🐛[BUG]: "
 labels: ["bug"]
 
 body:
@@ -77,9 +77,3 @@ body:
        + Environment location: [Bare-metal, Docker, Cloud(specify cloud provider)]
        + If method of install is Docker, provide `docker pull` & `docker run` commands used
       render: shell
-
-  - type: textarea
-    id: misc
-    attributes:
-      label: Other/Misc.
-      description: Please enter any other helpful information here.

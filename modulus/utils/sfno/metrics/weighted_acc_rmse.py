@@ -22,7 +22,7 @@ import torch.nn as nn
 
 # distributed stuff
 from modulus.utils.sfno.distributed import comm
-from modulus.utils.sfno.distributed.mappings import reduce_from_matmul_parallel_region
+from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
 
 
 def mean(x, axis=None):  # pragma: no cover
@@ -99,7 +99,7 @@ def l1_torch_distributed(
 ) -> torch.Tensor:  # pragma: no cover
     """Calculates the L1 loss between prediction and target in a distributed setting."""
     res = nn.functional.l1_loss(pred, target)
-    res = reduce_from_matmul_parallel_region(res) / float(comm.get_size("matmul"))
+    res = reduce_from_parallel_region(res, "matmul") / float(comm.get_size("matmul"))
     return res
 
 
@@ -151,7 +151,7 @@ def weighted_rmse_torch_distributed(
     res = weighted_rmse_torch_kernel(pred, target, weight)
 
     # perform model parallel mean:
-    res = reduce_from_matmul_parallel_region(res) / float(comm.get_size("matmul"))
+    res = reduce_from_parallel_region(res, "matmul") / float(comm.get_size("matmul"))
 
     # average over batches
     res = torch.mean(torch.sqrt(res), dim=0)
@@ -209,9 +209,9 @@ def weighted_acc_torch_distributed(
     cov, var1, var2 = weighted_acc_torch_kernel(pred, target, weight)
 
     # reductions:
-    cov = reduce_from_matmul_parallel_region(cov)
-    var1 = reduce_from_matmul_parallel_region(var1)
-    var2 = reduce_from_matmul_parallel_region(var2)
+    cov = reduce_from_parallel_region(cov, "matmul")
+    var1 = reduce_from_parallel_region(var1, "matmul")
+    var2 = reduce_from_parallel_region(var2, "matmul")
 
     # compute ratio
     res = cov / (torch.sqrt(var1 * var2) + eps)
@@ -244,7 +244,12 @@ class SimpsonQuadrature(nn.Module):
             )
 
     def forward(self, x, dim=1):  # pragma: no cover
-        return torch.sum(x * self.weights, dim=dim)
+        # reshape weights to handle channels
+        shape = [1 for _ in range(x.dim())]
+        shape[dim] = -1
+        weights = torch.reshape(self.weights, shape)
+
+        return torch.sum(x * weights, dim=dim)
 
 
 class TrapezoidQuadrature(nn.Module):
@@ -260,7 +265,12 @@ class TrapezoidQuadrature(nn.Module):
         self.weights = torch.tensor(weights, dtype=torch.float32, device=device)
 
     def forward(self, x, dim=1):  # pragma: no cover
-        return torch.sum(x * self.weights, dim=dim)
+        # reshape weights to handle channels
+        shape = [1 for _ in range(x.dim())]
+        shape[dim] = -1
+        weights = torch.reshape(self.weights, shape)
+
+        return torch.sum(x * weights, dim=dim)
 
 
 class Quadrature(nn.Module):
