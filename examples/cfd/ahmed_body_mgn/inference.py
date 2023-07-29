@@ -19,9 +19,9 @@ import numpy as np
 import wandb as wb
 
 from modulus.models.meshgraphnet import MeshGraphNet
+from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from modulus.launch.utils import load_checkpoint
 from modulus.launch.logging import PythonLogger
-from ahmed_body_dataset import AhmedBodyDataset
 
 from utils import compute_drag_coefficient, relative_lp_error
 from constants import Constants

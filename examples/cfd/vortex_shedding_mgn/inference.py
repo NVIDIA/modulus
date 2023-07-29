@@ -76,7 +76,7 @@ class MGNRollout:
 
         self.var_identifier = {"u": 0, "v": 1, "p": 2}
 
-    def predict(self, idx):
+    def predict(self):
         self.pred, self.exact, self.faces, self.graphs = [], [], [], []
         stats = {
             key: value.to(self.device) for key, value in self.dataset.node_stats.items()
@@ -140,11 +140,10 @@ class MGNRollout:
             self.faces.append(torch.squeeze(cells).numpy())
             self.graphs.append(graph.cpu())
 
-        # keep the QoI only
-        self.pred = [var[:, idx] for var in self.pred]
-        self.exact = [var[:, idx] for var in self.exact]
+    def init_animation(self, idx):
+        self.pred_i = [var[:, idx] for var in self.pred]
+        self.exact_i = [var[:, idx] for var in self.exact]
 
-    def init_animation(self):
         # fig configs
         plt.rcParams["image.cmap"] = "inferno"
         self.fig, self.ax = plt.subplots(2, 1, figsize=(16, 9))
@@ -161,8 +160,8 @@ class MGNRollout:
     def animate(self, num):
         num *= C.frame_skip
         graph = self.graphs[num]
-        y_star = self.pred[num].numpy()
-        y_exact = self.exact[num].numpy()
+        y_star = self.pred_i[num].numpy()
+        y_exact = self.exact_i[num].numpy()
         triang = mtri.Triangulation(
             graph.ndata["mesh_pos"][:, 0].numpy(),
             graph.ndata["mesh_pos"][:, 1].numpy(),
@@ -204,9 +203,9 @@ if __name__ == "__main__":
     logger.info("Rollout started...")
     rollout = MGNRollout(logger)
     idx = [rollout.var_identifier[k] for k in C.viz_vars]
+    rollout.predict()
     for i in idx:
-        rollout.predict(i)
-        rollout.init_animation()
+        rollout.init_animation(i)
         ani = animation.FuncAnimation(
             rollout.fig,
             rollout.animate,
@@ -214,4 +213,4 @@ if __name__ == "__main__":
             interval=C.frame_interval,
         )
         ani.save("animations/animation_" + C.viz_vars[i] + ".gif")
-        logger.info(f"Completed rollout for {C.viz_vars[i]}")
+        logger.info(f"Created animation for {C.viz_vars[i]}")

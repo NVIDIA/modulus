@@ -38,7 +38,7 @@ class Constants(BaseModel):
     cugraphops_decoder: bool = False
     recompute_activation: bool = False
     wb_mode: str = "disabled"
-    dataset_path: str = "datasets/ngc_era5_data"
+    dataset_path: str = "/data"
     static_dataset_path: str = "datasets/static"
     latlon_res: Tuple[int, int] = (721, 1440)
     num_workers: int = 0  # 8
