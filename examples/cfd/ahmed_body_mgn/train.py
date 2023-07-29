@@ -21,7 +21,7 @@ from torch.nn.parallel import DistributedDataParallel
 import wandb as wb
 
 from modulus.models.meshgraphnet import MeshGraphNet
-from ahmed_body_dataset import AhmedBodyDataset
+from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from modulus.distributed.manager import DistributedManager
 
 from modulus.launch.logging import (
