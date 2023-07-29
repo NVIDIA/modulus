@@ -47,7 +47,7 @@ def test_manager_slurm():
     os.environ["MASTER_PORT"] = "12345"
     os.environ["SLURM_PROCID"] = "0"
     os.environ["SLURM_NPROCS"] = "1"
-    os.environ["SLURM_LOCALID"] = "1"
+    os.environ["SLURM_LOCALID"] = "0"
     os.environ["SLURM_LAUNCH_NODE_IPADDR"] = "localhost"
     # Reset class state
     DistributedManager._shared_state = {}
@@ -70,9 +70,9 @@ def test_manager_ompi():
     # Test distributed manager with openMPI variables
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
-    os.environ["OMPI_COMM_WORLD_RANK"] = "1"
+    os.environ["OMPI_COMM_WORLD_RANK"] = "0"
     os.environ["OMPI_COMM_WORLD_SIZE"] = "1"
-    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "1"
+    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "0"
     # Reset class state
     DistributedManager._shared_state = {}
     DistributedManager.initialize()
@@ -87,6 +87,53 @@ def test_manager_ompi():
     del os.environ["OMPI_COMM_WORLD_RANK"]
     del os.environ["OMPI_COMM_WORLD_SIZE"]
     del os.environ["OMPI_COMM_WORLD_LOCAL_RANK"]
+
+
+def test_manager_specified_initialization():
+    # PyTorch env vars
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+    os.environ["LOCAL_RANK"] = "0"
+
+    # SLURM env vars
+    os.environ["SLURM_PROCID"] = "0"
+    os.environ["SLURM_NPROCS"] = "1"
+    os.environ["SLURM_LOCALID"] = "0"
+    os.environ["SLURM_LAUNCH_NODE_IPADDR"] = "localhost"
+
+    # OpenMPI env vars
+    os.environ["OMPI_COMM_WORLD_RANK"] = "0"
+    os.environ["OMPI_COMM_WORLD_SIZE"] = "1"
+    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "0"
+
+    # Test SLURM initialization
+    os.environ["MODULUS_DISTRIBUTED_INITIALIZATION_METHOD"] = "SLURM"
+    DistributedManager._shared_state = {}
+    DistributedManager.initialize()
+    manager = DistributedManager()
+    assert manager.is_initialized()
+    assert manager._initialization_method == "slurm"
+    assert not manager.distributed, "Manager should be in serial mode"
+    assert manager.rank == 0
+    assert manager.world_size == 1
+    assert manager.local_rank == 0
+
+    # Test OpenMPI initialization
+    os.environ["MODULUS_DISTRIBUTED_INITIALIZATION_METHOD"] = "OPENMPI"
+    DistributedManager._shared_state = {}
+    DistributedManager.initialize()
+    manager = DistributedManager()
+    assert manager.is_initialized()
+    assert manager._initialization_method == "openmpi"
+    assert not manager.distributed, "Manager should be in serial mode"
+    assert manager.rank == 0
+    assert manager.world_size == 1
+    assert manager.local_rank == 0
+
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
 
 
 def test_manager_singleton():

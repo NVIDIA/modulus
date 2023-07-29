@@ -240,6 +240,7 @@ class DistributedManager(object):
         local_rank = int(os.environ.get("SLURM_LOCALID"))
         addr = os.environ.get("SLURM_LAUNCH_NODE_IPADDR")
 
+
         DistributedManager.setup(
             rank=rank,
             world_size=world_size,
@@ -252,7 +253,24 @@ class DistributedManager(object):
 
     @staticmethod
     def initialize():
-        """Initialize distributed manager"""
+        """
+        Initialize distributed manager
+
+        Current supported initialization methods are:
+            `ENV`: PyTorch environment variable initialization
+                 https://pytorch.org/docs/stable/distributed.html#environment-variable-initialization
+            `SLURM`: Initialization on SLURM systems.
+                   Uses `SLURM_PROCID`, `SLURM_NPROCS`, `SLURM_LOCALID` and
+                   `SLURM_LAUNCH_NODE_IPADDR` environment variables.
+            `OPENMPI`: Initialization for OpenMPI launchers.
+                     Uses `OMPI_COMM_WORLD_RANK`, `OMPI_COMM_WORLD_SIZE` and
+                     `OMPI_COMM_WORLD_LOCAL_RANK` environment variables.
+
+        Initialization by default is done using the first valid method in the order
+        listed above. Initialization method can also be explicitly controlled using the
+        `MODULUS_DISTRIBUTED_INITIALIZATION_METHOD` environment variable and setting it
+        to one of the options above.
+        """
         if DistributedManager.is_initialized():
             warn("Distributed manager is already intialized")
             return
@@ -261,13 +279,27 @@ class DistributedManager(object):
         port = os.getenv("MASTER_PORT", "12355")
         # https://pytorch.org/docs/master/notes/cuda.html#id5
         os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-        try:
+        initialization_method = os.getenv("MODULUS_DISTRIBUTED_INITIALIZATION_METHOD")
+        if initialization_method is None:
+            try:
+                DistributedManager.initialize_env()
+            except:
+                if "SLURM_PROCID" in os.environ:
+                    DistributedManager.initialize_slurm(port)
+                elif "OMPI_COMM_WORLD_RANK" in os.environ:
+                    DistributedManager.initialize_open_mpi(addr, port)
+        elif initialization_method == "ENV":
             DistributedManager.initialize_env()
-        except:
-            if "SLURM_PROCID" in os.environ:
-                DistributedManager.initialize_slurm(port)
-            elif "OMPI_COMM_WORLD_RANK" in os.environ:
-                DistributedManager.initialize_open_mpi(addr, port)
+        elif initialization_method == "SLURM":
+            DistributedManager.initialize_slurm(port)
+        elif initialization_method == "OPENMPI":
+            DistributedManager.initialize_open_mpi(addr, port)
+        else:
+            raise RuntimeError("Unknown initialization method "
+                               f"{initialization_method}. "
+                               "Supported values for "
+                               "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
+                               "ENV, SLURM and OPENMPI")
 
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)
