@@ -240,7 +240,6 @@ class DistributedManager(object):
         local_rank = int(os.environ.get("SLURM_LOCALID"))
         addr = os.environ.get("SLURM_LAUNCH_NODE_IPADDR")
 
-
         DistributedManager.setup(
             rank=rank,
             world_size=world_size,
@@ -295,11 +294,13 @@ class DistributedManager(object):
         elif initialization_method == "OPENMPI":
             DistributedManager.initialize_open_mpi(addr, port)
         else:
-            raise RuntimeError("Unknown initialization method "
-                               f"{initialization_method}. "
-                               "Supported values for "
-                               "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
-                               "ENV, SLURM and OPENMPI")
+            raise RuntimeError(
+                "Unknown initialization method "
+                f"{initialization_method}. "
+                "Supported values for "
+                "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
+                "ENV, SLURM and OPENMPI"
+            )
 
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)

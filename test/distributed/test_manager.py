@@ -200,10 +200,12 @@ def test_process_groups():
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
-    torch.multiprocessing.spawn(run_process_groups,
-                                args=(model_parallel_size, verbose),
-                                nprocs=model_parallel_size,
-                                start_method='spawn')
+    torch.multiprocessing.spawn(
+        run_process_groups,
+        args=(model_parallel_size, verbose),
+        nprocs=model_parallel_size,
+        start_method="spawn",
+    )
 
 
 if __name__ == "__main__":
