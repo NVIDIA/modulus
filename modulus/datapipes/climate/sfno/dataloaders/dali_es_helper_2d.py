@@ -108,9 +108,8 @@ class GeneralES(object):
 
         # we need some additional static fields in this case
         if self.zenith_angle:
-            longitude = np.arange(0, 360, 0.25)
-            latitude = np.arange(-90, 90.25, 0.25)
-            latitude = latitude[::-1]
+            longitude = np.linspace(0, 360, self.img_shape[1], endpoint=False)
+            latitude = np.linspace(90,-90, self.img_shape[0])
             self.lon_grid, self.lat_grid = np.meshgrid(longitude, latitude)
             self.lat_grid_local = self.lat_grid[
                 self.read_anchor[0] : self.read_anchor[0] + self.read_shape[0],
@@ -387,12 +386,12 @@ class GeneralES(object):
         if not self.is_parallel:
             self._init_buffers()
 
-    def _init_double_buff_host(self, n_tsteps):  # pragma: no cover
+    def _init_double_buff_host(self, n_tsteps, n_channels):  # pragma: no cover
         buffs = [
             np.zeros(
                 (
                     n_tsteps,
-                    self.n_in_channels,
+                    n_channels,
                     self.read_shape[0],
                     self.read_shape[1],
                 ),
@@ -401,7 +400,7 @@ class GeneralES(object):
             np.zeros(
                 (
                     n_tsteps,
-                    self.n_in_channels,
+                    n_channels,
                     self.read_shape[0],
                     self.read_shape[1],
                 ),
@@ -410,12 +409,12 @@ class GeneralES(object):
         ]
         return buffs
 
-    def _init_double_buff_gpu(self, n_tsteps):  # pragma: no cover
+    def _init_double_buff_gpu(self, n_tsteps, n_channels):  # pragma: no cover
         buffs = [
             cpx.zeros_pinned(
                 (
                     n_tsteps,
-                    self.n_in_channels,
+                    n_channels,
                     self.read_shape[0],
                     self.read_shape[1],
                 ),
@@ -424,7 +423,7 @@ class GeneralES(object):
             cpx.zeros_pinned(
                 (
                     n_tsteps,
-                    self.n_in_channels,
+                    n_channels,
                     self.read_shape[0],
                     self.read_shape[1],
                 ),
@@ -439,23 +438,25 @@ class GeneralES(object):
         self.device.use()
         self.current_buffer = 0
         if self.host_prefetch_buffers:
-            self.inp_buffs = self._init_double_buff_host(self.n_history + 1)
-            self.tar_buffs = self._init_double_buff_host(self.n_future + 1)
+            self.inp_buffs = self._init_double_buff_host(self.n_history + 1, self.n_in_channels)
+            self.tar_buffs = self._init_double_buff_host(self.n_future + 1, self.n_out_channels)
         else:
-            self.inp_buffs = self._init_double_buff_gpu(self.n_history + 1)
-            self.tar_buffs = self._init_double_buff_gpu(self.n_future + 1)
+            self.inp_buffs = self._init_double_buff_gpu(self.n_history + 1, self.n_in_channels)
+            self.tar_buffs = self._init_double_buff_gpu(self.n_future + 1, self.n_out_channels)
         if self.zenith_angle:
             if self.host_prefetch_buffers:
-                self.zen_inp_buffs = self._init_double_buff_host(self.n_history + 1)
-                self.zen_tar_buffs = self._init_double_buff_host(self.n_future + 1)
+                self.zen_inp_buffs = self._init_double_buff_host(self.n_history + 1, 1)
+                self.zen_tar_buffs = self._init_double_buff_host(self.n_future + 1, 1)
             else:
-                self.zen_inp_buffs = self._init_double_buff_gpu(self.n_history + 1)
-                self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1)
+                self.zen_inp_buffs = self._init_double_buff_gpu(self.n_history + 1, 1)
+                self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1, 1)
         return
 
     def _compute_zenith_angle(
-        zen_inp, zen_tar, self, local_idx, year_idx
+        self, zen_inp, zen_tar, local_idx, year_idx
     ):  # pragma: no cover
+        """Computes solar zenith angle"""
+
         # compute hours into the year
         year = self.years[year_idx]
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0)
@@ -469,15 +470,20 @@ class GeneralES(object):
                 )
             ]
         )
-        cos_zenith_inp = np.expand_dims(
-            cos_zenith_angle(
-                inp_times, self.lon_grid_local, self.lat_grid_local
-            ).astype(np.float32),
-            axis=1,
+        cos_zenith_inp = np.asarray(
+            [
+                np.expand_dims(
+                    cos_zenith_angle(
+                        inp_time, self.lon_grid_local, self.lat_grid_local
+                    ).astype(np.float32),
+                    axis=0,
+                ) 
+                for inp_time in inp_times
+            ]
         )
         zen_inp[...] = cos_zenith_inp[...]
 
-        # zenith angle for target:
+        # zenith angle for target
         tar_times = np.asarray(
             [
                 jan_01_epoch + datetime.timedelta(hours=idx * self.timestep_hours)
@@ -488,11 +494,15 @@ class GeneralES(object):
                 )
             ]
         )
-        cos_zenith_tar = np.expand_dims(
-            cos_zenith_angle(
-                tar_times, self.lon_grid_local, self.lat_grid_local
-            ).astype(np.float32),
-            axis=1,
+        cos_zenith_tar = np.asarray(
+            [
+                np.expand_dims(
+                    cos_zenith_angle(
+                        tar_time, self.lon_grid_local, self.lat_grid_local
+                    ).astype(np.float32),
+                    axis=0,
+                ) for tar_time in tar_times
+            ]
         )
         zen_tar[...] = cos_zenith_tar[...]
 

@@ -17,8 +17,8 @@ import torch
 import tensorly as tl
 
 tl.set_backend("pytorch")
-# from tensorly.plugins import use_opt_einsum
-# use_opt_einsum('optimal')
+
+from functools import partial
 
 from modulus.models.sfno.contractions import (
     _contract_diagonal,

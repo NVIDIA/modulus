@@ -413,7 +413,7 @@ class ERA5DaliESDataloader(object):
             if self.add_zenith:
                 izen = token[0]["izen"]
                 tzen = token[0]["tzen"]
-                if self.host_file_buffers:
+                if self.host_prefetch_buffers:
                     result = (
                         inp.to(torch.cuda.current_device()),
                         tar.to(torch.cuda.current_device()),
