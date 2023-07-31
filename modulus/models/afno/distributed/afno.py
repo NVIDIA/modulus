@@ -309,7 +309,7 @@ class DistributedAFNOArch(modulus.Module):
 
     Example
     -------
-    >>> mode = .afno.DistributedAFNOArch((64, 64), 2)
+    >>> model = modulus.models.afno.DistributedAFNOArch((64, 64), 2)
     >>> input = torch.randn(20, 2, 64, 64)
     >>> output = model(input)
     """
