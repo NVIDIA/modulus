@@ -13,4 +13,4 @@
 # limitations under the License.
 
 from .afno import AFNO
-from .distributed import DistributedAFNOArch
+from .distributed import DistributedAFNO

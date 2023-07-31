@@ -274,7 +274,7 @@ class DistributedAFNONet(nn.Module):
         return x
 
 
-class DistributedAFNOArch(modulus.Module):
+class DistributedAFNO(modulus.Module):
     """Distributed Adaptive Fourier neural operator (AFNO) model.
 
     Note
@@ -309,7 +309,7 @@ class DistributedAFNOArch(modulus.Module):
 
     Example
     -------
-    >>> model = modulus.models.afno.DistributedAFNOArch((64, 64), 2)
+    >>> model = modulus.models.afno.DistributedAFNO((64, 64), 2)
     >>> input = torch.randn(20, 2, 64, 64)
     >>> output = model(input)
     """
