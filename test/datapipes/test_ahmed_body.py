@@ -16,7 +16,7 @@ import pytest
 import torch
 
 from typing import Tuple
-from modulus.datapipes.gnn import AhmedBodyDataset
+from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from . import common
 
 Tensor = torch.Tensor
