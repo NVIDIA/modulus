@@ -132,7 +132,7 @@ def _unique_model_names(
             model0 = model0.module
         # Base name of model is meta.name unless pytorch model
         base_name = model0.__class__.__name__
-        if isinstance(model0, modulus.Module):
+        if isinstance(model0, modulus.models.Module):
             base_name = model0.meta.name
         # If we have multiple models of the same name, introduce another index
         if base_name in model_dict:
@@ -199,7 +199,7 @@ def save_checkpoint(
             # Get full file path / name
             file_name = _get_checkpoint_filename(path, name, index=epoch, saving=True)
             # Save state dictionary
-            if isinstance(model, modulus.Module):
+            if isinstance(model, modulus.models.Module):
                 model.save(file_name)
             else:
                 torch.save(model.state_dict(), file_name)
@@ -219,10 +219,8 @@ def save_checkpoint(
     if scaler:
         checkpoint_dict["scaler_state_dict"] = scaler.state_dict()
     # Static capture is being used, save its grad scaler
-    elif _StaticCapture.scaler_singleton:
-        checkpoint_dict[
-            "scaler_state_dict"
-        ] = _StaticCapture.scaler_singleton.state_dict()
+    if _StaticCapture._amp_scalers:
+        checkpoint_dict["static_capture_state_dict"] = _StaticCapture.state_dict()
 
     # Output file name
     output_filename = _get_checkpoint_filename(path, index=epoch, saving=True)
@@ -297,7 +295,7 @@ def load_checkpoint(
                 )
                 continue
             # Load state dictionary
-            if isinstance(model, modulus.Module):
+            if isinstance(model, modulus.models.Module):
                 model.load(file_name)
             else:
                 model.load_state_dict(torch.load(file_name, map_location=device))
@@ -329,14 +327,14 @@ def load_checkpoint(
         scheduler.load_state_dict(checkpoint_dict["scheduler_state_dict"])
         checkpoint_logging.success("Loaded scheduler state dictionary")
 
-    # Scheduler state dict
+    # Scaler state dict
     if "scaler_state_dict" in checkpoint_dict:
-        if scaler:
-            scaler.load_state_dict(checkpoint_dict["scaler_state_dict"])
-            checkpoint_logging.success("Loaded grad scaler state dictionary")
-        else:
-            # Load into static capture for initialization
-            _StaticCapture.scaler_dict = checkpoint_dict["scaler_state_dict"]
+        scaler.load_state_dict(checkpoint_dict["scaler_state_dict"])
+        checkpoint_logging.success("Loaded grad scaler state dictionary")
+
+    if "static_capture_state_dict" in checkpoint_dict:
+        _StaticCapture.load_state_dict(checkpoint_dict["static_capture_state_dict"])
+        checkpoint_logging.success("Loaded static capture state dictionary")
 
     epoch = 0
     if "epoch" in checkpoint_dict:
