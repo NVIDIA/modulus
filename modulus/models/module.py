@@ -62,7 +62,7 @@ class Module(torch.nn.Module):
         out._args = {
             "__name__": cls.__name__,
             "__module__": cls.__module__,
-            "__args__": {cls.__name__: {k: v for k, v in bound_args.arguments.items()}},
+            "__args__": {k: v for k, v in bound_args.arguments.items()},
         }
         return out
 
@@ -84,22 +84,53 @@ class Module(torch.nn.Module):
 
     @classmethod
     def instantiate(cls, arg_dict: Dict[str, Any]) -> "Module":
-        _mod = importlib.import_module(arg_dict["__module__"])
-        _cls_name = arg_dict["__name__"]
+        """Instantiate a model from a dictionary of arguments
+
+        Parameters
+        ----------
+        arg_dict : Dict[str, Any]
+            Dictionary of arguments to instantiate model with. This should be
+            have three keys: '__name__', '__module__', and '__args__'. The first two
+            are used to import the class and the last is used to instantiate
+            the class. The '__args__' key should be a dictionary of arguments
+            to pass to the class's __init__ function.
+
+        Returns
+        -------
+        Module
+
+        Examples
+        --------
+        >>> from modulus.models import Module
+        >>> fcn = Module.instantiate({'__name__': 'FullyConnected', '__module__': 'modulus.models.mlp', '__args__': {'in_features': 10}})
+        >>> fcn
+        FullyConnected(
+          (layers): ModuleList(
+            (0): FCLayer(
+              (activation_fn): SiLU()
+              (linear): Linear(in_features=10, out_features=512, bias=True)
+            )
+            (1-5): 5 x FCLayer(
+              (activation_fn): SiLU()
+              (linear): Linear(in_features=512, out_features=512, bias=True)
+            )
+          )
+          (final_layer): FCLayer(
+            (activation_fn): Identity()
+            (linear): Linear(in_features=512, out_features=512, bias=True)
+          )
+        )
+        """
 
         # Add a check if the class is one in the model registry
+        _cls_name = arg_dict["__name__"]
         registry = ModelRegistry()
         if _cls_name in registry.list_models():
             _cls = registry.factory(_cls_name)
-        else:
-            _cls = getattr(_mod, _cls_name)
-
-        cls_args = arg_dict["__args__"]
-        all_args = {}
-        for args in cls_args.values():
-            all_args.update(args)
-
-        return _cls(**all_args)
+        else: # Otherwise, try to import the class
+            _mod = importlib.import_module(arg_dict["__module__"])
+            _cls = getattr(_mod, arg_dict["__name__"])
+        return _cls(**arg_dict["__args__"])
 
     def debug(self):
         """Turn on debug logging"""
