@@ -109,7 +109,7 @@ class GeneralES(object):
         # we need some additional static fields in this case
         if self.zenith_angle:
             longitude = np.linspace(0, 360, self.img_shape[1], endpoint=False)
-            latitude = np.linspace(90,-90, self.img_shape[0])
+            latitude = np.linspace(90, -90, self.img_shape[0])
             self.lon_grid, self.lat_grid = np.meshgrid(longitude, latitude)
             self.lat_grid_local = self.lat_grid[
                 self.read_anchor[0] : self.read_anchor[0] + self.read_shape[0],
@@ -438,11 +438,19 @@ class GeneralES(object):
         self.device.use()
         self.current_buffer = 0
         if self.host_prefetch_buffers:
-            self.inp_buffs = self._init_double_buff_host(self.n_history + 1, self.n_in_channels)
-            self.tar_buffs = self._init_double_buff_host(self.n_future + 1, self.n_out_channels)
+            self.inp_buffs = self._init_double_buff_host(
+                self.n_history + 1, self.n_in_channels
+            )
+            self.tar_buffs = self._init_double_buff_host(
+                self.n_future + 1, self.n_out_channels
+            )
         else:
-            self.inp_buffs = self._init_double_buff_gpu(self.n_history + 1, self.n_in_channels)
-            self.tar_buffs = self._init_double_buff_gpu(self.n_future + 1, self.n_out_channels)
+            self.inp_buffs = self._init_double_buff_gpu(
+                self.n_history + 1, self.n_in_channels
+            )
+            self.tar_buffs = self._init_double_buff_gpu(
+                self.n_future + 1, self.n_out_channels
+            )
         if self.zenith_angle:
             if self.host_prefetch_buffers:
                 self.zen_inp_buffs = self._init_double_buff_host(self.n_history + 1, 1)
@@ -477,7 +485,7 @@ class GeneralES(object):
                         inp_time, self.lon_grid_local, self.lat_grid_local
                     ).astype(np.float32),
                     axis=0,
-                ) 
+                )
                 for inp_time in inp_times
             ]
         )
@@ -501,7 +509,8 @@ class GeneralES(object):
                         tar_time, self.lon_grid_local, self.lat_grid_local
                     ).astype(np.float32),
                     axis=0,
-                ) for tar_time in tar_times
+                )
+                for tar_time in tar_times
             ]
         )
         zen_tar[...] = cos_zenith_tar[...]
