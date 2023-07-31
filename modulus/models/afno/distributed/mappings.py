@@ -15,9 +15,9 @@
 import torch
 
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.helpers import _reduce
-from modulus.distributed.helpers import _split
-from modulus.distributed.helpers import _gather
+from modulus.distributed.utils import _reduce
+from modulus.distributed.utils import _split
+from modulus.distributed.utils import _gather
 
 
 # matmul parallel
