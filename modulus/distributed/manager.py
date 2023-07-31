@@ -68,6 +68,12 @@ class DistributedManager(object):
             obj._find_unused_parameters = False
         if not hasattr(obj, "_initialization_method"):
             obj._initialization_method = "None"
+        if not hasattr(obj, "_groups"):
+            obj._groups = {}
+        if not hasattr(obj, "_group_ranks"):
+            obj._group_ranks = {}
+        if not hasattr(obj, "_group_names"):
+            obj._group_names = {}
 
         return obj
 
@@ -336,10 +342,6 @@ class DistributedManager(object):
             dist.init_process_group(
                 backend, rank=manager.rank, world_size=manager.world_size
             )
-
-        manager._groups = {}
-        manager._group_ranks = {}
-        manager._group_names = {}
 
         manager._device = torch.device(
             f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"

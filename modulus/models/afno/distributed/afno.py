@@ -309,9 +309,11 @@ class DistributedAFNO(modulus.Module):
 
     Example
     -------
-    >>> model = modulus.models.afno.DistributedAFNO((64, 64), 2)
-    >>> input = torch.randn(20, 2, 64, 64)
-    >>> output = model(input)
+    >>> # from modulus.distributed import DistributedManager
+    >>> # DistributedManager.initialize()
+    >>> # model = modulus.models.afno.DistributedAFNO((64, 64), 2)
+    >>> # input = torch.randn(20, 2, 64, 64)
+    >>> # output = model(input)
     """
 
     def __init__(
