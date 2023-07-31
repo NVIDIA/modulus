@@ -123,20 +123,25 @@ class _GatherWithinMatmulParallelRegion(torch.autograd.Function):
 # -----------------
 # matmul parallel
 def copy_to_matmul_parallel_region(input_):
+    """Copy input"""
     return _CopyToMatmulParallelRegion.apply(input_)
 
 
 def reduce_from_matmul_parallel_region(input_):
+    """All-reduce the input from the matmul parallel region."""
     return _ReduceFromMatmulParallelRegion.apply(input_)
 
 
 def scatter_to_matmul_parallel_region(input_, dim):
+    """Split the input and keep only the corresponding chuck to the rank."""
     return _ScatterToMatmulParallelRegion.apply(input_, dim)
 
 
 def gather_from_matmul_parallel_region(input_, dim):
+    """Gather the input from matmul parallel region and concatenate."""
     return _GatherFromMatmulParallelRegion.apply(input_, dim)
 
 
 def gather_within_matmul_parallel_region(input_, dim):
+    """Gather the input from matmul parallel region and concatenate."""
     return _GatherWithinMatmulParallelRegion.apply(input_, dim)
