@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added distributed utilities to create process groups and orthogonal process groups.
+- Added distributed AFNO model implementation.
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.2.0] - 2023-08-xx
+
+### Added
+
 - Added a CHANGELOG.md
 - Added build support for internal DGL
 - 4D Fourier Neural Operator model
@@ -18,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - DGL install changed from pypi to source
+- Updated SFNO to add support for super resolution, flexible checkpoining, etc.
 
 ### Deprecated
 
@@ -27,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed issue with torch-harmonics version locking
 - Fixed the Modulus editable install
+- Fixed AMP bug in static capture
 
 ### Security
 
