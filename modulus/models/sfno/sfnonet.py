@@ -18,7 +18,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 from torch.cuda import amp
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, List
 
 # helpers
 from modulus.models.sfno.layers import (
@@ -300,15 +300,15 @@ class SphericalFourierNeuralOperatorNet(Module):
         Type of filter to use ('linear', 'non-linear'), by default "non-linear"
     operator_type : str, optional
         Type of operator to use ('diaginal', 'dhconv'), by default "diagonal"
-    inp_shape : tuple, optional
-        Shape of the input channels, by default (721, 1440)
+    inp_shape : List[int], optional
+        Shape of the input channels, by default [721, 1440]
     scale_factor : int, optional
         Scale factor to use, by default 16
-    in_chans : int, optional
+    in_channels : int, optional
         Number of input channels, by default 2
-    out_chans : int, optional
+    out_channels : int, optional
         Number of output channels, by default 2
-    out_channels : List[int], optional
+    out_channels_id : List[int], optional
         List of output channel ids, by default [0, 1, 2]
     embed_dim : int, optional
         Dimension of the embeddings, by default 256
@@ -365,8 +365,8 @@ class SphericalFourierNeuralOperatorNet(Module):
     >>> model = SFNO(
     ...         inp_shape=(8, 16),
     ...         scale_factor=4,
-    ...         in_chans=2,
-    ...         out_chans=2,
+    ...         in_channels=2,
+    ...         out_channels=2,
     ...         embed_dim=16,
     ...         num_layers=2,
     ...         encoder_layers=1,
@@ -382,12 +382,12 @@ class SphericalFourierNeuralOperatorNet(Module):
         grid="legendre-gauss",
         filter_type: str = "non-linear",
         operator_type: str = "diagonal",
-        inp_shape: Tuple[int] = (721, 1440),
+        inp_shape: List[int] = [721, 1440],
         out_shape: Any = None,
         scale_factor: int = 16,
-        in_chans: int = 2,
-        out_chans: int = 2,
-        out_channels: List[int] = [0, 1, 2],
+        in_channels: int = 2,
+        out_channels: int = 2,
+        out_channels_id: List[int] = [0, 1, 2],
         channel_names: List[str] = ["u10m", "v10m", "u100m"],
         embed_dim: int = 256,
         num_layers: int = 12,
@@ -423,9 +423,9 @@ class SphericalFourierNeuralOperatorNet(Module):
         self.inp_shape = inp_shape
         self.out_shape = inp_shape if out_shape is None else out_shape
         self.scale_factor = scale_factor
-        self.in_chans = in_chans
-        self.out_chans = out_chans
-        self.out_channels = out_channels
+        self.in_chans = in_channels
+        self.out_chans = out_channels
+        self.out_channels_id = out_channels_id
         self.channel_names = channel_names
         self.embed_dim = embed_dim
         self.num_layers = num_layers
@@ -772,7 +772,7 @@ class SphericalFourierNeuralOperatorNet(Module):
 
         if self.output_transform:
             minmax_channels = []
-            for o, c in enumerate(self.out_channels):
+            for o, c in enumerate(self.out_channels_id):
                 if self.channel_names[c][0] == "r":
                     minmax_channels.append(o)
             self.register_buffer(

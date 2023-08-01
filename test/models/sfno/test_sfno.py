@@ -30,21 +30,21 @@ from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 def test_sfno_forward(device, checkpointing):
     """Test sfno forward pass with & without checkpointing"""
 
-    in_chans = 2
+    in_channels = 2
     h, w = 8, 16
     params = {}
 
     fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
+    x = torch.randn(1, in_channels, h, w)
     x = x.to(device)
 
     # Construct sfno model
     model = SphericalFourierNeuralOperatorNet(
         params,
-        inp_shape=(h, w),
+        inp_shape=[h, w],
         scale_factor=4,
-        in_chans=in_chans,
-        out_chans=in_chans,
+        in_channels=in_channels,
+        out_channels=in_channels,
         embed_dim=16,
         num_layers=2,
         encoder_layers=1,
@@ -115,17 +115,17 @@ def test_sfno_constructor(
     """Test sfno constructor options"""
     # Define dictionary of constructor args
 
-    in_chans = 2
+    in_channels = 2
     h, w = 8, 16
     batch_size = 2
 
     arg_list = [
         {
             "params": {},
-            "inp_shape": (h, w),
+            "inp_shape": [h, w],
             "scale_factor": 4,
-            "in_chans": in_chans,
-            "out_chans": in_chans,
+            "in_channels": in_channels,
+            "out_channels": in_channels,
             "embed_dim": 16,
             "num_layers": 2,
             "encoder_layers": 1,
@@ -144,10 +144,10 @@ def test_sfno_constructor(
         },
         {
             "params": {},
-            "inp_shape": (h, w),
+            "inp_shape": [h, w],
             "scale_factor": 4,
-            "in_chans": in_chans,
-            "out_chans": in_chans,
+            "in_channels": in_channels,
+            "out_channels": in_channels,
             "embed_dim": 16,
             "num_layers": 2,
             "encoder_layers": 1,
@@ -170,11 +170,11 @@ def test_sfno_constructor(
         model = SphericalFourierNeuralOperatorNet(**kw_args).to(device)
 
         fix_random_seeds()
-        x = torch.randn(batch_size, in_chans, h, w)
+        x = torch.randn(batch_size, in_channels, h, w)
         x = x.to(device)
 
         outvar = model(x)
-        assert outvar.shape == (batch_size, in_chans, h, w)
+        assert outvar.shape == (batch_size, in_channels, h, w)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -184,18 +184,18 @@ def test_sfno_optims(device):
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
 
-        in_chans = 2
+        in_channels = 2
         h, w = 8, 16
         fix_random_seeds()
-        x = torch.randn(1, in_chans, h, w)
+        x = torch.randn(1, in_channels, h, w)
         x = x.to(device)
 
         model_kwds = {
             "params": {},
-            "inp_shape": (h, w),
+            "inp_shape": [h, w],
             "scale_factor": 4,
-            "in_chans": in_chans,
-            "out_chans": in_chans,
+            "in_channels": in_channels,
+            "out_channels": in_channels,
             "embed_dim": 16,
             "num_layers": 2,
             "encoder_layers": 1,
@@ -226,18 +226,18 @@ def test_sfno_optims(device):
 def test_sfno_checkpoint(device):
     """Test sfno checkpoint save/load"""
 
-    in_chans = 4
+    in_channels = 4
     h, w = 8, 16
     fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
+    x = torch.randn(1, in_channels, h, w)
     x = x.to(device)
 
     model_kwds = {
         "params": {},
-        "inp_shape": (h, w),
+        "inp_shape": [h, w],
         "scale_factor": 3,
-        "in_chans": in_chans,
-        "out_chans": in_chans,
+        "in_channels": in_channels,
+        "out_channels": in_channels,
         "embed_dim": 16,
         "num_layers": 4,
         "encoder_layers": 1,
@@ -249,7 +249,7 @@ def test_sfno_checkpoint(device):
     model_1 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
     model_2 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
 
-    x = torch.randn(1, in_chans, h, w)
+    x = torch.randn(1, in_channels, h, w)
     x = x.to(device)
 
     assert common.validate_checkpoint(
@@ -264,18 +264,18 @@ def test_sfno_checkpoint(device):
 def test_sfno_deploy(device):
     """Test sfno deployment support"""
 
-    in_chans = 3
+    in_channels = 3
     h, w = 8, 16
     fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
+    x = torch.randn(1, in_channels, h, w)
     x = x.to(device)
 
     model_kwds = {
         "params": {},
-        "inp_shape": (h, w),
+        "inp_shape": [h, w],
         "scale_factor": 3,
-        "in_chans": in_chans,
-        "out_chans": in_chans,
+        "in_channels": in_channels,
+        "out_channels": in_channels,
         "embed_dim": 16,
         "num_layers": 4,
         "encoder_layers": 1,

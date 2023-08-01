@@ -19,7 +19,7 @@ import modulus
 import modulus.models.layers.fft as fft
 
 from functools import partial
-from typing import Tuple, Any
+from typing import List, Any
 from dataclasses import dataclass
 from ..meta import ModelMetaData
 from ..module import Module
@@ -340,26 +340,26 @@ class PatchEmbed(nn.Module):
 
     Parameters
     ----------
-    img_size : Tuple[int, int]
-        Input image dimensions (height, width)
+    inp_shape : List[int]
+        Input image dimensions [height, width]
     in_channels : int
         Number of input channels
-    patch_size : Tuple[int, int], optional
-        Size of image patches, by default (16, 16)
+    patch_size : List[int], optional
+        Size of image patches, by default [16, 16]
     embed_dim : int, optional
         Embedded channel size, by default 256
     """
 
     def __init__(
         self,
-        img_size: Tuple[int, int],
+        inp_shape: List[int],
         in_channels: int,
-        patch_size: Tuple[int, int] = (16, 16),
+        patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
     ):
         super().__init__()
-        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-        self.img_size = img_size
+        num_patches = (inp_shape[1] // patch_size[1]) * (inp_shape[0] // patch_size[0])
+        self.inp_shape = inp_shape
         self.patch_size = patch_size
         self.num_patches = num_patches
         self.proj = nn.Conv2d(
@@ -369,8 +369,8 @@ class PatchEmbed(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         B, C, H, W = x.shape
         assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            H == self.inp_shape[0] and W == self.inp_shape[1]
+        ), f"Input image size ({H}*{W}) doesn't match model ({self.inp_shape[0]}*{self.inp_shape[1]})."
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
@@ -401,14 +401,14 @@ class AFNO(Module):
 
     Parameters
     ----------
-    img_size : Tuple[int, int]
-        Input image dimensions (height, width)
+    inp_shape : List[int]
+        Input image dimensions [height, width]
     in_channels : int
         Number of input channels
     out_channels: int
         Number of output channels
-    patch_size : Tuple[int, int], optional
-        Size of image patches, by default (16, 16)
+    patch_size : List[int], optional
+        Size of image patches, by default [16, 16]
     embed_dim : int, optional
         Embedded channel size, by default 256
     depth : int, optional
@@ -427,7 +427,7 @@ class AFNO(Module):
     Example
     -------
     >>> model = modulus.models.afno.AFNO(
-    ...     img_size=(32, 32),
+    ...     inp_shape=[32, 32],
     ...     in_channels=2,
     ...     out_channels=1,
     ...     patch_size=(8, 8),
@@ -448,10 +448,10 @@ class AFNO(Module):
 
     def __init__(
         self,
-        img_size: Tuple[int, int],
+        inp_shape: List[int],
         in_channels: int,
         out_channels: int,
-        patch_size: Tuple[int, int] = (16, 16),
+        patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
         depth: int = 4,
         mlp_ratio: float = 4.0,
@@ -462,19 +462,19 @@ class AFNO(Module):
     ) -> None:
         super().__init__(meta=MetaData())
         assert (
-            img_size[0] % patch_size[0] == 0 and img_size[1] % patch_size[1] == 0
-        ), f"img_size {img_size} should be divisible by patch_size {patch_size}"
+            inp_shape[0] % patch_size[0] == 0 and inp_shape[1] % patch_size[1] == 0
+        ), f"input shape {inp_shape} should be divisible by patch_size {patch_size}"
 
         self.in_chans = in_channels
         self.out_chans = out_channels
-        self.img_size = img_size
+        self.inp_shape = inp_shape
         self.patch_size = patch_size
         self.num_features = self.embed_dim = embed_dim
         self.num_blocks = num_blocks
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         self.patch_embed = PatchEmbed(
-            img_size=img_size,
+            inp_shape=inp_shape,
             in_channels=self.in_chans,
             patch_size=self.patch_size,
             embed_dim=embed_dim,
@@ -484,8 +484,8 @@ class AFNO(Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
-        self.h = img_size[0] // self.patch_size[0]
-        self.w = img_size[1] // self.patch_size[1]
+        self.h = inp_shape[0] // self.patch_size[0]
+        self.w = inp_shape[1] // self.patch_size[1]
 
         self.blocks = nn.ModuleList(
             [
@@ -549,6 +549,6 @@ class AFNO(Module):
         # [b h w p1 p2 c_out]
         out = torch.permute(out, (0, 5, 1, 3, 2, 4))
         # [b c_out, h, p1, w, p2]
-        out = out.reshape(list(out.shape[:2]) + [self.img_size[0], self.img_size[1]])
+        out = out.reshape(list(out.shape[:2]) + [self.inp_shape[0], self.inp_shape[1]])
         # [b c_out, (h*p1), (w*p2)]
         return out
