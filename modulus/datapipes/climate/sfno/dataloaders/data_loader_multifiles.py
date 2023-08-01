@@ -56,6 +56,12 @@ class MultifilesDataset(Dataset):
             self.img_crop_shape_x = self.img_shape_x
             self.img_crop_shape_y = self.img_shape_y
 
+        # set these for compatibility with the distributed dataloader. Doesn't support distributed mode as of now
+        self.img_local_offset_x = 0
+        self.img_local_offset_y = 0
+        self.img_local_shape_x = self.img_shape_x
+        self.img_local_shape_y = self.img_shape_y
+
         self.n_samples_total = self.n_years * self.n_samples_per_year
         self.files = [None for _ in range(self.n_years)]
         logging.info("Number of samples per year: {}".format(self.n_samples_per_year))

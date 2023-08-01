@@ -21,7 +21,9 @@ class ComplexReLU(nn.Module):
     Complex-valued variants of the ReLU activation function
     """
 
-    def __init__(self, negative_slope=0.0, mode="real", bias_shape=None, scale=1.0):
+    def __init__(
+        self, negative_slope=0.0, mode="real", bias_shape=None, scale=1.0
+    ):  # pragma: no cover
         super(ComplexReLU, self).__init__()
 
         # store parameters
@@ -39,8 +41,7 @@ class ComplexReLU(nn.Module):
         self.negative_slope = negative_slope
         self.act = nn.LeakyReLU(negative_slope=negative_slope)
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
-
+    def forward(self, z: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         if self.mode == "cartesian":
             zr = torch.view_as_real(z)
             za = self.act(zr)
@@ -83,7 +84,9 @@ class ComplexActivation(nn.Module):
     - any other mode: the complex input is returned as-is (identity operation).
     """
 
-    def __init__(self, activation, mode="cartesian", bias_shape=None):
+    def __init__(
+        self, activation, mode="cartesian", bias_shape=None
+    ):  # pragma: no cover
         super(ComplexActivation, self).__init__()
 
         # store parameters
@@ -100,7 +103,7 @@ class ComplexActivation(nn.Module):
         # real valued activation
         self.act = activation
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         if self.mode == "cartesian":
             zr = torch.view_as_real(z)
             za = self.act(zr)

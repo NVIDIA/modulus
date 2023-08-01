@@ -15,7 +15,7 @@
 
 name: Feature Request
 description: Request new or improved functionality or changes to existing Modulus (Core) functionality
-title: "[FEA 🚀]: "
+title: "🚀[FEA]: "
 labels: ["feature request"]
 
 body:
@@ -53,8 +53,6 @@ body:
     attributes:
       label: Please provide a clear description of problem you would like to solve.
       description: Real usage examples are especially helpful. If there is an existing function you use in a different library, please also provide a link.
-    validations:
-      required: true
 
   - type: textarea
     id: alternatives
@@ -62,9 +60,3 @@ body:
       label: Describe any alternatives you have considered
       description: List any other libraries, or approaches you have looked at or tried.
       placeholder: I have looked at library xyz and qrs, but they do not offer GPU acceleration
-
-  - type: textarea
-    id: misc
-    attributes:
-      label: Additional context
-      description: Add any other context, code examples, or references to existing implementations about the feature request here.

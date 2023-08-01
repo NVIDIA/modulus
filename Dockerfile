@@ -31,42 +31,16 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 RUN pip install "tensorly>=0.8.1" "vtk>=9.2.6" "pyvista>=0.40.1" https://github.com/tensorly/torch/archive/715a0daa7ae0cbdb443d06780a785ae223108903.tar.gz
 
-# Install DGL (Internal if present otherwise from source)
+# Install DGL from source
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
-COPY . /modulus/
-RUN if [ -e "/modulus/deps/dgl" ]; then \
-	echo "Internal DGL exists. Using internal DGL build" && \
-	cp -r /modulus/deps/dgl/ /opt/ && \
-	mkdir /opt/dgl/dgl-source/build \
-	&& cd /opt/dgl/dgl-source/build \
-	&& export NCCL_ROOT=/usr \
-	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
-        	-DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 75 80 86 90" -DCUDA_ARCH_PTX="90" \
-        	-DCUDA_ARCH_NAME="Manual" \
-        	-DBUILD_TORCH=ON \
-        	-DBUILD_SPARSE=ON \
-	&& cmake --build . \
-	&& cd ../python \
-	&& python setup.py bdist_wheel \
-	&& pip install ./dist/dgl*.whl \
-	&& rm -rf ./dist \
-	&& rm -rf ../build \
-	&& cd /opt/dgl/ \
-	&& pip install --no-cache-dir -r requirements.txt; \
-    else \
-	echo "No Internal DGL present. Building from source" && \
-	git clone --recurse-submodules https://github.com/dmlc/dgl.git && \
-	cd dgl/ && DGL_HOME="/workspace/dgl/" bash script/build_dgl.sh -g && \
+RUN git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.1 && git submodule update --init --recursive && \
+	DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
 	cd python && \
 	python setup.py install && \
-	python setup.py build_ext --inplace; \
-    fi
-
-# cleanup of stage
-RUN rm -rf /modulus/ 
+	python setup.py build_ext --inplace
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
