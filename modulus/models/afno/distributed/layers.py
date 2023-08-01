@@ -21,10 +21,10 @@ import torch.nn.functional as F
 
 from modulus.distributed.manager import DistributedManager
 
-from modulus.models.afno.distributed.mappings import copy_to_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import reduce_from_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import scatter_to_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import gather_from_matmul_parallel_region
+from modulus.distributed.mappings import copy_to_matmul_parallel_region
+from modulus.distributed.mappings import reduce_from_matmul_parallel_region
+from modulus.distributed.mappings import scatter_to_matmul_parallel_region
+from modulus.distributed.mappings import gather_from_matmul_parallel_region
 
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):

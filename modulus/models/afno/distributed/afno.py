@@ -25,8 +25,8 @@ import torch.distributed as dist
 import modulus
 from modulus.distributed.manager import DistributedManager
 
-from modulus.models.afno.distributed.mappings import copy_to_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import (
+from modulus.distributed.mappings import copy_to_matmul_parallel_region
+from modulus.distributed.mappings import (
     scatter_to_matmul_parallel_region,
     gather_from_matmul_parallel_region,
 )
