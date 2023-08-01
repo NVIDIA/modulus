@@ -118,6 +118,63 @@ class _GatherWithinMatmulParallelRegion(torch.autograd.Function):
         )
 
 
+# spatial parallel
+class _ScatterToSpatialParallelRegion(torch.autograd.Function):
+    """Split the input and keep only the corresponding chuck to the rank."""
+
+    @staticmethod
+    def symbolic(graph, input_, dim_):
+        return _split(
+            input_, dim_, group=DistributedManager().group("spatial_parallel")
+        )
+
+    @staticmethod
+    def forward(ctx, input_, dim_):
+        ctx.dim = dim_
+        return _split(
+            input_, dim_, group=DistributedManager().group("spatial_parallel")
+        )
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return (
+            _gather(
+                grad_output,
+                ctx.dim,
+                group=DistributedManager().group("spatial_parallel"),
+            ),
+            None,
+        )
+
+
+class _GatherFromSpatialParallelRegion(torch.autograd.Function):
+    """Gather the input from spatial parallel region and concatinate."""
+
+    @staticmethod
+    def symbolic(graph, input_, dim_):
+        return _gather(
+            input_, dim_, group=DistributedManager().group("spatial_parallel")
+        )
+
+    @staticmethod
+    def forward(ctx, input_, dim_):
+        ctx.dim = dim_
+        return _gather(
+            input_, dim_, group=DistributedManager().group("spatial_parallel")
+        )
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return (
+            _split(
+                grad_output,
+                ctx.dim,
+                group=DistributedManager().group("spatial_parallel"),
+            ),
+            None,
+        )
+
+
 # -----------------
 # Helper functions.
 # -----------------
@@ -145,3 +202,14 @@ def gather_from_matmul_parallel_region(input_, dim):
 def gather_within_matmul_parallel_region(input_, dim):
     """Gather the input from matmul parallel region and concatenate."""
     return _GatherWithinMatmulParallelRegion.apply(input_, dim)
+
+
+# spatial parallel
+def scatter_to_spatial_parallel_region(input_, dim):
+    """Split the input and keep only the corresponding chuck to the rank."""
+    return _ScatterToSpatialParallelRegion.apply(input_, dim)
+
+
+def gather_from_spatial_parallel_region(input_, dim):
+    """Gather the input from spatial parallel region and concatinate."""
+    return _GatherFromSpatialParallelRegion.apply(input_, dim)
