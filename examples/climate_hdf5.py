@@ -52,7 +52,8 @@ class MetaData(DatapipeMetaData):
 
 
 class ClimateHDF5Datapipe(Datapipe):
-    """Climate DALI data pipeline for HDF5 files
+    """Climate DALI data pipeline for HDF5 files. The pipeline will load data from
+    HDF5 files and normalize the data using the mean and standard deviation. The
 
     Parameters
     ----------
@@ -306,8 +307,8 @@ class ClimateHDF5Datapipe(Datapipe):
         """
 
         # get latitudes and longitudes from data shape
-        lat = np.linspace(-90, 90, self.data_shape[0])
-        lon = np.linspace(-180, 180, self.data_shape[1])
+        lat = np.linspace(-90, 90, self.data_shape[0]).astype(np.float32)
+        lon = np.linspace(-180, 180, self.data_shape[1]).astype(np.float32)
         lat, lon = np.meshgrid(lat, lon, indexing="ij")
         self.latlon = dali.types.Constant(np.stack((lat, lon), axis=0))
 
@@ -364,7 +365,7 @@ class ClimateHDF5Datapipe(Datapipe):
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that
                 state_seq = state_seq.gpu()
-                timestamps = timestamps.gpu()
+                #timestamps = timestamps.gpu()
 
             # Crop
             h, w = self.data_shape
@@ -514,15 +515,15 @@ class ClimateDaliExternalSource:
         year = self.start_year + year_idx
         timestamps = np.array([(datetime(year, 1, 1) + timedelta(hours=int(in_idx) * self.dt) + timedelta(hours=i * self.stride * self.dt)).timestamp() for i in range(self.num_steps)])
 
-
         # Debug timestamp and make sure it matches the one in the file
         # TODO: Remove this prior to merging
-        if 'time' in self.data_files[year_idx]:
-            for i in range(self.num_steps):
-                data_timestamp = self.data_files[year_idx]['time'][in_idx + i * self.stride]
-                data_timestamp = (datetime(1950, 1, 1) + timedelta(hours=data_timestamp)).timestamp()
-                if data_timestamp != timestamps[i]:
-                    raise ValueError("Timestamp mismatch")
+        #if 'time' in self.data_files[year_idx]:
+        #    for i in range(self.num_steps):
+        #        data_timestamp = self.data_files[year_idx]['time'][in_idx + i * self.stride]
+        #        data_timestamp = (datetime(1950, 1, 1) + timedelta(hours=data_timestamp)).timestamp()
+        #        if np.isclose(data_timestamp, timestamps[i], rtol=1e-03):
+        #            print("date time mismatch: ", data_timestamp - timestamps[i])
+        #            raise ValueError("Timestamp mismatch")
 
         return state_seq, timestamps
 
