@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added distributed utilities to create process groups and orthogonal process groups.
+- Added distributed AFNO model implementation.
+
 ### Changed
 
 ### Deprecated
