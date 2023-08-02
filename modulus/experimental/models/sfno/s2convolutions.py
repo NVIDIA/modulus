@@ -28,7 +28,10 @@ from tltorch.factorized_tensors.core import FactorizedTensor
 
 # import convenience functions for factorized tensors
 from modulus.experimental.models.sfno.activations import ComplexReLU
-from modulus.experimental.models.sfno.contractions import compl_muladd2d_fwd, compl_mul2d_fwd
+from modulus.experimental.models.sfno.contractions import (
+    compl_muladd2d_fwd,
+    compl_mul2d_fwd,
+)
 from modulus.experimental.models.sfno.contractions import _contract_localconv_fwd
 from modulus.experimental.models.sfno.contractions import (
     _contract_blockconv_fwd,

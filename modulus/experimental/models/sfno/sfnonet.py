@@ -58,7 +58,9 @@ from modulus.experimental.utils.sfno.distributed import comm
 
 # layer normalization
 from apex.normalization import FusedLayerNorm
-from modulus.experimental.utils.sfno.distributed.layer_norm import DistributedInstanceNorm2d
+from modulus.experimental.utils.sfno.distributed.layer_norm import (
+    DistributedInstanceNorm2d,
+)
 
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
