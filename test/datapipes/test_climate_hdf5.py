@@ -24,26 +24,22 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    return "/home/oliver/fcn_mip_modulus/tisr_dali/modulus-data/datasets/hdf5/test/"
-    # return "/data/nfs/modulus-data/datasets/hdf5/test/"
+    return "/data/nfs/modulus-data/datasets/hdf5/test/"
 
 
 @pytest.fixture
 def stats_dir():
-    return "/home/oliver/fcn_mip_modulus/tisr_dali/modulus-data/datasets/hdf5/stats/"
-    # return "/data/nfs/modulus-data/datasets/hdf5/stats/"
+    return "/data/nfs/modulus-data/datasets/hdf5/stats/"
 
 
 @pytest.fixture
 def lsm_filename():
-    return "/home/oliver/fcn_mip_modulus/tisr_dali/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
-    # return "/data/nfs/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
+    return "/data/nfs/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
 
 
 @pytest.fixture
 def geopotential_filename():
-    return "/home/oliver/fcn_mip_modulus/tisr_dali/modulus-data/datasets/hdf5/static/geopotential.nc"
-    # return "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
+    return "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
