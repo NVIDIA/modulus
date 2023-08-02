@@ -18,7 +18,10 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 from torch.cuda import amp
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, Tuple
+
+# import contractions
+from modulus.models.sfno.factorizations import get_contract_fun, _contract_dense
 
 # helpers
 from modulus.models.sfno.layers import (
@@ -30,6 +33,7 @@ from modulus.models.sfno.layers import (
 
 # import global convolution and non-linear spectral layers
 from modulus.models.sfno.layers import (
+    SpectralConv2d,
     SpectralAttention2d,
     SpectralAttentionS2,
 )
@@ -41,16 +45,12 @@ import torch_harmonics as th
 import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
-from modulus.models.sfno.layers import RealFFT2
+from modulus.models.sfno.layers import RealFFT2, InverseRealFFT2
 from modulus.utils.sfno.distributed.layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
     DistributedMLP,
     DistributedEncoderDecoder,
-)
-from modulus.utils.sfno.distributed.mappings import (
-    scatter_to_parallel_region,
-    gather_from_parallel_region,
 )
 
 # more distributed stuff
@@ -292,6 +292,8 @@ class SphericalFourierNeuralOperatorNet(Module):
 
     Parameters
     ----------
+    params : dict
+        Dictionary of parameters
     spectral_transform : str, optional
         Type of spectral transformation to use, by default "sht"
     grid : str, optional
@@ -300,16 +302,14 @@ class SphericalFourierNeuralOperatorNet(Module):
         Type of filter to use ('linear', 'non-linear'), by default "non-linear"
     operator_type : str, optional
         Type of operator to use ('diaginal', 'dhconv'), by default "diagonal"
-    inp_shape : List[int], optional
-        Shape of the input channels, by default [721, 1440]
+    inp_shape : tuple, optional
+        Shape of the input channels, by default (721, 1440)
     scale_factor : int, optional
         Scale factor to use, by default 16
-    in_channels : int, optional
+    in_chans : int, optional
         Number of input channels, by default 2
-    out_channels : int, optional
+    out_chans : int, optional
         Number of output channels, by default 2
-    out_channels_id : List[int], optional
-        List of output channel ids, by default [0, 1, 2]
     embed_dim : int, optional
         Dimension of the embeddings, by default 256
     num_layers : int, optional
@@ -363,10 +363,11 @@ class SphericalFourierNeuralOperatorNet(Module):
     --------
     >>> from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
     >>> model = SFNO(
+    ...         params={},
     ...         inp_shape=(8, 16),
     ...         scale_factor=4,
-    ...         in_channels=2,
-    ...         out_channels=2,
+    ...         in_chans=2,
+    ...         out_chans=2,
     ...         embed_dim=16,
     ...         num_layers=2,
     ...         encoder_layers=1,
@@ -378,17 +379,15 @@ class SphericalFourierNeuralOperatorNet(Module):
 
     def __init__(
         self,
+        params: dict,
         spectral_transform: str = "sht",
         grid="legendre-gauss",
         filter_type: str = "non-linear",
         operator_type: str = "diagonal",
-        inp_shape: List[int] = [721, 1440],
-        out_shape: Any = None,
+        inp_shape: Tuple[int] = (721, 1440),
         scale_factor: int = 16,
-        in_channels: int = 2,
-        out_channels: int = 2,
-        out_channels_id: List[int] = [0, 1, 2],
-        channel_names: List[str] = ["u10m", "v10m", "u100m"],
+        in_chans: int = 2,
+        out_chans: int = 2,
         embed_dim: int = 256,
         num_layers: int = 12,
         repeat_layers=1,
@@ -416,37 +415,106 @@ class SphericalFourierNeuralOperatorNet(Module):
     ):  # pragma: no cover
         super(SphericalFourierNeuralOperatorNet, self).__init__(meta=MetaData())
 
-        self.spectral_transform = spectral_transform
-        self.grid = grid
-        self.filter_type = filter_type
-        self.operator_type = operator_type
-        self.inp_shape = inp_shape
-        self.out_shape = inp_shape if out_shape is None else out_shape
-        self.scale_factor = scale_factor
-        self.in_chans = in_channels
-        self.out_chans = out_channels
-        self.out_channels_id = out_channels_id
-        self.channel_names = channel_names
-        self.embed_dim = embed_dim
-        self.num_layers = num_layers
-        self.repeat_layers = repeat_layers
-        self.max_modes = max_modes
-        self.hard_thresholding_fraction = hard_thresholding_fraction
-        self.normalization_layer = normalization_layer
-        self.use_mlp = use_mlp
-        self.mlp_ratio = mlp_ratio
-        self.activation_function = activation_function
-        self.encoder_layers = encoder_layers
-        self.pos_embed = pos_embed
-        self.big_skip = big_skip
-        self.rank = rank
-        self.factorization = factorization
-        self.separable = separable
-        self.complex_network = complex_network
-        self.complex_activation = complex_activation
-        self.spectral_layers = spectral_layers
-        self.output_transform = output_transform
-        self.checkpointing = checkpointing
+        self.params = params
+        self.spectral_transform = (
+            params.spectral_transform
+            if hasattr(params, "spectral_transform")
+            else spectral_transform
+        )
+        self.grid = params.grid if hasattr(params, "grid") else grid
+        self.filter_type = (
+            params.filter_type if hasattr(params, "filter_type") else filter_type
+        )
+        self.operator_type = (
+            params.operator_type if hasattr(params, "operator_type") else operator_type
+        )
+        self.inp_shape = (
+            (params.img_shape_x, params.img_shape_y)
+            if hasattr(params, "img_shape_x") and hasattr(params, "img_shape_y")
+            else inp_shape
+        )
+        self.out_shape = (
+            (params.out_shape_x, params.out_shape_y)
+            if hasattr(params, "out_shape_x") and hasattr(params, "out_shape_y")
+            else self.inp_shape
+        )
+        self.scale_factor = (
+            params.scale_factor if hasattr(params, "scale_factor") else scale_factor
+        )
+        self.in_chans = (
+            params.N_in_channels if hasattr(params, "N_in_channels") else in_chans
+        )
+        self.out_chans = (
+            params.N_out_channels if hasattr(params, "N_out_channels") else out_chans
+        )
+        self.embed_dim = self.num_features = (
+            params.embed_dim if hasattr(params, "embed_dim") else embed_dim
+        )
+        self.num_layers = (
+            params.num_layers if hasattr(params, "num_layers") else num_layers
+        )
+        self.repeat_layers = (
+            params.repeat_layers if hasattr(params, "repeat_layers") else repeat_layers
+        )
+        self.max_modes = (
+            (params.lmax, params.mmax)
+            if hasattr(params, "lmax") and hasattr(params, "mmax")
+            else max_modes
+        )
+
+        self.hard_thresholding_fraction = (
+            params.hard_thresholding_fraction
+            if hasattr(params, "hard_thresholding_fraction")
+            else hard_thresholding_fraction
+        )
+        self.normalization_layer = (
+            params.normalization_layer
+            if hasattr(params, "normalization_layer")
+            else normalization_layer
+        )
+        self.use_mlp = params.use_mlp if hasattr(params, "use_mlp") else use_mlp
+        self.mlp_ratio = params.mlp_ratio if hasattr(params, "mlp_ratio") else mlp_ratio
+        self.activation_function = (
+            params.activation_function
+            if hasattr(params, "activation_function")
+            else activation_function
+        )
+        self.encoder_layers = (
+            params.encoder_layers
+            if hasattr(params, "encoder_layers")
+            else encoder_layers
+        )
+        self.pos_embed = params.pos_embed if hasattr(params, "pos_embed") else pos_embed
+        self.big_skip = params.big_skip if hasattr(params, "big_skip") else big_skip
+        self.rank = params.rank if hasattr(params, "rank") else rank
+        self.factorization = (
+            params.factorization if hasattr(params, "factorization") else factorization
+        )
+        self.separable = params.separable if hasattr(params, "separable") else separable
+        self.complex_network = (
+            params.complex_network
+            if hasattr(params, "complex_network")
+            else complex_network
+        )
+        self.complex_activation = (
+            params.complex_activation
+            if hasattr(params, "complex_activation")
+            else complex_activation
+        )
+        self.spectral_layers = (
+            params.spectral_layers
+            if hasattr(params, "spectral_layers")
+            else spectral_layers
+        )
+        self.output_transform = (
+            params.output_transform
+            if hasattr(params, "output_transform")
+            else output_transform
+        )
+        self.checkpointing = (
+            params.checkpointing if hasattr(params, "checkpointing") else checkpointing
+        )
+        # self.pretrain_encoding = params.pretrain_encoding if hasattr(params, "pretrain_encoding") else False
 
         # compute the downscaled image size
         self.h = int(self.inp_shape[0] // self.scale_factor)
@@ -772,8 +840,8 @@ class SphericalFourierNeuralOperatorNet(Module):
 
         if self.output_transform:
             minmax_channels = []
-            for o, c in enumerate(self.out_channels_id):
-                if self.channel_names[c][0] == "r":
+            for o, c in enumerate(params.out_channels):
+                if params.channel_names[c][0] == "r":
                     minmax_channels.append(o)
             self.register_buffer(
                 "minmax_channels",

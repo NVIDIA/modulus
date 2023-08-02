@@ -42,23 +42,23 @@ import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
 from modulus.experimental.models.sfno.layers import RealFFT2
-from modulus.experimental.utils.sfno.distributed.layers import (
+from modulus.utils.sfno.distributed.layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
     DistributedMLP,
     DistributedEncoderDecoder,
 )
-from modulus.experimental.utils.sfno.distributed.mappings import (
+from modulus.utils.sfno.distributed.mappings import (
     scatter_to_parallel_region,
     gather_from_parallel_region,
 )
 
 # more distributed stuff
-from modulus.experimental.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed import comm
 
 # layer normalization
 from apex.normalization import FusedLayerNorm
-from modulus.experimental.utils.sfno.distributed.layer_norm import (
+from modulus.utils.sfno.distributed.layer_norm import (
     DistributedInstanceNorm2d,
 )
 
