@@ -35,8 +35,7 @@ from torch.utils.data import Dataset
 
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
-
-from zenith_angle import cos_zenith_angle
+from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
 
 Tensor = torch.Tensor
 
@@ -52,7 +51,58 @@ class MetaData(DatapipeMetaData):
 
 
 class ClimateHDF5Datapipe(Datapipe):
-    """Climate DALI data pipeline for HDF5 files
+    """
+    A Climate DALI data pipeline for HDF5 files. This pipeline loads data from
+    HDF5 files, which can include latitude, longitude, cosine of zenith angle,
+    geopotential, and land sea mask if specified. Additionally, it normalizes
+    the data if a statistics file is provided. The pipeline returns a dictionary
+    with the following structure:
+
+    - `state_seq`: Tensor of shape (batch_size, num_steps, num_channels, height,
+      width). This sequence is drawn from the HDF5 file and normalized if a
+      statistics file is provided.
+    - `timestamps`: Tensor of shape (batch_size, num_steps), containing
+      timestamps for each timestep in the sequence.
+    - `land_sea_mask`: Tensor of shape (batch_size, 1, height, width),
+      containing the land sea mask if a path to a land sea mask file is
+      provided.
+    - `geopotential`: Tensor of shape (batch_size, 1, height, width), containing
+      geopotential if a path to a geopotential file is provided.
+    - `latlon`: Tensor of shape (batch_size, 2, height, width), containing
+      latitude and longitude meshgrid if specified.
+    - `cos_latlon`: Tensor of shape (batch_size, 3, height, width), containing
+      `[cos(lat), sin(lon), cos(lon)]` if specified. This is required by many
+      neural climate models.
+    - `cos_zenith`: Tensor of shape (batch_size, num_steps, 1, height, width),
+      containing the cosine of the zenith angle if specified.
+
+    To use this data pipeline, your data directory must be structured as
+    follows:
+    ```
+    ├── data_dir
+    │   ├── 1980.h5
+    │   ├── 1981.h5
+    │   ├── 1982.h5
+    │   ├── ...
+    │   └── 2020.h5
+    ├── stats_dir
+    │
+    ├── global_means.npy
+    │
+    ├── global_stds.npy
+    ```
+    The HDF5 files should contain the following variable
+    with the corresponding name:
+    - `fields`: Tensor of shape (num_timesteps, num_channels, height, width),
+      containing climate data. The order of the channels should match the order
+      of the channels in the statistics files. The statistics files should be
+      `.npy` files with the shape (1, num_channels, 1, 1).
+
+    This pipeline assumes the HDF5 files have no metadata, such as timestamps.
+    Because of this, it's important to specify the `dt` parameter and the
+    `start_year` parameter so that the pipeline can compute the correct
+    timestamps for each timestep. These timestamps are then used to compute the
+    cosine of the zenith angle, if specified.
 
     Parameters
     ----------
@@ -75,14 +125,15 @@ class ClimateHDF5Datapipe(Datapipe):
         Start year of dataset, by default 1980
     num_steps : int, optional
         Number of timesteps to return, by default 2 (1 for input, 1 for output)
-    land_sea_mask : str, optional
+    lsm_filename : str, optional
         Path to land sea mask file, by default None
-    geopotential : str, optional
+    geopotential_filename : str, optional
         Path to geopotential file, by default None
-    cos_zenith : bool, optional
-        Include cosine of zenith angle, by default False
-    latlons : bool, optional
+    use_latlon : bool, optional
         Include latitude and longitude meshgrid, by default False
+    use_cos_zenith : bool, optional
+        Include cosine of zenith angle, by default False. If True then latitude and longitude
+        will also be computed.
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
         divisible by patch_size, by default None
@@ -112,8 +163,8 @@ class ClimateHDF5Datapipe(Datapipe):
         num_steps: int = 2,
         lsm_filename: str = None,
         geopotential_filename: str = None,
-        use_cos_zenith: bool = False,
         use_latlon: bool = False,
+        use_cos_zenith: bool = False,
         patch_size: Union[Tuple[int, int], int, None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
@@ -135,6 +186,8 @@ class ClimateHDF5Datapipe(Datapipe):
         self.num_steps = num_steps
         self.lsm_filename = lsm_filename
         self.geopotential_filename = geopotential_filename
+        if use_cos_zenith:
+            use_latlon = True
         self.use_latlon = use_latlon
         self.use_cos_zenith = use_cos_zenith
         self.process_rank = process_rank
@@ -152,6 +205,7 @@ class ClimateHDF5Datapipe(Datapipe):
             self.pipe_outputs.append("geopotential")
         if self.use_latlon:
             self.pipe_outputs.append("latlon")
+            self.pipe_outputs.append("cos_latlon")
         if self.use_cos_zenith:
             self.pipe_outputs.append("cos_zenith")
 
@@ -203,10 +257,7 @@ class ClimateHDF5Datapipe(Datapipe):
         self.logger.info(f"Getting file stats from {self.data_paths[0]}")
         with h5py.File(self.data_paths[0], "r") as f:
             # truncate the dataset to avoid out-of-range sampling
-            data_samples_per_year = (
-                f["fields"].shape[0]
-                - self.num_steps * self.stride
-            )
+            data_samples_per_year = f["fields"].shape[0] - self.num_steps * self.stride
             self.data_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them
@@ -219,10 +270,12 @@ class ClimateHDF5Datapipe(Datapipe):
 
             # Adjust image shape if patch_size defined
             if self.patch_size is not None:
-                self.data_shape = [
+                self.cropped_data_shape = [
                     s - s % self.patch_size[i] for i, s in enumerate(self.data_shape)
                 ]
-            self.logger.info(f"Input data shape: {self.data_shape}")
+            else:
+                self.cropped_data_shape = self.data_shape
+            self.logger.info(f"Input data shape: {self.cropped_data_shape}")
 
             # Get total length
             self.total_length = self.n_years * self.num_samples_per_year
@@ -280,33 +333,49 @@ class ClimateHDF5Datapipe(Datapipe):
             raise AssertionError("Error, normalisation arrays have wrong shape")
 
     def _load_land_sea_mask(self) -> None:
-        """Load land-sea mask from netCDF file.
-        """
+        """Load land-sea mask from netCDF file."""
         ds = nc.Dataset(self.lsm_filename)
         lsm = np.array(ds["lsm"]).astype(np.float32)
+        lsm = np.flip(
+            lsm, axis=1
+        )  # flip latitude axis, TODO hacky fix and we should get this from the file
+        assert (
+            lsm.shape[1:] == self.data_shape
+        ), "Land-sea mask shape does not match data shape"
+        lsm = lsm[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         self.lsm = dali.types.Constant(lsm)
 
     def _load_geopotential(self, normalize: bool = True) -> None:
-        """Get geopotential from netCDF file.
-        """
+        """Get geopotential from netCDF file."""
         ds = nc.Dataset(self.geopotential_filename)
         geop = np.array(ds["z"]).astype(np.float32)
+        geop = np.flip(
+            geop, axis=1
+        )  # flip latitude axis, TODO hacky fix and we should get this from the file
+        assert (
+            geop.shape[1:] == self.data_shape
+        ), "Geopotential shape does not match data shape"
+        geop = geop[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         if normalize:
             geop = (geop - geop.mean()) / geop.std()
-        self.geopotential = dali.types.Constant(np.array(geop, dtype=np.float32))
+        self.geopotential = dali.types.Constant(geop)
 
-    def _load_latlon(self, normalize: bool = True) -> None:
-        """Computes cosine of latitudes and sine and cosine of longitudes.
-        """
+    def _load_latlon(self) -> None:
+        """Load latitude and longitude coordinates from data shape and compute cos/sin versions."""
 
         # get latitudes and longitudes from data shape
-        lat = np.linspace(-90, 90, self.data_shape[0])
-        lon = np.linspace(0, 360, self.data_shape[1])
+        lat = np.linspace(-90, 90, self.cropped_data_shape[0]).astype(np.float32)
+        lon = np.linspace(-180, 180, self.cropped_data_shape[1]).astype(np.float32)
         lat, lon = np.meshgrid(lat, lon, indexing="ij")
-        if normalize:
-            lat = (lat - lat.mean()) / lat.std()
-            lon = (lon - lon.mean()) / lon.std()
         self.latlon = dali.types.Constant(np.stack((lat, lon), axis=0))
+
+        # cos/sin latitudes and longitudes
+        cos_lat = np.cos(np.deg2rad(lat))
+        sin_lon = np.sin(np.deg2rad(lon))
+        cos_lon = np.cos(np.deg2rad(lon))
+        self.cos_latlon = dali.types.Constant(
+            np.stack((cos_lat, sin_lon, cos_lon), axis=0)
+        )
 
     def _create_pipeline(self) -> dali.Pipeline:
         """Create DALI pipeline
@@ -355,10 +424,10 @@ class ClimateHDF5Datapipe(Datapipe):
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that
                 state_seq = state_seq.gpu()
-                timestamps = timestamps.gpu()
+                # timestamps = timestamps.gpu() # NOTE: this causes cos_zenith to run on CPU, Dali currently has bugs in GPU cos/sin that are under investigation
 
             # Crop
-            h, w = self.data_shape
+            h, w = self.cropped_data_shape
             state_seq = state_seq[:, :, :h, :w]
 
             # Normalize
@@ -368,13 +437,14 @@ class ClimateHDF5Datapipe(Datapipe):
             # Make output list
             outputs = [state_seq, timestamps]
 
-            # Define static array of latlon
+            # Get static inputs
             if self.lsm_filename is not None:
                 outputs.append(self.lsm)
             if self.geopotential_filename is not None:
                 outputs.append(self.geopotential)
             if self.use_latlon:
                 outputs.append(self.latlon)
+                outputs.append(self.cos_latlon)
 
             # Get cosine zenith angle
             if self.use_cos_zenith:
@@ -495,14 +565,35 @@ class ClimateDaliExternalSource:
         data = self.data_files[year_idx]["fields"]
 
         # Load sequence of input variables
-        state_seq = np.empty((self.num_steps,) + data.shape[1:], dtype=data.dtype)
+        state_seq = np.empty(
+            (self.num_steps, len(self.chans)) + data.shape[2:], dtype=data.dtype
+        )
         for i in range(self.num_steps):
             ind = in_idx + i * self.stride
             state_seq[i] = data[ind, self.chans]
 
         # Load sequence of timestamps
         year = self.start_year + year_idx
-        timestamps = np.array([(datetime(year, 1, 1) + timedelta(hours=int(in_idx)) + timedelta(hours=i * self.stride * self.dt)).timestamp() for i in range(self.num_steps)])
+        timestamps = np.array(
+            [
+                (
+                    datetime(year, 1, 1)
+                    + timedelta(hours=int(in_idx) * self.dt)
+                    + timedelta(hours=i * self.stride * self.dt)
+                ).timestamp()
+                for i in range(self.num_steps)
+            ]
+        ).astype(np.float32)
+
+        # Debug timestamp and make sure it matches the one in the file
+        # TODO: Remove this prior to merging
+        # if 'time' in self.data_files[year_idx]:
+        #    for i in range(self.num_steps):
+        #        data_timestamp = self.data_files[year_idx]['time'][in_idx + i * self.stride]
+        #        data_timestamp = (datetime(1950, 1, 1) + timedelta(hours=data_timestamp)).timestamp()
+        #        if np.isclose(data_timestamp, timestamps[i], rtol=1e-03):
+        #            print("date time mismatch: ", data_timestamp - timestamps[i])
+        #            raise ValueError("Timestamp mismatch")
 
         return state_seq, timestamps
 
