@@ -41,8 +41,8 @@ class DummyLoader(object):
         self.n_out_channels = len(self.out_channels)
         self.roll = params.roll
         self.device = device
-        self.io_grid = params.io_grid
-        self.io_rank = params.io_rank
+        self.io_grid = params.io_grid[1:]
+        self.io_rank = params.io_rank[1:]
 
         if train:
             self.n_samples_per_epoch = (
@@ -73,12 +73,27 @@ class DummyLoader(object):
 
         self._get_files_stats()
 
+        # zenith angle yes or no?
+        self.add_zenith = self.params.add_zenith
+        if self.add_zenith:
+            self.zen_dummy = torch.zeros(
+                (
+                    self.batch_size,
+                    self.n_history + 1,
+                    1,
+                    self.img_local_shape_x,
+                    self.img_local_shape_y,
+                ),
+                dtype=torch.float32,
+                device=self.device,
+            )
+
     def _get_files_stats(self):  # pragma: no cover
         self.files_paths = glob.glob(self.location + "/*.h5")
 
         if not self.files_paths:
-            print(
-                "Warning, no input files found, specifying dataset properties from parameter inputs"
+            logging.info(
+                "No input files found, specifying dataset properties from parameter inputs"
             )
             self.n_years = self.params.n_years
             self.n_samples_per_year = self.params.n_samples_per_year
@@ -105,30 +120,26 @@ class DummyLoader(object):
         assert self.img_crop_offset_y + self.img_crop_shape_y <= self.img_shape_y
 
         # for x
-        read_shape_x = self.img_crop_shape_x // self.io_grid[1]
-        read_anchor_x = self.img_crop_offset_x + read_shape_x * self.io_rank[1]
+        read_shape_x = (self.img_crop_shape_x + self.io_grid[0] - 1) // self.io_grid[0]
+        read_anchor_x = self.img_crop_offset_x + read_shape_x * self.io_rank[0]
         read_shape_x = min(read_shape_x, self.img_shape_x - read_anchor_x)
         # for y
-        read_shape_y = self.img_crop_shape_y // self.io_grid[2]
-        read_anchor_y = self.img_crop_offset_y + read_shape_y * self.io_rank[2]
+        read_shape_y = (self.img_crop_shape_y + self.io_grid[1] - 1) // self.io_grid[1]
+        read_anchor_y = self.img_crop_offset_y + read_shape_y * self.io_rank[1]
         read_shape_y = min(read_shape_y, self.img_shape_y - read_anchor_y)
 
-        self.read_anchor = [read_anchor_x, read_anchor_y]
-        self.read_shape = [read_shape_x, read_shape_y]
-
         # compute padding
-        read_pad_x = (self.img_crop_shape_x + self.io_grid[1] - 1) // self.io_grid[
-            1
-        ] - read_shape_x
-        read_pad_y = (self.img_crop_shape_y + self.io_grid[2] - 1) // self.io_grid[
-            2
-        ] - read_shape_y
-        self.read_pad = [read_pad_x, read_pad_y]
+        self.img_local_pad_x = (
+            self.img_crop_shape_x + self.io_grid[0] - 1
+        ) // self.io_grid[0] - read_shape_x
+        self.img_local_pad_y = (
+            self.img_crop_shape_y + self.io_grid[1] - 1
+        ) // self.io_grid[1] - read_shape_y
 
         self.img_local_offset_x = read_anchor_x
         self.img_local_offset_y = read_anchor_y
-        self.img_local_shape_x = read_shape_x + read_pad_x
-        self.img_local_shape_y = read_shape_y + read_pad_y
+        self.img_local_shape_x = read_shape_x + self.img_local_pad_x
+        self.img_local_shape_y = read_shape_y + self.img_local_pad_y
 
         # sharding
         self.n_samples_total = (
@@ -139,10 +150,8 @@ class DummyLoader(object):
         self.n_samples_shard = self.n_samples_total // comm.get_size("data")
 
         # channels
-        assert self.n_in_channels % self.io_grid[0] == 0
-        self.n_in_channels_local = self.n_in_channels // self.io_grid[0]
-        assert self.n_out_channels % self.io_grid[0] == 0
-        self.n_out_channels_local = self.n_out_channels // self.io_grid[0]
+        self.n_in_channels_local = self.n_in_channels
+        self.n_out_channels_local = self.n_out_channels
 
         self.files = [None for _ in range(self.n_years)]
         logging.info("Number of samples per year: {}".format(self.n_samples_per_year))
@@ -155,7 +164,6 @@ class DummyLoader(object):
                 self.n_in_channels_local,
             )
         )
-        logging.info("Delta t: {} hours".format(6 * self.dt))
         logging.info(
             "Including {} hours of past history in training at a frequency of {} hours".format(
                 6 * self.dt * self.n_history, 6 * self.dt
@@ -219,6 +227,10 @@ class DummyLoader(object):
     def __next__(self):  # pragma: no cover
         if self.sample_idx < self.n_samples_shard:
             self.sample_idx += 1
-            return self.inp, self.tar
+
+            if self.add_zenith:
+                return self.inp, self.tar, self.zen_dummy, self.zen_dummy
+            else:
+                return self.inp, self.tar
         else:
             raise StopIteration()

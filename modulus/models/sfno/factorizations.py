@@ -17,14 +17,18 @@ import torch
 import tensorly as tl
 
 tl.set_backend("pytorch")
-# from tensorly.plugins import use_opt_einsum
-# use_opt_einsum('optimal')
+
+from functools import partial
 
 from modulus.models.sfno.contractions import (
     _contract_diagonal,
     _contract_dhconv,
     _contract_sep_diagonal,
     _contract_sep_dhconv,
+    _contract_diagonal_real,
+    _contract_dhconv_real,
+    _contract_sep_diagonal_real,
+    _contract_sep_dhconv_real,
 )
 
 from tltorch.factorized_tensors.core import FactorizedTensor
@@ -191,7 +195,7 @@ def _contract_tt(
 
 # jitted PyTorch contractions:
 def _contract_dense_pytorch(
-    x, weight, separable=False, operator_type="diagonal"
+    x, weight, separable=False, operator_type="diagonal", complex=True
 ):  # pragma: no cover
 
     # to cheat the fused optimizers convert to real here
@@ -199,16 +203,28 @@ def _contract_dense_pytorch(
 
     if separable:
         if operator_type == "diagonal":
-            x = _contract_sep_diagonal(x, weight)
+            if complex:
+                x = _contract_sep_diagonal(x, weight)
+            else:
+                x = _contract_sep_diagonal_real(x, weight)
         elif operator_type == "dhconv":
-            x = _contract_sep_dhconv(x, weight)
+            if complex:
+                x = _contract_sep_dhconv(x, weight)
+            else:
+                x = _contract_sep_dhconv_real(x, weight)
         else:
             raise ValueError(f"Unkonw operator type {operator_type}")
     else:
         if operator_type == "diagonal":
-            x = _contract_diagonal(x, weight)
+            if complex:
+                x = _contract_diagonal(x, weight)
+            else:
+                x = _contract_diagonal_real(x, weight)
         elif operator_type == "dhconv":
-            x = _contract_dhconv(x, weight)
+            if complex:
+                x = _contract_dhconv(x, weight)
+            else:
+                x = _contract_dhconv_real(x, weight)
         else:
             raise ValueError(f"Unkonw operator type {operator_type}")
 
@@ -218,7 +234,11 @@ def _contract_dense_pytorch(
 
 
 def get_contract_fun(
-    weight, implementation="reconstructed", separable=False, operator_type="diagonal"
+    weight,
+    implementation="reconstructed",
+    separable=False,
+    operator_type="diagonal",
+    complex=True,
 ):  # pragma: no cover
     """Generic ND implementation of Fourier Spectral Conv contraction
 
@@ -238,7 +258,13 @@ def get_contract_fun(
         return _contract_dense
     elif implementation == "factorized":
         if torch.is_tensor(weight):
-            return _contract_dense_pytorch
+            handle = partial(
+                _contract_dense_pytorch,
+                separable=separable,
+                complex=complex,
+                operator_type=operator_type,
+            )
+            return handle
         elif isinstance(weight, FactorizedTensor):
             if weight.name.lower() == "complexdense" or weight.name.lower() == "dense":
                 return _contract_dense
@@ -256,5 +282,5 @@ def get_contract_fun(
             )
     else:
         raise ValueError(
-            f'Got {implementation=}, expected "reconstructed" or "factorized"'
+            f'Got {implementation}, expected "reconstructed" or "factorized"'
         )
