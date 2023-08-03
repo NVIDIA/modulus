@@ -226,6 +226,8 @@ def all_gather_v_wrapper(
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed all_gather_v primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
@@ -261,6 +263,8 @@ def all_reduce_v_wrapper(
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed all_reduce_v primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
@@ -302,6 +306,8 @@ def gather_v_wrapper(
     dst: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed gather_v primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
@@ -358,6 +364,8 @@ def scatter_v_wrapper(
     src: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed scatter_v primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
@@ -408,6 +416,8 @@ def indexed_all_gather_wrapper(
     send_sizes: List[int],
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of the forward pass of a distributed indexed all_gather primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
@@ -447,6 +457,8 @@ def indexed_all_gather_wrapper_bwd(
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of the backward pass of a distributed indexed all_gather primitive"""
+
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
