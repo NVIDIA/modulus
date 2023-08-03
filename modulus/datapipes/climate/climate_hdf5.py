@@ -53,8 +53,8 @@ class MetaData(DatapipeMetaData):
 class ClimateHDF5Datapipe(Datapipe):
     """
     A Climate DALI data pipeline for HDF5 files. This pipeline loads data from
-    HDF5 files, which can include latitude, longitude, cosine of zenith angle,
-    geopotential, and land sea mask if specified. Additionally, it normalizes
+    HDF5 files, which can include latitude, longitude, cosine of the solar zenith
+    angle, geopotential, and land sea mask if specified. Additionally, it normalizes
     the data if a statistics file is provided. The pipeline returns a dictionary
     with the following structure:
 
@@ -74,7 +74,7 @@ class ClimateHDF5Datapipe(Datapipe):
       `[cos(lat), sin(lon), cos(lon)]` if specified. This is required by many
       neural climate models.
     - `cos_zenith`: Tensor of shape (batch_size, num_steps, 1, height, width),
-      containing the cosine of the zenith angle if specified.
+      containing the cosine of the solar zenith angle if specified.
 
     To use this data pipeline, your data directory must be structured as
     follows:
@@ -102,7 +102,7 @@ class ClimateHDF5Datapipe(Datapipe):
     Because of this, it's important to specify the `dt` parameter and the
     `start_year` parameter so that the pipeline can compute the correct
     timestamps for each timestep. These timestamps are then used to compute the
-    cosine of the zenith angle, if specified.
+    cosine of the solar zenith angle, if specified.
 
     Parameters
     ----------
@@ -158,7 +158,7 @@ class ClimateHDF5Datapipe(Datapipe):
         channels: Union[List[int], None] = None,
         batch_size: int = 1,
         stride: int = 1,
-        dt: float = 6,
+        dt: float = 6.0,
         start_year: int = 1980,
         num_steps: int = 2,
         lsm_filename: str = None,
@@ -279,7 +279,6 @@ class ClimateHDF5Datapipe(Datapipe):
 
             # Get total length
             self.total_length = self.n_years * self.num_samples_per_year
-            self.length = self.total_length
 
             # Sanity checks
             if max(self.channels) >= f["fields"].shape[1]:
@@ -412,7 +411,7 @@ class ClimateHDF5Datapipe(Datapipe):
             )
 
             # Update length of dataset
-            self.length = len(source) // self.batch_size
+            self.total_length = len(source) // self.batch_size
 
             # Read current batch
             state_seq, timestamps = dali.fn.external_source(
@@ -463,7 +462,7 @@ class ClimateHDF5Datapipe(Datapipe):
         return dali_pth.DALIGenericIterator([self.pipe], self.pipe_outputs)
 
     def __len__(self):
-        return self.length
+        return self.total_length
 
 
 class ClimateDaliExternalSource:
