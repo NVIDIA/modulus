@@ -421,10 +421,6 @@ class ClimateHDF5Datapipe(Datapipe):
                 parallel=True,
                 batch=False,
             )
-            if self.device.type == "cuda":
-                # Move tensors to GPU as external_source won't do that
-                state_seq = state_seq.gpu()
-                # timestamps = timestamps.gpu() # NOTE: this causes cos_zenith to run on CPU, Dali currently has bugs in GPU cos/sin that are under investigation
 
             # Crop
             h, w = self.cropped_data_shape
@@ -450,6 +446,10 @@ class ClimateHDF5Datapipe(Datapipe):
             if self.use_cos_zenith:
                 cos_zenith = cos_zenith_angle(timestamps, latlon=self.latlon)
                 outputs.append(cos_zenith)
+
+            if self.device.type == "cuda":
+                # Move tensors to GPU as external_source won't do that
+                outputs = [o.gpu() for o in outputs]
 
             # Set outputs
             pipe.set_outputs(*outputs)
@@ -584,16 +584,6 @@ class ClimateDaliExternalSource:
                 for i in range(self.num_steps)
             ]
         ).astype(np.float32)
-
-        # Debug timestamp and make sure it matches the one in the file
-        # TODO: Remove this prior to merging
-        # if 'time' in self.data_files[year_idx]:
-        #    for i in range(self.num_steps):
-        #        data_timestamp = self.data_files[year_idx]['time'][in_idx + i * self.stride]
-        #        data_timestamp = (datetime(1950, 1, 1) + timedelta(hours=data_timestamp)).timestamp()
-        #        if np.isclose(data_timestamp, timestamps[i], rtol=1e-03):
-        #            print("date time mismatch: ", data_timestamp - timestamps[i])
-        #            raise ValueError("Timestamp mismatch")
 
         return state_seq, timestamps
 
