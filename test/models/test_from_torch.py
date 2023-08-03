@@ -25,6 +25,8 @@ registry = ModelRegistry()
 
 
 class CustomModel(torch.nn.Module):
+    """ Custom User Model """
+
     def __init__(self, in_features, out_features):
         super().__init__()
         self.linear = torch.nn.Linear(in_features, out_features)
@@ -35,6 +37,8 @@ class CustomModel(torch.nn.Module):
 
 @dataclass
 class CustomMetaData(ModelMetaData):
+    """ Custom User Metadata for Model """
+
     name: str = "FullyConnected"
     # Optimization
     jit: bool = True
