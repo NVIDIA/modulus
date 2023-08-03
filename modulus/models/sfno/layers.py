@@ -134,7 +134,7 @@ class MLP(nn.Module):
         in_features,
         hidden_features=None,
         out_features=None,
-        act_layer='gelu',
+        act_layer="gelu",
         output_bias=True,
         drop_rate=0.0,
         checkpointing=0,

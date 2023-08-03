@@ -23,6 +23,7 @@ from . import common
 
 registry = ModelRegistry()
 
+
 class CustomModel(torch.nn.Module):
     def __init__(self, in_features, out_features):
         super().__init__()
@@ -30,6 +31,7 @@ class CustomModel(torch.nn.Module):
 
     def forward(self, x):
         return self.linear(x)
+
 
 @dataclass
 class CustomMetaData(ModelMetaData):
@@ -119,7 +121,6 @@ def test_from_torch_checkpoint(device):
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
     registry.__clear_registry__()
-
 
 
 @common.check_ort_version()

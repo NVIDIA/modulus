@@ -80,23 +80,23 @@ class ModelRegistry:
     def factory(self, name: str) -> "modulus.Module":
         """
         Returns a registered model given its name.
-    
+
         Parameters
         ----------
         name : str
             The name of the registered model.
-    
+
         Returns
         -------
         model : modulus.Module
             The registered model.
-    
+
         Raises
         ------
         KeyError
             If no model is registered under the provided name.
         """
-    
+
         if name in self._model_registry:
             model = self._model_registry[name]
             if isinstance(model, pkg_resources.EntryPoint):

@@ -30,6 +30,7 @@ from modulus.models.meta import ModelMetaData
 from modulus.registry import ModelRegistry
 from modulus.utils.filesystem import _get_fs, _download_cached
 
+
 class Module(torch.nn.Module):
     """The base class for all network models in Modulus.
 
@@ -47,8 +48,11 @@ class Module(torch.nn.Module):
     meta : ModelMetaData, optional
         Meta data class for storing info regarding model, by default None
     """
-    _file_extension = ".mdlus" # Set file extension for saving and loading
-    __model_checkpoint_version__ = "0.1.0" # Used for file versioning and is not the same as modulus version
+
+    _file_extension = ".mdlus"  # Set file extension for saving and loading
+    __model_checkpoint_version__ = (
+        "0.1.0"  # Used for file versioning and is not the same as modulus version
+    )
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
@@ -127,7 +131,7 @@ class Module(torch.nn.Module):
         registry = ModelRegistry()
         if _cls_name in registry.list_models():
             _cls = registry.factory(_cls_name)
-        else: # Otherwise, try to import the class
+        else:  # Otherwise, try to import the class
             _mod = importlib.import_module(arg_dict["__module__"])
             _cls = getattr(_mod, arg_dict["__name__"])
         return _cls(**arg_dict["__args__"])
@@ -146,9 +150,7 @@ class Module(torch.nn.Module):
         # TODO: set up debug log
         # fh = logging.FileHandler(f'modulus-core-{self.meta.name}.log')
 
-    def save(
-        self, file_name: Union[str, None] = None, verbose: bool = False
-    ) -> None:
+    def save(self, file_name: Union[str, None] = None, verbose: bool = False) -> None:
         """Simple utility for saving just the model
 
         Parameters
@@ -179,11 +181,14 @@ class Module(torch.nn.Module):
                 json.dump(self._args, f)
 
             # Save the modulus version and git hash (if available)
-            metadata_info = {"modulus_version": modulus.__version__,
-                             "mdlus_file_version": self.__model_checkpoint_version__}
+            metadata_info = {
+                "modulus_version": modulus.__version__,
+                "mdlus_file_version": self.__model_checkpoint_version__,
+            }
 
             if verbose:
                 import git
+
                 repo = git.Repo(search_parent_directories=True)
                 try:
                     metadata_info["git_hash"] = repo.head.object.hexsha
@@ -194,7 +199,7 @@ class Module(torch.nn.Module):
                 json.dump(metadata_info, f)
 
             # Once all files are saved, package them into a tar file
-            with tarfile.open(local_path / 'model.tar', 'w') as tar:
+            with tarfile.open(local_path / "model.tar", "w") as tar:
                 for file in local_path.iterdir():
                     tar.add(str(file), arcname=file.name)
 
@@ -205,34 +210,31 @@ class Module(torch.nn.Module):
             fs = _get_fs(file_name)
             fs.put(str(local_path / "model.tar"), file_name)
 
-
     @staticmethod
     def _check_checkpoint(local_path: str) -> bool:
         if not local_path.joinpath("args.json").exists():
-            raise IOError(
-                f"File 'args.json' not found in checkpoint"
-            )
+            raise IOError(f"File 'args.json' not found in checkpoint")
 
         if not local_path.joinpath("metadata.json").exists():
-            raise IOError(
-                f"File 'metadata.json' not found in checkpoint"
-            )
+            raise IOError(f"File 'metadata.json' not found in checkpoint")
 
         if not local_path.joinpath("model.pt").exists():
-            raise IOError(
-                f"Model weights 'model.pt' not found in checkpoint"
-            )
+            raise IOError(f"Model weights 'model.pt' not found in checkpoint")
 
         # Check if the checkpoint version is compatible with the current version
         with open(local_path.joinpath("metadata.json"), "r") as f:
             metadata_info = json.load(f)
-            if metadata_info['mdlus_file_version'] != Module.__model_checkpoint_version__:
+            if (
+                metadata_info["mdlus_file_version"]
+                != Module.__model_checkpoint_version__
+            ):
                 raise IOError(
                     f"Model checkpoint version {metadata_info['mdlus_file_version']} is not compatible with current version {Module.__version__}"
                 )
 
-
-    def load(self, file_name: str, map_location: Union[None, str, torch.device] = None) -> None:
+    def load(
+        self, file_name: str, map_location: Union[None, str, torch.device] = None
+    ) -> None:
         """Simple utility for loading the model weights from checkpoint
 
         Parameters
@@ -256,7 +258,7 @@ class Module(torch.nn.Module):
             local_path = Path(temp_dir)
 
             # Open the tar file and extract its contents to the temporary directory
-            with tarfile.open(cached_file_name, 'r') as tar:
+            with tarfile.open(cached_file_name, "r") as tar:
                 tar.extractall(path=local_path)
 
             # Check if the checkpoint is valid
@@ -268,7 +270,6 @@ class Module(torch.nn.Module):
                 local_path.joinpath("model.pt"), map_location=device
             )
             self.load_state_dict(model_dict)
-
 
     @classmethod
     def from_checkpoint(cls, file_name: str) -> "Module":
@@ -297,7 +298,7 @@ class Module(torch.nn.Module):
             local_path = Path(temp_dir)
 
             # Open the tar file and extract its contents to the temporary directory
-            with tarfile.open(cached_file_name, 'r') as tar:
+            with tarfile.open(cached_file_name, "r") as tar:
                 tar.extractall(path=local_path)
 
             # Check if the checkpoint is valid
@@ -317,7 +318,9 @@ class Module(torch.nn.Module):
         return model
 
     @staticmethod
-    def from_torch(torch_model_class: torch.nn.Module, meta: ModelMetaData = None) -> "Module":
+    def from_torch(
+        torch_model_class: torch.nn.Module, meta: ModelMetaData = None
+    ) -> "Module":
         """Construct a Modulus module from a PyTorch module
 
         Parameters

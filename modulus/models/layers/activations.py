@@ -121,6 +121,7 @@ ACT2FN = {
     "squareplus": SquarePlus,
 }
 
+
 def get_activation(activation: str) -> nn.Module:
     """Returns an activation function given a string
 
