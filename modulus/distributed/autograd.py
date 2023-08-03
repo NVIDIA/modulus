@@ -16,12 +16,12 @@
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from typing import Optional
+from typing import Optional, List
 from .manager import DistributedManager
 from .utils import (
     gather_v_wrapper, scatter_v_wrapper,
     all_gather_v_wrapper, all_reduce_v_wrapper,
-    idx_all_gather_wrapper, idx_all_gather_idx_bwd
+    indexed_all_gather_wrapper, indexed_all_gather_wrapper_bwd
 )
 
 
@@ -134,18 +134,18 @@ class ScatterVAutograd(torch.autograd.Function):
         return grad_tensor, None, None, None, None
 
 
-class IdxAllGatherAutograd(torch.autograd.Function):
+class IndexedAllGatherAutograd(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
         tensor: torch.Tensor,
-        scatter_indices: torch.Tensor,
+        scatter_indices: List[torch.Tensor],
         recv_sizes: List[int],
         send_sizes: List[int],
         use_fp32: bool = True,
         group: Optional[dist.ProcessGroup] = None,
     ) -> torch.Tensor:
-        tensor_to_recv = idx_all_gather_wrapper(
+        tensor_to_recv = indexed_all_gather_wrapper(
             tensor,
             scatter_indices,
             recv_sizes,
@@ -158,8 +158,7 @@ class IdxAllGatherAutograd(torch.autograd.Function):
         ctx.use_fp32 = use_fp32
         ctx.group = group
         ctx.tensor_dim0 = tensor.size(0)
-
-        ctx.save_for_backward(scatter_indices)
+        ctx.scatter_indices = scatter_indices    
 
         return tensor_to_recv
 
@@ -168,14 +167,13 @@ class IdxAllGatherAutograd(torch.autograd.Function):
         ctx,
         grad_output: torch.Tensor,
     ) -> torch.Tensor:
-        scatter_indices, = ctx.saved_tensors
         needs_grad = ctx.needs_input_grad[0]
         grad_tensor = None
 
         if needs_grad:
-            grad_tensor = idx_all_gather_wrapper_bwd(
+            grad_tensor = indexed_all_gather_wrapper_bwd(
                 grad_output,
-                scatter_indices,
+                ctx.scatter_indices,
                 ctx.recv_sizes,
                 ctx.send_sizes,
                 ctx.tensor_dim0,
@@ -216,7 +214,7 @@ def scatter_v(
     return ScatterVAutograd.apply(tensor, sizes, dim, src, group)
 
 
-def idx_all_gather(
+def indexed_all_gather(
     tensor: torch.Tensor,
     scatter_indices: torch.Tensor,
     recv_sizes: List[int],
@@ -224,7 +222,7 @@ def idx_all_gather(
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    return IdxAllGatherAutograd.apply(
+    return IndexedAllGatherAutograd.apply(
         tensor,
         scatter_indices,
         recv_sizes,
