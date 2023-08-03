@@ -221,25 +221,25 @@ def run_test_autograd_prim(func):
     )
 
 
+@pytest.mark.multigpu
 def test_scatter_v():
     run_test_autograd_prim(run_test_scatter_v)
 
 
+@pytest.mark.multigpu
 def test_gather_v():
     run_test_autograd_prim(run_test_gather_v)
 
 
+@pytest.mark.multigpu
 def test_all_gather_v():
     run_test_autograd_prim(run_test_all_gather_v)
 
 
+@pytest.mark.multigpu
 def test_indexed_all_gather_v():
     run_test_autograd_prim(run_test_indexed_all_gather_v)
 
 
-# for debugging
 if __name__ == "__main__":
-    test_indexed_all_gather_v()
-    test_scatter_v()
-    test_gather_v()
-    test_all_gather_v()
+    pytest.main([__file__])
