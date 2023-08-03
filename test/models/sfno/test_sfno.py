@@ -288,4 +288,3 @@ def test_sfno_deploy(device):
 
     assert common.validate_onnx_export(model, x)
     assert common.validate_onnx_runtime(model, x)
-    
