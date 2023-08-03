@@ -171,6 +171,8 @@ def run_test_indexed_all_gather_v(rank, world_size):
     manager = DistributedManager()
     assert manager.is_initialized()
 
+    # this test case is not ideal as it quite similar to the non-indexed case
+    # however, it is a first start to test correctness in general
     tensor_dim = 4
     tensor = torch.arange(1, world_size + 1, device=f"cuda:{rank}", dtype=torch.float32)
     tensor = tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
