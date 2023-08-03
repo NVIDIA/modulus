@@ -18,9 +18,10 @@ import torch
 
 from modulus.distributed import DistributedManager
 from modulus.distributed.autograd import (
-    all_gather_v, gather_v,
+    all_gather_v,
+    gather_v,
     scatter_v,
-    indexed_all_gather
+    indexed_all_gather,
 )
 
 
@@ -40,11 +41,13 @@ def run_test_scatter_v(rank, world_size):
 
     tensor = torch.arange(world_size, device=f"cuda:{rank}", dtype=torch.float32) + 1
     tensor = tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
-    tensor = tensor.repeat_interleave(repeats=torch.tensor(sizes, device=f"cuda:{rank}"), dim=0)
+    tensor = tensor.repeat_interleave(
+        repeats=torch.tensor(sizes, device=f"cuda:{rank}"), dim=0
+    )
     tensor.requires_grad_(True)
 
-    scattered_tensor = scatter_v(tensor, sizes, dim=0, src=0, group=None)  
-    
+    scattered_tensor = scatter_v(tensor, sizes, dim=0, src=0, group=None)
+
     expected_tensor = torch.ones(
         (sizes[rank], tensor_dim), device=f"cuda:{rank}", dtype=torch.float32
     ) * (rank + 1)
@@ -53,7 +56,7 @@ def run_test_scatter_v(rank, world_size):
 
     grad_out = torch.ones_like(scattered_tensor) * (-1)
     scattered_tensor.backward(gradient=grad_out)
-    
+
     if rank == 0:
         expected_grad = torch.ones_like(tensor) * (-1)
         assert torch.allclose(tensor.grad, expected_grad)
@@ -84,21 +87,27 @@ def run_test_gather_v(rank, world_size):
     tensor.requires_grad_(True)
     sizes = [r + 2 for r in range(world_size)]
 
-    gathered_tensor = gather_v(tensor, sizes, dim=0, dst=0, group=None)  
-    
+    gathered_tensor = gather_v(tensor, sizes, dim=0, dst=0, group=None)
+
     if rank == 0:
-        expected_tensor = torch.arange(world_size, device="cuda:0", dtype=torch.float32) + 1
-        expected_tensor = expected_tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
-        expected_tensor = expected_tensor.repeat_interleave(repeats=torch.tensor(sizes, device="cuda:0"), dim=0)
+        expected_tensor = (
+            torch.arange(world_size, device="cuda:0", dtype=torch.float32) + 1
+        )
+        expected_tensor = (
+            expected_tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
+        )
+        expected_tensor = expected_tensor.repeat_interleave(
+            repeats=torch.tensor(sizes, device="cuda:0"), dim=0
+        )
 
         assert torch.allclose(expected_tensor, gathered_tensor)
 
     grad_out = torch.ones_like(gathered_tensor) * (-1)
     gathered_tensor.backward(gradient=grad_out)
-   
+
     expected_grad = torch.ones_like(tensor) * (-1)
     assert torch.allclose(tensor.grad, expected_grad)
-  
+
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
@@ -125,20 +134,24 @@ def run_test_all_gather_v(rank, world_size):
     tensor.requires_grad_(True)
     sizes = [r + 2 for r in range(world_size)]
 
-    gathered_tensor = all_gather_v(tensor, sizes, dim=0, group=None)  
-    
-    expected_tensor = torch.arange(world_size, device=f"cuda:{rank}", dtype=torch.float32) + 1
+    gathered_tensor = all_gather_v(tensor, sizes, dim=0, group=None)
+
+    expected_tensor = (
+        torch.arange(world_size, device=f"cuda:{rank}", dtype=torch.float32) + 1
+    )
     expected_tensor = expected_tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
-    expected_tensor = expected_tensor.repeat_interleave(repeats=torch.tensor(sizes, device=f"cuda:{rank}"), dim=0)
+    expected_tensor = expected_tensor.repeat_interleave(
+        repeats=torch.tensor(sizes, device=f"cuda:{rank}"), dim=0
+    )
 
     assert torch.allclose(expected_tensor, gathered_tensor)
 
     grad_out = torch.ones_like(gathered_tensor) * (-1)
     gathered_tensor.backward(gradient=grad_out)
-   
+
     expected_grad = torch.ones_like(tensor) * (-1) * world_size
     assert torch.allclose(tensor.grad, expected_grad)
-  
+
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
@@ -161,7 +174,7 @@ def run_test_indexed_all_gather_v(rank, world_size):
     tensor_dim = 4
     tensor = torch.arange(1, world_size + 1, device=f"cuda:{rank}", dtype=torch.float32)
     tensor = tensor.view(-1, 1).expand(-1, tensor_dim).contiguous()
-    tensor = tensor.repeat_interleave(repeats=rank+1, dim=0)
+    tensor = tensor.repeat_interleave(repeats=rank + 1, dim=0)
     tensor.requires_grad_(True)
 
     send_sizes = [rank + 1 for _ in range(world_size)]
@@ -171,7 +184,9 @@ def run_test_indexed_all_gather_v(rank, world_size):
         torch.nonzero(tensor[:, 0] == (r + 1)).view(-1) for r in range(world_size)
     ]
 
-    gathered_tensor = indexed_all_gather(tensor, scatter_indices, recv_sizes, send_sizes, group=None)  
+    gathered_tensor = indexed_all_gather(
+        tensor, scatter_indices, recv_sizes, send_sizes, group=None
+    )
 
     expected_tensor = torch.ones(
         (sum(recv_sizes), tensor_dim), device=f"cuda:{rank}", dtype=torch.float32
@@ -181,10 +196,10 @@ def run_test_indexed_all_gather_v(rank, world_size):
 
     grad_out = torch.ones_like(gathered_tensor) * (-1)
     gathered_tensor.backward(gradient=grad_out)
-   
+
     expected_grad = torch.ones_like(tensor) * (-1)
     assert torch.allclose(tensor.grad, expected_grad)
-  
+
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]

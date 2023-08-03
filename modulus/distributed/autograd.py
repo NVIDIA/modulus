@@ -19,9 +19,12 @@ import torch.distributed as dist
 from typing import Optional, List
 from .manager import DistributedManager
 from .utils import (
-    gather_v_wrapper, scatter_v_wrapper,
-    all_gather_v_wrapper, all_reduce_v_wrapper,
-    indexed_all_gather_wrapper, indexed_all_gather_wrapper_bwd
+    gather_v_wrapper,
+    scatter_v_wrapper,
+    all_gather_v_wrapper,
+    all_reduce_v_wrapper,
+    indexed_all_gather_wrapper,
+    indexed_all_gather_wrapper_bwd,
 )
 
 
@@ -33,7 +36,7 @@ class AllGatherVAutograd(torch.autograd.Function):
         sizes: List[int],
         dim: int = 0,
         use_fp32: bool = True,
-        group: Optional[dist.ProcessGroup] = None
+        group: Optional[dist.ProcessGroup] = None,
     ) -> torch.Tensor:
         gathered_tensor = all_gather_v_wrapper(tensor, sizes, dim, group)
         ctx.sizes = sizes
@@ -49,13 +52,9 @@ class AllGatherVAutograd(torch.autograd.Function):
 
         if needs_grad:
             grad_tensor = all_reduce_v_wrapper(
-                grad_output, 
-                ctx.sizes,
-                ctx.dim, 
-                use_fp32=ctx.use_fp32, 
-                group=ctx.group
+                grad_output, ctx.sizes, ctx.dim, use_fp32=ctx.use_fp32, group=ctx.group
             )
-    
+
         return grad_tensor, None, None, None, None
 
 
@@ -86,11 +85,7 @@ class GatherVAutograd(torch.autograd.Function):
 
         if needs_grad:
             grad_tensor = scatter_v_wrapper(
-                grad_output, 
-                ctx.sizes, 
-                ctx.dim, 
-                ctx.dst, 
-                ctx.group
+                grad_output, ctx.sizes, ctx.dim, ctx.dst, ctx.group
             )
 
         return grad_tensor, None, None, None, None
@@ -104,7 +99,7 @@ class ScatterVAutograd(torch.autograd.Function):
         sizes: List[int],
         dim: int = 0,
         src: int = 0,
-        group = Optional[dist.ProcessGroup],
+        group=Optional[dist.ProcessGroup],
     ) -> torch.Tensor:
         scattered_tensor = scatter_v_wrapper(tensor, sizes, dim, src, group)
         ctx.tensor = tensor
@@ -115,22 +110,15 @@ class ScatterVAutograd(torch.autograd.Function):
         return scattered_tensor
 
     @staticmethod
-    def backward(
-        ctx,
-        grad_output: torch.Tensor
-    ) -> torch.Tensor:
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         grad_tensor = None
         needs_grad = ctx.needs_input_grad[0]
 
         if needs_grad:
             grad_tensor = gather_v_wrapper(
-                grad_output, 
-                ctx.sizes, 
-                ctx.dim, 
-                ctx.src, 
-                ctx.group
+                grad_output, ctx.sizes, ctx.dim, ctx.src, ctx.group
             )
-                
+
         return grad_tensor, None, None, None, None
 
 
@@ -158,7 +146,7 @@ class IndexedAllGatherAutograd(torch.autograd.Function):
         ctx.use_fp32 = use_fp32
         ctx.group = group
         ctx.tensor_dim0 = tensor.size(0)
-        ctx.scatter_indices = scatter_indices    
+        ctx.scatter_indices = scatter_indices
 
         return tensor_to_recv
 
@@ -178,7 +166,7 @@ class IndexedAllGatherAutograd(torch.autograd.Function):
                 ctx.send_sizes,
                 ctx.tensor_dim0,
                 ctx.use_fp32,
-                ctx.group
+                ctx.group,
             )
 
         return grad_tensor, None, None, None, None, None, None
@@ -189,7 +177,7 @@ def all_gather_v(
     sizes: List[int],
     dim: int = 0,
     use_fp32: bool = True,
-    group: Optional[dist.ProcessGroup] = None
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
     return AllGatherVAutograd.apply(tensor, sizes, dim, use_fp32, group)
 
