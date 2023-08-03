@@ -22,7 +22,7 @@ from . import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_forward(device, dimension):
     """Test FNO forward pass"""
     torch.manual_seed(0)
@@ -44,8 +44,10 @@ def test_fno_forward(device, dimension):
         invar = torch.randn(bsize, 2, 16).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 16, 16).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 16, 16, 16).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 16, 16, 16, 16).to(device)
 
     assert common.validate_forward_accuracy(
         model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-3
@@ -59,7 +61,7 @@ def test_fno_constructor(device):
     out_features = random.randint(1, 8)
     # Define dictionary of constructor args
     arg_list = []
-    for dimension in [1, 2, 3]:
+    for dimension in [1, 2, 3, 4]:
         arg_list.append(
             {
                 "in_channels": random.randint(1, 4),
@@ -84,8 +86,10 @@ def test_fno_constructor(device):
             invar = torch.randn(bsize, kw_args["in_channels"], 8).to(device)
         elif kw_args["dimension"] == 2:
             invar = torch.randn(bsize, kw_args["in_channels"], 8, 8).to(device)
-        else:
+        elif kw_args["dimension"] == 3:
             invar = torch.randn(bsize, kw_args["in_channels"], 8, 8, 8).to(device)
+        else:
+            invar = torch.randn(bsize, kw_args["in_channels"], 8, 8, 8, 8).to(device)
 
         outvar = model(invar)
         assert outvar.shape == (bsize, out_features, *invar.shape[2:])
@@ -97,7 +101,7 @@ def test_fno_constructor(device):
             out_channels=2,
             decoder_layers=1,
             decoder_layer_size=8,
-            dimension=4,
+            dimension=5,
             latent_channels=32,
             num_fno_layers=4,
             num_fno_modes=4,
@@ -109,7 +113,7 @@ def test_fno_constructor(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_optims(device, dimension):
     """Test FNO optimizations"""
 
@@ -132,8 +136,10 @@ def test_fno_optims(device, dimension):
             invar = torch.randn(bsize, 2, 8).to(device)
         elif dimension == 2:
             invar = torch.randn(bsize, 2, 8, 8).to(device)
-        else:
+        elif dimension == 3:
             invar = torch.randn(bsize, 2, 8, 8, 8).to(device)
+        else:
+            invar = torch.randn(bsize, 2, 8, 8, 8, 8).to(device)
 
         return model, invar
 
@@ -153,7 +159,7 @@ def test_fno_optims(device, dimension):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_checkpoint(device, dimension):
     """Test FNO checkpoint save/load"""
     # Construct FNO models
@@ -186,15 +192,17 @@ def test_fno_checkpoint(device, dimension):
         invar = torch.randn(bsize, 2, 8).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 8, 8).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 8, 8, 8).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 8, 8, 8, 8).to(device)
 
     assert common.validate_checkpoint(model_1, model_2, (invar,))
 
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fnodeploy(device, dimension):
     """Test FNO deployment support"""
     # Construct AFNO model
@@ -216,8 +224,10 @@ def test_fnodeploy(device, dimension):
         invar = torch.randn(bsize, 2, 4).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 4, 4).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 4, 4, 4).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 4, 4, 4, 4).to(device)
 
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))

@@ -37,6 +37,11 @@ def model():
 
 
 @pytest.fixture
+def model2():
+    return FullyConnected(2, 32, 2)
+
+
+@pytest.fixture
 def logger():
     logger = logging.getLogger("launch")
     formatter = logging.Formatter(
@@ -179,20 +184,62 @@ def test_capture_errors():
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_capture_scaler_checkpointing(model, device):
+def test_capture_scaler_checkpointing(model, model2, device):
     # Testing the class variables of AMP grad scaler for checkpointing
     #
     model = model.to(device)
+    model2 = model2.to(device)
     optim = torch.optim.Adam(model.parameters(), lr=0.001)
+    optim2 = torch.optim.Adam(model2.parameters(), lr=0.001)
+    _StaticCapture.reset_state()
     # Test if it can ignore invalid scalar dicts
-    _StaticCapture.scaler_dict = {"phoo": 0}
-    capture = StaticCaptureTraining(model=model, optim=optim)
-    assert not "phoo" in capture.scaler.state_dict()
+    capture1 = StaticCaptureTraining(model=model, optim=optim)
+    capture2 = StaticCaptureTraining(model=model2, optim=optim2)
+    state_dict = _StaticCapture.state_dict().copy()
 
-    # Test capture will load from singleton state dict
-    # Needed when loading a checkpoint
-    scaler_dict = _StaticCapture.scaler_singleton.state_dict()
-    _StaticCapture.scaler_dict = scaler_dict
+    # Reset state
+    del capture1
+    del capture2
+    _StaticCapture.reset_state()
 
-    capture = StaticCaptureTraining(model=model, optim=optim)
-    assert scaler_dict == capture.scaler.state_dict()
+    # Load state dict
+    _StaticCapture.load_state_dict(state_dict)
+    capture1 = StaticCaptureTraining(model=model, optim=optim)
+    capture2 = StaticCaptureTraining(model=model2, optim=optim2)
+
+    assert state_dict == _StaticCapture.state_dict()
+
+
+@pytest.mark.parametrize("device", ["cuda:0"])
+def test_capture_scaler_checkpointing_ordering(model, model2, device):
+    # Testing the class variables of AMP grad scaler for checkpointing
+    #
+    model = model.to(device)
+    model2 = model2.to(device)
+    optim = torch.optim.Adam(model.parameters(), lr=0.001)
+    optim2 = torch.optim.Adam(model2.parameters(), lr=0.001)
+    _StaticCapture.reset_state()
+    # Hard code some non-default attributes for testing
+    capture1a = StaticCaptureTraining(model=model, optim=optim, label="capture1")
+    capture1a.scaler._init_scale = 2.0
+    capture1a.scaler._growth_factor = 1.0
+    capture2a = StaticCaptureTraining(model=model2, optim=optim2, label="capture2")
+    capture2a.scaler._init_scale = 3.0
+    capture2a.scaler._growth_factor = 4.0
+    state_dict = _StaticCapture.state_dict().copy()
+
+    # Reset state
+    _StaticCapture.reset_state()
+
+    # Create new captures and make sure they are not the same
+    # Change instantiation order
+    capture2b = StaticCaptureTraining(model=model2, optim=optim2, label="capture2")
+    capture1b = StaticCaptureTraining(model=model, optim=optim, label="capture1")
+    assert not capture1a.scaler.state_dict() == capture1b.scaler.state_dict()
+    assert not capture2a.scaler.state_dict() == capture2b.scaler.state_dict()
+    # Load state dict
+    _StaticCapture.load_state_dict(state_dict)
+
+    # Compar
+    assert capture1a.scaler.state_dict() == capture1b.scaler.state_dict()
+    assert capture2a.scaler.state_dict() == capture2b.scaler.state_dict()
