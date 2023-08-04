@@ -132,7 +132,7 @@ class ClimateHDF5Datapipe(Datapipe):
     use_latlon : bool, optional
         Include latitude and longitude meshgrid, by default False
     use_cos_zenith : bool, optional
-        Include cosine of zenith angle, by default False. If True then latitude and longitude
+        Include cosine of the solar zenith angle, by default False. If True then latitude and longitude
         will also be computed.
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
@@ -223,6 +223,10 @@ class ClimateHDF5Datapipe(Datapipe):
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
         if not self.stats_dir is None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
+        if self.stats_dir is None:
+            self.logger.warning(
+                "Warning, no stats directory specified, this will result in no normalisation"
+            )
 
         # Load all data files and statistics
         self._parse_dataset_files()
