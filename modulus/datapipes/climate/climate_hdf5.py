@@ -348,7 +348,7 @@ class ClimateHDF5Datapipe(Datapipe):
         )  # flip latitude axis, TODO hacky fix and we should get this from the file
         assert (
             lsm.shape[1:] == self.data_shape
-        ), "Land-sea mask shape does not match data shape"
+        ), f"Land-sea mask shape {lsm.shape} does not match data shape {self.data_shape}"
         lsm = lsm[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         self.lsm = dali.types.Constant(lsm)
 
@@ -361,7 +361,7 @@ class ClimateHDF5Datapipe(Datapipe):
         )  # flip latitude axis, TODO hacky fix and we should get this from the file
         assert (
             geop.shape[1:] == self.data_shape
-        ), "Geopotential shape does not match data shape"
+        ), f"Geopotential shape {geop.shape} does not match data shape {self.data_shape}"
         geop = geop[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         if normalize:
             geop = (geop - geop.mean()) / geop.std()
