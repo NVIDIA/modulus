@@ -42,7 +42,6 @@ class Constants(BaseModel):
 
     lr: float = 1e-4
     lr_decay_rate: float = 0.99985
-    drag_loss_weight: float = 1.0
 
     amp: bool = False
     jit: bool = False
