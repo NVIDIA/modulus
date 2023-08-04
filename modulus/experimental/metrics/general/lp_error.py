@@ -21,7 +21,7 @@ Tensor = torch.Tensor
 def lp_error(
     pred: Tensor,
     target: Tensor,
-    dim: Any[int, Tuple] = -1,
+    dim: Any = -1,
     p: int = 2,
     relative: bool = False,
     reduce: bool = False,
