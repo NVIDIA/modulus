@@ -134,6 +134,8 @@ class ClimateHDF5Datapipe(Datapipe):
     use_cos_zenith : bool, optional
         Include cosine of the solar zenith angle, by default False. If True then latitude and longitude
         will also be computed.
+    latlon_lower_bound : Tuple[float, float], optional
+        Lower bound of latitude and longitude, by default (-90, -180)
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
         divisible by patch_size, by default None
@@ -165,6 +167,7 @@ class ClimateHDF5Datapipe(Datapipe):
         geopotential_filename: str = None,
         use_latlon: bool = False,
         use_cos_zenith: bool = False,
+        latlon_lower_bound: Tuple[float, float] = (-90, -180),
         patch_size: Union[Tuple[int, int], int, None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
@@ -190,6 +193,7 @@ class ClimateHDF5Datapipe(Datapipe):
             use_latlon = True
         self.use_latlon = use_latlon
         self.use_cos_zenith = use_cos_zenith
+        self.latlon_lower_bound = latlon_lower_bound
         self.process_rank = process_rank
         self.world_size = world_size
         if isinstance(patch_size, int):
@@ -367,8 +371,16 @@ class ClimateHDF5Datapipe(Datapipe):
         """Load latitude and longitude coordinates from data shape and compute cos/sin versions."""
 
         # get latitudes and longitudes from data shape
-        lat = np.linspace(-90, 90, self.cropped_data_shape[0]).astype(np.float32)
-        lon = np.linspace(-180, 180, self.cropped_data_shape[1]).astype(np.float32)
+        lat = np.linspace(
+            np.latlon_lower_bound[0],
+            np.latlon_lower_bound[0] + 180,
+            self.cropped_data_shape[0],
+        ).astype(np.float32)
+        lon = np.linspace(
+            np.latlon_lower_bound[1],
+            np.latlon_lower_bound[1] + 360,
+            self.cropped_data_shape[1] + 1,
+        ).astype(np.float32)[1:]
         lat, lon = np.meshgrid(lat, lon, indexing="ij")
         self.latlon = dali.types.Constant(np.stack((lat, lon), axis=0))
 
