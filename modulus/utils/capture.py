@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 import functools
 import modulus
 import torch
@@ -19,6 +20,7 @@ import logging
 from logging import Logger
 from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
+from modulus.distributed import DistributedManager
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -111,7 +113,8 @@ class _StaticCapture(object):
             scaler_enabled = self.use_gradscaler and amp_type == torch.float16
             self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
-            self.replay_stream = torch.cuda.current_stream(self.model.device)
+            #self.replay_stream = torch.cuda.current_stream(self.model.device)
+            self.replay_stream = torch.cuda.Stream(self.model.device)
         # CPU device
         else:
             self.cuda_graphs_enabled = False
@@ -176,24 +179,28 @@ class _StaticCapture(object):
         """
         # Graph warm up
         if self.iteration < self.cuda_graph_warmup:
-            warmup_stream = torch.cuda.Stream()
+            #warmup_stream = torch.cuda.Stream()
+            self.replay_stream.wait_stream(torch.cuda.current_stream())
             self._zero_grads()
-            with torch.cuda.stream(warmup_stream):
+            with torch.cuda.stream(self.replay_stream):
                 output = self._amp_forward(*args, **kwargs)
                 self.output = output.detach()
-            torch.cuda.current_stream().wait_stream(warmup_stream)
+            torch.cuda.current_stream().wait_stream(self.replay_stream)
         # CUDA Graphs
         else:
             # Graph record
             if self.iteration == self.cuda_graph_warmup:
                 self.logger.warning(f"Recording graph of '{self.function.__name__}'")
                 self._zero_grads()
+                torch.cuda.synchronize()
+                if DistributedManager().distributed:
+                    torch.distributed.barrier()
+                time.sleep(30)
                 with torch.cuda.graph(self.graph):
                     output = self._amp_forward(*args, **kwargs)
                     self.output = output.detach()
             # Graph replay
-            with torch.cuda.stream(self.replay_stream):
-                self.graph.replay()
+            self.graph.replay()
 
         self.iteration += 1
         return self.output
@@ -478,3 +485,4 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         )
         self.eval = True  # No optimizer/scaler calls
         self.no_grad = True  # No grad context and no grad zeroing
+
