@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import time
 import functools
 import modulus
@@ -113,7 +114,7 @@ class _StaticCapture(object):
             scaler_enabled = self.use_gradscaler and amp_type == torch.float16
             self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
-            #self.replay_stream = torch.cuda.current_stream(self.model.device)
+            # self.replay_stream = torch.cuda.current_stream(self.model.device)
             self.replay_stream = torch.cuda.Stream(self.model.device)
         # CPU device
         else:
@@ -179,7 +180,7 @@ class _StaticCapture(object):
         """
         # Graph warm up
         if self.iteration < self.cuda_graph_warmup:
-            #warmup_stream = torch.cuda.Stream()
+            # warmup_stream = torch.cuda.Stream()
             self.replay_stream.wait_stream(torch.cuda.current_stream())
             self._zero_grads()
             with torch.cuda.stream(self.replay_stream):
@@ -195,7 +196,10 @@ class _StaticCapture(object):
                 torch.cuda.synchronize()
                 if DistributedManager().distributed:
                     torch.distributed.barrier()
-                time.sleep(30)
+                # TODO: temporary workaround till this issue is fixed:
+                # https://github.com/pytorch/pytorch/pull/104487#issuecomment-1638665876
+                delay = os.environ.get("MODULUS_CUDA_GRAPH_CAPTURE_DELAY", "30")
+                time.sleep(int(delay))
                 with torch.cuda.graph(self.graph):
                     output = self._amp_forward(*args, **kwargs)
                     self.output = output.detach()
@@ -485,4 +489,3 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         )
         self.eval = True  # No optimizer/scaler calls
         self.no_grad = True  # No grad context and no grad zeroing
-
