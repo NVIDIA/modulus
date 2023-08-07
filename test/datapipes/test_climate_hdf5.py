@@ -354,7 +354,7 @@ def test_era5_hdf5_shuffle(
         stride=stride,
         dt=1,
         start_year=2018,
-        num_steps=1,
+        num_steps=2,
         patch_size=None,
         num_samples_per_year=None,
         batch_size=1,
