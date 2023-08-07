@@ -114,7 +114,6 @@ class _StaticCapture(object):
             scaler_enabled = self.use_gradscaler and amp_type == torch.float16
             self.scaler = self._init_amp_scaler(scaler_enabled, self.logger)
 
-            # self.replay_stream = torch.cuda.current_stream(self.model.device)
             self.replay_stream = torch.cuda.Stream(self.model.device)
         # CPU device
         else:
@@ -180,7 +179,6 @@ class _StaticCapture(object):
         """
         # Graph warm up
         if self.iteration < self.cuda_graph_warmup:
-            # warmup_stream = torch.cuda.Stream()
             self.replay_stream.wait_stream(torch.cuda.current_stream())
             self._zero_grads()
             with torch.cuda.stream(self.replay_stream):
