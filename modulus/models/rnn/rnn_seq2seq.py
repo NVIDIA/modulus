@@ -27,6 +27,7 @@ from modulus.models.rnn.layers import (
     _ConvGRULayer,
     _ConvResidualBlock,
 )
+from modulus.models.layers import get_activation
 
 
 @dataclass
@@ -59,8 +60,8 @@ class Seq2SeqRNN(Module):
         Channels for encoding/decoding, by default 512
     nr_residual_blocks : int, optional
         Number of residual blocks, by default 2
-    activation_fn : Union[nn.Module, List[nn.Module]], optional
-        Activation function to use, by default nn.ReLU()
+    activation_fn : str, optional
+        Activation function to use, by default "relu"
     nr_downsamples : int, optional
         Number of downsamples, by default 2
     nr_tsteps : int, optional
@@ -72,7 +73,7 @@ class Seq2SeqRNN(Module):
     ... input_channels=6,
     ... dimension=2,
     ... nr_latent_channels=32,
-    ... activation_fn=torch.nn.ReLU(),
+    ... activation_fn="relu",
     ... nr_downsamples=2,
     ... nr_tsteps=16,
     ... )
@@ -88,7 +89,7 @@ class Seq2SeqRNN(Module):
         dimension: int = 2,
         nr_latent_channels: int = 512,
         nr_residual_blocks: int = 2,
-        activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
+        activation_fn: str = "relu",
         nr_downsamples: int = 2,
         nr_tsteps: int = 32,
     ) -> None:
@@ -99,6 +100,7 @@ class Seq2SeqRNN(Module):
         self.nr_downsamples = nr_downsamples
         self.encoder_layers = nn.ModuleList()
         channels_out = nr_latent_channels
+        activation_fn = get_activation(activation_fn)
 
         # check valid dimensions
         if dimension not in [2, 3]:

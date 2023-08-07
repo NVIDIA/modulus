@@ -37,6 +37,7 @@ from typing import Union, List, Any
 from dataclasses import dataclass
 
 import modulus
+from modulus.models.layers import get_activation
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -79,8 +80,8 @@ class SRResNet(Module):
     scaling_factor : int, optional
         Scaling factor to increase the output feature size
         compared to the input (2, 4, or 8), by default 8
-    activation_fn : Activation, optional
-        Activation function, by default Activation.PRELU
+    activation_fn : str, optional
+        Activation function, by default "prelu"
 
     Example
     -------
@@ -112,10 +113,11 @@ class SRResNet(Module):
         conv_layer_size: int = 32,
         n_resid_blocks: int = 8,
         scaling_factor: int = 8,
-        activation_fn: nn.Module = nn.PReLU(),
+        activation_fn: str = "prelu",
     ):
         super().__init__(meta=MetaData())
         self.var_dim = 1
+        activation_fn = get_activation(activation_fn)
 
         # Scaling factor must be 2, 4, or 8
         scaling_factor = int(scaling_factor)

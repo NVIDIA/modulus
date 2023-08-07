@@ -23,6 +23,7 @@ from torch import Tensor
 from dataclasses import dataclass
 from ..meta import ModelMetaData
 from ..module import Module
+from ..mlp import FullyConnected
 
 # ===================================================================
 # ===================================================================
@@ -649,10 +650,16 @@ class FNO(Module):
 
     Parameters
     ----------
-    decoder_net : modulus.Module
-        Pointwise decoder network, input feature size should match `latent_channels`
     in_channels : int
         Number of input channels
+    out_channels : int
+        Number of output channels
+    decoder_layers : int, optional
+        Number of decoder layers, by default 1
+    decoder_layer_size : int, optional
+        Number of neurons in decoder layers, by default 32
+    decoder_activation_fn : str, optional
+        Activation function for decoder, by default "silu"
     dimension : int
         Model dimensionality (supports 1, 2, 3).
     latent_channels : int, optional
@@ -665,24 +672,19 @@ class FNO(Module):
         Domain padding for spectral convolutions, by default 8
     padding_type : str, optional
         Type of padding for spectral convolutions, by default "constant"
-    activation_fn : nn.Module, optional
-        Activation function, by default nn.GELU
+    activation_fn : str, optional
+        Activation function, by default "gelu"
     coord_features : bool, optional
         Use coordinate grid as additional feature map, by default True
 
     Example
     -------
-    >>> # define the decoder net
-    >>> decoder = modulus.models.mlp.FullyConnected(
-    ...     in_features=32,
-    ...     out_features=3,
-    ...     num_layers=2,
-    ...     layer_size=16,
-    ... )
     >>> # define the 2d FNO model
     >>> model = modulus.models.fno.FNO(
-    ...     decoder_net=decoder,
     ...     in_channels=4,
+    ...     out_channels=3,
+    ...     decoder_layers=2,
+    ...     decoder_layer_size=32,
     ...     dimension=2,
     ...     latent_channels=32,
     ...     num_fno_layers=2,
@@ -701,15 +703,18 @@ class FNO(Module):
 
     def __init__(
         self,
-        decoder_net: Module,
         in_channels: int,
-        dimension: int,
+        out_channels: int,
+        decoder_layers: int = 1,
+        decoder_layer_size: int = 32,
+        decoder_activation_fn: str = "silu",
+        dimension: int = 2,
         latent_channels: int = 32,
         num_fno_layers: int = 4,
         num_fno_modes: Union[int, List[int]] = 16,
         padding: int = 8,
         padding_type: str = "constant",
-        activation_fn: nn.Module = nn.GELU(),
+        activation_fn: str = "gelu",
         coord_features: bool = True,
     ) -> None:
         super().__init__(meta=MetaData())
@@ -718,11 +723,17 @@ class FNO(Module):
         self.num_fno_modes = num_fno_modes
         self.padding = padding
         self.padding_type = padding_type
-        self.activation_fn = activation_fn
+        self.activation_fn = layers.get_activation(activation_fn)
         self.coord_features = coord_features
-        self.var_dim = decoder_net.meta.var_dim
+
         # decoder net
-        self.decoder_net = decoder_net
+        self.decoder_net = FullyConnected(
+            in_features=latent_channels,
+            layer_size=decoder_layer_size,
+            out_features=out_channels,
+            num_layers=decoder_layers,
+            activation_fn=decoder_activation_fn,
+        )
 
         if dimension == 1:
             FNOModel = FNO1DEncoder
@@ -757,16 +768,17 @@ class FNO(Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
+        # Fourier encoder
         y_latent = self.spec_encoder(x)
 
         # Reshape to pointwise inputs if not a conv FC model
         y_shape = y_latent.shape
-        if self.var_dim == -1:
-            y_latent, y_shape = self.grid_to_points(y_latent)
+        y_latent, y_shape = self.grid_to_points(y_latent)
 
+        # Decoder
         y = self.decoder_net(y_latent)
+
         # Convert back into grid
-        if self.var_dim == -1:
-            y = self.points_to_grid(y, y_shape)
+        y = self.points_to_grid(y, y_shape)
 
         return y
