@@ -16,7 +16,7 @@
 name: Feature Request
 description: Request new or improved functionality or changes to existing Modulus (Core) functionality
 title: "🚀[FEA]: "
-labels: ["feature request"]
+labels: ["enhancement", "? - Needs Triage"]
 
 body:
   - type: markdown
