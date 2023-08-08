@@ -61,15 +61,11 @@ def darcy_trainer(cfg: DictConfig) -> None:
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
 
     # define model, loss, optimiser, scheduler, data loader
-    decoder = FullyConnected(
-        in_features=cfg.arch.fno.latent_channels,
-        out_features=cfg.arch.decoder.out_features,
-        num_layers=cfg.arch.decoder.layers,
-        layer_size=cfg.arch.decoder.layer_size,
-    )
     model = FNO(
-        decoder_net=decoder,
         in_channels=cfg.arch.fno.in_channels,
+        out_channels=cfg.arch.decoder.out_features,
+        decoder_layers=cfg.arch.decoder.layers,
+        decoder_layer_size=cfg.arch.decoder.layer_size,
         dimension=cfg.arch.fno.dimension,
         latent_channels=cfg.arch.fno.latent_channels,
         num_fno_layers=cfg.arch.fno.fno_layers,
