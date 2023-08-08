@@ -12,11 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .models.module import Module
-from .models.meta import ModelMetaData
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
+import pytest
 
-from .datapipes.datapipe import Datapipe
 
-__version__ = "0.3.0a0"
+def pytest_addoption(parser):
+    parser.addoption(
+        "--multigpu", action="store_true", default=False, help="run multigpu tests"
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "multigpu: mark test as multigpu to run")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--multigpu") and not config.getoption("-m"):
+        skip_multigpu = pytest.mark.skip(reason="need --multigpu option to run")
+        for item in items:
+            if "multigpu" in item.keywords:
+                item.add_marker(skip_multigpu)

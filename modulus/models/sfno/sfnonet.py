@@ -62,6 +62,7 @@ from modulus.utils.sfno.distributed.layer_norm import DistributedInstanceNorm2d
 
 from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
+from modulus.models.layers import get_activation
 
 
 @dataclass
@@ -170,7 +171,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         mlp_ratio=2.0,
         drop_rate=0.0,
         drop_path=0.0,
-        act_layer=nn.GELU,
+        act_layer="gelu",
         norm_layer=(nn.LayerNorm, nn.LayerNorm),
         sparsity_threshold=0.0,
         use_complex_kernels=True,
@@ -230,7 +231,7 @@ class FourierNeuralOperatorBlock(nn.Module):
             self.inner_skip = nn.Identity()
 
         if filter_type == "linear" or filter_type == "real linear":
-            self.act_layer = act_layer()
+            self.act_layer = get_activation(act_layer)
 
         # dropout
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -635,16 +636,6 @@ class SphericalFourierNeuralOperatorNet(Module):
             self.inp_shape_eff = [self.trans_down.nlat, self.trans_down.nlon]
             self.h_loc = self.itrans.nlat
             self.w_loc = self.itrans.nlon
-
-        # determine activation function
-        if self.activation_function == "relu":
-            self.activation_function = nn.ReLU
-        elif self.activation_function == "gelu":
-            self.activation_function = nn.GELU
-        elif self.activation_function == "silu":
-            self.activation_function = nn.SiLU
-        else:
-            raise ValueError(f"Unknown activation function {self.activation_function}")
 
         # encoder
         if comm.get_size("matmul") > 1:

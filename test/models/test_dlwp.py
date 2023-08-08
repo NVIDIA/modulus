@@ -30,7 +30,7 @@ def test_dlwp_forward(device):
         nr_input_channels=2,
         nr_output_channels=2,
         nr_initial_channels=64,
-        activation_fn=torch.nn.LeakyReLU(0.1),
+        activation_fn="leaky_relu",
         depth=2,
         clamp_activation=(None, 10.0),
     ).to(device)

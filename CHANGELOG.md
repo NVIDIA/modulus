@@ -6,7 +6,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [0.3.0a0]
+
+### Added
+
+- Added distributed utilities to create process groups and orthogonal process groups.
+- Added distributed AFNO model implementation.
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.2.0] - 2023-08-xx
 
 ### Added
 
@@ -14,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added build support for internal DGL
 - 4D Fourier Neural Operator model
 - Ahmed body dataset
+- Unified Climate Datapipe
 
 ### Changed
 
