@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added build support for internal DGL
 - 4D Fourier Neural Operator model
 - Ahmed body dataset
+- Unified Climate Datapipe
 
 ### Changed
 
