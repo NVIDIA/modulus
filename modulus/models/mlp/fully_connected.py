@@ -15,11 +15,11 @@
 import torch
 import torch.nn as nn
 import modulus
+from modulus.models.layers import FCLayer, get_activation
 
 from torch import Tensor
 from dataclasses import dataclass
 from typing import Optional, Union, List
-from modulus.models.layers import FCLayer
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -53,8 +53,8 @@ class FullyConnected(Module):
         Size of output features, by default 512
     num_layers : int, optional
         Number of hidden layers, by default 6
-    activation_fn : Union[nn.Module, List[nn.Module]], optional
-        Activation function to use, by default nn.SILU
+    activation_fn : Union[str, List[str]], optional
+        Activation function to use, by default 'silu'
     skip_connections : bool, optional
         Add skip connections every 2 hidden layers, by default False
     adaptive_activations : bool, optional
@@ -77,7 +77,7 @@ class FullyConnected(Module):
         layer_size: int = 512,
         out_features: int = 512,
         num_layers: int = 6,
-        activation_fn: Union[nn.Module, List[nn.Module]] = nn.SiLU(),
+        activation_fn: Union[str, List[str]] = "silu",
         skip_connections: bool = False,
         adaptive_activations: bool = False,
         weight_norm: bool = False,
@@ -97,6 +97,7 @@ class FullyConnected(Module):
             activation_fn = activation_fn + [activation_fn[-1]] * (
                 num_layers - len(activation_fn)
             )
+        activation_fn = [get_activation(a) for a in activation_fn]
 
         self.layers = nn.ModuleList()
 

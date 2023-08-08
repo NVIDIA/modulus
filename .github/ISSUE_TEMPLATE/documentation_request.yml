@@ -16,7 +16,7 @@
 name: Documentation Request
 description: Request updates or additions to Modulus (Core) documentation
 title: "📚[DOC]: "
-labels: ["doc"]
+labels: ["documentation", "? - Needs Triage"]
 
 body:
   - type: markdown

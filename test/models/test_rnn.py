@@ -31,7 +31,7 @@ def test_conv_rnn_one2many_forward(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=8,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=4,
     ).to(device)
@@ -61,7 +61,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=4,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=8,
     ).to(device)
@@ -70,7 +70,7 @@ def test_conv_rnn_one2many_checkpoint(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=4,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=8,
     ).to(device)
@@ -97,7 +97,7 @@ def test_conv_rnn_one2many_optimizations(device, dimension):
             input_channels=1,
             dimension=dimension,
             nr_latent_channels=8,
-            activation_fn=torch.nn.ReLU(),
+            activation_fn="relu",
             nr_downsamples=2,
             nr_tsteps=2,
         ).to(device)
@@ -129,7 +129,7 @@ def test_conv_rnn_one2many_constructor(device):
                 "input_channels": 1,
                 "dimension": dimension,
                 "nr_latent_channels": random.randint(4, 8),
-                "activation_fn": torch.nn.ReLU(),
+                "activation_fn": "relu",
                 "nr_downsamples": random.randint(2, 3),
                 "nr_tsteps": random.randint(8, 16),
             }
@@ -159,7 +159,7 @@ def test_conv_rnn_one2many_constructor(device):
             input_channels=1,
             dimension=4,
             nr_latent_channels=32,
-            activation_fn=torch.nn.ReLU(),
+            activation_fn="relu",
             nr_downsamples=2,
             nr_tsteps=2,
         ).to(device)
@@ -178,7 +178,7 @@ def test_conv_rnn_seq2seq_forward(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=4,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=8,
     ).to(device)
@@ -208,7 +208,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=8,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=8,
     ).to(device)
@@ -217,7 +217,7 @@ def test_conv_rnn_seq2seq_checkpoint(device, dimension):
         input_channels=1,
         dimension=dimension,
         nr_latent_channels=8,
-        activation_fn=torch.nn.ReLU(),
+        activation_fn="relu",
         nr_downsamples=2,
         nr_tsteps=8,
     ).to(device)
@@ -244,7 +244,7 @@ def test_conv_rnn_seq2seq_optimizations(device, dimension):
             input_channels=1,
             dimension=dimension,
             nr_latent_channels=4,
-            activation_fn=torch.nn.ReLU(),
+            activation_fn="relu",
             nr_downsamples=2,
             nr_tsteps=2,
         ).to(device)
@@ -276,7 +276,7 @@ def test_conv_rnn_seq2seq_constructor(device):
                 "input_channels": 1,
                 "dimension": dimension,
                 "nr_latent_channels": random.randint(4, 8),
-                "activation_fn": torch.nn.ReLU(),
+                "activation_fn": "relu",
                 "nr_downsamples": random.randint(2, 3),
                 "nr_tsteps": random.randint(2, 4),
             }
@@ -310,7 +310,7 @@ def test_conv_rnn_seq2seq_constructor(device):
             input_channels=1,
             dimension=4,
             nr_latent_channels=4,
-            activation_fn=torch.nn.ReLU(),
+            activation_fn="relu",
             nr_downsamples=2,
             nr_tsteps=2,
         ).to(device)

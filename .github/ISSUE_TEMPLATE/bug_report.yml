@@ -16,7 +16,7 @@
 name: Bug Report
 description: File a bug report for Modulus (Core)
 title: "🐛[BUG]: "
-labels: ["bug"]
+labels: ["bug", "? - Needs Triage"]
 
 body:
   - type: markdown
