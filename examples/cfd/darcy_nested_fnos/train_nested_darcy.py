@@ -132,8 +132,10 @@ class SetUpInfrastructure:
             layer_size=model_cfg.decoder.layer_size,
         )
         self.model = FNO(
-            decoder_net=decoder,
             in_channels=model_cfg.fno.in_channels,
+            out_channels=model_cfg.decoder.out_features,
+            decoder_layers=model_cfg.decoder.layers,
+            decoder_layer_size=model_cfg.decoder.layer_size,
             dimension=model_cfg.fno.dimension,
             latent_channels=model_cfg.fno.latent_channels,
             num_fno_layers=model_cfg.fno.fno_layers,
