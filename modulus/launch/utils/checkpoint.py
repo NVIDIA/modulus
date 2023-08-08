@@ -38,6 +38,7 @@ def _get_checkpoint_filename(
     base_name: str = "checkpoint",
     index: Union[int, None] = None,
     saving: bool = False,
+    model_type: str = "mdlus",
 ) -> str:
     """Gets the file name /path of checkpoint
 
@@ -58,6 +59,9 @@ def _get_checkpoint_filename(
         Checkpoint index, by default None
     saving : bool, optional
         Get filename for saving a new checkpoint, by default False
+    model_type : str
+        Model type, by default "mdlus" for Modulus models and "pt" for PyTorch models
+
 
     Returns
     -------
@@ -77,14 +81,20 @@ def _get_checkpoint_filename(
     checkpoint_filename = str(
         Path(path).resolve() / f"{base_name}.{model_parallel_rank}"
     )
+
+    # File extension for Modulus models or PyTorch models
+    file_extension = ".mdlus" if model_type == "mdlus" else ".pt"
+
     # If epoch is provided load that file
     if index is not None:
         checkpoint_filename = checkpoint_filename + f".{index}"
-        checkpoint_filename += ".pt"
+        checkpoint_filename += file_extension
     # Otherwise try loading the latest epoch or rolling checkpoint
     else:
         file_names = []
-        for fname in glob.glob(checkpoint_filename + "*.pt", recursive=False):
+        for fname in glob.glob(
+            checkpoint_filename + "*" + file_extension, recursive=False
+        ):
             file_names.append(Path(fname).name)
 
         if len(file_names) > 0:
@@ -92,7 +102,13 @@ def _get_checkpoint_filename(
             # This is the most likely line to error since it will fail with
             # invalid checkpoint names
             file_idx = [
-                int(re.sub(f"^{base_name}.{model_parallel_rank}.|.pt", "", fname))
+                int(
+                    re.sub(
+                        f"^{base_name}.{model_parallel_rank}.|" + file_extension,
+                        "",
+                        fname,
+                    )
+                )
                 for fname in file_names
             ]
             file_idx.sort()
@@ -101,9 +117,9 @@ def _get_checkpoint_filename(
                 checkpoint_filename = checkpoint_filename + f".{file_idx[-1]+1}"
             else:
                 checkpoint_filename = checkpoint_filename + f".{file_idx[-1]}"
-            checkpoint_filename += ".pt"
+            checkpoint_filename += file_extension
         else:
-            checkpoint_filename += ".0.pt"
+            checkpoint_filename += ".0" + file_extension
 
     return checkpoint_filename
 
@@ -163,7 +179,7 @@ def save_checkpoint(
     """Training checkpoint saving utility
 
     This will save a training checkpoint in the provided path following the file naming
-    convention "checkpoint.{model parallel id}.{epoch/index}.pt". The load checkpoint
+    convention "checkpoint.{model parallel id}.{epoch/index}.mdlus". The load checkpoint
     method in Modulus core can then be used to read this file.
 
     Parameters
@@ -196,8 +212,14 @@ def save_checkpoint(
             models = [models]
         models = _unique_model_names(models)
         for name, model in models.items():
+            # Get model type
+            model_type = "mdlus" if isinstance(model, modulus.models.Module) else "pt"
+
             # Get full file path / name
-            file_name = _get_checkpoint_filename(path, name, index=epoch, saving=True)
+            file_name = _get_checkpoint_filename(
+                path, name, index=epoch, saving=True, model_type=model_type
+            )
+
             # Save state dictionary
             if isinstance(model, modulus.models.Module):
                 model.save(file_name)
@@ -223,7 +245,9 @@ def save_checkpoint(
         checkpoint_dict["static_capture_state_dict"] = _StaticCapture.state_dict()
 
     # Output file name
-    output_filename = _get_checkpoint_filename(path, index=epoch, saving=True)
+    output_filename = _get_checkpoint_filename(
+        path, index=epoch, saving=True, model_type="pt"
+    )
     if epoch:
         checkpoint_dict["epoch"] = epoch
 
@@ -287,8 +311,13 @@ def load_checkpoint(
             models = [models]
         models = _unique_model_names(models)
         for name, model in models.items():
+            # Get model type
+            model_type = "mdlus" if isinstance(model, modulus.models.Module) else "pt"
+
             # Get full file path / name
-            file_name = _get_checkpoint_filename(path, name, index=epoch)
+            file_name = _get_checkpoint_filename(
+                path, name, index=epoch, model_type=model_type
+            )
             if not Path(file_name).exists():
                 checkpoint_logging.error(
                     f"Could not find valid model file {file_name}, skipping load"
@@ -305,7 +334,7 @@ def load_checkpoint(
             )
 
     # == Loading training checkpoint ==
-    checkpoint_filename = _get_checkpoint_filename(path, index=epoch)
+    checkpoint_filename = _get_checkpoint_filename(path, index=epoch, model_type="pt")
     if not Path(checkpoint_filename).is_file():
         checkpoint_logging.warning(
             "Could not find valid checkpoint file, skipping load"
