@@ -12,5 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .afno import AFNO
-from .distributed import DistributedAFNO
+import pytest
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--multigpu", action="store_true", default=False, help="run multigpu tests"
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "multigpu: mark test as multigpu to run")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--multigpu") and not config.getoption("-m"):
+        skip_multigpu = pytest.mark.skip(reason="need --multigpu option to run")
+        for item in items:
+            if "multigpu" in item.keywords:
+                item.add_marker(skip_multigpu)
