@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
+from torch.nn.modules.container import Sequential
 from torch.utils.checkpoint import checkpoint
 from torch.cuda import amp
 import math
@@ -24,6 +25,7 @@ from torch_harmonics import *
 from modulus.models.sfno.contractions import *
 from modulus.models.sfno.activations import *
 from modulus.models.sfno.initialization import trunc_normal_
+from modulus.models.layers import get_activation
 
 
 @torch.jit.script
@@ -94,6 +96,34 @@ class PatchEmbed(nn.Module):
         return x
 
 
+class EncoderDecoder(nn.Module):
+    """
+    Basic Encoder/Decoder
+    """
+
+    def __init__(
+        self,
+        num_layers,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        act,
+    ):  # pragma: no cover
+        super(EncoderDecoder, self).__init__()
+
+        encoder_modules = []
+        current_dim = input_dim
+        for i in range(num_layers):
+            encoder_modules.append(nn.Conv2d(current_dim, hidden_dim, 1, bias=True))
+            encoder_modules.append(get_activation(act))
+            current_dim = hidden_dim
+        encoder_modules.append(nn.Conv2d(current_dim, output_dim, 1, bias=False))
+        self.fwd = nn.Sequential(*encoder_modules)
+
+    def forward(self, x):
+        return self.fwd(x)
+
+
 class MLP(nn.Module):
     """
     Basic CNN with support for gradient checkpointing
@@ -104,10 +134,11 @@ class MLP(nn.Module):
         in_features,
         hidden_features=None,
         out_features=None,
-        act_layer=nn.GELU,
+        act_layer="gelu",
         output_bias=True,
         drop_rate=0.0,
         checkpointing=0,
+        **kwargs,
     ):  # pragma: no cover
         super(MLP, self).__init__()
         self.checkpointing = checkpointing
@@ -115,15 +146,13 @@ class MLP(nn.Module):
         hidden_features = hidden_features or in_features
 
         fc1 = nn.Conv2d(in_features, hidden_features, 1, bias=True)
-        act = act_layer()
+        act = get_activation(act_layer)
         fc2 = nn.Conv2d(hidden_features, out_features, 1, bias=output_bias)
         if drop_rate > 0.0:
             drop = nn.Dropout(drop_rate)
             self.fwd = nn.Sequential(fc1, act, drop, fc2, drop)
         else:
             self.fwd = nn.Sequential(fc1, act, fc2)
-
-        # by default, all weights are shared
 
     @torch.jit.ignore
     def checkpoint_forward(self, x):  # pragma: no cover
@@ -206,23 +235,21 @@ class SpectralConv2d(nn.Module):
         self,
         forward_transform,
         inverse_transform,
-        hidden_size,
-        sparsity_threshold=0.0,
+        in_channels,
+        out_channels,
+        scale="auto",
         hard_thresholding_fraction=1,
-        use_complex_kernels=False,
         compression=None,
         rank=0,
         bias=False,
     ):  # pragma: no cover
         super(SpectralConv2d, self).__init__()
 
-        self.hidden_size = hidden_size
-        self.sparsity_threshold = sparsity_threshold
+        if scale == "auto":
+            scale = 1 / (in_channels * out_channels)
+
         self.hard_thresholding_fraction = hard_thresholding_fraction
-        self.scale = 1 / hidden_size**2
-        self.contract_handle = (
-            compl_contract2d_fwd_c if use_complex_kernels else compl_contract2d_fwd
-        )
+        self.contract_handle = _contract_diagonal
 
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
@@ -233,42 +260,41 @@ class SpectralConv2d(nn.Module):
         self.modes_lat = int(modes_lat * self.hard_thresholding_fraction)
         self.modes_lon = int(modes_lon * self.hard_thresholding_fraction)
 
+        self.scale_residual = (
+            self.forward_transform.nlat != self.inverse_transform.nlat
+        ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
         # new simple linear layer
         self.w = nn.Parameter(
-            self.scale
-            * torch.randn(
-                self.hidden_size, self.hidden_size, self.modes_lat, self.modes_lon, 2
-            )
+            scale
+            * torch.randn(in_channels, out_channels, self.modes_lat, self.modes_lon, 2)
         )
         # optional bias
         if bias:
             self.b = nn.Parameter(
-                self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
+                scale * torch.randn(1, out_channels, *self.output_dims)
             )
 
     def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
-        # x = x.float()
         B, C, H, W = x.shape
+
+        if not self.scale_residual:
+            residual = x
 
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
             x = self.forward_transform(x)
+            if self.scale_residual:
+                x = x.contiguous()
+                residual = self.inverse_transform(x)
+                residual = residual.to(dtype)
             x = torch.view_as_real(x)
             x = x.to(dtype)
 
         # do spectral conv
-        modes = torch.zeros(x.shape, device=x.device)
-
-        # modes[:, :, :self.modes_lat,  :self.modes_lon, :] = self.contract_handle(x[:, :, :self.modes_lat,  :self.modes_lon, :], self.wh)
-        # modes[:, :, -self.modes_lat:, :self.modes_lon, :] = self.contract_handle(x[:, :, -self.modes_lat:, :self.modes_lon, :], self.wl)
         modes = self.contract_handle(x, self.w)
 
-        # finalize
-        x = F.softshrink(modes, lambd=self.sparsity_threshold)
-        x = torch.view_as_complex(x)
-
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
             x = torch.view_as_complex(x)
@@ -279,102 +305,7 @@ class SpectralConv2d(nn.Module):
         if hasattr(self, "b"):
             x = x + self.b
 
-        return x
-
-
-class SpectralConvS2(nn.Module):
-    """
-    Spectral Convolution as utilized in
-    """
-
-    def __init__(
-        self,
-        forward_transform,
-        inverse_transform,
-        hidden_size,
-        sparsity_threshold=0.0,
-        use_complex_kernels=False,
-        compression=None,
-        rank=128,
-        bias=False,
-    ):  # pragma: no cover
-        super(SpectralConvS2, self).__init__()
-
-        self.hidden_size = hidden_size
-        self.sparsity_threshold = sparsity_threshold
-        self.scale = 0.02
-
-        self.forward_transform = forward_transform
-        self.inverse_transform = inverse_transform
-
-        self.modes_lat = self.forward_transform.lmax
-        self.modes_lon = self.forward_transform.mmax
-
-        assert self.inverse_transform.lmax == self.modes_lat
-        assert self.inverse_transform.mmax == self.modes_lon
-
-        # remember the lower triangular indices
-        ii, jj = torch.tril_indices(self.modes_lat, self.modes_lon)
-        self.register_buffer("ii", ii)
-        self.register_buffer("jj", jj)
-
-        if compression == "tt":
-            self.rank = rank
-            # tensortrain coefficients
-            g1 = nn.Parameter(self.scale * torch.randn(self.hidden_size, self.rank, 2))
-            g2 = nn.Parameter(
-                self.scale * torch.randn(self.rank, self.hidden_size, self.rank, 2)
-            )
-            g3 = nn.Parameter(self.scale * torch.randn(self.rank, len(ii), 2))
-            self.w = nn.ParameterList([g1, g2, g3])
-
-            self.contract_handle = (
-                contract_tt  # if use_complex_kernels else raise(NotImplementedError)
-            )
-        else:
-            self.w = nn.Parameter(
-                self.scale * torch.randn(self.hidden_size, self.hidden_size, len(ii), 2)
-            )
-            self.contract_handle = (
-                compl_contract_fwd_c if use_complex_kernels else compl_contract_fwd
-            )
-
-        if bias:
-            self.b = nn.Parameter(
-                self.scale * torch.randn(1, self.hidden_size, *self.output_dims)
-            )
-
-    def forward(self, x):  # pragma: no cover
-        dtype = x.dtype
-        # x = x.float()
-        B, C, H, W = x.shape
-
-        with amp.autocast(enabled=False):
-            x = x.to(torch.float32)
-            x = x.contiguous()
-            x = self.forward_transform(x)
-            x = torch.view_as_real(x)
-            x = x.to(dtype)
-
-        # do spectral conv
-        modes = torch.zeros(x.shape, device=x.device)
-        modes[:, :, self.ii, self.jj, :] = self.contract_handle(
-            x[:, :, self.ii, self.jj, :], self.w
-        )
-
-        # finalize
-        x = F.softshrink(modes, lambd=self.sparsity_threshold)
-
-        with amp.autocast(enabled=False):
-            x = x.to(torch.float32)
-            x = torch.view_as_complex(x)
-            x = self.inverse_transform(x)
-            x = x.to(dtype)
-
-        if hasattr(self, "b"):
-            x = x + self.b
-
-        return x
+        return x, residual
 
 
 class SpectralAttention2d(nn.Module):
@@ -412,11 +343,15 @@ class SpectralAttention2d(nn.Module):
         self.modes_lon = forward_transform.mmax
 
         # only storing the forward handle to be able to call it
-        self.forward_transform = forward_transform.forward
-        self.inverse_transform = inverse_transform.forward
+        self.forward_transform = forward_transform
+        self.inverse_transform = inverse_transform
 
         assert inverse_transform.lmax == self.modes_lat
         assert inverse_transform.mmax == self.modes_lon
+
+        self.scale_residual = (
+            self.forward_transform.nlat != self.inverse_transform.nlat
+        ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
 
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
@@ -465,13 +400,19 @@ class SpectralAttention2d(nn.Module):
     def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
-        # x = x.to(torch.float32)
+
+        if not self.scale_residual:
+            residual = x
 
         # FWD transform
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
             x = x.contiguous()
             x = self.forward_transform(x)
+            if self.scale_residual:
+                x = x.contiguous()
+                residual = self.inverse_transform(x)
+                residual = residual.to(dtype)
             x = torch.view_as_real(x)
 
         # MLP
@@ -484,7 +425,7 @@ class SpectralAttention2d(nn.Module):
             x = self.inverse_transform(x)
             x = x.to(dtype)
 
-        return x
+        return x, residual
 
 
 class SpectralAttentionS2(nn.Module):
@@ -500,7 +441,6 @@ class SpectralAttentionS2(nn.Module):
         sparsity_threshold=0.0,
         hidden_size_factor=2,
         use_complex_network=True,
-        use_complex_kernels=False,
         complex_activation="real",
         bias=False,
         spectral_layers=1,
@@ -513,26 +453,28 @@ class SpectralAttentionS2(nn.Module):
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
         # self.mul_add_handle = compl_muladd1d_fwd_c if use_complex_kernels else compl_muladd1d_fwd
-        self.mul_add_handle = (
-            compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
-        )
+        self.mul_add_handle = compl_muladd2d_fwd
         # self.mul_handle = compl_mul1d_fwd_c if use_complex_kernels else compl_mul1d_fwd
-        self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd
+        self.mul_handle = compl_mul2d_fwd
         self.spectral_layers = spectral_layers
 
         self.modes_lat = forward_transform.lmax
         self.modes_lon = forward_transform.mmax
 
         # only storing the forward handle to be able to call it
-        self.forward_transform = forward_transform.forward
-        self.inverse_transform = inverse_transform.forward
+        self.forward_transform = forward_transform
+        self.inverse_transform = inverse_transform
 
         assert inverse_transform.lmax == self.modes_lat
         assert inverse_transform.mmax == self.modes_lon
 
+        self.scale_residual = (
+            (self.forward_transform.nlat != self.inverse_transform.nlat)
+            or (self.forward_transform.nlon != self.inverse_transform.nlon)
+            or (self.forward_transform.grid != self.inverse_transform.grid)
+        )
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
-        # w = [self.scale * torch.randn(self.embed_dim + 4*self.embed_freqs, self.hidden_size, 2)]
         for l in range(1, self.spectral_layers):
             w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
         self.w = nn.ParameterList(w)
@@ -577,13 +519,19 @@ class SpectralAttentionS2(nn.Module):
     def forward(self, x):  # pragma: no cover
 
         dtype = x.dtype
-        # x = x.to(torch.float32)
+
+        if not self.scale_residual:
+            residual = x
 
         # FWD transform
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
             x = x.contiguous()
             x = self.forward_transform(x)
+            if self.scale_residual:
+                x = x.contiguous()
+                residual = self.inverse_transform(x)
+                residual = residual.to(dtype)
             x = torch.view_as_real(x)
 
         # MLP
@@ -596,4 +544,4 @@ class SpectralAttentionS2(nn.Module):
             x = self.inverse_transform(x)
             x = x.to(dtype)
 
-        return x
+        return x, residual

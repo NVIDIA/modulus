@@ -33,11 +33,13 @@ except:
     )
 from torch.nn import functional as F
 
+from .utils import read_vtp_file, save_json, load_json
+
 # Hide GPU from visible devices for TF
 tf.config.set_visible_devices([], "GPU")
 
 
-class MGNDataset(DGLDataset):
+class VortexSheddingDataset(DGLDataset):
     """In-memory MeshGraphNet Dataset for stationary mesh
     Notes:
         - This dataset prepares and processes the data available in MeshGraphNet's repo:
@@ -115,7 +117,7 @@ class MGNDataset(DGLDataset):
         if self.split == "train":
             self.edge_stats = self._get_edge_stats()
         else:
-            self.edge_stats = self._load_json("edge_stats.json")
+            self.edge_stats = load_json("edge_stats.json")
 
         # normalize edge features
         for i in range(num_samples):
@@ -151,7 +153,7 @@ class MGNDataset(DGLDataset):
         if self.split == "train":
             self.node_stats = self._get_node_stats()
         else:
-            self.node_stats = self._load_json("node_stats.json")
+            self.node_stats = load_json("node_stats.json")
 
         # normalize node features
         for i in range(num_samples):
@@ -217,7 +219,7 @@ class MGNDataset(DGLDataset):
         stats.pop("edge_meansqr")
 
         # save to file
-        self._save_json(stats, "edge_stats.json")
+        save_json(stats, "edge_stats.json")
         return stats
 
     def _get_node_stats(self):
@@ -274,7 +276,7 @@ class MGNDataset(DGLDataset):
         stats.pop("velocity_diff_meansqr")
 
         # save to file
-        self._save_json(stats, "node_stats.json")
+        save_json(stats, "node_stats.json")
         return stats
 
     def _load_tf_data(self, path, split):
@@ -367,19 +369,6 @@ class MGNDataset(DGLDataset):
     @staticmethod
     def _push_forward_diff(invar):
         return torch.tensor(invar[1:] - invar[0:-1], dtype=torch.float)
-
-    @staticmethod
-    def _save_json(var, file):
-        var_list = {k: v.numpy().tolist() for k, v in var.items()}
-        with open(file, "w") as f:
-            json.dump(var_list, f)
-
-    @staticmethod
-    def _load_json(file):
-        with open(file, "r") as f:
-            var_list = json.load(f)
-        var = {k: torch.tensor(v, dtype=torch.float) for k, v in var_list.items()}
-        return var
 
     @staticmethod
     def _get_rollout_mask(node_type):

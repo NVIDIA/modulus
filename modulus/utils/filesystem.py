@@ -19,7 +19,7 @@ import builtins
 import urllib.request
 import os
 import hashlib
-import subprocess
+import requests
 
 import logging
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 try:
     LOCAL_CACHE = os.environ["LOCAL_CACHE"]
 except KeyError:
-    LOCAL_CACHE = os.environ["HOME"] + "/.cache/modulus"
+    LOCAL_CACHE = os.environ["HOME"] + "/.cache"
 
 
 def _cache_fs(fs):
@@ -55,15 +55,16 @@ def _download_cached(path: str, recursive: bool = False) -> str:
     if not os.path.exists(cache_path):
         logger.debug("Downloading %s to cache: %s", path, cache_path)
         if path.startswith("s3://"):
-            if recursive:
-                subprocess.check_call(
-                    ["aws", "s3", "cp", path, cache_path, "--recursive"]
-                )
-            else:
-                subprocess.check_call(["aws", "s3", "cp", path, cache_path])
+            fs = _get_fs(path)
+            fs.get(path, cache_path, recursive=recursive)
         elif url.scheme == "http":
+            # urllib.request.urlretrieve(path, cache_path)
             # TODO: Check if this supports directory fetches
-            urllib.request.urlretrieve(path, cache_path)
+            response = requests.get(path, stream=True, timeout=5)
+            with open(cache_path, "wb") as output:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        output.write(chunk)
         elif url.scheme == "file":
             path = os.path.join(url.netloc, url.path)
             return path

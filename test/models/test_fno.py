@@ -22,20 +22,16 @@ from . import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_forward(device, dimension):
     """Test FNO forward pass"""
     torch.manual_seed(0)
     # Construct FNO model
-    decoder = FullyConnected(
-        in_features=32,
-        out_features=2,
-        num_layers=1,
-        layer_size=8,
-    )
     model = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=1,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=32,
         num_fno_layers=4,
@@ -48,8 +44,10 @@ def test_fno_forward(device, dimension):
         invar = torch.randn(bsize, 2, 16).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 16, 16).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 16, 16, 16).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 16, 16, 16, 16).to(device)
 
     assert common.validate_forward_accuracy(
         model, (invar,), file_name=f"fno{dimension}d_output.pth", atol=1e-3
@@ -61,19 +59,15 @@ def test_fno_constructor(device):
     """Test FNO constructor options"""
 
     out_features = random.randint(1, 8)
-    decoder = FullyConnected(
-        in_features=32,
-        out_features=out_features,
-        num_layers=1,
-        layer_size=8,
-    )
     # Define dictionary of constructor args
     arg_list = []
-    for dimension in [1, 2, 3]:
+    for dimension in [1, 2, 3, 4]:
         arg_list.append(
             {
-                "decoder_net": decoder,
                 "in_channels": random.randint(1, 4),
+                "out_channels": out_features,
+                "decoder_layers": 1,
+                "decoder_layer_size": 8,
                 "dimension": dimension,
                 "latent_channels": 32,
                 "num_fno_layers": 2,
@@ -92,8 +86,10 @@ def test_fno_constructor(device):
             invar = torch.randn(bsize, kw_args["in_channels"], 8).to(device)
         elif kw_args["dimension"] == 2:
             invar = torch.randn(bsize, kw_args["in_channels"], 8, 8).to(device)
-        else:
+        elif kw_args["dimension"] == 3:
             invar = torch.randn(bsize, kw_args["in_channels"], 8, 8, 8).to(device)
+        else:
+            invar = torch.randn(bsize, kw_args["in_channels"], 8, 8, 8, 8).to(device)
 
         outvar = model(invar)
         assert outvar.shape == (bsize, out_features, *invar.shape[2:])
@@ -101,9 +97,11 @@ def test_fno_constructor(device):
     # Also test failure case
     try:
         model = FNO(
-            decoder_net=decoder,
             in_channels=2,
-            dimension=4,
+            out_channels=2,
+            decoder_layers=1,
+            decoder_layer_size=8,
+            dimension=5,
             latent_channels=32,
             num_fno_layers=4,
             num_fno_modes=4,
@@ -115,21 +113,17 @@ def test_fno_constructor(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_optims(device, dimension):
     """Test FNO optimizations"""
 
     def setup_model():
         """Setups up fresh FNO model and inputs for each optim test"""
-        decoder = FullyConnected(
-            in_features=4,
-            out_features=2,
-            num_layers=1,
-            layer_size=8,
-        )
         model = FNO(
-            decoder_net=decoder,
             in_channels=2,
+            out_channels=2,
+            decoder_layers=1,
+            decoder_layer_size=8,
             dimension=dimension,
             latent_channels=4,
             num_fno_layers=4,
@@ -142,8 +136,10 @@ def test_fno_optims(device, dimension):
             invar = torch.randn(bsize, 2, 8).to(device)
         elif dimension == 2:
             invar = torch.randn(bsize, 2, 8, 8).to(device)
-        else:
+        elif dimension == 3:
             invar = torch.randn(bsize, 2, 8, 8, 8).to(device)
+        else:
+            invar = torch.randn(bsize, 2, 8, 8, 8, 8).to(device)
 
         return model, invar
 
@@ -163,19 +159,15 @@ def test_fno_optims(device, dimension):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fno_checkpoint(device, dimension):
     """Test FNO checkpoint save/load"""
     # Construct FNO models
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model_1 = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
@@ -183,15 +175,11 @@ def test_fno_checkpoint(device, dimension):
         padding=0,
     ).to(device)
 
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model_2 = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
@@ -204,27 +192,25 @@ def test_fno_checkpoint(device, dimension):
         invar = torch.randn(bsize, 2, 8).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 8, 8).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 8, 8, 8).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 8, 8, 8, 8).to(device)
 
     assert common.validate_checkpoint(model_1, model_2, (invar,))
 
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("dimension", [1, 2, 3, 4])
 def test_fnodeploy(device, dimension):
     """Test FNO deployment support"""
     # Construct AFNO model
-    decoder = FullyConnected(
-        in_features=4,
-        out_features=2,
-        num_layers=2,
-        layer_size=8,
-    )
     model = FNO(
-        decoder_net=decoder,
         in_channels=2,
+        out_channels=2,
+        decoder_layers=2,
+        decoder_layer_size=8,
         dimension=dimension,
         latent_channels=4,
         num_fno_layers=2,
@@ -238,8 +224,10 @@ def test_fnodeploy(device, dimension):
         invar = torch.randn(bsize, 2, 4).to(device)
     elif dimension == 2:
         invar = torch.randn(bsize, 2, 4, 4).to(device)
-    else:
+    elif dimension == 3:
         invar = torch.randn(bsize, 2, 4, 4, 4).to(device)
+    else:
+        invar = torch.randn(bsize, 2, 4, 4, 4, 4).to(device)
 
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))

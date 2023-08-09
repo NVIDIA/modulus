@@ -19,6 +19,7 @@ from torch import Tensor
 from typing import Any
 from dataclasses import dataclass
 
+from modulus.models.layers import get_activation
 from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.embedder import (
     GraphCastEncoderEmbedder,
@@ -79,8 +80,8 @@ class GraphCastNet(Module):
         Number of neurons in each hidden layer, by default 512
     aggregation : str, optional
         Message passing aggregation method ("sum", "mean"), by default "sum"
-    activation_fn : nn.Module, optional
-        Type of activation function, by default nn.SiLU()
+    activation_fn : str, optional
+        Type of activation function, by default "silu"
     norm_type : str, optional
         Normalization type, by default "LayerNorm"
     use_cugraphops_encoder : bool, default=False
@@ -121,7 +122,7 @@ class GraphCastNet(Module):
         hidden_layers: int = 1,
         hidden_dim: int = 512,
         aggregation: str = "sum",
-        activation_fn: nn.Module = nn.SiLU(),
+        activation_fn: str = "silu",
         norm_type: str = "LayerNorm",
         use_cugraphops_encoder: bool = False,
         use_cugraphops_processor: bool = False,
@@ -131,12 +132,6 @@ class GraphCastNet(Module):
     ):
         super().__init__(meta=MetaData())
 
-        # check the input resolution
-        if input_res != (721, 1440):
-            raise NotImplementedError(
-                "Currently only native ERA5 input resolution (721, 1440) is supported"
-            )
-
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
         self.longitudes = torch.linspace(-180, 180, steps=input_res[1] + 1)[1:]
@@ -144,6 +139,9 @@ class GraphCastNet(Module):
             torch.meshgrid(self.latitudes, self.longitudes, indexing="ij"), dim=-1
         )
         self.has_static_data = static_dataset_path is not None
+
+        # Set activation function
+        activation_fn = get_activation(activation_fn)
 
         # Get the static data
         if self.has_static_data:
