@@ -56,7 +56,7 @@ class MiniNetwork(torch.nn.Module):
 
 
 def check_cuda_graphs(
-    datapipe: modulus.Datapipe,
+    datapipe: "modulus.Datapipe",
     input_fn: Union[Callable, None] = None,
     iterations: int = 5,
     warmup_length: int = 3,

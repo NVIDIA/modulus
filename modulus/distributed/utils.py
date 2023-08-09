@@ -193,7 +193,7 @@ def _split(input_, dim_, group=None):
 
 
 def _gather(input_, dim_, group=None):
-    """Gather tensors and concatinate along the last dimension."""
+    """Gather tensors and concatenate along the specified dimension."""
     # get input format
     input_format = get_memory_format(input_)
 

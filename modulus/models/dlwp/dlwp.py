@@ -19,6 +19,7 @@ import torch.nn as nn
 from dataclasses import dataclass
 
 import modulus
+from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from typing import Tuple, Union
@@ -212,7 +213,7 @@ class DLWP(Module):
     nr_initial_channels : int
         Number of channels in the initial convolution. This governs the overall channels
         in the model.
-    activation_fn : nn.Module
+    activation_fn : str
         Activation function for the convolutions
     depth : int
         Depth for the U-Net
@@ -242,7 +243,7 @@ class DLWP(Module):
         nr_input_channels: int,
         nr_output_channels: int,
         nr_initial_channels: int = 64,
-        activation_fn: nn.Module = nn.LeakyReLU(0.1),
+        activation_fn: str = "leaky_relu",
         depth: int = 2,
         clamp_activation: Tuple[Union[float, int, None], Union[float, int, None]] = (
             None,
@@ -254,7 +255,7 @@ class DLWP(Module):
         self.nr_input_channels = nr_input_channels
         self.nr_output_channels = nr_output_channels
         self.nr_initial_channels = nr_initial_channels
-        self.activation_fn = activation_fn
+        self.activation_fn = get_activation(activation_fn)
         self.depth = depth
         self.clamp_activation = clamp_activation
 
