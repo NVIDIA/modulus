@@ -25,6 +25,7 @@ from torch_harmonics import *
 from modulus.experimental.models.sfno.contractions import *
 from modulus.experimental.models.sfno.activations import *
 from modulus.experimental.models.sfno.initialization import trunc_normal_
+from modulus.models.layers import get_activation
 
 
 @torch.jit.script
@@ -112,9 +113,10 @@ class EncoderDecoder(nn.Module):
 
         encoder_modules = []
         current_dim = input_dim
+        act = get_activation(act)
         for i in range(num_layers):
             encoder_modules.append(nn.Conv2d(current_dim, hidden_dim, 1, bias=True))
-            encoder_modules.append(act())
+            encoder_modules.append(act)
             current_dim = hidden_dim
         encoder_modules.append(nn.Conv2d(current_dim, output_dim, 1, bias=False))
         self.fwd = nn.Sequential(*encoder_modules)
@@ -133,7 +135,7 @@ class MLP(nn.Module):
         in_features,
         hidden_features=None,
         out_features=None,
-        act_layer=nn.GELU,
+        act_layer="gelu",
         output_bias=True,
         drop_rate=0.0,
         checkpointing=0,
@@ -145,7 +147,7 @@ class MLP(nn.Module):
         hidden_features = hidden_features or in_features
 
         fc1 = nn.Conv2d(in_features, hidden_features, 1, bias=True)
-        act = act_layer()
+        act = get_activation(act_layer)
         fc2 = nn.Conv2d(hidden_features, out_features, 1, bias=output_bias)
         if drop_rate > 0.0:
             drop = nn.Dropout(drop_rate)

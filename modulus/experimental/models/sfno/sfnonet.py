@@ -20,6 +20,8 @@ from torch.cuda import amp
 from dataclasses import dataclass
 from typing import Any, List
 
+from modulus.models.layers import get_activation
+
 # helpers
 from modulus.experimental.models.sfno.layers import (
     trunc_normal_,
@@ -42,7 +44,7 @@ import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
 from modulus.experimental.models.sfno.layers import RealFFT2
-from modulus.utils.sfno.distributed.layers import (
+from modulus.experimental.utils.sfno.distributed.layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
     DistributedMLP,
@@ -172,7 +174,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         mlp_ratio=2.0,
         drop_rate=0.0,
         drop_path=0.0,
-        act_layer=nn.GELU,
+        act_layer="gelu",
         norm_layer=(nn.LayerNorm, nn.LayerNorm),
         sparsity_threshold=0.0,
         use_complex_kernels=True,
@@ -189,7 +191,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         spectral_layers=1,
         checkpointing=0,
     ):  # pragma: no cover
-        super(FourierNeuralOperatorBlock, self).__init__()
+        super().__init__()
 
         if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
             self.input_shape_loc = (
@@ -232,7 +234,7 @@ class FourierNeuralOperatorBlock(nn.Module):
             self.inner_skip = nn.Identity()
 
         if filter_type == "linear" or filter_type == "real linear":
-            self.act_layer = act_layer()
+            self.act_layer = get_activation(act_layer)
 
         # dropout
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -288,7 +290,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         return x
 
 
-class SphericalFourierNeuralOperatorNet(Module):
+class SFNO(Module):
     """
     Spherical Fourier Neural Operator Network
 
@@ -363,7 +365,7 @@ class SphericalFourierNeuralOperatorNet(Module):
 
     Example:
     --------
-    >>> from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
+    >>> from modulus.models.sfno.sfnonet import SFNO
     >>> model = SFNO(
     ...         inp_shape=(8, 16),
     ...         scale_factor=4,
@@ -416,7 +418,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         output_transform: bool = False,
         checkpointing: int = 0,
     ):  # pragma: no cover
-        super(SphericalFourierNeuralOperatorNet, self).__init__(meta=MetaData())
+        super().__init__(meta=MetaData())
 
         self.spectral_transform = spectral_transform
         self.grid = grid
@@ -569,16 +571,6 @@ class SphericalFourierNeuralOperatorNet(Module):
             self.inp_shape_eff = [self.trans_down.nlat, self.trans_down.nlon]
             self.h_loc = self.itrans.nlat
             self.w_loc = self.itrans.nlon
-
-        # determine activation function
-        if self.activation_function == "relu":
-            self.activation_function = nn.ReLU
-        elif self.activation_function == "gelu":
-            self.activation_function = nn.GELU
-        elif self.activation_function == "silu":
-            self.activation_function = nn.SiLU
-        else:
-            raise ValueError(f"Unknown activation function {self.activation_function}")
 
         # encoder
         if comm.get_size("matmul") > 1:
