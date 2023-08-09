@@ -16,6 +16,7 @@
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
+from typing import List, Optional
 from .manager import DistributedManager
 
 
@@ -90,9 +91,9 @@ def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
     ----------
     loss : float
         loss value
-    dst_rank : int, optional
+    dst_rank : int, Optional
         destination rank to gather to, by default 0
-    mean : bool, optional
+    mean : bool, Optional
         Calculate the mean of the losses gathered, by default True
 
     Raises
@@ -224,8 +225,9 @@ def all_gather_v_wrapper(
     tensor: torch.Tensor,
     sizes: List[int],
     dim: int = 0,
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed all_gather_v primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
@@ -237,7 +239,7 @@ def all_gather_v_wrapper(
     if comm_size == 1:
         return tensor
 
-    tensor_shape = tensor.shape
+    tensor_shape = list(tensor.shape)
     tensor_list = [None] * comm_size
 
     for src in range(comm_size):
@@ -260,8 +262,9 @@ def all_reduce_v_wrapper(
     sizes: List[int],
     dim: int = 0,
     use_fp32: bool = True,
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed all_reduce_v primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
@@ -270,7 +273,7 @@ def all_reduce_v_wrapper(
 
     global_size = sum(sizes)
 
-    tensor_shape = tensor.shape
+    tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
     tmp = [
         torch.empty(
@@ -278,12 +281,12 @@ def all_reduce_v_wrapper(
             dtype=tensor.dtype,
             device=tensor.device,
         )
-    ] for _ in range(comm_size)
-   
-    scatter_list = torch.split(tensor, sizes, dim=dim)
+        for _ in range(comm_size)
+    ]
+    scatter_list = list(torch.split(tensor, sizes, dim=dim))
 
     dist.all_to_all(tmp, scatter_list, group=group)
-    stack_dim = tensor.dim() + 1
+    stack_dim = tensor.dim()
     tmp = torch.stack(tmp, dim=stack_dim)
 
     if use_fp32:
@@ -302,8 +305,9 @@ def gather_v_wrapper(
     sizes: List[int],
     dim: int = 0,
     dst: int = 0,
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed gather_v primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
@@ -315,27 +319,41 @@ def gather_v_wrapper(
 
     if comm_size == 1:
         return tensor
-    
-    tensor_shape = tensor.shape
+
+    tensor_shape = list(tensor.shape)
     tensor_list = [None] * comm_size
 
     if rank == dst:
-        for src in range(comm_size):
-            tensor_shape[dim] = sizes[src]
-            tensor_list[src] = torch.empty(
-                tensor_shape,
-                device=tensor.device,
-                dtype=tensor.dtype,
-            ) 
+        for r in range(comm_size):
+            req_list = [None] * comm_size
+            if r == dst:
+                tensor_list[dst] = tensor
+            else:
+                tensor_shape[dim] = sizes[r]
+                tensor_list[r] = torch.empty(
+                    tensor_shape,
+                    device=tensor.device,
+                    dtype=tensor.dtype,
+                )
 
-    dist.gather(
-        tensor, 
-        tensor_list if rank == dst else None,
-        dst=dst,
-        group=group
-    )
+                req_list[r] = dist.irecv(tensor_list[r], src=r, group=group)
 
-    output = torch.cat(tensor_list, dim=dim)
+        for r in range(comm_size):
+            if r != dst:
+                req_list[r].wait()
+
+        output = torch.cat(tensor_list, dim=dim)
+
+    else:
+        req = dist.isend(tensor, dst=dst, group=group)
+        req.wait()
+
+        tensor_shape[dim] = sum(sizes)
+        output = torch.empty(
+            tensor_shape,
+            device=tensor.device,
+            dtype=tensor.dtype,
+        )
 
     return output
 
@@ -345,8 +363,9 @@ def scatter_v_wrapper(
     sizes: List[int],
     dim: int = 0,
     src: int = 0,
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of a distributed scatter_v primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
@@ -357,10 +376,10 @@ def scatter_v_wrapper(
     global_size = sum(sizes)
     local_size = sizes[rank]
 
-    assert global_size = tensor.size(dim)
+    assert global_size == tensor.size(dim)
 
-    tensor_shape = tensor.shape
-    tensor_shape[dim] = sizes[rank]    
+    tensor_shape = list(tensor.shape)
+    tensor_shape[dim] = sizes[rank]
     output = torch.empty(
         tensor_shape,
         dtype=tensor.dtype,
@@ -375,33 +394,39 @@ def scatter_v_wrapper(
         req_list = [None] * comm_size
         for r in range(comm_size):
             tensor_to_scatter_to_r = scatter_list[r]
-            req_list[r] = dist.isend(tensor_to_scatter_to_r, dst=r, group=group)
+            if r == src:
+                output = tensor_to_scatter_to_r
+            else:
+                req_list[r] = dist.isend(tensor_to_scatter_to_r, dst=r, group=group)
 
         for r in range(comm_size):
-            req_list[r].wait()
+            if r != src:
+                req_list[r].wait()
 
     else:
         req = dist.irecv(output, src=src, group=group)
         req.wait()
-    
+
     return output
 
 
-def idx_all_gather_wrapper(
+def indexed_all_gather_wrapper(
     tensor: torch.Tensor,
     scatter_indices: List[torch.Tensor],
     recv_sizes: List[int],
     send_sizes: List[int],
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-
-    # based on all_to_all_single and thus currently
-    # limitied to primitive along dim 0 
+    """implementation of the forward pass of a distributed indexed all_gather primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    tensor_shape = tensor.shape
+    assert len(recv_sizes) == comm_size
+    assert len(send_sizes) == comm_size
+    assert len(scatter_indices) == comm_size
+
+    tensor_shape = list(tensor.shape)
     tensor_shape[0] = sum(recv_sizes)
 
     scatter_indices = torch.cat(scatter_indices, dim=0)
@@ -412,35 +437,40 @@ def idx_all_gather_wrapper(
         device=tensor.device,
     )
     tensor_to_send = tensor[scatter_indices]
-    
+
     dist.all_to_all_single(
         tensor_to_recv,
         tensor_to_send,
         output_split_sizes=recv_sizes,
         input_split_sizes=send_sizes,
-        group=group
+        group=group,
     )
 
     return tensor_to_recv
 
 
-def idx_all_gather_wrapper_bwd(
+def indexed_all_gather_wrapper_bwd(
     tensor: torch.Tensor,
     scatter_indices: List[torch.Tensor],
     recv_sizes: List[int],
     send_sizes: List[int],
     tensor_dim0: int,
     use_fp32: bool = True,
-    group: optional[dist.ProcessGroup] = None,
+    group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
+    """implementation of the backward pass of a distributed indexed all_gather primitive"""
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
+    assert len(recv_sizes) == comm_size
+    assert len(send_sizes) == comm_size
+    assert len(scatter_indices) == comm_size
+
     scatter_indices = torch.cat(scatter_indices, dim=0)
 
-    tensor_shape = tensor.shape
-    tensor_shape[0] = sum(recv_sizes)
+    tensor_shape = list(tensor.shape)
+    tensor_shape[0] = sum(send_sizes)
     tensor_to_recv = torch.empty(
         tensor_shape,
         dtype=tensor.dtype,
@@ -449,7 +479,7 @@ def idx_all_gather_wrapper_bwd(
 
     dist.all_to_all_single(
         tensor_to_recv,
-        tensor_to_Send,
+        tensor,
         output_split_sizes=send_sizes,
         input_split_sizes=recv_sizes,
         group=group,
@@ -458,26 +488,22 @@ def idx_all_gather_wrapper_bwd(
     tensor_shape[0] = tensor_dim0
 
     if use_fp32:
-        out = torch.empty(
+        out = torch.zeros(
             tensor_shape,
             dtype=torch.float32,
-            device=torch.device,
+            device=tensor.device,
         )
 
         tensor_to_recv = tensor_to_recv.to(dtype=torch.float32)
 
     else:
-        out = torch.empty(
+        out = torch.zeros(
             tensor_shape,
             dtype=tensor.dtype,
             device=tensor.device,
-        )          
+        )
 
-    out.index_add_(
-        src=tensor_to_recv,
-        index=scatter_indices,
-        dim=0
-    )
+    out.index_add_(source=tensor_to_recv, index=scatter_indices, dim=0)
 
     if use_fp32:
         out = out.to(tensor.dtype)
