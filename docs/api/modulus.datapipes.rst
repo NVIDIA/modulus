@@ -25,6 +25,14 @@ Weather and climate datapipes
 Graph datapipes
 ---------------
 
-.. automodule:: modulus.datapipes.gnn.mgn_dataset
+.. automodule:: modulus.datapipes.gnn.vortex_shedding_dataset
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.datapipes.gnn.ahmed_body_dataset
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.datapipes.gnn.utils
     :members:
     :show-inheritance:
