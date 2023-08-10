@@ -92,6 +92,11 @@ class MGNRollout:
                 stats["velocity_diff_mean"],
                 stats["velocity_diff_std"],
             )
+            graph.ndata["y"][:, [2]] = self.dataset.denormalize(
+                graph.ndata["y"][:, [2]],
+                stats["pressure_mean"],
+                stats["pressure_std"],
+            )
 
             # inference step
             invar = graph.ndata["x"].clone()
