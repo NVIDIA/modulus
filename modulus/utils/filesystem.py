@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 try:
     LOCAL_CACHE = os.environ["LOCAL_CACHE"]
 except KeyError:
-    LOCAL_CACHE = os.environ["HOME"] + "/.cache"
+    LOCAL_CACHE = os.environ["HOME"] + "/.cache/modulus"
 
 
 def _cache_fs(fs):

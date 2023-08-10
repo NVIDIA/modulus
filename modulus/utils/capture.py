@@ -195,10 +195,10 @@ class _StaticCapture(object):
                 torch.cuda.synchronize()
                 if DistributedManager().distributed:
                     torch.distributed.barrier()
-                # TODO: temporary workaround till this issue is fixed:
-                # https://github.com/pytorch/pytorch/pull/104487#issuecomment-1638665876
-                delay = os.environ.get("MODULUS_CUDA_GRAPH_CAPTURE_DELAY", "10")
-                time.sleep(int(delay))
+                    # TODO: temporary workaround till this issue is fixed:
+                    # https://github.com/pytorch/pytorch/pull/104487#issuecomment-1638665876
+                    delay = os.environ.get("MODULUS_CUDA_GRAPH_CAPTURE_DELAY", "10")
+                    time.sleep(int(delay))
                 with torch.cuda.graph(self.graph):
                     output = self._amp_forward(*args, **kwargs)
                     self.output = output.detach()
