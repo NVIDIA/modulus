@@ -21,6 +21,7 @@ import importlib
 import tempfile
 import tarfile
 import pkg_resources
+import omegaconf
 from typing import Union, List, Dict, Any
 from pathlib import Path
 import torch.nn as nn
@@ -178,7 +179,7 @@ class Module(torch.nn.Module):
             torch.save(self.state_dict(), local_path / "model.pt")
 
             with open(local_path / "args.json", "w") as f:
-                json.dump(self._args, f)
+                json.dump(self._args, f, cls=OmegaConfEncoder)
 
             # Save the modulus version and git hash (if available)
             metadata_info = {
@@ -394,3 +395,12 @@ class Module(torch.nn.Module):
         for name, param in self.named_parameters():
             count += param.numel()
         return count
+
+
+class OmegaConfEncoder(json.JSONEncoder):
+    """Custom JSON encoder for OmegaConf objects"""
+
+    def default(self, obj):
+        if isinstance(obj, (omegaconf.ListConfig, omegaconf.DictConfig)):
+            return omegaconf.OmegaConf.to_container(obj, resolve=True)
+        return super().default(obj)
