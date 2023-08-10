@@ -48,7 +48,7 @@ to merge the changes from a branch of the fork into a selected branch of upstrea
     - Atleast one Modulus engineer will be assigned for the review.
 
 4. The PR will be accepted and the corresponding issue closed after adequate review and
-testing has been completed.
+testing has been completed. Note that every PR should have an open issue.
 
 ### Licensing Information
 

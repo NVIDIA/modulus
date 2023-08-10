@@ -12,6 +12,7 @@
 - [ ] The documentation is up to date with these changes.
 - [ ] The [CHANGELOG.md](https://github.com/NVIDIA/modulus/blob/main/CHANGELOG.md) is
 up to date with these changes.
+- [ ] The corresponding issue is linked to this PR (every PR should have an open issue).
 
 ## Dependencies
 
