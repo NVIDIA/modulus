@@ -47,8 +47,21 @@ def _get_fs(path):
 def _download_cached(path: str, recursive: bool = False) -> str:
     sha = hashlib.sha256(path.encode())
     filename = sha.hexdigest()
+    try:
+        os.makedirs(LOCAL_CACHE, exist_ok=True)
+    except PermissionError as error:
+        logger.error(
+            "Failed to create cache folder, check permissions or set a cache"
+            + " location using the LOCAL_CACHE enviroment variable"
+        )
+        raise error
+    except OSError as error:
+        logger.error(
+            "Failed to create cache folder, set a cache"
+            + " location using the LOCAL_CACHE enviroment variable"
+        )
+        raise error
 
-    os.makedirs(LOCAL_CACHE, exist_ok=True)
     cache_path = os.path.join(LOCAL_CACHE, filename)
 
     url = urllib.parse.urlparse(path)
