@@ -18,6 +18,7 @@ dependencies = [
     "certifi>=2023.7.22",
     "numpy>=1.22.4",
     "nvidia_dali_cuda110>=1.16.0",
+    "omegaconf==2.3.0",
     "pytest>=6.0.0",
     "ruamel.yaml>=0.17.22",
     "setuptools>=67.6.0",
