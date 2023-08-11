@@ -31,6 +31,7 @@ from modulus.registry import ModelRegistry
 from modulus.utils.filesystem import _get_fs, _download_cached
 from modulus.utils.json import OmegaConfEncoder
 
+
 class Module(torch.nn.Module):
     """The base class for all network models in Modulus.
 
