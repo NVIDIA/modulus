@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updating file system cache location to modulus folder
+
 ### Deprecated
 
 ### Removed
