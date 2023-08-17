@@ -227,14 +227,35 @@ def all_gather_v_wrapper(
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of a distributed all_gather_v primitive"""
+    """
+    Implements a distributed AllGatherV primitive. It is based
+    on the idea of a single global tensor which is distributed along
+    a specified dimension into chunks of variable size.
+    This primitive gathers all local tensors from each rank into the
+    full global tensor onto each rank.
+
+    Parameters
+    ----------
+    tensor : "torch.Tensor"
+        local tensor on each rank
+    sizes : List[int]
+        list of the sizes of each chunk on each rank along distributed dimension,
+        valid and set on each rank
+    dim : int, optional
+        dimension along which global tensor is distributed, by default 0
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        full global tensor, valid on each rank
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
     assert dim < tensor.dim()
-
-    global_size = sum(sizes)
 
     if comm_size == 1:
         return tensor
@@ -264,7 +285,37 @@ def all_reduce_v_wrapper(
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of a distributed all_reduce_v primitive"""
+    """
+    Implements a distributed AllReduceV primitive. It is based
+    on the idea of a single global tensor which which can be distributed
+    along a specified dimension into chunks of variable size.
+    This primitive assumes different global tensors of the same shape on each
+    rank. It then re-distributes chunks of all these tensors such that each rank
+    receives all corresponding parts of a global tensor. Each rank then sums up
+    the chunks after receiving it. By design, this primitive thus implements the
+    backward pass of the "all_gather_v" primitive. In this case, the result would
+    be a single global gradient tensor distributed onto different ranks.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        global tensor on each rank (different one on each rank)
+    sizes : List[int]
+        list of the sizes of each chunk on each rank along distributed dimension,
+        valid and set on each rank
+    dim : int, optional
+        dimension along which global tensor is distributed, by default 0
+    use_fp32 : bool, optional
+        flag to specify FP32 precision for the redcution, by default True
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        local tensor, i.e. result of reduction of all corresponding chunks
+        from all global tensors for each rank separately
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
@@ -307,53 +358,74 @@ def gather_v_wrapper(
     dst: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of a distributed gather_v primitive"""
+    """
+    Implements a distributed GatherV primitive. It is based
+    on the idea of a single global tensor which is distributed along
+    a specified dimension into chunks of variable size.
+    This primitive assumes such a distributed tensor and gathers all
+    local tensors from each rank into the full global tensor valid
+    on the specified destination rank.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        local tensor on each rank
+    sizes : List[int]
+        list of the sizes of each chunk on each rank along distributed dimension,
+        valid and set on each rank
+    dim : int, optional
+        dimension along which global tensor is distributed, by default 0
+    dst : int, optional
+        destination rank which contains the full global tensor after the operation, by default 0
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        full global tensor, valid on destination rank
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
     assert 0 <= dst < comm_size
     assert dim < tensor.dim()
-
-    global_size = sum(sizes)
+    assert tensor.size(dim) == sizes[rank]
 
     if comm_size == 1:
         return tensor
 
+    gather_list = [None] * comm_size
     tensor_shape = list(tensor.shape)
-    tensor_list = [None] * comm_size
 
+    for r in range(comm_size):
+        tensor_shape[dim] = sizes[r]
+        gather_list[r] = torch.empty(
+            tensor_shape,
+            dtype=tensor.dtype,
+            device=tensor.device,
+        )
+
+    # dist.scatter doesn't support tensors of different shape
+    # so this implementation is using explicit send/recv combinations
     if rank == dst:
+        req_list = [None] * comm_size
         for r in range(comm_size):
-            req_list = [None] * comm_size
             if r == dst:
-                tensor_list[dst] = tensor
+                gather_list[r] = tensor
             else:
-                tensor_shape[dim] = sizes[r]
-                tensor_list[r] = torch.empty(
-                    tensor_shape,
-                    device=tensor.device,
-                    dtype=tensor.dtype,
-                )
-
-                req_list[r] = dist.irecv(tensor_list[r], src=r, group=group)
+                req_list[r] = dist.irecv(gather_list[r], src=r, group=group)
 
         for r in range(comm_size):
             if r != dst:
                 req_list[r].wait()
 
-        output = torch.cat(tensor_list, dim=dim)
-
     else:
         req = dist.isend(tensor, dst=dst, group=group)
         req.wait()
 
-        tensor_shape[dim] = sum(sizes)
-        output = torch.empty(
-            tensor_shape,
-            device=tensor.device,
-            dtype=tensor.dtype,
-        )
+    output = torch.cat(gather_list, dim=dim)
 
     return output
 
@@ -365,18 +437,38 @@ def scatter_v_wrapper(
     src: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of a distributed scatter_v primitive"""
+    """
+    Implements a distributed ScatterV primitive. It is based
+    on the idea of a single global tensor which is distributed along
+    a specified dimension into chunks of variable size.
+    This primitive scatters the global tensor from a specified source rank
+    into local chunks onto each other rank.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        global tensor, valid on source rank
+    sizes : List[int]
+        list of the sizes of each chunk on each rank along distributed dimension,
+        valid and set each rank
+    dim : int, optional
+        dimension along which global tensor is distributed, by default 0
+    src : int, optional
+        source rank of primitive, i.e. rank of original full global tensor, by default 0
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        corresponding local part of the global tensor on each rank
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
     assert 0 <= src < comm_size
     assert dim < tensor.dim()
-
-    global_size = sum(sizes)
-    local_size = sizes[rank]
-
-    assert global_size == tensor.size(dim)
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
@@ -410,101 +502,145 @@ def scatter_v_wrapper(
     return output
 
 
-def indexed_all_gather_wrapper(
+def indexed_all_to_all_v_wrapper(
     tensor: torch.Tensor,
-    scatter_indices: List[torch.Tensor],
-    recv_sizes: List[int],
-    send_sizes: List[int],
+    indices: List[torch.Tensor],
+    sizes: List[List[int]],
+    dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of the forward pass of a distributed indexed all_gather primitive"""
+    """
+    Implements an indexed version of a distributed AllToAllV
+    primitive. It is based on the idea of a single global tensor which
+    is distributed along a specified dimension into chunks of variable size.
+    This primitive assumes a set of indices into this dimension which indicate
+    the corresponding slices sent to each other rank forming an indexed version
+    of an AllToAllV primitive.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        local part of global tensor on each rank
+    indices : List[torch.Tensor]
+        list of indices on each rank of slices being sent to
+        each other rank from this rank
+    sizes : List[List[int]]
+        number of indices each rank sends to each other rank,
+        valid and set on each rank, e.g. sizes[0][3] corresponds
+        to the number of slices rank 0 sends to rank 3
+    dim : int
+        dimension along which global tensor is distributed, by default 0
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        local result of primitive corresponding to indexed global tensor
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(recv_sizes) == comm_size
-    assert len(send_sizes) == comm_size
-    assert len(scatter_indices) == comm_size
+    assert len(sizes) == comm_size
+    assert len(sizes[rank]) == comm_size
+    assert len(indices) == comm_size
+    assert dim < tensor.dim()
 
-    tensor_shape = list(tensor.shape)
-    tensor_shape[0] = sum(recv_sizes)
+    indices = torch.cat(indices, dim=0)
+    tensor_to_send = torch.index_select(tensor, dim=dim, index=indices)
 
-    scatter_indices = torch.cat(scatter_indices, dim=0)
-
-    tensor_to_recv = torch.empty(
-        tensor_shape,
-        dtype=tensor.dtype,
-        device=tensor.device,
-    )
-    tensor_to_send = tensor[scatter_indices]
-
-    dist.all_to_all_single(
-        tensor_to_recv,
-        tensor_to_send,
-        output_split_sizes=recv_sizes,
-        input_split_sizes=send_sizes,
-        group=group,
-    )
+    recv_list = [None] * comm_size
+    for r in range(comm_size):
+        recv_list[r] = scatter_v_wrapper(
+            tensor_to_send,
+            sizes=sizes[r],
+            src=r,
+            dim=dim,
+            group=group,
+        )
+    tensor_to_recv = torch.cat(recv_list, dim=dim)
 
     return tensor_to_recv
 
 
-def indexed_all_gather_wrapper_bwd(
+def indexed_all_to_all_v_wrapper_bwd(
     tensor: torch.Tensor,
-    scatter_indices: List[torch.Tensor],
-    recv_sizes: List[int],
-    send_sizes: List[int],
-    tensor_dim0: int,
+    indices: List[torch.Tensor],
+    sizes: List[List[int]],
+    tensor_size_along_dim: int,
     use_fp32: bool = True,
+    dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
-    """implementation of the backward pass of a distributed indexed all_gather primitive"""
+    """
+    Implements the backward pass to the indexed version of a distributed
+    AllToAllV primitive.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        local tensor, i.e. gradient on resulting tensor from forward pass
+    indices : List[torch.Tensor]
+        list of indices on each rank of slices being sent to
+        each other rank from this rank
+    sizes : List[List[int]]
+        list of the sizes of each chunk on each rank along distributed dimension,
+        valid and set on each rank
+    tensor_size_along_dim : int
+        size of original local tensor along specified dimension,
+        i.e. from the corresponding forward pass
+    use_fp32 : bool, optional
+        flag to specify FP32 precision, by default True
+    dim : int, optional
+        dimension along with global tensor is distributed, by default 0
+    group : Optional[dist.ProcessGroup], optional
+        process group along which global tensor is shared, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        result of primitive corresponding to indexed global tensor
+    """
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(recv_sizes) == comm_size
-    assert len(send_sizes) == comm_size
-    assert len(scatter_indices) == comm_size
+    assert len(sizes) == comm_size
+    assert len(sizes[rank]) == comm_size
+    assert len(indices) == comm_size
+    assert dim < tensor.dim()
 
-    scatter_indices = torch.cat(scatter_indices, dim=0)
-
+    indices = torch.cat(indices, dim=0)
     tensor_shape = list(tensor.shape)
-    tensor_shape[0] = sum(send_sizes)
-    tensor_to_recv = torch.empty(
-        tensor_shape,
-        dtype=tensor.dtype,
-        device=tensor.device,
-    )
 
-    dist.all_to_all_single(
-        tensor_to_recv,
-        tensor,
-        output_split_sizes=send_sizes,
-        input_split_sizes=recv_sizes,
-        group=group,
-    )
+    # scatter gradients, roles reversed compared to forward pass
+    recv_sizes = [sizes[r][rank] for r in range(comm_size)]
+    recv_list = [None] * comm_size
+    for r in range(comm_size):
+        recv_list[r] = scatter_v_wrapper(
+            tensor, recv_sizes, dim=dim, src=r, group=group
+        )
+    tensor_to_recv = torch.cat(recv_list, dim=dim)
 
-    tensor_shape[0] = tensor_dim0
-
+    # sum up gathered gradients and taking
+    # care of precision handling as specified
+    # by boolean flag
+    tensor_shape[dim] = tensor_size_along_dim
     if use_fp32:
         out = torch.zeros(
             tensor_shape,
             dtype=torch.float32,
             device=tensor.device,
         )
-
         tensor_to_recv = tensor_to_recv.to(dtype=torch.float32)
-
     else:
         out = torch.zeros(
             tensor_shape,
             dtype=tensor.dtype,
             device=tensor.device,
         )
-
-    out.index_add_(source=tensor_to_recv, index=scatter_indices, dim=0)
-
+    out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
     if use_fp32:
         out = out.to(tensor.dtype)
 
