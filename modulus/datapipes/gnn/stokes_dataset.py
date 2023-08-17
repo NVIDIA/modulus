@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import os, pickle, numpy as np
-from torch.nn import functional as F
+import os
 import re
+from typing import List, Tuple, Dict, Union, Optional, Any
 
-from typing import List, Tuple, Dict, Union, Optional
+import numpy as np
+import torch
+from torch.nn import functional as F
+
 from .utils import read_vtp_file, save_json, load_json
 
 try:
@@ -113,8 +115,8 @@ class StokesDataset(DGLDataset):
             self.node_stats = self._get_node_stats(keys=normalize_keys)
             self.edge_stats = self._get_edge_stats()
         else:
-            self.node_stats = self._load_pickle("node_stats.pickle")
-            self.edge_stats = self._load_pickle("edge_stats.pickle")
+            self.node_stats = load_json("node_stats.json")
+            self.edge_stats = load_json("edge_stats.json")
 
         self.graphs = self.normalize_node()
         self.graphs = self.normalize_edge()
@@ -194,7 +196,7 @@ class StokesDataset(DGLDataset):
         stats.pop("edge_meansqr")
 
         # save to file
-        self._save_pickle(stats, "edge_stats.pickle")
+        save_json(stats, "edge_stats.json")
         return stats
 
     def _get_node_stats(self, keys):
@@ -219,19 +221,8 @@ class StokesDataset(DGLDataset):
             stats.pop(key + "_meansqr")
 
         # save to file
-        self._save_pickle(stats, "node_stats.pickle")
+        save_json(stats, "node_stats.json")
         return stats
-
-    @staticmethod
-    def _save_pickle(var, file):
-        with open(file, "wb") as f:
-            pickle.dump(var, f, pickle.HIGHEST_PROTOCOL)
-
-    @staticmethod
-    def _load_pickle(file):
-        with open(file, "rb") as f:
-            var = pickle.load(f)
-        return var
 
     @staticmethod
     def _create_dgl_graph(
