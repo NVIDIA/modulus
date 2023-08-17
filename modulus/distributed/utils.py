@@ -522,7 +522,7 @@ def indexed_all_to_all_v_wrapper(
     tensor : torch.Tensor
         local part of global tensor on each rank
     indices : List[torch.Tensor]
-        list of indices on each rank of slices being sent to 
+        list of indices on each rank of slices being sent to
         each other rank from this rank
     sizes : List[List[int]]
         number of indices each rank sends to each other rank,
@@ -575,14 +575,14 @@ def indexed_all_to_all_v_wrapper_bwd(
 ) -> torch.Tensor:
     """
     Implements the backward pass to the indexed version of a distributed
-    AllToAllV primitive. 
+    AllToAllV primitive.
 
     Parameters
     ----------
     tensor : torch.Tensor
         local tensor, i.e. gradient on resulting tensor from forward pass
     indices : List[torch.Tensor]
-        list of indices on each rank of slices being sent to 
+        list of indices on each rank of slices being sent to
         each other rank from this rank
     sizes : List[List[int]]
         list of the sizes of each chunk on each rank along distributed dimension,
@@ -619,11 +619,7 @@ def indexed_all_to_all_v_wrapper_bwd(
     recv_list = [None] * comm_size
     for r in range(comm_size):
         recv_list[r] = scatter_v_wrapper(
-            tensor,
-            recv_sizes,
-            dim=dim,
-            src=r,
-            group=group
+            tensor, recv_sizes, dim=dim, src=r, group=group
         )
     tensor_to_recv = torch.cat(recv_list, dim=dim)
 

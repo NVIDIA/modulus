@@ -179,26 +179,21 @@ def run_test_indexed_all_to_all_v(rank, world_size):
     tensor = tensor.repeat_interleave(repeats=rank + 1, dim=0)
     tensor.requires_grad_(True)
 
-    sizes = [
-        [r + 1 for _ in range(world_size)] for r in range(world_size)
-    ]
+    sizes = [[r + 1 for _ in range(world_size)] for r in range(world_size)]
 
     indices = [
         torch.nonzero(tensor[:, 0] == (r + 1)).view(-1) for r in range(world_size)
     ]
 
     gathered_tensor = indexed_all_to_all_v(
-        tensor, 
-        indices,
-        sizes,
-        dim=0,
-        use_fp32=True,
-        group=None
+        tensor, indices, sizes, dim=0, use_fp32=True, group=None
     )
 
     expected_size_along_dim = sum([sizes[r][rank] for r in range(world_size)])
     expected_tensor = torch.ones(
-        (expected_size_along_dim, tensor_dim), device=f"cuda:{rank}", dtype=torch.float32
+        (expected_size_along_dim, tensor_dim),
+        device=f"cuda:{rank}",
+        dtype=torch.float32,
     ) * (rank + 1)
 
     assert torch.allclose(expected_tensor, gathered_tensor)

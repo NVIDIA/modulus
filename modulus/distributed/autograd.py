@@ -37,8 +37,8 @@ class AllGatherVAutograd(torch.autograd.Function):
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
     to be passed through.
-    The backward pass performs an AllReduceV operation where 
-    each rank gathers its corresponding chunk of a global tensor 
+    The backward pass performs an AllReduceV operation where
+    each rank gathers its corresponding chunk of a global tensor
     from each other rank and sums up these individual gradients.
     """
 
@@ -53,12 +53,7 @@ class AllGatherVAutograd(torch.autograd.Function):
     ) -> torch.Tensor:
         """forward pass of the Distributed AllGatherV primitive"""
 
-        gathered_tensor = all_gather_v_wrapper(
-            tensor, 
-            sizes,
-            dim=dim, 
-            group=group
-        )
+        gathered_tensor = all_gather_v_wrapper(tensor, sizes, dim=dim, group=group)
         ctx.sizes = sizes
         ctx.group = group
         ctx.dim = dim
@@ -74,11 +69,11 @@ class AllGatherVAutograd(torch.autograd.Function):
 
         if needs_grad:
             grad_tensor = all_reduce_v_wrapper(
-                grad_output, 
-                ctx.sizes, 
-                dim=ctx.dim, 
-                use_fp32=ctx.use_fp32, 
-                group=ctx.group
+                grad_output,
+                ctx.sizes,
+                dim=ctx.dim,
+                use_fp32=ctx.use_fp32,
+                group=ctx.group,
             )
 
         return grad_tensor, None, None, None, None
@@ -86,16 +81,16 @@ class AllGatherVAutograd(torch.autograd.Function):
 
 class GatherVAutograd(torch.autograd.Function):
     """
-    Autograd Wrapper for a distributed GatherV primitive. 
+    Autograd Wrapper for a distributed GatherV primitive.
     It is based on the idea of a single global tensor which is distributed
     along a specified dimension into chunks of variable size.
     This primitive assumes such a distributed tensor and gathers all
     local tensors from each rank into the full global tensor valid
     on the specified destination rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
-    be passed through. 
+    be passed through.
     The backward pass corresponds to a straightforward
-    ScatterV primitive distributing the global gradient from the 
+    ScatterV primitive distributing the global gradient from the
     specified destination rank to all the other ranks.
     """
 
@@ -110,13 +105,7 @@ class GatherVAutograd(torch.autograd.Function):
     ) -> torch.Tensor:
         """forward pass of the distributed GatherV primitive"""
 
-        gathered_tensor = gather_v_wrapper(
-            tensor, 
-            sizes, 
-            dim=dim, 
-            dst=dst, 
-            group=group
-        )
+        gathered_tensor = gather_v_wrapper(tensor, sizes, dim=dim, dst=dst, group=group)
 
         ctx.sizes = sizes
         ctx.dim = dim
@@ -136,11 +125,7 @@ class GatherVAutograd(torch.autograd.Function):
 
         if needs_grad:
             grad_tensor = scatter_v_wrapper(
-                grad_output, 
-                ctx.sizes, 
-                dim=ctx.dim, 
-                src=ctx.dst, 
-                group=ctx.group
+                grad_output, ctx.sizes, dim=ctx.dim, src=ctx.dst, group=ctx.group
             )
 
         return grad_tensor, None, None, None, None
@@ -154,9 +139,9 @@ class ScatterVAutograd(torch.autograd.Function):
     This primitive scatters the global tensor from a specified source rank
     into local chunks onto each other rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
-    be passed through. 
+    be passed through.
     The backward pass corresponds to an GatherV primitive
-    gathering local gradients from all the other ranks into a single 
+    gathering local gradients from all the other ranks into a single
     global gradient on the specified source rank.
     """
 
@@ -172,11 +157,7 @@ class ScatterVAutograd(torch.autograd.Function):
         """forward pass of the Distributed ScatterV primitive"""
 
         scattered_tensor = scatter_v_wrapper(
-            tensor, 
-            sizes,
-            dim=dim, 
-            src=src, 
-            group=group
+            tensor, sizes, dim=dim, src=src, group=group
         )
 
         ctx.tensor = tensor
@@ -195,11 +176,7 @@ class ScatterVAutograd(torch.autograd.Function):
 
         if needs_grad:
             grad_tensor = gather_v_wrapper(
-                grad_output, 
-                ctx.sizes, 
-                dim=ctx.dim, 
-                dst=ctx.src, 
-                group=ctx.group
+                grad_output, ctx.sizes, dim=ctx.dim, dst=ctx.src, group=ctx.group
             )
 
         return grad_tensor, None, None, None, None
@@ -207,8 +184,8 @@ class ScatterVAutograd(torch.autograd.Function):
 
 class IndexedAllToAllVAutograd(torch.autograd.Function):
     """
-    Autograd Wrapper for an Indexed AllToAllV primitive. It is based on the 
-    idea of a single global tensor which is distributed along a 
+    Autograd Wrapper for an Indexed AllToAllV primitive. It is based on the
+    idea of a single global tensor which is distributed along a
     specified dimension into chunks of variable size.
     This primitive assumes a set of indices into this dimension which indicate
     the corresponding slices sent to each other rank forming an indexed version
@@ -287,8 +264,8 @@ def all_gather_v(
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
     to be passed through.
-    The backward pass performs an AllReduceV operation where 
-    each rank gathers its corresponding chunk of a global tensor 
+    The backward pass performs an AllReduceV operation where
+    each rank gathers its corresponding chunk of a global tensor
     from each other rank and sums up these individual gradients.
 
     Parameters
@@ -323,7 +300,7 @@ def gather_v(
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
     """
-    Autograd Wrapper for a distributed GatherV primitive. 
+    Autograd Wrapper for a distributed GatherV primitive.
     It is based on the idea of a single global tensor which is distributed
     along a specified dimension into chunks of variable size.
     This primitive assumes such a distributed tensor and gathers all
@@ -332,7 +309,7 @@ def gather_v(
     tensor-parallel settings on tensors which require gradients to
     be passed through.
     The backward pass corresponds to a straightforward
-    ScatterV primitive distributing the global gradient from the 
+    ScatterV primitive distributing the global gradient from the
     specified destination rank to all the other ranks.
 
     Parameters
@@ -374,7 +351,7 @@ def scatter_v(
     tensor-parallel settings on tensors which require gradients to
     be passed through.
     The backward pass corresponds to an GatherV primitive
-    gathering local gradients from all the other ranks into a single 
+    gathering local gradients from all the other ranks into a single
     global gradient on the specified source rank.
 
     Parameters
@@ -409,8 +386,8 @@ def indexed_all_to_all_v(
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:
     """
-    Autograd Wrapper for an Indexed AllToAllV primitive. It is based on the 
-    idea of a single global tensor which is distributed along a 
+    Autograd Wrapper for an Indexed AllToAllV primitive. It is based on the
+    idea of a single global tensor which is distributed along a
     specified dimension into chunks of variable size.
     This primitive assumes a set of indices into this dimension which indicate
     the corresponding slices sent to each other rank forming an indexed version
@@ -425,7 +402,7 @@ def indexed_all_to_all_v(
     tensor : torch.Tensor
         local part of global tensor on each rank
     indices : List[torch.Tensor]
-        list of indices on each rank of slices being sent to 
+        list of indices on each rank of slices being sent to
         each other rank from this rank
     sizes : List[List[int]]
         number of indices each rank sends to each other rank,
