@@ -37,6 +37,9 @@ class AllGatherVAutograd(torch.autograd.Function):
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
     to be passed through.
+    The backward pass performs an AllReduceV operation where 
+    each rank gathers its corresponding chunk of a global tensor 
+    from each other rank and sums up these individual gradients.
     """
 
     @staticmethod
@@ -90,7 +93,10 @@ class GatherVAutograd(torch.autograd.Function):
     local tensors from each rank into the full global tensor valid
     on the specified destination rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
-    be passed through.
+    be passed through. 
+    The backward pass corresponds to a straightforward
+    ScatterV primitive distributing the global gradient from the 
+    specified destination rank to all the other ranks.
     """
 
     @staticmethod
@@ -148,7 +154,10 @@ class ScatterVAutograd(torch.autograd.Function):
     This primitive scatters the global tensor from a specified source rank
     into local chunks onto each other rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
-    be passed through.
+    be passed through. 
+    The backward pass corresponds to an GatherV primitive
+    gathering local gradients from all the other ranks into a single 
+    global gradient on the specified source rank.
     """
 
     @staticmethod
@@ -205,6 +214,9 @@ class IndexedAllToAllVAutograd(torch.autograd.Function):
     the corresponding slices sent to each other rank forming an indexed version
     of an AllToAllV primitive. It is intended to be used in tensor-parallel settings
     on tensors which require gradients to be passed through.
+    The backward pass more or less corresponds to the same operation as in the forward
+    pass but with reversed roles and does an additional reduction of gathered gradients
+    so that each rank finally will compute the overall gradient on its local tensor partition.
     """
 
     @staticmethod
@@ -275,6 +287,9 @@ def all_gather_v(
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
     to be passed through.
+    The backward pass performs an AllReduceV operation where 
+    each rank gathers its corresponding chunk of a global tensor 
+    from each other rank and sums up these individual gradients.
 
     Parameters
     ----------
@@ -316,6 +331,9 @@ def gather_v(
     on the specified destination rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
     be passed through.
+    The backward pass corresponds to a straightforward
+    ScatterV primitive distributing the global gradient from the 
+    specified destination rank to all the other ranks.
 
     Parameters
     ----------
@@ -355,6 +373,9 @@ def scatter_v(
     into local chunks onto each other rank. It is intended to be used in
     tensor-parallel settings on tensors which require gradients to
     be passed through.
+    The backward pass corresponds to an GatherV primitive
+    gathering local gradients from all the other ranks into a single 
+    global gradient on the specified source rank.
 
     Parameters
     ----------
@@ -395,6 +416,9 @@ def indexed_all_to_all_v(
     the corresponding slices sent to each other rank forming an indexed version
     of an AllToAllV primitive. It is intended to be used in tensor-parallel settings
     on tensors which require gradients to be passed through.
+    The backward pass more or less corresponds to the same operation as in the forward
+    pass but with reversed roles and does an additional reduction of gathered gradients
+    so that each rank finally will compute the overall gradient on its local tensor partition.
 
     Parameters
     ----------
