@@ -21,7 +21,7 @@ from modulus.distributed.autograd import (
     all_gather_v,
     gather_v,
     scatter_v,
-    indexed_all_gather,
+    indexed_all_to_all_v,
 )
 
 
@@ -160,7 +160,7 @@ def run_test_all_gather_v(rank, world_size):
     DistributedManager.cleanup()
 
 
-def run_test_indexed_all_gather_v(rank, world_size):
+def run_test_indexed_all_to_all_v(rank, world_size):
     os.environ["RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
@@ -179,19 +179,26 @@ def run_test_indexed_all_gather_v(rank, world_size):
     tensor = tensor.repeat_interleave(repeats=rank + 1, dim=0)
     tensor.requires_grad_(True)
 
-    send_sizes = [rank + 1 for _ in range(world_size)]
-    recv_sizes = [r + 1 for r in range(world_size)]
+    sizes = [
+        [r + 1 for _ in range(world_size)] for r in range(world_size)
+    ]
 
-    scatter_indices = [
+    indices = [
         torch.nonzero(tensor[:, 0] == (r + 1)).view(-1) for r in range(world_size)
     ]
 
-    gathered_tensor = indexed_all_gather(
-        tensor, scatter_indices, recv_sizes, send_sizes, group=None
+    gathered_tensor = indexed_all_to_all_v(
+        tensor, 
+        indices,
+        sizes,
+        dim=0,
+        use_fp32=True,
+        group=None
     )
 
+    expected_size_along_dim = sum([sizes[r][rank] for r in range(world_size)])
     expected_tensor = torch.ones(
-        (sum(recv_sizes), tensor_dim), device=f"cuda:{rank}", dtype=torch.float32
+        (expected_size_along_dim, tensor_dim), device=f"cuda:{rank}", dtype=torch.float32
     ) * (rank + 1)
 
     assert torch.allclose(expected_tensor, gathered_tensor)
@@ -239,8 +246,8 @@ def test_all_gather_v():
 
 
 @pytest.mark.multigpu
-def test_indexed_all_gather_v():
-    run_test_autograd_prim(run_test_indexed_all_gather_v)
+def test_indexed_all_to_all_v_v():
+    run_test_autograd_prim(run_test_indexed_all_to_all_v)
 
 
 if __name__ == "__main__":
