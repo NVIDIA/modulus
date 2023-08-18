@@ -86,8 +86,7 @@ def run_test_distributed_graphcast(
 
     # initialize data
     x_single_gpu = create_random_input(
-        input_res=model_kwds["input_res"],
-        dim=model_kwds["input_dim_grid_nodes"]
+        input_res=model_kwds["input_res"], dim=model_kwds["input_dim_grid_nodes"]
     ).to(device=device, dtype=dtype)
     x_multi_gpu = x_single_gpu.detach().clone()
     x_multi_gpu = (
@@ -156,7 +155,9 @@ def run_test_distributed_graphcast(
 def test_distributed_graphcast(dtype, do_concat_trick):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    world_size = min(4, num_gpus) # test-graph is otherwise too small for distribution across more GPUs
+    world_size = min(
+        4, num_gpus
+    )  # test-graph is otherwise too small for distribution across more GPUs
 
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
