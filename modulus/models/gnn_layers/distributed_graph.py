@@ -89,7 +89,7 @@ class DistributedGraph:
 
         # utility variables for torch.distributed
         dist_manager = DistributedManager()
-        self.device_id = dist_manager.local_rank
+        self.device_id = dist_manager.device
         self.partition_rank = dist_manager.group_rank(name=graph_partition_group_name)
         self.partition_size = dist_manager.group_size(name=graph_partition_group_name)
         error_msg = f"Passed partition_size does not correspond to size of process_group, got {partition_size} and {self.partition_size} respectively."
@@ -203,6 +203,8 @@ class DistributedGraph:
 
         for r in range(self.partition_size):
             assert self.sizes[self.partition_rank][r] == self.scatter_indices[r].numel()
+
+        dist.barrier(self.process_group)
 
     def get_src_node_features_in_partition(
         self,

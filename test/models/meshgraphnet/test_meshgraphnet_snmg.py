@@ -24,7 +24,7 @@ from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 from modulus.distributed import DistributedManager
 
 
-def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
+def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
@@ -168,32 +168,19 @@ def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
     DistributedManager.cleanup()
 
 
-def run_test_distributed_meshgraphnet(dtype):
+@pytest.mark.multigpu
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_distributed_meshgraphnet(dtype):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = num_gpus
 
     torch.multiprocessing.spawn(
-        run_test_distributed_meshgraphnet_impl,
+        run_test_distributed_meshgraphnet,
         args=(world_size, dtype),
         nprocs=world_size,
         start_method="spawn",
     )
-
-
-@pytest.mark.multigpu
-def test_distributed_meshgraphnet_fp32():
-    run_test_distributed_meshgraphnet(torch.float32)
-
-
-@pytest.mark.multigpu
-def test_distributed_meshgraphnet_fp16():
-    run_test_distributed_meshgraphnet(torch.float16)
-
-
-@pytest.mark.multigpu
-def test_distributed_meshgraphnet_bf16():
-    run_test_distributed_meshgraphnet(torch.bfloat16)
 
 
 if __name__ == "__main__":

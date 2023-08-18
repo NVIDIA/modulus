@@ -18,12 +18,12 @@ import sys, os
 import numpy as np
 
 
-def fix_random_seeds():
+def fix_random_seeds(seed=0):
     """Fix random seeds for reproducibility"""
-    dgl.seed(0)
-    np.random.seed(0)
-    torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
+    dgl.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
 
 def create_random_input(input_res, dim):

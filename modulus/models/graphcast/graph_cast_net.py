@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from typing import Any
+from typing import Any, Optional
 from dataclasses import dataclass
 
 from modulus.models.layers import get_activation
@@ -171,22 +171,23 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder or self.is_distributed:
+            print(self.g2m_graph)
             try:
                 offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
             except:
                 # fall back to older DGL routine
                 offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
 
-            n_in_nodes, n_out_nodes = (
+            n_src_nodes, n_dst_nodes = (
                 self.g2m_graph.num_src_nodes(),
                 self.g2m_graph.num_dst_nodes(),
             )
+            self.g2m_edata = self.g2m_edata[edge_ids]
             self.g2m_graph = CuGraphCSC(
                 offsets,
                 indices,
-                n_in_nodes,
-                n_out_nodes,
-                edge_ids,
+                n_src_nodes,
+                n_dst_nodes,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
             )
@@ -202,16 +203,16 @@ class GraphCastNet(Module):
                 # fall back to older DGL routine
                 offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
 
-            n_in_nodes, n_out_nodes = (
+            n_src_nodes, n_dst_nodes = (
                 self.m2g_graph.num_src_nodes(),
                 self.m2g_graph.num_dst_nodes(),
             )
+            self.m2g_edata = self.m2g_edata[edge_ids]
             self.m2g_graph = CuGraphCSC(
                 offsets,
                 indices,
-                n_in_nodes,
-                n_out_nodes,
-                edge_ids,
+                n_src_nodes,
+                n_dst_nodes,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
             )
@@ -227,16 +228,16 @@ class GraphCastNet(Module):
                 # fall back to older DGL routine
                 offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
 
-            n_in_nodes, n_out_nodes = (
+            n_src_nodes, n_dst_nodes = (
                 self.mesh_graph.num_src_nodes(),
                 self.mesh_graph.num_dst_nodes(),
             )
+            self.mesh_edata = self.mesh_edata[edge_ids]
             self.mesh_graph = CuGraphCSC(
                 offsets,
                 indices,
-                n_in_nodes,
-                n_out_nodes,
-                edge_ids,
+                n_src_nodes,
+                n_dst_nodes,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
             )
@@ -247,6 +248,7 @@ class GraphCastNet(Module):
                 self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
                     self.mesh_ndata
                 )
+                print(self.mesh_ndata)
 
         # Get the static data
         if self.has_static_data:
