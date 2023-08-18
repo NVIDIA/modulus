@@ -130,6 +130,10 @@ class CuGraphCSC:
     def get_src_node_features_in_partition(
         self, global_src_feat: torch.Tensor
     ) -> torch.Tensor:
+        """
+        Get local chunk of global source node features for each rank corresponding
+        to its rank in the process group across which the graph is partitioned.
+        """
         if self.is_distributed:
             return self.dist_graph.get_src_node_features_in_partition(global_src_feat)
         return global_src_feat
@@ -137,6 +141,14 @@ class CuGraphCSC:
     def get_src_node_features_in_local_graph(
         self, local_src_feat: torch.Tensor
     ) -> torch.Tensor:
+        """
+        Get all source node features on all ranks from all other ranks which are requires
+        for the neighborhood definition in the local graph. ``local_src_feat`` here
+        corresponds to the local chunk of the global source node features on each rank
+        corresponding to its rank in the process group across which the graph is partitioned.
+        After this primitive, any message passing routine should have all necessary tensors
+        to work on the corresponding local graph according to the partition rank.
+        """
         if self.is_distributed:
             return self.dist_graph.get_src_node_features_in_local_graph(local_src_feat)
         return local_src_feat
@@ -144,6 +156,10 @@ class CuGraphCSC:
     def get_dst_node_features_in_partition(
         self, global_dst_feat: torch.Tensor
     ) -> torch.Tensor:
+        """
+        Get local chunk of global destination node features for each rank corresponding
+        to its rank in the process group across which the graph is partitioned.
+        """
         if self.is_distributed:
             return self.dist_graph.get_dst_node_features_in_partition(global_dst_feat)
         return global_dst_feat
@@ -151,6 +167,10 @@ class CuGraphCSC:
     def get_edge_features_in_partition(
         self, global_efeat: torch.Tensor
     ) -> torch.Tensor:
+        """
+        Get local chunk of global edge features for each rank corresponding
+        to its rank in the process group across which the graph is partitioned.
+        """
         if self.is_distributed:
             return self.dist_graph.get_edge_features_in_partition(global_efeat)
         return global_efeat
@@ -158,6 +178,11 @@ class CuGraphCSC:
     def get_global_src_node_features(
         self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True
     ) -> torch.Tensor:
+        """
+        Based on local source node features on each rank corresponding
+        to its rank in the process group across which the graph is partitioned,
+        get the global node features either on all group ranks or on group rank 0.
+        """
         if self.is_distributed:
             return self.dist_graph.get_global_src_node_features(
                 local_nfeat, get_on_all_ranks
@@ -167,6 +192,11 @@ class CuGraphCSC:
     def get_global_dst_node_features(
         self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True
     ) -> torch.Tensor:
+        """
+        Based on local destination node features on each rank corresponding
+        to its rank in the process group across which the graph is partitioned,
+        get the global node features either on all group ranks or on group rank 0.
+        """
         if self.is_distributed:
             return self.dist_graph.get_global_dst_node_features(
                 local_nfeat, get_on_all_ranks
@@ -176,6 +206,11 @@ class CuGraphCSC:
     def get_global_edge_features(
         self, local_efeat: torch.Tensor, get_on_all_ranks: bool = True
     ) -> torch.Tensor:
+        """
+        Based on local edge features on each rank corresponding
+        to its rank in the process group across which the graph is partitioned,
+        get the global edge features either on all group ranks or on group rank 0.
+        """
         if self.is_distributed:
             return self.dist_graph.get_global_edge_features(
                 local_efeat, get_on_all_ranks

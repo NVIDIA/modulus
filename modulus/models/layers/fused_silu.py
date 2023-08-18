@@ -15,6 +15,7 @@
 import functools
 import torch
 from torch.autograd import Function
+
 try:
     from nvfuser._C import Fusion, FusionDefinition, DataType
 except:

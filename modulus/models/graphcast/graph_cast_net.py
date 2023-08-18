@@ -182,10 +182,10 @@ class GraphCastNet(Module):
                 self.g2m_graph.num_dst_nodes(),
             )
             self.g2m_graph = CuGraphCSC(
-                offsets, 
-                indices, 
-                n_in_nodes, 
-                n_out_nodes, 
+                offsets,
+                indices,
+                n_in_nodes,
+                n_out_nodes,
                 edge_ids,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
@@ -207,10 +207,10 @@ class GraphCastNet(Module):
                 self.m2g_graph.num_dst_nodes(),
             )
             self.m2g_graph = CuGraphCSC(
-                offsets, 
-                indices, 
-                n_in_nodes, 
-                n_out_nodes, 
+                offsets,
+                indices,
+                n_in_nodes,
+                n_out_nodes,
                 edge_ids,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
@@ -232,10 +232,10 @@ class GraphCastNet(Module):
                 self.mesh_graph.num_dst_nodes(),
             )
             self.mesh_graph = CuGraphCSC(
-                offsets, 
-                indices, 
-                n_in_nodes, 
-                n_out_nodes, 
+                offsets,
+                indices,
+                n_in_nodes,
+                n_out_nodes,
                 edge_ids,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
@@ -257,7 +257,7 @@ class GraphCastNet(Module):
             input_dim_grid_nodes += num_static_feat
             if self.is_distributed and expect_partitioned_input:
                 # if input itself is distributed, we also need to distribute static data
-                self.static_data (
+                self.static_data(
                     self.static_data[0].view(num_static_feat, -1).permute(1, 0)
                 )
                 self.static_data = self.g2m_graph.get_src_node_features_in_partition(
@@ -270,7 +270,6 @@ class GraphCastNet(Module):
         self.input_dim_grid_nodes = input_dim_grid_nodes
         self.output_dim_grid_nodes = output_dim_grid_nodes
         self.input_res = input_res
-
 
         # by default: don't checkpoint at all
         self.model_checkpoint_fn = set_checkpoint_fn(False)
@@ -662,11 +661,11 @@ class GraphCastNet(Module):
             if self.has_static_data:
                 invar = torch.concat((invar, self.static_data), dim=1)
             invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
-            
+
             if self.is_distributed:
                 # partition node features
                 invar = self.g2m_graph.get_src_node_features_in_partition(invar)
-    
+
         return invar
 
     def prepare_output(self, outvar: Tensor, produce_aggregated_output: bool) -> Tensor:

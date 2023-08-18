@@ -67,7 +67,7 @@ def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
 
     model_multi_gpu = MeshGraphNet(**model_kwds).to(device=manager.device, dtype=dtype)
     model_multi_gpu = DistributedDataParallel(
-        model_multi_gpu, 
+        model_multi_gpu,
         process_group=manager.group("graph_partition"),
     )
 
@@ -98,16 +98,24 @@ def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
         partition_group_name="graph_partition",
     )
 
-    nfeat_single_gpu = torch.randn((num_nodes, model_kwds["input_dim_nodes"])).to(
-        device=manager.device, dtype=dtype
-    ).requires_grad_(True)
-    efeat_single_gpu = torch.randn((num_indices, model_kwds["input_dim_edges"])).to(
-        device=manager.device, dtype=dtype
-    ).requires_grad_(True)
+    nfeat_single_gpu = (
+        torch.randn((num_nodes, model_kwds["input_dim_nodes"]))
+        .to(device=manager.device, dtype=dtype)
+        .requires_grad_(True)
+    )
+    efeat_single_gpu = (
+        torch.randn((num_indices, model_kwds["input_dim_edges"]))
+        .to(device=manager.device, dtype=dtype)
+        .requires_grad_(True)
+    )
     nfeat_multi_gpu = nfeat_single_gpu.detach().clone()
-    nfeat_multi_gpu = graph_multi_gpu.get_src_node_features_in_partition(nfeat_multi_gpu).requires_grad_(True)
+    nfeat_multi_gpu = graph_multi_gpu.get_src_node_features_in_partition(
+        nfeat_multi_gpu
+    ).requires_grad_(True)
     efeat_multi_gpu = efeat_single_gpu.detach().clone()
-    efeat_multi_gpu = graph_multi_gpu.get_edge_features_in_partition(efeat_multi_gpu).requires_grad_(True)
+    efeat_multi_gpu = graph_multi_gpu.get_edge_features_in_partition(
+        efeat_multi_gpu
+    ).requires_grad_(True)
 
     # forward + backward passes
     out_single_gpu = model_single_gpu(
@@ -130,7 +138,9 @@ def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
     atol, rtol = tolerances[dtype]
 
     # compare forward
-    out_single_gpu_dist = graph_multi_gpu.get_src_node_features_in_partition(out_single_gpu)
+    out_single_gpu_dist = graph_multi_gpu.get_src_node_features_in_partition(
+        out_single_gpu
+    )
     diff = out_single_gpu_dist - out_multi_gpu
     diff = torch.abs(diff)
     mask = diff > atol
@@ -148,7 +158,7 @@ def run_test_distributed_meshgraphnet_impl(rank, world_size, dtype):
             param, model_multi_gpu_parameters[param_idx], atol=atol, rtol=rtol
         ), f"{mask.sum()} elements have diff > {atol} \n {param[mask]} \n {model_multi_gpu_parameters[param_idx][mask]}"
 
-    #cleanup distributed
+    # cleanup distributed
     del os.environ["RANK"]
     del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]

@@ -124,7 +124,9 @@ class DistributedGraph:
         )
 
         scatter_indices = [None] * self.partition_size
-        sizes = [[None for _ in range(self.partition_size)] for _ in range(partition_size)]
+        sizes = [
+            [None for _ in range(self.partition_size)] for _ in range(partition_size)
+        ]
 
         for rank in range(self.partition_size):
             offset_start = dst_offsets_in_partition[rank]
@@ -139,7 +141,10 @@ class DistributedGraph:
                 sorted=True, return_inverse=True
             )
             local_src_ids_per_rank = torch.arange(
-                0, global_src_ids_per_rank.size(0), dtype=offsets.dtype, device=offsets.device
+                0,
+                global_src_ids_per_rank.size(0),
+                dtype=offsets.dtype,
+                device=offsets.device,
             )
             global_src_ids_to_gpu = global_src_ids_per_rank // src_nodes_in_partition
             remote_src_ids_per_rank = (
@@ -195,7 +200,7 @@ class DistributedGraph:
 
         self.sizes = sizes
         self.scatter_indices = scatter_indices
-        
+
         for r in range(self.partition_size):
             assert self.sizes[self.partition_rank][r] == self.scatter_indices[r].numel()
 
