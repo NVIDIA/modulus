@@ -129,8 +129,18 @@ class GraphCastNet(Module):
         use_cugraphops_decoder: bool = False,
         do_concat_trick: bool = False,
         recompute_activation: bool = False,
+        partition_size: int = 1,
+        partition_group_name: Optional[str] = None,
+        expect_partitioned_input: bool = False,
+        produce_aggregated_output: bool = True,
     ):
         super().__init__(meta=MetaData())
+
+        self.is_distributed = False
+        if partition_size > 1:
+            self.is_distributed = True
+        self.expect_partitioned_input = expect_partitioned_input
+        self.produce_aggregated_output = produce_aggregated_output
 
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
@@ -142,19 +152,6 @@ class GraphCastNet(Module):
 
         # Set activation function
         activation_fn = get_activation(activation_fn)
-
-        # Get the static data
-        if self.has_static_data:
-            self.static_data = StaticData(
-                static_dataset_path, self.latitudes, self.longitudes
-            ).get()
-            num_static_feat = self.static_data.size(1)
-            input_dim_grid_nodes += num_static_feat
-        else:
-            self.static_data = None
-        self.input_dim_grid_nodes = input_dim_grid_nodes
-        self.output_dim_grid_nodes = output_dim_grid_nodes
-        self.input_res = input_res
 
         # construct the graph
         try:
@@ -173,35 +170,107 @@ class GraphCastNet(Module):
         self.mesh_edata = self.mesh_graph.edata["x"]
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
-        if use_cugraphops_encoder:
-            offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
+        if use_cugraphops_encoder or self.is_distributed:
+            try:
+                offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
+            except:
+                # fall back to older DGL routine
+                offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+
             n_in_nodes, n_out_nodes = (
                 self.g2m_graph.num_src_nodes(),
                 self.g2m_graph.num_dst_nodes(),
             )
             self.g2m_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
+                offsets, 
+                indices, 
+                n_in_nodes, 
+                n_out_nodes, 
+                edge_ids,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
+            if self.is_distributed:
+                self.g2m_edata = self.g2m_graph.get_edge_features_in_partition(
+                    self.g2m_edata
+                )
 
-        if use_cugraphops_decoder:
-            offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
+        if use_cugraphops_decoder or self.is_distributed:
+            try:
+                offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
+            except:
+                # fall back to older DGL routine
+                offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
+
             n_in_nodes, n_out_nodes = (
                 self.m2g_graph.num_src_nodes(),
                 self.m2g_graph.num_dst_nodes(),
             )
             self.m2g_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
+                offsets, 
+                indices, 
+                n_in_nodes, 
+                n_out_nodes, 
+                edge_ids,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
+            if self.is_distributed:
+                self.m2g_edata = self.m2g_graph.get_edge_features_in_partition(
+                    self.m2g_edata
+                )
 
-        if use_cugraphops_processor:
-            offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
+        if use_cugraphops_processor or self.is_distributed:
+            try:
+                offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
+            except:
+                # fall back to older DGL routine
+                offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
+
             n_in_nodes, n_out_nodes = (
                 self.mesh_graph.num_src_nodes(),
                 self.mesh_graph.num_dst_nodes(),
             )
             self.mesh_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
+                offsets, 
+                indices, 
+                n_in_nodes, 
+                n_out_nodes, 
+                edge_ids,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
+            if self.is_distributed:
+                self.mesh_edata = self.mesh_graph.get_edge_features_in_partition(
+                    self.mesh_edata
+                )
+                self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
+                    self.mesh_ndata
+                )
+
+        # Get the static data
+        if self.has_static_data:
+            self.static_data = StaticData(
+                static_dataset_path, self.latitudes, self.longitudes
+            ).get()
+            num_static_feat = self.static_data.size(1)
+            input_dim_grid_nodes += num_static_feat
+            if self.is_distributed and expect_partitioned_input:
+                # if input itself is distributed, we also need to distribute static data
+                self.static_data (
+                    self.static_data[0].view(num_static_feat, -1).permute(1, 0)
+                )
+                self.static_data = self.g2m_graph.get_src_node_features_in_partition(
+                    self.static_data
+                )
+                self.static_data = self_static_data.permute(1, 0).unsqueeze(dim=0)
+        else:
+            self.static_data = None
+
+        self.input_dim_grid_nodes = input_dim_grid_nodes
+        self.output_dim_grid_nodes = output_dim_grid_nodes
+        self.input_res = input_res
+
 
         # by default: don't checkpoint at all
         self.model_checkpoint_fn = set_checkpoint_fn(False)
@@ -557,16 +626,16 @@ class GraphCastNet(Module):
         self,
         grid_nfeat: Tensor,
     ) -> Tensor:
-        invar = self.prepare_input(grid_nfeat)
+        invar = self.prepare_input(grid_nfeat, self.expect_partitioned_input)
         outvar = self.model_checkpoint_fn(
             self.custom_forward,
             invar,
             use_reentrant=False,
             preserve_rng_state=False,
         )
-        return self.prepare_output(outvar)
+        return self.prepare_output(outvar, self.produce_aggregated_output)
 
-    def prepare_input(self, invar: Tensor) -> Tensor:
+    def prepare_input(self, invar: Tensor, expect_partitioned_input: bool) -> Tensor:
         """Prepares the input to the model in the required shape.
 
         Parameters
@@ -574,19 +643,33 @@ class GraphCastNet(Module):
         invar : Tensor
             Input in the shape [N, C, H, W].
 
+        expect_partitioned_input : bool
+            flag indicating whether input is partioned according to graph partitioning scheme
+
         Returns
         -------
         Tensor
             Reshaped input.
         """
-        assert invar.size(0) == 1, "GraphCast does not support batch size > 1"
-        # concat static data
-        if self.has_static_data:
-            invar = torch.concat((invar, self.static_data), dim=1)
-        invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
+        if expect_partitioned_input and self.is_distributed:
+            # partitioned input is [N, C, P] instead of [N, C, H, W]
+            if self.has_static_data:
+                invar = torch.concat((invar, self.static_data), dim=1)
+                invar = invar[0].permute(1, 0)
+        else:
+            assert invar.size(0) == 1, "GraphCast does not support batch size > 1"
+            # concat static data
+            if self.has_static_data:
+                invar = torch.concat((invar, self.static_data), dim=1)
+            invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
+            
+            if self.is_distributed:
+                # partition node features
+                invar = self.g2m_graph.get_src_node_features_in_partition(invar)
+    
         return invar
 
-    def prepare_output(self, outvar: Tensor) -> Tensor:
+    def prepare_output(self, outvar: Tensor, produce_aggregated_output: bool) -> Tensor:
         """Prepares the output of the model in the shape [N, C, H, W].
 
         Parameters
@@ -594,14 +677,28 @@ class GraphCastNet(Module):
         outvar : Tensor
             Output of the final MLP of the model.
 
+        produce_aggregated_output : bool
+            flag indicating whether output is gathered onto each rank
+            or kept distributed
+
         Returns
         -------
         Tensor
             The reshaped output of the model.
         """
-        outvar = outvar.permute(1, 0)
-        outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)
-        outvar = torch.unsqueeze(outvar, dim=0)
+        if produce_aggregated_output or not self.is_distributed:
+            # default case: output of shape [N, C, H, W]
+            if self.is_distributed:
+                outvar = self.m2g_graph.get_global_dst_node_features(outvar)
+
+            outvar = outvar.permute(1, 0)
+            outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)
+            outvar = torch.unsqueeze(outvar, dim=0)
+
+        else:
+            # keep partition of H, W, i.e. produce [N, C, P]
+            outvar = outvar.permute(1, 0).unsqueeze(dim=0)
+
         return outvar
 
     def to(self, *args: Any, **kwargs: Any) -> "GraphCastNet":

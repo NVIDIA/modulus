@@ -15,7 +15,10 @@
 import functools
 import torch
 from torch.autograd import Function
-from nvfuser._C import Fusion, FusionDefinition, DataType
+try:
+    from nvfuser._C import Fusion, FusionDefinition, DataType
+except:
+    from torch._C._nvfuser import Fusion, FusionDefinition, DataType
 
 
 _torch_dtype_to_nvfuser = {

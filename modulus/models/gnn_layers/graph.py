@@ -76,9 +76,6 @@ class CuGraphCSC:
     partition_group_name : str, optional
         for distributed settings, the name of the subgroup representing the partitioned
         graph is intended to be passed on to be used with dist_manager as described below
-    dist_manager : DistributedManager, optional
-        for distributed settings, the an instance of the DistributedManager singleton of Modulus
-        is intended to be passed on
     """
 
     def __init__(
@@ -90,9 +87,8 @@ class CuGraphCSC:
         ef_indices: Optional[Tensor] = None,
         reverse_graph_bwd: bool = True,
         cache_graph: bool = True,
-        partition_size: int = 1,
+        partition_size: Optional[int] = -1,
         partition_group_name: Optional[str] = None,
-        dist_manager: Optional[DistributedManager] = None,
     ) -> None:
         self.offsets = offsets
         self.indices = indices
@@ -123,7 +119,6 @@ class CuGraphCSC:
             self.indices,
             partition_size,
             partition_group_name,
-            dist_manager,
         )
         # overwrite graph information with local graph after distribution
         self.offsets = self.dist_graph.local_offsets

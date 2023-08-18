@@ -24,7 +24,7 @@ from modulus.distributed import (
     gather_v,
     scatter_v,
     all_gather_v,
-    indexed_all_gather,
+    indexed_all_to_all_v,
 )
 
 
@@ -34,9 +34,24 @@ class DistributedGraph:
         global_offsets: torch.Tensor,
         global_indices: torch.Tensor,
         partition_size: int,
-        partition_group_name: str,
-        dist_manager: DistributedManager,
+        graph_partition_group_name: str,
     ):
+        """Utility Class representing a distributed graph. Based on a CSC
+        structure represented by corresponding offsets and indices buffers,
+        the global graph is partioned into smaller local graphs.
+
+        Parameters
+        ----------
+        global_offsets : torch.Tensor
+            CSC offsets
+        global_indices : torch.Tensor
+            CSC indices
+        partition_size : int
+            number of process groups across which graph is partitioned
+        graph_partition_group_name : str
+            name of process group of ranks across which graph is partitioned
+        """
+
         # global information about node ids and edge ids
         self.num_global_src_nodes = global_indices.max().item() + 1
         self.num_global_dst_nodes = global_offsets.size(0) - 1
@@ -67,23 +82,19 @@ class DistributedGraph:
         self.num_indices_in_each_partition = [None] * partition_size
         self.num_dst_nodes_in_each_partition = [None] * partition_size
 
-        # required sizes and indices for main communication
-        # primitives exchanging distribute node information
-        self.recv_sizes = None
-        self.send_sizes = None
-        self.send_indices = None
-
         # mapping of local IDs to their corresponding global IDs
         self.partitioned_indices_to_global = None
         self.partitioned_src_node_ids_to_global = None
         self.partitioned_dst_node_ids_to_global = None
 
         # utility variables for torch.distributed
+        dist_manager = DistributedManager()
         self.device_id = dist_manager.local_rank
-        self.partition_rank = dist_manager.group_rank(partition_group_name)
-        self.partition_size = partition_size
-        self.partition_id = dist_manager.group_id(partition_group_name)
-        self.partition_group = dist_manager.group(partition_group_name)
+        self.partition_rank = dist_manager.group_rank(name=graph_partition_group_name)
+        self.partition_size = dist_manager.group_size(name=graph_partition_group_name)
+        error_msg = f"Passed partition_size does not correspond to size of process_group, got {partition_size} and {self.partition_size} respectively."
+        assert self.partition_size == partition_size, error_msg
+        self.process_group = dist_manager.group(name=graph_partition_group_name)
 
         # this partitions offsets and indices on each rank in the same fashion
         # it could be rewritten to do it on one rank and exchange the partitions
@@ -112,8 +123,8 @@ class DistributedGraph:
             self.num_global_src_nodes, src_offsets_in_partition[-1]
         )
 
-        send_indices = [None] * self.partition_size
-        recv_sizes = [None] * self.partition_size
+        scatter_indices = [None] * self.partition_size
+        sizes = [[None for _ in range(self.partition_size)] for _ in range(partition_size)]
 
         for rank in range(self.partition_size):
             offset_start = dst_offsets_in_partition[rank]
@@ -128,7 +139,7 @@ class DistributedGraph:
                 sorted=True, return_inverse=True
             )
             local_src_ids_per_rank = torch.arange(
-                0, global_src_ids_per_rank.size(0), dtype=offsets.dtype
+                0, global_src_ids_per_rank.size(0), dtype=offsets.dtype, device=offsets.device
             )
             global_src_ids_to_gpu = global_src_ids_per_rank // src_nodes_in_partition
             remote_src_ids_per_rank = (
@@ -170,26 +181,23 @@ class DistributedGraph:
 
             for rank_offset in range(self.partition_size):
                 mask = global_src_ids_to_gpu == rank_offset
-                if self.partition_rank == rank:
-                    # simply count number of nonzero elements in mask
-                    recv_sizes[rank_offset] = mask.sum().item()
 
                 if self.partition_rank == rank_offset:
                     # indices to send to this rank from this rank
-                    send_indices[rank] = (
+                    scatter_indices[rank] = (
                         remote_src_ids_per_rank[mask]
                         .detach()
                         .clone()
                         .to(device=self.device_id, dtype=torch.int64)
                     )
 
-        # concatenate indices and save sizes
-        # this makes later communication easier
-        send_sizes = [idx.size(0) for idx in send_indices]
+                sizes[rank_offset][rank] = mask.sum().item()
 
-        self.send_sizes = send_sizes
-        self.recv_sizes = recv_sizes
-        self.send_indices = torch.cat(send_indices, dim=0)
+        self.sizes = sizes
+        self.scatter_indices = scatter_indices
+        
+        for r in range(self.partition_size):
+            assert self.sizes[self.partition_rank][r] == self.scatter_indices[r].numel()
 
     def get_src_node_features_in_partition(
         self,
@@ -204,7 +212,7 @@ class DistributedGraph:
                 self.num_src_nodes_in_each_partition,
                 dim=0,
                 src=0,
-                group=self.partition_group,
+                group=self.process_group,
             )
 
         return global_node_features[self.partitioned_src_node_ids_to_global, :].to(
@@ -216,13 +224,13 @@ class DistributedGraph:
     ) -> torch.Tensor:
         # main primitive to gather all necessary src features
         # which are required for a csc-based message passing step
-        return indexed_all_gather(
+        return indexed_all_to_all_v(
             partitioned_src_node_features,
-            scatter_indices=self.send_indices,
-            recv_sizes=self.recv_sizes,
-            send_sizes=self.send_sizes,
+            indices=self.scatter_indices,
+            sizes=self.sizes,
             use_fp32=True,
-            group=self.partition_group,
+            dim=0,
+            group=self.process_group,
         )
 
     def get_dst_node_features_in_partition(
@@ -238,7 +246,7 @@ class DistributedGraph:
                 self.num_dst_nodes_in_each_partition,
                 dim=0,
                 src=0,
-                group=self.partition_group,
+                group=self.process_group,
             )
 
         return global_node_features[self.partitioned_dst_node_ids_to_global, :].to(
@@ -266,7 +274,7 @@ class DistributedGraph:
                 self.num_indices_in_each_partition,
                 dim=0,
                 src=0,
-                self.partition_group,
+                process_group=self.process_group,
             )
         return global_edge_features[self.partitioned_indices_to_global, :].to(
             device=self.device_id
@@ -290,7 +298,7 @@ class DistributedGraph:
                 self.num_src_nodes_in_each_partition,
                 dim=0,
                 dst=0,
-                group=self.partition_group,
+                group=self.process_group,
             )
 
         return all_gather_v(
@@ -298,7 +306,7 @@ class DistributedGraph:
             self.num_src_nodes_in_each_partition,
             dim=0,
             use_fp32=True,
-            group=self.partition_group,
+            group=self.process_group,
         )
 
     def get_global_dst_node_features(
@@ -310,7 +318,7 @@ class DistributedGraph:
                 self.num_dst_nodes_in_each_partition,
                 dim=0,
                 dst=0,
-                group=self.partition_group,
+                group=self.process_group,
             )
 
         return all_gather_v(
@@ -318,7 +326,7 @@ class DistributedGraph:
             self.num_dst_nodes_in_each_partition,
             dim=0,
             use_fp32=True,
-            group=self.partition_group,
+            group=self.process_group,
         )
 
     def get_global_edge_features(
@@ -330,7 +338,7 @@ class DistributedGraph:
                 self.num_indices_in_each_partition,
                 dim=0,
                 dst=0,
-                group=self.partition_group,
+                group=self.process_group,
             )
 
         return all_gather_v(
@@ -338,5 +346,5 @@ class DistributedGraph:
             self.num_indices_in_each_partition,
             dim=0,
             use_fp32=True,
-            group=self.partition_group,
+            group=self.process_group,
         )

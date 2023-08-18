@@ -615,9 +615,9 @@ def indexed_all_to_all_v_wrapper_bwd(
     tensor_shape = list(tensor.shape)
 
     # scatter gradients, roles reversed compared to forward pass
-    recv_sizes = [sizes[r][rank] for r in range(comm_size)]
     recv_list = [None] * comm_size
     for r in range(comm_size):
+        recv_sizes = [sizes[i][r] for i in range(comm_size)]
         recv_list[r] = scatter_v_wrapper(
             tensor, recv_sizes, dim=dim, src=r, group=group
         )
@@ -640,6 +640,7 @@ def indexed_all_to_all_v_wrapper_bwd(
             dtype=tensor.dtype,
             device=tensor.device,
         )
+
     out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
     if use_fp32:
         out = out.to(tensor.dtype)
