@@ -32,7 +32,7 @@ class AllGatherVAutograd(torch.autograd.Function):
     """
     Autograd Wrapper for a distributed AllGatherV primitive.
     It is based on the idea of a single global tensor which is distributed
-    a long a specified dimension into chunks of variable size.
+    along a specified dimension into chunks of variable size.
     This primitive gathers all local tensors from each rank into the
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
@@ -259,7 +259,7 @@ def all_gather_v(
     """
     Autograd Wrapper for a distributed AllGatherV primitive.
     It is based on the idea of a single global tensor which is distributed
-    a long a specified dimension into chunks of variable size.
+    along a specified dimension into chunks of variable size.
     This primitive gathers all local tensors from each rank into the
     full global tensor onto each rank. Its indended to be used in
     tensor-parallel settings on tensors which require gradients
