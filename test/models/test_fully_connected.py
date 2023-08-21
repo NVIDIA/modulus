@@ -56,7 +56,7 @@ def test_fully_connected_constructor(device):
             "out_features": random.randint(1, 16),
             "layer_size": 16,
             "num_layers": 4,
-            "activation_fn": [torch.nn.ReLU(), torch.nn.SiLU()],
+            "activation_fn": ["relu", "silu"],
             "skip_connections": True,
             "adaptive_activations": True,
             "weight_norm": True,

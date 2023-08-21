@@ -15,13 +15,14 @@
 import os
 import time
 import functools
-import modulus
 import torch
 import logging
 from logging import Logger
 from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
 from modulus.distributed import DistributedManager
+
+import modulus
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -51,7 +52,7 @@ class _StaticCapture(object):
 
     def __init__(
         self,
-        model: modulus.models.Module,
+        model: "modulus.Module",
         optim: Union[optim, None] = None,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -194,10 +195,11 @@ class _StaticCapture(object):
                 torch.cuda.synchronize()
                 if DistributedManager().distributed:
                     torch.distributed.barrier()
-                # TODO: temporary workaround till this issue is fixed:
-                # https://github.com/pytorch/pytorch/pull/104487#issuecomment-1638665876
-                delay = os.environ.get("MODULUS_CUDA_GRAPH_CAPTURE_DELAY", "10")
-                time.sleep(int(delay))
+
+                    # TODO: temporary workaround till this issue is fixed:
+                    # https://github.com/pytorch/pytorch/pull/104487#issuecomment-1638665876
+                    delay = os.environ.get("MODULUS_CUDA_GRAPH_CAPTURE_DELAY", "10")
+                    time.sleep(int(delay))
                 with torch.cuda.graph(self.graph):
                     output = self._amp_forward(*args, **kwargs)
                     self.output = output.detach()
@@ -390,7 +392,7 @@ class StaticCaptureTraining(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.models.Module,
+        model: "modulus.Module",
         optim: torch.optim,
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
@@ -466,7 +468,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
 
     def __init__(
         self,
-        model: modulus.models.Module,
+        model: "modulus.Module",
         logger: Union[Logger, None] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
