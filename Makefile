@@ -46,11 +46,11 @@ coverage:
 		coverage html
 
 container-deploy:
-	docker build -t modulus:deploy --target deploy -f Dockerfile .
+	docker build -t modulus:deploy --build-arg TARGETPLATFORM=linux/amd64 --target deploy -f Dockerfile .
 
 container-ci:
-	docker build -t modulus:ci --target ci -f Dockerfile .
+	docker build -t modulus:ci --build-arg TARGETPLATFORM=linux/amd64 --target ci -f Dockerfile .
 
 container-docs:
-	docker build -t modulus:docs --target docs -f Dockerfile .
+	docker build -t modulus:docs --build-arg TARGETPLATFORM=linux/amd64 --target docs -f Dockerfile .
 

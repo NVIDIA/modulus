@@ -38,20 +38,22 @@ COPY . /modulus/
 
 # install vtk and pyvista
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl pyvista>=0.40.1; \ 
-elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-pip install "vtk>=9.2.6" "pyvista>=0.40.1"; \ 
-fi
+	echo "Installing vtk and pyvista for: $TARGETPLATFORM" \
+	pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl pyvista>=0.40.1; \ 
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+	echo "Installing vtk and pyvista for: $TARGETPLATFORM" \
+	pip install "vtk>=9.2.6" "pyvista>=0.40.1"; \ 
+    fi
 
 # Install DGL from source
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.1-cp310-cp310-linux_x86_64.whl" ]; then \
-        echo "DGL wheel exists, installing!" && \
+        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
         pip install --force-reinstall /modulus/deps/dgl-1.1.1-cp310-cp310-linux_x86_64.whl; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-1.1.1-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "DGL wheel exists, installing!" && \
+        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
         pip install --force-reinstall /modulus/deps/dgl-1.1.1-cp310-cp310-linux_aarch64.whl; \
     else \
         echo "No DGL wheel present, building from source" && \
@@ -66,10 +68,10 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.1-cp
 # TODO: Find a fix to eliminate the custom build
 # Forcing numpy update to over ride numba 0.56.4 max numpy constraint
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl" ]; then \
-	echo "Custom wheel exists, installing!" && \
+	echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
 	pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_aarch64.whl" ]; then \
-	echo "Custom wheel exists, installing!" && \
+	echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
         pip install --force-reinstall /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_aarch64.whl; \
     else \
 	echo "No custom wheel present, skipping" && \

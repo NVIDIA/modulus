@@ -95,7 +95,8 @@ pip install .
 To build Modulus docker image:
 
 ```bash
-docker build -t modulus:deploy --target deploy -f Dockerfile .
+docker build -t modulus:deploy \
+    --build-arg TARGETPLATFORM=linux/amd64 --target deploy -f Dockerfile .
 ```
 
 Alternatively, you can run `make container-deploy`
@@ -103,10 +104,14 @@ Alternatively, you can run `make container-deploy`
 To build CI image:
 
 ```bash
-docker build -t modulus:ci --target ci -f Dockerfile .
+docker build -t modulus:ci \
+    --build-arg TARGETPLATFORM=linux/amd64 --target ci -f Dockerfile .
 ```
 
-Alternatively, you can run `make container-ci`
+Alternatively, you can run `make container-ci`.
+
+Currently only `linux/amd64` and `linux/arm64` platforms are supported. `linux/amd64`
+is the recommended default.
 
 ## Contributing
 
