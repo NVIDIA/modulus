@@ -83,14 +83,17 @@ RUN rm -rf /modulus/
 
 # CI image
 FROM builder as ci
+
+ARG TARGETPLATFORM
+
 RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" 
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" \
+	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \ 
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently" \
+	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
 
 
@@ -105,13 +108,16 @@ RUN rm -rf /modulus/
 
 # Docs image
 FROM deploy as docs
+
+ARG TARGETPLATFORM
+
 # Install CI packages
 RUN pip install "protobuf==3.20.0"
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" \
+	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \ 
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently" \
+	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
 # Install packages for Sphinx build
 RUN pip install "recommonmark==0.7.1" "sphinx==5.1.1" "sphinx-rtd-theme==1.0.0" "pydocstyle==6.1.1" "nbsphinx==0.8.9" "nbconvert==6.4.3" "jinja2==3.0.3"
