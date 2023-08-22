@@ -215,7 +215,7 @@ def run_test_indexed_all_to_all_v(rank, world_size):
 def run_test_autograd_prim(func):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    world_size = num_gpus
+    world_size = 2
 
     torch.multiprocessing.spawn(
         func,
