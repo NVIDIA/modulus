@@ -50,26 +50,34 @@ def conj_pad_helper_2d(tensor, pad_dim, other_dim, new_size):
     return result
 
 
-# fft layers:
-# input: dim[0] contig, dim[1] split
-# output: dim[0] split, dim[1] contig
-class distributed_rfft2(torch.autograd.Function):
+class DistributedRFFT2(torch.autograd.Function):
+    """
+    Autograd Wrapper for a distributed 2D real to complex FFT primitive.
+    It is based on the idea of a single global tensor which is distributed
+    along a specified dimension into chunks of equal size.
+    This primitive computes a 1D FFT first along dim[0], then performs
+    an AllToAll transpose before computing a 1D FFT along dim[1].
+    The backward pass performs an IFFT operation with communication
+    in the opposite order as in the forward pass.
+
+    For the forward method, data should be split along dim[1] across the
+    "spatial_parallel" process group. The output is data split in dim[0].
+    """
+
     @staticmethod
     def forward(ctx, x, s, dim, norm="ortho"):
         # NVTX marker
-        torch.cuda.nvtx.range_push("distributed_rfft2.forward")
+        torch.cuda.nvtx.range_push("DistributedRFFT2.forward")
 
         # save:
         ctx.s = s
         ctx.dim = dim
         ctx.norm = norm
 
-        torch.cuda.nvtx.range_push("distributed_rfft2.forward.fft1")
         # assume last dim is split (second to last is contiguous):
         x1 = torch.fft.fft(x, n=s[0], dim=dim[0], norm=norm)
         torch.cuda.nvtx.range_pop()
 
-        torch.cuda.nvtx.range_push("distributed_rfft2.forward.transpose")
         # transpose
         x1_recv, _ = _transpose(
             x1,
@@ -81,7 +89,6 @@ class distributed_rfft2(torch.autograd.Function):
         x1_tran = torch.cat(x1_recv, dim=dim[1])
         torch.cuda.nvtx.range_pop()
 
-        torch.cuda.nvtx.range_push("distributed_rfft2.forward.fft2")
         # another fft:
         x2 = torch.fft.fft(x1_tran, n=s[1], dim=dim[1], norm=norm)
         torch.cuda.nvtx.range_pop()
@@ -127,14 +134,25 @@ class distributed_rfft2(torch.autograd.Function):
         return grad_input, None, None, None
 
 
-# input: dim[0] split, dim[1] contig
-# output: dim[0] contig, dim[1] split
-class distributed_irfft2(torch.autograd.Function):
+class DistributedIRFFT2(torch.autograd.Function):
+    """
+    Autograd Wrapper for a distributed 2D real to complex IFFT primitive.
+    It is based on the idea of a single global tensor which is distributed
+    along a specified dimension into chunks of equal size.
+    This primitive computes a 1D IFFT first along dim[1], then performs
+    an AllToAll transpose before computing a 1D FFT along dim[0].
+    The backward pass performs an FFT operation with communication
+    in the opposite order as in the forward pass.
+
+    For the forward method, data should be split along dim[0] across the
+    "spatial_parallel" process group. The output is data split in dim[1].
+    """
+
     @staticmethod
     def forward(ctx, x, s, dim, norm="ortho"):
 
         # NVTX marker
-        torch.cuda.nvtx.range_push("distributed_irfft2.forward")
+        torch.cuda.nvtx.range_push("DistributedIRFFT2.forward")
 
         # save:
         ctx.s = s

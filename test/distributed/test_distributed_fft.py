@@ -17,7 +17,7 @@ import pytest
 import torch
 import torch.distributed as dist
 from modulus.distributed import DistributedManager
-from modulus.distributed.fft import distributed_rfft2
+from modulus.distributed.fft import DistributedRFFT2
 
 
 def distributed_setup(rank, model_parallel_size, verbose):
@@ -108,7 +108,7 @@ def run_distributed_fft(rank, model_parallel_size, verbose):
         local_input.copy_(tmp)
     torch.cuda.synchronize()
 
-    local_output = distributed_rfft2.apply(local_input, (None, None), (-2, -1), "ortho")
+    local_output = DistributedRFFT2.apply(local_input, (None, None), (-2, -1), "ortho")
     dist.barrier()
 
     global_output = global_rfft2(global_input, dim=(-2, -1), norm="ortho")
