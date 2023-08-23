@@ -14,7 +14,7 @@
 
 import torch
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.utils import _transpose, pad_helper, truncate_helper
+from modulus.distributed.utils import distributed_transpose, pad_helper, truncate_helper
 from modulus.distributed.mappings import gather_from_spatial_parallel_region
 from modulus.distributed.mappings import scatter_to_spatial_parallel_region
 
@@ -79,7 +79,7 @@ class DistributedRFFT2(torch.autograd.Function):
         torch.cuda.nvtx.range_pop()
 
         # transpose
-        x1_recv, _ = _transpose(
+        x1_recv, _ = distributed_transpose(
             x1,
             dim[0],
             dim[1],
@@ -119,7 +119,7 @@ class DistributedRFFT2(torch.autograd.Function):
         g1 = torch.fft.ifft(g_pad, n=s[1], dim=dim[1], norm=norm)
 
         # transpose
-        g1_recv, _ = _transpose(
+        g1_recv, _ = distributed_transpose(
             g1,
             dim[1],
             dim[0],
@@ -172,7 +172,7 @@ class DistributedIRFFT2(torch.autograd.Function):
         x1 = torch.fft.ifft(x_pad, n=ctx.last_dim_size, dim=dim[1], norm=norm)
 
         # transpose
-        x1_recv, _ = _transpose(
+        x1_recv, _ = distributed_transpose(
             x1,
             dim[1],
             dim[0],
@@ -205,7 +205,7 @@ class DistributedIRFFT2(torch.autograd.Function):
         g1 = torch.fft.fft(grad_output, dim=dim[0], norm=norm)
 
         # transpose
-        g1_recv, _ = _transpose(
+        g1_recv, _ = distributed_transpose(
             g1,
             dim[0],
             dim[1],

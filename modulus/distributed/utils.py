@@ -131,7 +131,7 @@ def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
 
 
 # distributed primitives
-def _transpose(tensor, dim0, dim1, group=None, async_op=False):
+def distributed_transpose(tensor, dim0, dim1, group=None, async_op=False):
     """Perform distributed transpose of tensor to switch sharding dimension"""
     # get input format
     input_format = get_memory_format(tensor)
