@@ -76,7 +76,7 @@ class _ScatterToMatmulParallelRegion(torch.autograd.Function):
 
 
 class _GatherFromMatmulParallelRegion(torch.autograd.Function):
-    """Gather the input from matmul parallel region and concatinate."""
+    """Gather the input from matmul parallel region and concatenate."""
 
     @staticmethod
     def symbolic(graph, input_, dim_):
@@ -98,7 +98,7 @@ class _GatherFromMatmulParallelRegion(torch.autograd.Function):
 
 
 class _GatherWithinMatmulParallelRegion(torch.autograd.Function):
-    """Gather the input from matmul parallel region and concatinate."""
+    """Gather the input from matmul parallel region and concatenate."""
 
     @staticmethod
     def symbolic(graph, input_, dim_):
@@ -148,7 +148,7 @@ class _ScatterToSpatialParallelRegion(torch.autograd.Function):
 
 
 class _GatherFromSpatialParallelRegion(torch.autograd.Function):
-    """Gather the input from spatial parallel region and concatinate."""
+    """Gather the input from spatial parallel region and concatenate."""
 
     @staticmethod
     def symbolic(graph, input_, dim_):
@@ -211,5 +211,5 @@ def scatter_to_spatial_parallel_region(input_, dim):
 
 
 def gather_from_spatial_parallel_region(input_, dim):
-    """Gather the input from spatial parallel region and concatinate."""
+    """Gather the input from spatial parallel region and concatenate."""
     return _GatherFromSpatialParallelRegion.apply(input_, dim)
