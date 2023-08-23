@@ -12,9 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added distributed utilities to create process groups and orthogonal process groups.
 - Added distributed AFNO model implementation.
+- Added distributed utilities for communication of buffers of varying size per rank.
 - Added distributed FFT utility.
 
 ### Changed
+
+- Updating file system cache location to modulus folder
 
 ### Deprecated
 
@@ -26,7 +29,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-## [0.2.0] - 2023-08-xx
+## [0.2.1] - 2023-08-08
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- Added a workaround fix for the CUDA graphs error in multi-node runs
+
+### Security
+
+- Update `certifi` package version
+
+### Dependencies
+
+## [0.2.0] - 2023-08-01
 
 ### Added
 
