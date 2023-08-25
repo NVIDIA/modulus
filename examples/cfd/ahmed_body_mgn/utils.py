@@ -67,5 +67,9 @@ def relative_lp_error(pred, y, p=2):
         Calculated relative L2 error norm (percentage) on cpu
     """
 
-    error = torch.mean(torch.norm(pred - y, p=p) / torch.norm(y, p=p)).cpu().numpy()
+    error = (
+        torch.mean(torch.linalg.norm(pred - y, ord=p) / torch.linalg.norm(y, ord=p))
+        .cpu()
+        .numpy()
+    )
     return error * 100
