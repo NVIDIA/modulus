@@ -128,7 +128,6 @@ class HDF5MapStyleDataset(Dataset):
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_3d")
 def main(cfg: DictConfig) -> None:
-
     logger = PythonLogger("main")  # General python logger
     LaunchLogger.initialize()
 
