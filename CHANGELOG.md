@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+- Updated the base container to latest PyTorch 23.07.
+- Update DGL version.
+
 ## [0.2.1] - 2023-08-08
 
 ### Added
