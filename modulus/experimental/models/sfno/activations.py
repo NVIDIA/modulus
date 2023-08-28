@@ -115,7 +115,9 @@ class ComplexActivation(nn.Module):
             out = self.act(zabs + self.bias) * torch.exp(1.0j * z.angle())
         else:
             # identity
-            warn("Unknown complex activation mode. Setting the activation to identity operation")
+            warn(
+                "Unknown complex activation mode. Setting the activation to identity operation"
+            )
             out = z
 
         return out

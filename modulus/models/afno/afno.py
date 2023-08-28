@@ -357,7 +357,7 @@ class PatchEmbed(nn.Module):
         patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
     ):
-        
+
         super().__init__()
         assert len(inp_shape) == 2, "inp_shape should be a list of length 2"
         assert len(patch_size) == 2, "patch_size should be a list of length 2"

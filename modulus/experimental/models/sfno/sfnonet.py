@@ -272,10 +272,12 @@ class FourierNeuralOperatorBlock(nn.Module):
             x = x + self.outer_skip(residual)
 
         return x
-    
+
 
 @dataclass
 class SFNOMetaData(ModelMetaData):
+    """Data class for storing SFNO meta data"""
+
     name: str = "SFNO"
     # Optimization
     jit: bool = False
