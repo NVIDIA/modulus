@@ -34,4 +34,10 @@ GraphCast utils
     :members:
     :show-inheritance:
 
+Filesystem utils
+----------------
+
+.. automodule:: modulus.utils.filesystem
+    :members:
+    :show-inheritance:
 
