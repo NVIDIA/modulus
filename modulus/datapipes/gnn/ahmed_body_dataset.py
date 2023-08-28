@@ -267,6 +267,14 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             self.node_stats = self._get_node_stats(keys=normalize_keys)
             self.edge_stats = self._get_edge_stats()
         else:
+            if not os.path.exists("node_stats.json"):
+                raise FileNotFoundError(
+                    "node_stats.json not found! Node stats must be computed on the training set."
+                )
+            if not os.path.exists("edge_stats.json"):
+                raise FileNotFoundError(
+                    "edge_stats.json not found! Edge stats must be computed on the training set."
+                )
             self.node_stats = load_json("node_stats.json")
             self.edge_stats = load_json("edge_stats.json")
 
@@ -412,7 +420,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
     def _get_edge_stats(self) -> Dict[str, Any]:
         """
-        Compute and save the mean and standard deviation of each edge attribute 'x' in the graphs.
+        Computes the mean and standard deviation of each edge attribute 'x' in the
+        graphs, and saves to a JSON file.
 
         Returns
         -------
@@ -445,8 +454,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
     def _get_node_stats(self, keys: List[str]) -> Dict[str, Any]:
         """
-        Compute and save the mean and standard deviation values of each node attribute
-        for the list of keys in the graphs.
+        Computes the mean and standard deviation values of each node attribute
+        for the list of keys in the graphs, and saves to a JSON file.
 
         Parameters
         ----------
