@@ -45,6 +45,8 @@ class MetaData(ModelMetaData):
     amp_cpu: bool = False
     amp_gpu: bool = True
     torch_fx: bool = False
+    # Data type
+    bf16: bool = True
     # Inference
     onnx: bool = False
     # Physics informed
