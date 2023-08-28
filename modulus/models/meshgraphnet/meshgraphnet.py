@@ -70,6 +70,8 @@ class MeshGraphNet(Module):
         Number of MLP layers for processing nodes in each message passing block, by default 2
     num_layers_edge_processor : int, optional
         Number of MLP layers for processing edge features in each message passing block, by default 2
+    hidden_dim_processor : int, optional
+        Hidden layer size for the message passing blocks, by default 128
     hidden_dim_node_encoder : int, optional
         Hidden layer size for the node feature encoder, by default 128
     num_layers_node_encoder : int, optional
@@ -117,6 +119,7 @@ class MeshGraphNet(Module):
         processor_size: int = 15,
         num_layers_node_processor: int = 2,
         num_layers_edge_processor: int = 2,
+        hidden_dim_processor: int = 128,
         hidden_dim_node_encoder: int = 128,
         num_layers_node_encoder: int = 2,
         hidden_dim_edge_encoder: int = 128,
@@ -131,7 +134,7 @@ class MeshGraphNet(Module):
 
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
-            output_dim=hidden_dim_edge_encoder,
+            output_dim=hidden_dim_processor,
             hidden_dim=hidden_dim_edge_encoder,
             hidden_layers=num_layers_edge_encoder,
             activation_fn=nn.ReLU(),
@@ -140,7 +143,7 @@ class MeshGraphNet(Module):
         )
         self.node_encoder = MeshGraphMLP(
             input_dim_nodes,
-            output_dim=hidden_dim_node_encoder,
+            output_dim=hidden_dim_processor,
             hidden_dim=hidden_dim_node_encoder,
             hidden_layers=num_layers_node_encoder,
             activation_fn=nn.ReLU(),
@@ -148,7 +151,7 @@ class MeshGraphNet(Module):
             recompute_activation=False,
         )
         self.node_decoder = MeshGraphMLP(
-            hidden_dim_node_encoder,
+            hidden_dim_processor,
             output_dim=output_dim,
             hidden_dim=hidden_dim_node_decoder,
             hidden_layers=num_layers_node_decoder,
@@ -158,8 +161,8 @@ class MeshGraphNet(Module):
         )
         self.processor = MeshGraphNetProcessor(
             processor_size=processor_size,
-            input_dim_node=hidden_dim_node_encoder,
-            input_dim_edge=hidden_dim_edge_encoder,
+            input_dim_node=hidden_dim_processor,
+            input_dim_edge=hidden_dim_processor,
             num_layers_node=num_layers_node_processor,
             num_layers_edge=num_layers_edge_processor,
             aggregation=aggregation,

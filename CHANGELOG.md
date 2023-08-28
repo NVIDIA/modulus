@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added distributed utilities to create process groups and orthogonal process groups.
 - Added distributed AFNO model implementation.
+- Added distributed utilities for communication of buffers of varying size per rank.
 
 ### Changed
+
+- Updating file system cache location to modulus folder
 
 ### Deprecated
 
@@ -24,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+- Updated the base container to latest PyTorch 23.07.
+- Update DGL version.
 
 ## [0.2.1] - 2023-08-08
 
