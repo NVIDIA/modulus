@@ -357,7 +357,10 @@ class PatchEmbed(nn.Module):
         patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
     ):
+        
         super().__init__()
+        assert len(inp_shape) == 2, "inp_shape should be a list of length 2"
+        assert len(patch_size) == 2, "patch_size should be a list of length 2"
         num_patches = (inp_shape[1] // patch_size[1]) * (inp_shape[0] // patch_size[0])
         self.inp_shape = inp_shape
         self.patch_size = patch_size
@@ -461,6 +464,7 @@ class AFNO(Module):
         hard_thresholding_fraction: float = 1.0,
     ) -> None:
         super().__init__(meta=MetaData())
+        assert len(inp_shape) == 2, "inp_shape should be a list of length 2"
         assert len(patch_size) == 2, "patch_size should be a list of length 2"
         assert (
             inp_shape[0] % patch_size[0] == 0 and inp_shape[1] % patch_size[1] == 0

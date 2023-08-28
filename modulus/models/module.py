@@ -29,7 +29,6 @@ import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.registry import ModelRegistry
 from modulus.utils.filesystem import _get_fs, _download_cached
-from modulus.utils.json import OmegaConfEncoder
 
 
 class Module(torch.nn.Module):
@@ -179,7 +178,7 @@ class Module(torch.nn.Module):
             torch.save(self.state_dict(), local_path / "model.pt")
 
             with open(local_path / "args.json", "w") as f:
-                json.dump(self._args, f, cls=OmegaConfEncoder)
+                json.dump(self._args, f)
 
             # Save the modulus version and git hash (if available)
             metadata_info = {

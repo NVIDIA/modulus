@@ -68,22 +68,6 @@ from modulus.models.module import Module
 from modulus.models.meta import ModelMetaData
 
 
-@dataclass
-class MetaData(ModelMetaData):
-    name: str = "SFNO"
-    # Optimization
-    jit: bool = False
-    cuda_graphs: bool = True
-    amp_cpu: bool = True
-    amp_gpu: bool = True
-    torch_fx: bool = False
-    # Inference
-    onnx: bool = False
-    # Physics informed
-    func_torch: bool = False
-    auto_grad: bool = False
-
-
 class SpectralFilterLayer(nn.Module):
     """Spectral filter layer"""
 
@@ -288,6 +272,24 @@ class FourierNeuralOperatorBlock(nn.Module):
             x = x + self.outer_skip(residual)
 
         return x
+    
+
+@dataclass
+class SFNOMetaData(ModelMetaData):
+    name: str = "SFNO"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = True
+    amp_cpu: bool = True
+    amp_gpu: bool = True
+    torch_fx: bool = False
+    # Data type
+    bf16: bool = False
+    # Inference
+    onnx: bool = False
+    # Physics informed
+    func_torch: bool = False
+    auto_grad: bool = False
 
 
 class SFNO(Module):
@@ -418,7 +420,7 @@ class SFNO(Module):
         output_transform: bool = False,
         checkpointing: int = 0,
     ):  # pragma: no cover
-        super().__init__(meta=MetaData())
+        super().__init__(meta=SFNOMetaData())
 
         self.spectral_transform = spectral_transform
         self.grid = grid
