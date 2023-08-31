@@ -61,7 +61,7 @@ RUN rm -rf /modulus/
 FROM builder as ci
 RUN pip install "tensorflow==2.9.0" "warp-lang>=0.6.0" "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e . && rm -rf /modulus/ && pip uninstall nvidia-modulus -y
+RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
