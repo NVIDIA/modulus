@@ -12,20 +12,16 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "Apache 2.0"}
 dependencies = [
-    "h5py>=3.7.0",
-    "mpi4py>=3.1.4",
-    "netcdf4>=1.6.3",
-    "certifi>=2023.7.22",
-    "numpy>=1.22.4",
-    "nvidia_dali_cuda110>=1.16.0",
-    "pytest>=6.0.0",
-    "ruamel.yaml>=0.17.22",
-    "setuptools>=67.6.0",
     "torch>=1.12",
+    "numpy>=1.22.4,<1.25",
+    "h5py>=3.7.0",
     "xarray>=2023.1.0",
     "zarr>=2.14.2",
+    "nvidia_dali_cuda110>=1.16.0",
     "s3fs>=2023.5.0",
-    "scikit-learn>=1.0.2"
+    "setuptools>=67.6.0",
+    "certifi>=2023.7.22",
+    "pytest>=6.0.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -35,7 +31,19 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-inference = ["onnxruntime==1.13.1"]
+all = [
+    "mpi4py>=3.1.4",
+    "netcdf4>=1.6.3",
+    "ruamel.yaml>=0.17.22",
+    "scikit-learn>=1.0.2",
+    "warp-lang>=0.6.0",
+    "tensorly>=0.8.1",
+    "vtk>=9.2.6",
+    "pyvista>=0.40.1",
+    "tensorly-torch>=0.4.0",
+    "torch-harmonics>=0.6.2",
+]
+
 
 [tool.setuptools.dynamic]
 version = {attr = "modulus.__version__"}

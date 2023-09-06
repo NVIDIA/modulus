@@ -13,10 +13,14 @@
 # limitations under the License.
 
 import json
-from modulus.utils.sfno.YParams import ParamsBase, YParams
+from pytest_utils import import_or_fail
 
 
-def test_ParamsBase():
+
+def test_ParamsBase(pytestconfig):
+    import_or_fail("ruamel.yaml", pytestconfig)
+    from modulus.utils.sfno.YParams import ParamsBase, YParams
+
     p = ParamsBase()
     p["foo"] = "bar"
     assert p["foo"] == "bar"
@@ -27,7 +31,10 @@ def test_ParamsBase():
     assert p.to_dict() == {"foo": "bar"}
 
 
-def test_ParamsBase_from_json(tmp_path):
+def test_ParamsBase_from_json(tmp_path, pytestconfig):
+    import_or_fail("ruamel.yaml", pytestconfig)
+    from modulus.utils.sfno.YParams import ParamsBase, YParams
+
     d = {"foo": "bar", "baz": 123}
     p = tmp_path / "params.json"
     p.write_text(json.dumps(d))
@@ -37,7 +44,10 @@ def test_ParamsBase_from_json(tmp_path):
     assert params["baz"] == 123
 
 
-def test_YParams(tmp_path):
+def test_YParams(tmp_path, pytestconfig):
+    import_or_fail("ruamel.yaml", pytestconfig)
+    from modulus.utils.sfno.YParams import ParamsBase, YParams
+
     yaml_content = """
     config1:
         foo: bar

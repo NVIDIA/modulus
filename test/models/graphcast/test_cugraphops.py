@@ -15,12 +15,14 @@
 import torch
 import numpy as np
 from utils import get_icosphere_path, fix_random_seeds
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
+from pytest_utils import import_or_fail
 
-
-def test_cugraphops(num_channels=2, res_h=21, res_w=10):
+def test_cugraphops(pytestconfig, num_channels=2, res_h=21, res_w=10):
     """Test cugraphops"""
     icosphere_path = get_icosphere_path()
+    
+    import_or_fail("dgl", pytestconfig)
+    from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     # Fix random seeds
     fix_random_seeds()

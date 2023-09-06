@@ -13,12 +13,8 @@
 # limitations under the License.
 
 import fsspec
-from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper, dlwp
 from modulus.utils.filesystem import Package
-from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 from modulus.models.dlwp import DLWP
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from pathlib import Path
 import numpy as np
 import datetime
@@ -28,6 +24,21 @@ import shutil
 import os
 
 import pytest
+from pytest_utils import import_or_fail
+
+@pytest.fixture
+def dlwp_data_dir():
+    path = "/data/nfs/modulus-data/plugin_data/dlwp/"
+    if not os.path.exists(path):
+        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+    return path
+
+@pytest.fixture
+def graphcast_data_dir():
+    path = "/data/nfs/modulus-data/plugin_data/graphcast/"
+    if not os.path.exists(path):
+        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+    return path
 
 
 def _copy_directory(src, dst):
@@ -78,8 +89,13 @@ def save_untrained_sfno(path):
         "nettype": "sfno",
         "add_zenith": True,
     }
+    from modulus.utils.sfno.YParams import ParamsBase
+ 
     params = ParamsBase()
     params.update_params(config)
+    
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+    
     model = SphericalFourierNeuralOperatorNet(params)
 
     config_path = path / "config.json"
@@ -94,9 +110,14 @@ def save_untrained_sfno(path):
     return package
 
 
-def test_sfno(tmp_path):
-    package = save_untrained_sfno(tmp_path)
+def test_sfno(tmp_path, pytestconfig):
+    
+    import_or_fail("ruamel.yaml", pytestconfig)
+    import_or_fail("tensorly", pytestconfig)
+    from modulus.models.fcn_mip_plugin import sfno
 
+    package = save_untrained_sfno(tmp_path)
+    
     model = sfno(package, pretrained=True)
     x = torch.ones(1, 1, model.model.h, model.model.w)
     time = datetime.datetime(2018, 1, 1)
@@ -128,8 +149,10 @@ def save_untrained_dlwp(path):
     package = Package(url, seperator="/")
     return package
 
+def test_dlwp(tmp_path, dlwp_data_dir, pytestconfig):
+    import_or_fail("tensorly", pytestconfig)
+    from modulus.models.fcn_mip_plugin import dlwp 
 
-def test_dlwp(tmp_path):
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
@@ -143,7 +166,7 @@ def test_dlwp(tmp_path):
 
 
 def save_untrained_graphcast(path):
-
+    
     icosphere_path = path / "icospheres.json"
     config = {
         "meshgraph_path": icosphere_path.as_posix(),
@@ -156,6 +179,8 @@ def save_untrained_graphcast(path):
         "hidden_dim": 2,
         "do_concat_trick": True,
     }
+    
+    from modulus.models.graphcast import GraphCastNet
 
     model = GraphCastNet(**config)
 
@@ -171,8 +196,12 @@ def save_untrained_graphcast(path):
     return package
 
 
-def test_graphcast(tmp_path):
-    source_dir = "/data/nfs/modulus-data/plugin_data/graphcast/"
+def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
+    import_or_fail("dgl", pytestconfig)
+    import_or_fail("tensorly", pytestconfig)
+    from modulus.models.fcn_mip_plugin import graphcast_34ch
+
+    source_dir = graphcast_data_dir
     _copy_directory(source_dir, tmp_path)
 
     package = save_untrained_graphcast(
@@ -186,7 +215,11 @@ def test_graphcast(tmp_path):
 
 
 @pytest.mark.parametrize("batch_size", [1, 2])
-def test__CozZenWrapper(batch_size):
+def test__CozZenWrapper(batch_size, pytestconfig):
+    
+    import_or_fail("tensorly", pytestconfig)
+    from modulus.models.fcn_mip_plugin import _CosZenWrapper 
+    
     class I(torch.nn.Module):
         def forward(self, x):
             return x

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pytest
 import torch
 
@@ -24,12 +25,18 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    return "/data/nfs/modulus-data/datasets/hdf5/test/"
+    path = "/data/nfs/modulus-data/datasets/hdf5/test/"
+    if not os.path.exists(path):
+        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+    return path
 
 
 @pytest.fixture
 def stats_dir():
-    return "/data/nfs/modulus-data/datasets/hdf5/stats/"
+    path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
+    if not os.path.exists(path):
+        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+    return path
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

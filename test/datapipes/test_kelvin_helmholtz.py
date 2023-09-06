@@ -16,15 +16,17 @@ import pytest
 import torch
 
 from typing import Tuple
-from modulus.datapipes.benchmarks.kelvin_helmholtz import KelvinHelmholtz2D
 from . import common
-
+from pytest_utils import import_or_fail
 Tensor = torch.Tensor
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_kelvin_helmholtz_2d_constructor(device):
+def test_kelvin_helmholtz_2d_constructor(device, pytestconfig):
 
+    import_or_fail("warp", pytestconfig)
+    from modulus.datapipes.benchmarks.kelvin_helmholtz import KelvinHelmholtz2D
+ 
     # construct data pipe
     datapipe = KelvinHelmholtz2D(
         resolution=32,
@@ -44,8 +46,11 @@ def test_kelvin_helmholtz_2d_constructor(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_kelvin_helmholtz_2d_device(device):
-
+def test_kelvin_helmholtz_2d_device(device, pytestconfig):
+    
+    import_or_fail("warp", pytestconfig)
+    from modulus.datapipes.benchmarks.kelvin_helmholtz import KelvinHelmholtz2D
+ 
     # construct data pipe
     datapipe = KelvinHelmholtz2D(
         resolution=32,
@@ -72,8 +77,11 @@ def test_kelvin_helmholtz_2d_device(device):
 @pytest.mark.parametrize("batch_size", [1, 2, 3])
 @pytest.mark.parametrize("seq_length", [2, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_kelvin_helmholtz_2d_shape(resolution, batch_size, seq_length, device):
-
+def test_kelvin_helmholtz_2d_shape(resolution, batch_size, seq_length, device, pytestconfig):
+    
+    import_or_fail("warp", pytestconfig)
+    from modulus.datapipes.benchmarks.kelvin_helmholtz import KelvinHelmholtz2D
+ 
     # construct data pipe
     datapipe = KelvinHelmholtz2D(
         resolution=resolution,
@@ -110,8 +118,11 @@ def test_kelvin_helmholtz_2d_shape(resolution, batch_size, seq_length, device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0"])
-def test_kelvin_helmholtz_cudagraphs(device):
+def test_kelvin_helmholtz_cudagraphs(device, pytestconfig):
 
+    import_or_fail("warp", pytestconfig)
+    from modulus.datapipes.benchmarks.kelvin_helmholtz import KelvinHelmholtz2D
+ 
     # Preprocess function to convert dataloader output into Tuple of tensors
     def input_fn(data) -> Tuple[Tensor, ...]:
         return (data["density"], data["velocity"], data["pressure"])

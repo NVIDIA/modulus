@@ -15,13 +15,16 @@
 
 import torch
 import pytest
-
-from modulus.utils.graphcast.graph_utils import latlon2xyz, xyz2latlon
+from pytest_utils import import_or_fail 
 
 
 @pytest.mark.parametrize("latlon", [[-27.0, 48.0], [0, 0], [62.0, -45.0]])
-def test_coordinate_transform(latlon):
+def test_coordinate_transform(latlon, pytestconfig):
     """Test coordinate transformation from latlon to xyz and back."""
+    
+    import_or_fail("dgl", pytestconfig)
+    from modulus.utils.graphcast.graph_utils import latlon2xyz, xyz2latlon
+
     latlon = torch.tensor([latlon], dtype=torch.float)
     xyz = latlon2xyz(latlon)
     latlon_recovered = xyz2latlon(xyz)

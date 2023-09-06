@@ -19,7 +19,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--multigpu", action="store_true", default=False, help="run multigpu tests"
     )
-
+    parser.addoption(
+        "--fail-on-missing-modules", action="store_true", default=False,
+        help="fail tests if required modules are missing")
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "multigpu: mark test as multigpu to run")

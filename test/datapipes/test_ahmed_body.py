@@ -12,23 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pytest
 import torch
+import importlib
 
 from typing import Tuple
-from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from . import common
+from pytest_utils import import_or_fail
 
 Tensor = torch.Tensor
 
-
 @pytest.fixture
 def data_dir():
-    return "/data/nfs/modulus-data/datasets/ahmed_body/"
+    path = "/data/nfs/modulus-data/datasets/ahmed_body/"
+    if not os.path.exists(path):
+        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+    return path
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ahmed_body_constructor(data_dir, device):
+def test_ahmed_body_constructor(data_dir, device, pytestconfig):
+    
+    import_or_fail("vtk", pytestconfig)
+    import_or_fail("pyvista", pytestconfig)
+    from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 
     # construct dataset
     dataset = AhmedBodyDataset(
