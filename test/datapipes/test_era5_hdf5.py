@@ -27,7 +27,9 @@ Tensor = torch.Tensor
 def data_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/test/"
     if not os.path.exists(path):
-        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+        pytest.skip(
+            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
+        )
     return path
 
 
@@ -35,7 +37,9 @@ def data_dir():
 def stats_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
     if not os.path.exists(path):
-        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+        pytest.skip(
+            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
+        )
     return path
 
 

@@ -15,9 +15,10 @@
 import torch
 import sys, os
 import numpy as np
-import pytest 
+import pytest
 
 dgl = pytest.importorskip("dgl")
+
 
 def fix_random_seeds():
     """Fix random seeds for reproducibility"""
