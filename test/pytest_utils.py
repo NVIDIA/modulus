@@ -16,33 +16,6 @@
 from functools import wraps
 import pytest
 
-"""
-def import_or_fail(module_names):
-    def decorator(test_func):
-        @pytest.mark.usefixtures("pytestconfig")
-        @wraps(test_func)
-        def wrapper(*args, **kwargs):
-            pytestconfig = kwargs.get("pytestconfig")
-            if pytestconfig is None:
-                raise ValueError("pytestconfig must be passed as an argument when using the import_or_fail_decorator.")
-
-            if not isinstance(module_names, (list, tuple)):
-                actual_module_names = [module_names]  # Allow single string for backward compatibility
-            else:
-                actual_module_names = module_names
-
-            for module_name in actual_module_names:
-                if pytestconfig.getoption("--fail-on-missing-modules"):
-                    __import__(module_name)
-                else:
-                    pytest.importorskip(module_name)
-
-            return test_func(*args, **kwargs)
-
-        return wrapper
-    return decorator
-"""
-
 
 def import_or_fail(module_names):
     def decorator(test_func):
