@@ -16,6 +16,8 @@ import numpy as np
 import torch
 import xarray
 import datetime
+from urllib.parse import urlparse
+import glob
 
 import modulus
 from modulus.models.sfno import sfnonet
@@ -165,8 +167,10 @@ class _DLWPWrapper(torch.nn.Module):
         data = self.input_map_wts.S.values
         M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
-        input = input.reshape(input.shape[0], input.shape[1], input.shape[2], -1) @ M.T
-        input = input.reshape(input.shape[0], input.shape[1], input.shape[2], 6, 64, 64)
+        N, T, C = input.shape[0], input.shape[1], input.shape[2]
+        input = input.reshape(N * T * C, -1) @ M.T
+        S = int((M.shape[0] / 6) ** 0.5)
+        input = input.reshape(N, T, C, 6, S, S)
         input_list = list(torch.split(input, 1, dim=1))
         input_list = [tensor.squeeze(1) for tensor in input_list]
         repeat_vals = (input.shape[0], -1, -1, -1, -1)  # repeat along batch dimension
@@ -222,8 +226,9 @@ class _DLWPWrapper(torch.nn.Module):
         data = self.output_map_wts.S.values
         M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
-        output = output.reshape(output.shape[0], 2, output.shape[2], -1) @ M.T
-        output = output.reshape(output.shape[0], 2, output.shape[2], 721, 1440)
+        N, T, C = output.shape[0], 2, output.shape[2]
+        output = output.reshape(N * T * C, -1) @ M.T
+        output = output.reshape(N, T, C, 721, 1440)
 
         return output
 
@@ -243,8 +248,35 @@ def dlwp(package, pretrained=True):
     latgrid, longrid = latlon_grids["latgrid"].values, latlon_grids["longrid"].values
 
     # load maps
-    ll_to_cs_mapfile_path = package.get("map_LL721x1440_CS64.nc")
-    cs_to_ll_mapfile_path = package.get("map_CS64_LL721x1440.nc")
+    parsed_uri = urlparse(package.root)
+    if parsed_uri.scheme == "file":
+        root_path = parsed_uri.path
+    else:
+        root_path = package.root
+
+    ll_to_cs_file = glob.glob(root_path + package.seperator + "map_LL*_CS*.nc")
+    cs_to_ll_file = glob.glob(root_path + package.seperator + "map_CS*_LL*.nc")
+
+    if ll_to_cs_file:
+        file_path = ll_to_cs_file[0]  # take the first match
+        if parsed_uri.scheme == "file":
+            ll_to_cs_relative_path = file_path[len(root_path) :].lstrip(
+                package.seperator
+            )
+        else:
+            ll_to_cs_relative_path = file_path[len(root_path) :]
+
+    if cs_to_ll_file:
+        file_path = cs_to_ll_file[0]
+        if parsed_uri.scheme == "file":
+            cs_to_ll_relative_path = file_path[len(root_path) :].lstrip(
+                package.seperator
+            )
+        else:
+            cs_to_ll_relative_path = file_path[len(root_path) :]
+
+    ll_to_cs_mapfile_path = package.get(ll_to_cs_relative_path)
+    cs_to_ll_mapfile_path = package.get(cs_to_ll_relative_path)
 
     with open(package.get("config.json")) as json_file:
         config = json.load(json_file)
