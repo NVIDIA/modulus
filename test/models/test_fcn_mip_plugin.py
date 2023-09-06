@@ -121,12 +121,10 @@ def save_untrained_sfno(path):
     return package
 
 
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_sfno(tmp_path, pytestconfig):
     """Test SFNO plugin"""
 
-    import_or_fail(
-        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
-    )
     from modulus.models.fcn_mip_plugin import sfno
 
     package = save_untrained_sfno(tmp_path)
@@ -164,12 +162,10 @@ def save_untrained_dlwp(path):
     return package
 
 
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_dlwp(tmp_path, dlwp_data_dir, pytestconfig):
     """Test DLWP plugin"""
 
-    import_or_fail(
-        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
-    )
     from modulus.models.fcn_mip_plugin import dlwp
 
     package = save_untrained_dlwp(tmp_path)
@@ -216,12 +212,10 @@ def save_untrained_graphcast(path):
     return package
 
 
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
     """Test GraphCast plugin"""
 
-    import_or_fail(
-        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
-    )
     from modulus.models.fcn_mip_plugin import graphcast_34ch
 
     source_dir = graphcast_data_dir
@@ -237,13 +231,11 @@ def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
     assert out.shape == x.shape
 
 
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test__CozZenWrapper(batch_size, pytestconfig):
     """Test Cosine Zenith wrapper"""
 
-    import_or_fail(
-        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
-    )
     from modulus.models.fcn_mip_plugin import _CosZenWrapper
 
     class I(torch.nn.Module):

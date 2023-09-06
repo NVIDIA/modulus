@@ -16,9 +16,8 @@ import json
 from pytest_utils import import_or_fail
 
 
-
+@import_or_fail("ruamel.yaml")
 def test_ParamsBase(pytestconfig):
-    import_or_fail("ruamel.yaml", pytestconfig)
     from modulus.utils.sfno.YParams import ParamsBase, YParams
 
     p = ParamsBase()
@@ -31,8 +30,8 @@ def test_ParamsBase(pytestconfig):
     assert p.to_dict() == {"foo": "bar"}
 
 
+@import_or_fail("ruamel.yaml")
 def test_ParamsBase_from_json(tmp_path, pytestconfig):
-    import_or_fail("ruamel.yaml", pytestconfig)
     from modulus.utils.sfno.YParams import ParamsBase, YParams
 
     d = {"foo": "bar", "baz": 123}
@@ -44,8 +43,8 @@ def test_ParamsBase_from_json(tmp_path, pytestconfig):
     assert params["baz"] == 123
 
 
+@import_or_fail("ruamel.yaml")
 def test_YParams(tmp_path, pytestconfig):
-    import_or_fail("ruamel.yaml", pytestconfig)
     from modulus.utils.sfno.YParams import ParamsBase, YParams
 
     yaml_content = """

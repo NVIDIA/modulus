@@ -34,10 +34,10 @@ def data_dir():
     return path
 
 
+@import_or_fail(["vtk", "pyvista"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_ahmed_body_constructor(data_dir, device, pytestconfig):
 
-    import_or_fail(["vtk", "pyvista"], pytestconfig)
     from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 
     # construct dataset

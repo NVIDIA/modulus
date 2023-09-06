@@ -28,13 +28,13 @@ from pytest_utils import import_or_fail
 icosphere_path = get_icosphere_path()
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_graphcast_forward(device, pytestconfig, num_channels=2, res_h=10, res_w=20):
     """Test graphcast forward pass"""
-    
-    import_or_fail("dgl", pytestconfig)
+
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
- 
+
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
@@ -58,15 +58,15 @@ def test_graphcast_forward(device, pytestconfig, num_channels=2, res_h=10, res_w
     assert common.validate_forward_accuracy(model, (x,), rtol=1e-2)
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_graphcast_constructor(
     device, pytestconfig, num_channels_1=2, num_channels_2=3, res_h=10, res_w=20
 ):
     """Test graphcast constructor options"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
- 
+
     # Define dictionary of constructor args
     arg_list = [
         {
@@ -109,13 +109,13 @@ def test_graphcast_constructor(
         )
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_GraphCast_optims(device, pytestconfig, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast optimizations"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
- 
+
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
         model_kwds = {
@@ -154,13 +154,13 @@ def test_GraphCast_optims(device, pytestconfig, num_channels=2, res_h=10, res_w=
     assert common.validate_combo_optims(model, (*invar,))
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_graphcast_checkpoint(device, pytestconfig, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast checkpoint save/load"""
-    
-    import_or_fail("dgl", pytestconfig)
+
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
- 
+
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
@@ -188,14 +188,14 @@ def test_graphcast_checkpoint(device, pytestconfig, num_channels=2, res_h=10, re
     )
 
 
+@import_or_fail("dgl")
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_GraphCast_deploy(device, pytestconfig, num_channels=2, res_h=10, res_w=20):
     """Test GraphCast deployment support"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
- 
+
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,

@@ -26,11 +26,12 @@ from pytest_utils import import_or_fail
 
 dgl = pytest.importorskip("dgl")
 
+
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_meshgraphnet_forward(device, pytestconfig):
     """Test mehsgraphnet forward pass"""
-    
-    import_or_fail("dgl", pytestconfig)
+
     from modulus.models.meshgraphnet import MeshGraphNet
 
     torch.manual_seed(0)
@@ -60,11 +61,11 @@ def test_meshgraphnet_forward(device, pytestconfig):
     )
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_mehsgraphnet_constructor(device, pytestconfig):
     """Test mehsgraphnet constructor options"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.meshgraphnet import MeshGraphNet
 
     # Define dictionary of constructor args
@@ -117,11 +118,11 @@ def test_mehsgraphnet_constructor(device, pytestconfig):
         assert outvar.shape == (bsize * num_nodes, kw_args["output_dim"])
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_meshgraphnet_optims(device, pytestconfig):
     """Test meshgraphnet optimizations"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.meshgraphnet import MeshGraphNet
 
     def setup_model():
@@ -156,11 +157,11 @@ def test_meshgraphnet_optims(device, pytestconfig):
     assert common.validate_combo_optims(model, (*invar,))
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_meshgraphnet_checkpoint(device, pytestconfig):
     """Test meshgraphnet checkpoint save/load"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.meshgraphnet import MeshGraphNet
 
     # Construct MGN model
@@ -194,12 +195,12 @@ def test_meshgraphnet_checkpoint(device, pytestconfig):
     )
 
 
+@import_or_fail("dgl")
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_meshgraphnet_deploy(device, pytestconfig):
     """Test mesh-graph net deployment support"""
 
-    import_or_fail("dgl", pytestconfig)
     from modulus.models.meshgraphnet import MeshGraphNet
 
     # Construct MGN model

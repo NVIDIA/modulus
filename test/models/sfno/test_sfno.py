@@ -25,12 +25,12 @@ from pytest_utils import import_or_fail
 from utils import fix_random_seeds
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("checkpointing", [0, 2])
 def test_sfno_forward(device, checkpointing, pytestconfig):
     """Test sfno forward pass with & without checkpointing"""
 
-    import_or_fail(["tensorly", "tltorch", "torch_harmonics"], pytestconfig)
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 2
@@ -58,6 +58,7 @@ def test_sfno_forward(device, checkpointing, pytestconfig):
     assert common.validate_forward_accuracy(model, (x,), rtol=1e-3)
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize(
     "filter_type, operator_type, use_mlp, activation_function, pos_embed, \
@@ -119,7 +120,6 @@ def test_sfno_constructor(
     """Test sfno constructor options"""
     # Define dictionary of constructor args
 
-    import_or_fail(["tensorly", "tltorch", "torch_harmonics"], pytestconfig)
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 2
@@ -184,11 +184,11 @@ def test_sfno_constructor(
         assert outvar.shape == (batch_size, in_chans, h, w)
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_sfno_optims(device, pytestconfig):
     """Test sfno optimizations"""
 
-    import_or_fail(["tensorly", "tltorch", "torch_harmonics"], pytestconfig)
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     def setup_model():
@@ -232,11 +232,11 @@ def test_sfno_optims(device, pytestconfig):
     assert common.validate_combo_optims(model, (*invar,))
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_sfno_checkpoint(device, pytestconfig):
     """Test sfno checkpoint save/load"""
 
-    import_or_fail(["tensorly", "tltorch", "torch_harmonics"], pytestconfig)
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 4
@@ -272,12 +272,12 @@ def test_sfno_checkpoint(device, pytestconfig):
     )
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_sfno_deploy(device, pytestconfig):
     """Test sfno deployment support"""
 
-    import_or_fail(["tensorly", "tltorch", "torch_harmonics"], pytestconfig)
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 3
