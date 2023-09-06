@@ -23,19 +23,21 @@ from pytest_utils import import_or_fail
 
 Tensor = torch.Tensor
 
+
 @pytest.fixture
 def data_dir():
     path = "/data/nfs/modulus-data/datasets/ahmed_body/"
     if not os.path.exists(path):
-        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+        pytest.skip(
+            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
+        )
     return path
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_ahmed_body_constructor(data_dir, device, pytestconfig):
-    
-    import_or_fail("vtk", pytestconfig)
-    import_or_fail("pyvista", pytestconfig)
+
+    import_or_fail(["vtk", "pyvista"], pytestconfig)
     from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 
     # construct dataset

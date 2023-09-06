@@ -26,18 +26,28 @@ import os
 import pytest
 from pytest_utils import import_or_fail
 
+
 @pytest.fixture
 def dlwp_data_dir():
+    """Data dir for dlwp package"""
+
     path = "/data/nfs/modulus-data/plugin_data/dlwp/"
     if not os.path.exists(path):
-        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+        pytest.skip(
+            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
+        )
     return path
+
 
 @pytest.fixture
 def graphcast_data_dir():
+    """Data dir for graphcast package"""
+
     path = "/data/nfs/modulus-data/plugin_data/graphcast/"
     if not os.path.exists(path):
-        pytest.skip("NFS volumes not set up. Run `make get-data` from the root directory of the repo")
+        pytest.skip(
+            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
+        )
     return path
 
 
@@ -76,6 +86,7 @@ def save_checkpoint(model, check_point_path, del_device_buffer=False):
 
 
 def save_untrained_sfno(path):
+    """Function to save untrained SFNO"""
 
     config = {
         "N_in_channels": 2,
@@ -90,12 +101,12 @@ def save_untrained_sfno(path):
         "add_zenith": True,
     }
     from modulus.utils.sfno.YParams import ParamsBase
- 
+
     params = ParamsBase()
     params.update_params(config)
-    
+
     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
-    
+
     model = SphericalFourierNeuralOperatorNet(params)
 
     config_path = path / "config.json"
@@ -111,13 +122,15 @@ def save_untrained_sfno(path):
 
 
 def test_sfno(tmp_path, pytestconfig):
-    
-    import_or_fail("ruamel.yaml", pytestconfig)
-    import_or_fail("tensorly", pytestconfig)
+    """Test SFNO plugin"""
+
+    import_or_fail(
+        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
+    )
     from modulus.models.fcn_mip_plugin import sfno
 
     package = save_untrained_sfno(tmp_path)
-    
+
     model = sfno(package, pretrained=True)
     x = torch.ones(1, 1, model.model.h, model.model.w)
     time = datetime.datetime(2018, 1, 1)
@@ -128,6 +141,7 @@ def test_sfno(tmp_path, pytestconfig):
 
 
 def save_untrained_dlwp(path):
+    """Function to save untrained DLWP"""
 
     config = {
         "nr_input_channels": 18,
@@ -149,9 +163,14 @@ def save_untrained_dlwp(path):
     package = Package(url, seperator="/")
     return package
 
+
 def test_dlwp(tmp_path, dlwp_data_dir, pytestconfig):
-    import_or_fail("tensorly", pytestconfig)
-    from modulus.models.fcn_mip_plugin import dlwp 
+    """Test DLWP plugin"""
+
+    import_or_fail(
+        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
+    )
+    from modulus.models.fcn_mip_plugin import dlwp
 
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
@@ -166,7 +185,8 @@ def test_dlwp(tmp_path, dlwp_data_dir, pytestconfig):
 
 
 def save_untrained_graphcast(path):
-    
+    """Function to save untrained GraphCast"""
+
     icosphere_path = path / "icospheres.json"
     config = {
         "meshgraph_path": icosphere_path.as_posix(),
@@ -179,7 +199,7 @@ def save_untrained_graphcast(path):
         "hidden_dim": 2,
         "do_concat_trick": True,
     }
-    
+
     from modulus.models.graphcast import GraphCastNet
 
     model = GraphCastNet(**config)
@@ -197,8 +217,11 @@ def save_untrained_graphcast(path):
 
 
 def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
-    import_or_fail("dgl", pytestconfig)
-    import_or_fail("tensorly", pytestconfig)
+    """Test GraphCast plugin"""
+
+    import_or_fail(
+        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
+    )
     from modulus.models.fcn_mip_plugin import graphcast_34ch
 
     source_dir = graphcast_data_dir
@@ -216,10 +239,13 @@ def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
 
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test__CozZenWrapper(batch_size, pytestconfig):
-    
-    import_or_fail("tensorly", pytestconfig)
-    from modulus.models.fcn_mip_plugin import _CosZenWrapper 
-    
+    """Test Cosine Zenith wrapper"""
+
+    import_or_fail(
+        ["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"], pytestconfig
+    )
+    from modulus.models.fcn_mip_plugin import _CosZenWrapper
+
     class I(torch.nn.Module):
         def forward(self, x):
             return x
