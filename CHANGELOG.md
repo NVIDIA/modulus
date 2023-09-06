@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed modulus uninstall in CI docker image
+
 ### Security
 
 ### Dependencies
