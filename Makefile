@@ -45,12 +45,25 @@ coverage:
 		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
 		coverage html
 
+ARCH := $(shell uname -p)
+
+ifeq ($(ARCH), x86_64)
+    TARGETPLATFORM := "linux/amd64"
+else
+    ifeq ($(ARCH), aarch64)
+        TARGETPLATFORM := "linux/arm64"
+    else
+        $(error Unknown CPU architecture ${ARCH} detected)
+    endif
+endif
+
+
 container-deploy:
-	docker build -t modulus:deploy --build-arg TARGETPLATFORM=linux/amd64 --target deploy -f Dockerfile .
+	docker build -t modulus:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target deploy -f Dockerfile .
 
 container-ci:
-	docker build -t modulus:ci --build-arg TARGETPLATFORM=linux/amd64 --target ci -f Dockerfile .
+	docker build -t modulus:ci --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target ci -f Dockerfile .
 
 container-docs:
-	docker build -t modulus:docs --build-arg TARGETPLATFORM=linux/amd64 --target docs -f Dockerfile .
+	docker build -t modulus:docs --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target docs -f Dockerfile .
 
