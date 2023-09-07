@@ -28,7 +28,11 @@ icosphere_path = get_icosphere_path()
 
 
 def run_test_distributed_graphcast(
-    rank: int, world_size: int, dtype: torch.dtype, do_concat_trick: bool, do_checkpointing: bool
+    rank: int,
+    world_size: int,
+    dtype: torch.dtype,
+    do_concat_trick: bool,
+    do_checkpointing: bool,
 ):
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"

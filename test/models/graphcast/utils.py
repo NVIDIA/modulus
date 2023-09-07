@@ -19,6 +19,7 @@ import numpy as np
 
 from typing import List
 
+
 def fix_random_seeds(seed=0):
     """Fix random seeds for reproducibility"""
     dgl.seed(seed)
@@ -39,11 +40,13 @@ def get_icosphere_path():
     return icosphere_path
 
 
-def compare_quantiles(t: torch.Tensor, ref: torch.Tensor, quantiles: List[float], tolerances: List[float]):
+def compare_quantiles(
+    t: torch.Tensor, ref: torch.Tensor, quantiles: List[float], tolerances: List[float]
+):
     assert len(quantiles) == len(tolerances)
     diff = torch.abs(ref.float() - t.float()).contiguous().view(-1)
     for i, q in enumerate(quantiles):
         diff_q = torch.quantile(diff, q=q, interpolation="midpoint").item()
         tol = tolerances[i]
-        msg = f"For the quantile q={q}, expected a numerical difference of at most {tol}, but observed {diff_q}" 
+        msg = f"For the quantile q={q}, expected a numerical difference of at most {tol}, but observed {diff_q}"
         assert diff_q < tol, msg

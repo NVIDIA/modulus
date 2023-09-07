@@ -27,8 +27,13 @@ from modulus.distributed import (
     indexed_all_to_all_v,
 )
 
+
 @dataclass
-class GraphPartition:
+class GraphPartition:  # pragma: no cover
+    """Class acting as a struct to hold all relevant buffers and variables
+    to define a graph partition.
+    """
+
     partition_size: int
     partition_rank: int
     device: torch.device
@@ -47,7 +52,7 @@ class GraphPartition:
     # buffers, sizes, and ID counts to support
     # distributed communication primitives
     # number of IDs each rank potentially sends to all other ranks
-    sizes: List[List[int]]  = None
+    sizes: List[List[int]] = None
     # local indices of IDs current rank sends to all other ranks
     scatter_indices: List[torch.Tensor] = None
     num_src_nodes_in_each_partition: List[int] = None
@@ -61,15 +66,15 @@ def partition_graph_nodewise(
     partition_size: int,
     partition_rank: int,
     device: torch.device,
-): # pragma: no cover
+):  # pragma: no cover
     """Utility function which partitions a global graph given as CSC structure naively
     by splitting both the IDs of source and destination nodes into chunks of equal
     size. Each partition rank then manages its according chunk of both source and
     destination nodes. Indices are assigned to the rank such that each rank manages
     all the incoming edges for all the destination nodes on the corresponding
-    partition rank. 
+    partition rank.
     The function performs the partitioning based on a global graph in CPU
-    memory for each rank independently. It could be rewritten to e.g. only 
+    memory for each rank independently. It could be rewritten to e.g. only
     do it one rank and exchange the partitions or to an algorithm that also
     assumes an already distributed global graph, however, we expect global
     graphs to fit in CPU memory. After the partitioning, we can get rid off
@@ -96,21 +101,25 @@ def partition_graph_nodewise(
 
     # initialize graph partition
     graph_partition = GraphPartition(
-        partition_size=partition_size,
-        partition_rank=partition_rank,
-        device=device
+        partition_size=partition_size, partition_rank=partition_rank, device=device
     )
 
     # initialize all lists to already be of the correct size
     # after partition_size has been set in __init__
     graph_partition.sizes = [
-        [None for _ in range(graph_partition.partition_size)] for _ in range(graph_partition.partition_size)
+        [None for _ in range(graph_partition.partition_size)]
+        for _ in range(graph_partition.partition_size)
     ]
     graph_partition.scatter_indices = [None] * graph_partition.partition_size
-    graph_partition.num_src_nodes_in_each_partition = [None] * graph_partition.partition_size
-    graph_partition.num_dst_nodes_in_each_partition = [None] * graph_partition.partition_size
-    graph_partition.num_indices_in_each_partition = [None] * graph_partition.partition_size
-
+    graph_partition.num_src_nodes_in_each_partition = [
+        None
+    ] * graph_partition.partition_size
+    graph_partition.num_dst_nodes_in_each_partition = [
+        None
+    ] * graph_partition.partition_size
+    graph_partition.num_indices_in_each_partition = [
+        None
+    ] * graph_partition.partition_size
 
     # --------------------------------------------------------------
     # initialize temporary variables used in computing the partition
@@ -150,9 +159,7 @@ def partition_graph_nodewise(
         offset_start = dst_offsets_in_partition[rank]
         offset_end = dst_offsets_in_partition[rank + 1]
         offsets = global_offsets[offset_start : offset_end + 1].detach().clone()
-        partition_indices = (
-            global_indices[offsets[0] : offsets[-1]].detach().clone()
-        )
+        partition_indices = global_indices[offsets[0] : offsets[-1]].detach().clone()
         offsets -= offsets[0].item()
 
         global_src_ids_per_rank, inverse_mapping = partition_indices.unique(
@@ -214,7 +221,10 @@ def partition_graph_nodewise(
 
     for r in range(graph_partition.partition_size):
         err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
-        assert graph_partition.sizes[graph_partition.partition_rank][r] == graph_partition.scatter_indices[r].numel(), err_msg
+        assert (
+            graph_partition.sizes[graph_partition.partition_rank][r]
+            == graph_partition.scatter_indices[r].numel()
+        ), err_msg
 
     return graph_partition
 
@@ -226,8 +236,8 @@ class DistributedGraph:
         global_indices: torch.Tensor,
         partition_size: int,
         graph_partition_group_name: str,
-        graph_partition: Optional[GraphPartition] = None
-    ): # pragma: no cover
+        graph_partition: Optional[GraphPartition] = None,
+    ):  # pragma: no cover
         """Utility Class representing a distributed graph based on a given
         partitioning of a CSC graph structure. By default, a naive node-wise
         partitioning scheme is applied, see ``partition_graph_nodewise`` for
@@ -266,9 +276,9 @@ class DistributedGraph:
                 global_indices,
                 self.partition_size,
                 self.partition_rank,
-                self.device
+                self.device,
             )
-        
+
         else:
             error_msg = f"Passed graph_partition.partition_size does not correspond to size of process_group, got {graph_partition.partition_size} and {self.partition_size} respectively."
             assert graph_partition.partition_size == self.partition_size
@@ -283,7 +293,7 @@ class DistributedGraph:
         global_node_features: torch.Tensor,
         scatter_features: bool = False,
         src_rank: int = 0,
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
         if scatter_features:
@@ -295,13 +305,13 @@ class DistributedGraph:
                 group=self.process_group,
             )
 
-        return global_node_features[self.graph_partition.partitioned_src_node_ids_to_global, :].to(
-            device=self.device
-        )
+        return global_node_features[
+            self.graph_partition.partitioned_src_node_ids_to_global, :
+        ].to(device=self.device)
 
     def get_src_node_features_in_local_graph(
         self, partitioned_src_node_features: torch.Tensor
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # main primitive to gather all necessary src features
         # which are required for a csc-based message passing step
         return indexed_all_to_all_v(
@@ -318,9 +328,9 @@ class DistributedGraph:
         global_node_features: torch.Tensor,
         scatter_features: bool = False,
         src_rank: int = 0,
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # if global features only on local rank 0 also scatter, split them
-        # according to the partition and scatter them to other ranks           
+        # according to the partition and scatter them to other ranks
         if scatter_features:
             return scatter_v(
                 global_node_features,
@@ -330,14 +340,14 @@ class DistributedGraph:
                 group=self.process_group,
             )
 
-        return global_node_features[self.graph_partition.partitioned_dst_node_ids_to_global, :].to(
-            device=self.device
-        )
+        return global_node_features[
+            self.graph_partition.partitioned_dst_node_ids_to_global, :
+        ].to(device=self.device)
 
     def get_dst_node_features_in_local_graph(
         self,
         partitioned_dst_node_features: torch.Tensor,
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # current partitioning scheme assumes that
         # local graph is built from partitioned IDs
         return partitioned_dst_node_features
@@ -347,7 +357,7 @@ class DistributedGraph:
         global_edge_features: torch.Tensor,
         scatter_features: bool = False,
         src_rank: int = 0,
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
         if scatter_features:
@@ -358,13 +368,13 @@ class DistributedGraph:
                 src=src_rank,
                 process_group=self.process_group,
             )
-        return global_edge_features[self.graph_partition.partitioned_indices_to_global, :].to(
-            device=self.device
-        )
+        return global_edge_features[
+            self.graph_partition.partitioned_indices_to_global, :
+        ].to(device=self.device)
 
     def get_edge_features_in_local_graph(
         self, partitioned_edge_features: torch.Tensor
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         # current partitioning scheme assumes that
         # local graph is built from partitioned IDs
         return partitioned_edge_features
@@ -374,7 +384,7 @@ class DistributedGraph:
         partitioned_node_features: torch.Tensor,
         get_on_all_ranks: bool = True,
         dst_rank: int = 0,
-    ) -> torch.Tensor: # pragma: no cover
+    ) -> torch.Tensor:  # pragma: no cover
         assert partitioned_node_features.device == self.device
 
         if not get_on_all_ranks:
@@ -395,8 +405,11 @@ class DistributedGraph:
         )
 
     def get_global_dst_node_features(
-        self, partitioned_node_features: torch.Tensor, get_on_all_ranks: bool = True, dst_rank: int = 0
-    ) -> torch.Tensor: # pragma: no cover
+        self,
+        partitioned_node_features: torch.Tensor,
+        get_on_all_ranks: bool = True,
+        dst_rank: int = 0,
+    ) -> torch.Tensor:  # pragma: no cover
         assert partitioned_node_features.device == self.device
 
         if not get_on_all_ranks:
@@ -417,8 +430,11 @@ class DistributedGraph:
         )
 
     def get_global_edge_features(
-        self, partitioned_edge_features: torch.Tensor, get_on_all_ranks: bool = True, dst_rank: int = 0
-    ) -> torch.Tensor: # pragma: no cover
+        self,
+        partitioned_edge_features: torch.Tensor,
+        get_on_all_ranks: bool = True,
+        dst_rank: int = 0,
+    ) -> torch.Tensor:  # pragma: no cover
         assert partitioned_edge_features.device == self.device
 
         if not get_on_all_ranks:

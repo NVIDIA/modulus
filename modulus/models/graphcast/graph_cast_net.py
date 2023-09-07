@@ -186,9 +186,9 @@ class GraphCastNet(Module):
 
         if use_cugraphops_encoder or self.is_distributed:
             self.g2m_graph, edge_perm = CuGraphCSC.from_dgl(
-                graph=self.g2m_graph, 
-                partition_size=partition_size, 
-                partition_group_name=partition_group_name
+                graph=self.g2m_graph,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
             self.g2m_edata = self.g2m_edata[edge_perm]
 
@@ -199,9 +199,9 @@ class GraphCastNet(Module):
 
         if use_cugraphops_decoder or self.is_distributed:
             self.m2g_graph, edge_perm = CuGraphCSC.from_dgl(
-                graph=self.m2g_graph, 
+                graph=self.m2g_graph,
                 partition_size=partition_size,
-                partition_group_name=partition_group_name
+                partition_group_name=partition_group_name,
             )
             self.m2g_edata = self.m2g_edata[edge_perm]
 
@@ -212,9 +212,9 @@ class GraphCastNet(Module):
 
         if use_cugraphops_processor or self.is_distributed:
             self.mesh_graph, edge_perm = CuGraphCSC.from_dgl(
-                graph=self.mesh_graph, 
+                graph=self.mesh_graph,
                 partition_size=partition_size,
-                partition_group_name=partition_group_name
+                partition_group_name=partition_group_name,
             )
             self.mesh_edata = self.mesh_edata[edge_perm]
             if self.is_distributed:

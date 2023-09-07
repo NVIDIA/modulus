@@ -16,7 +16,13 @@
 import torch
 
 
-def get_random_graph(num_nodes: int, min_degree: int, max_degree: int) -> torch.Tensor:
+def get_random_graph(
+    num_nodes: int, min_degree: int, max_degree: int
+) -> torch.Tensor:  # pragma: no cover
+    """utility function which creates a random CSC-graph structure
+    defined by an offsets and indices buffer based on a given number of
+    nodes, and minimum and maximum node degree.
+    """
     offsets = torch.empty(num_nodes + 1, dtype=torch.int64)
     offsets[0] = 0
     offsets[1:] = torch.randint(
