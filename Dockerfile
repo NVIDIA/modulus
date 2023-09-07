@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=23.06
+ARG PYT_VER=23.07
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
 ARG TARGETPLATFORM
@@ -49,20 +49,21 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.1-cp310-cp310-linux_x86_64.whl" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp310-cp310-linux_x86_64.whl" ]; then \
         echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall /modulus/deps/dgl-1.1.1-cp310-cp310-linux_x86_64.whl; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-1.1.1-cp310-cp310-linux_aarch64.whl" ]; then \
+        pip install --force-reinstall /modulus/deps/dgl-1.1.2-cp310-cp310-linux_x86_64.whl; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp310-cp310-linux_aarch64.whl" ]; then \
         echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall /modulus/deps/dgl-1.1.1-cp310-cp310-linux_aarch64.whl; \
+        pip install --force-reinstall /modulus/deps/dgl-1.1.2-cp310-cp310-linux_aarch64.whl; \
     else \
         echo "No DGL wheel present, building from source" && \
-	git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.1 && git submodule update --init --recursive && \
+	git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.2 && git submodule update --init --recursive && \
 	DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
 	cd python && \
 	python setup.py install && \
 	python setup.py build_ext --inplace; \
     fi
+RUN rm -r /workspace/dgl
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
@@ -88,14 +89,13 @@ ARG TARGETPLATFORM
 
 RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" "mpi4py>=3.1.4"
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
+RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
-	pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \ 
+	pip install "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
-
 
 # Deployment image
 FROM builder as deploy
@@ -115,7 +115,7 @@ ARG TARGETPLATFORM
 RUN pip install "protobuf==3.20.0"
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
-	pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \ 
+	pip install "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
