@@ -86,7 +86,7 @@ FROM builder as ci
 
 ARG TARGETPLATFORM
 
-RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" "mip4py>=3.1.4"
+RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" "mpi4py>=3.1.4"
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
