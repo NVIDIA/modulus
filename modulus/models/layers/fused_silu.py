@@ -18,7 +18,9 @@ from torch.autograd import Function
 
 try:
     from nvfuser._C import Fusion, FusionDefinition, DataType
-except:
+except ImportError:
+    # accomodating for earlier versions of PyTorch (< 2.0)
+    # which don't need nvfuser as explicit dependency
     from torch._C._nvfuser import Fusion, FusionDefinition, DataType
 
 

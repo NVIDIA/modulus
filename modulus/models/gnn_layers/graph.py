@@ -121,21 +121,47 @@ class CuGraphCSC:
             partition_group_name,
         )
         # overwrite graph information with local graph after distribution
-        self.offsets = self.dist_graph.local_offsets
-        self.indices = self.dist_graph.local_indices
-        self.num_src_nodes = self.dist_graph.num_local_src_nodes
-        self.num_dst_nodes = self.dist_graph.num_local_dst_nodes
+        self.offsets = self.dist_graph.graph_partition.local_offsets
+        self.indices = self.dist_graph.graph_partition.local_indices
+        self.num_src_nodes = self.dist_graph.graph_partition.num_local_src_nodes
+        self.num_dst_nodes = self.dist_graph.graph_partition.num_local_dst_nodes
         self.is_distributed = True
 
+    @staticmethod
+    def from_dgl(graph: DGLGraph, partition_size: int = 1, partition_group_name: Optional[str] = None): # pragma: no cover
+        # DGL changed their APIs w.r.t. how sparse formats can be accessed
+        # this here is done to support both versions
+        if hasattr(graph, "adj_tensors"):
+            offsets, indices, edge_perm = graph.adj_tensors("csc")
+        elif hasattr(graph, "adj_sparse"):
+            offsets, indices, edge_perm = graph.adj_sparse("csc")
+        else:
+            raise ValueError("Passed graph object doesn't support conversion to CSC.")
+        
+        n_src_nodes, n_dst_nodes = (
+            graph.num_src_nodes(), graph.num_dst_nodes()
+        )
+
+        graph_csc = CuGraphCSC(
+            offsets,
+            indices,
+            n_src_nodes,
+            n_dst_nodes,
+            partition_size=partition_size,
+            partition_group_name=partition_group_name,
+        )
+
+        return graph_csc, edge_perm
+
     def get_src_node_features_in_partition(
-        self, global_src_feat: torch.Tensor
+        self, global_src_feat: torch.Tensor, scatter_features: bool = False, src_rank: int = 0,
     ) -> torch.Tensor:
         """
         Get local chunk of global source node features for each rank corresponding
         to its rank in the process group across which the graph is partitioned.
         """
-        if self.is_distributed:
-            return self.dist_graph.get_src_node_features_in_partition(global_src_feat)
+        if self.is_distributed: # pragma: no cover
+            return self.dist_graph.get_src_node_features_in_partition(global_src_feat, scatter_features=scatter_features, src_rank=src_rank)
         return global_src_feat
 
     def get_src_node_features_in_local_graph(
@@ -149,71 +175,71 @@ class CuGraphCSC:
         After this primitive, any message passing routine should have all necessary tensors
         to work on the corresponding local graph according to the partition rank.
         """
-        if self.is_distributed:
+        if self.is_distributed: # pragma: no cover
             return self.dist_graph.get_src_node_features_in_local_graph(local_src_feat)
         return local_src_feat
 
     def get_dst_node_features_in_partition(
-        self, global_dst_feat: torch.Tensor
+        self, global_dst_feat: torch.Tensor, scatter_features: bool = False, src_rank: int = 0
     ) -> torch.Tensor:
         """
         Get local chunk of global destination node features for each rank corresponding
         to its rank in the process group across which the graph is partitioned.
         """
-        if self.is_distributed:
-            return self.dist_graph.get_dst_node_features_in_partition(global_dst_feat)
+        if self.is_distributed: # pragma: no cover
+            return self.dist_graph.get_dst_node_features_in_partition(global_dst_feat, scatter_features=scatter_features, src_rank=src_rank)
         return global_dst_feat
 
     def get_edge_features_in_partition(
-        self, global_efeat: torch.Tensor
+        self, global_efeat: torch.Tensor, scatter_features: bool = False, src_rank: int = 0
     ) -> torch.Tensor:
         """
         Get local chunk of global edge features for each rank corresponding
         to its rank in the process group across which the graph is partitioned.
         """
-        if self.is_distributed:
-            return self.dist_graph.get_edge_features_in_partition(global_efeat)
+        if self.is_distributed: # pragma: no cover
+            return self.dist_graph.get_edge_features_in_partition(global_efeat, scatter_features=scatter_features, src_rank=src_rank)
         return global_efeat
 
     def get_global_src_node_features(
-        self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True
+        self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True, dst_rank: int = 0,
     ) -> torch.Tensor:
         """
         Based on local source node features on each rank corresponding
         to its rank in the process group across which the graph is partitioned,
         get the global node features either on all group ranks or on group rank 0.
         """
-        if self.is_distributed:
+        if self.is_distributed: # pragma: no cover
             return self.dist_graph.get_global_src_node_features(
-                local_nfeat, get_on_all_ranks
+                local_nfeat, get_on_all_ranks, dst_rank=dst_rank,
             )
         return local_nfeat
 
     def get_global_dst_node_features(
-        self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True
+        self, local_nfeat: torch.Tensor, get_on_all_ranks: bool = True, dst_rank: int = 0,
     ) -> torch.Tensor:
         """
         Based on local destination node features on each rank corresponding
         to its rank in the process group across which the graph is partitioned,
         get the global node features either on all group ranks or on group rank 0.
         """
-        if self.is_distributed:
+        if self.is_distributed: # pragma: no cover
             return self.dist_graph.get_global_dst_node_features(
-                local_nfeat, get_on_all_ranks
+                local_nfeat, get_on_all_ranks, dst_rank=dst_rank,
             )
         return local_nfeat
 
     def get_global_edge_features(
-        self, local_efeat: torch.Tensor, get_on_all_ranks: bool = True
+        self, local_efeat: torch.Tensor, get_on_all_ranks: bool = True, dst_rank: int = 0
     ) -> torch.Tensor:
         """
         Based on local edge features on each rank corresponding
         to its rank in the process group across which the graph is partitioned,
         get the global edge features either on all group ranks or on group rank 0.
         """
-        if self.is_distributed:
+        if self.is_distributed: # pragma: no cover
             return self.dist_graph.get_global_edge_features(
-                local_efeat, get_on_all_ranks
+                local_efeat, get_on_all_ranks, dst_rank=dst_rank,
             )
         return local_efeat
 
@@ -246,7 +272,7 @@ class CuGraphCSC:
 
         return self
 
-    def to_bipartite_csc(self, dtype=None):
+    def to_bipartite_csc(self, dtype=None) -> BipartiteCSC:
         """Converts the graph to a bipartite CSC graph.
 
         Parameters
@@ -295,7 +321,7 @@ class CuGraphCSC:
 
         return self.bipartite_csc
 
-    def to_static_csc(self, dtype=None):
+    def to_static_csc(self, dtype=None) -> StaticCSC:
         """Converts the graph to a static CSC graph.
 
         Parameters
@@ -342,7 +368,18 @@ class CuGraphCSC:
 
         return self.static_csc
 
-    def to_dgl_graph(self):
+    def to_dgl_graph(self) -> DGLGraph: # pragma: no cover
+        """Converts the graph to a DGLGraph.
+        This can be useful if e.g. one wants to operate on a distributed
+        graph in Modulus which assumes a simple CSC structure, but
+        has only implemented GNN primitives in a DGL backend. 
+
+        Returns
+        -------
+        DGLGraph
+            The DGLGraph created from the given object in CSC format.
+        """
+
         if self.dgl_graph is None or not self.cache_graph:
             assert self.ef_indices is None, "ef_indices is not supported."
             graph_offsets = self.offsets

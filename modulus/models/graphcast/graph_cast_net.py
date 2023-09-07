@@ -95,6 +95,20 @@ class GraphCastNet(Module):
     recompute_activation : bool, optional
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
+    partition_size : int, default=1
+        Number of process groups across which graphs are distributed.
+    partition_group_name : str, default=None
+        Name of process group across which graphs are distributed.
+    expect_partitioned_input : bool, default=False,
+        Flag indicating whether the model expects the input to be already
+        partitioned. This can be helpful e.g. in multi-step rollouts to avoid
+        aggregating the output just to distribute it in the next step again.
+    produce_aggregated_output : bool, default=True,
+        Flag indicating whether the model produces the aggregated output on each
+        rank of the progress group across which the graph is distributed or
+        whether the output is kept distributed. This can be helpful e.g.
+        in multi-step rollouts to avoid aggregating the output just to distribute
+        it in the next step again.
 
     Note
     ----
@@ -171,76 +185,38 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder or self.is_distributed:
-            print(self.g2m_graph)
-            try:
-                offsets, indices, edge_ids = self.g2m_graph.adj_tensors("csc")
-            except:
-                # fall back to older DGL routine
-                offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
+            self.g2m_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.g2m_graph, 
+                partition_size=partition_size, 
+                partition_group_name=partition_group_name
+            )
+            self.g2m_edata = self.g2m_edata[edge_perm]
 
-            n_src_nodes, n_dst_nodes = (
-                self.g2m_graph.num_src_nodes(),
-                self.g2m_graph.num_dst_nodes(),
-            )
-            self.g2m_edata = self.g2m_edata[edge_ids]
-            self.g2m_graph = CuGraphCSC(
-                offsets,
-                indices,
-                n_src_nodes,
-                n_dst_nodes,
-                partition_size=partition_size,
-                partition_group_name=partition_group_name,
-            )
             if self.is_distributed:
                 self.g2m_edata = self.g2m_graph.get_edge_features_in_partition(
                     self.g2m_edata
                 )
 
         if use_cugraphops_decoder or self.is_distributed:
-            try:
-                offsets, indices, edge_ids = self.m2g_graph.adj_tensors("csc")
-            except:
-                # fall back to older DGL routine
-                offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
-
-            n_src_nodes, n_dst_nodes = (
-                self.m2g_graph.num_src_nodes(),
-                self.m2g_graph.num_dst_nodes(),
-            )
-            self.m2g_edata = self.m2g_edata[edge_ids]
-            self.m2g_graph = CuGraphCSC(
-                offsets,
-                indices,
-                n_src_nodes,
-                n_dst_nodes,
+            self.m2g_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.m2g_graph, 
                 partition_size=partition_size,
-                partition_group_name=partition_group_name,
+                partition_group_name=partition_group_name
             )
+            self.m2g_edata = self.m2g_edata[edge_perm]
+
             if self.is_distributed:
                 self.m2g_edata = self.m2g_graph.get_edge_features_in_partition(
                     self.m2g_edata
                 )
 
         if use_cugraphops_processor or self.is_distributed:
-            try:
-                offsets, indices, edge_ids = self.mesh_graph.adj_tensors("csc")
-            except:
-                # fall back to older DGL routine
-                offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
-
-            n_src_nodes, n_dst_nodes = (
-                self.mesh_graph.num_src_nodes(),
-                self.mesh_graph.num_dst_nodes(),
-            )
-            self.mesh_edata = self.mesh_edata[edge_ids]
-            self.mesh_graph = CuGraphCSC(
-                offsets,
-                indices,
-                n_src_nodes,
-                n_dst_nodes,
+            self.mesh_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.mesh_graph, 
                 partition_size=partition_size,
-                partition_group_name=partition_group_name,
+                partition_group_name=partition_group_name
             )
+            self.mesh_edata = self.mesh_edata[edge_perm]
             if self.is_distributed:
                 self.mesh_edata = self.mesh_graph.get_edge_features_in_partition(
                     self.mesh_edata
@@ -248,7 +224,6 @@ class GraphCastNet(Module):
                 self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
                     self.mesh_ndata
                 )
-                print(self.mesh_ndata)
 
         # Get the static data
         if self.has_static_data:

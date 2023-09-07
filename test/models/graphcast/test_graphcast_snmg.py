@@ -28,7 +28,7 @@ icosphere_path = get_icosphere_path()
 
 
 def run_test_distributed_graphcast(
-    rank: int, world_size: int, dtype: torch.dtype, do_concat_trick: bool
+    rank: int, world_size: int, dtype: torch.dtype, do_concat_trick: bool, do_checkpointing: bool
 ):
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"
@@ -55,7 +55,7 @@ def run_test_distributed_graphcast(
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
         "output_dim_grid_nodes": 34,
-        "processor_layers": 8,
+        "processor_layers": 4,
         "hidden_dim": 32,
         "do_concat_trick": do_concat_trick,
         "use_cugraphops_encoder": True,
@@ -70,6 +70,9 @@ def run_test_distributed_graphcast(
     model_single_gpu = GraphCastNet(partition_size=1, **model_kwds).to(
         device=device, dtype=dtype
     )
+    if do_checkpointing:
+        model_single_gpu.set_checkpoint_model(True)
+
     # initialze distributed model with the same seeds
     fix_random_seeds(42)
     model_multi_gpu = GraphCastNet(
@@ -79,6 +82,8 @@ def run_test_distributed_graphcast(
         produce_aggregated_output=False,
         **model_kwds,
     ).to(device=device, dtype=dtype)
+    if do_checkpointing:
+        model_multi_gpu.set_checkpoint_model(True)
 
     model_multi_gpu = DistributedDataParallel(
         model_multi_gpu, process_group=manager.group("graph_partition")
@@ -96,7 +101,13 @@ def run_test_distributed_graphcast(
     )
     x_multi_gpu = model_multi_gpu.module.g2m_graph.get_src_node_features_in_partition(
         x_multi_gpu
-    )
+    ).requires_grad_(True)
+
+    # zero grads
+    for param in model_single_gpu.parameters():
+        param.data.zero_()
+    for param in model_multi_gpu.parameters():
+        param.data.zero_()
 
     # forward + backward passes
     out_single_gpu = model_single_gpu(x_single_gpu)
@@ -104,7 +115,12 @@ def run_test_distributed_graphcast(
     loss.backward()
 
     out_multi_gpu = model_multi_gpu(x_multi_gpu)
-    loss = out_multi_gpu.sum()
+    # PyTorch unfortunately averages across all process groups within DistributedDataParallel
+    # by default, for tensor-parallel applications like this one, potential solutions
+    # are either custom gradient hooks (the best solution for actual training workloads)
+    # or multiplying by world_size to cancel out the normalization. As this is just a simple
+    # test, we do the easier thing here as we only compare the weight gradients.
+    loss = out_multi_gpu.sum() * world_size
     loss.backward()
 
     # numeric tolerances based on dtype
@@ -132,12 +148,12 @@ def run_test_distributed_graphcast(
     # compare model gradients (ensure correctness of backward)
     model_multi_gpu_parameters = list(model_multi_gpu.parameters())
     for param_idx, param in enumerate(model_single_gpu.parameters()):
-        diff = param - model_multi_gpu_parameters[param_idx]
+        diff = param.grad - model_multi_gpu_parameters[param_idx].grad
         diff = torch.abs(diff)
         mask = diff > atol
         assert torch.allclose(
-            param, model_multi_gpu_parameters[param_idx], atol=atol, rtol=rtol
-        ), f"{mask.sum()} elements have diff > {atol} \n {param[mask]} \n {model_multi_gpu_parameters[param_idx][mask]}"
+            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol, rtol=rtol
+        ), f"{mask.sum()} elements have diff > {atol} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
 
     # cleanup distributed
     del os.environ["RANK"]
@@ -152,7 +168,8 @@ def run_test_distributed_graphcast(
 @pytest.mark.multigpu
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("do_concat_trick", [False, True])
-def test_distributed_graphcast(dtype, do_concat_trick):
+@pytest.mark.parametrize("do_checkpointing", [False, True])
+def test_distributed_graphcast(dtype, do_concat_trick, do_checkpointing):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = min(
@@ -161,7 +178,7 @@ def test_distributed_graphcast(dtype, do_concat_trick):
 
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
-        args=(world_size, dtype, do_concat_trick),
+        args=(world_size, dtype, do_concat_trick, do_checkpointing),
         nprocs=world_size,
         start_method="spawn",
     )

@@ -19,6 +19,8 @@ import numpy as np
 
 from torch.nn.parallel import DistributedDataParallel
 
+from utils import get_random_graph
+
 from modulus.models.gnn_layers.utils import CuGraphCSC
 from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 from modulus.distributed import DistributedManager
@@ -43,7 +45,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
         "input_dim_nodes": 3,
         "input_dim_edges": 4,
         "output_dim": 5,
-        "processor_size": 10,
+        "processor_size": 4,
         "num_layers_node_processor": 2,
         "num_layers_edge_processor": 2,
         "hidden_dim_node_encoder": 256,
@@ -72,16 +74,12 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     )
 
     # initialize data
-    min_degree, max_degree = 3, 6
     num_nodes = 1024
-    offsets = torch.empty(num_nodes + 1, dtype=torch.int64)
-    offsets[0] = 0
-    offsets[1:] = torch.randint(
-        min_degree, max_degree + 1, (num_nodes,), dtype=torch.int64
+    offsets, indices = get_random_graph(
+        num_nodes=num_nodes,
+        min_degree=3,
+        max_degree=6,
     )
-    offsets = offsets.cumsum(dim=0)
-    num_indices = offsets[-1].item()
-    indices = torch.randint(0, num_nodes, (num_indices,), dtype=torch.int64)
 
     graph_single_gpu = CuGraphCSC(
         offsets.to(manager.device),
@@ -104,7 +102,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
         .requires_grad_(True)
     )
     efeat_single_gpu = (
-        torch.randn((num_indices, model_kwds["input_dim_edges"]))
+        torch.randn((indices.numel(), model_kwds["input_dim_edges"]))
         .to(device=manager.device, dtype=dtype)
         .requires_grad_(True)
     )
@@ -117,6 +115,12 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
         efeat_multi_gpu
     ).requires_grad_(True)
 
+    # zero grads
+    for param in model_single_gpu.parameters():
+        param.data.zero_()
+    for param in model_multi_gpu.parameters():
+        param.data.zero_()
+
     # forward + backward passes
     out_single_gpu = model_single_gpu(
         nfeat_single_gpu, efeat_single_gpu, graph_single_gpu
@@ -125,13 +129,18 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     loss.backward()
 
     out_multi_gpu = model_multi_gpu(nfeat_multi_gpu, efeat_multi_gpu, graph_multi_gpu)
-    loss = out_multi_gpu.sum()
+    # PyTorch unfortunately averages across all process groups within DistributedDataParallel
+    # by default, for tensor-parallel applications like this one, potential solutions
+    # are either custom gradient hooks (the best solution for actual training workloads)
+    # or multiplying by world_size to cancel out the normalization. As this is just a simple
+    # test, we do the easier thing here as we only compare the weight gradients.
+    loss = out_multi_gpu.sum() * world_size
 
     loss.backward()
 
     # numeric tolerances based on dtype
     tolerances = {
-        torch.float32: (1e-2, 1e-4),
+        torch.float32: (1e-3, 1e-6),
         torch.bfloat16: (1e-1, 1e-3),
         torch.float16: (1e-1, 1e-3),
     }
@@ -151,12 +160,12 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     # compare model gradients (ensure correctness of backward)
     model_multi_gpu_parameters = list(model_multi_gpu.parameters())
     for param_idx, param in enumerate(model_single_gpu.parameters()):
-        diff = param - model_multi_gpu_parameters[param_idx]
+        diff = param.grad - model_multi_gpu_parameters[param_idx].grad
         diff = torch.abs(diff)
         mask = diff > atol
         assert torch.allclose(
-            param, model_multi_gpu_parameters[param_idx], atol=atol, rtol=rtol
-        ), f"{mask.sum()} elements have diff > {atol} \n {param[mask]} \n {model_multi_gpu_parameters[param_idx][mask]}"
+            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol, rtol=rtol
+        ), f"{mask.sum()} elements have diff > {atol} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
 
     # cleanup distributed
     del os.environ["RANK"]

@@ -50,7 +50,7 @@ class AllGatherVAutograd(torch.autograd.Function):
         dim: int = 0,
         use_fp32: bool = True,
         group: Optional[dist.ProcessGroup] = None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """forward pass of the Distributed AllGatherV primitive"""
 
         gathered_tensor = all_gather_v_wrapper(tensor, sizes, dim=dim, group=group)
@@ -61,7 +61,7 @@ class AllGatherVAutograd(torch.autograd.Function):
         return gathered_tensor
 
     @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):
+    def backward(ctx, grad_output: torch.Tensor): # pragma: no cover
         """backward pass of the of the Distributed AllGatherV primitive"""
 
         grad_tensor = None
@@ -102,7 +102,7 @@ class GatherVAutograd(torch.autograd.Function):
         dim: int = 0,
         dst: int = 0,
         group: Optional[dist.ProcessGroup] = None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """forward pass of the distributed GatherV primitive"""
 
         gathered_tensor = gather_v_wrapper(tensor, sizes, dim=dim, dst=dst, group=group)
@@ -117,7 +117,7 @@ class GatherVAutograd(torch.autograd.Function):
     def backward(
         ctx,
         grad_output: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """backward pass of the Distributed GatherV primitive"""
 
         grad_tensor = None
@@ -153,7 +153,7 @@ class ScatterVAutograd(torch.autograd.Function):
         dim: int = 0,
         src: int = 0,
         group=Optional[dist.ProcessGroup],
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """forward pass of the Distributed ScatterV primitive"""
 
         scattered_tensor = scatter_v_wrapper(
@@ -168,7 +168,7 @@ class ScatterVAutograd(torch.autograd.Function):
         return scattered_tensor
 
     @staticmethod
-    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor: # pragma: no cover
         """backward pass of the Distributed ScatterV primitive"""
 
         grad_tensor = None
@@ -205,7 +205,7 @@ class IndexedAllToAllVAutograd(torch.autograd.Function):
         use_fp32: bool = True,
         dim: int = 0,
         group: Optional[dist.ProcessGroup] = None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """forward pass of the Distributed IndexedAlltoAllV primitive"""
 
         tensor_to_recv = indexed_all_to_all_v_wrapper(
@@ -229,7 +229,7 @@ class IndexedAllToAllVAutograd(torch.autograd.Function):
     def backward(
         ctx,
         grad_output: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # pragma: no cover
         """backward pass of the Distributed IndexedAlltoAllV primitive"""
 
         needs_grad = ctx.needs_input_grad[0]
@@ -255,7 +255,7 @@ def all_gather_v(
     dim: int = 0,
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     """
     Autograd Wrapper for a distributed AllGatherV primitive.
     It is based on the idea of a single global tensor which is distributed
@@ -298,7 +298,7 @@ def gather_v(
     dim: int = 0,
     dst: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     """
     Autograd Wrapper for a distributed GatherV primitive.
     It is based on the idea of a single global tensor which is distributed
@@ -341,7 +341,7 @@ def scatter_v(
     dim: int = 0,
     src: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     """
     Autograd Wrapper for Distributed ScatterV. It is based
     on the idea of a single global tensor which is distributed along
@@ -384,7 +384,7 @@ def indexed_all_to_all_v(
     use_fp32: bool = True,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor: # pragma: no cover
     """
     Autograd Wrapper for an Indexed AllToAllV primitive. It is based on the
     idea of a single global tensor which is distributed along a
