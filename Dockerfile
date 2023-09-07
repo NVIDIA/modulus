@@ -38,10 +38,16 @@ COPY . /modulus/
 
 # install vtk and pyvista
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" \
-	pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl "pyvista>=0.40.1"; \ 
+	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
+	apt-get update && apt-get install -y libgl1-mesa-dev && \
+	git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
+	mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
+	python setup.py bdist_wheel && \
+	pip install dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
+	cd ../../ && rm -r vtk && \
+	pip install "pyvista>=0.40.1"; \ 
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" \
+	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
 	pip install "vtk>=9.2.6" "pyvista>=0.40.1"; \ 
     fi
 
