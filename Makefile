@@ -45,6 +45,9 @@ coverage:
 		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
 		coverage html
 
+# For arch naming conventions, refer
+# https://docs.docker.com/build/building/multi-platform/
+# https://github.com/containerd/containerd/blob/v1.4.3/platforms/platforms.go#L86
 ARCH := $(shell uname -p)
 
 ifeq ($(ARCH), x86_64)
