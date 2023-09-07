@@ -110,8 +110,8 @@ docker build -t modulus:ci \
 
 Alternatively, you can run `make container-ci`.
 
-Currently only `linux/amd64` and `linux/arm64` platforms are supported. `linux/amd64`
-is the recommended default.
+Currently only `linux/amd64` and `linux/arm64` platforms are supported. If using `linux/arm64`,
+some dependencies like `warp-lang` might not install correctly.
 
 ## Contributing
 
