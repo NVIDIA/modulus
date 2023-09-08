@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=23.06
+ARG PYT_VER=23.07
 FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
 
 # Update pip and setuptools
@@ -36,11 +36,12 @@ ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
-RUN git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.1 && git submodule update --init --recursive && \
+RUN git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.2 && git submodule update --init --recursive && \
 	DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
 	cd python && \
 	python setup.py install && \
 	python setup.py build_ext --inplace
+RUN rm -r /workspace/dgl
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
@@ -58,9 +59,9 @@ RUN rm -rf /modulus/
 
 # CI image
 FROM builder as ci
-RUN pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0" "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" 
+RUN pip install "tensorflow==2.9.0" "warp-lang>=0.6.0" "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e . && rm -rf /modulus/
+RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
@@ -74,6 +75,6 @@ RUN rm -rf /modulus/
 # Docs image
 FROM deploy as docs
 # Install CI packages
-RUN pip install "tensorflow>=2.9.0" "warp-lang>=0.6.0" "protobuf==3.20.0"
+RUN pip install "tensorflow==2.9.0" "warp-lang>=0.6.0" "protobuf==3.20.0"
 # Install packages for Sphinx build
 RUN pip install "recommonmark==0.7.1" "sphinx==5.1.1" "sphinx-rtd-theme==1.0.0" "pydocstyle==6.1.1" "nbsphinx==0.8.9" "nbconvert==6.4.3" "jinja2==3.0.3"
