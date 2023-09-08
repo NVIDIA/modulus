@@ -129,13 +129,15 @@ def save_untrained_dlwp(path):
     return package
 
 
-def test_dlwp(tmp_path):
+@pytest.mark.parametrize("batch_size", [1, 4])
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_dlwp(tmp_path, batch_size, device):
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
 
-    model = dlwp(package, pretrained=True)
-    x = torch.ones(1, 2, 7, 721, 1440)
+    model = dlwp(package, pretrained=True).to(device)
+    x = torch.ones(batch_size, 2, 7, 721, 1440).to(device)
     time = datetime.datetime(2018, 1, 1)
     with torch.no_grad():
         out = model(x, time)
