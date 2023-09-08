@@ -189,7 +189,7 @@ class _DLWPWrapper(torch.nn.Module):
             tisr = np.maximum(
                 cos_zenith_angle(
                     time
-                    - datetime.timedelta(hours=6 * (input.shape[0] - 1))
+                    - datetime.timedelta(hours=6 * (input.shape[1] - 1))
                     + datetime.timedelta(hours=6 * i),
                     self.longrid,
                     self.latgrid,
