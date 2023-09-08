@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from typing import Any, Optional
+from typing import Any, Optional, Self
 from dataclasses import dataclass
 
 from modulus.models.layers import get_activation
@@ -96,9 +96,15 @@ class GraphCastNet(Module):
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
     partition_size : int, default=1
-        Number of process groups across which graphs are distributed.
+        Number of process groups across which graphs are distributed. If equal to 1,
+        the model is run in a normal Single-GPU configuration.
     partition_group_name : str, default=None
-        Name of process group across which graphs are distributed.
+        Name of process group across which graphs are distributed. If partition_size
+        is set to 1, the model is run in a normal Single-GPU configuration and the
+        specification of a process group is not necessary. If partitition_size > 1,
+        passing no process group name leads to a parallelism across the default
+        process group. Otherwise, the group size of a process group is expected
+        to match partition_size.
     expect_partitioned_input : bool, default=False,
         Flag indicating whether the model expects the input to be already
         partitioned. This can be helpful e.g. in multi-step rollouts to avoid
@@ -677,7 +683,7 @@ class GraphCastNet(Module):
 
         return outvar
 
-    def to(self, *args: Any, **kwargs: Any) -> "GraphCastNet":
+    def to(self, *args: Any, **kwargs: Any) -> Self:
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
