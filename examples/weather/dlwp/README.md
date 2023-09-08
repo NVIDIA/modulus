@@ -18,7 +18,8 @@ with Δt set to 6 hr
 ## Dataset
 
 The model is trained on 7-channel subset of ERA5 Data that is mapped onto a cubed sphere
-grid with a resolution of 64x64 grid cells.
+grid with a resolution of 64x64 grid cells. The map files were generated using
+[TempestRemap](https://github.com/ClimateGlobalChange/tempestremap) library.
 The model uses years 1980-2015 for training, 2016-2017 for validation
 and 2018 for out of sample testing. Some sample scripts for downloading the data and processing
 it are provided in the `data_curation` directory. A larger subset of dataset is hosted
@@ -58,3 +59,7 @@ View progress in a browser at <http://127.0.0.1:2458>
 ## References
 
 [Sub-Seasonal Forecasting With a Large Ensemble of Deep-Learning Weather Prediction Models](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002502)
+
+[Arbitrary-Order Conservative and Consistent Remapping and a Theory of Linear Maps: Part 1](https://journals.ametsoc.org/view/journals/mwre/143/6/mwr-d-14-00343.1.xml)
+
+[Arbitrary-Order Conservative and Consistent Remapping and a Theory of Linear Maps, Part 2](https://journals.ametsoc.org/view/journals/mwre/144/4/mwr-d-15-0301.1.xml)

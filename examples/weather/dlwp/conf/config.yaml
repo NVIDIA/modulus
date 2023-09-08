@@ -30,4 +30,4 @@ nr_output_channels: 14
 batch_size:
   train: 32 
   validate: 2
-  out_of_sample: 1
+  out_of_sample: 2

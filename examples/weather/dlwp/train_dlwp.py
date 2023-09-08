@@ -48,65 +48,66 @@ def loss_func(x, y, p=2.0):
     return torch.mean(diff_norms / y_norms)
 
 
-def prepare_input(
-    input_list,
-    datapipe_start_year,
-    idx_list,
-    year_idx,
-    lsm,
-    longrid,
-    latgrid,
-    topographic_height,
-    device,
-    batchsize,
-):
-    # TODO: Add an assertion check here to ensure the idx_list has same number of elements as the input_list!
-    for i in range(len(input_list)):
+def compute_tisr(start_year, year_idx, sample_idx, longrid, latgrid):
+    # Compute TISR
+    batched_tisr = []
+    for i, year_id in enumerate(year_idx):
         tisr = []
-        sub_idx_list = idx_list[:, i]
-        for j, id in enumerate(sub_idx_list):
-            year = datapipe_start_year + year_idx[j]
+        for id in sample_idx[i]:
+            year = start_year + year_id
             start_date = datetime.datetime(year.item(), 1, 1, 0, 0)
             time_delta = datetime.timedelta(hours=id.item() * 6)
             result_time = start_date + time_delta
-            # print(result_time, year.item(), id.item())
             tisr.append(
                 np.maximum(
                     zenith_angle.cos_zenith_angle(result_time, longrid, latgrid), 0
                 )
                 - (1 / np.pi)
             )  # subtract mean value
-        tisr = np.stack(tisr, axis=0)
-        tisr = torch.tensor(tisr, dtype=input_list[0].dtype).to(device).unsqueeze(dim=1)
-        input_list[i] = torch.cat((input_list[i], tisr), dim=1)
+        batched_tisr.append(np.stack(tisr, axis=0))
+    batched_tisr = np.expand_dims(
+        np.stack(batched_tisr, axis=0), axis=2
+    )  # add channel dimension
+
+    return batched_tisr
+
+
+def prepare_input(
+    input_list,
+    tisr_list,
+    lsm,
+    topographic_height,
+):
+    # TODO: Add an assertion check here to ensure the idx_list has same number of elements as the input_list!
+    for i in range(len(input_list)):
+        input_list[i] = torch.cat((input_list[i], tisr_list[i]), dim=1)
 
     input_model = torch.cat(
         input_list, dim=1
     )  # concat the time dimension into channels
 
-    repeat_vals = (batchsize, -1, -1, -1, -1)  # repeat along batch dimension
-    lsm_tensor = (
-        torch.tensor(lsm, dtype=input_list[0].dtype).to(device).unsqueeze(dim=0)
-    )
-    lsm_tensor = lsm_tensor.expand(*repeat_vals)
+    repeat_vals = (
+        input_list[0].shape[0],
+        -1,
+        -1,
+        -1,
+        -1,
+    )  # repeat along batch dimension
+    lsm = lsm.expand(*repeat_vals)
     # normalize topographic height
     topographic_height = (topographic_height - 3.724e03) / 8.349e03
-    topographic_height_tensor = (
-        torch.tensor(topographic_height, dtype=input_list[0].dtype)
-        .to(device)
-        .unsqueeze(dim=0)
-    )
-    topographic_height_tensor = topographic_height_tensor.expand(*repeat_vals)
+    topographic_height = topographic_height.expand(*repeat_vals)
 
-    input_model = torch.cat((input_model, lsm_tensor, topographic_height_tensor), dim=1)
+    input_model = torch.cat((input_model, lsm, topographic_height), dim=1)
     return input_model
 
 
 @torch.no_grad()
-def validation_step(
+def validation_and_plotting_step(
     eval_step,
     arch,
     datapipe,
+    datapipe_start_year,
     nr_output_channels=14,
     num_input_steps=2,
     lsm=None,
@@ -114,6 +115,9 @@ def validation_step(
     latgrid=None,
     topographic_height=None,
     epoch=0,
+    channels=[0, 1],
+    plotting=False,
+    device=None,
 ):
     loss_epoch = 0
     num_examples = 0
@@ -122,130 +126,90 @@ def validation_step(
         arch = arch.module
     arch.eval()
     for i, data in enumerate(datapipe):
-        invar = data[0]["invar"]
-        outvar = data[0]["outvar"]
-        invar_list = torch.split(invar, 1, dim=1)  # split along the time dimension
-        invar_list = [tensor.squeeze(dim=1) for tensor in invar_list]
-        invar_model = prepare_input(
-            invar_list,
-            2016,
-            data[0]["invar_idx"],
-            data[0]["year_idx"],
-            lsm,
-            longrid,
-            latgrid,
-            topographic_height,
-            invar.device,
-            invar.size(0),
+        invar = data[0]["invar"].to(device)
+        outvar = data[0]["outvar"].to(device)
+        invar_idx = data[0]["invar_idx"]
+        outvar_idx = data[0]["outvar_idx"]
+        year_idx = data[0]["year_idx"]
+
+        invar_tisr = compute_tisr(
+            datapipe_start_year, year_idx, invar_idx, longrid, latgrid
+        )
+        outvar_tisr = compute_tisr(
+            datapipe_start_year, year_idx, outvar_idx, longrid, latgrid
+        )
+        invar_tisr_tensor = torch.tensor(invar_tisr, dtype=invar.dtype).to(invar.device)
+        outvar_tisr_tensor = torch.tensor(outvar_tisr, dtype=outvar.dtype).to(
+            invar.device
         )
 
+        invar_list = torch.split(invar, 1, dim=1)  # split along the time dimension
+        invar_list = [tensor.squeeze(dim=1) for tensor in invar_list]
+        tisr_list = torch.split(
+            invar_tisr_tensor, 1, dim=1
+        )  # split along the time dimension
+        tisr_list = [tensor.squeeze(dim=1) for tensor in tisr_list]
+
+        lsm_tensor = (
+            torch.tensor(lsm, dtype=torch.float).to(invar.device).unsqueeze(dim=0)
+        )
+        topographic_height_tensor = (
+            torch.tensor(topographic_height, dtype=torch.float)
+            .to(invar.device)
+            .unsqueeze(dim=0)
+        )
+
+        invar_model = prepare_input(
+            invar_list,
+            tisr_list,
+            lsm_tensor,
+            topographic_height_tensor,
+        )
+
+        pred_outvar = torch.zeros_like(outvar)
         # multi step loss.
         for t in range(outvar.shape[1] // num_input_steps):
             output = eval_step(arch, invar_model)
-            invar_model = output
-            invar_list = list(
-                torch.split(invar_model, (nr_output_channels // num_input_steps), dim=1)
-            )
-            invar_model = prepare_input(
-                invar_list,
-                2016,
-                data[0]["outvar_idx"][
-                    :, t * num_input_steps : (t + 1) * num_input_steps
-                ],
-                data[0]["year_idx"],
-                lsm,
-                longrid,
-                latgrid,
-                topographic_height,
-                invar.device,
-                invar.size(0),
-            )
+            if t != outvar.shape[1] // num_input_steps - 1:
+                invar_model = output
+                invar_list = list(
+                    torch.split(
+                        invar_model, (nr_output_channels // num_input_steps), dim=1
+                    )
+                )
+                tisr_list = torch.split(
+                    outvar_tisr_tensor[
+                        :, t * num_input_steps : (t + 1) * num_input_steps
+                    ],
+                    1,
+                    dim=1,
+                )
+                tisr_list = [tensor.squeeze(dim=1) for tensor in tisr_list]
+
+                invar_model = prepare_input(
+                    invar_list,
+                    tisr_list,
+                    lsm_tensor,
+                    topographic_height_tensor,
+                )
+
             output_list = torch.split(
                 output, nr_output_channels // num_input_steps, dim=1
             )
             output_list = [tensor.unsqueeze(dim=1) for tensor in output_list]
             output = torch.cat(output_list, dim=1)
+            pred_outvar[:, t * 2] = output[:, 0]
+            pred_outvar[:, t * 2 + 1] = output[:, 1]
+
             loss_epoch += F.mse_loss(
                 outvar[:, t * num_input_steps : t * num_input_steps + num_input_steps],
                 output,
             ).detach()
         num_examples += invar.shape[0]
 
-    arch.train()
-    return loss_epoch.detach() / num_examples
-
-
-@torch.no_grad()
-def plotting_step(
-    arch,
-    datapipe,
-    datapipe_start_year,
-    channels=[0, 1],
-    epoch=0,
-    nr_output_channels=14,
-    num_input_steps=2,
-    lsm=None,
-    longrid=None,
-    latgrid=None,
-    topographic_height=None,
-):
-    arch.eval()
-    for i, data in enumerate(datapipe):
-        invar = data[0]["invar"].detach()
-        outvar = data[0]["outvar"].cpu().detach()
-        invar_list = torch.split(invar, 1, dim=1)  # split along the time dimension
-        invar_list = [tensor.squeeze(dim=1) for tensor in invar_list]
-        invar_model = prepare_input(
-            invar_list,
-            datapipe_start_year,
-            data[0]["invar_idx"],
-            data[0]["year_idx"],
-            lsm,
-            longrid,
-            latgrid,
-            topographic_height,
-            invar.device,
-            invar.size(0),
-        )
-
-        pred_outvar = torch.zeros_like(outvar)
-
-        # non over-lapping rollout
-        for t in range(outvar.shape[1] // num_input_steps):
-            # print(t)
-            output = arch(invar_model)
-            invar_model = output
-            invar_list = list(
-                torch.split(invar_model, (nr_output_channels // num_input_steps), dim=1)
-            )
-            # print(data[0]["outvar_idx"][:,t*num_input_steps:(t+1)*num_input_steps], data[0]["year_idx"])
-            invar_model = prepare_input(
-                invar_list,
-                datapipe_start_year,
-                data[0]["outvar_idx"][
-                    :, t * num_input_steps : (t + 1) * num_input_steps
-                ],
-                data[0]["year_idx"],
-                lsm,
-                longrid,
-                latgrid,
-                topographic_height,
-                invar.device,
-                invar.size(0),
-            )
-
-            output_list = torch.split(
-                output, nr_output_channels // num_input_steps, dim=1
-            )  # split along the channel dimension
-            output_list = [tensor.unsqueeze(dim=1) for tensor in output_list]
-            output = torch.cat(output_list, dim=1).cpu().detach()
-            pred_outvar[:, t * 2] = output[:, 0]
-            pred_outvar[:, t * 2 + 1] = output[:, 1]
-
-        # Plotting
-        if i == 0:
-            pred_outvar = pred_outvar.numpy()
-            outvar = outvar.numpy()
+        if plotting and i == 0:
+            pred_outvar = pred_outvar.detach().cpu().numpy()
+            outvar = outvar.detach().cpu().numpy()
             for chan in channels:
                 plt.close("all")
                 fig, ax = plt.subplots(
@@ -287,6 +251,9 @@ def plotting_step(
                     ax[2, t].set_title(f"Diff: {t}")
 
                 fig.savefig(f"era5_validation_channel{chan}_epoch{epoch}.png", dpi=300)
+
+    arch.train()
+    return loss_epoch.detach() / num_examples
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
@@ -338,6 +305,14 @@ def main(cfg: DictConfig) -> None:
         to_absolute_path("./static_datasets/latlon_grid_field_rs_cs.nc")
     )
     latgrid, longrid = latlon_grids["latgrid"].values, latlon_grids["longrid"].values
+
+    # convert static datasets to tensors
+    lsm_tensor = torch.tensor(lsm, dtype=torch.float).to(dist.device).unsqueeze(dim=0)
+    topographic_height_tensor = (
+        torch.tensor(topographic_height, dtype=torch.float)
+        .to(dist.device)
+        .unsqueeze(dim=0)
+    )
 
     optimizer = torch.optim.Adam(
         arch.parameters(),
@@ -422,46 +397,47 @@ def main(cfg: DictConfig) -> None:
         return arch(invar)
 
     @StaticCaptureTraining(
-        model=arch, optim=optimizer, logger=logger, use_graphs=False, use_amp=False
+        model=arch, optim=optimizer, logger=logger, use_graphs=True, use_amp=False
     )
-    def train_step_forward(arch, invar, outvar):
+    def train_step_forward(
+        arch, invar, outvar, invar_tisr, outvar_tisr, lsm, topographic_height
+    ):
         invar_list = torch.split(invar, 1, dim=1)  # split along the time dimension
         invar_list = [tensor.squeeze(dim=1) for tensor in invar_list]
+        tisr_list = torch.split(invar_tisr, 1, dim=1)  # split along the time dimension
+        tisr_list = [tensor.squeeze(dim=1) for tensor in tisr_list]
+
         invar_model = prepare_input(
             invar_list,
-            1980,
-            data[0]["invar_idx"],
-            data[0]["year_idx"],
+            tisr_list,
             lsm,
-            longrid,
-            latgrid,
             topographic_height,
-            dist.device,
-            invar.size(0),
         )
-
         # multi step loss.
         loss = 0.0
         for t in range(outvar.shape[1] // num_input_steps):
             output = arch(invar_model)
-            invar_model = output
-            invar_list = list(
-                torch.split(invar_model, (nr_output_channels // num_input_steps), dim=1)
-            )
-            invar_model = prepare_input(
-                invar_list,
-                1980,
-                data[0]["outvar_idx"][
-                    :, t * num_input_steps : (t + 1) * num_input_steps
-                ],
-                data[0]["year_idx"],
-                lsm,
-                longrid,
-                latgrid,
-                topographic_height,
-                dist.device,
-                invar.size(0),
-            )
+            if t != outvar.shape[1] // num_input_steps - 1:
+                invar_model = output
+                invar_list = list(
+                    torch.split(
+                        invar_model, (nr_output_channels // num_input_steps), dim=1
+                    )
+                )
+                tisr_list = torch.split(
+                    outvar_tisr[:, t * num_input_steps : (t + 1) * num_input_steps],
+                    1,
+                    dim=1,
+                )
+                tisr_list = [tensor.squeeze(dim=1) for tensor in tisr_list]
+
+                invar_model = prepare_input(
+                    invar_list,
+                    tisr_list,
+                    lsm,
+                    topographic_height,
+                )
+
             output_list = torch.split(
                 output, nr_output_channels // num_input_steps, dim=1
             )
@@ -474,6 +450,26 @@ def main(cfg: DictConfig) -> None:
 
         return loss
 
+    # Create static tensors for training
+    for i, data in enumerate(datapipe):
+        if i < 1:
+            static_invar = data[0]["invar"].to(dist.device)
+            static_outvar = data[0]["outvar"].to(dist.device)
+            invar_idx = data[0]["invar_idx"]
+            outvar_idx = data[0]["outvar_idx"]
+            year_idx = data[0]["year_idx"]
+
+            invar_tisr = compute_tisr(1980, year_idx, invar_idx, longrid, latgrid)
+            outvar_tisr = compute_tisr(1980, year_idx, outvar_idx, longrid, latgrid)
+            static_invar_tisr_tensor = torch.tensor(invar_tisr, dtype=torch.float).to(
+                dist.device
+            )
+            static_outvar_tisr_tensor = torch.tensor(outvar_tisr, dtype=torch.float).to(
+                dist.device
+            )
+        else:
+            break
+
     # Main training loop
     max_epoch = cfg.max_epoch
     for epoch in range(max(1, loaded_epoch + 1), max_epoch + 1):
@@ -481,43 +477,75 @@ def main(cfg: DictConfig) -> None:
             "train", epoch=epoch, num_mini_batch=len(datapipe), epoch_alert_freq=1
         ) as log:
             for data in datapipe:
-                invar = data[0]["invar"]
-                outvar = data[0]["outvar"]
+                invar = data[0]["invar"].to(dist.device)
+                outvar = data[0]["outvar"].to(dist.device)
+                invar_idx = data[0]["invar_idx"]
+                outvar_idx = data[0]["outvar_idx"]
+                year_idx = data[0]["year_idx"]
 
-                loss = train_step_forward(arch, invar, outvar)
+                invar_tisr = compute_tisr(1980, year_idx, invar_idx, longrid, latgrid)
+                outvar_tisr = compute_tisr(1980, year_idx, outvar_idx, longrid, latgrid)
+                invar_tisr_tensor = torch.tensor(invar_tisr, dtype=invar.dtype).to(
+                    dist.device
+                )
+                outvar_tisr_tensor = torch.tensor(outvar_tisr, dtype=outvar.dtype).to(
+                    dist.device
+                )
+
+                static_invar.copy_(invar)
+                static_outvar.copy_(outvar)
+                static_invar_tisr_tensor.copy_(invar_tisr_tensor)
+                static_outvar_tisr_tensor.copy_(outvar_tisr_tensor)
+
+                loss = train_step_forward(
+                    arch,
+                    static_invar,
+                    static_outvar,
+                    static_invar_tisr_tensor,
+                    static_outvar_tisr_tensor,
+                    lsm_tensor,
+                    topographic_height_tensor,
+                )
                 log.log_minibatch({"Mini-batch loss": loss.detach()})
             log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
 
-        if dist.rank == 0:
-            with LaunchLogger("valid", epoch=epoch) as log:
-                val_loss = validation_step(
-                    eval_step_forward,
-                    arch,
-                    val_datapipe,
-                    nr_output_channels,
-                    num_input_steps,
-                    lsm,
-                    longrid,
-                    latgrid,
-                    topographic_height,
-                    epoch=epoch,
-                )
-                log.log_epoch({"Val loss": val_loss})
+        with LaunchLogger("valid", epoch=epoch) as log:
+            val_loss = validation_and_plotting_step(
+                eval_step_forward,
+                arch,
+                val_datapipe,
+                2016,
+                nr_output_channels,
+                num_input_steps,
+                lsm,
+                longrid,
+                latgrid,
+                topographic_height,
+                epoch=epoch,
+                channels=[0, 1, 2, 3, 4, 5, 6],
+                plotting=False,
+                device=dist.device,
+            )
+            log.log_epoch({"Val loss": val_loss})
 
-                # plot the data on out of sample dataset
-                plotting_step(
-                    arch,
-                    out_of_sample_datapipe,
-                    2018,
-                    [0, 1, 2, 3, 4, 5, 6],
-                    epoch,
-                    nr_output_channels,
-                    num_input_steps,
-                    lsm,
-                    longrid,
-                    latgrid,
-                    topographic_height,
-                )
+        if dist.rank == 0:
+            # plot the data on out of sample dataset
+            out_of_sample_loss = validation_and_plotting_step(
+                eval_step_forward,
+                arch,
+                out_of_sample_datapipe,
+                2018,
+                nr_output_channels,
+                num_input_steps,
+                lsm,
+                longrid,
+                latgrid,
+                topographic_height,
+                epoch=epoch,
+                channels=[0, 1, 2, 3, 4, 5, 6],
+                plotting=True,
+                device=dist.device,
+            )
 
         if dist.world_size > 1:
             torch.distributed.barrier()
