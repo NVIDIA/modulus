@@ -155,6 +155,17 @@ class _DLWPWrapper(torch.nn.Module):
         self.topographic_height = topographic_height
 
         # load map weights
+        # Note: these map files are created using TempestRemap library
+        # https://github.com/ClimateGlobalChange/tempestremap
+        # To generate the maps, the below sequence of commands can be
+        # executed once TempestRemap is installed.
+
+        # GenerateRLLMesh --lat 721 --lon 1440 --file out_latlon.g --lat_begin 90 --lat_end -90 --out_format Netcdf4
+        # GenerateCSMesh --res <desired-res> --file out_cubedsphere.g --out_format Netcdf4
+        # GenerateOverlapMesh --a out_latlon.g --b out_cubedsphere.g --out overlap_latlon_cubedsphere.g --out_format Netcdf4
+        # GenerateOfflineMap --in_mesh out_latlon.g --out_mesh out_cubedsphere.g --ov_mesh overlap_latlon_cubedsphere.g --in_np 1 --in_type FV --out_type FV --out_map map_LL_CS.nc --out_format Netcdf4
+        # GenerateOverlapMesh --a out_cubedsphere.g --b out_latlon.g --out overlap_cubedsphere_latlon.g --out_format Netcdf4
+        # GenerateOfflineMap --in_mesh out_cubedsphere.g --out_mesh out_latlon.g --ov_mesh overlap_cubedsphere_latlon.g --in_np 1 --in_type FV --out_type FV --out_map map_CS_LL.nc --out_format Netcdf4
         self.input_map_wts = xarray.open_dataset(ll_to_cs_mapfile_path)
         self.output_map_wts = xarray.open_dataset(cs_to_ll_mapfile_path)
 
