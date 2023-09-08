@@ -168,7 +168,7 @@ class _DLWPWrapper(torch.nn.Module):
         M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
         N, T, C = input.shape[0], input.shape[1], input.shape[2]
-        input = input.reshape(N * T * C, -1) @ M.T
+        input = (M @ input.reshape(N * T * C, -1).T).T
         S = int((M.shape[0] / 6) ** 0.5)
         input = input.reshape(N, T, C, 6, S, S)
         input_list = list(torch.split(input, 1, dim=1))
@@ -227,7 +227,7 @@ class _DLWPWrapper(torch.nn.Module):
         M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
         N, T, C = output.shape[0], 2, output.shape[2]
-        output = output.reshape(N * T * C, -1) @ M.T
+        output = (M @ output.reshape(N * T * C, -1).T).T
         output = output.reshape(N, T, C, 721, 1440)
 
         return output
