@@ -23,7 +23,8 @@ dependencies = [
     "torch>=1.12",
     "xarray>=2023.1.0",
     "s3fs>=2023.5.0",
-    "scikit-learn>=1.0.2"
+    "scikit-learn>=1.0.2",
+    "treelib>=1.2.5"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
