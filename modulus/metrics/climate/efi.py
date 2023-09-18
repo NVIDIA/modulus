@@ -68,9 +68,24 @@ def efi(
     )
 
 
-def efi(bin_edges, counts, quantiles):
+def efi(bin_edges: Tensor, counts: Tensor, quantiles: Tensor) -> Tensor:
     """Compute the Extreme Forecast Index for the given histogram.
 
+    The histogram is assumed to correspond with the given quantiles.
+    That is, the bin midpoints must align with the quantiles.
+
+    Parameters
+    ----------
+    bin_edges : Tensor
+        The bin edges of the histogram over which the data distribution
+        is defined. Assumed to be monotonically increasing but not evenly
+        spaced.
+    counts : Tensor
+        The counts of the histogram over which the data distributed is defined.
+        Not assumed to be normalized.
+    quantiles : Tensor
+        The quantiles of the climatological or reference distribution. The quantiles
+        must match the midpoints of the histogram bins.
     See modulus/metrics/climate/efi for more details.
     """
     bin_widths = bin_edges[1:] - bin_edges[:-1]
