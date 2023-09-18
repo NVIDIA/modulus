@@ -57,11 +57,16 @@ def efi(
 
     clim_cdf = normal_cdf(climatology_mean, climatology_std, bin_edges, grid="right")
 
-    return 2.0 / torch.pi * torch.trapz(
-        (clim_cdf - pred_cdf) / torch.sqrt(clim_cdf * (1.0 - clim_cdf)),
-        clim_cdf,
-        dim=0,
+    return (
+        2.0
+        / torch.pi
+        * torch.trapz(
+            (clim_cdf - pred_cdf) / torch.sqrt(clim_cdf * (1.0 - clim_cdf)),
+            clim_cdf,
+            dim=0,
+        )
     )
+
 
 def efi(bin_edges, counts, quantiles):
     """Compute the Extreme Forecast Index for the given histogram.
@@ -76,12 +81,12 @@ def efi(bin_edges, counts, quantiles):
         2.0
         / torch.pi
         * torch.trapz(
-            (quantiles - pred_cdf)
-            / torch.sqrt(quantiles * (1.0 - quantiles)),
+            (quantiles - pred_cdf) / torch.sqrt(quantiles * (1.0 - quantiles)),
             quantiles,
             dim=0,
         )
     )
+
 
 def normalized_entropy(
     pred_pdf: Tensor,
