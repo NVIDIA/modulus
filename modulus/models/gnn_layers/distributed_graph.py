@@ -255,7 +255,7 @@ class DistributedGraph:
             be larger than 1, i.e. an actual partition distributed among multiple ranks.
         partition_group_name : str, default=None
             Name of process group across which graphs are distributed. Passing no process
-            group name leads to a parallelism across the default process group. 
+            group name leads to a parallelism across the default process group.
             Otherwise, the group size of a process group is expected to match partition_size.
         graph_partition : GraphPartition, optional
             Optional graph_partition, if passed as None, the naive
