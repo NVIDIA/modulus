@@ -22,7 +22,7 @@ from modulus.metrics.general.histogram import normal_cdf, normal_pdf
 Tensor = torch.Tensor
 
 
-def efi(
+def efi_gaussian(
     pred_cdf: Tensor,
     bin_edges: Tensor,
     climatology_mean: Tensor,
@@ -61,7 +61,7 @@ def efi(
         2.0
         / torch.pi
         * torch.trapz(
-            (clim_cdf - pred_cdf) / torch.sqrt(clim_cdf * (1.0 - clim_cdf)),
+            (clim_cdf - pred_cdf) / torch.sqrt(1e-8 + clim_cdf * (1.0 - clim_cdf)),
             clim_cdf,
             dim=0,
         )
@@ -89,14 +89,16 @@ def efi(bin_edges: Tensor, counts: Tensor, quantiles: Tensor) -> Tensor:
     See modulus/metrics/climate/efi for more details.
     """
     bin_widths = bin_edges[1:] - bin_edges[:-1]
+    print(counts)
     pred_cdf = torch.cumsum(counts * bin_widths, dim=0) / torch.sum(
         counts * bin_widths, dim=0
     )
+    print(pred_cdf)
     return (
         2.0
         / torch.pi
         * torch.trapz(
-            (quantiles - pred_cdf) / torch.sqrt(quantiles * (1.0 - quantiles)),
+            (quantiles - pred_cdf) / torch.sqrt(1e-8 + quantiles * (1.0 - quantiles)),
             quantiles,
             dim=0,
         )
