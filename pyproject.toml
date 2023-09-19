@@ -12,7 +12,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "Apache 2.0"}
 dependencies = [
-    "torch>=1.12",
+    "torch>=2.0.0",
     "numpy>=1.22.4,<1.25",
     "h5py>=3.7.0",
     "xarray>=2023.1.0",
@@ -22,6 +22,8 @@ dependencies = [
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytest>=6.0.0",
+    "pyyaml>=6.0",
+    "onnx>=1.14.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
