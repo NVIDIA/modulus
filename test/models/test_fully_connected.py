@@ -50,6 +50,7 @@ def test_fully_connected_constructor(device):
             "skip_connections": False,
             "adaptive_activations": False,
             "weight_norm": False,
+            "weight_fact": False
         },
         {
             "in_features": random.randint(1, 16),
@@ -60,16 +61,45 @@ def test_fully_connected_constructor(device):
             "skip_connections": True,
             "adaptive_activations": True,
             "weight_norm": True,
+            "weight_fact": False
         },
+        {
+            "in_features": random.randint(1, 16),
+            "out_features": random.randint(1, 16),
+            "layer_size": 16,
+            "num_layers": 4,
+            "activation_fn": ["relu", "silu"],
+            "skip_connections": True,
+            "adaptive_activations": True,
+            "weight_norm": False,
+            "weight_fact": True
+            },
+        {
+            "in_features": random.randint(1, 16),
+            "out_features": random.randint(1, 16),
+            "layer_size": 16,
+            "num_layers": 4,
+            "activation_fn": ["relu", "silu"],
+            "skip_connections": True,
+            "adaptive_activations": True,
+            "weight_norm": True,
+            "weight_fact": True
+            },
     ]
     for kw_args in arg_list:
-        # Construct FC model
-        model = FullyConnected(**kw_args).to(device)
+        if kw_args["weight_norm"] and kw_args["weight_fact"]:
+            # If both weight_norm and weight_fact are True, expect an AssertionError
+            with pytest.raises(AssertionError, match="Cannot apply both weight normalization and weight factorization together, please select one."):
+                model = FullyConnected(**kw_args).to(device)
 
-        bsize = random.randint(1, 16)
-        invar = torch.randn(bsize, kw_args["in_features"]).to(device)
-        outvar = model(invar)
-        assert outvar.shape == (bsize, kw_args["out_features"])
+        else:
+            # Construct FC model
+            model = FullyConnected(**kw_args).to(device)
+
+            bsize = random.randint(1, 16)
+            invar = torch.randn(bsize, kw_args["in_features"]).to(device)
+            outvar = model(invar)
+            assert outvar.shape == (bsize, kw_args["out_features"])
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
