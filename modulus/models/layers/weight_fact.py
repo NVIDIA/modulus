@@ -61,7 +61,14 @@ class WeightFactLinear(nn.Module):
     torch.Size([2, 4])
     """
 
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, mean: float = 1.0, stddev = 0.1) -> None:
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        mean: float = 1.0,
+        stddev=0.1,
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -92,6 +99,12 @@ class WeightFactLinear(nn.Module):
 
     def extra_repr(self) -> str:
         """Print information about weight factorization"""
-        return "in_features={}, out_features={}, bias={}, mean = {}, stddev = {}".format(
-            self.in_features, self.out_features, self.bias, self.mean, self.stddev is not None
+        return (
+            "in_features={}, out_features={}, bias={}, mean = {}, stddev = {}".format(
+                self.in_features,
+                self.out_features,
+                self.bias,
+                self.mean,
+                self.stddev is not None,
+            )
         )

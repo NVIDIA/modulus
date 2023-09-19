@@ -61,7 +61,9 @@ class FCLayer(nn.Module):
         self.activation_par = activation_par
 
         # Ensure weight_norm and weight_fact are not both True
-        assert not (weight_norm and weight_fact), "Cannot apply both weight normalization and weight factorization together, please select one."
+        assert not (
+            weight_norm and weight_fact
+        ), "Cannot apply both weight normalization and weight factorization together, please select one."
 
         if weight_norm:
             self.linear = WeightNormLinear(in_features, out_features, bias=True)

@@ -50,7 +50,7 @@ def test_fully_connected_constructor(device):
             "skip_connections": False,
             "adaptive_activations": False,
             "weight_norm": False,
-            "weight_fact": False
+            "weight_fact": False,
         },
         {
             "in_features": random.randint(1, 16),
@@ -61,7 +61,7 @@ def test_fully_connected_constructor(device):
             "skip_connections": True,
             "adaptive_activations": True,
             "weight_norm": True,
-            "weight_fact": False
+            "weight_fact": False,
         },
         {
             "in_features": random.randint(1, 16),
@@ -72,8 +72,8 @@ def test_fully_connected_constructor(device):
             "skip_connections": True,
             "adaptive_activations": True,
             "weight_norm": False,
-            "weight_fact": True
-            },
+            "weight_fact": True,
+        },
         {
             "in_features": random.randint(1, 16),
             "out_features": random.randint(1, 16),
@@ -83,13 +83,16 @@ def test_fully_connected_constructor(device):
             "skip_connections": True,
             "adaptive_activations": True,
             "weight_norm": True,
-            "weight_fact": True
-            },
+            "weight_fact": True,
+        },
     ]
     for kw_args in arg_list:
         if kw_args["weight_norm"] and kw_args["weight_fact"]:
             # If both weight_norm and weight_fact are True, expect an AssertionError
-            with pytest.raises(AssertionError, match="Cannot apply both weight normalization and weight factorization together, please select one."):
+            with pytest.raises(
+                AssertionError,
+                match="Cannot apply both weight normalization and weight factorization together, please select one.",
+            ):
                 model = FullyConnected(**kw_args).to(device)
 
         else:
