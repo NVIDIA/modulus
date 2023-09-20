@@ -160,6 +160,9 @@ def save_untrained_dlwp(path):
 @pytest.mark.parametrize("batch_size", [1, 4])
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_dlwp(tmp_path, batch_size, device, pytestconfig):
+
+    from modulus.models.fcn_mip_plugin import dlwp
+
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
