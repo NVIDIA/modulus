@@ -96,7 +96,7 @@ FROM builder as ci
 ARG TARGETPLATFORM
 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
+RUN cd /modulus/ && pip install -e .[all] && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 
