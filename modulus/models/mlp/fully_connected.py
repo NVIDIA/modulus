@@ -81,6 +81,7 @@ class FullyConnected(Module):
         skip_connections: bool = False,
         adaptive_activations: bool = False,
         weight_norm: bool = False,
+        weight_fact: bool = False,
     ) -> None:
         super().__init__(meta=MetaData())
 
@@ -109,6 +110,7 @@ class FullyConnected(Module):
                     layer_size,
                     activation_fn[i],
                     weight_norm,
+                    weight_fact,
                     activation_par,
                 )
             )
@@ -119,6 +121,7 @@ class FullyConnected(Module):
             out_features=out_features,
             activation_fn=None,
             weight_norm=False,
+            weight_fact=False,
             activation_par=None,
         )
 
