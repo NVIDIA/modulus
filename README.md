@@ -68,7 +68,7 @@ Otherwise, additional dependencies can be installed on a case by case basis.
 The recommended Modulus docker image can be pulled from the [NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus):
 
 ```Bash
-docker pull nvcr.io/nvidia/modulus/modulus:23.05
+docker pull nvcr.io/nvidia/modulus/modulus:23.09
 ```
 
 Inside the container you can clone the Modulus git repositories and get started with the
@@ -77,7 +77,7 @@ example from the [Modulus Launch](https://github.com/NVIDIA/modulus-launch) repo
 
 ```bash
 docker run --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --runtime nvidia \
---rm -it nvcr.io/nvidia/modulus/modulus:23.05 bash
+--rm -it nvcr.io/nvidia/modulus/modulus:23.09 bash
 git clone https://github.com/NVIDIA/modulus-launch.git
 cd modulus-launch/examples/cfd/darcy_fno/
 pip install warp-lang # install NVIDIA Warp to run the darcy example
