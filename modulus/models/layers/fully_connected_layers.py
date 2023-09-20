@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable
-from typing import Optional
-from typing import Union
+from typing import Union, Callable
 
 import torch.nn as nn
 from torch import Tensor
@@ -44,7 +42,7 @@ class FCLayer(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        activation_fn: Union[nn.Module, None] = None,
+        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
         weight_norm: bool = False,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
@@ -95,7 +93,7 @@ class ConvFCLayer(nn.Module):
 
     def __init__(
         self,
-        activation_fn: Union[nn.Module, None] = None,
+        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__()
@@ -139,14 +137,18 @@ class Conv1dFCLayer(ConvFCLayer):
         self,
         in_features: int,
         out_features: int,
-        activation_fn: Union[nn.Module, None] = None,
+        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
+        weight_norm: bool = False,
     ) -> None:
         super().__init__(activation_fn, activation_par)
         self.in_channels = in_features
         self.out_channels = out_features
         self.conv = nn.Conv1d(in_features, out_features, kernel_size=1, bias=True)
         self.reset_parameters()
+
+        if weight_norm:
+            raise NotImplementedError("Weight norm not supported for Conv FC layers")
 
     def reset_parameters(self) -> None:
         """Reset layer weights"""
@@ -178,7 +180,7 @@ class Conv2dFCLayer(ConvFCLayer):
         self,
         in_channels: int,
         out_channels: int,
-        activation_fn: Union[nn.Module, None] = None,
+        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__(activation_fn, activation_par)
@@ -218,7 +220,7 @@ class Conv3dFCLayer(ConvFCLayer):
         self,
         in_channels: int,
         out_channels: int,
-        activation_fn: Union[nn.Module, None] = None,
+        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__(activation_fn, activation_par)
