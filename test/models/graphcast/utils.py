@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dgl
 import torch
 import sys, os
 import numpy as np
+import pytest
+
+dgl = pytest.importorskip("dgl")
 
 
 def fix_random_seeds():
