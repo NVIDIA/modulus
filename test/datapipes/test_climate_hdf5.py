@@ -18,7 +18,7 @@ import torch
 
 from typing import Tuple
 from . import common
-from pytest_utils import import_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
 Tensor = torch.Tensor
 
@@ -26,43 +26,28 @@ Tensor = torch.Tensor
 @pytest.fixture
 def data_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/test/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
 @pytest.fixture
 def stats_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
 @pytest.fixture
 def lsm_filename():
     path = "/data/nfs/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
 @pytest.fixture
 def geopotential_filename():
     path = "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_constructor(
@@ -200,6 +185,7 @@ def test_climate_hdf5_constructor(
         pass
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_device(
@@ -241,6 +227,7 @@ def test_climate_hdf5_device(
         break
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("data_channels", [[0, 1]])
 @pytest.mark.parametrize("num_steps", [2])
@@ -327,6 +314,7 @@ def test_climate_hdf5_shape(
         break
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("num_steps", [1, 2])
 @pytest.mark.parametrize("stride", [1, 3])
@@ -380,6 +368,7 @@ def test_era5_hdf5_sequence(
     )
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("stride", [1, 3])
@@ -428,6 +417,7 @@ def test_era5_hdf5_shuffle(
     assert common.check_shuffle(tensors, shuffle, stride, 8)
 
 
+@nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0"])
 def test_era5_hdf5_cudagraphs(

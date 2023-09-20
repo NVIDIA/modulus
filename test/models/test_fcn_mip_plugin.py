@@ -24,7 +24,7 @@ import shutil
 import os
 
 import pytest
-from pytest_utils import import_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
 
 @pytest.fixture
@@ -32,10 +32,6 @@ def dlwp_data_dir():
     """Data dir for dlwp package"""
 
     path = "/data/nfs/modulus-data/plugin_data/dlwp/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
@@ -44,10 +40,6 @@ def graphcast_data_dir():
     """Data dir for graphcast package"""
 
     path = "/data/nfs/modulus-data/plugin_data/graphcast/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
@@ -121,6 +113,7 @@ def save_untrained_sfno(path):
     return package
 
 
+@nfsdata_or_fail
 @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_sfno(tmp_path, pytestconfig):
     """Test SFNO plugin"""
@@ -162,6 +155,7 @@ def save_untrained_dlwp(path):
     return package
 
 
+@nfsdata_or_fail
 @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_dlwp(tmp_path, dlwp_data_dir, pytestconfig):
     """Test DLWP plugin"""
@@ -212,6 +206,7 @@ def save_untrained_graphcast(path):
     return package
 
 
+@nfsdata_or_fail
 @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
     """Test GraphCast plugin"""
@@ -231,6 +226,7 @@ def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
     assert out.shape == x.shape
 
 
+@nfsdata_or_fail
 @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test__CozZenWrapper(batch_size, pytestconfig):

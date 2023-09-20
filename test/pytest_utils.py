@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import os
 from functools import wraps
 import pytest
 
@@ -45,3 +45,25 @@ def _import_or_fail(module_names, config):
             __import__(module_name)
         else:
             pytest.importorskip(module_name)
+
+
+def nfsdata_or_fail(test_func):
+    @pytest.mark.usefixtures("pytestconfig")
+    @wraps(test_func)
+    def wrapper(*args, **kwargs):
+        pytestconfig = kwargs.get("pytestconfig")
+        if pytestconfig is None:
+            raise ValueError(
+                "pytestconfig must be passed as an argument when using the nfsdata_required_decorator."
+            )
+        _nfsdata_or_fail(pytestconfig)
+        return test_func(*args, **kwargs)
+
+    return wrapper
+
+
+def _nfsdata_or_fail(config):
+    if not os.path.exists("/data/nfs/modulus-data"):
+        pytest.skip(
+            "NFS volumes not set up with CI data repo. Run `make get-data` from the root directory of the repo"
+        )

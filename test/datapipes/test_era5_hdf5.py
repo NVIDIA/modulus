@@ -18,6 +18,7 @@ import torch
 
 from typing import Tuple
 from modulus.datapipes.climate import ERA5HDF5Datapipe
+from pytest_utils import import_or_fail, nfsdata_or_fail
 from . import common
 
 Tensor = torch.Tensor
@@ -26,25 +27,18 @@ Tensor = torch.Tensor
 @pytest.fixture
 def data_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/test/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
 @pytest.fixture
 def stats_dir():
     path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
-    if not os.path.exists(path):
-        pytest.skip(
-            "NFS volumes not set up. Run `make get-data` from the root directory of the repo"
-        )
     return path
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_era5_hdf5_constructor(data_dir, stats_dir, device):
+def test_era5_hdf5_constructor(data_dir, stats_dir, device, pytestconfig):
 
     # construct data pipe
     datapipe = ERA5HDF5Datapipe(
@@ -145,8 +139,9 @@ def test_era5_hdf5_constructor(data_dir, stats_dir, device):
         pass
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_era5_hdf5_device(data_dir, stats_dir, device):
+def test_era5_hdf5_device(data_dir, stats_dir, device, pytestconfig):
 
     # construct data pipe
     datapipe = ERA5HDF5Datapipe(
@@ -170,13 +165,21 @@ def test_era5_hdf5_device(data_dir, stats_dir, device):
         break
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("data_channels", [[0, 1]])
 @pytest.mark.parametrize("num_steps", [2])
 @pytest.mark.parametrize("patch_size", [None])
 @pytest.mark.parametrize("batch_size", [1, 2, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_era5_hdf5_shape(
-    data_dir, stats_dir, data_channels, num_steps, patch_size, batch_size, device
+    data_dir,
+    stats_dir,
+    data_channels,
+    num_steps,
+    patch_size,
+    batch_size,
+    device,
+    pytestconfig,
 ):
 
     # construct data pipe
@@ -221,10 +224,13 @@ def test_era5_hdf5_shape(
         break
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("num_steps", [1, 2])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_era5_hdf5_sequence(data_dir, stats_dir, num_steps, stride, device):
+def test_era5_hdf5_sequence(
+    data_dir, stats_dir, num_steps, stride, device, pytestconfig
+):
 
     # construct data pipe
     datapipe = ERA5HDF5Datapipe(
@@ -253,10 +259,11 @@ def test_era5_hdf5_sequence(data_dir, stats_dir, num_steps, stride, device):
     )
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_era5_hdf5_shuffle(data_dir, stats_dir, shuffle, stride, device):
+def test_era5_hdf5_shuffle(data_dir, stats_dir, shuffle, stride, device, pytestconfig):
 
     # construct data pipe
     datapipe = ERA5HDF5Datapipe(
@@ -283,8 +290,9 @@ def test_era5_hdf5_shuffle(data_dir, stats_dir, shuffle, stride, device):
     assert common.check_shuffle(tensors, shuffle, stride, 8)
 
 
+@nfsdata_or_fail
 @pytest.mark.parametrize("device", ["cuda:0"])
-def test_era5_hdf5_cudagraphs(data_dir, stats_dir, device):
+def test_era5_hdf5_cudagraphs(data_dir, stats_dir, device, pytestconfig):
 
     # Preprocess function to convert dataloader output into Tuple of tensors
     def input_fn(data) -> Tuple[Tensor, ...]:
