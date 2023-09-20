@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Handle the tar ball extracts in a safer way.
+
 ### Dependencies
 
 - Updated the base container to latest PyTorch 23.07.
