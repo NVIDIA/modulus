@@ -159,7 +159,7 @@ def save_untrained_dlwp(path):
 @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 @pytest.mark.parametrize("batch_size", [1, 4])
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
-def test_dlwp(tmp_path, batch_size, device):
+def test_dlwp(tmp_path, batch_size, device, pytestconfig):
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
