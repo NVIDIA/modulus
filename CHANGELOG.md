@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added distributed utilities to create process groups and orthogonal process groups.
 - Added distributed AFNO model implementation.
 - Added distributed utilities for communication of buffers of varying size per rank.
+- Added instructions for docker build on ARM architecture.
+- Added batching support and fix the input time step for the DLWP wrapper.
 
 ### Changed
 

@@ -123,7 +123,13 @@ def init(params, verbose=False):  # pragma: no cover
             master_address = int(os.getenv("MASTER_ADDRESS"))
     elif params.wireup_info == "mpi":
         import socket
-        from mpi4py import MPI
+
+        try:
+            from mpi4py import MPI
+        except ImportError:
+            Warning(
+                'mpi4py is not installed. Please install it using pip install "mip4py>=3.1.4"'
+            )
 
         mpi_comm = MPI.COMM_WORLD.Dup()
         world_size = mpi_comm.Get_size()
