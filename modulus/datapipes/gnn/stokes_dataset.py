@@ -45,18 +45,17 @@ class StokesDataset(DGLDataset):
     """In-memory Stokes flow Dataset"""
 
     def __init__(
-            self,
-            data_dir,
-            split="train",
-            num_samples=10,
-            invar_keys=["pos", "marker"],
-            outvar_keys=["u", "v", "p"],
-            normalize_keys=["u", "v", "p"],
-            force_reload=False,
-            name="dataset",
-            verbose=False,
+        self,
+        data_dir,
+        split="train",
+        num_samples=10,
+        invar_keys=["pos", "marker"],
+        outvar_keys=["u", "v", "p"],
+        normalize_keys=["u", "v", "p"],
+        force_reload=False,
+        name="dataset",
+        verbose=False,
     ):
-
         super().__init__(
             name=name,
             force_reload=force_reload,
@@ -80,7 +79,7 @@ class StokesDataset(DGLDataset):
 
         numbers = []
         for directory in data_list:
-            match = re.search(r'\d+', directory)
+            match = re.search(r"\d+", directory)
             if match:
                 numbers.append(int(match.group()))
 
@@ -152,21 +151,23 @@ class StokesDataset(DGLDataset):
         for i in range(len(self.graphs)):
             for key in invar_keys:
                 self.graphs[i].ndata[key] = (
-                                                    self.graphs[i].ndata[key] - self.node_stats[key + "_mean"]
-                                            ) / self.node_stats[key + "_std"]
+                    self.graphs[i].ndata[key] - self.node_stats[key + "_mean"]
+                ) / self.node_stats[key + "_std"]
 
             self.graphs[i].ndata["x"] = torch.cat(
-                [self.graphs[i].ndata[key] for key in self.input_keys], dim=-1)
+                [self.graphs[i].ndata[key] for key in self.input_keys], dim=-1
+            )
             self.graphs[i].ndata["y"] = torch.cat(
-                [self.graphs[i].ndata[key] for key in self.output_keys], dim=-1)
+                [self.graphs[i].ndata[key] for key in self.output_keys], dim=-1
+            )
         return self.graphs
 
     def normalize_edge(self):
         """normalizes a tensor"""
         for i in range(len(self.graphs)):
             self.graphs[i].edata["x"] = (
-                                                self.graphs[i].edata["x"] - self.edge_stats["edge_mean"]
-                                        ) / self.edge_stats["edge_std"]
+                self.graphs[i].edata["x"] - self.edge_stats["edge_mean"]
+            ) / self.edge_stats["edge_std"]
 
         return self.graphs
 
@@ -185,10 +186,10 @@ class StokesDataset(DGLDataset):
         }
         for i in range(self.length):
             stats["edge_mean"] += (
-                    torch.mean(self.graphs[i].edata["x"], dim=0) / self.length
+                torch.mean(self.graphs[i].edata["x"], dim=0) / self.length
             )
             stats["edge_meansqr"] += (
-                    torch.mean(torch.square(self.graphs[i].edata["x"]), dim=0) / self.length
+                torch.mean(torch.square(self.graphs[i].edata["x"]), dim=0) / self.length
             )
         stats["edge_std"] = torch.sqrt(
             stats["edge_meansqr"] - torch.square(stats["edge_mean"])
@@ -208,10 +209,11 @@ class StokesDataset(DGLDataset):
         for i in range(self.length):
             for key in keys:
                 stats[key + "_mean"] += (
-                        torch.mean(self.graphs[i].ndata[key], dim=0) / self.length
+                    torch.mean(self.graphs[i].ndata[key], dim=0) / self.length
                 )
                 stats[key + "_meansqr"] += (
-                        torch.mean(torch.square(self.graphs[i].ndata[key]), dim=0) / self.length
+                    torch.mean(torch.square(self.graphs[i].ndata[key]), dim=0)
+                    / self.length
                 )
 
         for key in keys:
@@ -232,7 +234,6 @@ class StokesDataset(DGLDataset):
         add_self_loop: bool = False,
         dtype: Union[torch.dtype, str] = torch.int32,
     ) -> dgl.DGLGraph:
-
         """
         Create a DGL graph from vtkPolyData.
 
@@ -257,7 +258,9 @@ class StokesDataset(DGLDataset):
 
         # Extract point data and connectivity information from the vtkPolyData
         points = polydata.GetPoints()
-        vertices = np.array([points.GetPoint(i) for i in range(points.GetNumberOfPoints())])
+        vertices = np.array(
+            [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
+        )
 
         polys = polydata.GetPolys()
         polys.InitTraversal()
@@ -276,11 +279,11 @@ class StokesDataset(DGLDataset):
             graph = dgl.add_self_loop(graph)
 
         # Assign node features using the vertex data
-        graph.ndata["pos"] = torch.tensor(vertices[:,:2], dtype=torch.float32)
+        graph.ndata["pos"] = torch.tensor(vertices[:, :2], dtype=torch.float32)
 
         # Add one-hot embedding of markers
         point_data = polydata.GetPointData()
-        marker = np.array(point_data.GetArray('marker'))
+        marker = np.array(point_data.GetArray("marker"))
         num_classes = 5
         one_hot_marker = np.eye(num_classes)[marker.astype(int)]
         graph.ndata["marker"] = torch.tensor(one_hot_marker, dtype=torch.float32)
@@ -301,5 +304,3 @@ class StokesDataset(DGLDataset):
                 graph.ndata[array_name] = torch.tensor(array_data, dtype=torch.float32)
 
         return graph
-
-
