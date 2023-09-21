@@ -28,3 +28,4 @@ from .fully_connected_layers import (
     ConvNdFCLayer,
     ConvNdKernel1Layer,
 )
+from .fourier_layers import FourierLayer, FourierFilter, GaborFilter
