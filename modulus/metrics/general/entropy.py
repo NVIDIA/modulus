@@ -15,9 +15,6 @@
 # TODO(Dallas) Introduce Distributed Class for computation.
 
 import torch
-import numpy as np
-from .histogram import histogram
-from typing import Union
 
 Tensor = torch.Tensor
 
@@ -128,7 +125,6 @@ def _relative_entropy_from_counts(
         + str(q.shape)
         + "."
     )
-    dbins = bin_edges[1:] - bin_edges[:-1]
     bin_mids = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     p = p / torch.trapz(p, bin_mids, dim=0) + 1e-8
     q = q / torch.trapz(q, bin_mids, dim=0) + 1e-8

@@ -15,7 +15,7 @@
 import torch
 import torch.distributed as dist
 from typing import Union, Tuple, List
-from abc import ABC, abstractmethod
+from abc import ABC
 from modulus.distributed.manager import DistributedManager
 from warnings import warn
 

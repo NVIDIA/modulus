@@ -14,10 +14,8 @@
 
 
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
 from typing import Optional, List
-from .manager import DistributedManager
 from .utils import (
     gather_v_wrapper,
     scatter_v_wrapper,

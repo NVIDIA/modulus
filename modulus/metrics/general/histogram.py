@@ -14,7 +14,6 @@
 
 
 import torch
-import numpy
 import torch.distributed as dist
 from typing import Union, Tuple
 from modulus.distributed.manager import DistributedManager
@@ -442,7 +441,7 @@ def _compute_counts_cdf(
     for input in inputs[1:]:
         assert s[1:] == input.shape[1:]
 
-    if type(bins) is int:
+    if isinstance(bins, int):
         if verbose:
             print("Bins is passed as an int.")
         # Compute largest bins needed
@@ -456,7 +455,7 @@ def _compute_counts_cdf(
             counts = _count_bins(input, bin_edges, counts=counts, cdf=cdf)
         return bin_edges, counts
 
-    elif type(bins) is torch.Tensor:
+    elif isinstance(bins, torch.Tensor):
         bin_edges = bins
         if verbose:
             print("Bins is passed as a tensor")
@@ -595,7 +594,7 @@ class Histogram(EnsembleMetrics):
     ):
 
         super().__init__(input_shape, **kwargs)
-        if type(bins) is int:
+        if isinstance(bins, int):
             self.number_of_bins = bins
         else:
             self.number_of_bins = bins.shape[0] - 1

@@ -253,7 +253,6 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
     assert dim < tensor.dim()
 
@@ -321,8 +320,6 @@ def all_reduce_v_wrapper(
     rank = dist.get_rank(group=group)
     assert len(sizes) == comm_size
     assert dim < tensor.dim()
-
-    global_size = sum(sizes)
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
