@@ -47,10 +47,7 @@ class ERA5DaliESDataloader(object):
             seed=self.global_seed,
         )
 
-        img_shape_x = self.img_shape_x
         img_shape_y = self.img_shape_y
-        in_channels = self.in_channels
-        out_channels = self.out_channels
 
         with pipeline:
             # get input and target

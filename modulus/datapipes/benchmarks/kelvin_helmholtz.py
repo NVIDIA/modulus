@@ -18,9 +18,7 @@ import torch
 import warp as wp
 
 from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple, Dict
-from pathlib import Path
-from torch.utils.data import Dataset
+from typing import Union, Tuple, Dict
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
 from .kernels.initialization import init_uniform_random_2d

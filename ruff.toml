@@ -1,0 +1,13 @@
+# Enable flake8-bugbear (`B`) rules.
+select = ["E", "F"]
+
+# Never enforce `E402` (line length violations).
+ignore = ["E402", "E501"]
+
+extend-exclude = ["modulus/experimental",]
+
+# Ignore `F401` (import violations) in all `__init__.py` files, and in `docs/*.py`.
+[per-file-ignores]
+"__init__.py" = ["F401"]
+"docs/*.py" = ["F401"]
+

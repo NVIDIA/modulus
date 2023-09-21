@@ -13,11 +13,14 @@
 # limitations under the License.
 
 import torch
-import os, json, functools, numpy as np
+import os
+import json
+import functools
+import numpy as np
 
 try:
     import tensorflow.compat.v1 as tf
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net Datapipe requires the Tensorflow library. Install the "
         + "package at: https://www.tensorflow.org/install"
@@ -26,14 +29,14 @@ except:
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net Datapipe requires the DGL library. Install the "
         + "desired CUDA version at: https://www.dgl.ai/pages/start.html"
     )
 from torch.nn import functional as F
 
-from .utils import read_vtp_file, save_json, load_json
+from .utils import save_json, load_json
 
 # Hide GPU from visible devices for TF
 tf.config.set_visible_devices([], "GPU")

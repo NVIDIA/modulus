@@ -20,7 +20,7 @@ from typing import Dict, Any
 
 try:
     import vtk
-except:
+except ImportError:
     raise ImportError("vtk package is required. Install with pip install vtk.")
 
 

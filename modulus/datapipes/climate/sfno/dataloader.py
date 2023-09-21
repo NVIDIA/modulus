@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader
 # distributed stuff
 import torch.distributed as dist
 from modulus.utils.sfno.distributed import comm
+from torch.utils.data.distributed import DistributedSampler
 
 
 def init_distributed_io(params):  # pragma: no cover
@@ -51,8 +52,6 @@ def init_distributed_io(params):  # pragma: no cover
     assert (params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1)
     assert (params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1)
 
-    # get io ranks: mp_rank = x_coord + params.io_grid[0] * (ycoord + params.io_grid[1] * zcoord)
-    mp_rank = comm.get_rank("model")
     params.io_rank = [0, 0, 0]
     if params.io_grid[1] > 1:
         params.io_rank[1] = comm.get_rank("h")

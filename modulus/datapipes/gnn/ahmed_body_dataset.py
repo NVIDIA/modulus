@@ -14,12 +14,11 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import List, Tuple, Dict, Union, Any
 
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
 from dataclasses import dataclass
 
 from .utils import read_vtp_file, save_json, load_json
@@ -29,7 +28,7 @@ from modulus.datapipes.meta import DatapipeMetaData
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
@@ -38,7 +37,7 @@ except:
 try:
     import vtk
     import pyvista as pv
-except:
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
         + "pip install vtk pyvista"
