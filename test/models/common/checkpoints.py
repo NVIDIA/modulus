@@ -14,7 +14,6 @@
 
 import logging
 
-from typing import Tuple
 from pathlib import Path
 from typing import Tuple
 

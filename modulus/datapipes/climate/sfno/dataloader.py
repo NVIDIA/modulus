@@ -20,10 +20,11 @@ import torch
 # distributed stuff
 import torch.distributed as dist
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 
 from modulus.utils.sfno.distributed import comm
 from torch.utils.data.distributed import DistributedSampler
+
+from modulus.utils.sfno.distributed import comm
 
 
 def init_distributed_io(params):  # pragma: no cover

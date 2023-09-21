@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools
-import json
-import os
 
 import numpy as np
 import torch
 import os
 import json
 import functools
+
 import numpy as np
+import torch
 
 try:
     import tensorflow.compat.v1 as tf
@@ -41,7 +40,6 @@ except ImportError:
     )
 from torch.nn import functional as F
 
-from .utils import save_json, load_json
 from .utils import load_json, save_json
 
 # Hide GPU from visible devices for TF

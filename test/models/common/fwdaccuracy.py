@@ -13,11 +13,12 @@
 # limitations under the License.
 
 import logging
-import modulus
-import torch
-
 from pathlib import Path
 from typing import Tuple, Union
+
+import torch
+
+import modulus
 
 from .utils import compare_output
 

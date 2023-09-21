@@ -14,7 +14,7 @@
 
 import pytest
 import torch
-from utils import fix_random_seeds, create_random_input, get_icosphere_path
+from utils import create_random_input, fix_random_seeds, get_icosphere_path
 from pytest_utils import import_or_fail
 
 
