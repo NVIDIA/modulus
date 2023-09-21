@@ -14,6 +14,7 @@
 
 from .activations import Identity, Stan, SquarePlus, get_activation
 from .weight_norm import WeightNormLinear
+from .weight_fact import WeightFactLinear
 from .spectral_layers import (
     SpectralConv1d,
     SpectralConv2d,
