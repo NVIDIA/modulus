@@ -14,7 +14,9 @@
 
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 from modulus.utils.sfno.distributed import comm
 
 # matmul parallel
@@ -363,10 +365,6 @@ class DistributedEncoderDecoder(nn.Module):
     ):  # pragma: no cover
         super(DistributedEncoderDecoder, self).__init__()
 
-        # get comms
-        comm_inp_size = comm.get_size(comm_inp_name)
-        comm_out_size = comm.get_size(comm_out_name)
-
         # get list of modules
         encoder_modules = []
         current_dim = input_dim
@@ -435,10 +433,6 @@ class DistributedMLP(nn.Module):
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
 
-        # get effective embedding size:
-        comm_inp_size = comm.get_size(comm_inp_name)
-        comm_hid_size = comm.get_size(comm_hidden_name)
-
         self.fc1 = DistributedMatmul(
             in_features,
             hidden_features,
@@ -458,7 +452,7 @@ class DistributedMLP(nn.Module):
         )
 
         self.act = act_layer()
-        self.drop = nn.Dropout(drop) if drop_rate > 0.0 else nn.Identity()
+        self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
     def fwd(self, x):  # pragma: no cover
         # do the mlp
@@ -608,8 +602,8 @@ class DistributedAFNO2Dv2(nn.Module):
 
         # select fft function handles
         if self.spatial_comm_size > 1:
-            self.fft_handle = distributed_rfft2.apply
-            self.ifft_handle = distributed_irfft2.apply
+            self.fft_handle = DistributedRealFFT2.apply
+            self.ifft_handle = DistributedInverseRealFFT2.apply
         else:
             self.fft_handle = torch.fft.rfft2
             self.ifft_handle = torch.fft.irfft2

@@ -14,7 +14,6 @@
 
 import torch
 import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -69,9 +68,9 @@ def reshape_fields(
     maxs = np.load(params.max_path)[:, channels]
     means = np.load(params.global_means_path)[:, channels]
     stds = np.load(params.global_stds_path)[:, channels]
-    if crop_size_x == None:
+    if crop_size_x is None:
         crop_size_x = img_shape_x
-    if crop_size_y == None:
+    if crop_size_y is None:
         crop_size_y = img_shape_y
 
     if normalize:

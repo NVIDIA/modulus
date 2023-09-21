@@ -17,8 +17,7 @@ from dgl import DGLGraph
 import torch
 from torch import Tensor, testing
 import numpy as np
-from torch.nn import functional as F
-from typing import List, Tuple, Union
+from typing import List
 
 
 def create_graph(
@@ -119,7 +118,7 @@ def add_edge_features(graph: DGLGraph, pos: Tensor, normalize: bool = True) -> D
     # y values should be zero
     try:
         testing.assert_close(dst_pos[:, 1], torch.zeros_like(dst_pos[:, 1]))
-    except:
+    except ValueError:
         raise ValueError("Invalid projection of edge nodes to local ccordinate system")
     src_pos = geospatial_rotation(src_pos, theta=theta_polar, axis="y", unit="rad")
     dst_pos = geospatial_rotation(dst_pos, theta=theta_polar, axis="y", unit="rad")
@@ -128,7 +127,7 @@ def add_edge_features(graph: DGLGraph, pos: Tensor, normalize: bool = True) -> D
         testing.assert_close(dst_pos[:, 0], torch.ones_like(dst_pos[:, 0]))
         testing.assert_close(dst_pos[:, 1], torch.zeros_like(dst_pos[:, 1]))
         testing.assert_close(dst_pos[:, 2], torch.zeros_like(dst_pos[:, 2]))
-    except:
+    except ValueError:
         raise ValueError("Invalid projection of edge nodes to local ccordinate system")
 
     # prepare edge features

@@ -20,8 +20,6 @@ import torch.distributed as dist
 
 from modulus.utils.sfno.distributed import comm
 
-from torch._utils import _flatten_dense_tensors
-
 
 def get_memory_format(tensor):  # pragma: no cover
     """Helper routine to get the memory format"""

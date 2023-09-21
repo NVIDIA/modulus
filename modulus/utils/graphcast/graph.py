@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import torch
 import json
 import numpy as np
@@ -62,7 +61,7 @@ class Graph:
                     for key, value in loaded_dict.items()
                 }
                 logger.info(f"Opened pre-computed graph at {icospheres_path}.")
-        except:
+        except FileNotFoundError:
             from modulus.utils.graphcast.icospheres import (
                 generate_and_save_icospheres,
             )  # requires PyMesh

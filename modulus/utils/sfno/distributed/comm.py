@@ -147,8 +147,6 @@ def init(params, verbose=False):  # pragma: no cover
         os.environ["MASTER_PORT"] = str(port)
     else:
         raise ValueError(f"Error, wireup-info {params.wireup_info} not supported")
-    # set local rank to 0 if env var not available
-    local_rank = int(os.getenv("LOCAL_RANK", 0))
 
     if world_size > 1:
         with disable_logging():
@@ -178,7 +176,6 @@ def init(params, verbose=False):  # pragma: no cover
             # get sizes
             world_size = get_world_size()
             world_rank = get_world_rank()
-            local_rank = get_local_rank()
 
     # do individual wireup for model parallel comms:
     if hasattr(params, "model_parallel_sizes"):
@@ -213,7 +210,6 @@ def init(params, verbose=False):  # pragma: no cover
     if world_size > 1:
 
         # set up the strides:
-        model_parallel_sizes_reversed = model_parallel_sizes[::-1]
         model_grid = np.reshape(
             np.arange(0, model_parallel_size), model_parallel_sizes[::-1]
         )

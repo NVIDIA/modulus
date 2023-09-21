@@ -44,7 +44,6 @@ def weighted_acc(pred, target, weighted=True):  # pragma: no cover
         target = np.expand_dims(target, 0)
 
     num_lat = np.shape(pred)[1]
-    num_long = np.shape(target)[2]
     pred -= mean(pred)
     target -= mean(target)
     s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))

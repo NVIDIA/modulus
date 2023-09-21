@@ -292,7 +292,7 @@ class MetricsHandler:
                 self.valid_weighted_rmse = torch.cat(valid_weighted_rmse_list, dim=0)
                 # we need to reduce the l1 loss as well, since this is not encoded in the loss obj
                 dist.all_reduce(
-                    valid_l1, op=dist.ReduceOp.AVG, group=comm.get_group("matmul")
+                    self.valid_l1, op=dist.ReduceOp.AVG, group=comm.get_group("matmul")
                 )
 
                 # gather acc curves
