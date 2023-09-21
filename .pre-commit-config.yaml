@@ -48,3 +48,4 @@ repos:
     rev: v0.0.290
     hooks:
     - id: ruff
+      args: [--fix]
