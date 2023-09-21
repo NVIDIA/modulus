@@ -14,7 +14,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.cuda import amp
 
@@ -29,22 +28,11 @@ from tltorch.factorized_tensors.core import FactorizedTensor
 # import convenience functions for factorized tensors
 from modulus.models.sfno.activations import ComplexReLU
 from modulus.models.sfno.contractions import compl_muladd2d_fwd, compl_mul2d_fwd
-from modulus.models.sfno.contractions import _contract_localconv_fwd
-from modulus.models.sfno.contractions import (
-    _contract_blockconv_fwd,
-    _contractadd_blockconv_fwd,
-)
 from modulus.models.sfno.factorizations import get_contract_fun
 
 # for the experimental module
-from modulus.models.sfno.contractions import (
-    compl_exp_muladd2d_fwd,
-    compl_exp_mul2d_fwd,
-    real_mul2d_fwd,
-    real_muladd2d_fwd,
-)
+from modulus.models.sfno.contractions import compl_exp_muladd2d_fwd, compl_exp_mul2d_fwd
 
-import torch_harmonics as th
 import torch_harmonics.distributed as thd
 
 
@@ -259,7 +247,7 @@ class SpectralAttentionS2(nn.Module):
 
             # weights
             w = [self.scale * torch.randn(self.embed_dim, hidden_size, 2)]
-            for l in range(1, self.spectral_layers):
+            for lay in range(1, self.spectral_layers):
                 w.append(self.scale * torch.randn(hidden_size, hidden_size, 2))
             self.w = nn.ParameterList(w)
 
@@ -276,7 +264,7 @@ class SpectralAttentionS2(nn.Module):
                 )
 
             self.activations = nn.ModuleList([])
-            for l in range(0, self.spectral_layers):
+            for lay in range(0, self.spectral_layers):
                 self.activations.append(
                     ComplexReLU(
                         mode=complex_activation,
@@ -294,7 +282,7 @@ class SpectralAttentionS2(nn.Module):
             w = [
                 self.scale * torch.randn(self.modes_lat, self.embed_dim, hidden_size, 2)
             ]
-            for l in range(1, self.spectral_layers):
+            for lay in range(1, self.spectral_layers):
                 w.append(
                     self.scale
                     * torch.randn(self.modes_lat, hidden_size, hidden_size, 2)
@@ -314,7 +302,7 @@ class SpectralAttentionS2(nn.Module):
             )
 
             self.activations = nn.ModuleList([])
-            for l in range(0, self.spectral_layers):
+            for lay in range(0, self.spectral_layers):
                 self.activations.append(
                     ComplexReLU(
                         mode=complex_activation,
@@ -334,13 +322,13 @@ class SpectralAttentionS2(nn.Module):
 
         xr = torch.view_as_real(x)
 
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
-                xr = self.mul_add_handle(xr, self.w[l], self.b[l])
+                xr = self.mul_add_handle(xr, self.w[lay], self.b[lay])
             else:
-                xr = self.mul_handle(xr, self.w[l])
+                xr = self.mul_handle(xr, self.w[lay])
             xr = torch.view_as_complex(xr)
-            xr = self.activations[l](xr)
+            xr = self.activations[lay](xr)
             xr = self.drop(xr)
             xr = torch.view_as_real(xr)
 

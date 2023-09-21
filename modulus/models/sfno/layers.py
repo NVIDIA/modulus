@@ -14,18 +14,19 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.fft
-from torch.nn.modules.container import Sequential
 from torch.utils.checkpoint import checkpoint
 from torch.cuda import amp
 import math
 
-from torch_harmonics import *
-from modulus.models.sfno.contractions import *
-from modulus.models.sfno.activations import *
-from modulus.models.sfno.initialization import trunc_normal_
-from modulus.models.layers import get_activation
+from .contractions import (
+    compl_mul2d_fwd,
+    _contract_diagonal,
+    compl_muladd2d_fwd,
+    compl_muladd2d_fwd_c,
+    compl_mul2d_fwd_c,
+)
+from .activations import get_activation, ComplexReLU
 
 
 @torch.jit.script
@@ -293,7 +294,7 @@ class SpectralConv2d(nn.Module):
             x = x.to(dtype)
 
         # do spectral conv
-        modes = self.contract_handle(x, self.w)
+        # modes = self.contract_handle(x, self.w)
 
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
@@ -357,7 +358,7 @@ class SpectralAttention2d(nn.Module):
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
         # w = [self.scale * torch.randn(self.embed_dim + 2*self.embed_freqs, self.hidden_size, 2)]
         # w = [self.scale * torch.randn(self.embed_dim + 4*self.embed_freqs, self.hidden_size, 2)]
-        for l in range(1, self.spectral_layers):
+        for lay in range(1, self.spectral_layers):
             w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
         self.w = nn.ParameterList(w)
 
@@ -381,13 +382,13 @@ class SpectralAttention2d(nn.Module):
 
     def forward_mlp(self, xr):  # pragma: no cover
         """forward method for the MLP part of the network"""
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
-                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                    xr, self.w[lay].to(xr.dtype), self.b[lay].to(xr.dtype)
                 )
             else:
-                xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
+                xr = self.mul_handle(xr, self.w[lay].to(xr.dtype))
             xr = torch.view_as_complex(xr)
             xr = self.activation(xr)
             xr = self.drop(xr)
@@ -475,7 +476,7 @@ class SpectralAttentionS2(nn.Module):
         )
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
-        for l in range(1, self.spectral_layers):
+        for lay in range(1, self.spectral_layers):
             w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
         self.w = nn.ParameterList(w)
 
@@ -499,13 +500,13 @@ class SpectralAttentionS2(nn.Module):
 
     def forward_mlp(self, xr):  # pragma: no cover
         """forward method for the MLP part of the network"""
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
-                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                    xr, self.w[lay].to(xr.dtype), self.b[lay].to(xr.dtype)
                 )
             else:
-                xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
+                xr = self.mul_handle(xr, self.w[lay].to(xr.dtype))
             xr = torch.view_as_complex(xr)
             xr = self.activation(xr)
             xr = self.drop(xr)

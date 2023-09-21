@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import Any, Tuple
 
 # import contractions
-from modulus.models.sfno.factorizations import get_contract_fun, _contract_dense
 
 # helpers
 from modulus.models.sfno.layers import (
@@ -33,7 +32,6 @@ from modulus.models.sfno.layers import (
 
 # import global convolution and non-linear spectral layers
 from modulus.models.sfno.layers import (
-    SpectralConv2d,
     SpectralAttention2d,
     SpectralAttentionS2,
 )
@@ -45,7 +43,7 @@ import torch_harmonics as th
 import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
-from modulus.models.sfno.layers import RealFFT2, InverseRealFFT2
+from modulus.models.sfno.layers import RealFFT2
 from modulus.utils.sfno.distributed.layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
@@ -55,6 +53,8 @@ from modulus.utils.sfno.distributed.layers import (
 
 # more distributed stuff
 from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.mappings import scatter_to_parallel_region
+from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 # layer normalization
 from apex.normalization import FusedLayerNorm
@@ -239,7 +239,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         # norm layer
         self.norm1 = norm_layer[1]()
 
-        if use_mlp == True:
+        if use_mlp:
             MLPH = DistributedMLP if (comm.get_size("matmul") > 1) else MLP
             mlp_hidden_dim = int(embed_dim * mlp_ratio)
             self.mlp = MLPH(

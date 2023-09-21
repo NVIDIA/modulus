@@ -297,7 +297,6 @@ class Preprocessor2D(nn.Module):
                     x, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
                 )
             else:
-                xshape = x.shape
                 xr = x
 
             # time difference mean:
@@ -347,7 +346,6 @@ class Preprocessor2D(nn.Module):
                     x, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
                 )
             else:
-                xshape = x.shape
                 xr = x
 
             # mean
@@ -398,12 +396,11 @@ class Preprocessor2D(nn.Module):
         xdim = x.dim()
         if xdim == 4:
             b_, c_, h_, w_ = x.shape
-            xr = torch.reshape(
+            x = torch.reshape(
                 x, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
             )
         else:
             xshape = x.shape
-            xr = x
             x = self.flatten_history(x)
 
         # normalize
