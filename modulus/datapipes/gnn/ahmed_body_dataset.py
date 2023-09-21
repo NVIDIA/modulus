@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 from torch import Tensor
+from dataclasses import dataclass
 
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
@@ -37,7 +38,6 @@ except ImportError:
 
 try:
     import pyvista as pv
-    import vtk
 except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
