@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
 import logging
 from typing import Tuple
-
-import torch
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")

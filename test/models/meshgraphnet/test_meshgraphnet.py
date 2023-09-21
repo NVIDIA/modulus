@@ -15,8 +15,8 @@
 import os
 import random
 import numpy as np
-import pytest
-import torch
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
