@@ -20,8 +20,6 @@ from torch import Tensor
 from .activations import Identity
 from .weight_norm import WeightNormLinear
 
-from modulus.sym.models.layers.activation import get_activation_fn, Activation
-
 
 class FCLayer(nn.Module):
     """Densely connected NN layer
