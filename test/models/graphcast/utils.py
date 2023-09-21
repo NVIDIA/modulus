@@ -14,6 +14,8 @@
 
 import torch
 import os
+
+import dgl
 import numpy as np
 import pytest
 

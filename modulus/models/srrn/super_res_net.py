@@ -30,12 +30,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import torch
-from torch import nn
 import math
 from dataclasses import dataclass
 
+import torch
+from torch import nn
+
 from modulus.models.layers import get_activation
+
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -119,7 +121,8 @@ class SRResNet(Module):
 
         # Scaling factor must be 2, 4, or 8
         scaling_factor = int(scaling_factor)
-        assert scaling_factor in {2, 4, 8}, "The scaling factor must be 2, 4, or 8!"
+        if scaling_factor not in {2, 4, 8}:
+            raise ValueError("The scaling factor must be 2, 4, or 8!")
 
         # The first convolutional block
         self.conv_block1 = ConvolutionalBlock3d(

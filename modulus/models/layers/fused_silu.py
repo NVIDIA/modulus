@@ -23,7 +23,6 @@ except ImportError:
     # which don't need nvfuser as explicit dependency
     from torch._C._nvfuser import Fusion, FusionDefinition, DataType
 
-
 _torch_dtype_to_nvfuser = {
     torch.double: DataType.Double,
     torch.float: DataType.Float,

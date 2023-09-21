@@ -13,21 +13,22 @@
 # limitations under the License.
 
 import torch
-import torch.nn as nn
 import torch.distributed as dist
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
-from modulus.utils.sfno.distributed import comm
-
-# matmul parallel
-from modulus.utils.sfno.distributed.mappings import copy_to_parallel_region
-from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
-from modulus.utils.sfno.distributed.mappings import scatter_to_parallel_region
-from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
-
-from modulus.utils.sfno.distributed.helpers import _transpose
 
 from modulus.models.sfno.initialization import trunc_normal_
+from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.helpers import _transpose
+
+# matmul parallel
+from modulus.utils.sfno.distributed.mappings import (
+    copy_to_parallel_region,
+    gather_from_parallel_region,
+    reduce_from_parallel_region,
+    scatter_to_parallel_region,
+)
 
 
 class distributed_transpose_w(torch.autograd.Function):  # pragma: no cover
@@ -94,8 +95,10 @@ class DistributedRealFFT2(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
 
         # we need to ensure that we can split the channels evenly
-        assert x.shape[1] % self.comm_size_h == 0
-        assert x.shape[1] % self.comm_size_w == 0
+        if not x.shape[1] % self.comm_size_h == 0:
+            raise AssertionError
+        if not x.shape[1] % self.comm_size_w == 0:
+            raise AssertionError
 
         # h and w is split. First we make w local by transposing into channel dim
         if self.comm_size_w > 1:
@@ -176,8 +179,10 @@ class DistributedInverseRealFFT2(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
 
         # we need to ensure that we can split the channels evenly
-        assert x.shape[1] % self.comm_size_h == 0
-        assert x.shape[1] % self.comm_size_w == 0
+        if not x.shape[1] % self.comm_size_h == 0:
+            raise AssertionError
+        if not x.shape[1] % self.comm_size_w == 0:
+            raise AssertionError
 
         # transpose: after that, channels are split, l is local:
         if self.comm_size_h > 1:
@@ -301,15 +306,18 @@ class DistributedMatmul(nn.Module):
         comm_out_size = comm.get_size(self.comm_out_name)
 
         # split:
-        assert (
-            kernel_size == 1
-        ), "Error, only pointwise operations are currently supported"
-        assert (
-            inp_dim % comm_inp_size == 0
-        ), f"Error, the size of input feature dim ({inp_dim}) has to be evenly divisible by the input feature comm dim ({comm_inp_size})"
-        assert (
-            out_dim % comm_out_size == 0
-        ), f"Error, the size of output feature dim ({out_dim}) has to be evenly divisible by the output feature comm dim ({comm_out_size})"
+        if not (kernel_size == 1):
+            raise ValueError("Error, only pointwise operations are currently supported")
+        if not (inp_dim % comm_inp_size == 0):
+            raise ValueError(
+                f"Error, the size of input feature dim ({inp_dim}) has to be \
+                evenly divisible by the input feature comm dim ({comm_inp_size})"
+            )
+        if not (out_dim % comm_out_size == 0):
+            raise ValueError(
+                f"Error, the size of output feature dim ({out_dim}) has to be \
+                evenly divisible by the output feature comm dim ({comm_out_size})"
+            )
 
         # compute reduced dims
         inp_dim_local = inp_dim // comm_inp_size
@@ -502,11 +510,10 @@ class DistributedPatchEmbed(nn.Module):
         spatial_comm_size = comm.get_size("spatial")
 
         # compute parameters
-        assert (
-            img_size[1] // patch_size[1]
-        ) % spatial_comm_size == 0, (
-            "Error, make sure that the spatial comm size evenly divides patched W"
-        )
+        if (img_size[1] // patch_size[1]) % spatial_comm_size != 0:
+            raise ValueError(
+                "Error, make sure that the spatial comm size evenly divides patched W"
+            )
         num_patches = ((img_size[1] // patch_size[1]) // spatial_comm_size) * (
             img_size[0] // patch_size[0]
         )
@@ -516,9 +523,10 @@ class DistributedPatchEmbed(nn.Module):
 
         # get effective embedding size:
         if self.output_parallel:
-            assert (
-                embed_dim % matmul_comm_size == 0
-            ), "Error, the embed_dim needs to be divisible by matmul_parallel_size"
+            if not (embed_dim % matmul_comm_size == 0):
+                ValueError(
+                    "Error, the embed_dim needs to be divisible by matmul_parallel_size"
+                )
             out_chans_local = embed_dim // matmul_comm_size
         else:
             out_chans_local = embed_dim
@@ -540,9 +548,10 @@ class DistributedPatchEmbed(nn.Module):
             x = copy_to_parallel_region(x, "matmul")
 
         B, C, H, W = x.shape
-        assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        if not (H == self.img_size[0] and W == self.img_size[1]):
+            raise ValueError(
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            )
         # new: B, C, H*W
         x = self.proj(x).flatten(2)
         return x
@@ -592,9 +601,10 @@ class DistributedAFNO2Dv2(nn.Module):
     ):  # pragma: no cover
         """Distributed AFNO2Dv2"""
         super(DistributedAFNO2Dv2, self).__init__()
-        assert (
-            hidden_size % num_blocks == 0
-        ), f"hidden_size {hidden_size} should be divisble by num_blocks {num_blocks}"
+        if not (hidden_size % num_blocks == 0):
+            raise ValueError(
+                f"hidden_size {hidden_size} should be divisble by num_blocks {num_blocks}"
+            )
 
         # get comm sizes:
         matmul_comm_size = comm.get_size("matmul")
@@ -611,9 +621,10 @@ class DistributedAFNO2Dv2(nn.Module):
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
         self.num_blocks = num_blocks
-        assert (
-            self.num_blocks % matmul_comm_size == 0
-        ), "Error, num_blocks needs to be divisible by matmul_parallel_size"
+        if not (self.num_blocks % matmul_comm_size == 0):
+            raise ValueError(
+                "Error, num_blocks needs to be divisible by matmul_parallel_size"
+            )
         self.num_blocks_local = self.num_blocks // matmul_comm_size
         self.block_size = self.hidden_size // self.num_blocks
         self.hard_thresholding_fraction = hard_thresholding_fraction

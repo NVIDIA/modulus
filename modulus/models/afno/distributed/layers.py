@@ -20,7 +20,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modulus.distributed.manager import DistributedManager
-
 from modulus.distributed.mappings import copy_to_parallel_region
 from modulus.distributed.mappings import reduce_from_parallel_region
 from modulus.distributed.mappings import scatter_to_parallel_region
@@ -145,9 +144,10 @@ class DistributedMLP(nn.Module):
 
         # get effective embedding size:
         comm_size = DistributedManager().group_size("model_parallel")
-        assert (
-            hidden_features % comm_size == 0
-        ), "Error, hidden_features needs to be divisible by matmul_parallel_size"
+        if not (hidden_features % comm_size == 0):
+            raise ValueError(
+                "Error, hidden_features needs to be divisible by matmul_parallel_size"
+            )
         hidden_features_local = hidden_features // comm_size
 
         # first set of hp
@@ -217,15 +217,17 @@ class DistributedPatchEmbed(nn.Module):
         self.num_patches = num_patches
 
         if self.input_parallel:
-            assert (
-                in_chans % matmul_comm_size == 0
-            ), "Error, the in_chans needs to be divisible by matmul_parallel_size"
+            if not (in_chans % matmul_comm_size == 0):
+                raise ValueError(
+                    "Error, the in_chans needs to be divisible by matmul_parallel_size"
+                )
 
         # get effective embedding size:
         if self.output_parallel:
-            assert (
-                embed_dim % matmul_comm_size == 0
-            ), "Error, the embed_dim needs to be divisible by matmul_parallel_size"
+            if not (embed_dim % matmul_comm_size == 0):
+                raise ValueError(
+                    "Error, the embed_dim needs to be divisible by matmul_parallel_size"
+                )
             out_chans_local = embed_dim // matmul_comm_size
         else:
             out_chans_local = embed_dim
@@ -247,10 +249,10 @@ class DistributedPatchEmbed(nn.Module):
             x = copy_to_parallel_region(x, group="model_parallel")
 
         B, C, H, W = x.shape
-        assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model "
-        f"({self.img_size[0]}*{self.img_size[1]})."
+        if not (H == self.img_size[0] and W == self.img_size[1]):
+            raise ValueError(
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            )
         # new: B, C, H*W
         x = self.proj(x).flatten(2)
         return x
@@ -294,9 +296,10 @@ class DistributedAFNO2D(nn.Module):
         output_is_matmul_parallel=False,
     ):
         super(DistributedAFNO2D, self).__init__()
-        assert (
-            hidden_size % num_blocks == 0
-        ), f"hidden_size {hidden_size} should be divisible by num_blocks {num_blocks}"
+        if not (hidden_size % num_blocks == 0):
+            raise ValueError(
+                f"hidden_size {hidden_size} should be divisible by num_blocks {num_blocks}"
+            )
 
         # get comm sizes:
         matmul_comm_size = DistributedManager().group_size("model_parallel")
@@ -307,9 +310,10 @@ class DistributedAFNO2D(nn.Module):
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
         self.num_blocks = num_blocks
-        assert (
-            self.num_blocks % matmul_comm_size == 0
-        ), "Error, num_blocks needs to be divisible by matmul_parallel_size"
+        if not (self.num_blocks % matmul_comm_size == 0):
+            raise ValueError(
+                "Error, num_blocks needs to be divisible by matmul_parallel_size"
+            )
         self.num_blocks_local = self.num_blocks // matmul_comm_size
         self.block_size = self.hidden_size // self.num_blocks
         self.hard_thresholding_fraction = hard_thresholding_fraction

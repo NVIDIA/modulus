@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
+import logging
 import os
 import time
-import functools
-import torch
-import logging
-from logging import Logger
-from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
-from modulus.distributed import DistributedManager
+from logging import Logger
+from typing import Any, Callable, Dict, NewType, Optional, Union
 from warnings import warn
+
+import torch
+
 import modulus
+from modulus.distributed import DistributedManager
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -80,9 +82,8 @@ class _StaticCapture(object):
         self.no_grad = False
 
         # Set up toggles for optimizations
-        assert (
-            amp_type == torch.float16 or amp_type == torch.bfloat16
-        ), "AMP type must be torch.float16 or torch.bfloat16"
+        if not (amp_type == torch.float16 or amp_type == torch.bfloat16):
+            raise ValueError("AMP type must be torch.float16 or torch.bfloat16")
         # CUDA device
         if "cuda" in str(self.model.device):
             # CUDA graphs

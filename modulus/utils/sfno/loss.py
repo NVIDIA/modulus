@@ -15,15 +15,13 @@
 from typing import Optional, Tuple
 
 import numpy as np
-
 import torch
+import torch_harmonics as harmonics
 from torch import nn
+from torch_harmonics.quadrature import clenshaw_curtiss_weights
 
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
-
-import torch_harmonics as harmonics
-from torch_harmonics.quadrature import clenshaw_curtiss_weights
 
 
 class LossHandler(nn.Module):

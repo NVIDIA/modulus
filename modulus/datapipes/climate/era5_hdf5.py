@@ -27,8 +27,9 @@ except ImportError:
     )
 
 from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple
 from pathlib import Path
+from typing import Iterable, List, Tuple, Union
+
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
 

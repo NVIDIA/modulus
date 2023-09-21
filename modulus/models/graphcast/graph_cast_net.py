@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import Any
+
 import torch
 from torch import Tensor
 
@@ -27,16 +30,18 @@ from dataclasses import dataclass
 from modulus.models.layers import get_activation
 from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.embedder import (
-    GraphCastEncoderEmbedder,
     GraphCastDecoderEmbedder,
+    GraphCastEncoderEmbedder,
 )
-from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoder
 from modulus.models.gnn_layers.mesh_graph_decoder import MeshGraphDecoder
+from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoder
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from modulus.models.module import Module
+from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
+from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
-from modulus.utils.graphcast.graph import Graph
+from modulus.models.module import Module
 from modulus.utils.graphcast.data_utils import StaticData
+from modulus.utils.graphcast.graph import Graph
 
 from .graph_cast_processor import GraphCastProcessor
 
@@ -306,7 +311,8 @@ class GraphCastNet(Module):
         )
 
         # icosahedron processor
-        assert processor_layers > 2, "Expected at least 3 processor layers"
+        if processor_layers <= 2:
+            raise ValueError("Expected at least 3 processor layers")
         self.processor_encoder = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=1,
@@ -646,12 +652,12 @@ class GraphCastNet(Module):
                 invar = torch.concat((invar, self.static_data), dim=1)
                 invar = invar[0].permute(1, 0)
         else:
-            assert invar.size(0) == 1, "GraphCast does not support batch size > 1"
+            if invar.size(0) != 1:
+                raise ValueError("GraphCast does not support batch size > 1")
             # concat static data
             if self.has_static_data:
                 invar = torch.concat((invar, self.static_data), dim=1)
             invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
-
             if self.is_distributed:
                 # partition node features
                 invar = self.g2m_graph.get_src_node_features_in_partition(invar)

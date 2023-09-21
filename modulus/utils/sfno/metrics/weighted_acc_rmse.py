@@ -13,12 +13,12 @@
 # limitations under the License.
 
 import numpy as np
+
 from modulus.utils.sfno import logging_utils
 
 logging_utils.config_logger()
 import torch
 import torch.nn as nn
-
 
 # distributed stuff
 from modulus.utils.sfno.distributed import comm

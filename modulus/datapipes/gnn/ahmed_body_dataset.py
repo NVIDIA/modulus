@@ -14,16 +14,17 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 from torch import Tensor
-from dataclasses import dataclass
 
-from .utils import read_vtp_file, save_json, load_json
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
+
+from .utils import load_json, read_vtp_file, save_json
 
 try:
     import dgl
@@ -35,8 +36,8 @@ except ImportError:
     )
 
 try:
-    import vtk
     import pyvista as pv
+    import vtk
 except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
@@ -174,7 +175,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         info_list = [info_list[index] for index in args]
         numbers_info = [numbers_info[index] for index in args]
 
-        assert sorted(numbers) == sorted(numbers_info)
+        if sorted(numbers) != sorted(numbers_info):
+            raise AssertionError
         self.numbers = numbers
 
         # create the graphs and add the node and features

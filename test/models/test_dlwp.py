@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
+
 import numpy as np
+import pytest
+import torch
 
 from modulus.models.dlwp import DLWP
+
 from . import common
 
 

@@ -13,10 +13,13 @@
 # limitations under the License.
 
 
+from typing import Tuple, Union
+
 import torch
 import torch.distributed as dist
-from typing import Union, Tuple
+
 from modulus.distributed.manager import DistributedManager
+
 from .ensemble_metrics import EnsembleMetrics
 
 Tensor = torch.Tensor
@@ -244,18 +247,20 @@ def _count_bins(
     """
     bins_shape = bin_edges.shape
     number_of_bins = bins_shape[0] - 1
-    assert (
-        bins_shape[1:] == input.shape[1:]
-    ), "Expected bin_edges and inputs to have compatible non-leading dimensions."
+    if bins_shape[1:] != input.shape[1:]:
+        raise ValueError(
+            "Expected bin_edges and inputs to have compatible non-leading dimensions."
+        )
 
     if counts is None:
         counts = torch.zeros(
             (number_of_bins, *bins_shape[1:]), dtype=torch.int64, device=input.device
         )
     else:
-        assert (
-            bins_shape[1:] == counts.shape[1:]
-        ), "Expected bin_edges and counts to have compatible non-leading dimensions."
+        if bins_shape[1:] != counts.shape[1:]:
+            raise ValueError(
+                "Expected bin_edges and counts to have compatible non-leading dimensions."
+            )
 
     if cdf:
         try:
@@ -294,14 +299,16 @@ def _get_mins_maxs(*inputs: Tensor, axis: int = 0) -> Tuple[Tensor, Tensor]:
     Tuple[Tensor, Tensor]
         (Minimum, Maximum) values of inputs
     """
-    assert len(inputs) > 0, "At least one tensor much be provided"
+    if len(inputs) <= 0:
+        raise ValueError("At least one tensor much be provided")
 
     input = inputs[0]
     inputs = list(inputs)[1:]
     # Check shape consistency
     s = input.shape
     for x in inputs:
-        assert s[1:] == x.shape[1:]
+        if s[1:] != x.shape[1:]:
+            raise ValueError()
 
     # Compute low and high for input
     low = torch.min(input, axis=axis)[0]
@@ -439,7 +446,8 @@ def _compute_counts_cdf(
     # Check shapes of inputs
     s = inputs[0].shape
     for input in inputs[1:]:
-        assert s[1:] == input.shape[1:]
+        if s[1:] != input.shape[1:]:
+            raise ValueError()
 
     if isinstance(bins, int):
         if verbose:
@@ -599,7 +607,8 @@ class Histogram(EnsembleMetrics):
         else:
             self.number_of_bins = bins.shape[0] - 1
 
-            assert self.input_shape[1:] == bins.shape[1:]
+            if self.input_shape[1:] != bins.shape[1:]:
+                raise ValueError()
 
         self.counts_shape = self.input_shape
         self.counts_shape[0] = self.number_of_bins
@@ -727,7 +736,7 @@ def normal_pdf(
     elif grid == "left":
         bin_mids = bin_edges[:-1]
     else:
-        assert ValueError(
+        raise ValueError(
             "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
         )
     return (
@@ -777,7 +786,7 @@ def normal_cdf(
     elif grid == "left":
         bin_mids = bin_edges[:-1]
     else:
-        assert ValueError(
+        raise ValueError(
             "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
         )
     return 0.5 + 0.5 * torch.erf(

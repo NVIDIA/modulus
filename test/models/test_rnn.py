@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
+
+import pytest
+import torch
 
 from modulus.models.rnn.rnn_one2many import One2ManyRNN
 from modulus.models.rnn.rnn_seq2seq import Seq2SeqRNN
+
 from . import common
 
 

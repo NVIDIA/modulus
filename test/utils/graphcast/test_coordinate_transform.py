@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-import torch
 import pytest
 from pytest_utils import import_or_fail
 

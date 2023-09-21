@@ -12,20 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-import torch
-import logging
-import inspect
 import importlib
-import tempfile
+import inspect
+import json
+import logging
 import tarfile
-from typing import Union, Dict, Any
+import tempfile
 from pathlib import Path
+from typing import Any, Dict, Union
+
+import torch
 
 import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.registry import ModelRegistry
-from modulus.utils.filesystem import _get_fs, _download_cached
+from modulus.utils.filesystem import _download_cached, _get_fs
 
 
 class Module(torch.nn.Module):

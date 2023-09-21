@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from functools import partial
+from typing import Any, Tuple, Union
+
 import torch
-import torch.nn as nn
-import torch.fft
-from torch import Tensor
-from typing import Tuple, Union, Any
 
 # distributed stuff
 import torch.distributed as dist
+import torch.fft
+import torch.nn as nn
+from torch import Tensor
 
 import modulus
 from modulus.distributed.manager import DistributedManager
@@ -32,12 +34,17 @@ from modulus.distributed.mappings import (
 )
 from modulus.models.afno.distributed.layers import trunc_normal_, DropPath
 from modulus.models.afno.distributed.layers import (
-    DistributedPatchEmbed,
-    DistributedMLP,
     DistributedAFNO2D,
+    DistributedMLP,
+    DistributedPatchEmbed,
+    DropPath,
+    trunc_normal_,
 )
-
-import logging
+from modulus.models.afno.distributed.mappings import (
+    copy_to_matmul_parallel_region,
+    gather_from_matmul_parallel_region,
+    scatter_to_matmul_parallel_region,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -340,9 +347,10 @@ class DistributedAFNO(modulus.Module):
 
         comm_size = DistributedManager().group_size("model_parallel")
         if channel_parallel_inputs:
-            assert (
-                in_channels % comm_size == 0
-            ), "Error, in_channels needs to be divisible by model_parallel size"
+            if not (in_channels % comm_size == 0):
+                raise ValueError(
+                    "Error, in_channels needs to be divisible by model_parallel size"
+                )
 
         self._impl = DistributedAFNONet(
             img_size=img_shape,

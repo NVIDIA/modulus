@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import torch
-from torch import Tensor
 import torch.nn as nn
+from torch import Tensor
 
 try:
     from dgl import DGLGraph
@@ -23,16 +23,15 @@ except ImportError:
         "Mesh Graph Net requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
-from typing import Callable, Tuple, List, Union
 from dataclasses import dataclass
+from typing import Callable, List, Tuple, Union
 
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
+from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
+from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-
-from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
-from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
-from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 
 
 @dataclass

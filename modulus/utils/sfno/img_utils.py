@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -84,17 +84,19 @@ def reshape_fields(
     if params.add_grid:
         if inp_or_tar == "inp":
             if params.gridtype == "linear":
-                assert (
-                    params.n_grid_channels == 2
-                ), "n_grid_channels must be set to 2 for gridtype linear"
+                if not (params.n_grid_channels == 2):
+                    raise ValueError(
+                        "n_grid_channels must be set to 2 for gridtype linear"
+                    )
                 x = np.meshgrid(np.linspace(-1, 1, img_shape_x))
                 y = np.meshgrid(np.linspace(-1, 1, img_shape_y))
                 grid_x, grid_y = np.meshgrid(y, x)
                 grid = np.stack((grid_x, grid_y), axis=0)
             elif params.gridtype == "sinusoidal":
-                assert (
-                    params.n_grid_channels == 4
-                ), "n_grid_channels must be set to 4 for gridtype sinusoidal"
+                if not (params.n_grid_channels == 4):
+                    raise ValueError(
+                        "n_grid_channels must be set to 4 for gridtype sinusoidal"
+                    )
                 x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_x)))
                 x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, img_shape_x)))
                 y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_y)))

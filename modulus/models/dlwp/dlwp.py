@@ -13,15 +13,15 @@
 # limitations under the License.
 
 import math
+from dataclasses import dataclass
+from typing import Tuple, Union
+
 import torch
 import torch.nn as nn
-
-from dataclasses import dataclass
 
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-from typing import Tuple, Union
 
 Tensor = torch.Tensor
 
@@ -326,10 +326,10 @@ class DLWP(Module):
 
     def forward(self, cubed_sphere_input):
         # do some input checks
-        assert cubed_sphere_input.size(2) == 6, "The input must have 6 faces."
-        assert cubed_sphere_input.size(3) == cubed_sphere_input.size(
-            4
-        ), "The input must have equal height and width"
+        if not cubed_sphere_input.size(2) != 6:
+            raise ValueError("The input must have 6 faces.")
+        if cubed_sphere_input.size(3) != cubed_sphere_input.size(4):
+            raise ValueError("The input must have equal height and width")
 
         # split the cubed_sphere_input into individual faces
         faces = torch.split(

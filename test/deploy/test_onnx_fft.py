@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import logging
+
 import pytest
 import torch
 import torch.fft
 import torch.nn as nn
 import torch.onnx
 import torch.onnx.utils
+
 import modulus.models.layers.fft as fft
 
 try:
@@ -27,6 +29,7 @@ except ImportError:
     ort = None
 
 from typing import Tuple
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
 
 Tensor = torch.Tensor

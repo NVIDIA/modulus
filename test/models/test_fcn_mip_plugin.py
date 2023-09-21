@@ -18,11 +18,11 @@ from modulus.models.dlwp import DLWP
 from pathlib import Path
 import numpy as np
 import datetime
-import torch
 import json
-import shutil
 import os
+import shutil
 
+import numpy as np
 import pytest
 from pytest_utils import import_or_fail, nfsdata_or_fail
 

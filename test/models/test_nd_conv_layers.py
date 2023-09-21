@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+
+import pytest
 import torch
 import torch.nn as nn
-import pytest
-import random
 
 import modulus.models.layers as layers
 

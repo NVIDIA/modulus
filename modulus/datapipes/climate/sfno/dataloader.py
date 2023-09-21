@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import types
 import math
+import types
 
 import torch
-from torch.utils.data import DataLoader
 
 # distributed stuff
 import torch.distributed as dist
-from modulus.utils.sfno.distributed import comm
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+
+from modulus.utils.sfno.distributed import comm
 
 
 def init_distributed_io(params):  # pragma: no cover
@@ -48,9 +49,12 @@ def init_distributed_io(params):  # pragma: no cover
 
     # to simplify, the number of total IO ranks has to be 1 or equal to the model parallel size
     num_io_ranks = math.prod(params.io_grid)
-    assert (num_io_ranks == 1) or (num_io_ranks == comm.get_size("spatial"))
-    assert (params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1)
-    assert (params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1)
+    if not ((num_io_ranks == 1) or (num_io_ranks == comm.get_size("spatial"))):
+        raise AssertionError
+    if not (params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1):
+        raise AssertionError
+    if not (params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1):
+        raise AssertionError
 
     params.io_rank = [0, 0, 0]
     if params.io_grid[1] > 1:

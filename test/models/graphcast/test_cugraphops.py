@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import numpy as np
 from utils import get_icosphere_path, fix_random_seeds
 from pytest_utils import import_or_fail

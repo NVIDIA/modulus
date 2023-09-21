@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from functools import partial
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import modulus.models.layers.fft as fft
 
 from functools import partial
@@ -92,9 +97,10 @@ class AFNO2DLayer(nn.Module):
         hidden_size_factor: int = 1,
     ):
         super().__init__()
-        assert (
-            hidden_size % num_blocks == 0
-        ), f"hidden_size {hidden_size} should be divisible by num_blocks {num_blocks}"
+        if not (hidden_size % num_blocks == 0):
+            raise ValueError(
+                f"hidden_size {hidden_size} should be divisible by num_blocks {num_blocks}"
+            )
 
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
@@ -370,9 +376,10 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         B, C, H, W = x.shape
-        assert (
-            H == self.inp_shape[0] and W == self.inp_shape[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.inp_shape[0]}*{self.inp_shape[1]})."
+        if not (H == self.img_size[0] and W == self.img_size[1]):
+            raise ValueError(
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            )
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
@@ -463,11 +470,19 @@ class AFNO(Module):
         hard_thresholding_fraction: float = 1.0,
     ) -> None:
         super().__init__(meta=MetaData())
-        assert len(inp_shape) == 2, "inp_shape should be a list of length 2"
-        assert len(patch_size) == 2, "patch_size should be a list of length 2"
-        assert (
-            inp_shape[0] % patch_size[0] == 0 and inp_shape[1] % patch_size[1] == 0
-        ), f"input shape {inp_shape} should be divisible by patch_size {patch_size}"
+        if len(inp_shape) != 2:
+            raise ValueError(
+                "inp_shape should be a list of length 2"
+            )
+        if len(patch_size) != 2:
+            raise ValueError(
+                "patch_size should be a list of length 2"
+            )
+
+        if not (img_size[0] % patch_size[0] == 0 and img_size[1] % patch_size[1] == 0):
+            raise ValueError(
+                f"img_size {img_size} should be divisible by patch_size {patch_size}"
+            )
 
         self.in_chans = in_channels
         self.out_chans = out_channels

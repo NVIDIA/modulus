@@ -12,21 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-import torch.fft
-from torch.utils.checkpoint import checkpoint
-from torch.cuda import amp
 import math
 
+import torch
+import torch.fft
+import torch.nn as nn
+from torch.cuda import amp
+from torch.utils.checkpoint import checkpoint
+
+from .activations import ComplexReLU, get_activation
 from .contractions import (
-    compl_mul2d_fwd,
     _contract_diagonal,
+    compl_mul2d_fwd,
+    compl_mul2d_fwd_c,
     compl_muladd2d_fwd,
     compl_muladd2d_fwd_c,
-    compl_mul2d_fwd_c,
 )
-from .activations import get_activation, ComplexReLU
 
 
 @torch.jit.script
@@ -89,9 +90,10 @@ class PatchEmbed(nn.Module):
     def forward(self, x):  # pragma: no cover
         # gather input
         B, C, H, W = x.shape
-        assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        if not (H == self.img_size[0] and W == self.img_size[1]):
+            raise ValueError(
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            )
         # new: B, C, H*W
         x = self.proj(x).flatten(2)
         return x
@@ -188,7 +190,8 @@ class RealFFT2(nn.Module):
             self.truncate = False
 
         # self.num_batches = 1
-        assert self.lmax % 2 == 0
+        if self.lmax % 2 != 0:
+            raise ValueError
 
     def forward(self, x):  # pragma: no cover
         y = self.fft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
@@ -347,8 +350,10 @@ class SpectralAttention2d(nn.Module):
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         self.scale_residual = (
             self.forward_transform.nlat != self.inverse_transform.nlat
@@ -466,8 +471,10 @@ class SpectralAttentionS2(nn.Module):
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         self.scale_residual = (
             (self.forward_transform.nlat != self.inverse_transform.nlat)

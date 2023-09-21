@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import datetime as dt
 import logging
-from modulus.utils.sfno.logging_utils import disable_logging
 import math
+import os
+from typing import Union
+
+import numpy as np
 import torch
 import torch.distributed as dist
-import datetime as dt
-from typing import Union
-import numpy as np
+
+from modulus.utils.sfno.logging_utils import disable_logging
 
 # dummy placeholders
 _COMM_LIST = []
@@ -187,15 +189,16 @@ def init(params, verbose=False):  # pragma: no cover
         model_parallel_names = params.model_parallel_names
     else:
         model_parallel_names = ["model"]
-    assert len(model_parallel_names) == len(
-        model_parallel_sizes
-    ), "Please specify names for your communicators"
+    if len(model_parallel_names) != len(model_parallel_sizes):
+        raise ValueError("Please specify names for your communicators")
     model_parallel_size = math.prod(model_parallel_sizes)
     params["model_parallel_size"] = model_parallel_size
 
-    assert (
-        world_size % model_parallel_size == 0
-    ), "Error, please make sure that the product of model parallel ranks evenly divides the total number of ranks"
+    if world_size % model_parallel_size != 0:
+        raise ValueError(
+            "Error, please make sure that the product of model parallel ranks evenly \
+            divides the total number of ranks"
+        )
 
     # we set this to be orthogonal to the MP groups
     # we can play tricks with the ddp_group later, in case if all the weights are shared

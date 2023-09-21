@@ -13,19 +13,23 @@
 # limitations under the License.
 
 import logging
-import modulus
-import torch
+
 import onnx
 import pytest
+import torch
+
+import modulus
 
 try:
     import onnxruntime as ort
 except ImportError:
     ort = None
 
-from typing import Tuple
 from pathlib import Path
+from typing import Tuple
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
+
 from .utils import compare_output
 
 Tensor = torch.Tensor

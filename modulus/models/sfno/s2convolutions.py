@@ -12,28 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-
-from torch.cuda import amp
-
 # import FactorizedTensor from tensorly for tensorized operations
 import tensorly as tl
+import torch
+import torch.nn as nn
+from torch.cuda import amp
 
 tl.set_backend("pytorch")
 # from tensorly.plugins import use_opt_einsum
 # use_opt_einsum('optimal')
+import torch_harmonics.distributed as thd
 from tltorch.factorized_tensors.core import FactorizedTensor
 
 # import convenience functions for factorized tensors
 from modulus.models.sfno.activations import ComplexReLU
-from modulus.models.sfno.contractions import compl_muladd2d_fwd, compl_mul2d_fwd
-from modulus.models.sfno.factorizations import get_contract_fun
 
 # for the experimental module
-from modulus.models.sfno.contractions import compl_exp_muladd2d_fwd, compl_exp_mul2d_fwd
-
-import torch_harmonics.distributed as thd
+from modulus.models.sfno.contractions import (
+    compl_exp_mul2d_fwd,
+    compl_exp_muladd2d_fwd,
+    compl_mul2d_fwd,
+    compl_muladd2d_fwd,
+)
+from modulus.models.sfno.factorizations import get_contract_fun
 
 
 class SpectralConvS2(nn.Module):
@@ -90,8 +91,10 @@ class SpectralConvS2(nn.Module):
         self.factorization = factorization
         self.separable = separable
 
-        assert self.inverse_transform.lmax == self.modes_lat
-        assert self.inverse_transform.mmax == self.modes_lon
+        if self.inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if self.inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         weight_shape = [in_channels]
 
@@ -236,8 +239,10 @@ class SpectralAttentionS2(nn.Module):
             or (self.forward_transform.grid != self.inverse_transform.grid)
         )
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         hidden_size = int(hidden_size_factor * self.embed_dim)
 

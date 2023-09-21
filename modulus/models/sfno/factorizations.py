@@ -12,26 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-
 import tensorly as tl
+import torch
 
 tl.set_backend("pytorch")
 
 from functools import partial
 
-from modulus.models.sfno.contractions import (
-    _contract_diagonal,
-    _contract_dhconv,
-    _contract_sep_diagonal,
-    _contract_sep_dhconv,
-    _contract_diagonal_real,
-    _contract_dhconv_real,
-    _contract_sep_diagonal_real,
-    _contract_sep_dhconv_real,
-)
-
 from tltorch.factorized_tensors.core import FactorizedTensor
+
+from modulus.models.sfno.contractions import (
+    _contract_dhconv,
+    _contract_dhconv_real,
+    _contract_diagonal,
+    _contract_diagonal_real,
+    _contract_sep_dhconv,
+    _contract_sep_dhconv_real,
+    _contract_sep_diagonal,
+    _contract_sep_diagonal_real,
+)
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 

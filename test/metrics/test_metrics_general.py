@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+import numpy as np
 import pytest
 import torch
 import torch.distributed as dist
-import numpy as np
-import os
 
-import modulus.metrics.general.histogram as hist
-import modulus.metrics.general.ensemble_metrics as em
-import modulus.metrics.general.crps as crps
-import modulus.metrics.general.wasserstein as w
 import modulus.metrics.general.calibration as cal
+import modulus.metrics.general.crps as crps
+import modulus.metrics.general.ensemble_metrics as em
 import modulus.metrics.general.entropy as ent
-
+import modulus.metrics.general.histogram as hist
+import modulus.metrics.general.wasserstein as w
 from modulus.distributed.manager import DistributedManager
 
 Tensor = torch.Tensor

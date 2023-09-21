@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
-from modulus.metrics.general.mse import mse, rmse
-from modulus.metrics.climate.acc import acc
-import modulus.metrics.climate.reduction as clim_red
-import modulus.metrics.climate.efi as efi
 
-import modulus.metrics.general.reduction as gen_red
+import modulus.metrics.climate.efi as efi
+import modulus.metrics.climate.reduction as clim_red
 import modulus.metrics.general.histogram as hist
+import modulus.metrics.general.reduction as gen_red
+from modulus.metrics.climate.acc import acc
+from modulus.metrics.general.mse import mse, rmse
 
 Tensor = torch.Tensor
 

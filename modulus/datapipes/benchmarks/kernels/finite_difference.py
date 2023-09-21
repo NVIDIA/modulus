@@ -25,7 +25,7 @@ pip install warp-lang
     )
     raise SystemExit(1)
 
-from .indexing import index_zero_edges_batched_2d, index_clamped_edges_batched_2d
+from .indexing import index_clamped_edges_batched_2d, index_zero_edges_batched_2d
 
 
 @wp.kernel

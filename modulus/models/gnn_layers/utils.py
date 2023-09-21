@@ -27,9 +27,9 @@ from modulus.models.gnn_layers import CuGraphCSC
 
 try:
     from pylibcugraphops.pytorch.operators import (
+        agg_concat_e2n,
         update_efeat_bipartite_e2e,
         update_efeat_static_e2e,
-        agg_concat_e2n,
     )
 
     USE_CUGRAPHOPS = True

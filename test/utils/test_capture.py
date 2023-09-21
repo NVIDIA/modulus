@@ -14,12 +14,13 @@
 
 
 import logging
+
 import pytest
 import torch
 import torch.nn as nn
 
 from modulus.models.mlp import FullyConnected
-from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
+from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 from modulus.utils.capture import _StaticCapture
 
 optimizers = pytest.importorskip("apex.optimizers")

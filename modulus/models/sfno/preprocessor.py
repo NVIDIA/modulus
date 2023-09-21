@@ -18,8 +18,8 @@ import torch.nn.functional as F
 
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import (
-    reduce_from_parallel_region,
     copy_to_parallel_region,
+    reduce_from_parallel_region,
 )
 
 
@@ -425,8 +425,10 @@ class Preprocessor2D(nn.Module):
         if self.history_normalization_mode in ["none", "timediff"]:
             return xn
 
-        assert self.history_mean is not None
-        assert self.history_std is not None
+        if self.history_mean is None:
+            raise ValueError
+        if self.history_std is None:
+            raise ValueError
 
         xndim = xn.dim()
         if xndim == 5:

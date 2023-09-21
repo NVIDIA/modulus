@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import ABC
+from typing import List, Tuple, Union
+from warnings import warn
+
 import torch
 import torch.distributed as dist
-from typing import Union, Tuple, List
-from abc import ABC
+
 from modulus.distributed.manager import DistributedManager
-from warnings import warn
 
 Tensor = torch.Tensor
 
@@ -59,13 +61,14 @@ class EnsembleMetrics(ABC):
         """
         Check input shapes for non-batched dimension.
         """
-        assert [i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)], (
-            "Expected new input to have compatible shape with existing shapes but got"
-            + str(inputs.shape)
-            + "and"
-            + str(self.input_shape)
-            + "."
-        )
+        if not [i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)]:
+            raise ValueError(
+                "Expected new input to have compatible shape with existing shapes but got"
+                + str(inputs.shape)
+                + "and"
+                + str(self.input_shape)
+                + "."
+            )
 
     def __call__(self, *args):
         """
@@ -156,9 +159,10 @@ class Mean(EnsembleMetrics):
         Tensor
             Mean value
         """
-        assert (
-            inputs.device == self.device
-        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
         self.sum = torch.sum(inputs, dim=dim)
         self.n = torch.as_tensor([inputs.shape[dim]], device=self.device)
         # TODO(Dallas) Move distributed calls into finalize.
@@ -185,9 +189,10 @@ class Mean(EnsembleMetrics):
             Current mean value
         """
         self._check_shape(inputs)
-        assert (
-            inputs.device == self.device
-        ), f"Inputs device, {inputs.device}, and Module device, {self.device}, must be the same."
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
 
         # TODO(Dallas) Move distributed calls into finalize.
         if DistributedManager.is_initialized() and dist.is_initialized():
@@ -319,9 +324,10 @@ class Variance(EnsembleMetrics):
             Unbiased variance values
         """
 
-        assert (
-            inputs.device == self.device
-        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
         self.sum = torch.sum(inputs, dim=dim)
         self.n = torch.as_tensor([inputs.shape[0]], device=self.device)
 
@@ -355,9 +361,10 @@ class Variance(EnsembleMetrics):
         """
 
         self._check_shape(inputs)
-        assert (
-            inputs.device == self.device
-        ), f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
 
         new_n = torch.as_tensor([inputs.shape[0]], device=self.device)
         new_sum = torch.sum(inputs, dim=0)
@@ -401,9 +408,10 @@ class Variance(EnsembleMetrics):
         Tensor
             Final (mean, variance/std) value
         """
-        assert (
-            self.n > 1.0
-        ), "Error! In order to finalize, there needs to be at least 2 samples."
+        if not (self.n > 1.0):
+            raise ValueError(
+                "Error! In order to finalize, there needs to be at least 2 samples."
+            )
         self.var = self.sum2 / (self.n - 1.0)
         if std:
             self.std = torch.sqrt(self.var)

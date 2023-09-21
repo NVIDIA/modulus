@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import os
-from modulus.distributed import DistributedManager
-from modulus.distributed import gather_loss
+
+from modulus.distributed import DistributedManager, gather_loss
+
 
 # TODO: Need to figure out how to test parallel set up
 def test_gather_loss():

@@ -1,8 +1,10 @@
-# Enable flake8-bugbear (`B`) rules.
-select = ["E", "F"]
+# Enable flake8-bandit (`S`) and isort (`I`) rules.
+select = ["E", "F", "S", "I"]
+fixable = ["I"]
 
-# Never enforce `E402` (line length violations).
-ignore = ["E402", "E501"]
+# Never enforce `E402`, `E501` (line length violations),
+# and `S311` (random number generators)
+ignore = ["E402", "E501", "S311"]
 
 extend-exclude = ["modulus/experimental",]
 
@@ -11,3 +13,5 @@ extend-exclude = ["modulus/experimental",]
 "__init__.py" = ["F401"]
 "docs/*.py" = ["F401"]
 
+# Ignore `S101` (assertions) in all `test` files.
+"test/*.py" = ["S101"]
