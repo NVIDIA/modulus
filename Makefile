@@ -21,6 +21,9 @@ interrogate:
 lint:
 	pre-commit run markdownlint -a
 
+ruff:
+	pre-commit run ruff -a 
+	
 license: 
 	pre-commit run license -a
 
