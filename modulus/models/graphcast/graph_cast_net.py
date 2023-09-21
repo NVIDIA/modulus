@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import torch
-import torch.nn as nn
 from torch import Tensor
 
 from typing import Any, Optional
@@ -184,7 +183,7 @@ class GraphCastNet(Module):
         # construct the graph
         try:
             self.graph = Graph(meshgraph_path, self.lat_lon_grid)
-        except:
+        except FileNotFoundError:
             raise FileNotFoundError(
                 "The icospheres_path is corrupted. "
                 "Tried using pymesh to generate the graph but could not find pymesh"

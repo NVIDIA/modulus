@@ -34,7 +34,7 @@ try:
 
     USE_CUGRAPHOPS = True
 
-except:
+except ImportError:
     update_efeat_bipartite_e2e = None
     update_efeat_static_e2e = None
     agg_concat_e2n = None

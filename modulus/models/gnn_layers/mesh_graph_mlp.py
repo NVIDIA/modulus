@@ -28,7 +28,7 @@ try:
     from apex.normalization import FusedLayerNorm
 
     apex_imported = True
-except:
+except ImportError:
     apex_imported = False
 
 

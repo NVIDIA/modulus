@@ -18,7 +18,6 @@ import torch.nn as nn
 
 from dataclasses import dataclass
 
-import modulus
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module

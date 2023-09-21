@@ -15,11 +15,10 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-import dgl
 
 try:
     from dgl import DGLGraph
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
@@ -27,7 +26,6 @@ except:
 from typing import Callable, Tuple, List, Union
 from dataclasses import dataclass
 
-import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 

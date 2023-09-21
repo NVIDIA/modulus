@@ -19,7 +19,6 @@ import datetime
 from urllib.parse import urlparse
 import glob
 
-import modulus
 from modulus.models.sfno import sfnonet
 from modulus.utils import filesystem
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle

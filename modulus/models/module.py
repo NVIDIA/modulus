@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import json
 import torch
 import logging
@@ -20,10 +19,8 @@ import inspect
 import importlib
 import tempfile
 import tarfile
-import pkg_resources
-from typing import Union, List, Dict, Any
+from typing import Union, Dict, Any
 from pathlib import Path
-import torch.nn as nn
 
 import modulus
 from modulus.models.meta import ModelMetaData
@@ -80,7 +77,7 @@ class Module(torch.nn.Module):
         self.logger = logging.getLogger("core.module")
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
-            f"[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
+            "[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
         )
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
@@ -227,13 +224,13 @@ class Module(torch.nn.Module):
     @staticmethod
     def _check_checkpoint(local_path: str) -> bool:
         if not local_path.joinpath("args.json").exists():
-            raise IOError(f"File 'args.json' not found in checkpoint")
+            raise IOError("File 'args.json' not found in checkpoint")
 
         if not local_path.joinpath("metadata.json").exists():
-            raise IOError(f"File 'metadata.json' not found in checkpoint")
+            raise IOError("File 'metadata.json' not found in checkpoint")
 
         if not local_path.joinpath("model.pt").exists():
-            raise IOError(f"Model weights 'model.pt' not found in checkpoint")
+            raise IOError("Model weights 'model.pt' not found in checkpoint")
 
         # Check if the checkpoint version is compatible with the current version
         with open(local_path.joinpath("metadata.json"), "r") as f:

@@ -14,11 +14,9 @@
 
 import torch
 import torch.nn as nn
-import modulus
 
 from torch import Tensor
 from dataclasses import dataclass
-from typing import Union, List
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.models.rnn.layers import (

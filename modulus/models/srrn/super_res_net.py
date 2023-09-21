@@ -33,10 +33,8 @@ SOFTWARE.
 import torch
 from torch import nn
 import math
-from typing import Union, List, Any
 from dataclasses import dataclass
 
-import modulus
 from modulus.models.layers import get_activation
 from ..meta import ModelMetaData
 from ..module import Module

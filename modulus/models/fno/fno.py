@@ -16,9 +16,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import modulus.models.layers as layers
-import modulus
 
-from typing import Dict, List, Union, Tuple
+from typing import List, Union, Tuple
 from torch import Tensor
 from dataclasses import dataclass
 from ..meta import ModelMetaData

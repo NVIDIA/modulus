@@ -15,11 +15,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import modulus
 import modulus.models.layers.fft as fft
 
 from functools import partial
-from typing import List, Any
+from typing import Tuple, List
 from dataclasses import dataclass
 from ..meta import ModelMetaData
 from ..module import Module

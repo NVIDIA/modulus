@@ -55,10 +55,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import torch
 import torch.nn as nn
-from typing import Union, List
 from dataclasses import dataclass
 
-import modulus
 from modulus.models.layers import get_activation
 from ..meta import ModelMetaData
 from ..module import Module

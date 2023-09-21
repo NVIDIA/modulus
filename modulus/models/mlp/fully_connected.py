@@ -14,7 +14,6 @@
 
 import torch
 import torch.nn as nn
-import modulus
 from modulus.models.layers import FCLayer, get_activation
 
 from torch import Tensor
