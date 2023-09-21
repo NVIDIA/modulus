@@ -20,6 +20,8 @@ from torch import Tensor
 from .activations import Identity
 from .weight_norm import WeightNormLinear
 
+from modulus.sym.models.layers.activation import get_activation_fn, Activation
+
 
 class FCLayer(nn.Module):
     """Densely connected NN layer
@@ -42,7 +44,7 @@ class FCLayer(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
+        activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         weight_norm: bool = False,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
@@ -52,7 +54,6 @@ class FCLayer(nn.Module):
             self.activation_fn = Identity()
         else:
             self.activation_fn = activation_fn
-
         self.weight_norm = weight_norm
         self.activation_par = activation_par
 
@@ -93,7 +94,7 @@ class ConvFCLayer(nn.Module):
 
     def __init__(
         self,
-        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
+        activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__()
@@ -137,7 +138,7 @@ class Conv1dFCLayer(ConvFCLayer):
         self,
         in_features: int,
         out_features: int,
-        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
+        activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
         weight_norm: bool = False,
     ) -> None:
@@ -180,7 +181,7 @@ class Conv2dFCLayer(ConvFCLayer):
         self,
         in_channels: int,
         out_channels: int,
-        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
+        activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__(activation_fn, activation_par)
@@ -220,7 +221,7 @@ class Conv3dFCLayer(ConvFCLayer):
         self,
         in_channels: int,
         out_channels: int,
-        activation_fn: Union[nn.module, Callable[[Tensor], Tensor], None] = None,
+        activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__(activation_fn, activation_par)
