@@ -288,7 +288,8 @@ class DistributedManager(object):
         if initialization_method is None:
             try:
                 DistributedManager.initialize_env()
-            except TypeError:
+            except Exception as e:
+                warn(e)
                 if "SLURM_PROCID" in os.environ:
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:

@@ -15,7 +15,6 @@
 import logging
 import modulus
 import torch
-import shutil
 
 from typing import Tuple
 from pathlib import Path

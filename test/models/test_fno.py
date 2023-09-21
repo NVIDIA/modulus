@@ -16,7 +16,6 @@ import torch
 import pytest
 import random
 
-from modulus.models.mlp import FullyConnected
 from modulus.models.fno import FNO
 from . import common
 

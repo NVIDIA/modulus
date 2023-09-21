@@ -20,7 +20,7 @@ import pytest
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
 from typing import Tuple

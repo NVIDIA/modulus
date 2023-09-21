@@ -82,11 +82,11 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     # Test linspace
     start = torch.zeros(input_shape, device=device)
     end = torch.ones(input_shape, device=device)
-    l = hist.linspace(start, end, 10)
-    assert l.shape[0] == 11
+    lin = hist.linspace(start, end, 10)
+    assert lin.shape[0] == 11
     l_np = np.linspace(start.cpu(), end.cpu(), 11)
     assert torch.allclose(
-        l,
+        lin,
         torch.from_numpy(l_np).to(device),
         rtol=rtol,
         atol=atol,
@@ -111,7 +111,7 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
     # Test low and high memory bin counts
-    bins = l
+    bins = lin
     counts = torch.zeros([10, *input_shape], device=device)
     counts_low_counts = hist._low_memory_bin_reduction_counts(x, bins, counts, 10)
     counts_high_counts = hist._high_memory_bin_reduction_counts(x, bins, counts, 10)
@@ -321,10 +321,13 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
 
     ens_metric = em.EnsembleMetrics((1, 72, 144), device=device)
     with pytest.raises(NotImplementedError) as e_info:
+        print(e_info)
         ens_metric.__call__()
     with pytest.raises(NotImplementedError) as e_info:
+        print(e_info)
         ens_metric.update()
     with pytest.raises(NotImplementedError) as e_info:
+        print(e_info)
         ens_metric.finalize()
 
     x = torch.randn((10, 1, 72, 144), device=device)
@@ -471,9 +474,9 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     x = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, x_bin_counts = hist.histogram(x, bins=30)
     x1 = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
-    _, x1_bin_counts = hist.histogram(x, bins=bin_edges)
+    _, x1_bin_counts = hist.histogram(x1, bins=bin_edges)
     x2 = 0.1 * torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
-    _, x2_bin_counts = hist.histogram(x, bins=bin_edges)
+    _, x2_bin_counts = hist.histogram(x2, bins=bin_edges)
 
     rel_ent_1 = ent._relative_entropy_from_counts(
         x_bin_counts, x1_bin_counts, bin_edges

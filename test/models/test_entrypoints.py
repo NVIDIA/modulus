@@ -49,6 +49,6 @@ def test_model_entry_points(model_name, pytestconfig):
 
     # Try loading the model
     try:
-        model = models[model_name].load()
+        models[model_name].load()
     except Exception as e:
         pytest.fail(f"Failed to load {model_name}: {e}")

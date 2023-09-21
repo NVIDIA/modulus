@@ -38,7 +38,7 @@ def test_dlwp_forward(device):
     bsize = 4
     invar = torch.randn(bsize, 2, 6, 64, 64).to(device)
     assert common.validate_forward_accuracy(
-        model, (invar,), file_name=f"dlwp_output.pth", atol=1e-3
+        model, (invar,), file_name="dlwp_output.pth", atol=1e-3
     )
 
 

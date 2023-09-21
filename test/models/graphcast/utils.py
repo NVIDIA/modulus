@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import torch
-import sys, os
+import os
 import numpy as np
 import pytest
 

@@ -235,11 +235,11 @@ def test__CozZenWrapper(batch_size, pytestconfig):
 
     from modulus.models.fcn_mip_plugin import _CosZenWrapper
 
-    class I(torch.nn.Module):
+    class Id(torch.nn.Module):
         def forward(self, x):
             return x
 
-    model = I()
+    model = Id()
     nx, ny = (3, 4)
     lat = np.arange(nx)
     lon = np.arange(ny)

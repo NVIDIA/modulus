@@ -251,7 +251,7 @@ def test_conv_nd(device, dimension):
     with torch.no_grad():
         assert torch.allclose(
             conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
-        ), f"ConvNdKernel1Layer output not identical to that of layer specific for {dim}d fields :("
+        ), f"ConvNdKernel1Layer output not identical to that of layer specific for {dimension}d fields :("
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -285,7 +285,7 @@ def test_conv_ndfc(device, dimension):
     with torch.no_grad():
         assert torch.allclose(
             conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
-        ), f"ConvNdFCLayer output not identical to that of layer specific for {dim}d fields :("
+        ), f"ConvNdFCLayer output not identical to that of layer specific for {dimension}d fields :("
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -312,4 +312,4 @@ def test_spec_conv_4d(device):
     with torch.no_grad():
         assert torch.allclose(
             spec_conv_orig(invar), spec_conv_modulus(invar), rtol=1e-06, atol=1e-06
-        ), f"SpectralConv4d output not identical to that of refrence layer"
+        ), "SpectralConv4d output not identical to that of refrence layer"
