@@ -33,8 +33,7 @@ def _compute_lat_weights(lat: Tensor) -> Tensor:
         Latitude weight tensor [H]
     """
 
-    nlat = len(lat)
-    lat_weight = torch.abs(torch.cos(torch.pi * (lat / nlat)))
+    lat_weight = torch.abs(torch.cos(torch.pi * (lat / 180.0)))
 
     lat_weight = lat_weight / lat_weight.sum()
     return lat_weight

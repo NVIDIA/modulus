@@ -324,9 +324,9 @@ class DLWP(Module):
 
     def forward(self, cubed_sphere_input):
         # do some input checks
-        if not cubed_sphere_input.size(2) != 6:
+        if cubed_sphere_input.size(-3) != 6:
             raise ValueError("The input must have 6 faces.")
-        if cubed_sphere_input.size(3) != cubed_sphere_input.size(4):
+        if cubed_sphere_input.size(-2) != cubed_sphere_input.size(-1):
             raise ValueError("The input must have equal height and width")
 
         # split the cubed_sphere_input into individual faces

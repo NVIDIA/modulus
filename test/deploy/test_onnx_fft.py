@@ -321,7 +321,7 @@ def test_onnx_rfft_checks(test_data: Tensor):
         raise AssertionError(
             "ONNX RFFT should error if user gives size larger than RFFT dim"
         )
-    except AssertionError:
+    except ValueError:
         pass
 
     try:

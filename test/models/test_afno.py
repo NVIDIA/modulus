@@ -101,7 +101,7 @@ def test_afno_constructor(device):
             num_blocks=4,
         ).to(device)
         raise AssertionError("Failed to error for invalid embed and block number")
-    except AssertionError:
+    except ValueError:
         pass
 
 

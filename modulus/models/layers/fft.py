@@ -496,7 +496,7 @@ class OnnxRfft2(Function):
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
         if not torch.onnx.is_in_onnx_export():
-            raise ValueError("Must be called only during ONNX export.")
+            raise AssertionError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib RFFT which assumes
         # DFT of last dims and no normalization.
@@ -543,7 +543,7 @@ class OnnxIrfft2(Function):
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
         if not torch.onnx.is_in_onnx_export():
-            raise ValueError("Must be called only during ONNX export.")
+            raise AssertionError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib IRFFT which assumes
         # DFT of last dims and 1/n normalization.
