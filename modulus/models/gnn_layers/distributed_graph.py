@@ -234,7 +234,7 @@ class DistributedGraph:
         global_offsets: torch.Tensor,
         global_indices: torch.Tensor,
         partition_size: int,
-        graph_partition_group_name: str,
+        graph_partition_group_name: str = None,
         graph_partition: Optional[GraphPartition] = None,
     ):  # pragma: no cover
         """Utility Class representing a distributed graph based on a given
@@ -250,10 +250,12 @@ class DistributedGraph:
         global_indices : torch.Tensor
             CSC indices, can live on the CPU
         partition_size : int
-            Number of process groups across which graph is partitioned,
-            i.e. the number of graph partitions.
-        graph_partition_group_name : str
-            Name of process group of ranks across which graph is partitioned.
+            Number of process groups across which graphs are distributed, expected to
+            be larger than 1, i.e. an actual partition distributed among multiple ranks.
+        partition_group_name : str, default=None
+            Name of process group across which graphs are distributed. Passing no process
+            group name leads to a parallelism across the default process group.
+            Otherwise, the group size of a process group is expected to match partition_size.
         graph_partition : GraphPartition, optional
             Optional graph_partition, if passed as None, the naive
             node-wise partitioning scheme will be applied to global_offsets and global_indices,

@@ -15,7 +15,7 @@
 import torch
 import torch.nn as nn
 
-from typing import Union
+from typing import Union, Self
 from torch import Tensor
 from dgl import DGLGraph
 

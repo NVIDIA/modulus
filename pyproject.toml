@@ -13,7 +13,6 @@ requires-python = ">=3.8"
 license = {text = "Apache 2.0"}
 dependencies = [
     "h5py>=3.7.0",
-    "mpi4py>=3.1.4",
     "netcdf4>=1.6.3",
     "certifi>=2023.7.22",
     "numpy>=1.22.4",
@@ -23,7 +22,6 @@ dependencies = [
     "setuptools>=67.6.0",
     "torch>=1.12",
     "xarray>=2023.1.0",
-    "zarr>=2.14.2",
     "s3fs>=2023.5.0",
     "scikit-learn>=1.0.2"
 ]

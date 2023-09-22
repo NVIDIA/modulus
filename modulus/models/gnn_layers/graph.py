@@ -21,7 +21,7 @@ import dgl
 from torch import Tensor
 from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple, List
+from typing import Any, Callable, Dict, Optional, Union, Tuple, List, Self
 from torch.utils.checkpoint import checkpoint
 
 from modulus.distributed import DistributedManager
@@ -66,16 +66,17 @@ class CuGraphCSC:
         Whether to cache graph structures when wrapping offsets and indices
         to the corresponding cugraph-ops graph types. If graph change in each
         iteration, set to False, by default True.
-    partition_size : int, optional
-        CuGraphCSC supports a tensor-parallel-style distributed training.
-        The graph is naively partioned such that all nodes are split evenely
-        across all participating ranks in this partition of a certain size.
-        Edges are partitioned such that each incoming edge is on the same rank
-        as each node for which it represents the destination node. For message-passing,
-        the corresponding features from source nodes need to be gathered.
-    partition_group_name : str, optional
-        for distributed settings, the name of the subgroup representing the partitioned
-        graph is intended to be passed on to be used with dist_manager as described below
+    partition_size : int, default=1
+        Number of process groups across which graph is distributed. If equal to 1,
+        the model is run in a normal Single-GPU congiguration. For details on how
+        the graph is partitioned, see ``DistributedGraph``.
+    partition_group_name : str, default=None
+        Name of process group across which graph is distributed. If partition_size
+        is set to 1, the model is run in a normal Single-GPU configuration and the
+        specification of a process group is not necessary. If partitition_size > 1,
+        passing no process group name leads to a parallelism across the default
+        process group. Otherwise, the group size of a process group is expected
+        to match partition_size.
     """
 
     def __init__(
@@ -275,7 +276,7 @@ class CuGraphCSC:
             )
         return local_efeat
 
-    def to(self, *args: Any, **kwargs: Any) -> "CuGraphCSC":
+    def to(self, *args: Any, **kwargs: Any) -> Self:
         """Moves the object to the specified device, dtype, or format and returns the
         updated object.
 
