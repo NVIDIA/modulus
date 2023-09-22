@@ -16,10 +16,10 @@ from typing import Tuple
 
 import pytest
 import torch
+from pytest_utils import import_or_fail
 
 from typing import Tuple
 from . import common
-from pytest_utils import import_or_fail
 
 Tensor = torch.Tensor
 

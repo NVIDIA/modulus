@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pkg_resources
+import pytest
 from pytest_utils import _import_or_fail
 
 

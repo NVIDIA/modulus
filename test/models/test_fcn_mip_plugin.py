@@ -12,11 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import fsspec
-from modulus.utils.filesystem import Package
-from modulus.models.dlwp import DLWP
-from pathlib import Path
-import numpy as np
 import datetime
 import json
 import os
@@ -24,7 +19,11 @@ import shutil
 
 import numpy as np
 import pytest
+import torch
 from pytest_utils import import_or_fail, nfsdata_or_fail
+
+from modulus.models.dlwp import DLWP
+from modulus.utils.filesystem import Package
 
 
 @pytest.fixture

@@ -14,6 +14,8 @@
 
 import os
 import random
+import sys
+
 import numpy as np
 import pytest
 import torch
@@ -25,8 +27,6 @@ import common
 from pytest_utils import import_or_fail
 
 dgl = pytest.importorskip("dgl")
-
-from modulus.models.meshgraphnet import MeshGraphNet
 
 
 @import_or_fail("dgl")

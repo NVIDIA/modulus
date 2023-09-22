@@ -15,6 +15,7 @@
 import os
 import pytest
 import torch
+from pytest_utils import nfsdata_or_fail
 
 from modulus.datapipes.climate import ERA5HDF5Datapipe
 from pytest_utils import import_or_fail, nfsdata_or_fail

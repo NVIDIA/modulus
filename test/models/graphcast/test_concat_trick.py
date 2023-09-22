@@ -14,8 +14,8 @@
 
 import numpy as np
 import torch
-from utils import fix_random_seeds, get_icosphere_path
 from pytest_utils import import_or_fail
+from utils import fix_random_seeds, get_icosphere_path
 
 icosphere_path = get_icosphere_path()
 

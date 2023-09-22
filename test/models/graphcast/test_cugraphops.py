@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import numpy as np
-from utils import get_icosphere_path, fix_random_seeds
+import torch
 from pytest_utils import import_or_fail
+from utils import fix_random_seeds, get_icosphere_path
 
 
 @import_or_fail("dgl")
