@@ -33,7 +33,7 @@ def weight_fact(w, mean=1.0, stddev=0.1):
 
     g = torch.normal(mean, stddev, size=(w.shape[0], 1))
     g = torch.exp(g)
-    v = w / g.view(-1, 1)
+    v = w / g
     return g, v
 
 
