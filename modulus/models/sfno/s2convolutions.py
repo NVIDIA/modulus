@@ -16,13 +16,12 @@
 import tensorly as tl
 import torch
 import torch.nn as nn
-from torch.cuda import amp
 
-tl.set_backend("pytorch")
 # from tensorly.plugins import use_opt_einsum
 # use_opt_einsum('optimal')
 import torch_harmonics.distributed as thd
 from tltorch.factorized_tensors.core import FactorizedTensor
+from torch.cuda import amp
 
 # import convenience functions for factorized tensors
 from modulus.models.sfno.activations import ComplexReLU
@@ -35,6 +34,8 @@ from modulus.models.sfno.contractions import (
     compl_muladd2d_fwd,
 )
 from modulus.models.sfno.factorizations import get_contract_fun
+
+tl.set_backend("pytorch")
 
 
 class SpectralConvS2(nn.Module):
