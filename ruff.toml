@@ -1,4 +1,4 @@
-# Enable flake8-bandit (`S`) and isort (`I`) rules.
+# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`), and isort (`I`) rules.
 select = ["E", "F", "S", "I"]
 fixable = ["I"]
 
