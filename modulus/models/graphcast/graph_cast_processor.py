@@ -15,7 +15,13 @@
 import torch
 import torch.nn as nn
 
-from typing import Union, Self
+from typing import Union
+
+try:
+    from typing import Self
+except ImportError:
+    # for Python versions < 3.11
+    from typing_extensions import Self
 from torch import Tensor
 from dgl import DGLGraph
 

@@ -16,7 +16,13 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from typing import Any, Optional, Self
+from typing import Any, Optional
+
+try:
+    from typing import Self
+except ImportError:
+    # for Python versions < 3.11
+    from typing_extensions import Self
 from dataclasses import dataclass
 
 from modulus.models.layers import get_activation

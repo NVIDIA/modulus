@@ -17,7 +17,7 @@ import torch
 import torch.distributed as dist
 
 from typing import List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from modulus.distributed import DistributedManager
 from modulus.distributed import (
@@ -28,6 +28,7 @@ from modulus.distributed import (
 )
 
 
+@dataclass
 class GraphPartition:  # pragma: no cover
     """Class acting as a struct to hold all relevant buffers and variables
     to define a graph partition.
@@ -65,15 +66,9 @@ class GraphPartition:  # pragma: no cover
             for _ in range(self.partition_size)
         ]
         self.scatter_indices = [None] * self.partition_size
-        self.num_src_nodes_in_each_partition = [
-            None
-        ] * self.partition_size
-        self.num_dst_nodes_in_each_partition = [
-            None
-        ] * graph_partition.partition_size
-        self.num_indices_in_each_partition = [
-            None
-        ] * graph_partition.partition_size
+        self.num_src_nodes_in_each_partition = [None] * self.partition_size
+        self.num_dst_nodes_in_each_partition = [None] * self.partition_size
+        self.num_indices_in_each_partition = [None] * self.partition_size
 
 
 def partition_graph_nodewise(

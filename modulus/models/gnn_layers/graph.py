@@ -21,7 +21,13 @@ import dgl
 from torch import Tensor
 from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple, List, Self
+from typing import Any, Callable, Dict, Optional, Union, Tuple, List
+
+try:
+    from typing import Self
+except ImportError:
+    # for Python versions < 3.11
+    from typing_extensions import Self
 from torch.utils.checkpoint import checkpoint
 
 from modulus.distributed import DistributedManager
