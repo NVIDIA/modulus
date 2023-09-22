@@ -30,7 +30,6 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from utils import relative_lp_error
 from constants import Constants
 
 try:
@@ -122,8 +121,7 @@ class MGNTrainer:
         # enable train mode
         self.model.train()
 
-        # instantiate loss, optimizer, and scheduler
-        self.criterion = torch.nn.MSELoss()
+        # instantiate optimizer, and scheduler
         try:
             self.optimizer = apex.optimizers.FusedAdam(self.model.parameters(), lr=C.lr)
             rank_zero_logger.info("Using FusedAdam optimizer")
@@ -157,7 +155,11 @@ class MGNTrainer:
         # forward pass
         with autocast(enabled=C.amp):
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            loss = self.criterion(pred, graph.ndata["y"])
+            diff_norm = torch.norm(
+                torch.flatten(pred) - torch.flatten(graph.ndata["y"]), p=2
+            )
+            y_norm = torch.norm(torch.flatten(graph.ndata["y"]), p=2)
+            loss = diff_norm / y_norm
             return loss
 
     def backward(self, loss):
@@ -183,11 +185,17 @@ class MGNTrainer:
         for graph in self.validation_dataloader:
             graph = graph.to(self.dist.device)
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            gt = graph.ndata["y"]
-            error += relative_lp_error(pred, gt)
-        error = error / len(self.validation_dataloader)
+            pred, gt = self.dataset.denormalize(
+                pred, graph.ndata["y"], self.dist.device
+            )
+            error += (
+                torch.mean(torch.norm(pred - gt, p=2) / torch.norm(gt, p=2))
+                .cpu()
+                .numpy()
+            )
+        error = error / len(self.validation_dataloader) * 100
         self.wb.log({"val_error (%)": error})
-        self.rank_zero_logger.info(f"Validation error (%): {error}")
+        self.rank_zero_logger.info(f"Denormalized validation error (%): {error}")
 
 
 if __name__ == "__main__":
