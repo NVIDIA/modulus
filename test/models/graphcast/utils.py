@@ -43,6 +43,26 @@ def get_icosphere_path():
 def compare_quantiles(
     t: torch.Tensor, ref: torch.Tensor, quantiles: List[float], tolerances: List[float]
 ):
+    """Utility function which compares a tensor against a reference based on tolanceres
+    on desired quantiles. Comparing different algorithms in FP32, and especially FP16
+    and BF16, is often hard through e.g. ``torch.allclose`` as absolute differences
+    in a element-to-element comparison fail when some outliers are present. It sometimes
+    is better to compare quantiles with different tolerances allowing some outliers while
+    enforcing stricter absolute tolerances for most of the elements.
+
+    Parameters
+    ----------
+    t : torch.Tensor
+        tensor to be compared against reference
+    ref : torch.Tensor
+        tensor acting as a reference
+    quantiles : List[float]
+        list of floats defining quantiles of interest, e.g. [0.25, 0.5, 0.75]
+        indicates a comparison of the 25%, the 50%, and the 75% quantile.
+    tolerances : List[float]
+        list of floats indicating the absolute corresponding tolerances for
+        all individual quantiles passed into this function
+    """
     assert len(quantiles) == len(tolerances)
     diff = torch.abs(ref.float() - t.float()).contiguous().view(-1)
     for i, q in enumerate(quantiles):

@@ -28,7 +28,6 @@ from modulus.distributed import (
 )
 
 
-@dataclass
 class GraphPartition:  # pragma: no cover
     """Class acting as a struct to hold all relevant buffers and variables
     to define a graph partition.
@@ -39,25 +38,42 @@ class GraphPartition:  # pragma: no cover
     device: torch.device
     # data structures for local graph
     # of this current partition rank
-    local_offsets: torch.Tensor = None
-    local_indices: torch.Tensor = None
+    local_offsets: torch.Tensor = field(init=False)
+    local_indices: torch.Tensor = field(init=False)
     num_local_src_nodes: int = 0
     num_local_dst_nodes: int = 0
     num_local_indices: int = 0
     # mapping from local to global ID space
     # for this current partition rank
-    partitioned_src_node_ids_to_global: torch.Tensor = 0
-    partitioned_dst_node_ids_to_global: torch.Tensor = 0
-    partitioned_indices_to_global: torch.Tensor = 0
+    partitioned_src_node_ids_to_global: torch.Tensor = field(init=False)
+    partitioned_dst_node_ids_to_global: torch.Tensor = field(init=False)
+    partitioned_indices_to_global: torch.Tensor = field(init=False)
     # buffers, sizes, and ID counts to support
     # distributed communication primitives
     # number of IDs each rank potentially sends to all other ranks
-    sizes: List[List[int]] = None
+    sizes: List[List[int]] = field(init=False)
     # local indices of IDs current rank sends to all other ranks
-    scatter_indices: List[torch.Tensor] = None
-    num_src_nodes_in_each_partition: List[int] = None
-    num_dst_nodes_in_each_partition: List[int] = None
-    num_indices_in_each_partition: List[int] = None
+    scatter_indices: List[torch.Tensor] = field(init=False)
+    num_src_nodes_in_each_partition: List[int] = field(init=False)
+    num_dst_nodes_in_each_partition: List[int] = field(init=False)
+    num_indices_in_each_partition: List[int] = field(init=False)
+
+    def __post_init__(self):
+        # after partition_size has been set in __init__
+        self.sizes = [
+            [None for _ in range(self.partition_size)]
+            for _ in range(self.partition_size)
+        ]
+        self.scatter_indices = [None] * self.partition_size
+        self.num_src_nodes_in_each_partition = [
+            None
+        ] * self.partition_size
+        self.num_dst_nodes_in_each_partition = [
+            None
+        ] * graph_partition.partition_size
+        self.num_indices_in_each_partition = [
+            None
+        ] * graph_partition.partition_size
 
 
 def partition_graph_nodewise(
@@ -103,23 +119,6 @@ def partition_graph_nodewise(
     graph_partition = GraphPartition(
         partition_size=partition_size, partition_rank=partition_rank, device=device
     )
-
-    # initialize all lists to already be of the correct size
-    # after partition_size has been set in __init__
-    graph_partition.sizes = [
-        [None for _ in range(graph_partition.partition_size)]
-        for _ in range(graph_partition.partition_size)
-    ]
-    graph_partition.scatter_indices = [None] * graph_partition.partition_size
-    graph_partition.num_src_nodes_in_each_partition = [
-        None
-    ] * graph_partition.partition_size
-    graph_partition.num_dst_nodes_in_each_partition = [
-        None
-    ] * graph_partition.partition_size
-    graph_partition.num_indices_in_each_partition = [
-        None
-    ] * graph_partition.partition_size
 
     # --------------------------------------------------------------
     # initialize temporary variables used in computing the partition
