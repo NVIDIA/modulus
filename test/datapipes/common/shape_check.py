@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import logging
-import torch
 from typing import Tuple, Union
 
+import torch
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")

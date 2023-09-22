@@ -13,11 +13,9 @@
 # limitations under the License.
 
 
-import numpy as np
-import torch
-import os
-import json
 import functools
+import json
+import os
 
 import numpy as np
 import torch
