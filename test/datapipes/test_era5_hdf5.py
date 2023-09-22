@@ -281,9 +281,7 @@ def test_era5_hdf5_shuffle(data_dir, stats_dir, shuffle, stride, device, pytestc
 
     # get all samples
     # TODO generalize this
-    tensors = []
-    for data in datapipe:
-        tensors.append(data[0]["invar"])
+    tensors = [data[0]["invar"] for data in datapipe]
 
     # check sample order
     assert common.check_shuffle(tensors, shuffle, stride, 8)

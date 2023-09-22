@@ -252,9 +252,12 @@ class SpectralAttentionS2(nn.Module):
             self.mul_handle = compl_mul2d_fwd
 
             # weights
-            w = [self.scale * torch.randn(self.embed_dim, hidden_size, 2)]
-            for lay in range(1, self.spectral_layers):
-                w.append(self.scale * torch.randn(hidden_size, hidden_size, 2))
+            w0 = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
+            w = w0 + [
+                self.scale * torch.randn(self.hidden_size, self.hidden_size, 2)
+                for _ in range(1, self.spectral_layers)
+            ]
+
             self.w = nn.ParameterList(w)
 
             self.wout = nn.Parameter(

@@ -271,10 +271,7 @@ def init_gradient_reduction_hooks(
             if group == "data":
                 continue
 
-            grads = []
-            for p in params:
-                if group in p.is_shared_mp:
-                    grads.append(p.grad.data)
+            grads = [p.grad.data for p in params if group in p.is_shared_mp]
 
             if not grads:
                 continue

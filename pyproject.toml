@@ -60,8 +60,9 @@ version = {attr = "modulus.__version__"}
 include = ["modulus", "modulus.*"] 
 
 [tool.ruff]
-# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`), and isort (`I`) rules.
-select = ["E", "F", "S", "I"]
+# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`), 
+# isort (`I`), and performance 'PERF' rules.
+select = ["E", "F", "S", "I", "PERF"]
 fixable = ["I"]
 
 # Never enforce `E402`, `E501` (line length violations),

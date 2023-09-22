@@ -596,12 +596,15 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             raise ValueError("Failed to get polygons from the polydata.")
 
         polys.InitTraversal()
+
         edge_list = []
         for i in range(polys.GetNumberOfCells()):
             id_list = vtk.vtkIdList()
             polys.GetNextCell(id_list)
             for j in range(id_list.GetNumberOfIds() - 1):
-                edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
+                edge_list.append(  # noqa: PERF401
+                    (id_list.GetId(j), id_list.GetId(j + 1))
+                )
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)

@@ -24,6 +24,7 @@ except ImportError:
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
 from dataclasses import dataclass
+from itertools import chain
 from typing import Callable, List, Tuple, Union
 
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
@@ -225,19 +226,13 @@ class MeshGraphNetProcessor(nn.Module):
             False,
         )
 
-        edge_blocks = []
-        node_blocks = []
-        layers = []
-
-        for _ in range(self.processor_size):
-            edge_blocks.append(MeshEdgeBlock(*edge_block_invars))
-
-        for _ in range(self.processor_size):
-            node_blocks.append(MeshNodeBlock(*node_block_invars))
-
-        for i in range(self.processor_size):
-            layers.append(edge_blocks[i])
-            layers.append(node_blocks[i])
+        edge_blocks = [
+            MeshEdgeBlock(*edge_block_invars) for _ in range(self.processor_size)
+        ]
+        node_blocks = [
+            MeshNodeBlock(*node_block_invars) for _ in range(self.processor_size)
+        ]
+        layers = list(chain(*zip(edge_blocks, node_blocks)))
 
         self.processor_layers = nn.ModuleList(layers)
         self.num_processor_layers = len(self.processor_layers)

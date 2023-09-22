@@ -175,9 +175,7 @@ def _cubed_conv_wrapper(faces, equator_conv, polar_conv):
 
 
 def _cubed_non_conv_wrapper(faces, layer):
-    output = []
-    for i in range(6):
-        output.append(layer(faces[i]))
+    output = [layer(faces[i]) for i in range(6)]
     return output
 
 

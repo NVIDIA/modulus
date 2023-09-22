@@ -357,17 +357,16 @@ class ResidualConvBlock3d(nn.Module):
     ):
         super().__init__()
 
-        layers = []
-        for i in range(n_layers - 1):
-            layers.append(
-                ConvolutionalBlock3d(
-                    in_channels=conv_layer_size,
-                    out_channels=conv_layer_size,
-                    kernel_size=kernel_size,
-                    batch_norm=True,
-                    activation_fn=activation_fn,
-                )
+        layers = [
+            ConvolutionalBlock3d(
+                in_channels=conv_layer_size,
+                out_channels=conv_layer_size,
+                kernel_size=kernel_size,
+                batch_norm=True,
+                activation_fn=activation_fn,
             )
+            for _ in range(n_layers - 1)
+        ]
         # The final convolutional block with no activation
         layers.append(
             ConvolutionalBlock3d(

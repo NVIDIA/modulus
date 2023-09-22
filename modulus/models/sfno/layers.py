@@ -360,11 +360,11 @@ class SpectralAttention2d(nn.Module):
         ) or (self.forward_transform.nlon != self.inverse_transform.nlon)
 
         # weights
-        w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
-        # w = [self.scale * torch.randn(self.embed_dim + 2*self.embed_freqs, self.hidden_size, 2)]
-        # w = [self.scale * torch.randn(self.embed_dim + 4*self.embed_freqs, self.hidden_size, 2)]
-        for lay in range(1, self.spectral_layers):
-            w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
+        w0 = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
+        w = w0 + [
+            self.scale * torch.randn(self.hidden_size, self.hidden_size, 2)
+            for _ in range(1, self.spectral_layers)
+        ]
         self.w = nn.ParameterList(w)
 
         if bias:
@@ -482,9 +482,12 @@ class SpectralAttentionS2(nn.Module):
             or (self.forward_transform.grid != self.inverse_transform.grid)
         )
         # weights
-        w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
-        for lay in range(1, self.spectral_layers):
-            w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
+        w0 = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
+        w = w0 + [
+            self.scale * torch.randn(self.hidden_size, self.hidden_size, 2)
+            for _ in range(1, self.spectral_layers)
+        ]
+
         self.w = nn.ParameterList(w)
 
         if bias:
