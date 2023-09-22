@@ -19,11 +19,9 @@ interrogate:
 	pre-commit run interrogate -a
 
 lint:
-	pre-commit run markdownlint -a
-
-ruff:
+	pre-commit run markdownlint -a && \
 	pre-commit run ruff -a 
-	
+
 license: 
 	pre-commit run license -a
 
