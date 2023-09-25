@@ -12,40 +12,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pytest
 import torch
 
 from typing import Tuple
-from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 from . import common
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
 Tensor = torch.Tensor
 
 
 @pytest.fixture
 def data_dir():
-    return "/data/nfs/modulus-data/datasets/hdf5/test/"
+    path = "/data/nfs/modulus-data/datasets/hdf5/test/"
+    return path
 
 
 @pytest.fixture
 def stats_dir():
-    return "/data/nfs/modulus-data/datasets/hdf5/stats/"
+    path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
+    return path
 
 
 @pytest.fixture
 def lsm_filename():
-    return "/data/nfs/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
+    path = "/data/nfs/modulus-data/datasets/hdf5/static/land_sea_mask.nc"
+    return path
 
 
 @pytest.fixture
 def geopotential_filename():
-    return "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
+    path = "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
+    return path
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_constructor(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device
+    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # construct data pipe
     datapipe = ClimateHDF5Datapipe(
@@ -176,10 +185,14 @@ def test_climate_hdf5_constructor(
         pass
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_device(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device
+    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # construct data pipe
     datapipe = ClimateHDF5Datapipe(
@@ -214,6 +227,8 @@ def test_climate_hdf5_device(
         break
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("data_channels", [[0, 1]])
 @pytest.mark.parametrize("num_steps", [2])
 @pytest.mark.parametrize("patch_size", [None])
@@ -229,7 +244,10 @@ def test_climate_hdf5_shape(
     patch_size,
     batch_size,
     device,
+    pytestconfig,
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # construct data pipe
     datapipe = ClimateHDF5Datapipe(
@@ -296,12 +314,23 @@ def test_climate_hdf5_shape(
         break
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("num_steps", [1, 2])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_era5_hdf5_sequence(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, num_steps, stride, device
+    data_dir,
+    stats_dir,
+    lsm_filename,
+    geopotential_filename,
+    num_steps,
+    stride,
+    device,
+    pytestconfig,
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # construct data pipe
     datapipe = ClimateHDF5Datapipe(
@@ -339,12 +368,23 @@ def test_era5_hdf5_sequence(
     )
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_era5_hdf5_shuffle(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, shuffle, stride, device
+    data_dir,
+    stats_dir,
+    lsm_filename,
+    geopotential_filename,
+    shuffle,
+    stride,
+    device,
+    pytestconfig,
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # construct data pipe
     datapipe = ClimateHDF5Datapipe(
@@ -377,10 +417,14 @@ def test_era5_hdf5_shuffle(
     assert common.check_shuffle(tensors, shuffle, stride, 8)
 
 
+@nfsdata_or_fail
+@import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0"])
 def test_era5_hdf5_cudagraphs(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device
+    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
 ):
+
+    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
 
     # Preprocess function to convert dataloader output into Tuple of tensors
     def input_fn(data) -> Tensor:
