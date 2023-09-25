@@ -36,6 +36,7 @@ from modulus.models.module import Module
 # helpers
 # import global convolution and non-linear spectral layers
 # wrap fft, to unify interface to spectral transforms
+from modulus.models.sfno.initialization import trunc_normal_
 from modulus.models.sfno.layers import (
     MLP,
     DropPath,
@@ -43,7 +44,6 @@ from modulus.models.sfno.layers import (
     RealFFT2,
     SpectralAttention2d,
     SpectralAttentionS2,
-    trunc_normal_,
 )
 from modulus.models.sfno.s2convolutions import SpectralConvS2
 
