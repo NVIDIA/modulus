@@ -15,8 +15,8 @@
 import torch
 from modulus.distributed.manager import DistributedManager
 from modulus.distributed.utils import distributed_transpose, pad_helper, truncate_helper
-from modulus.distributed.mappings import gather_from_spatial_parallel_region
-from modulus.distributed.mappings import scatter_to_spatial_parallel_region
+from modulus.distributed.mappings import gather_from_parallel_region
+from modulus.distributed.mappings import scatter_to_parallel_region
 
 
 def conj_pad_helper_2d(tensor, pad_dim, other_dim, new_size):
@@ -29,7 +29,9 @@ def conj_pad_helper_2d(tensor, pad_dim, other_dim, new_size):
     tensor_pad = pad_helper(tensor, pad_dim, new_size, mode="conj")
 
     # gather
-    tensor_pad_gather = gather_from_spatial_parallel_region(tensor_pad, dim=other_dim)
+    tensor_pad_gather = gather_from_parallel_region(
+        tensor_pad, dim=other_dim, group="spatial_parallel"
+    )
 
     # flip dims
     flip_slice = [
@@ -45,7 +47,9 @@ def conj_pad_helper_2d(tensor, pad_dim, other_dim, new_size):
     )
 
     # truncate:
-    result = scatter_to_spatial_parallel_region(tensor_pad_gather, dim=other_dim)
+    result = scatter_to_parallel_region(
+        tensor_pad_gather, dim=other_dim, group="spatial_parallel"
+    )
 
     return result
 
@@ -105,7 +109,6 @@ class DistributedRFFT2(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-
         # load
         dim = ctx.dim
         norm = ctx.norm
@@ -150,7 +153,6 @@ class DistributedIRFFT2(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, x, s, dim, norm="ortho"):
-
         # NVTX marker
         torch.cuda.nvtx.range_push("DistributedIRFFT2.forward")
 
@@ -194,11 +196,9 @@ class DistributedIRFFT2(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-
         # load
         dim = ctx.dim
         norm = ctx.norm
-        last_dim_size = ctx.last_dim_size
         orig_dim_size = ctx.orig_dim_size
 
         # do fft
