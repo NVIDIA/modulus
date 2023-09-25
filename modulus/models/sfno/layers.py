@@ -20,7 +20,9 @@ import torch.nn as nn
 from torch.cuda import amp
 from torch.utils.checkpoint import checkpoint
 
-from .activations import ComplexReLU, get_activation
+from modulus.models.layers.activations import get_activation
+
+from .activations import ComplexReLU
 from .contractions import (
     _contract_diagonal,
     compl_mul2d_fwd,

@@ -19,7 +19,6 @@ import time
 from contextlib import nullcontext
 from logging import Logger
 from typing import Any, Callable, Dict, NewType, Optional, Union
-from warnings import warn
 
 import torch
 
@@ -228,8 +227,7 @@ class _StaticCapture(object):
 
         try:
             self.optim.zero_grad(set_to_none=True)
-        except Exception as e:
-            warn(e)
+        except Exception:
             if self.optim:
                 self.optim.zero_grad()
             # For apex optim support and eval mode (need to reset model grads)
