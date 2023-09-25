@@ -21,9 +21,8 @@ from torch.cuda import amp
 from torch.utils.checkpoint import checkpoint
 
 from modulus.models.layers.activations import get_activation
-
-from .activations import ComplexReLU
-from .contractions import (
+from modulus.models.sfno.activations import ComplexReLU
+from modulus.models.sfno.contractions import (
     _contract_diagonal,
     compl_mul2d_fwd,
     compl_muladd2d_fwd,
