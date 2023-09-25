@@ -22,10 +22,7 @@ from modulus.models.mlp import FullyConnected
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.utils.capture import _StaticCapture
 
-try:
-    from apex import optimizers
-except:
-    pass
+optimizers = pytest.importorskip("apex.optimizers")
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")

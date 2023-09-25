@@ -16,14 +16,17 @@ import pytest
 import torch
 
 from typing import Tuple
-from modulus.datapipes.benchmarks.darcy import Darcy2D
 from . import common
+from pytest_utils import import_or_fail
 
 Tensor = torch.Tensor
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_darcy_2d_constructor(device):
+def test_darcy_2d_constructor(device, pytestconfig):
+
+    from modulus.datapipes.benchmarks.darcy import Darcy2D
 
     # construct data pipe
     datapipe = Darcy2D(
@@ -44,8 +47,11 @@ def test_darcy_2d_constructor(device):
     assert common.check_datapipe_iterable(datapipe)
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_darcy_2d_device(device):
+def test_darcy_2d_device(device, pytestconfig):
+
+    from modulus.datapipes.benchmarks.darcy import Darcy2D
 
     # construct data pipe
     datapipe = Darcy2D(
@@ -69,10 +75,13 @@ def test_darcy_2d_device(device):
         break
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("resolution", [128, 64])
 @pytest.mark.parametrize("batch_size", [1, 2, 3])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_darcy_2d_shape(resolution, batch_size, device):
+def test_darcy_2d_shape(resolution, batch_size, device, pytestconfig):
+
+    from modulus.datapipes.benchmarks.darcy import Darcy2D
 
     # construct data pipe
     datapipe = Darcy2D(
@@ -107,8 +116,11 @@ def test_darcy_2d_shape(resolution, batch_size, device):
         break
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("device", ["cuda:0"])
-def test_darcy_cudagraphs(device):
+def test_darcy_cudagraphs(device, pytestconfig):
+
+    from modulus.datapipes.benchmarks.darcy import Darcy2D
 
     # Preprocess function to convert dataloader output into Tuple of tensors
     def input_fn(data) -> Tuple[Tensor, ...]:
