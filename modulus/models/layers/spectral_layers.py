@@ -649,7 +649,7 @@ def first_order_pino_grads(
     weights_1: Tensor,
     weights_2: Tensor,
     bias_1: Tensor,
-) -> Tuple[Tensor]:
+) -> Tuple[Tensor]:  # pragma: no cover
     """
     Compute first order derivatives of output variables
     """
@@ -699,7 +699,7 @@ def second_order_pino_grads(
     weights_1: Tensor,
     weights_2: Tensor,
     bias_1: Tensor,
-) -> Tuple[Tensor]:
+) -> Tuple[Tensor]:  # pragma: no cover
     """
     Compute second order derivatives of output variables
     """
