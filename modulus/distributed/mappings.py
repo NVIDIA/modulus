@@ -20,157 +20,104 @@ from modulus.distributed.utils import _split
 from modulus.distributed.utils import _gather
 
 
-# matmul parallel
-class _CopyToMatmulParallelRegion(torch.autograd.Function):
-    """Pass the input to the matmul parallel region."""
+class _CopyToParallelRegion(torch.autograd.Function):
+    """Pass the input to the parallel region"""
 
     @staticmethod
-    def symbolic(graph, input_):
+    def symbolic(graph, input_, group_):
         return input_
 
     @staticmethod
-    def forward(ctx, input_):
+    def forward(ctx, input_, group_):
+        ctx.group = group_
         return input_
 
     @staticmethod
     def backward(ctx, grad_output):
-        return _reduce(grad_output, group=DistributedManager().group("model_parallel"))
+        return _reduce(grad_output, group=DistributedManager().group(ctx.group))
 
 
-class _ReduceFromMatmulParallelRegion(torch.autograd.Function):
-    """All-reduce the input from the matmul parallel region."""
-
-    @staticmethod
-    def symbolic(graph, input_):
-        return _reduce(input_, group=DistributedManager().group("model_parallel"))
+class _ReduceFromParallelRegion(torch.autograd.Function):
+    """All-reduce the input from the parallel region"""
 
     @staticmethod
-    def forward(ctx, input_):
-        return _reduce(input_, group=DistributedManager().group("model_parallel"))
+    def symbolic(graph, input_, group_):
+        return _reduce(input_, group=DistributedManager().group(group_))
+
+    @staticmethod
+    def forward(ctx, input_, group_):
+        return _reduce(input_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):
         return grad_output
 
 
-class _ScatterToMatmulParallelRegion(torch.autograd.Function):
-    """Split the input and keep only the corresponding chuck to the rank."""
+class _ScatterToParallelRegion(torch.autograd.Function):
+    """Split the input and keep only the chunk corresponding to the rank."""
 
     @staticmethod
-    def symbolic(graph, input_, dim_):
-        return _split(input_, dim_, group=DistributedManager().group("model_parallel"))
+    def symbolic(graph, input_, dim_, group_):
+        return _split(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
-    def forward(ctx, input_, dim_):
+    def forward(ctx, input_, dim_, group_):
         ctx.dim = dim_
-        return _split(input_, dim_, group=DistributedManager().group("model_parallel"))
+        ctx.group = group_
+        return _split(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):
         return (
-            _gather(
-                grad_output, ctx.dim, group=DistributedManager().group("model_parallel")
-            ),
+            _gather(grad_output, ctx.dim, group=DistributedManager().group(ctx.group_)),
             None,
         )
 
 
-class _GatherFromMatmulParallelRegion(torch.autograd.Function):
-    """Gather the input from matmul parallel region and concatenate."""
+class _GatherFromParallelRegion(torch.autograd.Function):
+    """Gather the input from parallel region and concatenate."""
 
     @staticmethod
-    def symbolic(graph, input_, dim_):
-        return _gather(input_, dim_, group=DistributedManager().group("model_parallel"))
+    def symbolic(graph, input_, dim_, group_):
+        return _gather(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
-    def forward(ctx, input_, dim_):
+    def forward(ctx, input_, dim_, group_):
         ctx.dim = dim_
-        return _gather(input_, dim_, group=DistributedManager().group("model_parallel"))
+        ctx.group = group_
+        return _gather(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):
         return (
-            _split(
-                grad_output, ctx.dim, group=DistributedManager().group("model_parallel")
-            ),
+            _split(grad_output, ctx.dim, group=DistributedManager().group(ctx.group)),
             None,
         )
 
 
-class _GatherWithinMatmulParallelRegion(torch.autograd.Function):
-    """Gather the input from matmul parallel region and concatenate."""
+class _GatherWithinParallelRegion(torch.autograd.Function):
+    """
+    Gather the input within parallel region and concatenate.
+    The same forward method as _GatherFromParallelRegion, the difference is only in the
+    backward pass. This method performs a reduction of the gradients before the split in
+    the backward pass while the other version only performs a split
+    """
 
     @staticmethod
-    def symbolic(graph, input_, dim_):
-        return _gather(input_, dim_, group=DistributedManager().group("model_parallel"))
+    def symbolic(graph, input_, dim_, group_):
+        return _gather(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
-    def forward(ctx, input_, dim_):
+    def forward(ctx, input_, dim_, group_):
         ctx.dim = dim_
-        return _gather(input_, dim_, group=DistributedManager().group("model_parallel"))
+        ctx.group = group_
+        return _gather(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):
-        red = _reduce(grad_output, group=DistributedManager().group("model_parallel"))
+        red = _reduce(grad_output, group=DistributedManager().group(ctx.group_))
         return (
-            _split(red, ctx.dim, group=DistributedManager().group("model_parallel")),
-            None,
-        )
-
-
-# spatial parallel
-class _ScatterToSpatialParallelRegion(torch.autograd.Function):
-    """Split the input and keep only the corresponding chuck to the rank."""
-
-    @staticmethod
-    def symbolic(graph, input_, dim_):
-        return _split(
-            input_, dim_, group=DistributedManager().group("spatial_parallel")
-        )
-
-    @staticmethod
-    def forward(ctx, input_, dim_):
-        ctx.dim = dim_
-        return _split(
-            input_, dim_, group=DistributedManager().group("spatial_parallel")
-        )
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return (
-            _gather(
-                grad_output,
-                ctx.dim,
-                group=DistributedManager().group("spatial_parallel"),
-            ),
-            None,
-        )
-
-
-class _GatherFromSpatialParallelRegion(torch.autograd.Function):
-    """Gather the input from spatial parallel region and concatenate."""
-
-    @staticmethod
-    def symbolic(graph, input_, dim_):
-        return _gather(
-            input_, dim_, group=DistributedManager().group("spatial_parallel")
-        )
-
-    @staticmethod
-    def forward(ctx, input_, dim_):
-        ctx.dim = dim_
-        return _gather(
-            input_, dim_, group=DistributedManager().group("spatial_parallel")
-        )
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return (
-            _split(
-                grad_output,
-                ctx.dim,
-                group=DistributedManager().group("spatial_parallel"),
-            ),
+            _split(red, ctx.dim, group=DistributedManager().group(ctx.group)),
             None,
         )
 
@@ -178,38 +125,31 @@ class _GatherFromSpatialParallelRegion(torch.autograd.Function):
 # -----------------
 # Helper functions.
 # -----------------
-# matmul parallel
-def copy_to_matmul_parallel_region(input_):
+def copy_to_parallel_region(input, group):
     """Copy input"""
-    return _CopyToMatmulParallelRegion.apply(input_)
+    return _CopyToParallelRegion.apply(input, group)
 
 
-def reduce_from_matmul_parallel_region(input_):
+def reduce_from_parallel_region(input, group):
     """All-reduce the input from the matmul parallel region."""
-    return _ReduceFromMatmulParallelRegion.apply(input_)
+    return _ReduceFromParallelRegion.apply(input, group)
 
 
-def scatter_to_matmul_parallel_region(input_, dim):
+def scatter_to_parallel_region(input, dim, group):
     """Split the input and keep only the corresponding chuck to the rank."""
-    return _ScatterToMatmulParallelRegion.apply(input_, dim)
+    return _ScatterToParallelRegion.apply(input, dim, group)
 
 
-def gather_from_matmul_parallel_region(input_, dim):
+def gather_from_parallel_region(input, dim, group):
     """Gather the input from matmul parallel region and concatenate."""
-    return _GatherFromMatmulParallelRegion.apply(input_, dim)
+    return _GatherFromParallelRegion.apply(input, dim, group)
 
 
-def gather_within_matmul_parallel_region(input_, dim):
-    """Gather the input from matmul parallel region and concatenate."""
-    return _GatherWithinMatmulParallelRegion.apply(input_, dim)
-
-
-# spatial parallel
-def scatter_to_spatial_parallel_region(input_, dim):
-    """Split the input and keep only the corresponding chuck to the rank."""
-    return _ScatterToSpatialParallelRegion.apply(input_, dim)
-
-
-def gather_from_spatial_parallel_region(input_, dim):
-    """Gather the input from spatial parallel region and concatenate."""
-    return _GatherFromSpatialParallelRegion.apply(input_, dim)
+def gather_within_parallel_region(input, dim, group):
+    """
+    Gather the input within parallel region and concatenate.
+    The same forward method as gather_from_parallel_region, the difference is only in
+    the backward pass. This method performs a reduction of the gradients before the
+    split in the backward pass while the other version only performs a split
+    """
+    return _GatherWithinParallelRegion.apply(input, dim, group)
