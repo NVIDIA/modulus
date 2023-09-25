@@ -13,5 +13,6 @@
 # limitations under the License.
 
 
+from .config import ProcessGroupNode, ProcessGroupNode
 from .manager import DistributedManager
 from .utils import gather_loss

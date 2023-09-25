@@ -17,8 +17,11 @@ import torch.distributed as dist
 from typing import Optional
 import os
 import numpy as np
+import queue
 
 from warnings import warn
+
+from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
 
 
 class DistributedManager(object):
@@ -434,13 +437,13 @@ class DistributedManager(object):
         Parameters
         ----------
         name : str
-        Name of the process group to be created.
+            Name of the process group to be created.
 
         group_name : str
-        Name of the existing process group.
+            Name of the existing process group.
 
         verbose : bool
-        Print out ranks of each created process group, default False.
+            Print out ranks of each created process group, default False.
 
         """
         manager = DistributedManager()
@@ -468,6 +471,75 @@ class DistributedManager(object):
             print(f"Process group '{name}':")
             for grp in manager._group_ranks[name]:
                 print("    ", grp)
+
+    @staticmethod
+    def create_group_from_node(
+        node: ProcessGroupNode,
+        parent: Optional[ProcessGroupNode] = None,
+        verbose: bool = False,
+    ):
+        assert (
+            node.size is not None
+        ), "Cannot create groups from a ProcessGroupNode that is not fully populated. "
+        "Ensure that config.set_leaf_group_sizes is called first with "
+        "update_parent_sizes = True"
+
+        parent_group = parent.data.name if parent else None
+        DistributedManager.create_process_subgroup(
+            node.name, node.size, group_name=parent_group, verbose=verbose
+        )
+        orthogonal_group = (
+            node.orthogonal_group
+            if node.orthogonal_group is not None
+            else f"__orthogonal_to_{node.name}"
+        )
+        # Create orthogonal process group
+        DistributedManager.create_orthogonal_process_group(
+            orthogonal_group, node.name, verbose=verbose
+        )
+        return orthogonal_group
+
+    @staticmethod
+    def create_groups_from_config(config: ProcessGroupConfig, verbose: bool = False):
+        # Traverse process group tree in breadth first order
+        # to create nested process groups
+        q = queue.Queue()
+        q.put(config.tree[config.root_id])
+        DistributedManager.create_group_from_node(config.root)
+
+        while not q.empty():
+            node_id = q.get()
+
+            children = config.tree.children(node_id)
+            parent_group = node_id
+            for child_id in children:
+                # Create child group and replace parent group by orthogonal group so
+                # that each child forms an independent block of processes
+                parent_group = DistributedManager.create_group_from_node(
+                    config.tree[child_id],
+                    parent=parent_group,
+                )
+
+                # Add child ids to the queue
+                q.put(child_id)
+
+        # for id in config.tree.expand_tree(mode=Tree.WIDTH):
+        #     node = config.tree[id]
+        #     data = node.data
+        #     assert (
+        #         data.size is not None
+        #     ), "Cannot create groups from a config that is not fully populated. "
+        #     "Ensure that config.set_leaf_group_sizes is set with "
+        #     "update_parent_sizes = True"
+        #     parent_group = node.parent.data.name
+        #     DistributedManager.create_process_subgroup(
+        #         data.name, data.size, group_name=parent_group, verbose=verbose
+        #     )
+        #     if data.orthogonal_group is not None:
+        #         # Create orthogonal process group if required
+        #         DistributedManager.create_orthogonal_process_group(
+        #             data.orthogonal_group, data.name, verbose=verbose
+        #         )
 
     @staticmethod
     def cleanup():
