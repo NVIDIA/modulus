@@ -26,9 +26,7 @@ from .activations import ComplexReLU
 from .contractions import (
     _contract_diagonal,
     compl_mul2d_fwd,
-    compl_mul2d_fwd_c,
     compl_muladd2d_fwd,
-    compl_muladd2d_fwd_c,
 )
 
 
@@ -340,10 +338,8 @@ class SpectralAttention2d(nn.Module):
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
         self.spectral_layers = spectral_layers
-        self.mul_add_handle = (
-            compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
-        )
-        self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd
+        self.mul_add_handle = compl_muladd2d_fwd
+        self.mul_handle = compl_mul2d_fwd
 
         self.modes_lat = forward_transform.lmax
         self.modes_lon = forward_transform.mmax
@@ -460,9 +456,9 @@ class SpectralAttentionS2(nn.Module):
         self.sparsity_threshold = sparsity_threshold
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
-        # self.mul_add_handle = compl_muladd1d_fwd_c if use_complex_kernels else compl_muladd1d_fwd
+        # self.mul_add_handle = compl_muladd1d_fwd
         self.mul_add_handle = compl_muladd2d_fwd
-        # self.mul_handle = compl_mul1d_fwd_c if use_complex_kernels else compl_mul1d_fwd
+        # self.mul_handle = compl_mul1d_fwd
         self.mul_handle = compl_mul2d_fwd
         self.spectral_layers = spectral_layers
 
