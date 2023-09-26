@@ -43,7 +43,6 @@ def test_stokes_constructor(data_dir, device, pytestconfig):
         data_dir=data_dir,
         split="train",
         num_samples=2,
-        compute_drag=True,
     )
 
     # iterate datapipe is iterable
@@ -57,7 +56,6 @@ def test_stokes_constructor(data_dir, device, pytestconfig):
             data_dir="/null_path",
             split="train",
             num_samples=2,
-            compute_drag=True,
         )
         raise IOError("Failed to raise error given null data path")
     except IOError:
