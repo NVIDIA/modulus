@@ -19,6 +19,7 @@ from torch import Tensor
 
 from .activations import Identity
 from .weight_norm import WeightNormLinear
+from .weight_fact import WeightFactLinear
 
 
 class FCLayer(nn.Module):
@@ -34,6 +35,8 @@ class FCLayer(nn.Module):
         Activation function to use. Can be None for no activation, by default None
     weight_norm : bool, optional
         Applies weight normalization to the layer, by default False
+    weight_fact : bool, optional
+        Applies weight factorization to the layer, by default False
     activation_par : Union[nn.Parameter, None], optional
         Additional parameters for the activation function, by default None
     """
@@ -44,6 +47,7 @@ class FCLayer(nn.Module):
         out_features: int,
         activation_fn: Union[nn.Module, Callable[[Tensor], Tensor], None] = None,
         weight_norm: bool = False,
+        weight_fact: bool = False,
         activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
         super().__init__()
@@ -53,20 +57,27 @@ class FCLayer(nn.Module):
         else:
             self.activation_fn = activation_fn
         self.weight_norm = weight_norm
+        self.weight_fact = weight_fact
         self.activation_par = activation_par
+
+        # Ensure weight_norm and weight_fact are not both True
+        assert not (
+            weight_norm and weight_fact
+        ), "Cannot apply both weight normalization and weight factorization together, please select one."
 
         if weight_norm:
             self.linear = WeightNormLinear(in_features, out_features, bias=True)
+        elif weight_fact:
+            self.linear = WeightFactLinear(in_features, out_features, bias=True)
         else:
             self.linear = nn.Linear(in_features, out_features, bias=True)
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Reset fully connected weights"""
-        nn.init.constant_(self.linear.bias, 0)
-        nn.init.xavier_uniform_(self.linear.weight)
-        if self.weight_norm:
-            nn.init.constant_(self.linear.weight_g, 1.0)
+        if not self.weight_norm and not self.weight_fact:
+            nn.init.constant_(self.linear.bias, 0)
+            nn.init.xavier_uniform_(self.linear.weight)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.linear(x)
