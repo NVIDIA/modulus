@@ -12,128 +12,312 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+from typing import Callable
+from typing import Optional
+from typing import Union
+
 import torch.nn as nn
-import modulus
-from modulus.models.layers import FCLayer, get_activation
-
 from torch import Tensor
-from dataclasses import dataclass
-from typing import Optional, Union, List
-from ..meta import ModelMetaData
-from ..module import Module
+
+from .activations import Identity
+from .weight_norm import WeightNormLinear
+from .weight_fact import WeightFactLinear
 
 
-@dataclass
-class MetaData(ModelMetaData):
-    name: str = "FullyConnected"
-    # Optimization
-    jit: bool = True
-    cuda_graphs: bool = True
-    amp: bool = True
-    torch_fx: bool = True
-    # Inference
-    onnx: bool = True
-    onnx_runtime: bool = True
-    # Physics informed
-    func_torch: bool = True
-    auto_grad: bool = True
-
-
-class FullyConnected(Module):
-    """A densely-connected MLP architecture
+class FCLayer(nn.Module):
+    """Densely connected NN layer
 
     Parameters
     ----------
-    in_features : int, optional
-        Size of input features, by default 512
-    layer_size : int, optional
-        Size of every hidden layer, by default 512
-    out_features : int, optional
-        Size of output features, by default 512
-    num_layers : int, optional
-        Number of hidden layers, by default 6
-    activation_fn : Union[str, List[str]], optional
-        Activation function to use, by default 'silu'
-    skip_connections : bool, optional
-        Add skip connections every 2 hidden layers, by default False
-    adaptive_activations : bool, optional
-        Use an adaptive activation function, by default False
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
     weight_norm : bool, optional
-        Use weight norm on fully connected layers, by default False
-
-    Example
-    -------
-    >>> model = modulus.models.mlp.FullyConnected(in_features=32, out_features=64)
-    >>> input = torch.randn(128, 32)
-    >>> output = model(input)
-    >>> output.size()
-    torch.Size([128, 64])
+        Applies weight normalization to the layer, by default False
+    weight_fact : bool, optional
+        Applies weight factorization to the layer, by default False
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
     """
 
     def __init__(
         self,
-        in_features: int = 512,
-        layer_size: int = 512,
-        out_features: int = 512,
-        num_layers: int = 6,
-        activation_fn: Union[str, List[str]] = "silu",
-        skip_connections: bool = False,
-        adaptive_activations: bool = False,
+        in_features: int,
+        out_features: int,
+        activation_fn: Union[nn.Module, None] = None,
         weight_norm: bool = False,
         weight_fact: bool = False,
+        activation_par: Union[nn.Parameter, None] = None,
     ) -> None:
-        super().__init__(meta=MetaData())
+        super().__init__()
 
-        self.skip_connections = skip_connections
-
-        if adaptive_activations:
-            activation_par = nn.Parameter(torch.ones(1))
+        if activation_fn is None:
+            self.activation_fn = Identity()
         else:
-            activation_par = None
+            self.activation_fn = activation_fn
+        self.activation_par = activation_par
 
-        if not isinstance(activation_fn, list):
-            activation_fn = [activation_fn] * num_layers
-        if len(activation_fn) < num_layers:
-            activation_fn = activation_fn + [activation_fn[-1]] * (
-                num_layers - len(activation_fn)
-            )
-        activation_fn = [get_activation(a) for a in activation_fn]
+        self.weight_norm = weight_norm
+        self.weight_fact = weight_fact
 
-        self.layers = nn.ModuleList()
+        # Ensure weight_norm and weight_fact are not both True
+        assert not (
+            weight_norm and weight_fact
+        ), "Cannot apply both weight normalization and weight factorization together, please select one."
 
-        layer_in_features = in_features
-        for i in range(num_layers):
-            self.layers.append(
-                FCLayer(
-                    layer_in_features,
-                    layer_size,
-                    activation_fn[i],
-                    weight_norm,
-                    weight_fact,
-                    activation_par,
-                )
-            )
-            layer_in_features = layer_size
+        if weight_norm:
+            self.linear = WeightNormLinear(in_features, out_features, bias=True)
+        elif weight_fact:
+            self.linear = WeightFactLinear(in_features, out_features, bias=True)
+        else:
+            self.linear = nn.Linear(in_features, out_features, bias=True)
+        self.reset_parameters()
 
-        self.final_layer = FCLayer(
-            in_features=layer_size,
-            out_features=out_features,
-            activation_fn=None,
-            weight_norm=False,
-            weight_fact=False,
-            activation_par=None,
-        )
+    def reset_parameters(self) -> None:
+        """Reset fully connected weights"""
+        if not self.weight_norm and not self.weight_fact:
+            nn.init.constant_(self.linear.bias, 0)
+            nn.init.xavier_uniform_(self.linear.weight)
 
     def forward(self, x: Tensor) -> Tensor:
-        x_skip: Optional[Tensor] = None
-        for i, layer in enumerate(self.layers):
-            x = layer(x)
-            if self.skip_connections and i % 2 == 0:
-                if x_skip is not None:
-                    x, x_skip = x + x_skip, x
-                else:
-                    x_skip = x
+        x = self.linear(x)
 
-        x = self.final_layer(x)
+        if self.activation_par is None:
+            x = self.activation_fn(x)
+        else:
+            x = self.activation_fn(self.activation_par * x)
+
+        return x
+
+
+class ConvFCLayer(nn.Module):
+    """Base class for 1x1 Conv layer for image channels
+
+    Parameters
+    ----------
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__()
+        if activation_fn is None:
+            self.activation_fn = Identity()
+        else:
+            self.activation_fn = activation_fn
+        self.activation_par = activation_par
+
+    def apply_activation(self, x: Tensor) -> Tensor:
+        """Applied activation / learnable activations
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor
+        """
+        if self.activation_par is None:
+            x = self.activation_fn(x)
+        else:
+            x = self.activation_fn(self.activation_par * x)
+        return x
+
+
+class Conv1dFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with 1d convolutions
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_features
+        self.out_channels = out_features
+        self.conv = nn.Conv1d(in_features, out_features, kernel_size=1, bias=True)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Reset layer weights"""
+        nn.init.constant_(self.conv.bias, 0)
+        nn.init.xavier_uniform_(self.conv.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class Conv2dFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with 2d convolutions
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Reset layer weights"""
+        nn.init.constant_(self.conv.bias, 0)
+        self.conv.bias.requires_grad = False
+        nn.init.xavier_uniform_(self.conv.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class Conv3dFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with 3d convolutions
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=True)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Reset layer weights"""
+        nn.init.constant_(self.conv.bias, 0)
+        nn.init.xavier_uniform_(self.conv.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class ConvNdFCLayer(ConvFCLayer):
+    """Channel-wise FC like layer with convolutions of arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    activation_fn : Union[nn.Module, None], optional
+        Activation function to use. Can be None for no activation, by default None
+    activation_par : Union[nn.Parameter, None], optional
+        Additional parameters for the activation function, by default None
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        activation_fn: Union[nn.Module, None] = None,
+        activation_par: Union[nn.Parameter, None] = None,
+    ) -> None:
+        super().__init__(activation_fn, activation_par)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = ConvNdKernel1Layer(in_channels, out_channels)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.conv.apply(self.initialise_parameters)  # recursively apply initialisations
+
+    def initialise_parameters(self, model):
+        """Reset layer weights"""
+        if hasattr(model, "bias"):
+            nn.init.constant_(model.bias, 0)
+        if hasattr(model, "weight"):
+            nn.init.xavier_uniform_(model.weight)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.apply_activation(x)
+        return x
+
+
+class ConvNdKernel1Layer(nn.Module):
+    """Channel-wise FC like layer for convolutions of arbitrary dimensions
+    CAUTION: if n_dims <= 3, use specific version for that n_dims instead
+
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        dims = list(x.size())
+        dims[1] = self.out_channels
+        x = self.conv(x.view(dims[0], self.in_channels, -1)).view(dims)
         return x

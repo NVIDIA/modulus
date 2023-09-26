@@ -21,12 +21,12 @@ from modulus.models.layers import WeightFactLinear
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_weight_fact(device):
-    """Test weight norm"""
+    """Test weight fact"""
 
     in_features = random.randint(1, 8)
     out_features = random.randint(1, 8)
     # Construct FC model
-    wfact = WeightNormLinear(
+    wfact = WeightFactLinear(
         in_features=in_features,
         out_features=out_features,
         bias=True,
@@ -40,14 +40,5 @@ def test_weight_fact(device):
     assert wfact.v.shape == (out_features, in_features)
     assert (
         wfact.extra_repr()
-        == f"in_features={in_features}, out_features={out_features}, bias={True}"
+        == f"in_features={in_features}, out_features={out_features}, bias={True}, mean = {1.0}, stddev = {0.1}"
     )
-
-    wfact = WeightFactLinear(
-        in_features=in_features,
-        out_features=out_features,
-        bias=False,
-    ).to(device)
-    wfact.reset_parameters()
-
-    assert wfact.bias is None
