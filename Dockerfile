@@ -27,6 +27,8 @@ RUN apt-get update && \
 
 ENV _CUDA_COMPAT_TIMEOUT=90
 
+# Install other dependencies
+RUN pip install "h5py>=3.7.0" "mpi4py>=3.1.4" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" 
 # TODO remove benchy dependency
 RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
@@ -93,7 +95,6 @@ FROM builder as ci
 
 ARG TARGETPLATFORM
 
-RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" "mpi4py>=3.1.4"
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
@@ -102,12 +103,13 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
+RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3" "mpi4py>=3.1.4"
 
 # Deployment image
 FROM builder as deploy
-RUN pip install "protobuf==3.20.0"
 COPY . /modulus/
 RUN cd /modulus/ && pip install .
+RUN pip install "protobuf==3.20.3"
 
 # Clean up
 RUN rm -rf /modulus/ 
@@ -118,7 +120,7 @@ FROM deploy as docs
 ARG TARGETPLATFORM
 
 # Install CI packages
-RUN pip install "protobuf==3.20.0"
+RUN pip install "protobuf==3.20.3"
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 

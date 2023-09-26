@@ -14,6 +14,7 @@
 
 import pytest
 import pkg_resources
+from pytest_utils import _import_or_fail
 
 
 @pytest.mark.parametrize(
@@ -31,8 +32,12 @@ import pkg_resources
         "SRResNet",
     ],
 )
-def test_model_entry_points(model_name):
+def test_model_entry_points(model_name, pytestconfig):
     """Test model entry points"""
+
+    if model_name == "GraphCastNet" or model_name == "MeshGraphNet":
+        _import_or_fail("dgl", pytestconfig)
+
     # Get all the models exposed by the package
     models = {
         entry_point.name: entry_point
