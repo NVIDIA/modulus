@@ -42,7 +42,31 @@ except:
 
 
 class StokesDataset(DGLDataset):
-    """In-memory Stokes flow Dataset"""
+    """
+    In-memory Stokes flow Dataset
+
+    Parameters
+    ----------
+    data_dir: str
+        The directory where the data is stored.
+    split: str, optional
+        The dataset split. Can be 'train', 'validation', or 'test', by default 'train'.
+    num_samples: int, optional
+        The number of samples to use, by default 10.
+    invar_keys: List[str], optional
+        The input node features to consider. Default includes 'pos' and 'marker'
+    outvar_keys: List[str], optional
+        The output features to consider. Default includes 'u', 'v', and 'p'.
+    normalize_keys List[str], optional
+        The features to normalize. Default includes 'u', 'v', and 'p'.
+    force_reload: bool, optional
+        If True, forces a reload of the data, by default False.
+    name: str, optional
+        The name of the dataset, by default 'dataset'.
+    verbose: bool, optional
+        If True, enables verbose mode, by default False.
+    """
+
 
     def __init__(
         self,
@@ -174,8 +198,6 @@ class StokesDataset(DGLDataset):
     @staticmethod
     def denormalize(invar, mu, std):
         """denormalizes a tensor"""
-        # assert invar.size()[-1] == mu.size()[-1]
-        # assert invar.size()[-1] == std.size()[-1]
         denormalized_invar = invar * std + mu
         return denormalized_invar
 
