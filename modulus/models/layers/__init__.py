@@ -29,3 +29,6 @@ from .fully_connected_layers import (
     ConvNdFCLayer,
     ConvNdKernel1Layer,
 )
+from .fourier_layers import FourierLayer, FourierFilter, GaborFilter
+from .siren_layers import SirenLayer, SirenLayerType
+from .dgm_layers import DGMLayer
