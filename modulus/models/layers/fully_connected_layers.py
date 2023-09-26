@@ -58,10 +58,9 @@ class FCLayer(nn.Module):
             self.activation_fn = Identity()
         else:
             self.activation_fn = activation_fn
-        self.activation_par = activation_par
-
         self.weight_norm = weight_norm
         self.weight_fact = weight_fact
+        self.activation_par = activation_par
 
         # Ensure weight_norm and weight_fact are not both True
         assert not (
