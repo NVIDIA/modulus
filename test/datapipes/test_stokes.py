@@ -33,7 +33,7 @@ def data_dir():
 @nfsdata_or_fail
 @import_or_fail(["vtk", "pyvista", "dgl"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ahmed_body_constructor(data_dir, device, pytestconfig):
+def test_stokes_constructor(data_dir, device, pytestconfig):
 
     # _nfsdata_or_fail(pytestconfig)
     from modulus.datapipes.gnn.stokes_dataset import StokesDataset
