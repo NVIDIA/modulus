@@ -103,8 +103,8 @@ class WeightFactLinear(nn.Module):
             "in_features={}, out_features={}, bias={}, mean = {}, stddev = {}".format(
                 self.in_features,
                 self.out_features,
-                self.bias,
+                self.bias is not None,
                 self.mean,
-                self.stddev is not None,
+                self.stddev,
             )
         )
