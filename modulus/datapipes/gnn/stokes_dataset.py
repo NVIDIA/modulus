@@ -67,7 +67,6 @@ class StokesDataset(DGLDataset):
         If True, enables verbose mode, by default False.
     """
 
-
     def __init__(
         self,
         data_dir,
