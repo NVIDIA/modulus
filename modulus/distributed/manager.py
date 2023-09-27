@@ -472,5 +472,6 @@ class DistributedManager(object):
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
+        dist.barrier()  # just make sure that no process hangs
         dist.destroy_process_group()
         DistributedManager._shared_state = {}
