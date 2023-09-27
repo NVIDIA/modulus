@@ -35,6 +35,9 @@ RUN pip install git+https://github.com/romerojosh/benchy.git
 RUN pip install https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
 RUN pip install "tensorly>=0.8.1" https://github.com/tensorly/torch/archive/715a0daa7ae0cbdb443d06780a785ae223108903.tar.gz
 
+# copy modulus source
+COPY . /modulus/
+
 # Install Numcodecs (This needs a separate install because Numcodecs ARM pip install has issues) 
 # A fix is being added here: https://github.com/zarr-developers/numcodecs/pull/315 but the public release is not ready yet.
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
@@ -47,9 +50,6 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Numcodecs wheel for $TARGETPLATFORM is not present, attempting to build from pip, but might fail" && \
 	pip install numcodecs; \
     fi
-
-# copy modulus source
-COPY . /modulus/
 
 # install vtk and pyvista
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
