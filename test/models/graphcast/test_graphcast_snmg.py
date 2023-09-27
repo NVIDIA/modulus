@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
+
+script_path = os.path.abspath(__file__)
+sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
+
 import os
 import pytest
 import time
