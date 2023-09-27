@@ -22,7 +22,7 @@ import pytest
 import torch
 from pytest_utils import import_or_fail
 
-from utils import fix_random_seeds
+from sfno.utils import fix_random_seeds
 
 
 @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
