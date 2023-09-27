@@ -52,9 +52,9 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     fi
 
 # install vtk and pyvista
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus-sym/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
 	echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
-	pip install /modulus-sym/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
+	pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing vtk for: $TARGETPLATFORM" && \
 	pip install "vtk>=9.2.6"; \ 
