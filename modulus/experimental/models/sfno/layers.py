@@ -26,7 +26,6 @@ from modulus.experimental.models.sfno.contractions import *
 from modulus.experimental.models.sfno.activations import *
 from modulus.models.sfno.initialization import trunc_normal_
 from modulus.models.layers import get_activation
-from modulus.models.sfno.initialization import trunc_normal_
 
 
 @torch.jit.script
