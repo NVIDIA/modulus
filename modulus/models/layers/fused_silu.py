@@ -15,7 +15,13 @@
 import functools
 import torch
 from torch.autograd import Function
-from nvfuser._C import Fusion, FusionDefinition, DataType
+
+try:
+    from nvfuser._C import Fusion, FusionDefinition, DataType
+except ImportError:
+    # accomodating for earlier versions of PyTorch (< 2.0)
+    # which don't need nvfuser as explicit dependency
+    from torch._C._nvfuser import Fusion, FusionDefinition, DataType
 
 
 _torch_dtype_to_nvfuser = {
