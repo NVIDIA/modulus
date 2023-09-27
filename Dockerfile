@@ -87,7 +87,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp
 	python setup.py install && \
 	python setup.py build_ext --inplace; \
     fi
-RUN rm -r /workspace/dgl
+RUN rm -rf /workspace/dgl
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
