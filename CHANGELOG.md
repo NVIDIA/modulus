@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added Stokes flow dataset
+- An experimental version of SFNO to be used in unified training recipe for weather models
 
 ### Changed
+
+- The AFNO input argument `img_size` to `inp_shape`
 
 ### Deprecated
 
@@ -31,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added distributed utilities to create process groups and orthogonal process groups.
 - Added distributed AFNO model implementation.
 - Added distributed utilities for communication of buffers of varying size per rank.
+- Added distributed utilities for message passing across multiple GPUs.
 - Added instructions for docker build on ARM architecture.
 - Added batching support and fix the input time step for the DLWP wrapper.
 

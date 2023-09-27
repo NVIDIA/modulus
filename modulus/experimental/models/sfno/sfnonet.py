@@ -381,7 +381,7 @@ class SFNO(Module):
     #...         spectral_layers=2,
     #...         use_mlp=True,)
     #>>> model(torch.randn(1, 2, 8, 16)).shape
-    torch.Size([1, 2, 8, 16])
+    #torch.Size([1, 2, 8, 16])
     """
 
     def __init__(
