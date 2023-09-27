@@ -16,6 +16,8 @@ import numpy as np
 import torch
 import xarray
 import datetime
+from urllib.parse import urlparse
+import glob
 
 import modulus
 from modulus.models.sfno import sfnonet
@@ -153,27 +155,44 @@ class _DLWPWrapper(torch.nn.Module):
         self.topographic_height = topographic_height
 
         # load map weights
+        # Note: these map files are created using TempestRemap library
+        # https://github.com/ClimateGlobalChange/tempestremap
+        # To generate the maps, the below sequence of commands can be
+        # executed once TempestRemap is installed.
+
+        # GenerateRLLMesh --lat 721 --lon 1440 --file out_latlon.g --lat_begin 90 --lat_end -90 --out_format Netcdf4
+        # GenerateCSMesh --res <desired-res> --file out_cubedsphere.g --out_format Netcdf4
+        # GenerateOverlapMesh --a out_latlon.g --b out_cubedsphere.g --out overlap_latlon_cubedsphere.g --out_format Netcdf4
+        # GenerateOfflineMap --in_mesh out_latlon.g --out_mesh out_cubedsphere.g --ov_mesh overlap_latlon_cubedsphere.g --in_np 1 --in_type FV --out_type FV --out_map map_LL_CS.nc --out_format Netcdf4
+        # GenerateOverlapMesh --a out_cubedsphere.g --b out_latlon.g --out overlap_cubedsphere_latlon.g --out_format Netcdf4
+        # GenerateOfflineMap --in_mesh out_cubedsphere.g --out_mesh out_latlon.g --ov_mesh overlap_cubedsphere_latlon.g --in_np 1 --in_type FV --out_type FV --out_map map_CS_LL.nc --out_format Netcdf4
         self.input_map_wts = xarray.open_dataset(ll_to_cs_mapfile_path)
         self.output_map_wts = xarray.open_dataset(cs_to_ll_mapfile_path)
 
     def prepare_input(self, input, time):
         device = input.device
         dtype = input.dtype
-        num_chans = input.size(2)
-        input_list = list(torch.split(input, 1, dim=1))
+
         i = self.input_map_wts.row.values - 1
         j = self.input_map_wts.col.values - 1
         data = self.input_map_wts.S.values
-        M = torch.sparse_coo_tensor(np.array((i, j)), data).to(device).type(dtype)
+        M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
-        for i in range(len(input_list)):
-            input_list[i] = input_list[i].reshape(num_chans, -1) @ M.T
-            input_list[i] = input_list[i].reshape(1, num_chans, 6, 64, 64)
-
+        N, T, C = input.shape[0], input.shape[1], input.shape[2]
+        input = (M @ input.reshape(N * T * C, -1).T).T
+        S = int((M.shape[0] / 6) ** 0.5)
+        input = input.reshape(N, T, C, 6, S, S)
+        input_list = list(torch.split(input, 1, dim=1))
+        input_list = [tensor.squeeze(1) for tensor in input_list]
+        repeat_vals = (input.shape[0], -1, -1, -1, -1)  # repeat along batch dimension
         for i in range(len(input_list)):
             tisr = np.maximum(
                 cos_zenith_angle(
-                    time + datetime.timedelta(hours=6 * i), self.longrid, self.latgrid
+                    time
+                    - datetime.timedelta(hours=6 * (input.shape[1] - 1))
+                    + datetime.timedelta(hours=6 * i),
+                    self.longrid,
+                    self.latgrid,
                 ),
                 0,
             ) - (
@@ -185,6 +204,7 @@ class _DLWPWrapper(torch.nn.Module):
                 .unsqueeze(dim=0)
                 .unsqueeze(dim=0)
             )  # add channel and batch size dimension
+            tisr = tisr.expand(*repeat_vals)  # TODO - find better way to batch TISR
             input_list[i] = torch.cat(
                 (input_list[i], tisr), dim=1
             )  # concat along channel dim
@@ -192,7 +212,7 @@ class _DLWPWrapper(torch.nn.Module):
         input_model = torch.cat(
             input_list, dim=1
         )  # concat the time dimension into channels
-        repeat_vals = (1, -1, -1, -1, -1)  # repeat along batch dimension
+
         lsm_tensor = torch.tensor(self.lsm, dtype=dtype).to(device).unsqueeze(dim=0)
         lsm_tensor = lsm_tensor.expand(*repeat_vals)
         topographic_height_tensor = (
@@ -205,7 +225,6 @@ class _DLWPWrapper(torch.nn.Module):
         input_model = torch.cat(
             (input_model, lsm_tensor, topographic_height_tensor), dim=1
         )
-
         return input_model
 
     def prepare_output(self, output):
@@ -213,17 +232,14 @@ class _DLWPWrapper(torch.nn.Module):
         dtype = output.dtype
         output = torch.split(output, output.shape[1] // 2, dim=1)
         output = torch.stack(output, dim=1)  # add time dimension back in
-        output_list = list(torch.split(output, 1, dim=1))
-        num_chans = output_list[0].shape[2]
         i = self.output_map_wts.row.values - 1
         j = self.output_map_wts.col.values - 1
         data = self.output_map_wts.S.values
-        M = torch.sparse_coo_tensor(np.array((i, j)), data).to(device).type(dtype)
+        M = torch.sparse_coo_tensor(np.array((i, j)), data).type(dtype).to(device)
 
-        for i in range(len(output_list)):
-            output_list[i] = output_list[i].reshape(num_chans, -1) @ M.T
-            output_list[i] = output_list[i].reshape(1, num_chans, 721, 1440)
-        output = torch.stack(output_list, dim=1)
+        N, T, C = output.shape[0], 2, output.shape[2]
+        output = (M @ output.reshape(N * T * C, -1).T).T
+        output = output.reshape(N, T, C, 721, 1440)
 
         return output
 
@@ -243,8 +259,35 @@ def dlwp(package, pretrained=True):
     latgrid, longrid = latlon_grids["latgrid"].values, latlon_grids["longrid"].values
 
     # load maps
-    ll_to_cs_mapfile_path = package.get("map_LL721x1440_CS64.nc")
-    cs_to_ll_mapfile_path = package.get("map_CS64_LL721x1440.nc")
+    parsed_uri = urlparse(package.root)
+    if parsed_uri.scheme == "file":
+        root_path = parsed_uri.path
+    else:
+        root_path = package.root
+
+    ll_to_cs_file = glob.glob(root_path + package.seperator + "map_LL*_CS*.nc")
+    cs_to_ll_file = glob.glob(root_path + package.seperator + "map_CS*_LL*.nc")
+
+    if ll_to_cs_file:
+        file_path = ll_to_cs_file[0]  # take the first match
+        if parsed_uri.scheme == "file":
+            ll_to_cs_relative_path = file_path[len(root_path) :].lstrip(
+                package.seperator
+            )
+        else:
+            ll_to_cs_relative_path = file_path[len(root_path) :]
+
+    if cs_to_ll_file:
+        file_path = cs_to_ll_file[0]
+        if parsed_uri.scheme == "file":
+            cs_to_ll_relative_path = file_path[len(root_path) :].lstrip(
+                package.seperator
+            )
+        else:
+            cs_to_ll_relative_path = file_path[len(root_path) :]
+
+    ll_to_cs_mapfile_path = package.get(ll_to_cs_relative_path)
+    cs_to_ll_mapfile_path = package.get(cs_to_ll_relative_path)
 
     with open(package.get("config.json")) as json_file:
         config = json.load(json_file)

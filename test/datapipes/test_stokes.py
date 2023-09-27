@@ -26,24 +26,22 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    path = "/data/nfs/modulus-data/datasets/ahmed_body/"
+    path = "/data/nfs/modulus-data/datasets/stokes/"
     return path
 
 
 @nfsdata_or_fail
 @import_or_fail(["vtk", "pyvista", "dgl"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ahmed_body_constructor(data_dir, device, pytestconfig):
-
+def test_stokes_constructor(data_dir, device, pytestconfig):
     # _nfsdata_or_fail(pytestconfig)
-    from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
+    from modulus.datapipes.gnn.stokes_dataset import StokesDataset
 
     # construct dataset
-    dataset = AhmedBodyDataset(
+    dataset = StokesDataset(
         data_dir=data_dir,
         split="train",
         num_samples=2,
-        compute_drag=True,
     )
 
     # iterate datapipe is iterable
@@ -53,11 +51,10 @@ def test_ahmed_body_constructor(data_dir, device, pytestconfig):
     try:
         # init dataset with empty path
         # if dataset throws an IO error then this should pass
-        dataset = AhmedBodyDataset(
+        dataset = StokesDataset(
             data_dir="/null_path",
             split="train",
             num_samples=2,
-            compute_drag=True,
         )
         raise IOError("Failed to raise error given null data path")
     except IOError:
@@ -66,23 +63,14 @@ def test_ahmed_body_constructor(data_dir, device, pytestconfig):
     # check invalid split
     try:
         # if dataset throws an IO error then this should pass
-        dataset = AhmedBodyDataset(
+        dataset = StokesDataset(
             data_dir=data_dir,
             invar_keys=[
                 "pos",
-                "normals",
-                "velocity",
-                "reynolds_number",
-                "length",
-                "width",
-                "height",
-                "ground_clearance",
-                "slant_angle",
-                "fillet_radius",
+                "markers",
             ],
             split="valid",
             num_samples=2,
-            compute_drag=True,
         )
         raise IOError("Failed to raise error given invalid split")
     except IOError:
