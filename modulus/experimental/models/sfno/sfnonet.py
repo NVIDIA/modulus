@@ -44,7 +44,7 @@ import torch_harmonics.distributed as thd
 
 # wrap fft, to unify interface to spectral transforms
 from modulus.experimental.models.sfno.layers import RealFFT2
-from modulus.experimental.utils.sfno.distributed.layers import (
+from modulus.experimental.utils.sfno.distributed.dist_layers import (
     DistributedRealFFT2,
     DistributedInverseRealFFT2,
     DistributedMLP,
