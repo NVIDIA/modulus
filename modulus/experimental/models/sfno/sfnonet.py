@@ -369,18 +369,18 @@ class SFNO(Module):
 
     Example:
     --------
-    >>> from modulus.models.sfno.sfnonet import SFNO
-    >>> model = SFNO(
-    ...         inp_shape=(8, 16),
-    ...         scale_factor=4,
-    ...         in_channels=2,
-    ...         out_channels=2,
-    ...         embed_dim=16,
-    ...         num_layers=2,
-    ...         encoder_layers=1,
-    ...         spectral_layers=2,
-    ...         use_mlp=True,)
-    >>> model(torch.randn(1, 2, 8, 16)).shape
+    #>>> from modulus.models.sfno.sfnonet import SFNO
+    #>>> model = SFNO(
+    #...         inp_shape=(8, 16),
+    #...         scale_factor=4,
+    #...         in_channels=2,
+    #...         out_channels=2,
+    #...         embed_dim=16,
+    #...         num_layers=2,
+    #...         encoder_layers=1,
+    #...         spectral_layers=2,
+    #...         use_mlp=True,)
+    #>>> model(torch.randn(1, 2, 8, 16)).shape
     torch.Size([1, 2, 8, 16])
     """
 
