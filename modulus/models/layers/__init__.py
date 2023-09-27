@@ -14,6 +14,7 @@
 
 from .activations import Identity, Stan, SquarePlus, get_activation
 from .weight_norm import WeightNormLinear
+from .weight_fact import WeightFactLinear
 from .spectral_layers import (
     SpectralConv1d,
     SpectralConv2d,
@@ -28,3 +29,6 @@ from .fully_connected_layers import (
     ConvNdFCLayer,
     ConvNdKernel1Layer,
 )
+from .fourier_layers import FourierLayer, FourierFilter, GaborFilter
+from .siren_layers import SirenLayer, SirenLayerType
+from .dgm_layers import DGMLayer

@@ -86,6 +86,20 @@ class Module(torch.nn.Module):
         self.logger.addHandler(handler)
         self.logger.setLevel(logging.WARNING)
 
+    @staticmethod
+    def _safe_members(tar, local_path):
+        for member in tar.getmembers():
+            if (
+                ".." in member.name
+                or os.path.isabs(member.name)
+                or os.path.realpath(os.path.join(local_path, member.name)).startswith(
+                    os.path.realpath(local_path)
+                )
+            ):
+                yield member
+            else:
+                print(f"Skipping potentially malicious file: {member.name}")
+
     @classmethod
     def instantiate(cls, arg_dict: Dict[str, Any]) -> "Module":
         """Instantiate a model from a dictionary of arguments
@@ -259,7 +273,9 @@ class Module(torch.nn.Module):
 
             # Open the tar file and extract its contents to the temporary directory
             with tarfile.open(cached_file_name, "r") as tar:
-                tar.extractall(path=local_path)
+                tar.extractall(
+                    path=local_path, members=list(Module._safe_members(tar, local_path))
+                )
 
             # Check if the checkpoint is valid
             Module._check_checkpoint(local_path)
@@ -299,7 +315,9 @@ class Module(torch.nn.Module):
 
             # Open the tar file and extract its contents to the temporary directory
             with tarfile.open(cached_file_name, "r") as tar:
-                tar.extractall(path=local_path)
+                tar.extractall(
+                    path=local_path, members=list(cls._safe_members(tar, local_path))
+                )
 
             # Check if the checkpoint is valid
             Module._check_checkpoint(local_path)

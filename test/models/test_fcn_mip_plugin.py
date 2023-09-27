@@ -13,12 +13,8 @@
 # limitations under the License.
 
 import fsspec
-from modulus.utils.sfno.YParams import ParamsBase
-from modulus.models.fcn_mip_plugin import sfno, graphcast_34ch, _CosZenWrapper, dlwp
 from modulus.utils.filesystem import Package
-from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 from modulus.models.dlwp import DLWP
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from pathlib import Path
 import numpy as np
 import datetime
@@ -28,6 +24,23 @@ import shutil
 import os
 
 import pytest
+from pytest_utils import import_or_fail, nfsdata_or_fail
+
+
+@pytest.fixture
+def dlwp_data_dir():
+    """Data dir for dlwp package"""
+
+    path = "/data/nfs/modulus-data/plugin_data/dlwp/"
+    return path
+
+
+@pytest.fixture
+def graphcast_data_dir():
+    """Data dir for graphcast package"""
+
+    path = "/data/nfs/modulus-data/plugin_data/graphcast/"
+    return path
 
 
 def _copy_directory(src, dst):
@@ -65,6 +78,7 @@ def save_checkpoint(model, check_point_path, del_device_buffer=False):
 
 
 def save_untrained_sfno(path):
+    """Function to save untrained SFNO"""
 
     config = {
         "N_in_channels": 2,
@@ -78,8 +92,13 @@ def save_untrained_sfno(path):
         "nettype": "sfno",
         "add_zenith": True,
     }
+    from modulus.utils.sfno.YParams import ParamsBase
+
     params = ParamsBase()
     params.update_params(config)
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+
     model = SphericalFourierNeuralOperatorNet(params)
 
     config_path = path / "config.json"
@@ -94,7 +113,13 @@ def save_untrained_sfno(path):
     return package
 
 
-def test_sfno(tmp_path):
+@nfsdata_or_fail
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
+def test_sfno(tmp_path, pytestconfig):
+    """Test SFNO plugin"""
+
+    from modulus.models.fcn_mip_plugin import sfno
+
     package = save_untrained_sfno(tmp_path)
 
     model = sfno(package, pretrained=True)
@@ -107,6 +132,7 @@ def test_sfno(tmp_path):
 
 
 def save_untrained_dlwp(path):
+    """Function to save untrained DLWP"""
 
     config = {
         "nr_input_channels": 18,
@@ -129,13 +155,20 @@ def save_untrained_dlwp(path):
     return package
 
 
-def test_dlwp(tmp_path):
+@nfsdata_or_fail
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
+@pytest.mark.parametrize("batch_size", [1, 4])
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_dlwp(tmp_path, batch_size, device, pytestconfig):
+
+    from modulus.models.fcn_mip_plugin import dlwp
+
     package = save_untrained_dlwp(tmp_path)
     source_dir = "/data/nfs/modulus-data/plugin_data/dlwp/"
     _copy_directory(source_dir, tmp_path)
 
-    model = dlwp(package, pretrained=True)
-    x = torch.ones(1, 2, 7, 721, 1440)
+    model = dlwp(package, pretrained=True).to(device)
+    x = torch.ones(batch_size, 2, 7, 721, 1440).to(device)
     time = datetime.datetime(2018, 1, 1)
     with torch.no_grad():
         out = model(x, time)
@@ -143,6 +176,7 @@ def test_dlwp(tmp_path):
 
 
 def save_untrained_graphcast(path):
+    """Function to save untrained GraphCast"""
 
     icosphere_path = path / "icospheres.json"
     config = {
@@ -156,6 +190,8 @@ def save_untrained_graphcast(path):
         "hidden_dim": 2,
         "do_concat_trick": True,
     }
+
+    from modulus.models.graphcast import GraphCastNet
 
     model = GraphCastNet(**config)
 
@@ -171,8 +207,14 @@ def save_untrained_graphcast(path):
     return package
 
 
-def test_graphcast(tmp_path):
-    source_dir = "/data/nfs/modulus-data/plugin_data/graphcast/"
+@nfsdata_or_fail
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
+def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
+    """Test GraphCast plugin"""
+
+    from modulus.models.fcn_mip_plugin import graphcast_34ch
+
+    source_dir = graphcast_data_dir
     _copy_directory(source_dir, tmp_path)
 
     package = save_untrained_graphcast(
@@ -185,8 +227,14 @@ def test_graphcast(tmp_path):
     assert out.shape == x.shape
 
 
+@nfsdata_or_fail
+@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
 @pytest.mark.parametrize("batch_size", [1, 2])
-def test__CozZenWrapper(batch_size):
+def test__CozZenWrapper(batch_size, pytestconfig):
+    """Test Cosine Zenith wrapper"""
+
+    from modulus.models.fcn_mip_plugin import _CosZenWrapper
+
     class I(torch.nn.Module):
         def forward(self, x):
             return x
