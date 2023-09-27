@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
+import sys, os
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
-import os
 import pytest
 import time
 import torch
 
 from torch.nn.parallel import DistributedDataParallel
 
-from utils import fix_random_seeds, create_random_input
-from utils import get_icosphere_path
+from graphcast.utils import fix_random_seeds, create_random_input
+from graphcast.utils import get_icosphere_path
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from modulus.distributed import DistributedManager
 
