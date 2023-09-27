@@ -369,7 +369,7 @@ class SFNO(Module):
 
     Example:
     --------
-    >>> from modulus.models.sfno.sfnonet import SFNO
+    >>> from modulus.experimental.models.sfno.sfnonet import SFNO
     >>> model = SFNO(
     ...         inp_shape=(8, 16),
     ...         scale_factor=4,
