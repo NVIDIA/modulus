@@ -13,16 +13,16 @@
 # limitations under the License.
 
 import numpy as np
-
-from modulus.utils.sfno import logging_utils
-
-logging_utils.config_logger()
 import torch
 import torch.nn as nn
+
+from modulus.utils.sfno import logging_utils
 
 # distributed stuff
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
+
+logging_utils.config_logger()
 
 
 def mean(x, axis=None):  # pragma: no cover

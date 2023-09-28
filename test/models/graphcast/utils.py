@@ -13,14 +13,13 @@
 # limitations under the License.
 
 import os
+from typing import List
 
 import numpy as np
 import pytest
 import torch
 
 dgl = pytest.importorskip("dgl")
-
-from typing import List
 
 
 def fix_random_seeds(seed=0):

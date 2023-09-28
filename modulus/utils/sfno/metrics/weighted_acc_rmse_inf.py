@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import numpy as np
+import torch
 
 from modulus.utils.sfno import logging_utils
 
 logging_utils.config_logger()
-import torch
 
 
 def unlog_tp(x, eps=1e-5):  # pragma: no cover

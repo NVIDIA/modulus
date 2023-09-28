@@ -1,4 +1,5 @@
 # ignore_header_test
+# ruff: noqa: E402
 
 """"""
 """
