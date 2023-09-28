@@ -25,10 +25,10 @@ import torch.distributed as dist
 import modulus
 from modulus.distributed.manager import DistributedManager
 
-from modulus.models.afno.distributed.mappings import copy_to_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import (
-    scatter_to_matmul_parallel_region,
-    gather_from_matmul_parallel_region,
+from modulus.distributed.mappings import copy_to_parallel_region
+from modulus.distributed.mappings import (
+    scatter_to_parallel_region,
+    gather_from_parallel_region,
 )
 from modulus.models.afno.distributed.layers import trunc_normal_, DropPath
 from modulus.models.afno.distributed.layers import (
@@ -98,7 +98,7 @@ class DistributedBlock(nn.Module):
     def forward(self, x):
 
         if not self.input_is_matmul_parallel:
-            x = scatter_to_matmul_parallel_region(x, dim=1)
+            x = scatter_to_parallel_region(x, dim=1, group="model_parallel")
 
         residual = x
         x = self.norm1(x)
@@ -114,7 +114,7 @@ class DistributedBlock(nn.Module):
         x = x + residual
 
         if not self.output_is_matmul_parallel:
-            x = gather_from_matmul_parallel_region(x, dim=1)
+            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
 
         return x
 
@@ -251,7 +251,7 @@ class DistributedAFNONet(nn.Module):
 
         # be careful if head is distributed
         if self.output_is_matmul_parallel:
-            x = copy_to_matmul_parallel_region(x)
+            x = copy_to_parallel_region(x, group="model_parallel")
         else:
             if not self.synchronized_head:
                 # If output is not model parallel, synchronize all GPUs params for head

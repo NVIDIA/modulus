@@ -388,7 +388,7 @@ class DistributedManager(object):
         assert name not in manager._groups, f"Group with name {name} already exists"
 
         # Get parent group's params
-        group = manager._group[group_name] if group_name else None
+        group = manager._groups[group_name] if group_name else None
         group_size = dist.get_world_size(group=group)
         num_groups = manager.world_size // group_size
 
