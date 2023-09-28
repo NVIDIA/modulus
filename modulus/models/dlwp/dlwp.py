@@ -19,6 +19,7 @@ from typing import Tuple, Union
 import torch
 import torch.nn as nn
 
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module

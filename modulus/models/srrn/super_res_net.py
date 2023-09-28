@@ -37,6 +37,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import get_activation
 
 from ..meta import ModelMetaData

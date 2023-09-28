@@ -21,6 +21,7 @@ import numpy as np
 import torch
 import xarray
 
+import modulus  # noqa: F401 for docs
 from modulus.models.dlwp import DLWP
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from modulus.models.sfno import sfnonet

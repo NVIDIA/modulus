@@ -20,6 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
+import modulus  # noqa: F401 for docs
 import modulus.models.layers as layers
 
 from ..meta import ModelMetaData
