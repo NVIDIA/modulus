@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added Stokes flow dataset
+- An experimental version of SFNO to be used in unified training recipe for weather models
 
 ### Changed
+
+- The AFNO input argument `img_size` to `inp_shape`
 
 ### Deprecated
 
