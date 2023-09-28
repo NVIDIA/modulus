@@ -25,7 +25,7 @@ setup(
             "FullyConnected = modulus.models.mlp:FullyConnected",
             "Pix2Pix = modulus.models.pix2pix:Pix2Pix",
             "One2ManyRNN = modulus.models.rnn:One2ManyRNN",
-            #'SphericalFourierNeuralOperatorNet = modulus.models.sfno:SphericalFourierNeuralOperatorNet',
+            "SFNO = modulus.experimental.models.sfno:SFNO",
             "SRResNet = modulus.models.srrn:SRResNet",
         ],
     }
