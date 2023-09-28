@@ -84,7 +84,7 @@ def split_tensor_along_dim(tensor, dim, num_chunks):
 
 
 @torch.no_grad()
-def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
+def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):  # pragma: no cover
     """Gathers loss from all processes to one for logging
 
     Parameters
@@ -132,7 +132,7 @@ def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
 
 
 # distributed primitives
-def _transpose(tensor, dim0, dim1, group=None, async_op=False):
+def distributed_transpose(tensor, dim0, dim1, group=None, async_op=False):
     """Perform distributed transpose of tensor to switch sharding dimension"""
     # get input format
     input_format = get_memory_format(tensor)
@@ -154,7 +154,7 @@ def _transpose(tensor, dim0, dim1, group=None, async_op=False):
     return x_recv, req
 
 
-def _reduce(input_, use_fp32=True, group=None):
+def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     """All-reduce the input tensor across model parallel group."""
 
     # Bypass the function if we are using only 1 GPU.
@@ -173,7 +173,7 @@ def _reduce(input_, use_fp32=True, group=None):
     return input_
 
 
-def _split(input_, dim_, group=None):
+def _split(input_, dim_, group=None):  # pragma: no cover
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
@@ -193,7 +193,7 @@ def _split(input_, dim_, group=None):
     return output
 
 
-def _gather(input_, dim_, group=None):
+def _gather(input_, dim_, group=None):  # pragma: no cover
     """Gather tensors and concatenate along the specified dimension."""
     # get input format
     input_format = get_memory_format(input_)
@@ -226,7 +226,7 @@ def all_gather_v_wrapper(
     sizes: List[int],
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed AllGatherV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -284,7 +284,7 @@ def all_reduce_v_wrapper(
     dim: int = 0,
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed AllReduceV primitive. It is based
     on the idea of a single global tensor which which can be distributed
@@ -357,7 +357,7 @@ def gather_v_wrapper(
     dim: int = 0,
     dst: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed GatherV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -436,7 +436,7 @@ def scatter_v_wrapper(
     dim: int = 0,
     src: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed ScatterV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -508,7 +508,7 @@ def indexed_all_to_all_v_wrapper(
     sizes: List[List[int]],
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements an indexed version of a distributed AllToAllV
     primitive. It is based on the idea of a single global tensor which
@@ -572,7 +572,7 @@ def indexed_all_to_all_v_wrapper_bwd(
     use_fp32: bool = True,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements the backward pass to the indexed version of a distributed
     AllToAllV primitive.
@@ -615,9 +615,9 @@ def indexed_all_to_all_v_wrapper_bwd(
     tensor_shape = list(tensor.shape)
 
     # scatter gradients, roles reversed compared to forward pass
-    recv_sizes = [sizes[r][rank] for r in range(comm_size)]
     recv_list = [None] * comm_size
     for r in range(comm_size):
+        recv_sizes = [sizes[i][r] for i in range(comm_size)]
         recv_list[r] = scatter_v_wrapper(
             tensor, recv_sizes, dim=dim, src=r, group=group
         )
@@ -640,6 +640,7 @@ def indexed_all_to_all_v_wrapper_bwd(
             dtype=tensor.dtype,
             device=tensor.device,
         )
+
     out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
     if use_fp32:
         out = out.to(tensor.dtype)
