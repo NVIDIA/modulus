@@ -92,7 +92,7 @@ def test_fully_connected_constructor(device):
         if kw_args["weight_norm"] and kw_args["weight_fact"]:
             # If both weight_norm and weight_fact are True, expect an AssertionError
             with pytest.raises(
-                AssertionError,
+                ValueError,
                 match="Cannot apply both weight normalization and weight factorization together, please select one.",
             ):
                 model = FullyConnected(**kw_args).to(device)

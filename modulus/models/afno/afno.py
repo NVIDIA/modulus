@@ -376,9 +376,9 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         B, C, H, W = x.shape
-        if not (H == self.img_size[0] and W == self.img_size[1]):
+        if not (H == self.inp_shape[0] and W == self.inp_shape[1]):
             raise ValueError(
-                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+                f"Input image size ({H}*{W}) doesn't match model ({self.inp_shape[0]}*{self.inp_shape[1]})."
             )
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
@@ -479,7 +479,7 @@ class AFNO(Module):
             inp_shape[0] % patch_size[0] == 0 and inp_shape[1] % patch_size[1] == 0
         ):
             raise ValueError(
-                f"img_size {inp_shape} should be divisible by patch_size {patch_size}"
+                f"input shape {inp_shape} should be divisible by patch_size {patch_size}"
             )
 
         self.in_chans = in_channels

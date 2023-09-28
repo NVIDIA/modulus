@@ -196,7 +196,7 @@ class DistributedMLP(nn.Module):
 class DistributedPatchEmbed(nn.Module):
     def __init__(
         self,
-        img_size=(224, 224),
+        inp_shape=(224, 224),
         patch_size=(16, 16),
         in_chans=3,
         embed_dim=768,
@@ -213,8 +213,8 @@ class DistributedPatchEmbed(nn.Module):
         matmul_comm_size = DistributedManager().group_size("model_parallel")
 
         # compute parameters
-        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-        self.img_size = (img_size[0], img_size[1])
+        num_patches = (inp_shape[1] // patch_size[1]) * (inp_shape[0] // patch_size[0])
+        self.inp_shape = (inp_shape[0], inp_shape[1])
         self.patch_size = patch_size
         self.num_patches = num_patches
 
@@ -251,9 +251,9 @@ class DistributedPatchEmbed(nn.Module):
             x = copy_to_parallel_region(x, group="model_parallel")
 
         B, C, H, W = x.shape
-        if not (H == self.img_size[0] and W == self.img_size[1]):
+        if not (H == self.inp_shape[0] and W == self.inp_shape[1]):
             raise ValueError(
-                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+                f"Input input size ({H}*{W}) doesn't match model ({self.inp_shape[0]}*{self.inp_shape[1]})."
             )
         # new: B, C, H*W
         x = self.proj(x).flatten(2)

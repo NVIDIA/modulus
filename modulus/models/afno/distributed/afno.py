@@ -122,7 +122,7 @@ class DistributedBlock(nn.Module):
 class DistributedAFNONet(nn.Module):
     def __init__(
         self,
-        img_size=(720, 1440),
+        inp_shape=(720, 1440),
         patch_size=(16, 16),
         in_chans=2,
         out_chans=2,
@@ -142,7 +142,7 @@ class DistributedAFNONet(nn.Module):
         # comm sizes
         matmul_comm_size = DistributedManager().group_size("model_parallel")
 
-        self.img_size = img_size
+        self.inp_shape = inp_shape
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.out_chans = out_chans
@@ -153,7 +153,7 @@ class DistributedAFNONet(nn.Module):
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         self.patch_embed = DistributedPatchEmbed(
-            img_size=img_size,
+            inp_shape=inp_shape,
             patch_size=self.patch_size,
             in_chans=self.in_chans,
             embed_dim=embed_dim,
@@ -171,8 +171,8 @@ class DistributedAFNONet(nn.Module):
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
 
-        self.h = img_size[0] // self.patch_size[0]
-        self.w = img_size[1] // self.patch_size[1]
+        self.h = inp_shape[0] // self.patch_size[0]
+        self.w = inp_shape[1] // self.patch_size[1]
 
         # add blocks
         blks = []
@@ -283,7 +283,7 @@ class DistributedAFNO(modulus.Module):
 
     Parameters
     ----------
-    img_shape : Tuple[int, int]
+    inp_shape : Tuple[int, int]
         Input image dimensions (height, width)
     in_channels : int
         Number of input channels
@@ -318,7 +318,7 @@ class DistributedAFNO(modulus.Module):
 
     def __init__(
         self,
-        img_shape: Tuple[int, int],
+        inp_shape: Tuple[int, int],
         in_channels: int,
         out_channels: Union[int, Any] = None,
         patch_size: int = 16,
@@ -346,7 +346,7 @@ class DistributedAFNO(modulus.Module):
                 )
 
         self._impl = DistributedAFNONet(
-            img_size=img_shape,
+            inp_shape=inp_shape,
             patch_size=(patch_size, patch_size),
             in_chans=in_channels,
             out_chans=out_channels,

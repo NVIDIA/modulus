@@ -22,14 +22,17 @@ import numpy as np
 import pytest
 import torch
 from meshgraphnet.utils import get_random_graph
+from pytest_utils import import_or_fail
 from torch.nn.parallel import DistributedDataParallel
 
 from modulus.distributed import DistributedManager
-from modulus.models.gnn_layers.utils import CuGraphCSC
-from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 
 
+@import_or_fail("dgl")
 def run_test_distributed_meshgraphnet(rank, world_size, dtype):
+    from modulus.models.gnn_layers.utils import CuGraphCSC
+    from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
+
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
