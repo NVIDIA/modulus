@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import os
+
 import pytest
 import torch
 import torch.distributed as dist
+
 from modulus.distributed import DistributedManager
 from modulus.distributed.fft import DistributedRFFT2
 

@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, sys
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
-
+from meshgraphnet.utils import get_random_graph
 from torch.nn.parallel import DistributedDataParallel
 
-from meshgraphnet.utils import get_random_graph
+from modulus.distributed import DistributedManager
 from modulus.models.gnn_layers.utils import CuGraphCSC
 from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
-from modulus.distributed import DistributedManager
 
 
 def run_test_distributed_meshgraphnet(rank, world_size, dtype):

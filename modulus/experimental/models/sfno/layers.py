@@ -12,20 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.fft
-from torch.nn.modules.container import Sequential
-from torch.utils.checkpoint import checkpoint
-from torch.cuda import amp
 import math
 
-from torch_harmonics import *
-from modulus.experimental.models.sfno.contractions import *
-from modulus.experimental.models.sfno.activations import *
-from modulus.models.sfno.initialization import trunc_normal_
-from modulus.models.layers import get_activation
+import torch
+import torch.fft
+import torch.nn as nn
+from torch.cuda import amp
+from torch.utils.checkpoint import checkpoint
+
+from modulus.models.layers.activations import get_activation
+from modulus.models.sfno.activations import ComplexReLU
+from modulus.models.sfno.contractions import (
+    _contract_diagonal,
+    compl_mul2d_fwd,
+    compl_muladd2d_fwd,
+)
 
 
 @torch.jit.script

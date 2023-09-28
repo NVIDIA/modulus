@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from warnings import warn
+
 import torch
 from torch import nn
-
-from warnings import warn
 
 
 class ComplexReLU(nn.Module):

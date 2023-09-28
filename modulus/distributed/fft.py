@@ -13,10 +13,13 @@
 # limitations under the License.
 
 import torch
+
 from modulus.distributed.manager import DistributedManager
+from modulus.distributed.mappings import (
+    gather_from_parallel_region,
+    scatter_to_parallel_region,
+)
 from modulus.distributed.utils import distributed_transpose, pad_helper, truncate_helper
-from modulus.distributed.mappings import gather_from_parallel_region
-from modulus.distributed.mappings import scatter_to_parallel_region
 
 
 def conj_pad_helper_2d(tensor, pad_dim, other_dim, new_size):

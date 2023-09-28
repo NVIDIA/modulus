@@ -65,7 +65,7 @@ include = ["modulus", "modulus.*"]
 # isort (`I`), and performance 'PERF' rules.
 select = ["E", "F", "S", "I", "PERF"]
 fixable = ["I"]
-
+exclude = ["modulus/experimental/*.py"]
 # Never enforce `E402`, `E501` (line length violations),
 # and `S311` (random number generators)
 ignore = ["E402", "E501", "S311"]

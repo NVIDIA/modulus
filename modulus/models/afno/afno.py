@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from functools import partial
-from typing import Tuple
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -22,9 +22,6 @@ import torch.nn.functional as F
 
 import modulus.models.layers.fft as fft
 
-from functools import partial
-from typing import Tuple, List
-from dataclasses import dataclass
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -364,8 +361,11 @@ class PatchEmbed(nn.Module):
     ):
 
         super().__init__()
-        assert len(inp_shape) == 2, "inp_shape should be a list of length 2"
-        assert len(patch_size) == 2, "patch_size should be a list of length 2"
+        if len(inp_shape) != 2:
+            raise ValueError("inp_shape should be a list of length 2")
+        if len(patch_size) != 2:
+            raise ValueError("patch_size should be a list of length 2")
+
         num_patches = (inp_shape[1] // patch_size[1]) * (inp_shape[0] // patch_size[0])
         self.inp_shape = inp_shape
         self.patch_size = patch_size
@@ -471,17 +471,15 @@ class AFNO(Module):
     ) -> None:
         super().__init__(meta=MetaData())
         if len(inp_shape) != 2:
-            raise ValueError(
-                "inp_shape should be a list of length 2"
-            )
+            raise ValueError("inp_shape should be a list of length 2")
         if len(patch_size) != 2:
-            raise ValueError(
-                "patch_size should be a list of length 2"
-            )
+            raise ValueError("patch_size should be a list of length 2")
 
-        if not (img_size[0] % patch_size[0] == 0 and img_size[1] % patch_size[1] == 0):
+        if not (
+            inp_shape[0] % patch_size[0] == 0 and inp_shape[1] % patch_size[1] == 0
+        ):
             raise ValueError(
-                f"img_size {img_size} should be divisible by patch_size {patch_size}"
+                f"img_size {inp_shape} should be divisible by patch_size {patch_size}"
             )
 
         self.in_chans = in_channels

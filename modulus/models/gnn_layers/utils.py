@@ -12,17 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+from typing import Any, Callable, Dict, Tuple, Union
 
-import torch
-import torch.distributed as dist
-from torch import Tensor
-from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple, List
+import torch
+from dgl import DGLGraph
+from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
-from modulus.models.gnn_layers import DistributedGraph
 from modulus.models.gnn_layers import CuGraphCSC
 
 try:

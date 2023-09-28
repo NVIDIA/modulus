@@ -14,9 +14,8 @@
 
 import pytest
 import torch
-import importlib
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
-from typing import Tuple
 from . import common
 
 Tensor = torch.Tensor

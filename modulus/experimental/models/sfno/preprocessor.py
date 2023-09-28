@@ -18,8 +18,8 @@ import torch.nn.functional as F
 
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import (
-    reduce_from_parallel_region,
     copy_to_parallel_region,
+    reduce_from_parallel_region,
 )
 
 

@@ -26,24 +26,17 @@ from torch import Tensor
 
 import modulus
 from modulus.distributed.manager import DistributedManager
-
-from modulus.distributed.mappings import copy_to_parallel_region
 from modulus.distributed.mappings import (
-    scatter_to_parallel_region,
+    copy_to_parallel_region,
     gather_from_parallel_region,
+    scatter_to_parallel_region,
 )
-from modulus.models.afno.distributed.layers import trunc_normal_, DropPath
 from modulus.models.afno.distributed.layers import (
     DistributedAFNO2D,
     DistributedMLP,
     DistributedPatchEmbed,
     DropPath,
     trunc_normal_,
-)
-from modulus.models.afno.distributed.mappings import (
-    copy_to_matmul_parallel_region,
-    gather_from_matmul_parallel_region,
-    scatter_to_matmul_parallel_region,
 )
 
 logger = logging.getLogger(__name__)

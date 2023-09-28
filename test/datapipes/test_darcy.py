@@ -18,7 +18,6 @@ import pytest
 import torch
 from pytest_utils import import_or_fail
 
-from typing import Tuple
 from . import common
 
 Tensor = torch.Tensor

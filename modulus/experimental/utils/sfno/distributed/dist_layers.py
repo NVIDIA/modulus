@@ -15,19 +15,19 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from modulus.utils.sfno.distributed import comm
-
-# matmul parallel
-from modulus.utils.sfno.distributed.mappings import copy_to_parallel_region
-from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
-from modulus.utils.sfno.distributed.mappings import scatter_to_parallel_region
-from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
-
-from modulus.utils.sfno.distributed.helpers import _transpose
-
-from modulus.models.sfno.initialization import trunc_normal_
 
 from modulus.models.layers import get_activation
+from modulus.models.sfno.initialization import trunc_normal_
+from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.helpers import _transpose
+
+# matmul parallel
+from modulus.utils.sfno.distributed.mappings import (
+    copy_to_parallel_region,
+    gather_from_parallel_region,
+    reduce_from_parallel_region,
+    scatter_to_parallel_region,
+)
 
 
 class distributed_transpose_w(torch.autograd.Function):  # pragma: no cover

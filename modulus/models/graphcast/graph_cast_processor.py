@@ -14,14 +14,6 @@
 
 from typing import Union
 
-try:
-    from typing import Self
-except ImportError:
-    # for Python versions < 3.11
-    from typing_extensions import Self
-from torch import Tensor
-from dgl import DGLGraph
-
 import torch.nn as nn
 from dgl import DGLGraph
 from torch import Tensor

@@ -22,7 +22,6 @@ import common
 import pytest
 import torch
 from pytest_utils import import_or_fail
-
 from sfno.utils import fix_random_seeds
 
 

@@ -13,22 +13,17 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import torch
 from torch import Tensor
-
-from typing import Any, Optional
 
 try:
     from typing import Self
 except ImportError:
     # for Python versions < 3.11
     from typing_extensions import Self
-from dataclasses import dataclass
 
-from modulus.models.layers import get_activation
-from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
 from modulus.models.gnn_layers.embedder import (
     GraphCastDecoderEmbedder,
     GraphCastEncoderEmbedder,
@@ -258,7 +253,7 @@ class GraphCastNet(Module):
                 self.static_data = self.g2m_graph.get_src_node_features_in_partition(
                     self.static_data
                 )
-                self.static_data = self_static_data.permute(1, 0).unsqueeze(dim=0)
+                self.static_data = self.static_data.permute(1, 0).unsqueeze(dim=0)
         else:
             self.static_data = None
 

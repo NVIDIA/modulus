@@ -12,43 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# import FactorizedTensor from tensorly for tensorized operations
+import tensorly as tl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from torch.cuda import amp
-
-# import FactorizedTensor from tensorly for tensorized operations
-import tensorly as tl
 
 tl.set_backend("pytorch")
 # from tensorly.plugins import use_opt_einsum
 # use_opt_einsum('optimal')
+import torch_harmonics as th
+import torch_harmonics.distributed as thd
 from tltorch.factorized_tensors.core import FactorizedTensor
 
 # import convenience functions for factorized tensors
 from modulus.experimental.models.sfno.activations import ComplexReLU
-from modulus.experimental.models.sfno.contractions import (
-    compl_muladd2d_fwd,
-    compl_mul2d_fwd,
-)
-from modulus.experimental.models.sfno.contractions import _contract_localconv_fwd
-from modulus.experimental.models.sfno.contractions import (
-    _contract_blockconv_fwd,
-    _contractadd_blockconv_fwd,
-)
-from modulus.experimental.models.sfno.factorizations import get_contract_fun
 
 # for the experimental module
 from modulus.experimental.models.sfno.contractions import (
-    compl_exp_muladd2d_fwd,
+    _contract_blockconv_fwd,
+    _contract_localconv_fwd,
+    _contractadd_blockconv_fwd,
     compl_exp_mul2d_fwd,
+    compl_exp_muladd2d_fwd,
+    compl_mul2d_fwd,
+    compl_muladd2d_fwd,
     real_mul2d_fwd,
     real_muladd2d_fwd,
 )
-
-import torch_harmonics as th
-import torch_harmonics.distributed as thd
+from modulus.experimental.models.sfno.factorizations import get_contract_fun
 
 
 class SpectralConvS2(nn.Module):

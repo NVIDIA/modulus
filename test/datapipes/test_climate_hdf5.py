@@ -14,8 +14,8 @@
 
 import pytest
 import torch
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
-from typing import Tuple
 from . import common
 
 Tensor = torch.Tensor
@@ -41,6 +41,7 @@ def lsm_filename():
 
 @pytest.fixture
 def geopotential_filename():
+    """Geopotential file."""
     path = "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
     return path
 

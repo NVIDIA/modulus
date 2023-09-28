@@ -20,10 +20,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.mappings import copy_to_parallel_region
-from modulus.distributed.mappings import reduce_from_parallel_region
-from modulus.distributed.mappings import scatter_to_parallel_region
-from modulus.distributed.mappings import gather_from_parallel_region
+from modulus.distributed.mappings import (
+    copy_to_parallel_region,
+    gather_from_parallel_region,
+    reduce_from_parallel_region,
+    scatter_to_parallel_region,
+)
 
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):

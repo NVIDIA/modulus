@@ -16,8 +16,8 @@ import pytest
 import torch
 
 from modulus.models.layers.spectral_layers import (
-    fourier_derivatives,
     calc_latent_derivatives,
+    fourier_derivatives,
 )
 
 
