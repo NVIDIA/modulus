@@ -38,7 +38,6 @@ from modulus.experimental.models.sfno.layers import (
     RealFFT2,
     SpectralAttention2d,
     SpectralAttentionS2,
-    trunc_normal_,
 )
 from modulus.experimental.models.sfno.s2convolutions import SpectralConvS2
 from modulus.experimental.utils.sfno.distributed.dist_layers import (
@@ -50,6 +49,7 @@ from modulus.experimental.utils.sfno.distributed.dist_layers import (
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+from modulus.models.sfno.initialization import trunc_normal_
 
 # more distributed stuff
 from modulus.utils.sfno.distributed import comm
@@ -220,7 +220,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         # norm layer
         self.norm1 = norm_layer[1]()
 
-        if use_mlp == True:
+        if use_mlp:
             MLPH = DistributedMLP if (comm.get_size("matmul") > 1) else MLP
             mlp_hidden_dim = int(embed_dim * mlp_ratio)
             self.mlp = MLPH(

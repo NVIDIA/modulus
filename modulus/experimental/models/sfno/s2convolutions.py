@@ -16,32 +16,23 @@
 import tensorly as tl
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.cuda import amp
-
-tl.set_backend("pytorch")
-# from tensorly.plugins import use_opt_einsum
-# use_opt_einsum('optimal')
-import torch_harmonics as th
 import torch_harmonics.distributed as thd
 from tltorch.factorized_tensors.core import FactorizedTensor
+from torch.cuda import amp
 
 # import convenience functions for factorized tensors
 from modulus.experimental.models.sfno.activations import ComplexReLU
 
 # for the experimental module
 from modulus.experimental.models.sfno.contractions import (
-    _contract_blockconv_fwd,
-    _contract_localconv_fwd,
-    _contractadd_blockconv_fwd,
     compl_exp_mul2d_fwd,
     compl_exp_muladd2d_fwd,
     compl_mul2d_fwd,
     compl_muladd2d_fwd,
-    real_mul2d_fwd,
-    real_muladd2d_fwd,
 )
 from modulus.experimental.models.sfno.factorizations import get_contract_fun
+
+tl.set_backend("pytorch")
 
 
 class SpectralConvS2(nn.Module):
@@ -98,8 +89,10 @@ class SpectralConvS2(nn.Module):
         self.factorization = factorization
         self.separable = separable
 
-        assert self.inverse_transform.lmax == self.modes_lat
-        assert self.inverse_transform.mmax == self.modes_lon
+        if self.inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if self.inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         weight_shape = [in_channels]
 
@@ -244,8 +237,10 @@ class SpectralAttentionS2(nn.Module):
             or (self.forward_transform.grid != self.inverse_transform.grid)
         )
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         hidden_size = int(hidden_size_factor * self.embed_dim)
 
@@ -255,8 +250,10 @@ class SpectralAttentionS2(nn.Module):
 
             # weights
             w = [self.scale * torch.randn(self.embed_dim, hidden_size, 2)]
-            for l in range(1, self.spectral_layers):
-                w.append(self.scale * torch.randn(hidden_size, hidden_size, 2))
+            for lay in range(1, self.spectral_layers):
+                w.append(  # noqa: PERF401
+                    self.scale * torch.randn(hidden_size, hidden_size, 2)
+                )  # noqa: PERF401
             self.w = nn.ParameterList(w)
 
             self.wout = nn.Parameter(
@@ -272,7 +269,7 @@ class SpectralAttentionS2(nn.Module):
                 )
 
             self.activations = nn.ModuleList([])
-            for l in range(0, self.spectral_layers):
+            for lay in range(0, self.spectral_layers):
                 self.activations.append(
                     ComplexReLU(
                         mode=complex_activation,
@@ -290,7 +287,7 @@ class SpectralAttentionS2(nn.Module):
             w = [
                 self.scale * torch.randn(self.modes_lat, self.embed_dim, hidden_size, 2)
             ]
-            for l in range(1, self.spectral_layers):
+            for lay in range(1, self.spectral_layers):
                 w.append(
                     self.scale
                     * torch.randn(self.modes_lat, hidden_size, hidden_size, 2)
@@ -310,7 +307,7 @@ class SpectralAttentionS2(nn.Module):
             )
 
             self.activations = nn.ModuleList([])
-            for l in range(0, self.spectral_layers):
+            for lay in range(0, self.spectral_layers):
                 self.activations.append(
                     ComplexReLU(
                         mode=complex_activation,
@@ -330,13 +327,13 @@ class SpectralAttentionS2(nn.Module):
 
         xr = torch.view_as_real(x)
 
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
-                xr = self.mul_add_handle(xr, self.w[l], self.b[l])
+                xr = self.mul_add_handle(xr, self.w[lay], self.b[lay])
             else:
-                xr = self.mul_handle(xr, self.w[l])
+                xr = self.mul_handle(xr, self.w[lay])
             xr = torch.view_as_complex(xr)
-            xr = self.activations[l](xr)
+            xr = self.activations[lay](xr)
             xr = self.drop(xr)
             xr = torch.view_as_real(xr)
 
