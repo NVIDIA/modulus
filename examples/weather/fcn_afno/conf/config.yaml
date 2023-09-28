@@ -21,3 +21,5 @@ hydra:
 wb_artifacts: False
 
 start_epoch: 0
+
+num_samples_per_year_train: 1456

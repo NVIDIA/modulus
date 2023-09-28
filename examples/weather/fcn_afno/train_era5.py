@@ -116,7 +116,7 @@ def main(cfg: DictConfig) -> None:
         data_dir="/data/train/",
         stats_dir="/data/stats/",
         channels=[i for i in range(20)],
-        num_samples_per_year=1456,  # Need better shard fix
+        num_samples_per_year=cfg.num_samples_per_year_train,
         batch_size=2,
         patch_size=(8, 8),
         num_workers=8,
