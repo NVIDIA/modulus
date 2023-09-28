@@ -17,6 +17,7 @@ import torch.nn as nn
 from torch import Tensor
 
 try:
+    import dgl  # noqa: F401 for docs
     from dgl import DGLGraph
 except ImportError:
     raise ImportError(
