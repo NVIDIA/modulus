@@ -16,6 +16,8 @@ import logging
 
 import torch
 
+import modulus  # noqa: F401 for docs
+
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
 

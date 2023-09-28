@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import FCLayer, get_activation
 
 from ..meta import ModelMetaData

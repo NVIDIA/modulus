@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from itertools import chain
 from typing import Callable, List, Tuple, Union
 
+import modulus  # noqa: F401 for docs
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock

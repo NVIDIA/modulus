@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import modulus  # noqa: F401 for docs
 import modulus.models.layers.fft as fft
 
 from ..meta import ModelMetaData
