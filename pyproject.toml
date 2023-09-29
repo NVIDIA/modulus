@@ -51,7 +51,7 @@ dev = [
     "black==22.10.0",
     "interrogate==1.5.0",
     "coverage==6.5.0",
-    "ruff==0.0.290",
+    "ruff>=0.0.290",
 ]
 
 [tool.setuptools.dynamic]
