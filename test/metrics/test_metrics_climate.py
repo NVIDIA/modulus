@@ -69,6 +69,22 @@ def test_climate_acc_mse(test_data, device, rtol: float = 1e-3, atol: float = 1e
         atol=atol,
     )
 
+    # Test exceptions
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(torch.zeros((10,), device=device), targ_tensor, means_tensor, lat)
+
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(pred_tensor, torch.zeros((10,), device=device), means_tensor, lat)
+
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(pred_tensor, targ_tensor, torch.zeros((10,), device=device), lat)
+
     # int( cos(x)^2 - cos(2x)^2 )dx, x = 0...2*pi = pi/4
     # So MSE should be pi/4 / (pi) = 0.25
     error = mse(pred_tensor**2, targ_tensor**2, dim=(1, 2))
@@ -184,6 +200,13 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         atol=atol,
     )
 
+    # Test Raises Assertion
+    with pytest.raises(
+        AssertionError,
+        match="Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively",
+    ):
+        clim_red.global_mean(torch.zeros((10,), device=device), lat)
+
     # Global variance of cos(2x) should be
     # int[ (cos(2x) - E[cos(2x)])^2 * cos(2x)/2 ] dx
     # = int[ (cos(2x) - 1/3)^2 * cos(2x)/2 ] dx
@@ -202,6 +225,13 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         rtol=rtol,
         atol=atol,
     )
+
+    # Test Raises Assertion
+    with pytest.raises(
+        AssertionError,
+        match="Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively",
+    ):
+        clim_red.global_var(torch.zeros((10,), device=device), lat)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

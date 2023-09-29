@@ -122,7 +122,7 @@ def global_mean(x: Tensor, lat: Tensor, keepdims: bool = False) -> Tensor:
     Tensor
         Global mean tensor
     """
-    if not (x.ndim > 2):
+    if not (x.ndim >= 2):
         raise AssertionError(
             "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
         )
@@ -162,8 +162,8 @@ def global_var(
     Tensor
         Global variance tensor
     """
-    if not (x.ndim > 2):
-        raise ValueError(
+    if not (x.ndim >= 2):
+        raise AssertionError(
             "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
         )
 

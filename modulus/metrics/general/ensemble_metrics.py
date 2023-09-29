@@ -14,7 +14,6 @@
 
 from abc import ABC
 from typing import List, Tuple, Union
-from warnings import warn
 
 import torch
 import torch.distributed as dist
@@ -50,18 +49,13 @@ class EnsembleMetrics(ABC):
         self.device = torch.device(device)
         self.dtype = dtype
 
-        if DistributedManager.is_initialized() and not (dist.is_initialized()):
-            warn(
-                "DistributedManager is detected and initialized but torch distributed \
-    process group is not initialized. In order to use this class, please initialize \
-    torch process group, see https://pytorch.org/docs/stable/distributed.html"
-            )
-
     def _check_shape(self, inputs: Tensor) -> None:
         """
         Check input shapes for non-batched dimension.
         """
-        if not [i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)]:
+        print(inputs.shape, self.input_shape)
+        print([i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)])
+        if not all([i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)]):
             raise ValueError(
                 "Expected new input to have compatible shape with existing shapes but got"
                 + str(inputs.shape)

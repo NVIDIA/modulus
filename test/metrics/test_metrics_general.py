@@ -130,6 +130,25 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
+    # Test Raises Assertion
+    with pytest.raises(ValueError):
+        hist._count_bins(
+            torch.zeros((1, 2), device=device),
+            bins,
+            counts,
+        )
+    # Test Raises Assertion
+    with pytest.raises(ValueError):
+        hist._count_bins(x, bins, torch.zeros((1,), device=device))
+
+    with pytest.raises(ValueError):
+        hist._get_mins_maxs()
+
+    with pytest.raises(ValueError):
+        hist._get_mins_maxs(
+            torch.randn((10, 3), device=device), torch.randn((10, 5), device=device)
+        )
+
     binsx, countsx = hist.histogram(x, bins=10, verbose=True)
     assert torch.allclose(
         torch.sum(countsx, dim=0),
@@ -254,6 +273,17 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
+    # Test Assertions
+    with pytest.raises(ValueError):
+        crps._crps_gaussian(torch.tensor((10, 2), device=device), vv, y)
+
+    with pytest.raises(ValueError):
+        crps._crps_gaussian(
+            mm,
+            vv,
+            torch.tensor((10, 2), device=device),
+        )
+
     # Test from counts
     binsx, countsx = hist.histogram(x, bins=1_000)
     assert torch.allclose(
@@ -278,6 +308,14 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
+    # Test raises Assertion
+    with pytest.raises(ValueError):
+        crps._crps_from_counts(torch.zeros((1, 2), device=device), countsx, y)
+    with pytest.raises(ValueError):
+        crps._crps_from_counts(binsx, torch.zeros((1, 2), device=device), y)
+    with pytest.raises(ValueError):
+        crps._crps_from_counts(binsx, countsx, torch.zeros((1, 2), device=device))
+
     # Test from cdf
     binsx, cdfx = hist.cdf(x, bins=1_000)
     assert torch.allclose(
@@ -300,6 +338,14 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         rtol=rtol,
         atol=atol,
     )
+
+    # Test Raises Assertion
+    with pytest.raises(ValueError):
+        crps._crps_from_cdf(torch.zeros((1, 2), device=device), cdfx, y)
+    with pytest.raises(ValueError):
+        crps._crps_from_cdf(binsx, torch.zeros((1, 2), device=device), y)
+    with pytest.raises(ValueError):
+        crps._crps_from_cdf(binsx, cdfx, torch.zeros((1, 2), device=device))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -329,6 +375,8 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     with pytest.raises(NotImplementedError) as e_info:
         print(e_info)
         ens_metric.finalize()
+    with pytest.raises(ValueError):
+        ens_metric._check_shape(torch.zeros((1, 7, 14), device=device))
 
     x = torch.randn((10, 1, 72, 144), device=device)
     y = torch.randn((5, 1, 72, 144), device=device)
@@ -341,6 +389,12 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
         meanxy, torch.mean(torch.cat((x, y), dim=0), dim=0), rtol=rtol, atol=atol
     )
     assert torch.allclose(meanxy, M.finalize(), rtol=rtol, atol=atol)
+
+    # Test raises Assertion
+    with pytest.raises(AssertionError):
+        M(x.to("cuda:0" if device == "cpu" else "cpu"))
+    with pytest.raises(AssertionError):
+        M.update(y.to("cuda:0" if device == "cpu" else "cpu"))
 
     # Test _update_mean utility
     _sumxy, _n = em._update_mean(meanx * 10, 10, y, batch_dim=0)
@@ -365,6 +419,11 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         stdxy, torch.std(torch.cat((x, y), dim=0), dim=0), rtol=rtol, atol=atol
     )
+    # Test raises Assertion
+    with pytest.raises(AssertionError):
+        V(x.to("cuda:0" if device == "cpu" else "cpu"))
+    with pytest.raises(AssertionError):
+        V.update(y.to("cuda:0" if device == "cpu" else "cpu"))
 
     # Test _update_var utility function
     _sumxy, _sum2xy, _n = em._update_var(10 * meanx, 9 * varx, 10, y, batch_dim=0)
@@ -413,6 +472,20 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
     assert ranks_np.shape == y.shape
     assert torch.all(torch.le(ranks_np, 1.0))
     assert torch.all(torch.ge(ranks_np, 0.0))
+
+    # Test Raises Assertions
+    with pytest.raises(ValueError):
+        cal.find_rank(torch.zeros((10,), device=device), bin_counts, y)
+
+    with pytest.raises(ValueError):
+        cal.find_rank(bin_edges, torch.zeros((10,), device=device), y)
+
+    with pytest.raises(ValueError):
+        cal.find_rank(
+            bin_edges,
+            bin_counts,
+            torch.zeros((10,), device=device),
+        )
 
     ranks = ranks.flatten()
     rank_bin_edges = torch.linspace(0, 1, 11).to(device)
@@ -463,6 +536,16 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     assert torch.all(torch.le(entropy, one))
     assert torch.all(torch.ge(entropy, 0.0 * one))
 
+    # Test raises Assertion
+    with pytest.raises(ValueError):
+        ent._entropy_from_counts(
+            torch.zeros((bin_counts.shape[0], 1, 1), device=device), bin_edges
+        )
+    with pytest.raises(ValueError):
+        ent._entropy_from_counts(
+            torch.zeros((1,) + bin_counts.shape[1:], device=device), bin_edges
+        )
+
     # Test Maximum Entropy
     x = torch.rand((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, bin_counts = hist.histogram(x, bins=30)
@@ -488,3 +571,23 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     assert torch.all(torch.le(rel_ent_1, rel_ent_2))
     # assert torch.allclose(rel_ent_1, 0.0 * one, rtol=10.*rtol, atol = 10.*atol) # TODO
     assert torch.all(torch.ge(rel_ent_2, 0.0 * one))
+
+    # Test raises Assertion
+    with pytest.raises(ValueError):
+        ent._relative_entropy_from_counts(
+            torch.zeros((x_bin_counts.shape[0], 1, 1), device=device),
+            x1_bin_counts,
+            bin_edges,
+        )
+    with pytest.raises(ValueError):
+        ent._relative_entropy_from_counts(
+            torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
+            x1_bin_counts,
+            bin_edges,
+        )
+    with pytest.raises(ValueError):
+        ent._relative_entropy_from_counts(
+            x_bin_counts,
+            torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
+            bin_edges,
+        )

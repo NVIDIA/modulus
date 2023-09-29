@@ -667,7 +667,6 @@ class Histogram(EnsembleMetrics):
         Tuple[Tensor, Tensor]
             The calculated (bin edges [N+1, ...], counts [N, ...]) tensors
         """
-        self._check_shape(input)
         # TODO(Dallas) Move distributed calls into finalize.
         self.bin_edges, self.counts = _update_bins_counts(
             input, self.bin_edges, self.counts
