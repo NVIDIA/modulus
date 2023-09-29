@@ -16,7 +16,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from modulus.models.sfno.activations import ComplexReLU, ComplexActivation
+from modulus.models.sfno.activations import ComplexActivation, ComplexReLU
 
 
 def test_ComplexReLU_cartesian():

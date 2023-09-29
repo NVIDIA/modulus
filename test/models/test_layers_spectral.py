@@ -16,8 +16,8 @@ import pytest
 import torch
 
 from modulus.models.layers.spectral_layers import (
-    fourier_derivatives,
     calc_latent_derivatives,
+    fourier_derivatives,
 )
 
 
@@ -60,7 +60,7 @@ def test_output_shapes(simple_tensor, domain_length):
 
 def test_mismatched_dimensions(simple_tensor):
     wrong_domain_length = [2.0]
-    with pytest.raises(AssertionError, match=r"input shape doesn't match domain dims"):
+    with pytest.raises(ValueError, match=r"input shape doesn't match domain dims"):
         fourier_derivatives(simple_tensor, wrong_domain_length)
 
 

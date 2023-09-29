@@ -13,25 +13,24 @@
 # limitations under the License.
 
 import sys
+from dataclasses import dataclass
+from typing import Dict, Tuple, Union
+
 import numpy as np
 import torch
 import warp as wp
 
-from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple, Dict
-from pathlib import Path
-from torch.utils.data import Dataset
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
-from .kernels.initialization import init_uniform_random_2d
 from .kernels.finite_volume import (
-    euler_primitive_to_conserved_batched_2d,
+    euler_apply_flux_batched_2d,
     euler_conserved_to_primitive_batched_2d,
     euler_extrapolation_batched_2d,
     euler_get_flux_batched_2d,
-    euler_apply_flux_batched_2d,
+    euler_primitive_to_conserved_batched_2d,
     initialize_kelvin_helmoltz_batched_2d,
 )
+from .kernels.initialization import init_uniform_random_2d
 
 Tensor = torch.Tensor
 # TODO unsure if better to remove this

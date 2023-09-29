@@ -28,13 +28,11 @@
 
 
 import datetime
+
 import numpy as np
-from typing import Union, TypeVar
-import datetime
 
 try:
     import nvidia.dali as dali
-    import nvidia.dali.plugin.pytorch as dali_pth
 except ImportError:
     raise ImportError(
         "DALI dataset requires NVIDIA DALI package to be installed. "

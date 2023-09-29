@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import glob
-import torch
-import numpy as np
+import logging
+
 import h5py
+import numpy as np
+import torch
 
 # distributed stuff
 from modulus.utils.sfno.distributed import comm
@@ -116,8 +117,10 @@ class DummyLoader(object):
             self.img_crop_shape_x = self.img_shape_x
         if self.img_crop_shape_y is None:
             self.img_crop_shape_y = self.img_shape_y
-        assert self.img_crop_offset_x + self.img_crop_shape_x <= self.img_shape_x
-        assert self.img_crop_offset_y + self.img_crop_shape_y <= self.img_shape_y
+        if self.img_crop_offset_x + self.img_crop_shape_x > self.img_shape_x:
+            raise AssertionError
+        if self.img_crop_offset_y + self.img_crop_shape_y > self.img_shape_y:
+            raise AssertionError
 
         # for x
         read_shape_x = (self.img_crop_shape_x + self.io_grid[0] - 1) // self.io_grid[0]

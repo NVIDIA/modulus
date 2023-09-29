@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import List, Optional, Union
+
 import torch
 import torch.nn as nn
-import modulus
+from torch import Tensor
+
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import FCLayer, get_activation
 
-from torch import Tensor
-from dataclasses import dataclass
-from typing import Optional, Union, List
 from ..meta import ModelMetaData
 from ..module import Module
 

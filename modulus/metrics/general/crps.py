@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import numpy as np
 from typing import Union
+
+import numpy as np
+import torch
+
 from .histogram import cdf as cdf_function
 
 Tensor = torch.Tensor
@@ -52,22 +54,24 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     if isinstance(obs, np.ndarray):
         obs = torch.from_numpy(obs).to(mean.device)
     # Check shape compatibility
-    assert mean.shape == std.shape, (
-        "Mean and standard deviation must have"
-        + "compatible shapes but found"
-        + str(mean.shape)
-        + " and "
-        + str(std.shape)
-        + "."
-    )
-    assert mean.shape == obs.shape, (
-        "Mean and obs must have"
-        + "compatible shapes but found"
-        + str(mean.shape)
-        + " and "
-        + str(obs.shape)
-        + "."
-    )
+    if mean.shape != std.shape:
+        raise ValueError(
+            "Mean and standard deviation must have"
+            + "compatible shapes but found"
+            + str(mean.shape)
+            + " and "
+            + str(std.shape)
+            + "."
+        )
+    if mean.shape != obs.shape:
+        raise ValueError(
+            "Mean and obs must have"
+            + "compatible shapes but found"
+            + str(mean.shape)
+            + " and "
+            + str(obs.shape)
+            + "."
+        )
 
     d = (obs - mean) / std
     phi = torch.exp(-0.5 * d**2) / torch.sqrt(torch.as_tensor(2 * torch.pi))
@@ -109,27 +113,30 @@ def _crps_from_cdf(
     """
     if isinstance(obs, np.ndarray):
         obs = torch.from_numpy(obs).to(cdf.device)
-    assert bin_edges.shape[1:] == cdf.shape[1:], (
-        "Expected bins and cdf to have compatible non-zeroth dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(cdf.shape[1:])
-        + "."
-    )
-    assert bin_edges.shape[1:] == obs.shape, (
-        "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(obs.shape)
-        + "."
-    )
-    assert bin_edges.shape[0] == cdf.shape[0] + 1, (
-        "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
-        + str(bin_edges.shape[0])
-        + " and "
-        + str(cdf.shape[0])
-        + "+1."
-    )
+    if bin_edges.shape[1:] != cdf.shape[1:]:
+        raise ValueError(
+            "Expected bins and cdf to have compatible non-zeroth dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(cdf.shape[1:])
+            + "."
+        )
+    if bin_edges.shape[1:] != obs.shape:
+        raise ValueError(
+            "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(obs.shape)
+            + "."
+        )
+    if bin_edges.shape[0] != cdf.shape[0] + 1:
+        raise ValueError(
+            "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
+            + str(bin_edges.shape[0])
+            + " and "
+            + str(cdf.shape[0])
+            + "+1."
+        )
     dbins = bin_edges[1, ...] - bin_edges[0, ...]
     bin_mids = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     obs = torch.ge(bin_mids, obs).int()
@@ -167,27 +174,30 @@ def _crps_from_counts(
     """
     if isinstance(obs, np.ndarray):
         obs = torch.from_numpy(obs).to(counts.device)
-    assert bin_edges.shape[1:] == counts.shape[1:], (
-        "Expected bins and cdf to have compatible non-zeroth dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(counts.shape[1:])
-        + "."
-    )
-    assert bin_edges.shape[1:] == obs.shape, (
-        "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(obs.shape)
-        + "."
-    )
-    assert bin_edges.shape[0] == counts.shape[0] + 1, (
-        "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
-        + str(bin_edges.shape[0])
-        + " and "
-        + str(counts.shape[0])
-        + "+1."
-    )
+    if bin_edges.shape[1:] != counts.shape[1:]:
+        raise ValueError(
+            "Expected bins and cdf to have compatible non-zeroth dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(counts.shape[1:])
+            + "."
+        )
+    if bin_edges.shape[1:] != obs.shape:
+        raise ValueError(
+            "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(obs.shape)
+            + "."
+        )
+    if bin_edges.shape[0] != counts.shape[0] + 1:
+        raise ValueError(
+            "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
+            + str(bin_edges.shape[0])
+            + " and "
+            + str(counts.shape[0])
+            + "+1."
+        )
     cdf_hat = torch.cumsum(counts / torch.sum(counts, dim=0), dim=0)
     return _crps_from_cdf(bin_edges, cdf_hat, obs)
 

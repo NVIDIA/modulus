@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Tuple
+
 import pytest
 import torch
-
-from typing import Tuple
-from . import common
 from pytest_utils import import_or_fail
+
+from . import common
 
 Tensor = torch.Tensor
 

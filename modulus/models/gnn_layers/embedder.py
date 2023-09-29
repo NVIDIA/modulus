@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch.nn as nn
 from typing import Tuple
+
+import torch.nn as nn
 from torch import Tensor
 
 from .mesh_graph_mlp import MeshGraphMLP

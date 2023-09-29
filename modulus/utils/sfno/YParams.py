@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ruamel.yaml import YAML
-import logging
 import json
+import logging
+
+from ruamel.yaml import YAML
 
 
 class ParamsBase:

@@ -13,18 +13,18 @@
 # limitations under the License.
 
 
+from dataclasses import dataclass, field
+from typing import List, Optional
+
 import torch
 import torch.distributed as dist
 
-from typing import List, Optional
-from dataclasses import dataclass, field
-
-from modulus.distributed import DistributedManager
 from modulus.distributed import (
-    gather_v,
-    scatter_v,
+    DistributedManager,
     all_gather_v,
+    gather_v,
     indexed_all_to_all_v,
+    scatter_v,
 )
 
 
@@ -120,7 +120,6 @@ def partition_graph_nodewise(
     # global information about node ids and edge ids
     num_global_src_nodes = global_indices.max().item() + 1
     num_global_dst_nodes = global_offsets.size(0) - 1
-    num_global_indices = global_indices.size(0)
 
     # global IDs of destination nodes in this partition
     dst_nodes_in_partition = None
@@ -215,10 +214,11 @@ def partition_graph_nodewise(
 
     for r in range(graph_partition.partition_size):
         err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
-        assert (
+        if (
             graph_partition.sizes[graph_partition.partition_rank][r]
-            == graph_partition.scatter_indices[r].numel()
-        ), err_msg
+            != graph_partition.scatter_indices[r].numel()
+        ):
+            raise AssertionError(err_msg)
 
     return graph_partition
 
@@ -262,7 +262,8 @@ class DistributedGraph:
         self.partition_rank = dist_manager.group_rank(name=graph_partition_group_name)
         self.partition_size = dist_manager.group_size(name=graph_partition_group_name)
         error_msg = f"Passed partition_size does not correspond to size of process_group, got {partition_size} and {self.partition_size} respectively."
-        assert self.partition_size == partition_size, error_msg
+        if self.partition_size != partition_size:
+            raise AssertionError(error_msg)
         self.process_group = dist_manager.group(name=graph_partition_group_name)
 
         if graph_partition is None:
@@ -277,9 +278,11 @@ class DistributedGraph:
 
         else:
             error_msg = f"Passed graph_partition.partition_size does not correspond to size of process_group, got {graph_partition.partition_size} and {self.partition_size} respectively."
-            assert graph_partition.partition_size == self.partition_size
+            if graph_partition.partition_size != self.partition_size:
+                raise AssertionError(error_msg)
             error_msg = f"Passed graph_partition.device does not correspond to device of this rank, got {graph_partition.device} and {self.device} respectively."
-            assert graph.device == self.device
+            if graph_partition.device != self.device:
+                raise AssertionError(error_msg)
             self.graph_partition = graph_partition
 
         dist.barrier(self.process_group)
@@ -381,7 +384,9 @@ class DistributedGraph:
         get_on_all_ranks: bool = True,
         dst_rank: int = 0,
     ) -> torch.Tensor:  # pragma: no cover
-        assert partitioned_node_features.device == self.device
+        error_msg = f"Passed partitioned_node_features.device does not correspond to device of this rank, got {partitioned_node_features.device} and {self.device} respectively."
+        if partitioned_node_features.device != self.device:
+            raise AssertionError(error_msg)
 
         if not get_on_all_ranks:
             return gather_v(
@@ -406,7 +411,9 @@ class DistributedGraph:
         get_on_all_ranks: bool = True,
         dst_rank: int = 0,
     ) -> torch.Tensor:  # pragma: no cover
-        assert partitioned_node_features.device == self.device
+        error_msg = f"Passed partitioned_node_features.device does not correspond to device of this rank, got {partitioned_node_features.device} and {self.device} respectively."
+        if partitioned_node_features.device != self.device:
+            raise AssertionError(error_msg)
 
         if not get_on_all_ranks:
             return gather_v(
@@ -431,7 +438,9 @@ class DistributedGraph:
         get_on_all_ranks: bool = True,
         dst_rank: int = 0,
     ) -> torch.Tensor:  # pragma: no cover
-        assert partitioned_edge_features.device == self.device
+        error_msg = f"Passed partitioned_edge_features.device does not correspond to device of this rank, got {partitioned_edge_features.device} and {self.device} respectively."
+        if partitioned_edge_features.device != self.device:
+            raise AssertionError(error_msg)
 
         if not get_on_all_ranks:
             return gather_v(
