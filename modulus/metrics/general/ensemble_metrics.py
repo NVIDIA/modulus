@@ -161,7 +161,9 @@ class Mean(EnsembleMetrics):
         self.n = torch.as_tensor([inputs.shape[dim]], device=self.device)
         # TODO(Dallas) Move distributed calls into finalize.
 
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
             dist.all_reduce(self.n, op=dist.ReduceOp.SUM)
 
@@ -189,7 +191,9 @@ class Mean(EnsembleMetrics):
             )
 
         # TODO(Dallas) Move distributed calls into finalize.
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             # Collect local sums, n
             sums = torch.sum(inputs, batch_dim=dim)
             n = torch.as_tensor([inputs.shape[dim]], device=self.device)
@@ -325,7 +329,9 @@ class Variance(EnsembleMetrics):
         self.sum = torch.sum(inputs, dim=dim)
         self.n = torch.as_tensor([inputs.shape[0]], device=self.device)
 
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             # Compute mean and send around.
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
             dist.all_reduce(self.n, op=dist.ReduceOp.SUM)
@@ -363,7 +369,9 @@ class Variance(EnsembleMetrics):
         new_n = torch.as_tensor([inputs.shape[0]], device=self.device)
         new_sum = torch.sum(inputs, dim=0)
         # TODO(Dallas) Move distributed calls into finalize.
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             dist.all_reduce(new_n, op=dist.ReduceOp.SUM)
             dist.all_reduce(new_sum, op=dist.ReduceOp.SUM)
             new_sum2 = torch.sum((inputs - new_sum / new_n) ** 2, dim=0)

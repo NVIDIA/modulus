@@ -127,9 +127,7 @@ class EncoderDecoder(nn.Module):
 
 
 class MLP(nn.Module):
-    """
-    Basic CNN with support for gradient checkpointing
-    """
+    """Basic CNN with support for gradient checkpointing."""
 
     def __init__(
         self,

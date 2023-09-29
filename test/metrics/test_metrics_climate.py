@@ -119,6 +119,18 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         atol=atol,
     )
 
+    # Test assertion error
+    with pytest.raises(ValueError):
+        gen_red.WeightedStatistic(-1.0 * weights)
+
+    with pytest.raises(ValueError):
+        www = gen_red.WeightedStatistic(torch.rand((10,), device=device))
+        www(torch.randn((13, 13), device=device), dim=1)
+
+    with pytest.raises(ValueError):
+        www = gen_red.WeightedStatistic(torch.rand((10, 10), device=device))
+        www(torch.randn((13, 13), device=device), dim=1)
+
     # Check when weights are 1 dimensional
     weights = weights.flatten()
     wm = gen_red.WeightedMean(weights)

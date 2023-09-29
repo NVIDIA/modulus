@@ -26,7 +26,7 @@ Tensor = torch.Tensor
 
 
 @torch.jit.script
-def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:
+def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:  # pragma: no cover
     """Element-wise multi-dimensional linspace
 
     Replicates the bahaviour of numpy.linspace over all elements of multi-dimensional
@@ -65,7 +65,7 @@ def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:
 @torch.jit.script
 def _low_memory_bin_reduction_counts(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-):
+):  # pragma: no cover
     """Computes low-memory bin counts
 
     This function calculates a low-memory bin count of the inputs tensor and adding the
@@ -109,7 +109,7 @@ def _low_memory_bin_reduction_counts(
 @torch.jit.script
 def _high_memory_bin_reduction_counts(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes high-memory bin counts
 
     This function calculates a high-memory bin count of the inputs tensor and adding the
@@ -147,7 +147,7 @@ def _high_memory_bin_reduction_counts(
 @torch.jit.script
 def _low_memory_bin_reduction_cdf(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes low-memory cumulative bin counts
 
     This function calculates a low-memory cumulative bin count of the inputs tensor and adding the
@@ -184,7 +184,7 @@ def _high_memory_bin_reduction_cdf(
     bin_edges: torch.Tensor,
     counts: torch.Tensor,
     number_of_bins: int,
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes high-memory cumulative bin counts
 
     This function calculates a high-memory cumulative bin countof the inputs tensor and
@@ -358,7 +358,9 @@ def _update_bins_counts(
     low, high = _get_mins_maxs(input)
 
     # If in distributed environment, reduce to get extrema min and max
-    if DistributedManager.is_initialized() and dist.is_initialized():
+    if (
+        DistributedManager.is_initialized() and dist.is_initialized()
+    ):  # pragma: no cover
         dist.all_reduce(low, op=dist.ReduceOp.MIN)
         dist.all_reduce(high, op=dist.ReduceOp.MAX)
 
