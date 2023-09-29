@@ -164,7 +164,7 @@ class Pix2Pix(Module):
             activation = get_activation(activation_fn)
         else:
             activation = activation_fn
-            
+
         # set padding and convolutions
         if dimension == 1:
             padding = nn.ReflectionPad1d(3)
