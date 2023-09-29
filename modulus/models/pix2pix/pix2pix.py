@@ -160,7 +160,11 @@ class Pix2Pix(Module):
         assert padding_type in ["reflect", "zero", "replicate"], "Invalid padding type"
         super().__init__(meta=MetaData())
 
-        activation = get_activation(activation_fn)
+        if isinstance(activation_fn, str):
+            activation = get_activation(activation_fn)
+        else:
+            activation = activation_fn
+            
         # set padding and convolutions
         if dimension == 1:
             padding = nn.ReflectionPad1d(3)
