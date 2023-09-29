@@ -55,7 +55,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import torch
 import torch.nn as nn
-from typing import Union, List
+from typing import Union, List, Any
 from dataclasses import dataclass
 
 import modulus
@@ -106,7 +106,7 @@ class Pix2Pix(Module):
         Number of upsampling blocks, by default 3
     n_blocks : int, optional
         Number of residual blocks in middle of model, by default 3
-    activation_fn : str, optional
+    activation_fn : Any, optional
         Activation function, by default "relu"
     batch_norm : bool, optional
         Batch normalization, by default False
@@ -150,7 +150,7 @@ class Pix2Pix(Module):
         n_downsampling: int = 3,
         n_upsampling: int = 3,
         n_blocks: int = 3,
-        activation_fn: str = "relu",
+        activation_fn: Any = "relu",
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
@@ -160,6 +160,7 @@ class Pix2Pix(Module):
         assert padding_type in ["reflect", "zero", "replicate"], "Invalid padding type"
         super().__init__(meta=MetaData())
 
+        # activation function
         if isinstance(activation_fn, str):
             activation = get_activation(activation_fn)
         else:
