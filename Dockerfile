@@ -38,20 +38,36 @@ RUN pip install "tensorly>=0.8.1" https://github.com/tensorly/torch/archive/715a
 # copy modulus source
 COPY . /modulus/
 
+# Install Numcodecs (This needs a separate install because Numcodecs ARM pip install has issues) 
+# A fix is being added here: https://github.com/zarr-developers/numcodecs/pull/315 but the public release is not ready yet.
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        echo "Pip install for numcodecs for $TARGETPLATFORM exists, installing!" && \
+        pip install numcodecs; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl" ]; then \
+        echo "Numcodecs wheel for $TARGETPLATFORM exists, installing!" && \
+        pip install --force-reinstall /modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl; \
+    else \
+        echo "Numcodecs wheel for $TARGETPLATFORM is not present, attempting to build from pip, but might fail" && \
+	pip install numcodecs; \
+    fi
+
 # install vtk and pyvista
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
+	echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
+	pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+	echo "Installing vtk for: $TARGETPLATFORM" && \
+	pip install "vtk>=9.2.6"; \ 
+    else \
+	echo "Installing vtk for: $TARGETPLATFORM from source" && \
 	apt-get update && apt-get install -y libgl1-mesa-dev && \
 	git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
 	mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
 	python setup.py bdist_wheel && \
 	pip install dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
-	cd ../../ && rm -r vtk && \
-	pip install "pyvista>=0.40.1"; \ 
-    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
-	pip install "vtk>=9.2.6" "pyvista>=0.40.1"; \ 
+	cd ../../ && rm -r vtk; \
     fi
+RUN pip install "pyvista>=0.40.1"
 
 # Install DGL from source
 ARG DGL_BACKEND=pytorch
@@ -71,7 +87,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp
 	python setup.py install && \
 	python setup.py build_ext --inplace; \
     fi
-RUN rm -r /workspace/dgl
+RUN rm -rf /workspace/dgl
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
