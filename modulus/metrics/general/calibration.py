@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import numpy as np
-from modulus.metrics.general.histogram import histogram, linspace
 from typing import Union
+
+import numpy as np
+import torch
+
+from modulus.metrics.general.histogram import histogram, linspace
 
 Tensor = torch.Tensor
 
@@ -46,27 +48,30 @@ def find_rank(
     """
     if isinstance(obs, np.ndarray):
         obs = torch.from_numpy(obs).to(counts.device)
-    assert bin_edges.shape[1:] == counts.shape[1:], (
-        "Expected bins and counts to have compatible non-zeroth dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(counts.shape[1:])
-        + "."
-    )
-    assert bin_edges.shape[1:] == obs.shape, (
-        "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(obs.shape)
-        + "."
-    )
-    assert bin_edges.shape[0] == counts.shape[0] + 1, (
-        "Expected zeroth dimension of counts to be equal to the zeroth dimension of bins + 1 but have shapes"
-        + str(bin_edges.shape[0])
-        + " and "
-        + str(counts.shape[0])
-        + "+1."
-    )
+    if bin_edges.shape[1:] != counts.shape[1:]:
+        raise ValueError(
+            "Expected bins and counts to have compatible non-zeroth dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(counts.shape[1:])
+            + "."
+        )
+    if bin_edges.shape[1:] != obs.shape:
+        raise ValueError(
+            "Expected bins and observations to have compatible broadcasting dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(obs.shape)
+            + "."
+        )
+    if bin_edges.shape[0] != counts.shape[0] + 1:
+        raise ValueError(
+            "Expected zeroth dimension of counts to be equal to the zeroth dimension of bins + 1 but have shapes"
+            + str(bin_edges.shape[0])
+            + " and "
+            + str(counts.shape[0])
+            + "+1."
+        )
     n = torch.sum(counts, dim=0)[0]
     bin_mids = 0.5 * (bin_edges[1:] + bin_edges[:-1])
 

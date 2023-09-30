@@ -15,16 +15,13 @@
 from typing import Optional, Tuple
 
 import numpy as np
-
 import torch
+import torch_harmonics as harmonics
 from torch import nn
-import torch.nn.functional as F
+from torch_harmonics.quadrature import clenshaw_curtiss_weights
 
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
-
-import torch_harmonics as harmonics
-from torch_harmonics.quadrature import clenshaw_curtiss_weights
 
 
 class LossHandler(nn.Module):
@@ -231,7 +228,6 @@ class GeometricLpLoss(nn.Module):
             quad_weight = dA * jacobian
         elif quadrature_rule == "clenshaw-curtiss":
             cost, w = clenshaw_curtiss_weights(self.img_size[0], -1, 1)
-            weights = torch.from_numpy(w)
             dlambda = 2 * torch.pi / self.img_size[1]
             quad_weight = dlambda * torch.from_numpy(w).unsqueeze(-1)
         else:

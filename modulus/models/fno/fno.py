@@ -12,18 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import List, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import modulus.models.layers as layers
-import modulus
-
-from typing import Dict, List, Union, Tuple
 from torch import Tensor
-from dataclasses import dataclass
+
+import modulus  # noqa: F401 for docs
+import modulus.models.layers as layers
+
 from ..meta import ModelMetaData
-from ..module import Module
 from ..mlp import FullyConnected
+from ..module import Module
 
 # ===================================================================
 # ===================================================================
@@ -232,9 +234,10 @@ class FNO2DEncoder(nn.Module):
         self.padding_type = padding_type
 
     def forward(self, x: Tensor) -> Tensor:
-        assert (
-            x.dim() == 4
-        ), "Only 4D tensors [batch, in_channels, grid_x, grid_y] accepted for 2D FNO"
+        if x.dim() != 4:
+            raise ValueError(
+                "Only 4D tensors [batch, in_channels, grid_x, grid_y] accepted for 2D FNO"
+            )
 
         if self.coord_features:
             coord_feat = self.meshgrid(list(x.shape), x.device)

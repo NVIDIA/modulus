@@ -14,7 +14,7 @@
 
 import torch
 from torch import Tensor
-from abc import ABC
+
 from modulus.metrics.general.reduction import WeightedMean, WeightedVariance
 
 
@@ -33,8 +33,7 @@ def _compute_lat_weights(lat: Tensor) -> Tensor:
         Latitude weight tensor [H]
     """
 
-    nlat = len(lat)
-    lat_weight = torch.abs(torch.cos(torch.pi * (lat / 180)))
+    lat_weight = torch.abs(torch.cos(torch.pi * (lat / 180.0)))
 
     lat_weight = lat_weight / lat_weight.sum()
     return lat_weight
@@ -123,9 +122,10 @@ def global_mean(x: Tensor, lat: Tensor, keepdims: bool = False) -> Tensor:
     Tensor
         Global mean tensor
     """
-    assert (
-        x.ndim > 2
-    ), "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
+    if not (x.ndim >= 2):
+        raise AssertionError(
+            "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
+        )
 
     # Mean out the latitudes
     lat_reduced = zonal_mean(x, lat, dim=-2, keepdims=keepdims)
@@ -162,9 +162,10 @@ def global_var(
     Tensor
         Global variance tensor
     """
-    assert (
-        x.ndim > 2
-    ), "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
+    if not (x.ndim >= 2):
+        raise AssertionError(
+            "Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively"
+        )
 
     # Take global mean, incorporated weights
     gm = global_mean(x, lat, keepdims=True)

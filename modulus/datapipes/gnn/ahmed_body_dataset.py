@@ -14,31 +14,31 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Optional, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
-from dataclasses import dataclass
 
-from .utils import read_vtp_file, save_json, load_json
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
+
+from .utils import load_json, read_vtp_file, save_json
 
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
 
 try:
-    import vtk
     import pyvista as pv
-except:
+    import vtk
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
         + "pip install vtk pyvista"
@@ -175,7 +175,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         info_list = [info_list[index] for index in args]
         numbers_info = [numbers_info[index] for index in args]
 
-        assert sorted(numbers) == sorted(numbers_info)
+        if sorted(numbers) != sorted(numbers_info):
+            raise AssertionError
         self.numbers = numbers
 
         # create the graphs and add the node and features
@@ -595,12 +596,15 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             raise ValueError("Failed to get polygons from the polydata.")
 
         polys.InitTraversal()
+
         edge_list = []
         for i in range(polys.GetNumberOfCells()):
             id_list = vtk.vtkIdList()
             polys.GetNextCell(id_list)
             for j in range(id_list.GetNumberOfIds() - 1):
-                edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
+                edge_list.append(  # noqa: PERF401
+                    (id_list.GetId(j), id_list.GetId(j + 1))
+                )
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)

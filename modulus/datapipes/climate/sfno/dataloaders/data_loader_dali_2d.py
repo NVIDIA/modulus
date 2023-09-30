@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import numpy as np
-
-# distributed stuff
-from modulus.utils.sfno.distributed import comm
+import nvidia.dali.fn as fn
+import nvidia.dali.types as dali_types
+import torch
 
 # DALI stuff
 from nvidia.dali.pipeline import Pipeline
-import nvidia.dali.fn as fn
-import nvidia.dali.types as dali_types
 from nvidia.dali.plugin.pytorch import DALIGenericIterator, LastBatchPolicy
 
 # es helper
 import modulus.datapipes.climate.sfno.dataloaders.dali_es_helper_2d as esh
+
+# distributed stuff
+from modulus.utils.sfno.distributed import comm
 
 
 class ERA5DaliESDataloader(object):
@@ -47,10 +47,7 @@ class ERA5DaliESDataloader(object):
             seed=self.global_seed,
         )
 
-        img_shape_x = self.img_shape_x
         img_shape_y = self.img_shape_y
-        in_channels = self.in_channels
-        out_channels = self.out_channels
 
         with pipeline:
             # get input and target

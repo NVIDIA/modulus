@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .shape_check import check_batch_size, check_seq_length, check_channels, check_grid
-from .iterator_check import check_datapipe_iterable
-from .shuffle import check_shuffle
-from .sequence import check_sequence
-from .device import check_datapipe_device
 from .cuda_graphs import check_cuda_graphs
+from .device import check_datapipe_device
+from .iterator_check import check_datapipe_iterable
+from .sequence import check_sequence
+from .shape_check import check_batch_size, check_channels, check_grid, check_seq_length
+from .shuffle import check_shuffle

@@ -408,9 +408,6 @@ def euler_extrapolation_batched_2d(
     # get index
     b, i, j = wp.tid()
 
-    # volume
-    vol = dx * dx
-
     # get rho stensil
     rho_1_1 = index_periodic_edges_batched_2d(rho, b, i, j, lx, ly)
     rho_2_1 = index_periodic_edges_batched_2d(rho, b, i + 1, j, lx, ly)

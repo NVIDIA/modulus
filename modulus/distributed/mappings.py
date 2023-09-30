@@ -15,9 +15,7 @@
 import torch
 
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.utils import _reduce
-from modulus.distributed.utils import _split
-from modulus.distributed.utils import _gather
+from modulus.distributed.utils import _gather, _reduce, _split
 
 
 class _CopyToParallelRegion(torch.autograd.Function):

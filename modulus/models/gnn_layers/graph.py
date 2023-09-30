@@ -12,33 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+from typing import Any, Optional
 
-import torch
-import torch.distributed as dist
 import dgl
-
-from torch import Tensor
+import torch
 from dgl import DGLGraph
-import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple, List
+from torch import Tensor
 
 try:
     from typing import Self
 except ImportError:
     # for Python versions < 3.11
     from typing_extensions import Self
-from torch.utils.checkpoint import checkpoint
 
-from modulus.distributed import DistributedManager
 from modulus.models.gnn_layers import DistributedGraph
 
 try:
-    from pylibcugraphops.pytorch import StaticCSC, BipartiteCSC
+    from pylibcugraphops.pytorch import BipartiteCSC, StaticCSC
 
     USE_CUGRAPHOPS = True
 
-except:
+except ImportError:
     StaticCSC = None
     BipartiteCSC = None
     USE_CUGRAPHOPS = False
@@ -118,9 +112,10 @@ class CuGraphCSC:
             self.is_distributed = False
             return
 
-        assert (
-            self.ef_indices is None
-        ), "DistributedGraph does not support mapping CSC-indices to COO-indices."
+        if self.ef_indices is not None:
+            raise AssertionError(
+                "DistributedGraph does not support mapping CSC-indices to COO-indices."
+            )
         self.dist_graph = DistributedGraph(
             self.offsets,
             self.indices,
@@ -299,11 +294,14 @@ class CuGraphCSC:
             The updated object after moving to the specified device, dtype, or format.
         """
         device, dtype, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        assert dtype in (
+        if dtype not in (
             None,
             torch.int32,
             torch.int64,
-        ), f"Invalid dtype, expected torch.int32 or torch.int64, got {dtype}."
+        ):
+            raise TypeError(
+                f"Invalid dtype, expected torch.int32 or torch.int64, got {dtype}."
+            )
         self.offsets = self.offsets.to(device=device, dtype=dtype)
         self.indices = self.indices.to(device=device, dtype=dtype)
         if self.ef_indices is not None:
@@ -325,10 +323,12 @@ class CuGraphCSC:
             The bipartite CSC graph.
         """
 
-        assert (
-            USE_CUGRAPHOPS
-        ), "Conversion failed, expected cugraph-ops to be installed."
-        assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
+        if not (USE_CUGRAPHOPS):
+            raise RuntimeError(
+                "Conversion failed, expected cugraph-ops to be installed."
+            )
+        if not self.offsets.is_cuda:
+            raise RuntimeError("Expected the graph structures to reside on GPU.")
 
         if self.bipartite_csc is None or not self.cache_graph:
             # Occassionally, we have to watch out for the IdxT type
@@ -374,10 +374,12 @@ class CuGraphCSC:
             The static CSC graph.
         """
 
-        assert (
-            USE_CUGRAPHOPS
-        ), "Conversion failed, expected cugraph-ops to be installed."
-        assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
+        if not (USE_CUGRAPHOPS):
+            raise RuntimeError(
+                "Conversion failed, expected cugraph-ops to be installed."
+            )
+        if not self.offsets.is_cuda:
+            raise RuntimeError("Expected the graph structures to reside on GPU.")
 
         if self.static_csc is None or not self.cache_graph:
             # Occassionally, we have to watch out for the IdxT type
@@ -420,7 +422,8 @@ class CuGraphCSC:
         """
 
         if self.dgl_graph is None or not self.cache_graph:
-            assert self.ef_indices is None, "ef_indices is not supported."
+            if self.ef_indices is not None:
+                raise AssertionError("ef_indices is not supported.")
             graph_offsets = self.offsets
             dst_degree = graph_offsets[1:] - graph_offsets[:-1]
             src_indices = self.indices

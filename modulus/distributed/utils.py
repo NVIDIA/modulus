@@ -13,10 +13,12 @@
 # limitations under the License.
 
 # TODO this also needs more docstrings
-import torch
-import torch.nn.functional as F
-import torch.distributed as dist
 from typing import List, Optional
+
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
+
 from .manager import DistributedManager
 
 
@@ -70,13 +72,15 @@ def truncate_helper(tensor, dim, new_size):
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
     """splits tensor along specific dim"""
-    assert (
-        dim < tensor.dim()
-    ), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    assert (
-        tensor.shape[dim] % num_chunks == 0
-    ), f"Error, cannot split dim {dim} evenly. Dim size is \
+    if not (dim < tensor.dim()):
+        raise AssertionError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
+        )
+    if not (tensor.shape[dim] % num_chunks == 0):
+        raise AssertionError(
+            f"Error, cannot split dim {dim} evenly. Dim size is \
         {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+        )
     chunk_size = tensor.shape[dim] // num_chunks
     tensor_list = torch.split(tensor, chunk_size, dim=dim)
 
@@ -204,9 +208,10 @@ def _gather(input_, dim_, group=None):  # pragma: no cover
         return input_
 
     # sanity checks
-    assert (
-        dim_ < input_.dim()
-    ), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+    if not (dim_ < input_.dim()):
+        raise AssertionError(
+            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+        )
 
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
@@ -253,9 +258,10 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
 
     if comm_size == 1:
         return tensor
@@ -319,10 +325,10 @@ def all_reduce_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert dim < tensor.dim()
-
-    global_size = sum(sizes)
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
@@ -388,10 +394,14 @@ def gather_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert 0 <= dst < comm_size
-    assert dim < tensor.dim()
-    assert tensor.size(dim) == sizes[rank]
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if not (0 <= dst < comm_size):
+        raise ValueError()
+    if tensor.size(dim) != sizes[rank]:
+        raise ValueError()
 
     if comm_size == 1:
         return tensor
@@ -466,9 +476,12 @@ def scatter_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert 0 <= src < comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if not (0 <= src < comm_size):
+        raise ValueError()
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
@@ -542,10 +555,14 @@ def indexed_all_to_all_v_wrapper(
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(sizes) == comm_size
-    assert len(sizes[rank]) == comm_size
-    assert len(indices) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if len(sizes[rank]) != comm_size:
+        raise ValueError()
+    if len(indices) != comm_size:
+        raise ValueError()
 
     indices = torch.cat(indices, dim=0)
     tensor_to_send = torch.index_select(tensor, dim=dim, index=indices)
@@ -606,10 +623,14 @@ def indexed_all_to_all_v_wrapper_bwd(
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(sizes) == comm_size
-    assert len(sizes[rank]) == comm_size
-    assert len(indices) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if len(sizes[rank]) != comm_size:
+        raise ValueError()
+    if len(indices) != comm_size:
+        raise ValueError()
 
     indices = torch.cat(indices, dim=0)
     tensor_shape = list(tensor.shape)

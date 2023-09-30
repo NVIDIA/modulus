@@ -28,8 +28,9 @@
 
 
 import datetime
+from typing import TypeVar, Union
+
 import numpy as np
-from typing import Union, TypeVar
 
 # helper type
 dtype = np.float32

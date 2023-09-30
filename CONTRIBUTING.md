@@ -199,6 +199,9 @@ The pipeline has following stages:
     Linters will perform static analysis to check the style, complexity, errors and more.
     For markdown files `markdownlint` is used, its suggested to use the vscode,
     neovim or sublime [extensions](https://github.com/DavidAnson/markdownlint#related).
+    Modulus uses [Ruff](https://docs.astral.sh/ruff/) for linting of various types.
+    Currently we use flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`),
+    isort (`I`), and performance 'PERF' rules with the isort rules being fixable.
 
 4. `license`
     *Pre-commit will check this for you!*

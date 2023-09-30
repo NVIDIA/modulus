@@ -12,29 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+from typing import Any, Callable, Dict, Tuple, Union
 
-import torch
-import torch.distributed as dist
-from torch import Tensor
-from dgl import DGLGraph
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple, List
+import torch
+from dgl import DGLGraph
+from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
-from modulus.models.gnn_layers import DistributedGraph
 from modulus.models.gnn_layers import CuGraphCSC
 
 try:
     from pylibcugraphops.pytorch.operators import (
+        agg_concat_e2n,
         update_efeat_bipartite_e2e,
         update_efeat_static_e2e,
-        agg_concat_e2n,
     )
 
     USE_CUGRAPHOPS = True
 
-except:
+except ImportError:
     update_efeat_bipartite_e2e = None
     update_efeat_static_e2e = None
     agg_concat_e2n = None

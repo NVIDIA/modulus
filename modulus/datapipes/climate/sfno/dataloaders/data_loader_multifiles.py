@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import glob
+import logging
 import random
+
+import h5py
 import numpy as np
 from torch.utils.data import Dataset
-import h5py
 
 # import cv2
 from modulus.utils.sfno.img_utils import reshape_fields

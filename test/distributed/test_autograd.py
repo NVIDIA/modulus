@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+
 import pytest
 import torch
 
@@ -20,8 +21,8 @@ from modulus.distributed import DistributedManager
 from modulus.distributed.autograd import (
     all_gather_v,
     gather_v,
-    scatter_v,
     indexed_all_to_all_v,
+    scatter_v,
 )
 
 

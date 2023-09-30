@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -543,21 +542,21 @@ class SpectralConv4d(nn.Module):
 # ==========================================
 
 
-def fourier_derivatives(x: Tensor, l: List[float]) -> Tuple[Tensor, Tensor]:
+def fourier_derivatives(x: Tensor, ell: List[float]) -> Tuple[Tensor, Tensor]:
     """
     Fourier derivative function for PINO
     """
 
     # check that input shape maches domain length
-    assert len(x.shape) - 2 == len(l), "input shape doesn't match domain dims"
+    if len(x.shape) - 2 != len(ell):
+        raise ValueError("input shape doesn't match domain dims")
 
     # set pi from numpy
     pi = float(np.pi)
 
     # get needed dims
-    batchsize = x.size(0)
     n = x.shape[2:]
-    dim = len(l)
+    dim = len(ell)
 
     # get device
     device = x.device
@@ -582,9 +581,9 @@ def fourier_derivatives(x: Tensor, l: List[float]) -> Tuple[Tensor, Tensor]:
     j = torch.complex(
         torch.tensor([0.0], device=device), torch.tensor([1.0], device=device)
     )  # Cuda graphs does not work here
-    wx_h = [j * k_x_i * x_h * (2 * pi / l[i]) for i, k_x_i in enumerate(k_x)]
+    wx_h = [j * k_x_i * x_h * (2 * pi / ell[i]) for i, k_x_i in enumerate(k_x)]
     wxx_h = [
-        j * k_x_i * wx_h_i * (2 * pi / l[i])
+        j * k_x_i * wx_h_i * (2 * pi / ell[i])
         for i, (wx_h_i, k_x_i) in enumerate(zip(wx_h, k_x))
     ]
 

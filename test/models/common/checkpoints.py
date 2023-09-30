@@ -13,12 +13,13 @@
 # limitations under the License.
 
 import logging
-import modulus
-import torch
-import shutil
-
-from typing import Tuple
 from pathlib import Path
+from typing import Tuple
+
+import torch
+
+import modulus
+
 from .utils import compare_output
 
 Tensor = torch.Tensor
