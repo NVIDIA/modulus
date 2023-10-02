@@ -37,6 +37,8 @@ dtype = np.float32
 
 T = TypeVar("T", np.ndarray, float)
 
+TIMESTAMP_2000 = datetime.datetime(2000, 1, 1, 12, 0).timestamp()
+
 
 def _ensure_units_of_degrees(da):  # pragma: no cover
     """Ensure that the units of the DataArray are in degrees."""
@@ -75,6 +77,41 @@ def cos_zenith_angle(
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
     julian_centuries = _days_from_2000(time) / 36525.0
+    return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
+
+
+def cos_zenith_angle_from_timestamp(
+    timestamp: T,
+    lon: T,
+    lat: T,
+) -> T:  # pragma: no cover
+    """
+    Cosine of sun-zenith angle for lon, lat at time (UTC).
+    If DataArrays are provided for the lat and lon arguments, their units will
+    be assumed to be in degrees, unless they have a units attribute that
+    contains "rad"; in that case they will automatically be converted to having
+    units of degrees.
+    Args:
+        time: UNIX timestamp
+        lon: float or np.ndarray in degrees (E/W)
+        lat: float or np.ndarray in degrees (N/S)
+    Returns:
+        float, np.ndarray
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> angle = cos_zenith_angle(model_time, lat=360, lon=120)
+    >>> abs(angle - -0.447817277) < 1e-6
+    True
+    """
+    lon_rad = np.deg2rad(lon, dtype=dtype)
+    lat_rad = np.deg2rad(lat, dtype=dtype)
+    seconds_in_day = 86400
+    days_in_julian_year = 36525.0
+    julian_centuries = (
+        (timestamp - TIMESTAMP_2000) / days_in_julian_year / seconds_in_day
+    )
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 

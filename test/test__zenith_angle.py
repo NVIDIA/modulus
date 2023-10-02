@@ -29,7 +29,10 @@ from datetime import datetime
 
 import pytest
 
-from modulus.utils.sfno.zenith_angle import cos_zenith_angle
+from modulus.utils.sfno.zenith_angle import (
+    cos_zenith_angle,
+    cos_zenith_angle_from_timestamp,
+)
 
 
 @pytest.mark.parametrize(
@@ -45,3 +48,7 @@ from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 )
 def test__sun_zenith_angle(time, lon, lat, expected):
     assert cos_zenith_angle(time, lon, lat) == pytest.approx(expected, abs=1e-10)
+    timestamp = time.timestamp()
+    assert cos_zenith_angle_from_timestamp(timestamp, lon, lat) == pytest.approx(
+        expected, abs=1e-10
+    )
