@@ -74,7 +74,8 @@ def cos_zenith_angle(
     """
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
-    return _star_cos_zenith(time, lon_rad, lat_rad)
+    julian_centuries = _days_from_2000(time) / 36525.0
+    return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 
 def _days_from_2000(model_time):  # pragma: no cover
@@ -102,7 +103,7 @@ def _total_days(time_diff):  # pragma: no cover
     return np.asarray(time_diff).astype("timedelta64[us]") / np.timedelta64(1, "D")
 
 
-def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
+def _greenwich_mean_sidereal_time(jul_centuries):  # pragma: no cover
     """
     Greenwich mean sidereal time, in radians.
     Reference:
@@ -116,7 +117,6 @@ def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
     >>> abs(g_time - 4.903831411) < 1e-8
     True
     """
-    jul_centuries = _days_from_2000(model_time) / 36525.0
     theta = 67310.54841 + jul_centuries * (
         876600 * 3600
         + 8640184.812866
@@ -128,7 +128,7 @@ def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
     return theta_radians
 
 
-def _local_mean_sidereal_time(model_time, longitude):  # pragma: no cover
+def _local_mean_sidereal_time(julian_centuries, longitude):  # pragma: no cover
     """
     Local mean sidereal time. requires longitude in radians.
     Ref:
@@ -142,10 +142,10 @@ def _local_mean_sidereal_time(model_time, longitude):  # pragma: no cover
     >>> abs(l_time - 6.474627737) < 1e-8
     True
     """
-    return _greenwich_mean_sidereal_time(model_time) + longitude
+    return _greenwich_mean_sidereal_time(julian_centuries) + longitude
 
 
-def _sun_ecliptic_longitude(model_time):  # pragma: no cover
+def _sun_ecliptic_longitude(julian_centuries):  # pragma: no cover
     """
     Ecliptic longitude of the sun.
     Reference:
@@ -158,7 +158,6 @@ def _sun_ecliptic_longitude(model_time):  # pragma: no cover
     >>> abs(lon - 17.469114444) < 1e-8
     True
     """
-    julian_centuries = _days_from_2000(model_time) / 36525.0
 
     # mean anomaly calculation
     mean_anomaly = np.deg2rad(
@@ -213,7 +212,7 @@ def _obliquity_star(julian_centuries):  # pragma: no cover
     )
 
 
-def _right_ascension_declination(model_time):  # pragma: no cover
+def _right_ascension_declination(julian_centuries):  # pragma: no cover
     """
     Right ascension and declination of the sun.
     Ref:
@@ -228,10 +227,8 @@ def _right_ascension_declination(model_time):  # pragma: no cover
     >>> abs(out2 - -0.401270126) < 1e-8
     True
     """
-    julian_centuries = _days_from_2000(model_time) / 36525.0
     eps = _obliquity_star(julian_centuries)
-
-    eclon = _sun_ecliptic_longitude(model_time)
+    eclon = _sun_ecliptic_longitude(julian_centuries)
     x = np.cos(eclon)
     y = np.cos(eps) * np.sin(eclon)
     z = np.sin(eps) * np.sin(eclon)
@@ -243,17 +240,17 @@ def _right_ascension_declination(model_time):  # pragma: no cover
     return right_ascension, declination
 
 
-def _local_hour_angle(model_time, longitude, right_ascension):  # pragma: no cover
+def _local_hour_angle(julian_centuries, longitude, right_ascension):  # pragma: no cover
     """
     Hour angle at model_time for the given longitude and right_ascension
     longitude in radians
     Ref:
         https://en.wikipedia.org/wiki/Hour_angle#Relation_with_the_right_ascension
     """
-    return _local_mean_sidereal_time(model_time, longitude) - right_ascension
+    return _local_mean_sidereal_time(julian_centuries, longitude) - right_ascension
 
 
-def _star_cos_zenith(model_time, lon, lat):  # pragma: no cover
+def _star_cos_zenith(julian_centuries, lon, lat):  # pragma: no cover
     """
     Return cosine of star zenith angle
     lon,lat in radians
@@ -264,8 +261,8 @@ def _star_cos_zenith(model_time, lon, lat):  # pragma: no cover
             https://en.wikipedia.org/wiki/Solar_zenith_angle
     """
 
-    ra, dec = _right_ascension_declination(model_time)
-    h_angle = _local_hour_angle(model_time, lon, ra)
+    ra, dec = _right_ascension_declination(julian_centuries)
+    h_angle = _local_hour_angle(julian_centuries, lon, ra)
 
     cosine_zenith = np.sin(lat) * np.sin(dec) + np.cos(lat) * np.cos(dec) * np.cos(
         h_angle

@@ -44,4 +44,4 @@ from modulus.utils.sfno.zenith_angle import cos_zenith_angle
     ),
 )
 def test__sun_zenith_angle(time, lon, lat, expected):
-    assert cos_zenith_angle(time, lon, lat) == pytest.approx(expected, abs=1e-9)
+    assert cos_zenith_angle(time, lon, lat) == pytest.approx(expected, abs=1e-10)
