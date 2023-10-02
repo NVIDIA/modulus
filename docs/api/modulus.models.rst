@@ -2,6 +2,244 @@
 Modulus Models
 ==============
 
+.. automodule:: modulus.models
+.. currentmodule:: modulus.models
+
+Basics
+-------
+
+Modulus comes with several optimized, customizable and easy-to-use models for you to
+leverage them in you training workflows. These include some very general models FNOs,
+ResNet, and Graph models and also a few domain-specific models like DLWP, SFNO. 
+
+Currently available models include
+
+.. list-table::
+   :widths: 20 40 40
+   :header-rows: 1
+
+   * - Model Name
+     - Inputs
+     - Outputs
+   * - FullyConnected
+     - torch.Tensor [N, in_features]
+     - torch.Tensor [N, out_features]
+   * - FourierNeuralOperator
+     - torch.Tensor [N, in_channels, H, W]
+     - torch.Tensor [N, out_channels, H, W]
+   * - AdaptiveFourierNeuralOperator
+     - torch.Tensor [N, in_channels, H, W]
+     - torch.Tensor [N, out_channels, H, W]
+   * - MeshGraphNet
+     - torch.Tensor [num_nodes, input_dim_nodes], torch.Tensor [num_edges, input_dim_edges], dgl.DGLGraph [num_nodes, num_edges]
+     - torch.Tensor [num_nodes, output_dim]
+   * - GraphCastNet
+     - torch.Tensor [N, C_in, H, W]
+     - torch.Tensor [N, C_out, H, W]
+   * - Pix2PixNet 
+     - torch.Tensor [N, in_channels, H, W]
+     - torch.Tensor [N, out_channels, H, W]
+   * - One2ManyRNN
+     - torch.Tensor [N, C, 1, H, W]
+     - torch.Tensor [N, C, T, H, W]
+   * - Seq2SeqRNN
+     - torch.Tensor [N, C, T, H, W]
+     - torch.Tensor [N, C, T, H, W]
+   * - SRResNet
+     - torch.Tensor [N, C_in, D, H, W]
+     - torch.Tensor [N, C_out, D_out, H_out, W_out]
+   * - DLWP
+     - torch.Tensor [N, C_in, 6, Res, Res]
+     - torch.Tensor [N, C_out, 6, Res, Res]
+   * - SphericalFourierNeuralOperatorNet
+     - torch.Tensor [N, C_in, H, W]
+     - torch.Tensor [N, C_out, H, W]
+
+
+A simple usage of these models looks like below:
+
+.. code:: python
+
+    >>> import torch
+    >>> from modulus.models.mlp.fully_connected import FullyConnected
+    >>> model = FullyConnected(in_features=32, out_features=64)
+    >>> input = torch.randn(128, 32)
+    >>> output = model(input)
+    >>> output.shape
+    torch.Size([128, 64])
+
+.. code:: python
+
+    >>> import torch
+    >>> from modulus.models.fno.fno import FNO
+    >>> model = FNO(
+            in_channels=4,
+            out_channels=3,
+            decoder_layers=2,
+            decoder_layer_size=32,
+            dimension=2,
+            latent_channels=32,
+            num_fno_layers=2,
+            padding=0,
+        )
+    >>> input = torch.randn(32, 4, 32, 32) #(N, C, H, W)
+    >>> output = model(input)
+    >>> output.size()
+    torch.Size([32, 3, 32, 32])
+    
+
+How to write your own Modulus model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are a few different ways in which you can contribute a model to Modulus. If you
+are a seasoned PyTorch user, the easiest way would be to write your model using the
+optimized layers and utilites from Modulus and Pytorch. Once you have the model ready
+and tested, you can specify the ``ModelMetaData`` to describe the optimizations and
+features supported for the model. This enables the use of the model with other Modulus
+features like the ``StaticCaptureTraining`` and ``StaticCaptureEvaluateNoGrad`` that will
+apply the corresponding optimizations automatically in the training loop.
+
+Let's take a look at writing a simple UNet model. We write the model in such a way that
+it will have support for CUDA Graphs and Automoatic Mixed-Precision. Below is how a
+simple UNet model in PyTorch would look like:
+
+.. code:: python
+
+    import torch.nn as nn
+
+    class UNet(nn.Module):
+        def __init__(self, in_channels=1, out_channels=1):
+            super(UNet, self).__init__()
+
+            self.enc1 = self.conv_block(in_channels, 64)
+            self.enc2 = self.conv_block(64, 128)
+
+            self.dec1 = self.upconv_block(128, 64)
+            self.final = nn.Conv2d(64, out_channels, kernel_size=1)
+
+        def conv_block(self, in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(2)
+            )
+
+        def upconv_block(self, in_channels, out_channels):
+            return nn.Sequential(
+                nn.ConvTranspose2d(in_channels, out_channels, 2, stride=2),
+                nn.Conv2d(out_channels, out_channels, 3, padding=1),
+                nn.ReLU(inplace=True)
+            )
+
+        def forward(self, x):
+            x1 = self.enc1(x)
+            x2 = self.enc2(x1)
+            x = self.dec1(x2)
+            return self.final(x)
+
+To convert this to a Modulus model, we can do a few simple tweaks. First, let's subclass
+the model from ``modulus.models.module.Module`` instead of ``torch.nn.Module``. The
+``modulus.models.module.Module`` class acts like a direct replacement for the
+``torch.nn.Module`` and provides additional functionality for saving and loading
+checkpoints, etc. Refer to the API docs of ``modulus.models.module.Module`` for further
+details. Additionally we will add metadata to the model to capture the optimizations
+enabled. 
+
+.. code:: python
+
+    from dataclasses import dataclass
+    from modulus.models.meta import ModelMetaData
+    from modulus.models.module import Module 
+    import torch.nn as nn
+
+    @dataclass
+    class MetaData(ModelMetaData):
+        name: str = "UNet"
+        # Optimization
+        jit: bool = False
+        cuda_graphs: bool = True
+        amp_cpu: bool = True
+        amp_gpu: bool = True
+    
+    class UNet(Module):
+        def __init__(self, in_channels=1, out_channels=1):
+            super(UNet, self).__init__(meta=MetaData())
+
+            self.enc1 = self.conv_block(in_channels, 64)
+            self.enc2 = self.conv_block(64, 128)
+
+            self.dec1 = self.upconv_block(128, 64)
+            self.final = nn.Conv2d(64, out_channels, kernel_size=1)
+
+        def conv_block(self, in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(2)
+            )
+
+        def upconv_block(self, in_channels, out_channels):
+            return nn.Sequential(
+                nn.ConvTranspose2d(in_channels, out_channels, 2, stride=2),
+                nn.Conv2d(out_channels, out_channels, 3, padding=1),
+                nn.ReLU(inplace=True)
+            )
+
+        def forward(self, x):
+            x1 = self.enc1(x)
+            x2 = self.enc2(x1)
+            x = self.dec1(x2)
+            return self.final(x)
+
+Now, let's use the static capture utils on this model.
+
+.. code:: python
+
+    import torch
+    from modulus.utils import StaticCaptureTraining
+
+    model = UNet().to("cuda")
+    input = torch.randn(8, 1, 128, 128).to("cuda")
+    output = torch.zeros(8, 1, 64, 64).to("cuda")
+
+    optim = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # Create training step function with optimization wrapper
+    @StaticCaptureTraining(
+        model=model,
+        optim=optim,
+        cuda_graph_warmup=11,
+    )
+    def training_step(invar, outvar):
+        predvar = model(invar)
+        loss = torch.sum(torch.pow(predvar - outvar, 2))
+        return loss
+
+    import time
+
+    # Sample training loop
+    for i in range(20):
+        start_time = time.time()
+        loss = training_step(input, output)
+        elapsed_time = time.time() - start_time
+        print(f"Iteration {i + 1} took {elapsed_time:.4f} seconds")
+        input.copy_(torch.randn(8, 1, 128, 128).to("cuda"))
+
+For the simple model above, you can observe ~1.1x speed-up due to CUDA Graphs and AMP.
+The speed-up observed changes from model to model and is typically you can observe greater
+speed-up for more complex models. 
+
+.. note::
+    The ``ModelMetaData`` and ``modulus.model.module.Module`` do not make the model
+    support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
+    to write the model code that enables each of these optimizations. 
+
+How to use the model entrypoints
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+<TODO>
+
+
 .. autosummary::
    :toctree: generated
 
@@ -100,4 +338,3 @@ Spherical Harmonics Fourier Neural Operator
 .. automodule:: modulus.models.sfno.preprocessor
     :members:
     :show-inheritance:
-
