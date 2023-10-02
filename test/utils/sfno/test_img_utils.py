@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import os
-import torch
+
 import numpy as np
+import torch
+
 from modulus.utils.sfno.img_utils import PeriodicPad2d, reshape_fields
 
 

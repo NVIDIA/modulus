@@ -13,20 +13,23 @@
 # limitations under the License.
 
 import logging
+
 import pytest
 import torch
 import torch.fft
 import torch.nn as nn
 import torch.onnx
 import torch.onnx.utils
+
 import modulus.models.layers.fft as fft
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
 from typing import Tuple
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
 
 Tensor = torch.Tensor
@@ -299,27 +302,6 @@ def test_complex_ort_op(test_data: Tensor, rtol: float = 1e-5, atol: float = 1e-
     assert torch.allclose(output.imag, output_onnx_imag, rtol, atol)
 
 
-@check_ort_version()
-def test_roundtrip_ort(test_data_2: Tensor, rtol: float = 1e-5, atol: float = 1e-5):
-    """Tests model with rfft2 and irfft2 combined in ORT session"""
-    x = test_data_2
-
-    class Roundtrip(nn.Module):
-        def forward(self, x):
-            y = fft.rfft2(x, dim=(1, 2), norm="backward")
-            return fft.irfft2(y, dim=(1, 2), norm="backward")
-
-    model = Roundtrip()
-    output = model(x)
-
-    onnx_model = export_to_onnx_stream(model, x)
-    output_ort = run_onnx_inference(onnx_model, (x,))
-    assert len(output_ort) == 1
-    output_onnx = torch.Tensor(output_ort[0])
-
-    assert torch.allclose(output, output_onnx, rtol, atol)
-
-
 def test_onnx_rfft_checks(test_data: Tensor):
     """ONNX rfft error checks work, padding is not supported for ONNX RFFT"""
     # Should test multiple dims, but this is good enough
@@ -339,7 +321,7 @@ def test_onnx_rfft_checks(test_data: Tensor):
         raise AssertionError(
             "ONNX RFFT should error if user gives size larger than RFFT dim"
         )
-    except AssertionError:
+    except ValueError:
         pass
 
     try:

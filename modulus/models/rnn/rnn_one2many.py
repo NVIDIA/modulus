@@ -12,22 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+
 import torch
 import torch.nn as nn
-import modulus
-
 from torch import Tensor
-from dataclasses import dataclass
-from typing import Union, List
+
+import modulus  # noqa: F401 for docs
+from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.models.rnn.layers import (
-    _ConvLayer,
-    _TransposeConvLayer,
     _ConvGRULayer,
+    _ConvLayer,
     _ConvResidualBlock,
+    _TransposeConvLayer,
 )
-from modulus.models.layers import get_activation
 
 
 @dataclass

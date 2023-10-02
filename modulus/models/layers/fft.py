@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import math
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import torch
-from torch import Tensor
-from torch.autograd import Function
 import torch.fft
 import torch.onnx
+from torch import Tensor
+from torch.autograd import Function
 
 # Note 1: for DFT operators, the less verbose way of registering an operator is via
 # `register_custom_op_symbolic`. However, it does not currently work due to
@@ -63,7 +63,8 @@ def rfft(
     if not torch.onnx.is_in_onnx_export():
         return torch.fft.rfft(input, n=n, dim=dim, norm=norm)
 
-    assert isinstance(dim, int)
+    if not isinstance(dim, int):
+        raise TypeError()
     return _rfft_onnx(input, (n,), (dim,), norm)
 
 
@@ -94,7 +95,8 @@ def rfft2(
     if not torch.onnx.is_in_onnx_export():
         return torch.fft.rfft2(input, s=s, dim=dim, norm=norm)
 
-    assert isinstance(dim, tuple) and len(dim) == 2
+    if not (isinstance(dim, tuple) and len(dim) == 2):
+        raise ValueError()
     return _rfft_onnx(input, s, dim, norm)
 
 
@@ -125,7 +127,8 @@ def irfft(
     if not torch.onnx.is_in_onnx_export():
         return torch.fft.irfft(input, n=n, dim=dim, norm=norm)
 
-    assert isinstance(dim, int)
+    if not isinstance(dim, int):
+        raise TypeError()
     return _irfft_onnx(input, (n,), (dim,), norm)
 
 
@@ -156,7 +159,8 @@ def irfft2(
     if not torch.onnx.is_in_onnx_export():
         return torch.fft.irfft2(input, s=s, dim=dim, norm=norm)
 
-    assert isinstance(dim, tuple) and len(dim) == 2
+    if not (isinstance(dim, tuple) and len(dim) == 2):
+        raise ValueError()
     return _irfft_onnx(input, s, dim, norm)
 
 
@@ -183,7 +187,8 @@ def view_as_complex(input: Tensor) -> Tensor:
 
     # Just return the input unchanged - during ONNX export
     # there will be no complex type.
-    assert input.size(-1) == 2
+    if input.size(-1) != 2:
+        raise ValueError
     return input
 
 
@@ -210,7 +215,8 @@ def real(input: Tensor) -> Tensor:
 
     # There is no complex type during ONNX export, so assuming
     # complex numbers are represented as if after `view_as_real`.
-    assert input.size(-1) == 2
+    if input.size(-1) != 2:
+        raise ValueError()
     return input[..., 0]
 
 
@@ -237,7 +243,8 @@ def imag(input: Tensor) -> Tensor:
 
     # There is no complex type during ONNX export, so assuming
     # complex numbers are represented as if after `view_as_real`.
-    assert input.size(-1) == 2
+    if input.size(-1) != 2:
+        raise ValueError(input.size(-1))
     return input[..., 1]
 
 
@@ -248,7 +255,8 @@ def _rfft_onnx(
         _check_padding_rfft(s, dim, input.size())
 
     ndim = len(dim)
-    assert ndim in [1, 2], ndim
+    if ndim not in [1, 2]:
+        raise ValueError(ndim)
 
     perm = not _is_last_dims(dim, input.ndim)
 
@@ -277,7 +285,8 @@ def _irfft_onnx(
         _check_padding_irfft(s, dim, input.size())
 
     ndim = len(dim)
-    assert ndim in [1, 2], ndim
+    if ndim not in [1, 2]:
+        raise ValueError(ndim)
 
     # Whether to permute axes when DFT axis is not the last.
     perm = not _is_last_dims(dim, input.ndim)
@@ -302,7 +311,8 @@ def _irfft_onnx(
 
 
 def _contrib_rfft(g: torch.Graph, input: torch.Value, ndim: int) -> torch.Value:
-    assert ndim in [1, 2], ndim
+    if ndim not in [1, 2]:
+        raise ValueError(ndim)
 
     # See https://github.com/microsoft/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.Rfft
     output = g.op(
@@ -317,7 +327,8 @@ def _contrib_rfft(g: torch.Graph, input: torch.Value, ndim: int) -> torch.Value:
 
 
 def _contrib_irfft(g: torch.Graph, input: torch.Value, ndim: int) -> torch.Value:
-    assert ndim in [1, 2], ndim
+    if ndim not in [1, 2]:
+        raise ValueError(ndim)
 
     # See https://github.com/microsoft/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.Irfft
     output = g.op(
@@ -343,7 +354,8 @@ def _is_last_dims(dim: Tuple[int], inp_ndim: int) -> bool:
 def _check_padding_rfft(
     sizes: Tuple[Optional[int]], dim: Tuple[int], inp_sizes: Tuple[int]
 ) -> None:
-    assert len(sizes) == len(dim), f"{sizes}, {dim}"
+    if len(sizes) != len(dim):
+        raise ValueError(f"{sizes}, {dim}")
     for i, s in enumerate(sizes):
         if s is None or s < 0:
             continue
@@ -359,7 +371,8 @@ def _check_padding_rfft(
 def _check_padding_irfft(
     sizes: Tuple[Optional[int]], dim: Tuple[int], inp_sizes: Tuple[int]
 ) -> None:
-    assert len(sizes) == len(dim), f"{sizes}, {dim}"
+    if len(sizes) != len(dim):
+        raise ValueError(f"{sizes}, {dim}")
     # All but last dims must be equal to input dims.
     for i, s in enumerate(sizes[:-1]):
         if s is None or s < 0:
@@ -403,7 +416,8 @@ def _scale_output_forward(
     """Scales the RFFT output according to norm parameter."""
 
     norm = "backward" if norm is None else norm
-    assert norm in ["forward", "backward", "ortho"], norm
+    if norm not in ["forward", "backward", "ortho"]:
+        raise ValueError(norm)
 
     # No normalization for "backward" in RFFT ops.
     if norm in ["forward", "ortho"]:
@@ -422,7 +436,8 @@ def _scale_output_backward(
     """Scales the IRFFT output according to norm parameter."""
 
     norm = "backward" if norm is None else norm
-    assert norm in ["forward", "backward", "ortho"], norm
+    if norm not in ["forward", "backward", "ortho"]:
+        raise ValueError(norm)
 
     # Things get interesting here: Contrib IRFFT op uses cuFFT cufftXtExec
     # followed by a custom CUDA kernel (`_Normalize`) which always performs
@@ -434,7 +449,8 @@ def _scale_output_backward(
         # Second-to-last dim corresponds to last dim in RFFT transform.
         # This is required by the current Contrib ops,
         # so the axes permutation of the input is done previously.
-        assert len(sizes) >= ndim + 1
+        if not len(sizes) >= ndim + 1:
+            raise ValueError
         dft_size = math.prod(sizes[-(ndim + 1) : -2])
         dft_size *= 2 * (sizes[-2] - 1)
         dft_size = dft_size.float()
@@ -455,7 +471,8 @@ class OnnxRfft(Function):
 
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
-        assert torch.onnx.is_in_onnx_export(), "Must be called only during ONNX export."
+        if not torch.onnx.is_in_onnx_export():
+            raise ValueError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib RFFT which assumes
         # DFT of last dim and no normalization.
@@ -478,7 +495,8 @@ class OnnxRfft2(Function):
 
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
-        assert torch.onnx.is_in_onnx_export(), "Must be called only during ONNX export."
+        if not torch.onnx.is_in_onnx_export():
+            raise AssertionError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib RFFT which assumes
         # DFT of last dims and no normalization.
@@ -501,7 +519,8 @@ class OnnxIrfft(Function):
 
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
-        assert torch.onnx.is_in_onnx_export(), "Must be called only during ONNX export."
+        if not torch.onnx.is_in_onnx_export():
+            raise ValueError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib IRFFT which assumes
         # DFT of last dim and 1/n normalization.
@@ -523,7 +542,8 @@ class OnnxIrfft2(Function):
 
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
-        assert torch.onnx.is_in_onnx_export(), "Must be called only during ONNX export."
+        if not torch.onnx.is_in_onnx_export():
+            raise AssertionError("Must be called only during ONNX export.")
 
         # We need to mimic the behavior of Contrib IRFFT which assumes
         # DFT of last dims and 1/n normalization.

@@ -12,23 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+# we need this for the zenith angle feature
+import datetime
 import glob
-import numpy as np
+import logging
+import operator
+import os
+from bisect import bisect_right
+from itertools import accumulate, groupby
+
 import cupy as cp
 import cupyx as cpx
 import h5py
-import zarr
-import logging
-from itertools import groupby, accumulate
-import operator
-from bisect import bisect_right
+import numpy as np
 
 # for nvtx annotation
 import torch
+import zarr
 
-# we need this for the zenith angle feature
-import datetime
 from modulus.utils.sfno.zenith_angle import cos_zenith_angle
 
 
@@ -94,7 +95,8 @@ class GeneralES(object):
 
         # set the read slices
         # we do not support channel parallelism yet
-        assert io_grid[0] == 1
+        if io_grid[0] != 1:
+            raise AssertionError("Channel parallelism is not yet supported")
         self.io_grid = io_grid[1:]
         self.io_rank = io_rank[1:]
 
@@ -285,8 +287,10 @@ class GeneralES(object):
             self.crop_size[0] = self.img_shape[0]
         if self.crop_size[1] is None:
             self.crop_size[1] = self.img_shape[1]
-        assert self.crop_anchor[0] + self.crop_size[0] <= self.img_shape[0]
-        assert self.crop_anchor[1] + self.crop_size[1] <= self.img_shape[1]
+        if self.crop_anchor[0] + self.crop_size[0] > self.img_shape[0]:
+            raise AssertionError
+        if self.crop_anchor[1] + self.crop_size[1] > self.img_shape[1]:
+            raise AssertionError
         # for x
         read_shape_x = (self.crop_size[0] + self.io_grid[0] - 1) // self.io_grid[0]
         read_anchor_x = self.crop_anchor[0] + read_shape_x * self.io_rank[0]

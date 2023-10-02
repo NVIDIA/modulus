@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime, timedelta
+
 import h5py
+import netCDF4 as nc
 import numpy as np
 import torch
-from datetime import datetime, timedelta
-import netCDF4 as nc
 
 try:
     import nvidia.dali as dali
@@ -29,9 +30,8 @@ except ImportError:
     )
 
 from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple
 from pathlib import Path
-from torch.utils.data import Dataset
+from typing import Iterable, List, Tuple, Union
 
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
@@ -181,7 +181,7 @@ class ClimateHDF5Datapipe(Datapipe):
         self.num_workers = num_workers
         self.shuffle = shuffle
         self.data_dir = Path(data_dir)
-        self.stats_dir = Path(stats_dir) if not stats_dir is None else None
+        self.stats_dir = Path(stats_dir) if stats_dir is not None else None
         self.channels = channels
         self.stride = stride
         self.dt = dt
@@ -218,14 +218,14 @@ class ClimateHDF5Datapipe(Datapipe):
             device = torch.device(device)
 
         # Need a index id if cuda
-        if device.type == "cuda" and device.index == None:
+        if device.type == "cuda" and device.index is None:
             device = torch.device("cuda:0")
         self.device = device
 
         # check root directory exists
         if not self.data_dir.is_dir():
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
-        if not self.stats_dir is None and not self.stats_dir.is_dir():
+        if self.stats_dir is not None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
         if self.stats_dir is None:
             self.logger.warning(
@@ -348,9 +348,10 @@ class ClimateHDF5Datapipe(Datapipe):
         lsm = np.flip(
             lsm, axis=1
         )  # flip latitude axis, TODO hacky fix and we should get this from the file
-        assert (
-            lsm.shape[1:] == self.data_shape
-        ), f"Land-sea mask shape {lsm.shape} does not match data shape {self.data_shape}"
+        if lsm.shape[1:] != self.data_shape:
+            raise AssertionError(
+                "Land-sea mask shape {lsm.shape} does not match data shape {self.data_shape}"
+            )
         lsm = lsm[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         self.lsm = dali.types.Constant(lsm)
 
@@ -361,9 +362,10 @@ class ClimateHDF5Datapipe(Datapipe):
         geop = np.flip(
             geop, axis=1
         )  # flip latitude axis, TODO hacky fix and we should get this from the file
-        assert (
-            geop.shape[1:] == self.data_shape
-        ), f"Geopotential shape {geop.shape} does not match data shape {self.data_shape}"
+        if geop.shape[1:] != self.data_shape:
+            raise AssertionError(
+                f"Geopotential shape {geop.shape} does not match data shape {self.data_shape}"
+            )
         geop = geop[:, : self.cropped_data_shape[0], : self.cropped_data_shape[1]]
         if normalize:
             geop = (geop - geop.mean()) / geop.std()
@@ -444,7 +446,7 @@ class ClimateHDF5Datapipe(Datapipe):
             state_seq = state_seq[:, :, :h, :w]
 
             # Normalize
-            if not self.stats_dir is None:
+            if self.stats_dir is not None:
                 state_seq = dali.fn.normalize(state_seq, mean=self.mu, stddev=self.sd)
 
             # Make output list

@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
-from modulus.models.layers.activations import Identity, Stan, SquarePlus
+import pytest
+import torch
+
+from modulus.models.layers.activations import Identity, SquarePlus, Stan
 from modulus.models.layers.fused_silu import (
     FusedSiLU,
     FusedSiLU_deriv_1,
     FusedSiLU_deriv_2,
     FusedSiLU_deriv_3,
 )
+
 from . import common
 
 

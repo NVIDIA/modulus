@@ -12,19 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import fsspec
-from modulus.utils.filesystem import Package
-from modulus.models.dlwp import DLWP
-from pathlib import Path
-import numpy as np
 import datetime
-import torch
 import json
-import shutil
 import os
+import shutil
 
+import numpy as np
 import pytest
+import torch
 from pytest_utils import import_or_fail, nfsdata_or_fail
+
+from modulus.models.dlwp import DLWP
+from modulus.utils.filesystem import Package
 
 
 @pytest.fixture
@@ -235,11 +234,11 @@ def test__CozZenWrapper(batch_size, pytestconfig):
 
     from modulus.models.fcn_mip_plugin import _CosZenWrapper
 
-    class I(torch.nn.Module):
+    class Id(torch.nn.Module):
         def forward(self, x):
             return x
 
-    model = I()
+    model = Id()
     nx, ny = (3, 4)
     lat = np.arange(nx)
     lon = np.arange(ny)

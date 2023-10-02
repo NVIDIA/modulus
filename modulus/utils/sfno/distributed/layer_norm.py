@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Tuple
+
 import torch
 import torch.nn as nn
-
 from torch.cuda import amp
-
-from typing import Tuple
 
 # for spatial model-parallelism
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import (
-    gather_from_parallel_region,
     copy_to_parallel_region,
+    gather_from_parallel_region,
 )
 
 

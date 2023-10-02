@@ -11,18 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import sys, os
+# ruff: noqa: E402
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
-import pytest
-
-from graphcast.utils import fix_random_seeds, create_random_input
-
 import common
-from graphcast.utils import get_icosphere_path
+import pytest
+from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
 from pytest_utils import import_or_fail
 
 icosphere_path = get_icosphere_path()

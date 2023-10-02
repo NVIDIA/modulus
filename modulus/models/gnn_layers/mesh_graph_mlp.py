@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple, Optional, Union
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -21,14 +21,15 @@ from dgl import DGLGraph
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
-from .utils import concat_efeat, sum_efeat, CuGraphCSC
 from modulus.models.layers.fused_silu import silu_backward_for
+
+from .utils import CuGraphCSC, concat_efeat, sum_efeat
 
 try:
     from apex.normalization import FusedLayerNorm
 
     apex_imported = True
-except:
+except ImportError:
     apex_imported = False
 
 
@@ -128,13 +129,14 @@ class MeshGraphMLP(nn.Module):
 
         self.norm_type = norm_type
         if norm_type is not None:
-            assert norm_type in [
+            if norm_type not in [
                 "LayerNorm",
                 "GraphNorm",
                 "InstanceNorm",
                 "BatchNorm",
                 "MessageNorm",
-            ]
+            ]:
+                raise ValueError(norm_type)
             if norm_type == "LayerNorm" and apex_imported:
                 norm_layer = FusedLayerNorm
             else:
@@ -144,7 +146,8 @@ class MeshGraphMLP(nn.Module):
         self.model = nn.Sequential(*layers)
 
         if recompute_activation:
-            assert isinstance(activation_fn, nn.SiLU)
+            if not isinstance(activation_fn, nn.SiLU):
+                raise ValueError(activation_fn)
             self.recompute_activation = True
         else:
             self.recompute_activation = False
@@ -326,13 +329,14 @@ class MeshGraphEdgeMLPSum(nn.Module):
 
         self.norm_type = norm_type
         if norm_type is not None:
-            assert norm_type in [
+            if norm_type not in [
                 "LayerNorm",
                 "GraphNorm",
                 "InstanceNorm",
                 "BatchNorm",
                 "MessageNorm",
-            ]
+            ]:
+                raise ValueError(norm_type)
             if norm_type == "LayerNorm" and apex_imported:
                 norm_layer = FusedLayerNorm
             else:
@@ -342,7 +346,8 @@ class MeshGraphEdgeMLPSum(nn.Module):
         self.model = nn.Sequential(*layers)
 
         if recompute_activation:
-            assert isinstance(activation_fn, nn.SiLU)
+            if not isinstance(activation_fn, nn.SiLU):
+                raise ValueError(activation_fn)
             self.recompute_activation = True
         else:
             self.recompute_activation = False

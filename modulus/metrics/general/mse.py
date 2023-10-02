@@ -14,8 +14,9 @@
 
 # TODO(Dallas) Introduce Ensemble RMSE and MSE routines.
 
-import torch
 from typing import Union
+
+import torch
 
 Tensor = torch.Tensor
 

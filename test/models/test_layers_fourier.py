@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pytest
+import torch
 
-from modulus.models.layers import FourierLayer, FourierFilter, GaborFilter
+from modulus.models.layers import FourierFilter, FourierLayer, GaborFilter
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

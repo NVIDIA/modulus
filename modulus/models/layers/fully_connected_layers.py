@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Union, Callable
+from typing import Callable, Union
 
 import torch.nn as nn
 from torch import Tensor
 
 from .activations import Identity
-from .weight_norm import WeightNormLinear
 from .weight_fact import WeightFactLinear
+from .weight_norm import WeightNormLinear
 
 
 class FCLayer(nn.Module):
@@ -61,9 +61,10 @@ class FCLayer(nn.Module):
         self.activation_par = activation_par
 
         # Ensure weight_norm and weight_fact are not both True
-        assert not (
-            weight_norm and weight_fact
-        ), "Cannot apply both weight normalization and weight factorization together, please select one."
+        if weight_norm and weight_fact:
+            raise ValueError(
+                "Cannot apply both weight normalization and weight factorization together, please select one."
+            )
 
         if weight_norm:
             self.linear = WeightNormLinear(in_features, out_features, bias=True)

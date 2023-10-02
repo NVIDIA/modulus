@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import modulus
-
-import torch
 import logging
+
+import modulus
 
 logger = logging.getLogger("__name__")
 
@@ -45,6 +44,6 @@ def check_datapipe_iterable(
             pass
         assert len(datapipe) > 0  # even if infinite, len should return a int
         return True
-    except:
-        logger.warning(f"Datapipe is not iterable")
+    except Exception as e:
+        logger.warning(f"Datapipe is not iterable: {e}")
         return False
