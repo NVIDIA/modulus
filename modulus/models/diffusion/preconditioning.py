@@ -469,7 +469,7 @@ class EDMPrecond(torch.nn.Module):
     ----
     Reference: Karras, T., Aittala, M., Aila, T. and Laine, S., 2022. Elucidating the
     design space of diffusion-based generative models. Advances in Neural Information
-    Processing Systems, 35, pp.26565-26577..
+    Processing Systems, 35, pp.26565-26577.
     """
 
     def __init__(
