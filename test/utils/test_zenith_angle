@@ -29,7 +29,7 @@ from datetime import datetime
 
 import pytest
 
-from modulus.utils.sfno.zenith_angle import (
+from modulus.utils.zenith_angle import (
     cos_zenith_angle,
     cos_zenith_angle_from_timestamp,
 )
