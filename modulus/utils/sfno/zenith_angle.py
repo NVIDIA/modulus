@@ -86,22 +86,21 @@ def cos_zenith_angle_from_timestamp(
     lat: T,
 ) -> T:  # pragma: no cover
     """
-    Cosine of sun-zenith angle for lon, lat at time (UTC).
-    If DataArrays are provided for the lat and lon arguments, their units will
-    be assumed to be in degrees, unless they have a units attribute that
-    contains "rad"; in that case they will automatically be converted to having
-    units of degrees.
-    Args:
-        time: UNIX timestamp
-        lon: float or np.ndarray in degrees (E/W)
-        lat: float or np.ndarray in degrees (N/S)
-    Returns:
-        float, np.ndarray
+    Compute cosine of zenith angle using UNIX timestamp
+
+    Since the UNIX timestamp is a floating point or integer this routine can be
+    compiled with jax.
+
+    Parameters
+    ----------
+    timestamp: timestamp in seconds from UNIX epoch
+    lon: longitude in degrees E
+    lat: latitude in degrees N
 
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> angle = cos_zenith_angle(model_time, lat=360, lon=120)
+    >>> angle = cos_zenith_angle(model_time.timestamp(), lat=360, lon=120)
     >>> abs(angle - -0.447817277) < 1e-6
     True
     """
