@@ -21,6 +21,7 @@ Diffusion-Based Generative Models".
 import numpy as np
 import torch
 from torch.nn.functional import silu
+from dataclasses import dataclass
 
 from modulus.models.diffusion import (
     Linear,
@@ -30,12 +31,31 @@ from modulus.models.diffusion import (
     PositionalEmbedding,
     FourierEmbedding,
 )
-
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
 
 from typing import List
 
 
-class SongUNet(torch.nn.Module):
+@dataclass
+class MetaData(ModelMetaData):
+    name: str = "SongUNet"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = False
+    amp_cpu: bool = False
+    amp_gpu: bool = True
+    torch_fx: bool = False
+    # Data type
+    bf16: bool = True
+    # Inference
+    onnx: bool = False
+    # Physics informed
+    func_torch: bool = False
+    auto_grad: bool = False
+
+
+class SongUNet(Module):
     """
     Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
     optional self-attention,embeddings, and encoder-decoder components.
@@ -145,7 +165,7 @@ class SongUNet(torch.nn.Module):
                 f"Invalid decoder_type: {decoder_type}. Must be one of {valid_decoder_types}."
             )
 
-        super().__init__()
+        super().__init__(meta=MetaData())
         self.label_dropout = label_dropout
         self.embedding_type = embedding_type
         emb_channels = model_channels * channel_mult_emb

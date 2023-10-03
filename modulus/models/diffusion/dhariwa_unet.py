@@ -21,25 +21,40 @@ Diffusion-Based Generative Models".
 import numpy as np
 import torch
 from torch.nn.functional import silu
+from dataclasses import dataclass
 
 from modulus.models.diffusion import (
     Linear,
     Conv2d,
     GroupNorm,
-    AttentionOp,
     UNetBlock,
     PositionalEmbedding,
-    FourierEmbedding,
-    VPPrecond,
-    VEPrecond,
-    iDDPMPrecond,
-    EDMPrecond,
 )
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
 
-from typing import List, Dict, Any
+from typing import List
 
 
-class DhariwalUNet(torch.nn.Module):
+@dataclass
+class MetaData(ModelMetaData):
+    name: str = "SongUNet"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = False
+    amp_cpu: bool = False
+    amp_gpu: bool = True
+    torch_fx: bool = False
+    # Data type
+    bf16: bool = True
+    # Inference
+    onnx: bool = False
+    # Physics informed
+    func_torch: bool = False
+    auto_grad: bool = False
+
+
+class DhariwalUNet(Module):
     """
     Reimplementation of the ADM architecture, U-Net variants with optional
     self-attention.
@@ -97,20 +112,20 @@ class DhariwalUNet(torch.nn.Module):
 
     def __init__(
         self,
-        img_resolution,
-        in_channels,
-        out_channels,
-        label_dim=0,
-        augment_dim=0,
-        model_channels=192,
-        channel_mult=[1, 2, 3, 4],
-        channel_mult_emb=4,
-        num_blocks=3,
-        attn_resolutions=[32, 16, 8],
-        dropout=0.10,
-        label_dropout=0,
+        img_resolution: int,
+        in_channels: int,
+        out_channels: int,
+        label_dim: int = 0,
+        augment_dim: int = 0,
+        model_channels: int = 192,
+        channel_mult: List[int] = [1, 2, 3, 4],
+        channel_mult_emb: int = 4,
+        num_blocks: int = 3,
+        attn_resolutions: List[int] = [32, 16, 8],
+        dropout: float = 0.10,
+        label_dropout: float = 0.0,
     ):
-        super().__init__()
+        super().__init__(meta=MetaData())
         self.label_dropout = label_dropout
         emb_channels = model_channels * channel_mult_emb
         init = dict(
