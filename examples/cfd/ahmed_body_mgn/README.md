@@ -32,7 +32,7 @@ consist of 7.2 million mesh points on average, but we use the surface mesh as th
 to training which is roughly around 70k mesh nodes.
 
 To request access to the full dataset, please reach out to the
-[NVIDIA Modulus team](simnet-team@nvidia.com).
+[NVIDIA Modulus team](modulus-team@nvidia.com).
 
 ## Model overview and architecture
 
@@ -69,7 +69,7 @@ performed for 500 epochs.
 ## Getting Started
 
 The dataset for this example is not publicly available. To get access, please reach out
-to the [NVIDIA Modulus team](simnet-team@nvidia.com).
+to the [NVIDIA Modulus team](modulus-team@nvidia.com).
 
 This example requires the `pyvista` and `vtk` libraries. Install with
 
