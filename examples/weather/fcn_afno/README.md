@@ -35,8 +35,8 @@ different lead times.](../../../docs/img/FourCastNet.gif)
 
 ## Dataset
 
-The model is trained on a 20-channel subset of the ERA5 reanalysis data on single levels and
-pressure levels that is pre-processed and stored into HDF5 files.
+The model is trained on a 20-channel subset of the ERA5 reanalysis data on single levels
+and pressure levels that is pre-processed and stored into HDF5 files.
 The subset of the ERA5 training data that FCN was trained on is hosted at the
 National Energy Research Scientific Computing Center (NERSC). For convenience
 [it is available to all via Globus](https://app.globus.org/file-manager?origin_id=945b3c9e-0f8c-11ed-8daf-9f359c660fbd&origin_path=%2F~%2Fdata%2F).
@@ -83,10 +83,10 @@ If you find this work useful, cite it using:
 
 ```text
 @article{pathak2022fourcastnet,
-  title={Fourcastnet: A global data-driven high-resolution weather model 
+  title={Fourcastnet: A global data-driven high-resolution weather model
          using adaptive fourier neural operators},
-  author={Pathak, Jaideep and Subramanian, Shashank and Harrington, Peter 
-          and Raja, Sanjeev and Chattopadhyay, Ashesh and Mardani, Morteza 
+  author={Pathak, Jaideep and Subramanian, Shashank and Harrington, Peter
+          and Raja, Sanjeev and Chattopadhyay, Ashesh and Mardani, Morteza
           and Kurth, Thorsten and Hall, David and Li, Zongyi and Azizzadenesheli, Kamyar
           and Hassanzadeh, Pedram and Kashinath, Karthik and Anandkumar, Animashree},
   journal={arXiv preprint arXiv:2202.11214},
@@ -99,7 +99,7 @@ Climate Data Store.
 
 ```text
 Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabater, J.,
-Nicolas, J., Peubey, C., Radu, R., Rozum, I., Schepers, D., Simmons, A., Soci, C., 
+Nicolas, J., Peubey, C., Radu, R., Rozum, I., Schepers, D., Simmons, A., Soci, C.,
 Dee, D., Thépaut, J-N. (2018): ERA5 hourly data on pressure levels from 1959 to present.
 Copernicus Climate Change Service (C3S) Climate Data Store (CDS). 10.24381/cds.bd0915c6
 
