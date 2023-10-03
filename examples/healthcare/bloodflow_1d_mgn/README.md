@@ -1,8 +1,8 @@
 # MeshGraphNet for Reduced-Order cardiovascular simulations
 
 This example implements the one-dimensional Reduced-Order model based on
-MeshGraphNet presented in the paper [`Learning Reduced-Order Models for Cardiovascular
-Simulations with Graph Neural Networks`](https://arxiv.org/abs/2303.07310)
+MeshGraphNet presented in the paper [Learning Reduced-Order Models for Cardiovascular
+Simulations with Graph Neural Networks](https://arxiv.org/abs/2303.07310)
 (Pegolotti et al, 2023).
 
 ## Problem overview
