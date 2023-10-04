@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import ABC
+
 import torch
 from torch import Tensor
-from abc import ABC
 
 
 class WeightedStatistic(ABC):
@@ -27,7 +28,8 @@ class WeightedStatistic(ABC):
     """
 
     def __init__(self, weights: Tensor):
-        assert torch.all(weights > 0.0).item(), "Expected all weights to be positive."
+        if not torch.all(weights > 0.0).item():
+            raise ValueError("Expected all weights to be positive.")
         self.weights = self._normalize(weights)
 
     def __call__(self, x: Tensor, dim: int):
@@ -36,13 +38,14 @@ class WeightedStatistic(ABC):
         """
         w = self.weights
         if w.ndim == 1:
-            assert x.shape[dim] == len(w), (
-                "Expected inputs and weights to have the same size along the reduction dimension but have dimensions"
-                + str(len(x[dim]))
-                + " and "
-                + str(len(w))
-                + "."
-            )
+            if x.shape[dim] != len(w):
+                raise ValueError(
+                    "Expected inputs and weights to have the same size along the reduction dimension but have dimensions"
+                    + str(len(x[dim]))
+                    + " and "
+                    + str(len(w))
+                    + "."
+                )
             if dim < 0:
                 dim = x.ndim + dim
             for i in range(x.ndim):
@@ -51,9 +54,10 @@ class WeightedStatistic(ABC):
                 elif i > dim:
                     w = w.unsqueeze(-1)
         else:
-            assert (x.ndim == w.ndim) and (
-                x.shape[dim] == w.shape[dim]
-            ), "Expected inputs and weights to have compatible shapes."
+            if not ((x.ndim == w.ndim) and (x.shape[dim] == w.shape[dim])):
+                raise ValueError(
+                    "Expected inputs and weights to have compatible shapes."
+                )
         return w
 
     def _normalize(self, weights: Tensor) -> Tensor:

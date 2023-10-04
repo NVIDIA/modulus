@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-from torch import Tensor
-from dgl import DGLGraph
 from typing import Tuple, Union
 
+import torch
+import torch.nn as nn
+from dgl import DGLGraph
+from torch import Tensor
+
 from .mesh_graph_mlp import MeshGraphMLP
-from .utils import aggregate_and_concat, CuGraphCSC
+from .utils import CuGraphCSC, aggregate_and_concat
 
 
 class MeshNodeBlock(nn.Module):

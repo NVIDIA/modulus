@@ -15,7 +15,7 @@
 import torch
 import torch.nn as nn
 
-import modulus
+import modulus  # noqa: F401 for docs
 
 Tensor = torch.Tensor
 

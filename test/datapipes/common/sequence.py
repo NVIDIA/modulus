@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import modulus
+import logging
 
 import torch
-import logging
-from typing import Tuple, Union
+
+import modulus  # noqa: F401 for docs
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
@@ -56,7 +56,7 @@ def check_sequence(
 
     # check if seq matches epected
     if correct_seq != tensor_tags:
-        logger.warning(f"Sequence does not match expected")
+        logger.warning("Sequence does not match expected")
         logger.warning(f"Expected Sequence: {correct_seq}")
         logger.warning(f"Sequence order: {tensor_tags}")
         return False

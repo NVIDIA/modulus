@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
+
+import pytest
+import torch
 
 from modulus.models.rnn.rnn_one2many import One2ManyRNN
 from modulus.models.rnn.rnn_seq2seq import Seq2SeqRNN
+
 from . import common
 
 
@@ -122,18 +124,17 @@ def test_conv_rnn_one2many_constructor(device):
     """Test model constructor"""
 
     # Define dictionary of constructor args
-    arg_list = []
-    for dimension in [2, 3]:
-        arg_list.append(
-            {
-                "input_channels": 1,
-                "dimension": dimension,
-                "nr_latent_channels": random.randint(4, 8),
-                "activation_fn": "relu",
-                "nr_downsamples": random.randint(2, 3),
-                "nr_tsteps": random.randint(8, 16),
-            }
-        )
+    arg_list = [
+        {
+            "input_channels": 1,
+            "dimension": dimension,
+            "nr_latent_channels": random.randint(4, 8),
+            "activation_fn": "relu",
+            "nr_downsamples": random.randint(2, 3),
+            "nr_tsteps": random.randint(8, 16),
+        }
+        for dimension in [2, 3]
+    ]
 
     for kw_args in arg_list:
         # Construct model
@@ -269,18 +270,17 @@ def test_conv_rnn_seq2seq_constructor(device):
     """Test model constructor"""
 
     # Define dictionary of constructor args
-    arg_list = []
-    for dimension in [2, 3]:
-        arg_list.append(
-            {
-                "input_channels": 1,
-                "dimension": dimension,
-                "nr_latent_channels": random.randint(4, 8),
-                "activation_fn": "relu",
-                "nr_downsamples": random.randint(2, 3),
-                "nr_tsteps": random.randint(2, 4),
-            }
-        )
+    arg_list = [
+        {
+            "input_channels": 1,
+            "dimension": dimension,
+            "nr_latent_channels": random.randint(4, 8),
+            "activation_fn": "relu",
+            "nr_downsamples": random.randint(2, 3),
+            "nr_tsteps": random.randint(2, 4),
+        }
+        for dimension in [2, 3]
+    ]
 
     for kw_args in arg_list:
         # Construct model

@@ -13,18 +13,18 @@
 # limitations under the License.
 
 
+from typing import List, Optional
+
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
-from typing import Optional, List
-from .manager import DistributedManager
+
 from .utils import (
-    gather_v_wrapper,
-    scatter_v_wrapper,
     all_gather_v_wrapper,
     all_reduce_v_wrapper,
+    gather_v_wrapper,
     indexed_all_to_all_v_wrapper,
     indexed_all_to_all_v_wrapper_bwd,
+    scatter_v_wrapper,
 )
 
 

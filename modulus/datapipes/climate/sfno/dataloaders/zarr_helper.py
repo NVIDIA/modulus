@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Protocol
-import xarray
 from dataclasses import dataclass
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.distributed import DistributedSampler
-from typing import Any
+from typing import Any, Protocol
+
 import numpy as np
+import torch
+import xarray
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
 
 
 class Params(Protocol):
@@ -65,11 +65,15 @@ def get_data_loader(
     mean = np.load(params.global_means_path)
     std = np.load(params.global_stds_path)
 
-    assert mean.shape == (1, len(ds.channel), 1, 1), mean.shape
-    assert not np.any(np.isnan(mean)), np.ravel(std)
+    if mean.shape != (1, len(ds.channel), 1, 1):
+        raise AssertionError(mean.shape)
+    if np.any(np.isnan(mean)):
+        raise AssertionError(np.ravel(std))
 
-    assert std.shape == (1, len(ds.channel), 1, 1), std.shape
-    assert not np.any(np.isnan(std)), np.ravel(std)
+    if std.shape != (1, len(ds.channel), 1, 1):
+        raise AssertionError(std.shape)
+    if np.any(np.isnan(std)):
+        raise AssertionError(np.ravel(std))
 
     def reset_pipeline():  # pragma: no cover
         """reset the pipeline to the beginning of the dataset"""

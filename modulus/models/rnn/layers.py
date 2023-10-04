@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import math
+
 import torch
 import torch.nn as nn
-
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 
 
 def _get_same_padding(x: int, k: int, s: int) -> int:
@@ -103,7 +103,8 @@ class _ConvLayer(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         input_length = len(x.size()) - 2  # exclude channel and batch dims
-        assert input_length == self.dimension, "Input dimension not compatible"
+        if input_length != self.dimension:
+            raise ValueError("Input dimension not compatible")
 
         if input_length == 1:
             iw = x.size()[-1:][0]
@@ -226,7 +227,8 @@ class _TransposeConvLayer(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         orig_x = x
         input_length = len(orig_x.size()) - 2  # exclude channel and batch dims
-        assert input_length == self.dimension, "Input dimension not compatible"
+        if input_length != self.dimension:
+            raise ValueError("Input dimension not compatible")
 
         x = self.trans_conv(x)
 

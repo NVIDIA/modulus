@@ -11,22 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import sys, os
+# ruff: noqa: E402
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import pytest
-import time
 import torch
-
+from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
 from torch.nn.parallel import DistributedDataParallel
 
-from graphcast.utils import fix_random_seeds, create_random_input
-from graphcast.utils import get_icosphere_path
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from modulus.distributed import DistributedManager
+from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 icosphere_path = get_icosphere_path()
 

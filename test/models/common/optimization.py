@@ -13,13 +13,14 @@
 # limitations under the License.
 
 import logging
-import modulus
+from contextlib import nullcontext
+from typing import Tuple
+
 import torch
 
-from typing import Tuple
-from contextlib import nullcontext
+import modulus
 
-from .utils import dummy_loss_fn, compare_output
+from .utils import compare_output, dummy_loss_fn
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")

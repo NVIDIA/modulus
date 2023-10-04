@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
+import pytest
+import torch
+
 from modulus.models.afno import AFNO
+
 from . import common
 
 
@@ -99,7 +101,7 @@ def test_afno_constructor(device):
             num_blocks=4,
         ).to(device)
         raise AssertionError("Failed to error for invalid embed and block number")
-    except AssertionError:
+    except ValueError:
         pass
 
 

@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import pytest
 from unittest.mock import MagicMock
 
 from modulus.datapipes.climate.sfno.dataloaders.data_loader_dummy import DummyLoader

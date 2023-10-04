@@ -13,24 +13,24 @@
 # limitations under the License.
 
 import torch
+import torch.distributed as dist
+
+# distributed computing stuff
+from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 # we need those here:
 from modulus.utils.sfno.metrics.weighted_acc_rmse import (
     Quadrature,
+    l1_torch_distributed,
+    l1_torch_local,
     lat_torch,
     latitude_weighting_factor_torch,
-    l1_torch_local,
-    l1_torch_distributed,
-    weighted_rmse_torch_local,
-    weighted_rmse_torch_distributed,
-    weighted_acc_torch_local,
     weighted_acc_torch_distributed,
+    weighted_acc_torch_local,
+    weighted_rmse_torch_distributed,
+    weighted_rmse_torch_local,
 )
-
-# distributed computing stuff
-from modulus.utils.sfno.distributed import comm
-import torch.distributed as dist
-from modulus.utils.sfno.distributed.mappings import gather_from_parallel_region
 
 
 class MetricsHandler:
@@ -292,7 +292,7 @@ class MetricsHandler:
                 self.valid_weighted_rmse = torch.cat(valid_weighted_rmse_list, dim=0)
                 # we need to reduce the l1 loss as well, since this is not encoded in the loss obj
                 dist.all_reduce(
-                    valid_l1, op=dist.ReduceOp.AVG, group=comm.get_group("matmul")
+                    self.valid_l1, op=dist.ReduceOp.AVG, group=comm.get_group("matmul")
                 )
 
                 # gather acc curves

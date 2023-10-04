@@ -13,23 +13,24 @@
 # limitations under the License.
 
 import sys
+from dataclasses import dataclass
+from typing import Dict, Tuple, Union
+
 import numpy as np
 import torch
 import warp as wp
-from dataclasses import dataclass
-from typing import Union, Tuple, Dict
 
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
-from .kernels.initialization import init_uniform_random_4d
 from .kernels.finite_difference import (
     darcy_mgrid_jacobi_iterative_batched_2d,
     mgrid_inf_residual_batched_2d,
 )
+from .kernels.initialization import init_uniform_random_4d
 from .kernels.utils import (
+    bilinear_upsample_batched_2d,
     fourier_to_array_batched_2d,
     threshold_3d,
-    bilinear_upsample_batched_2d,
 )
 
 Tensor = torch.Tensor
