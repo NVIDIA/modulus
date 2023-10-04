@@ -91,17 +91,13 @@ def cos_zenith_angle_from_timestamp(
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> angle = cos_zenith_angle(model_time.timestamp(), lat=360, lon=120)
+    >>> angle = cos_zenith_angle_from_timestamp(model_time.timestamp(), lat=360, lon=120)
     >>> abs(angle - -0.447817277) < 1e-6
     True
     """
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
-    seconds_in_day = 86400
-    days_in_julian_century = 36525.0
-    julian_centuries = (
-        (timestamp - TIMESTAMP_2000) / days_in_julian_century / seconds_in_day
-    )
+    julian_centuries = _timestamp_to_julian_century(timestamp)
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 
@@ -130,6 +126,12 @@ def _total_days(time_diff):
     return np.asarray(time_diff).astype("timedelta64[us]") / np.timedelta64(1, "D")
 
 
+def _timestamp_to_julian_century(timestamp):
+    seconds_in_day = 86400
+    days_in_julian_century = 36525.0
+    return (timestamp - TIMESTAMP_2000) / days_in_julian_century / seconds_in_day
+
+
 def _greenwich_mean_sidereal_time(jul_centuries):
     """
     Greenwich mean sidereal time, in radians.
@@ -140,7 +142,8 @@ def _greenwich_mean_sidereal_time(jul_centuries):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> g_time = _greenwich_mean_sidereal_time(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> g_time = _greenwich_mean_sidereal_time(c)
     >>> abs(g_time - 4.903831411) < 1e-8
     True
     """
@@ -165,7 +168,8 @@ def _local_mean_sidereal_time(julian_centuries, longitude):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> l_time = _local_mean_sidereal_time(model_time, np.deg2rad(90))
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> l_time = _local_mean_sidereal_time(c, np.deg2rad(90))
     >>> abs(l_time - 6.474627737) < 1e-8
     True
     """
@@ -181,7 +185,8 @@ def _sun_ecliptic_longitude(julian_centuries):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> lon = _sun_ecliptic_longitude(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> lon = _sun_ecliptic_longitude(c)
     >>> abs(lon - 17.469114444) < 1e-8
     True
     """
@@ -248,7 +253,8 @@ def _right_ascension_declination(julian_centuries):
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> out1, out2 = _right_ascension_declination(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> out1, out2 = _right_ascension_declination(c)
     >>> abs(out1 - -1.363787213) < 1e-8
     True
     >>> abs(out2 - -0.401270126) < 1e-8
