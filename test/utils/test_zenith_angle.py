@@ -27,6 +27,7 @@
 
 from datetime import datetime
 
+import numpy as np
 import pytest
 
 from modulus.utils.zenith_angle import (
@@ -46,9 +47,17 @@ from modulus.utils.zenith_angle import (
         [datetime(2020, 7, 6, 12, 0, 0), 0.0, 90.0, 0.3843918031907148],
     ),
 )
-def test__sun_zenith_angle(time, lon, lat, expected):
+def test_zenith_angle(time, lon, lat, expected):
     assert cos_zenith_angle(time, lon, lat) == pytest.approx(expected, abs=1e-10)
     timestamp = time.timestamp()
     assert cos_zenith_angle_from_timestamp(timestamp, lon, lat) == pytest.approx(
         expected, abs=1e-10
     )
+
+
+def test_zenith_angle_array():
+    timestamp = np.array([0, 1, 2])[:, None, None]
+    lat = np.array([0.0, 0.0])[None, :, None]
+    lon = np.array([0.0])[None, None, :]
+    out = cos_zenith_angle_from_timestamp(timestamp, lon, lat)
+    assert out.shape == (3, 2, 1)

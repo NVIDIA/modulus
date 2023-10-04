@@ -98,9 +98,9 @@ def cos_zenith_angle_from_timestamp(
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
     seconds_in_day = 86400
-    days_in_julian_year = 36525.0
+    days_in_julian_century = 36525.0
     julian_centuries = (
-        (timestamp - TIMESTAMP_2000) / days_in_julian_year / seconds_in_day
+        (timestamp - TIMESTAMP_2000) / days_in_julian_century / seconds_in_day
     )
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
