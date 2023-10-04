@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from modulus.models.interpolation import interpolation
+from modulus.models.layers.interpolation import interpolation
 
 import torch
 import numpy as np

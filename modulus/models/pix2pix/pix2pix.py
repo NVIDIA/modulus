@@ -150,7 +150,7 @@ class Pix2Pix(Module):
         n_downsampling: int = 3,
         n_upsampling: int = 3,
         n_blocks: int = 3,
-        activation_fn: Any = "relu",
+        activation_fn: str = "relu",  # TODO need support for type Activation
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
