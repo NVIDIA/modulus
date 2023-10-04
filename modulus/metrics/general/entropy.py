@@ -24,7 +24,9 @@ def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tenso
     a histogram.
 
     Uses the formula:
-    .. math:
+    
+    .. math::
+
         Entropy(X) = \\int p(x) * \\log( p(x) ) dx
 
     Parameters
@@ -84,7 +86,9 @@ def _relative_entropy_from_counts(
     random variables using their histograms.
 
     Uses the formula:
-    .. math:
+    
+    .. math::
+
         Entropy(X) = \\int p(x) * \\log( p(x)/q(x) ) dx
 
     Parameters
