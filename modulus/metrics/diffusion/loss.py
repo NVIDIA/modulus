@@ -275,7 +275,29 @@ class MixtureLoss:
 
 
 class ResLossv1:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
+    """
+    Mixture loss function for denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default -1.2.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -322,9 +344,34 @@ class ResLossv1:
         return loss
 
 
-# P_mean=2.0
 class MixtureLossV1:
-    def __init__(self, P_mean=2.4, P_std=3.6, sigma_data=0.5):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default -1.2.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    p: float, optional
+        Parameter for weighted loss, by default 1.0.
+    reg_weight: float, optional
+        reg_weight, by default 5.0.  # TODO what is this?
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 2.4, P_std: float = 3.6, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -365,7 +412,33 @@ class MixtureLossV1:
 
 
 class MixtureLossV2:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default 0.0.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    p: float, optional
+        Parameter for weighted loss, by default 1.0.
+    reg_weight: float, optional
+        reg_weight, by default 5.0.  # TODO what is this?
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -406,7 +479,33 @@ class MixtureLossV2:
 
 
 class MixtureLossV3:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default 0.0.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    p: float, optional
+        Parameter for weighted loss, by default 0.75.
+    reg_weight: float, optional
+        reg_weight, by default 5.0.  # TODO what is this?
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -447,7 +546,33 @@ class MixtureLossV3:
 
 
 class MixtureLossV4:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default 0.0.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    p: float, optional
+        Parameter for weighted loss, by default 0.25.
+    reg_weight: float, optional
+        reg_weight, by default 5.0.  # TODO what is this?
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -488,7 +613,33 @@ class MixtureLossV4:
 
 
 class MixtureLossV5:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default 0.0.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    p: float, optional
+        Parameter for weighted loss, by default 0.0.
+    reg_weight: float, optional
+        reg_weight, by default 5.0.  # TODO what is this?
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
@@ -529,13 +680,45 @@ class MixtureLossV5:
 
 
 class OurLoss:
-    def __init__(self, mu=-1.2, sigma=1.2, signal_std=0.5, importance=0):
+    """
+    Mixture loss function for regression and denoising score matching.
+
+    Parameters
+    ----------
+    mu: float, optional
+        Mean for noise std log, by default -1.2.
+    sigma: float, optional:
+        Std for noise std log, by default 1.2.
+    signal_std: float, optional
+        Std for signal, by default 0.5.
+    importance: float, optional
+        Importance weighting for loss adjustment, by default 0.
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self,
+        mu: float = -1.2,
+        sigma: float = 1.2,
+        signal_std: float = 0.5,
+        importance: float = 0,
+    ):
         self.mu = mu
         self.sigma = sigma
         self.signal_std = signal_std
         self.importance = importance
 
     def accumulate_gradients(self, net, img_clean, img_lr, labels, augment_pipe=None):
+        """
+        Accumulates gradients for the provided neural network model, considering the
+        noisy loss function.
+        """
         sampling_sigma = self.sigma / np.sqrt(1 - self.importance)
         noise_std_log = (
             torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)

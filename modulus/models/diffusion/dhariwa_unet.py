@@ -72,7 +72,7 @@ class DhariwalUNet(Module):
         Number of channels in the input image.
     out_channels : int
         Number of channels in the output image.
-    label_dim : int, optiona;
+    label_dim : int, optional
         Number of class labels; 0 indicates an unconditional model. By default 0.
     augment_dim : int, optional
         Dimensionality of augmentation labels; 0 means no augmentation. By default 0.
