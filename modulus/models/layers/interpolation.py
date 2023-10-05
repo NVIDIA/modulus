@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import enum
 import math
-from typing import Tuple, List
+from typing import List, Tuple
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor
