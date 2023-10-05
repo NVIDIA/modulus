@@ -46,7 +46,9 @@ tf.config.set_visible_devices([], "GPU")
 
 class VortexSheddingDataset(DGLDataset):
     """In-memory MeshGraphNet Dataset for stationary mesh
-    Notes:
+    
+    .. note::
+
         - This dataset prepares and processes the data available in MeshGraphNet's repo:
             https://github.com/deepmind/deepmind-research/tree/master/meshgraphnets
         - A single adj matrix is used for each transient simulation.
