@@ -37,14 +37,7 @@ dtype = np.float32
 
 T = TypeVar("T", np.ndarray, float)
 
-
-def _ensure_units_of_degrees(da):  # pragma: no cover
-    """Ensure that the units of the DataArray are in degrees."""
-    units = da.attrs.get("units", "").lower()
-    if "rad" in units:
-        return np.rad2deg(da).assign_attrs(units="degrees")
-    else:
-        return da
+TIMESTAMP_2000 = datetime.datetime(2000, 1, 1, 12, 0).timestamp()
 
 
 def cos_zenith_angle(
@@ -74,10 +67,41 @@ def cos_zenith_angle(
     """
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
-    return _star_cos_zenith(time, lon_rad, lat_rad)
+    julian_centuries = _days_from_2000(time) / 36525.0
+    return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 
-def _days_from_2000(model_time):  # pragma: no cover
+def cos_zenith_angle_from_timestamp(
+    timestamp: T,
+    lon: T,
+    lat: T,
+) -> T:
+    """
+    Compute cosine of zenith angle using UNIX timestamp
+
+    Since the UNIX timestamp is a floating point or integer this routine can be
+    compiled with jax.
+
+    Parameters
+    ----------
+    timestamp: timestamp in seconds from UNIX epoch
+    lon: longitude in degrees E
+    lat: latitude in degrees N
+
+    Example:
+    --------
+    >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
+    >>> angle = cos_zenith_angle_from_timestamp(model_time.timestamp(), lat=360, lon=120)
+    >>> abs(angle - -0.447817277) < 1e-6
+    True
+    """
+    lon_rad = np.deg2rad(lon, dtype=dtype)
+    lat_rad = np.deg2rad(lat, dtype=dtype)
+    julian_centuries = _timestamp_to_julian_century(timestamp)
+    return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
+
+
+def _days_from_2000(model_time):
     """Get the days since year 2000.
 
     Example:
@@ -95,14 +119,20 @@ def _days_from_2000(model_time):  # pragma: no cover
     return _total_days(model_time - date_type(2000, 1, 1, 12, 0))
 
 
-def _total_days(time_diff):  # pragma: no cover
+def _total_days(time_diff):
     """
     Total time in units of days
     """
     return np.asarray(time_diff).astype("timedelta64[us]") / np.timedelta64(1, "D")
 
 
-def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
+def _timestamp_to_julian_century(timestamp):
+    seconds_in_day = 86400
+    days_in_julian_century = 36525.0
+    return (timestamp - TIMESTAMP_2000) / days_in_julian_century / seconds_in_day
+
+
+def _greenwich_mean_sidereal_time(jul_centuries):
     """
     Greenwich mean sidereal time, in radians.
     Reference:
@@ -112,11 +142,11 @@ def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> g_time = _greenwich_mean_sidereal_time(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> g_time = _greenwich_mean_sidereal_time(c)
     >>> abs(g_time - 4.903831411) < 1e-8
     True
     """
-    jul_centuries = _days_from_2000(model_time) / 36525.0
     theta = 67310.54841 + jul_centuries * (
         876600 * 3600
         + 8640184.812866
@@ -128,7 +158,7 @@ def _greenwich_mean_sidereal_time(model_time):  # pragma: no cover
     return theta_radians
 
 
-def _local_mean_sidereal_time(model_time, longitude):  # pragma: no cover
+def _local_mean_sidereal_time(julian_centuries, longitude):
     """
     Local mean sidereal time. requires longitude in radians.
     Ref:
@@ -138,14 +168,15 @@ def _local_mean_sidereal_time(model_time, longitude):  # pragma: no cover
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> l_time = _local_mean_sidereal_time(model_time, np.deg2rad(90))
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> l_time = _local_mean_sidereal_time(c, np.deg2rad(90))
     >>> abs(l_time - 6.474627737) < 1e-8
     True
     """
-    return _greenwich_mean_sidereal_time(model_time) + longitude
+    return _greenwich_mean_sidereal_time(julian_centuries) + longitude
 
 
-def _sun_ecliptic_longitude(model_time):  # pragma: no cover
+def _sun_ecliptic_longitude(julian_centuries):
     """
     Ecliptic longitude of the sun.
     Reference:
@@ -154,11 +185,11 @@ def _sun_ecliptic_longitude(model_time):  # pragma: no cover
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> lon = _sun_ecliptic_longitude(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> lon = _sun_ecliptic_longitude(c)
     >>> abs(lon - 17.469114444) < 1e-8
     True
     """
-    julian_centuries = _days_from_2000(model_time) / 36525.0
 
     # mean anomaly calculation
     mean_anomaly = np.deg2rad(
@@ -184,7 +215,7 @@ def _sun_ecliptic_longitude(model_time):  # pragma: no cover
     return mean_longitude + d_l
 
 
-def _obliquity_star(julian_centuries):  # pragma: no cover
+def _obliquity_star(julian_centuries):
     """
     return obliquity of the sun
     Use 5th order equation from
@@ -213,7 +244,7 @@ def _obliquity_star(julian_centuries):  # pragma: no cover
     )
 
 
-def _right_ascension_declination(model_time):  # pragma: no cover
+def _right_ascension_declination(julian_centuries):
     """
     Right ascension and declination of the sun.
     Ref:
@@ -222,16 +253,15 @@ def _right_ascension_declination(model_time):  # pragma: no cover
     Example:
     --------
     >>> model_time = datetime.datetime(2002, 1, 1, 12, 0, 0)
-    >>> out1, out2 = _right_ascension_declination(model_time)
+    >>> c = _timestamp_to_julian_century(model_time.timestamp())
+    >>> out1, out2 = _right_ascension_declination(c)
     >>> abs(out1 - -1.363787213) < 1e-8
     True
     >>> abs(out2 - -0.401270126) < 1e-8
     True
     """
-    julian_centuries = _days_from_2000(model_time) / 36525.0
     eps = _obliquity_star(julian_centuries)
-
-    eclon = _sun_ecliptic_longitude(model_time)
+    eclon = _sun_ecliptic_longitude(julian_centuries)
     x = np.cos(eclon)
     y = np.cos(eps) * np.sin(eclon)
     z = np.sin(eps) * np.sin(eclon)
@@ -243,17 +273,17 @@ def _right_ascension_declination(model_time):  # pragma: no cover
     return right_ascension, declination
 
 
-def _local_hour_angle(model_time, longitude, right_ascension):  # pragma: no cover
+def _local_hour_angle(julian_centuries, longitude, right_ascension):
     """
     Hour angle at model_time for the given longitude and right_ascension
     longitude in radians
     Ref:
         https://en.wikipedia.org/wiki/Hour_angle#Relation_with_the_right_ascension
     """
-    return _local_mean_sidereal_time(model_time, longitude) - right_ascension
+    return _local_mean_sidereal_time(julian_centuries, longitude) - right_ascension
 
 
-def _star_cos_zenith(model_time, lon, lat):  # pragma: no cover
+def _star_cos_zenith(julian_centuries, lon, lat):
     """
     Return cosine of star zenith angle
     lon,lat in radians
@@ -264,8 +294,8 @@ def _star_cos_zenith(model_time, lon, lat):  # pragma: no cover
             https://en.wikipedia.org/wiki/Solar_zenith_angle
     """
 
-    ra, dec = _right_ascension_declination(model_time)
-    h_angle = _local_hour_angle(model_time, lon, ra)
+    ra, dec = _right_ascension_declination(julian_centuries)
+    h_angle = _local_hour_angle(julian_centuries, lon, ra)
 
     cosine_zenith = np.sin(lat) * np.sin(dec) + np.cos(lat) * np.cos(dec) * np.cos(
         h_angle
