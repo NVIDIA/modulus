@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import numpy as np
+import pytest
 import torch
 
 from modulus.models.layers.interpolation import interpolation
 
 
-def test_interpolation():
+@pytest.mark.parametrize("mem_speed_trade", [True, False])
+def test_interpolation(mem_speed_trade):
     # set device
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -62,7 +64,7 @@ def test_interpolation():
             sin_grid,
             grid=grid,
             interpolation_type=i_type,
-            mem_speed_trade=False,
+            mem_speed_trade=mem_speed_trade,
         )
 
         # compare to numpy

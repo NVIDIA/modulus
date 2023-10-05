@@ -445,7 +445,7 @@ def interpolation(
     elif interpolation_type == "gaussian":
         stride = 5
     else:
-        raise RuntimeError
+        raise RuntimeError(f"Interpolation type {interpolation_type} not supported")
 
     # set device
     device = query_points.device
