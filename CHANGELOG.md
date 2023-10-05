@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Stokes flow dataset
 - An experimental version of SFNO to be used in unified training recipe for weather models
 - Added distributed FFT utility.
+- Added ruff as a linting tool.
 
 ### Changed
 

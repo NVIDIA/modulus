@@ -11,25 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import os, sys
+# ruff: noqa: E402
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
-
+from meshgraphnet.utils import get_random_graph
+from pytest_utils import import_or_fail
 from torch.nn.parallel import DistributedDataParallel
 
-from meshgraphnet.utils import get_random_graph
-from modulus.models.gnn_layers.utils import CuGraphCSC
-from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 from modulus.distributed import DistributedManager
 
 
+@import_or_fail("dgl")
 def run_test_distributed_meshgraphnet(rank, world_size, dtype):
+    from modulus.models.gnn_layers.utils import CuGraphCSC
+    from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
+
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"

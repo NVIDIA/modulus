@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pytest
-
-from utils import fix_random_seeds, create_random_input, get_icosphere_path
+import torch
 from pytest_utils import import_or_fail
+from utils import create_random_input, fix_random_seeds, get_icosphere_path
 
 
 @import_or_fail("dgl")

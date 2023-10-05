@@ -25,7 +25,7 @@ pip install warp-lang
     )
     raise SystemExit(1)
 
-from .indexing import index_zero_edges_batched_2d, index_clamped_edges_batched_2d
+from .indexing import index_clamped_edges_batched_2d, index_zero_edges_batched_2d
 
 
 @wp.kernel
@@ -70,7 +70,6 @@ def darcy_mgrid_jacobi_iterative_batched_2d(
     gdx = dx * wp.float32(mgrid_reduction_factor)
 
     # compute darcy stensil
-    d_1_1 = index_zero_edges_batched_2d(darcy0, b, gx, gy, lx, ly)
     d_0_1 = index_zero_edges_batched_2d(
         darcy0, b, gx - mgrid_reduction_factor, gy, lx, ly
     )

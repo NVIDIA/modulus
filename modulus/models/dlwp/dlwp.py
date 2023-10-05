@@ -13,16 +13,16 @@
 # limitations under the License.
 
 import math
+from dataclasses import dataclass
+from typing import Tuple, Union
+
 import torch
 import torch.nn as nn
 
-from dataclasses import dataclass
-
-import modulus
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-from typing import Tuple, Union
 
 Tensor = torch.Tensor
 
@@ -176,9 +176,7 @@ def _cubed_conv_wrapper(faces, equator_conv, polar_conv):
 
 
 def _cubed_non_conv_wrapper(faces, layer):
-    output = []
-    for i in range(6):
-        output.append(layer(faces[i]))
+    output = [layer(faces[i]) for i in range(6)]
     return output
 
 
@@ -327,10 +325,10 @@ class DLWP(Module):
 
     def forward(self, cubed_sphere_input):
         # do some input checks
-        assert cubed_sphere_input.size(2) == 6, "The input must have 6 faces."
-        assert cubed_sphere_input.size(3) == cubed_sphere_input.size(
-            4
-        ), "The input must have equal height and width"
+        if cubed_sphere_input.size(-3) != 6:
+            raise ValueError("The input must have 6 faces.")
+        if cubed_sphere_input.size(-2) != cubed_sphere_input.size(-1):
+            raise ValueError("The input must have equal height and width")
 
         # split the cubed_sphere_input into individual faces
         faces = torch.split(

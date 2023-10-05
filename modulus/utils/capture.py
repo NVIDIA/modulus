@@ -12,17 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
+import logging
 import os
 import time
-import functools
-import torch
-import logging
-from logging import Logger
-from typing import Union, Any, Callable, NewType, Dict, Optional
 from contextlib import nullcontext
-from modulus.distributed import DistributedManager
+from logging import Logger
+from typing import Any, Callable, Dict, NewType, Optional, Union
+
+import torch
 
 import modulus
+from modulus.distributed import DistributedManager
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -80,9 +81,8 @@ class _StaticCapture(object):
         self.no_grad = False
 
         # Set up toggles for optimizations
-        assert (
-            amp_type == torch.float16 or amp_type == torch.bfloat16
-        ), "AMP type must be torch.float16 or torch.bfloat16"
+        if not (amp_type == torch.float16 or amp_type == torch.bfloat16):
+            raise ValueError("AMP type must be torch.float16 or torch.bfloat16")
         # CUDA device
         if "cuda" in str(self.model.device):
             # CUDA graphs
@@ -107,7 +107,7 @@ class _StaticCapture(object):
             # Check if bfloat16 is suppored on the GPU
             if amp_type == torch.bfloat16 and not torch.cuda.is_bf16_supported():
                 self.logger.warning(
-                    f"Current CUDA device does not support bfloat16, falling back to float16"
+                    "Current CUDA device does not support bfloat16, falling back to float16"
                 )
                 amp_type = torch.float16
             self.amp_dtype = amp_type
@@ -132,7 +132,7 @@ class _StaticCapture(object):
             # https://pytorch.org/docs/stable/amp.html#cpu-op-specific-behavior
             if amp_type == torch.float16 and use_autocast:
                 self.logger.warning(
-                    f"torch.float16 not supported for CPU AMP, switching to torch.bfloat16"
+                    "torch.float16 not supported for CPU AMP, switching to torch.bfloat16"
                 )
                 amp_type = torch.bfloat16
             self.amp_dtype = torch.bfloat16
@@ -227,7 +227,7 @@ class _StaticCapture(object):
 
         try:
             self.optim.zero_grad(set_to_none=True)
-        except:
+        except Exception:
             if self.optim:
                 self.optim.zero_grad()
             # For apex optim support and eval mode (need to reset model grads)
@@ -300,7 +300,6 @@ class _StaticCapture(object):
         Dict[str, Any]
             Dictionary of states to save for file
         """
-        scaler_states = {}
         for key, value in state_dict.items():
             # If scaler has been created already load the weights
             if key in cls._amp_scalers:

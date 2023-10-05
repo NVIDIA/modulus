@@ -1,5 +1,5 @@
 # ignore_header_test
-
+# ruff: noqa: E402
 """"""
 """
 Pix2Pix model. This code was modified from, https://github.com/NVIDIA/pix2pixHD
@@ -53,14 +53,18 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+from dataclasses import dataclass
+
 import torch
 import torch.nn as nn
+
 from typing import Union, List, Any
 from dataclasses import dataclass
 
 
 import modulus  # noqa: F401 for docs
 from modulus.models.layers import get_activation
+
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -155,10 +159,10 @@ class Pix2Pix(Module):
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
-        assert (
-            n_blocks >= 0 and n_downsampling >= 0 and n_upsampling >= 0
-        ), "Invalid arch params"
-        assert padding_type in ["reflect", "zero", "replicate"], "Invalid padding type"
+        if not (n_blocks >= 0 and n_downsampling >= 0 and n_upsampling >= 0):
+            raise ValueError("Invalid arch params")
+        if padding_type not in ["reflect", "zero", "replicate"]:
+            raise ValueError("Invalid padding type")
         super().__init__(meta=MetaData())
 
         # activation function
@@ -296,11 +300,12 @@ class ResnetBlock(nn.Module):
         use_dropout: bool = False,
     ):
         super().__init__()
-        assert padding_type in [
+        if padding_type not in [
             "reflect",
             "zero",
             "replicate",
-        ], f"Invalid padding type {padding_type}"
+        ]:
+            raise ValueError(f"Invalid padding type {padding_type}")
 
         if dimension == 1:
             conv = nn.Conv1d

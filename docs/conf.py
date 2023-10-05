@@ -20,7 +20,9 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import os
+
 import sphinx_rtd_theme
+
 from modulus import __version__ as version
 
 project = "NVIDIA Modulus"

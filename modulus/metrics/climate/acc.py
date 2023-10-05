@@ -15,6 +15,7 @@
 # TODO(Dallas) Introduce Distributed Class for computation.
 
 import torch
+
 from modulus.metrics.climate.reduction import _compute_lat_weights
 
 Tensor = torch.Tensor
@@ -43,15 +44,12 @@ def acc(pred: Tensor, target: Tensor, climatology: Tensor, lat: Tensor) -> Tenso
     ----
     Reference: https://www.atmos.albany.edu/daes/atmclasses/atm401/spring_2016/ppts_pdfs/ECMWF_ACC_definition.pdf
     """
-    assert (
-        pred.ndim > 2
-    ), "Expected predictions to have at least two dimensions (lat, lon)"
-    assert (
-        target.ndim > 2
-    ), "Expected targets to have at least two dimensions (lat, lon)"
-    assert (
-        climatology.ndim > 2
-    ), "Expected climatology to have at least two dimensions (lat, lon)"
+    if not (pred.ndim > 2):
+        raise AssertionError("Expected predictions to have at least two dimensions")
+    if not (target.ndim > 2):
+        raise AssertionError("Expected predictions to have at least two dimensions")
+    if not (climatology.ndim > 2):
+        raise AssertionError("Expected predictions to have at least two dimensions")
 
     # subtract climate means
     pred_hat = pred - climatology

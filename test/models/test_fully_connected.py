@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
+import pytest
+import torch
+
 from modulus.models.mlp import FullyConnected
+
 from . import common
 
 
@@ -90,7 +92,7 @@ def test_fully_connected_constructor(device):
         if kw_args["weight_norm"] and kw_args["weight_fact"]:
             # If both weight_norm and weight_fact are True, expect an AssertionError
             with pytest.raises(
-                AssertionError,
+                ValueError,
                 match="Cannot apply both weight normalization and weight factorization together, please select one.",
             ):
                 model = FullyConnected(**kw_args).to(device)

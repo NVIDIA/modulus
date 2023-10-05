@@ -14,18 +14,17 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import Any, List, Union
 
 import numpy as np
 import torch
-from torch.nn import functional as F
 
-from .utils import read_vtp_file, save_json, load_json
+from .utils import load_json, read_vtp_file, save_json
 
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Stokes flow Dataset requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
@@ -33,8 +32,7 @@ except:
 
 try:
     import vtk
-    import pyvista as pv
-except:
+except ImportError:
     raise ImportError(
         "Stokes flow Dataset requires the vtk and pyvista libraries. Install with "
         + "pip install vtk pyvista"
@@ -290,7 +288,9 @@ class StokesDataset(DGLDataset):
             id_list = vtk.vtkIdList()
             polys.GetNextCell(id_list)
             for j in range(id_list.GetNumberOfIds() - 1):
-                edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
+                edge_list.append(  # noqa: PERF401
+                    (id_list.GetId(j), id_list.GetId(j + 1))
+                )
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)

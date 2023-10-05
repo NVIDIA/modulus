@@ -12,20 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.fft
-from torch.nn.modules.container import Sequential
-from torch.utils.checkpoint import checkpoint
-from torch.cuda import amp
 import math
 
-from torch_harmonics import *
-from modulus.experimental.models.sfno.contractions import *
-from modulus.experimental.models.sfno.activations import *
-from modulus.models.sfno.initialization import trunc_normal_
-from modulus.models.layers import get_activation
+import torch
+import torch.fft
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.cuda import amp
+from torch.utils.checkpoint import checkpoint
+
+from modulus.models.layers.activations import get_activation
+from modulus.models.sfno.activations import ComplexReLU
+from modulus.models.sfno.contractions import (
+    _contract_diagonal,
+    compl_mul2d_fwd,
+    compl_muladd2d_fwd,
+)
+from modulus.utils.sfno.distributed import comm
+from modulus.utils.sfno.distributed.layers import (
+    distributed_transpose_h,
+    distributed_transpose_w,
+)
 
 
 @torch.jit.script
@@ -88,9 +95,10 @@ class PatchEmbed(nn.Module):
     def forward(self, x):  # pragma: no cover
         # gather input
         B, C, H, W = x.shape
-        assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        if not (H == self.img_size[0] and W == self.img_size[1]):
+            raise AssertionError(
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            )
         # new: B, C, H*W
         x = self.proj(x).flatten(2)
         return x
@@ -188,7 +196,8 @@ class RealFFT2(nn.Module):
             self.truncate = False
 
         # self.num_batches = 1
-        assert self.lmax % 2 == 0
+        if self.lmax % 2 != 0:
+            raise AssertionError
 
     def forward(self, x):  # pragma: no cover
         y = self.fft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
@@ -223,6 +232,167 @@ class InverseRealFFT2(nn.Module):
 
     def forward(self, x):  # pragma: no cover
         out = self.ifft_handle(x, (self.nlat, self.nlon), (-2, -1), "ortho")
+
+        return out
+
+
+class DistributedRealFFT2(nn.Module):
+    """
+    Helper routine to wrap FFT similarly to the SHT
+    """
+
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):  # pragma: no cover
+        super(DistributedRealFFT2, self).__init__()
+
+        # get the comms grid:
+        self.comm_size_h = comm.get_size("h")
+        self.comm_size_w = comm.get_size("w")
+        self.comm_rank_w = comm.get_rank("w")
+
+        # dimensions
+        self.nlat = nlat
+        self.nlon = nlon
+        self.lmax = lmax or self.nlat
+        self.mmax = mmax or self.nlon // 2 + 1
+
+        # frequency paddings
+        ldist = (self.lmax + self.comm_size_h - 1) // self.comm_size_h
+        self.lpad = ldist * self.comm_size_h - self.lmax
+        mdist = (self.mmax + self.comm_size_w - 1) // self.comm_size_w
+        self.mpad = mdist * self.comm_size_w - self.mmax
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
+
+        # we need to ensure that we can split the channels evenly
+        if not x.shape[1] % self.comm_size_h == 0:
+            raise AssertionError
+        if not x.shape[1] % self.comm_size_w == 0:
+            raise AssertionError
+
+        # h and w is split. First we make w local by transposing into channel dim
+        if self.comm_size_w > 1:
+            xt = distributed_transpose_w.apply(x, (1, -1))
+        else:
+            xt = x
+
+        # do first FFT
+        xtf = torch.fft.rfft(xt, n=self.nlon, dim=-1, norm="ortho")
+
+        # truncate
+        xtft = xtf[..., : self.mmax]
+
+        # pad the dim to allow for splitting
+        xtfp = F.pad(xtft, [0, self.mpad], mode="constant")
+
+        # transpose: after this, m is split and c is local
+        if self.comm_size_w > 1:
+            y = distributed_transpose_w.apply(xtfp, (-1, 1))
+        else:
+            y = xtfp
+
+        # transpose: after this, c is split and h is local
+        if self.comm_size_h > 1:
+            yt = distributed_transpose_h.apply(y, (1, -2))
+        else:
+            yt = y
+
+        # the input data might be padded, make sure to truncate to nlat:
+        # ytt = yt[..., :self.nlat, :]
+
+        # do second FFT:
+        yo = torch.fft.fft(yt, n=self.nlat, dim=-2, norm="ortho")
+
+        # pad if required, truncation is implicit
+        yop = F.pad(yo, [0, 0, 0, self.lpad], mode="constant")
+
+        # transpose: after this, l is split and c is local
+        if self.comm_size_h > 1:
+            y = distributed_transpose_h.apply(yop, (-2, 1))
+        else:
+            y = yop
+
+        return y
+
+
+class DistributedInverseRealFFT2(nn.Module):
+    """
+    Helper routine to wrap FFT similarly to the SHT
+    """
+
+    def __init__(self, nlat, nlon, lmax=None, mmax=None):  # pragma: no cover
+        super(DistributedInverseRealFFT2, self).__init__()
+
+        # get the comms grid:
+        self.comm_size_h = comm.get_size("h")
+        self.comm_size_w = comm.get_size("w")
+        self.comm_rank_w = comm.get_rank("w")
+
+        # dimensions
+        self.nlat = nlat
+        self.nlon = nlon
+        self.lmax = lmax or self.nlat
+        self.mmax = mmax or self.nlon // 2 + 1
+
+        # spatial paddings
+        latdist = (self.nlat + self.comm_size_h - 1) // self.comm_size_h
+        self.latpad = latdist * self.comm_size_h - self.nlat
+        londist = (self.nlon + self.comm_size_w - 1) // self.comm_size_w
+        self.lonpad = londist * self.comm_size_w - self.nlon
+
+        # frequency paddings
+        ldist = (self.lmax + self.comm_size_h - 1) // self.comm_size_h
+        self.lpad = ldist * self.comm_size_h - self.lmax
+        mdist = (self.mmax + self.comm_size_w - 1) // self.comm_size_w
+        self.mpad = mdist * self.comm_size_w - self.mmax
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover
+
+        # we need to ensure that we can split the channels evenly
+        if not x.shape[1] % self.comm_size_h == 0:
+            raise AssertionError
+        if not x.shape[1] % self.comm_size_w == 0:
+            raise AssertionError
+
+        # transpose: after that, channels are split, l is local:
+        if self.comm_size_h > 1:
+            xt = distributed_transpose_h.apply(x, (1, -2))
+        else:
+            xt = x
+
+        # truncate
+        xtt = xt[..., : self.lmax, :]
+
+        # do first fft
+        xf = torch.fft.ifft(xtt, n=self.nlat, dim=-2, norm="ortho")
+
+        # transpose: after this, l is split and channels are local
+        xfp = F.pad(xf, [0, 0, 0, self.latpad])
+
+        if self.comm_size_h > 1:
+            y = distributed_transpose_h.apply(xfp, (-2, 1))
+        else:
+            y = xfp
+
+        # transpose: after this, channels are split and m is local
+        if self.comm_size_w > 1:
+            yt = distributed_transpose_w.apply(y, (1, -1))
+        else:
+            yt = y
+
+        # truncate
+        ytt = yt[..., : self.mmax]
+
+        # apply the inverse (real) FFT
+        x = torch.fft.irfft(ytt, n=self.nlon, dim=-1, norm="ortho")
+
+        # pad before we transpose back
+        xp = F.pad(x, [0, self.lonpad])
+
+        # transpose: after this, m is split and channels are local
+        if self.comm_size_w > 1:
+            out = distributed_transpose_w.apply(xp, (-1, 1))
+        else:
+            out = xp
 
         return out
 
@@ -293,9 +463,6 @@ class SpectralConv2d(nn.Module):
             x = torch.view_as_real(x)
             x = x.to(dtype)
 
-        # do spectral conv
-        modes = self.contract_handle(x, self.w)
-
         with amp.autocast(enabled=False):
             x = x.to(torch.float32)
             x = torch.view_as_complex(x)
@@ -335,10 +502,8 @@ class SpectralAttention2d(nn.Module):
         self.hidden_size = int(hidden_size_factor * self.embed_dim)
         self.scale = 0.02
         self.spectral_layers = spectral_layers
-        self.mul_add_handle = (
-            compl_muladd2d_fwd_c if use_complex_kernels else compl_muladd2d_fwd
-        )
-        self.mul_handle = compl_mul2d_fwd_c if use_complex_kernels else compl_mul2d_fwd
+        self.mul_add_handle = compl_muladd2d_fwd
+        self.mul_handle = compl_mul2d_fwd
 
         self.modes_lat = forward_transform.lmax
         self.modes_lon = forward_transform.mmax
@@ -347,8 +512,10 @@ class SpectralAttention2d(nn.Module):
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         self.scale_residual = (
             self.forward_transform.nlat != self.inverse_transform.nlat
@@ -358,8 +525,10 @@ class SpectralAttention2d(nn.Module):
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
         # w = [self.scale * torch.randn(self.embed_dim + 2*self.embed_freqs, self.hidden_size, 2)]
         # w = [self.scale * torch.randn(self.embed_dim + 4*self.embed_freqs, self.hidden_size, 2)]
-        for l in range(1, self.spectral_layers):
-            w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
+        for lay in range(1, self.spectral_layers):
+            w.append(  # noqa: PERF401
+                self.scale * torch.randn(self.hidden_size, self.hidden_size, 2)
+            )  # noqa: PERF401
         self.w = nn.ParameterList(w)
 
         if bias:
@@ -382,13 +551,13 @@ class SpectralAttention2d(nn.Module):
 
     def forward_mlp(self, xr):  # pragma: no cover
         """forward method for the MLP part of the network"""
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
-                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                    xr, self.w[lay].to(xr.dtype), self.b[lay].to(xr.dtype)
                 )
             else:
-                xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
+                xr = self.mul_handle(xr, self.w[lay].to(xr.dtype))
             xr = torch.view_as_complex(xr)
             xr = self.activation(xr)
             xr = self.drop(xr)
@@ -466,8 +635,10 @@ class SpectralAttentionS2(nn.Module):
         self.forward_transform = forward_transform
         self.inverse_transform = inverse_transform
 
-        assert inverse_transform.lmax == self.modes_lat
-        assert inverse_transform.mmax == self.modes_lon
+        if inverse_transform.lmax != self.modes_lat:
+            raise AssertionError
+        if inverse_transform.mmax != self.modes_lon:
+            raise AssertionError
 
         self.scale_residual = (
             (self.forward_transform.nlat != self.inverse_transform.nlat)
@@ -476,8 +647,10 @@ class SpectralAttentionS2(nn.Module):
         )
         # weights
         w = [self.scale * torch.randn(self.embed_dim, self.hidden_size, 2)]
-        for l in range(1, self.spectral_layers):
-            w.append(self.scale * torch.randn(self.hidden_size, self.hidden_size, 2))
+        for lay in range(1, self.spectral_layers):
+            w.append(  # noqa: PERF401
+                self.scale * torch.randn(self.hidden_size, self.hidden_size, 2)
+            )  # noqa: PERF401
         self.w = nn.ParameterList(w)
 
         if bias:
@@ -500,13 +673,13 @@ class SpectralAttentionS2(nn.Module):
 
     def forward_mlp(self, xr):  # pragma: no cover
         """forward method for the MLP part of the network"""
-        for l in range(self.spectral_layers):
+        for lay in range(self.spectral_layers):
             if hasattr(self, "b"):
                 xr = self.mul_add_handle(
-                    xr, self.w[l].to(xr.dtype), self.b[l].to(xr.dtype)
+                    xr, self.w[lay].to(xr.dtype), self.b[lay].to(xr.dtype)
                 )
             else:
-                xr = self.mul_handle(xr, self.w[l].to(xr.dtype))
+                xr = self.mul_handle(xr, self.w[lay].to(xr.dtype))
             xr = torch.view_as_complex(xr)
             xr = self.activation(xr)
             xr = self.drop(xr)

@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import logging
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
+
 from modulus.utils.sfno.logging_utils import config_logger, disable_logging
 
 

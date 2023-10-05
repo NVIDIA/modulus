@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
-from modulus.models.mlp import FullyConnected
+import pytest
+import torch
+
 from modulus.models.fno import FNO
+
 from . import common
 
 
@@ -60,22 +61,21 @@ def test_fno_constructor(device):
 
     out_features = random.randint(1, 8)
     # Define dictionary of constructor args
-    arg_list = []
-    for dimension in [1, 2, 3, 4]:
-        arg_list.append(
-            {
-                "in_channels": random.randint(1, 4),
-                "out_channels": out_features,
-                "decoder_layers": 1,
-                "decoder_layer_size": 8,
-                "dimension": dimension,
-                "latent_channels": 32,
-                "num_fno_layers": 2,
-                "num_fno_modes": 4,
-                "padding": 4,
-                "coord_features": False,
-            }
-        )
+    arg_list = [
+        {
+            "in_channels": random.randint(1, 4),
+            "out_channels": out_features,
+            "decoder_layers": 1,
+            "decoder_layer_size": 8,
+            "dimension": dimension,
+            "latent_channels": 32,
+            "num_fno_layers": 2,
+            "num_fno_modes": 4,
+            "padding": 4,
+            "coord_features": False,
+        }
+        for dimension in [1, 2, 3, 4]
+    ]
 
     for kw_args in arg_list:
         # Construct FC model

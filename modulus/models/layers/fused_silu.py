@@ -13,16 +13,16 @@
 # limitations under the License.
 
 import functools
+
 import torch
 from torch.autograd import Function
 
 try:
-    from nvfuser._C import Fusion, FusionDefinition, DataType
+    from nvfuser._C import DataType, Fusion, FusionDefinition
 except ImportError:
     # accomodating for earlier versions of PyTorch (< 2.0)
     # which don't need nvfuser as explicit dependency
-    from torch._C._nvfuser import Fusion, FusionDefinition, DataType
-
+    from torch._C._nvfuser import DataType, Fusion, FusionDefinition
 
 _torch_dtype_to_nvfuser = {
     torch.double: DataType.Double,

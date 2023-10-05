@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import sys, os
 import numpy as np
+import torch
 
 
 def fix_random_seeds():

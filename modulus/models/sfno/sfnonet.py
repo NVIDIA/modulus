@@ -12,57 +12,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
-import torch
-import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
-from torch.cuda import amp
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Tuple
 
-# import contractions
-from modulus.models.sfno.factorizations import get_contract_fun, _contract_dense
-
-# helpers
-from modulus.models.sfno.layers import (
-    trunc_normal_,
-    DropPath,
-    MLP,
-    EncoderDecoder,
-)
-
-# import global convolution and non-linear spectral layers
-from modulus.models.sfno.layers import (
-    SpectralConv2d,
-    SpectralAttention2d,
-    SpectralAttentionS2,
-)
-
-from modulus.models.sfno.s2convolutions import SpectralConvS2
+import torch
+import torch.nn as nn
 
 # get spectral transforms from torch_harmonics
 import torch_harmonics as th
 import torch_harmonics.distributed as thd
 
+# layer normalization
+from apex.normalization import FusedLayerNorm
+from torch.cuda import amp
+from torch.utils.checkpoint import checkpoint
+
+from modulus.models.layers import get_activation
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
+
+# import contractions
+# helpers
+# import global convolution and non-linear spectral layers
 # wrap fft, to unify interface to spectral transforms
-from modulus.models.sfno.layers import RealFFT2, InverseRealFFT2
-from modulus.utils.sfno.distributed.layers import (
-    DistributedRealFFT2,
-    DistributedInverseRealFFT2,
-    DistributedMLP,
-    DistributedEncoderDecoder,
+from modulus.models.sfno.initialization import trunc_normal_
+from modulus.models.sfno.layers import (
+    MLP,
+    DropPath,
+    EncoderDecoder,
+    RealFFT2,
+    SpectralAttention2d,
+    SpectralAttentionS2,
 )
+from modulus.models.sfno.s2convolutions import SpectralConvS2
 
 # more distributed stuff
 from modulus.utils.sfno.distributed import comm
-
-# layer normalization
-from apex.normalization import FusedLayerNorm
 from modulus.utils.sfno.distributed.layer_norm import DistributedInstanceNorm2d
-
-from modulus.models.module import Module
-from modulus.models.meta import ModelMetaData
-from modulus.models.layers import get_activation
+from modulus.utils.sfno.distributed.layers import (
+    DistributedEncoderDecoder,
+    DistributedInverseRealFFT2,
+    DistributedMLP,
+    DistributedRealFFT2,
+)
+from modulus.utils.sfno.distributed.mappings import (
+    gather_from_parallel_region,
+    scatter_to_parallel_region,
+)
 
 
 @dataclass
@@ -239,7 +236,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         # norm layer
         self.norm1 = norm_layer[1]()
 
-        if use_mlp == True:
+        if use_mlp:
             MLPH = DistributedMLP if (comm.get_size("matmul") > 1) else MLP
             mlp_hidden_dim = int(embed_dim * mlp_ratio)
             self.mlp = MLPH(
