@@ -109,7 +109,7 @@ def main(cfg: DictConfig) -> None:
         user_name="Modulus User",
         mode="offline",
     )
-    LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
+    LaunchLogger.initialize(use_mlflow=cfg.use_mlflow)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
 
     datapipe = ERA5HDF5Datapipe(
@@ -199,7 +199,7 @@ def main(cfg: DictConfig) -> None:
         return loss
 
     # Main training loop
-    max_epoch = 80
+    max_epoch = cfg.max_epoch
     for epoch in range(max(1, loaded_epoch + 1), max_epoch + 1):
         # Wrap epoch in launch logger for console / WandB logs
         with LaunchLogger(
