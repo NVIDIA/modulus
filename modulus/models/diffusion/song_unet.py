@@ -119,11 +119,13 @@ class SongUNet(Module):
 
     Example:
     --------
-    >>> model = SongUNet(img_resolution=64, in_channels=3, out_channels=3, label_dim=10)
-    >>> noise_labels = torch.randn([batch_size, noise_dim])
-    >>> class_labels = torch.randint(0, num_classes, [batch_size])
-    >>> input_image = torch.randn([batch_size, 3, 64, 64])
+    >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
+    >>> noise_labels = torch.randn([1])
+    >>> class_labels = torch.randint(0, 1, (1, 1))
+    >>> input_image = torch.ones([1, 2, 16, 16])
     >>> output_image = model(input_image, noise_labels, class_labels)
+    >>> output_image.shape
+    torch.Size([1, 2, 16, 16])
     """
 
     def __init__(

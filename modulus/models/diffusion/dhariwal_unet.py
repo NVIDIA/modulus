@@ -56,7 +56,7 @@ class MetaData(ModelMetaData):
 
 class DhariwalUNet(Module):
     """
-    Reimplementation of the ADM architecture, a U-Net variant, with optional
+    Reimplementation of the ADM architecture, U-Net variants with optional
     self-attention.
 
     This model supports conditional and unconditional setups, as well as several

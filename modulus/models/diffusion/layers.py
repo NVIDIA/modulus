@@ -376,8 +376,8 @@ class UNetBlock(torch.nn.Module):
         resample_filter: List[int] = [1, 1],
         resample_proj: bool = False,
         adaptive_scale: bool = True,
-        init: Dict[Any] = dict(),
-        init_zero: Dict[Any] = dict(init_weight=0),
+        init: Dict[str, Any] = dict(),
+        init_zero: Dict[str, Any] = dict(init_weight=0),
         init_attn: Any = None,
     ):
         super().__init__()

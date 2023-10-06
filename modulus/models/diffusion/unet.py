@@ -96,17 +96,17 @@ class UNet(Module):
 
     def __init__(
         self,
-        img_resolution,  # Image resolution.
-        img_channels,  # Number of color channels.
-        img_in_channels,  # Number of input color channels.
-        img_out_channels,  # Number of output color channels.
-        label_dim=0,  # Number of class labels, 0 = unconditional.
-        use_fp16=False,  # Execute the underlying model at FP16 precision?
-        sigma_min=0,  # Minimum supported noise level.
-        sigma_max=float("inf"),  # Maximum supported noise level.
-        sigma_data=0.5,  # Expected standard deviation of the training data.
-        model_type="DhariwalUNet",  # Class name of the underlying model.
-        **model_kwargs,  # Keyword arguments for the underlying model.
+        img_resolution,
+        img_channels,
+        img_in_channels,
+        img_out_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0,
+        sigma_max=float("inf"),
+        sigma_data=0.5,
+        model_type="DhariwalUNet",
+        **model_kwargs,
     ):
         super().__init__()
         self.img_resolution = img_resolution
