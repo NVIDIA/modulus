@@ -20,7 +20,8 @@ interrogate:
 
 lint:
 	pre-commit run markdownlint -a && \
-	pre-commit run ruff -a 
+	pre-commit run ruff -a && \
+	pre-commit run check-added-large-files -a
 
 license: 
 	pre-commit run license -a
