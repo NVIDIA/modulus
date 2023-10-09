@@ -14,10 +14,8 @@
 # limitations under the License.
 # ruff: noqa: E402
 import os
-import random
 import sys
 
-import numpy as np
 import pytest
 import torch
 
@@ -34,9 +32,9 @@ def test_song_unet_forward(device):
     torch.manual_seed(0)
     # Construct the DDM++ UNet model
     model = UNet(img_resolution=64, in_channels=2, out_channels=2).to(device)
-    input_image = torch.ones([1, 2, 64, 64])
-    noise_labels = noise_labels = torch.randn([1])
-    class_labels = torch.randint(0, 1, (1, 1))
+    input_image = torch.ones([1, 2, 64, 64]).to(device)
+    noise_labels = noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
 
     assert common.validate_forward_accuracy(
         model,
@@ -67,7 +65,7 @@ def test_song_unet_forward(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_constructor(device):
-    """Test the Song Unet constructor options"""
+    """Test the Song UNet constructor options"""
 
     # DDM++
     img_resolution = 16
@@ -141,7 +139,7 @@ def test_song_unet_optims(device):
 
     def setup_model():
         model = UNet(
-            img_resolution=64,
+            img_resolution=16,
             in_channels=2,
             out_channels=2,
             embedding_type="fourier",
@@ -171,11 +169,11 @@ def test_song_unet_optims(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_fno_checkpoint(device):
+def test_song_unet_checkpoint(device):
     """Test Song UNet checkpoint save/load"""
     # Construct FNO models
     model_1 = UNet(
-        img_resolution=64,
+        img_resolution=16,
         in_channels=2,
         out_channels=2,
     ).to(device)
@@ -196,8 +194,8 @@ def test_fno_checkpoint(device):
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_fnodeploy(device):
-    """Test Song Unet deployment support"""
+def test_son_unet_deploy(device):
+    """Test Song UNet deployment support"""
     model = UNet(
         img_resolution=64,
         in_channels=2,

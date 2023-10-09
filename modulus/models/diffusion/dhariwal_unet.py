@@ -56,7 +56,7 @@ class MetaData(ModelMetaData):
 
 class DhariwalUNet(Module):
     """
-    Reimplementation of the ADM architecture, U-Net variants with optional
+    Reimplementation of the ADM architecture, a U-Net variant, with optional
     self-attention.
 
     This model supports conditional and unconditional setups, as well as several
@@ -103,10 +103,10 @@ class DhariwalUNet(Module):
 
     Example:
     --------
-    >>> model = DhariwalUNet(img_resolution=64, in_channels=3, out_channels=3, label_dim=1)
-    >>> noise_labels = torch.randn([batch_size, noise_dim])
-    >>> class_labels = torch.randint(0, num_classes, [batch_size])
-    >>> input_image = torch.randn([batch_size, 3, 64, 64])
+    >>> model = DhariwalUNet(img_resolution=16, in_channels=2, out_channels=2)
+    >>> noise_labels = torch.randn([1])
+    >>> class_labels = torch.randint(0, 1, (1, 1))
+    >>> input_image = torch.ones([1, 2, 16, 16])
     >>> output_image = model(input_image, noise_labels, class_labels)
     """
 
