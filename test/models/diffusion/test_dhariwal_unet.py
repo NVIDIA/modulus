@@ -61,6 +61,7 @@ def test_dhariwal_unet_constructor(device):
     output_image = model(input_image, noise_labels, class_labels)
     assert output_image.shape == (1, out_channels, img_resolution, img_resolution)
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_dhariwal_unet_optims(device):
     """Test Dhariwal UNet optimizations"""
