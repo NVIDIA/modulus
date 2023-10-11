@@ -291,7 +291,7 @@ class DistributedManager(object):
         if initialization_method is None:
             try:
                 DistributedManager.initialize_env()
-            except:
+            except TypeError:
                 if "SLURM_PROCID" in os.environ:
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
@@ -362,7 +362,7 @@ class DistributedManager(object):
     @staticmethod
     def create_process_subgroup(
         name: str, size: int, group_name: Optional[str] = None, verbose: bool = False
-    ):
+    ):  # pragma: no cover
         """
         Create a process subgroup of a parent process group. This must be a collective
         call by all processes participating in this application.
@@ -391,7 +391,7 @@ class DistributedManager(object):
         assert name not in manager._groups, f"Group with name {name} already exists"
 
         # Get parent group's params
-        group = manager._group[group_name] if group_name else None
+        group = manager._groups[group_name] if group_name else None
         group_size = dist.get_world_size(group=group)
         num_groups = manager.world_size // group_size
 
@@ -430,7 +430,7 @@ class DistributedManager(object):
     @staticmethod
     def create_orthogonal_process_group(
         name: str, group_name: str, verbose: bool = False
-    ):
+    ):  # pragma: no cover
         """
         Create a process group that is orthogonal to the specified process group.
 
@@ -475,18 +475,17 @@ class DistributedManager(object):
     @staticmethod
     def create_group_from_node(
         node: ProcessGroupNode,
-        parent: Optional[ProcessGroupNode] = None,
+        parent: Optional[str] = None,
         verbose: bool = False,
-    ):
+    ):  # pragma: no cover
         assert (
             node.size is not None
         ), "Cannot create groups from a ProcessGroupNode that is not fully populated. "
         "Ensure that config.set_leaf_group_sizes is called first with "
         "update_parent_sizes = True"
 
-        parent_group = parent.data.name if parent else None
         DistributedManager.create_process_subgroup(
-            node.name, node.size, group_name=parent_group, verbose=verbose
+            node.name, node.size, group_name=parent, verbose=verbose
         )
         orthogonal_group = (
             node.orthogonal_group
@@ -500,49 +499,39 @@ class DistributedManager(object):
         return orthogonal_group
 
     @staticmethod
-    def create_groups_from_config(config: ProcessGroupConfig, verbose: bool = False):
+    def create_groups_from_config(
+        config: ProcessGroupConfig, verbose: bool = False
+    ):  # pragma: no cover
         # Traverse process group tree in breadth first order
         # to create nested process groups
         q = queue.Queue()
-        q.put(config.tree[config.root_id])
+        q.put(config.root_id)
         DistributedManager.create_group_from_node(config.root)
 
         while not q.empty():
             node_id = q.get()
+            if verbose:
+                print(f"Node ID: {node_id}")
 
             children = config.tree.children(node_id)
+            if verbose:
+                print(f"  Children: {children}")
+
             parent_group = node_id
-            for child_id in children:
+            for child in children:
                 # Create child group and replace parent group by orthogonal group so
                 # that each child forms an independent block of processes
                 parent_group = DistributedManager.create_group_from_node(
-                    config.tree[child_id],
+                    child.data,
                     parent=parent_group,
                 )
 
                 # Add child ids to the queue
-                q.put(child_id)
-
-        # for id in config.tree.expand_tree(mode=Tree.WIDTH):
-        #     node = config.tree[id]
-        #     data = node.data
-        #     assert (
-        #         data.size is not None
-        #     ), "Cannot create groups from a config that is not fully populated. "
-        #     "Ensure that config.set_leaf_group_sizes is set with "
-        #     "update_parent_sizes = True"
-        #     parent_group = node.parent.data.name
-        #     DistributedManager.create_process_subgroup(
-        #         data.name, data.size, group_name=parent_group, verbose=verbose
-        #     )
-        #     if data.orthogonal_group is not None:
-        #         # Create orthogonal process group if required
-        #         DistributedManager.create_orthogonal_process_group(
-        #             data.orthogonal_group, data.name, verbose=verbose
-        #         )
+                q.put(child.identifier)
 
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
+        # Destroying group.WORLD is enough for all process groups to get destroyed
         dist.destroy_process_group()
         DistributedManager._shared_state = {}

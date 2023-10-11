@@ -241,10 +241,20 @@ def run_process_groups_from_config(rank, model_parallel_size, verbose):
     manager = DistributedManager()
 
     assert manager.rank == rank
+
+    # Test that model_parallel and spatial_parallel span all the processes
     assert manager.rank == manager.group_rank(name="model_parallel")
     assert manager.rank == manager.group_rank(name="spatial_parallel")
+
+    # Test orthogonal data_parallel group, only one total model_parallel group so
+    # data_parallel rank should always be 0
     assert 0 == manager.group_rank(name="data_parallel")
+
+    # Test channel_parallel group, group with size 1, so rank must be 0
     assert 0 == manager.group_rank(name="channel_parallel")
+
+    # Cleanup process groups
+    DistributedManager.cleanup()
 
 
 @pytest.mark.multigpu
