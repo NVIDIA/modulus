@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=23.07
-FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.07-py3
+FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
 
