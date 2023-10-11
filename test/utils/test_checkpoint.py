@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import shutil
-import torch.nn as nn
-
-import modulus
 from typing import Callable
+
+import pytest
+import torch
+import torch.nn as nn
+from pytest_utils import import_or_fail
+
 from modulus.models.mlp import FullyConnected
-from modulus.launch.utils import save_checkpoint, load_checkpoint
 
 
 @pytest.fixture()
@@ -30,28 +30,44 @@ def checkpoint_folder() -> str:
 
 @pytest.fixture(params=["modulus", "pytorch"])
 def model_generator(request) -> Callable:
+
     # Create fully-connected NN generator function
     if request.param == "modulus":
-        generator = lambda x: FullyConnected(
-            in_features=x,
-            out_features=x,
-            num_layers=2,
-            layer_size=8,
-        )
+
+        def model(x):
+            return FullyConnected(
+                in_features=x,
+                out_features=x,
+                num_layers=2,
+                layer_size=8,
+            )
+
     else:
-        generator = lambda x: nn.Sequential(
-            nn.Linear(x, 8),
-            nn.ReLU(),
-            nn.Linear(8, x),
-        )
-    return generator
+
+        def model(x):
+            return nn.Sequential(
+                nn.Linear(x, 8),
+                nn.ReLU(),
+                nn.Linear(8, x),
+            )
+
+    return model
 
 
+@import_or_fail(["wandb", "mlflow"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_model_checkpointing(
-    device, model_generator, checkpoint_folder, rtol: float = 1e-3, atol: float = 1e-3
+    device,
+    model_generator,
+    checkpoint_folder,
+    pytestconfig,
+    rtol: float = 1e-3,
+    atol: float = 1e-3,
 ):
     """Test checkpointing util for model"""
+
+    from modulus.launch.utils import load_checkpoint, save_checkpoint
+
     mlp_model_1 = model_generator(8).to(device)
     mlp_model_2 = model_generator(4).to(device)
 
