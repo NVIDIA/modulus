@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.07-py3
-FROM $BASE_CONTAINER as builder
+FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
 
