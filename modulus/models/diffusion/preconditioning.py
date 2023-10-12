@@ -21,6 +21,8 @@ Diffusion-Based Generative Models".
 import torch
 import numpy as np
 
+from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
+
 from typing import Union, List
 
 
@@ -88,7 +90,7 @@ class VPPrecond(torch.nn.Module):
             out_channels=img_channels,
             label_dim=label_dim,
             **model_kwargs,
-        )
+        )  # TODO needs better handling
 
     def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
         x = x.to(torch.float32)
@@ -102,7 +104,9 @@ class VPPrecond(torch.nn.Module):
         )
         dtype = (
             torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            if (
+                self.use_fp16 and not force_fp32 and x.device.type == "cuda"
+            )  # TODO better handling of device
             else torch.float32
         )
 
@@ -236,7 +240,7 @@ class VEPrecond(torch.nn.Module):
             out_channels=img_channels,
             label_dim=label_dim,
             **model_kwargs,
-        )
+        )  # TODO needs better handling
 
     def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
         x = x.to(torch.float32)
@@ -250,7 +254,9 @@ class VEPrecond(torch.nn.Module):
         )
         dtype = (
             torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            if (
+                self.use_fp16 and not force_fp32 and x.device.type == "cuda"
+            )  # TODO better handling of device
             else torch.float32
         )
 
@@ -344,7 +350,7 @@ class iDDPMPrecond(torch.nn.Module):
             out_channels=img_channels * 2,
             label_dim=label_dim,
             **model_kwargs,
-        )
+        )  # TODO needs better handling
 
         u = torch.zeros(M + 1)
         for j in range(M, 0, -1):  # M, ..., 1
@@ -369,7 +375,9 @@ class iDDPMPrecond(torch.nn.Module):
         )
         dtype = (
             torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            if (
+                self.use_fp16 and not force_fp32 and x.device.type == "cuda"
+            )  # TODO better handling of device
             else torch.float32
         )
 
@@ -476,8 +484,8 @@ class EDMPrecond(torch.nn.Module):
         self,
         img_resolution,
         img_channels,
-        img_in_channels,
-        img_out_channels,
+        # img_in_channels,
+        # img_out_channels,
         label_dim=0,
         use_fp16=False,
         sigma_min=0.0,
@@ -490,31 +498,35 @@ class EDMPrecond(torch.nn.Module):
         self.img_resolution = img_resolution
         self.img_channels = img_channels
 
-        self.img_in_channels = img_in_channels
-        self.img_out_channels = img_out_channels
+        # self.img_in_channels = img_in_channels
+        # self.img_out_channels = img_out_channels
 
         self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
+
         self.model = globals()[model_type](
             img_resolution=img_resolution,
-            in_channels=img_in_channels + img_out_channels,
-            out_channels=img_out_channels,
+            in_channels=img_channels,
+            out_channels=img_channels,
+            # in_channels=img_in_channels + img_out_channels,
+            # out_channels=img_out_channels,
             label_dim=label_dim,
             **model_kwargs,
-        )
+        )  # TODO needs better handling
 
-    def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
-    ):
+    # def forward(
+    #     self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
+    # ):
+    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
 
-        # SR: concatenate input channels
-        if img_lr is None:
-            x = x
-        else:
-            x = torch.cat((x, img_lr), dim=1)
+        # # SR: concatenate input channels
+        # if img_lr is None:
+        #     x = x
+        # else:
+        #     x = torch.cat((x, img_lr), dim=1)
 
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
@@ -527,7 +539,9 @@ class EDMPrecond(torch.nn.Module):
         )
         dtype = (
             torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            if (
+                self.use_fp16 and not force_fp32 and x.device.type == "cuda"
+            )  # TODO better handling of device
             else torch.float32
         )
 
@@ -545,7 +559,7 @@ class EDMPrecond(torch.nn.Module):
 
         assert F_x.dtype == dtype
         # skip connection - for SR there's size mismatch bwtween input and output
-        x = x[:, 0 : self.img_out_channels, :, :]
+        # x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 

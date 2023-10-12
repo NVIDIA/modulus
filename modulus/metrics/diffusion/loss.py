@@ -120,6 +120,52 @@ class VELoss:
         return loss
 
 
+# class EDMLoss:
+#     """
+#     Loss function proposed in the EDM paper.
+
+#     Parameters
+#     ----------
+#     P_mean: float, optional
+#         Mean value for `sigma` computation, by default -1.2.
+#     P_std: float, optional:
+#         Standard deviation for `sigma` computation, by default 1.2.
+#     sigma_data: float, optional
+#         Standard deviation for data, by default 0.5.
+
+#     Note
+#     ----
+#     Reference: Karras, T., Aittala, M., Aila, T. and Laine, S., 2022. Elucidating the
+#     design space of diffusion-based generative models. Advances in Neural Information
+#     Processing Systems, 35, pp.26565-26577.
+#     """
+
+#     def __init__(
+#         self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5
+#     ):
+#         self.P_mean = P_mean
+#         self.P_std = P_std
+#         self.sigma_data = sigma_data
+
+#     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+#         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
+#         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+#         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
+
+#         # augment for conditional generaiton
+#         img_tot = torch.cat((img_clean, img_lr), dim=1)
+#         y_tot, augment_labels = (
+#             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+#         )
+#         y = y_tot[:, : img_clean.shape[1], :, :]
+#         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+
+#         n = torch.randn_like(y) * sigma
+#         D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
+#         loss = weight * ((D_yn - y) ** 2)
+#         return loss
+
+
 class EDMLoss:
     """
     Loss function proposed in the EDM paper.
@@ -147,21 +193,15 @@ class EDMLoss:
         self.P_std = P_std
         self.sigma_data = sigma_data
 
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
+    def __call__(self, net, images, labels=None, augment_pipe=None):
+        rnd_normal = torch.randn([images.shape[0], 1, 1, 1], device=images.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+        y, augment_labels = (
+            augment_pipe(images) if augment_pipe is not None else (images, None)
         )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
         n = torch.randn_like(y) * sigma
-        D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
+        D_yn = net(y + n, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
