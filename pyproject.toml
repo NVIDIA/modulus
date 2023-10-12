@@ -41,6 +41,15 @@ launch = [
     "tqdm>=4.60.0",
 ]
 
+dev = [
+    "pytest>=6.0.0",
+    "pyyaml>=6.0",
+    "black==22.10.0",
+    "interrogate==1.5.0",
+    "coverage==6.5.0",
+    "ruff==0.0.290",
+]
+
 all = [
     "h5py>=3.7.0",
     "mpi4py>=3.1.4",
@@ -54,17 +63,10 @@ all = [
     "pyvista>=0.40.1",
     "torch-harmonics>=0.6.2",
     "onnx>=1.14.0",
-    "nvidia-modulus[launch]"
+    "nvidia-modulus[launch]",
+    "nvidia-modulus[dev]"
 ]
 
-dev = [
-    "pytest>=6.0.0",
-    "pyyaml>=6.0",
-    "black==22.10.0",
-    "interrogate==1.5.0",
-    "coverage==6.5.0",
-    "ruff==0.0.290",
-]
 
 [tool.setuptools.dynamic]
 version = {attr = "modulus.__version__"}
