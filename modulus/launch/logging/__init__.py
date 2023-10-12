@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .launch import LaunchLogger
 from .console import PythonLogger, RankZeroLoggingWrapper
-
-from .wandb import initialize_wandb
+from .launch import LaunchLogger
 from .mlflow import initialize_mlflow
+from .wandb import initialize_wandb

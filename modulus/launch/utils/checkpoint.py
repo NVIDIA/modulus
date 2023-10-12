@@ -14,17 +14,17 @@
 
 import glob
 import re
-import torch
-import modulus
-
-from typing import Union, List, NewType, Dict
 from pathlib import Path
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.cuda.amp import GradScaler
+from typing import Dict, List, NewType, Union
 
+import torch
+from torch.cuda.amp import GradScaler
+from torch.optim.lr_scheduler import _LRScheduler
+
+import modulus
 from modulus.distributed import DistributedManager
-from modulus.utils.capture import _StaticCapture
 from modulus.launch.logging import PythonLogger
+from modulus.utils.capture import _StaticCapture
 
 optimizer = NewType("optimizer", torch.optim)
 scheduler = NewType("scheduler", _LRScheduler)
@@ -91,11 +91,12 @@ def _get_checkpoint_filename(
         checkpoint_filename += file_extension
     # Otherwise try loading the latest epoch or rolling checkpoint
     else:
-        file_names = []
-        for fname in glob.glob(
-            checkpoint_filename + "*" + file_extension, recursive=False
-        ):
-            file_names.append(Path(fname).name)
+        file_names = [
+            Path(fname).name
+            for fname in glob.glob(
+                checkpoint_filename + "*" + file_extension, recursive=False
+            )
+        ]
 
         if len(file_names) > 0:
             # If checkpoint from a null index save exists load that

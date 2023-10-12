@@ -14,16 +14,17 @@
 
 import re
 import sys
-import wandb
-import mlflow
 import time
+from typing import Dict, Tuple, Union
+
 import torch
 import torch.cuda.profiler as profiler
+import wandb
 
-from typing import Union, Dict, Tuple
 from modulus.distributed import DistributedManager, gather_loss
-from .wandb import alert
+
 from .console import PythonLogger
+from .wandb import alert
 
 
 class LaunchLogger(object):
@@ -162,7 +163,7 @@ class LaunchLogger(object):
 
             # Console
             if self.root:
-                message = f"Mini-Batch Losses:"
+                message = "Mini-Batch Losses:"
                 for name, value in losses.items():
                     message += f" {name} = {value:10.3e},"
                 message = message[:-1]

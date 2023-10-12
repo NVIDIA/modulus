@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 from datetime import datetime
+
+import torch
+
 from modulus.distributed import DistributedManager
 
 
@@ -36,7 +38,9 @@ def create_ddp_group_tag(group_name: str = None) -> str:
     dist = DistributedManager()
     if dist.rank == 0:
         # Store time stamp as int tensor for broadcasting
-        tint = lambda x: int(datetime.now().strftime(f"%{x}"))
+        def tint(x):
+            return int(datetime.now().strftime(f"%{x}"))
+
         time_index = torch.IntTensor(
             [tint(x) for x in ["m", "d", "y", "H", "M", "S"]]
         ).to(dist.device)
