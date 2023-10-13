@@ -17,7 +17,6 @@ import os
 import torch
 import numpy as np
 import wandb as wb
-
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from modulus.launch.utils import load_checkpoint
@@ -141,10 +140,8 @@ class AhmedBodyRollout:
         self.model.eval()
 
         # load checkpoint
-        _ = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
-            models=self.model,
-            device=self.device,
+        self.model.load(
+            os.path.join(C.ckpt_path, C.ckpt_name, "MeshGraphNet.0.499.mdlus")
         )
 
     def predict(self, save_results=False):

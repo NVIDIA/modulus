@@ -22,7 +22,7 @@ class Constants(BaseModel):
     """Ahmed Body model constants"""
 
     ckpt_path: str = "./checkpoints"
-    ckpt_name: str = "./ahmed_body.pt"
+    ckpt_name: str = "./ahmed_body"
     data_dir: str = "../dataset"
     results_dir: str = "./results"
 

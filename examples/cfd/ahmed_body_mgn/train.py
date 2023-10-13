@@ -206,9 +206,7 @@ if __name__ == "__main__":
     # save constants to JSON file
     if dist.rank == 0:
         os.makedirs(C.ckpt_path, exist_ok=True)
-        with open(
-            os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
-        ) as json_file:
+        with open(os.path.join(C.ckpt_path, C.ckpt_name + ".json"), "w") as json_file:
             json_file.write(C.json(indent=4))
 
     # initialize loggers
