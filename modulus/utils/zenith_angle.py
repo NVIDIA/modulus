@@ -32,12 +32,16 @@ from typing import TypeVar, Union
 
 import numpy as np
 
+# can replace this import with zoneinfo from the standard library in python3.9+.
+import pytz
+
 # helper type
 dtype = np.float32
 
+
 T = TypeVar("T", np.ndarray, float)
 
-TIMESTAMP_2000 = datetime.datetime(2000, 1, 1, 12, 0).timestamp()
+TIMESTAMP_2000 = datetime.datetime(2000, 1, 1, 12, 0, tzinfo=pytz.utc).timestamp()
 
 
 def cos_zenith_angle(
@@ -67,7 +71,7 @@ def cos_zenith_angle(
     """
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
-    julian_centuries = _days_from_2000(time) / 36525.0
+    julian_centuries = _datetime_to_julian_century(time)
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 
@@ -101,6 +105,10 @@ def cos_zenith_angle_from_timestamp(
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 
+def _datetime_to_julian_century(time: datetime.datetime) -> float:
+    return _days_from_2000(time) / 36525.0
+
+
 def _days_from_2000(model_time):
     """Get the days since year 2000.
 
@@ -110,13 +118,16 @@ def _days_from_2000(model_time):
     >>> _days_from_2000(model_time)
     731.0
     """
+    if isinstance(model_time, datetime.datetime):
+        model_time = model_time.replace(tzinfo=pytz.utc)
+
     date_type = type(np.asarray(model_time).ravel()[0])
     if date_type not in [datetime.datetime]:
         raise ValueError(
             f"model_time has an invalid date type. It must be "
             f"datetime.datetime. Got {date_type}."
         )
-    return _total_days(model_time - date_type(2000, 1, 1, 12, 0))
+    return _total_days(model_time - date_type(2000, 1, 1, 12, 0, 0, tzinfo=pytz.utc))
 
 
 def _total_days(time_diff):

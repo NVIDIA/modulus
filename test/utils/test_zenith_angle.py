@@ -29,8 +29,11 @@ from datetime import datetime
 
 import numpy as np
 import pytest
+from pytz import utc
 
 from modulus.utils.zenith_angle import (
+    _datetime_to_julian_century,
+    _timestamp_to_julian_century,
     cos_zenith_angle,
     cos_zenith_angle_from_timestamp,
 )
@@ -48,6 +51,7 @@ from modulus.utils.zenith_angle import (
     ),
 )
 def test_zenith_angle(time, lon, lat, expected):
+    time = time.replace(tzinfo=utc)
     assert cos_zenith_angle(time, lon, lat) == pytest.approx(expected, abs=1e-10)
     timestamp = time.timestamp()
     assert cos_zenith_angle_from_timestamp(timestamp, lon, lat) == pytest.approx(
@@ -61,3 +65,18 @@ def test_zenith_angle_array():
     lon = np.array([0.0])[None, None, :]
     out = cos_zenith_angle_from_timestamp(timestamp, lon, lat)
     assert out.shape == (3, 2, 1)
+
+
+@pytest.mark.parametrize(
+    "t",
+    [
+        datetime(2020, 7, 6, 9, 0, 0),
+        datetime(2000, 1, 1, 12, 0, 0),
+        datetime(2000, 7, 1, 12, 0, 0),
+        datetime(2000, 7, 1, 12, 0, 0, tzinfo=utc),
+    ],
+)
+def test_timestamp_to_julian_centuries(t):
+    a = _datetime_to_julian_century(t)
+    b = _timestamp_to_julian_century(t.replace(tzinfo=utc).timestamp())
+    assert a == b
