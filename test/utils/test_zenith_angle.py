@@ -90,6 +90,10 @@ def test_toa():
     assert ans >= 0
 
 
+@pytest.skip(
+    "This test requires CDS API and manual review of the tisr.png "
+    "and line .png. Consider running if modifying the tisr code."
+)
 def test_tisr_matches_cds():
     import os
 
