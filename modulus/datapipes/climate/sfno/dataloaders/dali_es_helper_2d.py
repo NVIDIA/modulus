@@ -66,7 +66,6 @@ class GeneralES(object):
         zenith_angle=True,
         seed=333,
         is_parallel=True,
-        host_prefetch_buffers=False,
         timestep_hours=6,
     ):  # pragma: no cover
         self.batch_size = batch_size
@@ -89,7 +88,6 @@ class GeneralES(object):
         self.device_id = device_id
         self.shard_id = shard_id
         self.is_parallel = is_parallel
-        self.host_prefetch_buffers = host_prefetch_buffers
         self.zenith_angle = zenith_angle
         self.timestep_hours = timestep_hours
 
@@ -441,27 +439,16 @@ class GeneralES(object):
         self.device = cp.cuda.Device(self.device_id)
         self.device.use()
         self.current_buffer = 0
-        if self.host_prefetch_buffers:
-            self.inp_buffs = self._init_double_buff_host(
-                self.n_history + 1, self.n_in_channels
-            )
-            self.tar_buffs = self._init_double_buff_host(
-                self.n_future + 1, self.n_out_channels
-            )
-        else:
-            self.inp_buffs = self._init_double_buff_gpu(
-                self.n_history + 1, self.n_in_channels
-            )
-            self.tar_buffs = self._init_double_buff_gpu(
-                self.n_future + 1, self.n_out_channels
-            )
+
+        self.inp_buffs = self._init_double_buff_gpu(
+            self.n_history + 1, self.n_in_channels
+        )
+        self.tar_buffs = self._init_double_buff_gpu(
+            self.n_future + 1, self.n_out_channels
+        )
         if self.zenith_angle:
-            if self.host_prefetch_buffers:
-                self.zen_inp_buffs = self._init_double_buff_host(self.n_history + 1, 1)
-                self.zen_tar_buffs = self._init_double_buff_host(self.n_future + 1, 1)
-            else:
-                self.zen_inp_buffs = self._init_double_buff_gpu(self.n_history + 1, 1)
-                self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1, 1)
+            self.zen_inp_buffs = self._init_double_buff_gpu(self.n_history + 1, 1)
+            self.zen_tar_buffs = self._init_double_buff_gpu(self.n_future + 1, 1)
         return
 
     def _compute_zenith_angle(
