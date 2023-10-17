@@ -106,7 +106,12 @@ def cos_zenith_angle_from_timestamp(
 
 
 def irradiance(
-    t, S0=1361, e=0.0167, perihelion_longitude=282.895, mean_tropical_year=365.2422
+    t,
+    S0=1361,
+    e=0.0167,
+    perihelion_longitude=282.895,
+    mean_tropical_year=365.2422,
+    newton_iterations: int = 3,
 ):
     """The flux of solar energy in W/m2 towards Earth
 
@@ -122,6 +127,7 @@ def irradiance(
         perihelion_longitude: spatial angle from moving vernal equinox to perihelion with Sun as angle vertex.
             Perihelion is moment when earth is closest to sun. vernal equinox is
             the longitude when the Earth crosses the equator from South to North.
+        newton_iterations: number of iterations for newton solver for elliptic anomaly
 
 
     Notes:
@@ -151,12 +157,29 @@ def irradiance(
     year_2000_equinox = datetime.datetime(2000, 3, 20, 7, 35, tzinfo=pytz.utc)
 
     # from appendix of Berger 1978
-    lam = (t - year_2000_equinox.timestamp()) % mean_tropical_year
-    lam = lam / mean_tropical_year * 2 * np.pi
-    v = lam - perihelion_longitude * np.pi / 180
+    M = (t - year_2000_equinox.timestamp()) % mean_tropical_year
+    M = M / mean_tropical_year * 2 * np.pi
+    M -= np.deg2rad(perihelion_longitude)
 
-    rho = (1 + e * np.cos(v)) / (1 - e**2)
-    return rho**2 * S0
+    # to get the elliptic anomaly E from the "mean anomaly" M
+    # use eq. 6.37
+    # https://link.springer.com/book/10.1007/978-3-662-53045-0)
+    # r / a = (1 - e cos E )
+    # E - e sin(E) = M
+    def f(E):
+        return E - e * np.sin(E) - M
+
+    def fp(E):
+        return 1 - e * np.cos(E)
+
+    # newton iterations
+    # initial guess
+    E = M / (1 - e)
+    for _ in range(newton_iterations):
+        E = E - f(E) / fp(E)
+
+    rho = 1 - e * np.cos(E)
+    return S0 / rho**2
 
 
 def toa_incident_solar_radiation_accumulated(
