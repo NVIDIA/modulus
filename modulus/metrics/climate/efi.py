@@ -89,11 +89,9 @@ def efi(bin_edges: Tensor, counts: Tensor, quantiles: Tensor) -> Tensor:
     See modulus/metrics/climate/efi for more details.
     """
     bin_widths = bin_edges[1:] - bin_edges[:-1]
-    print(counts)
     pred_cdf = torch.cumsum(counts * bin_widths, dim=0) / torch.sum(
         counts * bin_widths, dim=0
     )
-    print(pred_cdf)
     return (
         2.0
         / torch.pi
@@ -108,11 +106,10 @@ def efi(bin_edges: Tensor, counts: Tensor, quantiles: Tensor) -> Tensor:
 def normalized_entropy(
     pred_pdf: Tensor,
     bin_edges: Tensor,
-    climatology_mean: Tensor,
-    climatology_std: Tensor,
+    climatology_pdf: Tensor,
 ) -> Tensor:
-    """Calculates the relative entropy, or surprise, of using the prediction distribution as opposed to the
-    climatology distribution.
+    """Calculates the relative entropy, or surprise, of using the prediction
+    distribution with respect to the climatology distribution.
 
     Parameters
     ----------
@@ -123,22 +120,21 @@ def normalized_entropy(
     bin_edges : Tensor
         Tensor of bin edges with shape [N+1, ...]
         where N is the number of bins.
-    climatology_mean : Tensor
-        Tensor of climatological mean with shape [...]
-    climatology_std : Tensor
-        Tensor of climatological std with shape [...]
+    climatology_pdf : Tensor
+        Tensor of climatological probability function shape [N, ...]
 
     Returns
     -------
     Tensor
         Relative Entropy values of each of the batched dimensions.
 
-    Note
-    ----
-    Reference: https://www.atmos.albany.edu/daes/atmclasses/atm401/spring_2016/ppts_pdfs/ECMWF_EFI.pdf
     """
 
-    clim_pdf = normal_pdf(climatology_mean, climatology_std, bin_edges, grid="right")
+    if pred_pdf.shape != climatology_pdf.shape:
+        raise ValueError(
+            "Prediction PDF and Climatological PDF must have the same shapes"
+            + f"but recieved {pred_pdf.shape} and {climatology_pdf.shape}."
+        )
 
     return 1.0 - _entropy_from_counts(pred_pdf, bin_edges) / _entropy_from_counts(
         clim_pdf, bin_edges

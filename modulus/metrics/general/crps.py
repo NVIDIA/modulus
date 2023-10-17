@@ -239,11 +239,12 @@ def _crps_from_counts(
     return _crps_from_cdf(bin_edges, cdf_hat, obs)
 
 
-def crps(pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0) -> Tensor:
+def crps(
+    pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0, method: str = "kernel"
+) -> Tensor:
     """
     Computes the local Continuous Ranked Probability Score (CRPS) by either
-    computing a histogram and CDF of the predictions, or, if the number
-    of ensemble members is less than 100, using the kernel CRPS.
+    computing a histogram and CDF of the predictions, or using the kernel definition.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
     Computes:
@@ -261,16 +262,21 @@ def crps(pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0) -> Tensor:
     dim : int, Optional
         Dimension with which to calculate the CRPS over, the ensemble dimension.
         Assumed to be zero.
+    method: str, Optional
+        The method to calculate the crps. Can either be "kernel" or "histogram".
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
+    if method not in ["kernel", "histogram"]:
+        raise ValueError("Method must either be 'kernel' or 'histogram'.")
+
     n = pred.shape[dim]
     pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
     obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
-    if n < 100:
+    if method == "kernel":
         return kcrps(pred, obs, dim=0)
     else:
         number_of_bins = max(int(np.sqrt(n)), 100)

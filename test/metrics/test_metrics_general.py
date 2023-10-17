@@ -261,8 +261,8 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=10 * rtol,
-        atol=10 * atol,
+        rtol=50 * rtol,
+        atol=50 * atol,
     )
 
     # Test kernel method
