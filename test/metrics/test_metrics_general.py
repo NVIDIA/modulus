@@ -366,7 +366,7 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         crps._crps_from_cdf(binsx, torch.zeros((1, 2), device=device), y)
     with pytest.raises(ValueError):
         crps._crps_from_cdf(binsx, cdfx, torch.zeros((1, 2), device=device))
-    
+
     # Test different shape
     x = torch.randn((2, 3, 50, 100), device=device, dtype=torch.float32)
     y = torch.zeros((2, 3, 100), device=device, dtype=torch.float32)
