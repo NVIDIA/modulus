@@ -306,5 +306,5 @@ def test_climate_efi(test_data, device, rtol: float = 1e-1, atol: float = 1e-1):
     assert torch.allclose(e, 0.0 * one, rtol=rtol, atol=atol)
     assert torch.allclose(e1, 0.0 * one, rtol=rtol, atol=atol)
 
-    ne = efi.normalized_entropy(test_pdf, bin_edges, clim_mean, clim_std)
+    ne = efi.normalized_entropy(test_pdf, bin_edges, clim_pdf)
     assert torch.allclose(ne, 0.0 * one, rtol=rtol, atol=atol)
