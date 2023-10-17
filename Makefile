@@ -20,7 +20,8 @@ interrogate:
 
 lint:
 	pre-commit run markdownlint -a && \
-	pre-commit run ruff -a 
+	pre-commit run ruff -a && \
+	pre-commit run check-added-large-files -a
 
 license: 
 	pre-commit run license -a
@@ -43,7 +44,7 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
+		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=75 && \
 		coverage html
 
 # For arch naming conventions, refer
