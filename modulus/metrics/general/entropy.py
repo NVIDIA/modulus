@@ -19,12 +19,12 @@ import torch
 Tensor = torch.Tensor
 
 
-def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tensor:
+def entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tensor:
     """Computes the Statistical Entropy of a random variable using
     a histogram.
 
     Uses the formula:
-    
+
     .. math::
 
         Entropy(X) = \\int p(x) * \\log( p(x) ) dx
@@ -77,7 +77,7 @@ def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tenso
         return ent
 
 
-def _relative_entropy_from_counts(
+def relative_entropy_from_counts(
     p: Tensor,
     q: Tensor,
     bin_edges: Tensor,
@@ -86,7 +86,7 @@ def _relative_entropy_from_counts(
     random variables using their histograms.
 
     Uses the formula:
-    
+
     .. math::
 
         Entropy(X) = \\int p(x) * \\log( p(x)/q(x) ) dx
