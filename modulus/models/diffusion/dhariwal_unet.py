@@ -38,7 +38,7 @@ from typing import List
 
 @dataclass
 class MetaData(ModelMetaData):
-    name: str = "SongUNet"
+    name: str = "DhariwalUNet"
     # Optimization
     jit: bool = False
     cuda_graphs: bool = False
