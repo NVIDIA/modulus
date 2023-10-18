@@ -176,7 +176,11 @@ def silu_triple_backward_for(
     except KeyError:
         raise TypeError("Unsupported dtype")
 
-    x = fd.define_tensor(dim, dtype)
+    x = fd.define_tensor(
+        shape=[-1] * dim,
+        contiguity=nvfuser.compute_contiguity(size, stride),
+        dtype=dtype,
+    )
     one = fd.define_constant(1.0)
     two = fd.define_constant(2.0)
 
