@@ -22,9 +22,9 @@ try:
     import nvfuser
     from nvfuser import DataType, FusionDefinition
 except ImportError:
-    # accomodating for earlier versions of PyTorch (< 2.0)
-    # which don't need nvfuser as explicit dependency
-    from torch._C._nvfuser import DataType, FusionDefinition
+    print(
+        "Error: Either nvfuser is not installed or the version is incompatible. Please retry after installing correct version of nvfuser. The new version of nvfuser should be available in PyTorch container version >= 23.10. https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html"
+    )
 
 _torch_dtype_to_nvfuser = {
     torch.double: DataType.Double,

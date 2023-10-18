@@ -18,7 +18,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dgl import DGLGraph
-from nvfuser import FusionDefinition
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
@@ -56,6 +55,8 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
         ctx, grad_output: torch.Tensor
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor],]:
         """backward pass of the SiLU + Linear function"""
+
+        from nvfuser import FusionDefinition
 
         from modulus.models.layers.fused_silu import silu_backward_for
 
