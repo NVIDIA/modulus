@@ -37,7 +37,7 @@ def test_dhariwal_unet_forward(device):
     assert common.validate_forward_accuracy(
         model,
         (input_image, noise_labels, class_labels),
-        file_name=f"dhariwal_unet_output.pth",
+        file_name="dhariwal_unet_output.pth",
         atol=1e-3,
     )
 

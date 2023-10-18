@@ -16,31 +16,31 @@
 """Miscellaneous utility classes and functions."""
 
 
-import torch
+import contextlib
 import ctypes
 import fnmatch
+import glob
+import hashlib
+import html
 import importlib
 import inspect
-import numpy as np
-import os
-import shutil
-import sys
-import types
 import io
+import os
 import pickle
 import re
-import requests
-import html
-import hashlib
-import glob
+import shutil
+import sys
 import tempfile
+import types
 import urllib
 import urllib.request
 import uuid
-import contextlib
 import warnings
-
 from typing import Any, List, Tuple, Union
+
+import numpy as np
+import requests
+import torch
 
 
 class EasyDict(dict):

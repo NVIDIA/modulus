@@ -16,9 +16,9 @@
 """Loss functions used in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import torch
-
 from typing import Union
+
+import torch
 
 
 class VPLoss:

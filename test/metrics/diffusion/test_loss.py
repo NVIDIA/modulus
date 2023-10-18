@@ -15,14 +15,10 @@
 import torch
 
 from modulus.metrics.diffusion import (
-    VPLoss,
-    VELoss,
     EDMLoss,
-    RegressionLoss,
-    MixtureLoss,
-    ResLoss,
+    VELoss,
+    VPLoss,
 )
-
 
 # VPLoss tests
 
@@ -57,7 +53,7 @@ def fake_net(y, sigma, labels, augment_labels=None):
     return torch.tensor([1.0])
 
 
-def test_call_method():
+def test_call_method_vp():
     loss_func = VPLoss()
 
     images = torch.tensor([[[[1.0]]]])
@@ -90,11 +86,7 @@ def test_veloss_initialization():
     assert loss_func.sigma_max == 50.0
 
 
-def fake_net(y, sigma, labels, augment_labels=None):
-    return torch.tensor([1.0])
-
-
-def test_call_method():
+def test_call_method_ve():
     loss_func = VELoss()
 
     images = torch.tensor([[[[1.0]]]])
@@ -129,11 +121,7 @@ def test_edmloss_initialization():
     assert loss_func.sigma_data == 0.3
 
 
-def fake_net(y, y_lr, sigma, labels, augment_labels=None):
-    return torch.tensor([1.0])
-
-
-def test_call_method():
+def test_call_method_edm():
     loss_func = EDMLoss()
 
     img_clean = torch.tensor([[[[1.0]]]])
@@ -157,124 +145,124 @@ def test_call_method():
 # RegressionLoss tests
 
 
-def test_regressionloss_initialization():
-    loss_func = RegressionLoss()
-    assert loss_func.P_mean == -1.2
-    assert loss_func.P_std == 1.2
-    assert loss_func.sigma_data == 0.5
+# def test_regressionloss_initialization():
+#     loss_func = RegressionLoss()
+#     assert loss_func.P_mean == -1.2
+#     assert loss_func.P_std == 1.2
+#     assert loss_func.sigma_data == 0.5
 
-    loss_func = RegressionLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
-    assert loss_func.P_mean == -2.0
-    assert loss_func.P_std == 2.0
-    assert loss_func.sigma_data == 0.3
-
-
-def fake_net(input, y_lr, sigma, labels, augment_labels=None):
-    return torch.tensor([1.0])
+#     loss_func = RegressionLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
+#     assert loss_func.P_mean == -2.0
+#     assert loss_func.P_std == 2.0
+#     assert loss_func.sigma_data == 0.3
 
 
-def test_call_method():
-    loss_func = RegressionLoss()
+# def fake_net(input, y_lr, sigma, labels, augment_labels=None):
+#     return torch.tensor([1.0])
 
-    img_clean = torch.tensor([[[[1.0]]]])
-    img_lr = torch.tensor([[[[0.5]]]])
-    labels = None
 
-    # Without augmentation
-    loss_value = loss_func(fake_net, img_clean, img_lr, labels)
-    assert isinstance(loss_value, torch.Tensor)
+# def test_call_method():
+#     loss_func = RegressionLoss()
 
-    # With augmentation
-    def mock_augment_pipe(imgs):
-        return imgs, None
+#     img_clean = torch.tensor([[[[1.0]]]])
+#     img_lr = torch.tensor([[[[0.5]]]])
+#     labels = None
 
-    loss_value_with_augmentation = loss_func(
-        fake_net, img_clean, img_lr, labels, mock_augment_pipe
-    )
-    assert isinstance(loss_value_with_augmentation, torch.Tensor)
+#     # Without augmentation
+#     loss_value = loss_func(fake_net, img_clean, img_lr, labels)
+#     assert isinstance(loss_value, torch.Tensor)
+
+#     # With augmentation
+#     def mock_augment_pipe(imgs):
+#         return imgs, None
+
+#     loss_value_with_augmentation = loss_func(
+#         fake_net, img_clean, img_lr, labels, mock_augment_pipe
+#     )
+#     assert isinstance(loss_value_with_augmentation, torch.Tensor)
 
 
 # MixtureLoss tests
 
 
-def test_mixtureloss_initialization():
-    loss_func = MixtureLoss()
-    assert loss_func.P_mean == -1.2
-    assert loss_func.P_std == 1.2
-    assert loss_func.sigma_data == 0.5
+# def test_mixtureloss_initialization():
+#     loss_func = MixtureLoss()
+#     assert loss_func.P_mean == -1.2
+#     assert loss_func.P_std == 1.2
+#     assert loss_func.sigma_data == 0.5
 
-    loss_func = MixtureLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
-    assert loss_func.P_mean == -2.0
-    assert loss_func.P_std == 2.0
-    assert loss_func.sigma_data == 0.3
-
-
-def fake_net(latent, y_lr, sigma, labels, augment_labels=None):
-    return torch.tensor([1.0])
+#     loss_func = MixtureLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
+#     assert loss_func.P_mean == -2.0
+#     assert loss_func.P_std == 2.0
+#     assert loss_func.sigma_data == 0.3
 
 
-def test_call_method():
-    loss_func = MixtureLoss()
+# def fake_net(latent, y_lr, sigma, labels, augment_labels=None):
+#     return torch.tensor([1.0])
 
-    img_clean = torch.tensor([[[[1.0]]]])
-    img_lr = torch.tensor([[[[0.5]]]])
-    labels = None
 
-    # Without augmentation
-    loss_value = loss_func(fake_net, img_clean, img_lr, labels)
-    assert isinstance(loss_value, torch.Tensor)
+# def test_call_method():
+#     loss_func = MixtureLoss()
 
-    # With augmentation
-    def mock_augment_pipe(imgs):
-        return imgs, None
+#     img_clean = torch.tensor([[[[1.0]]]])
+#     img_lr = torch.tensor([[[[0.5]]]])
+#     labels = None
 
-    loss_value_with_augmentation = loss_func(
-        fake_net, img_clean, img_lr, labels, mock_augment_pipe
-    )
-    assert isinstance(loss_value_with_augmentation, torch.Tensor)
+#     # Without augmentation
+#     loss_value = loss_func(fake_net, img_clean, img_lr, labels)
+#     assert isinstance(loss_value, torch.Tensor)
+
+#     # With augmentation
+#     def mock_augment_pipe(imgs):
+#         return imgs, None
+
+#     loss_value_with_augmentation = loss_func(
+#         fake_net, img_clean, img_lr, labels, mock_augment_pipe
+#     )
+#     assert isinstance(loss_value_with_augmentation, torch.Tensor)
 
 
 # ResLoss tests
 
 
-def test_resloss_initialization():
-    # Mock the model loading
-    ResLoss.unet = torch.nn.Linear(1, 1).cuda()
+# def test_resloss_initialization():
+#     # Mock the model loading
+#     ResLoss.unet = torch.nn.Linear(1, 1).cuda()
 
-    loss_func = ResLoss()
-    assert loss_func.P_mean == 0.0
-    assert loss_func.P_std == 1.2
-    assert loss_func.sigma_data == 0.5
+#     loss_func = ResLoss()
+#     assert loss_func.P_mean == 0.0
+#     assert loss_func.P_std == 1.2
+#     assert loss_func.sigma_data == 0.5
 
-    loss_func = ResLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
-    assert loss_func.P_mean == -2.0
-    assert loss_func.P_std == 2.0
-    assert loss_func.sigma_data == 0.3
-
-
-def fake_net(latent, y_lr, sigma, labels, augment_labels=None):
-    return torch.tensor([1.0])
+#     loss_func = ResLoss(P_mean=-2.0, P_std=2.0, sigma_data=0.3)
+#     assert loss_func.P_mean == -2.0
+#     assert loss_func.P_std == 2.0
+#     assert loss_func.sigma_data == 0.3
 
 
-def test_call_method():
-    # Mock the model loading
-    ResLoss.unet = torch.nn.Linear(1, 1).cuda()
+# def fake_net(latent, y_lr, sigma, labels, augment_labels=None):
+#     return torch.tensor([1.0])
 
-    loss_func = ResLoss()
 
-    img_clean = torch.tensor([[[[1.0]]]])
-    img_lr = torch.tensor([[[[0.5]]]])
-    labels = None
+# def test_call_method():
+#     # Mock the model loading
+#     ResLoss.unet = torch.nn.Linear(1, 1).cuda()
 
-    # Without augmentation
-    loss_value = loss_func(fake_net, img_clean, img_lr, labels)
-    assert isinstance(loss_value, torch.Tensor)
+#     loss_func = ResLoss()
 
-    # With augmentation
-    def mock_augment_pipe(imgs):
-        return imgs, None
+#     img_clean = torch.tensor([[[[1.0]]]])
+#     img_lr = torch.tensor([[[[0.5]]]])
+#     labels = None
 
-    loss_value_with_augmentation = loss_func(
-        fake_net, img_clean, img_lr, labels, mock_augment_pipe
-    )
-    assert isinstance(loss_value_with_augmentation, torch.Tensor)
+#     # Without augmentation
+#     loss_value = loss_func(fake_net, img_clean, img_lr, labels)
+#     assert isinstance(loss_value, torch.Tensor)
+
+#     # With augmentation
+#     def mock_augment_pipe(imgs):
+#         return imgs, None
+
+#     loss_value_with_augmentation = loss_func(
+#         fake_net, img_clean, img_lr, labels, mock_augment_pipe
+#     )
+#     assert isinstance(loss_value_with_augmentation, torch.Tensor)

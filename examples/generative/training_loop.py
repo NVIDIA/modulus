@@ -14,24 +14,25 @@
 
 """Main training loop."""
 
-import os
-import time
 import copy
 import json
+import os
 import pickle  # TODO remove
-import psutil
+import time
+
 import numpy as np
+import psutil
 import torch
-from training_stats import report0, report, default_collector
+from training_stats import default_collector, report, report0
 from utils import (
-    construct_class_by_name,
-    open_url,
-    format_time,
     InfiniteSampler,
-    print_module_summary,
+    check_ddp_consistency,
+    construct_class_by_name,
     copy_params_and_buffers,
     ddp_sync,
-    check_ddp_consistency,
+    format_time,
+    open_url,
+    print_module_summary,
 )
 
 # # weather related

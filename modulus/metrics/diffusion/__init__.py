@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .loss import VPLoss, VELoss, EDMLoss, RegressionLoss, MixtureLoss, ResLoss
+from .loss import EDMLoss, MixtureLoss, RegressionLoss, ResLoss, VELoss, VPLoss

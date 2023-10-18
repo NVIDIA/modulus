@@ -17,23 +17,23 @@ Model architectures used in the paper "Elucidating the Design Space of
 Diffusion-Based Generative Models".
 """
 
+from dataclasses import dataclass
+from typing import List
+
 import numpy as np
 import torch
 from torch.nn.functional import silu
-from dataclasses import dataclass
 
 from modulus.models.diffusion import (
-    Linear,
     Conv2d,
-    GroupNorm,
-    UNetBlock,
-    PositionalEmbedding,
     FourierEmbedding,
+    GroupNorm,
+    Linear,
+    PositionalEmbedding,
+    UNetBlock,
 )
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-
-from typing import List
 
 
 @dataclass

@@ -20,13 +20,14 @@ import os
 
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"  # TODO is this needed?
 
-import re
 import json
-import torch
+import re
+
 import hydra
+import torch
+from omegaconf import DictConfig
 from training_loop import training_loop
 from utils import EasyDict, construct_class_by_name
-from omegaconf import DictConfig
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper

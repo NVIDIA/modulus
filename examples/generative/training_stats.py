@@ -18,10 +18,10 @@ synchronization overhead as well as the amount of boilerplate in user
 code."""
 
 import re
+
 import numpy as np
 import torch
-
-from utils import profiled_function, EasyDict
+from utils import EasyDict, profiled_function
 
 # ----------------------------------------------------------------------------
 

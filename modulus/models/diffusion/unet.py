@@ -12,19 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import torch
-from torch.nn.functional import silu
 from dataclasses import dataclass
 
-from modulus.models.diffusion import (
-    Linear,
-    Conv2d,
-    GroupNorm,
-    UNetBlock,
-    PositionalEmbedding,
-    FourierEmbedding,
-)
+import torch
+
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 
@@ -168,7 +159,11 @@ class UNet(Module):
             **model_kwargs,
         )
 
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
         # skip connection - for SR there's size mismatch bwtween input and output
         x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)

@@ -17,12 +17,12 @@ Preconditioning schemes used in the paper"Elucidating the Design Space of
 Diffusion-Based Generative Models".
 """
 
-import torch
+from typing import List, Union
+
 import numpy as np
+import torch
 
 from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
-
-from typing import Union, List
 
 
 class VPPrecond(torch.nn.Module):
@@ -120,7 +120,11 @@ class VPPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 
@@ -270,7 +274,11 @@ class VEPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 
@@ -393,7 +401,11 @@ class iDDPMPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
         D_x = c_skip * x + c_out * F_x[:, : self.img_channels].to(torch.float32)
         return D_x
 
@@ -556,7 +568,11 @@ class EDMPrecond(torch.nn.Module):
             **model_kwargs,
         )
 
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
         # skip connection - for SR there's size mismatch bwtween input and output
         # x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)

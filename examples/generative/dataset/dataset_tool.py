@@ -15,6 +15,7 @@
 
 """Tool for creating ZIP/PNG based datasets."""
 
+import argparse
 import functools
 import gzip
 import io
@@ -27,7 +28,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional, Tuple, Union
-import argparse
+
 import numpy as np
 import PIL.Image
 from tqdm import tqdm

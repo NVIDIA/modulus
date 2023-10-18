@@ -17,20 +17,21 @@
 """Script for calculating Frechet Inception Distance (FID)."""
 
 import os
-import click
-import tqdm
 import pickle
+
+import click
+import hydra
 import numpy as np
 import scipy.linalg
 import torch
-import hydra
+import tqdm
+from dataset import ImageFolderDataset
 from omegaconf import DictConfig
+from utils import open_url
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
-from utils import open_url
-from dataset import ImageFolderDataset
 
 def calculate_inception_stats(
     image_path,

@@ -13,18 +13,18 @@
 # limitations under the License.
 
 import os
-import tqdm
 import pickle  # TODO remove
-import numpy as np
-import torch
+
 import hydra
-from omegaconf import DictConfig
+import numpy as np
 import PIL.Image
+import torch
+import tqdm
+from omegaconf import DictConfig
+from utils import StackedRandomGenerator, open_url
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-
-from utils import StackedRandomGenerator, open_url
 
 
 def sampler(

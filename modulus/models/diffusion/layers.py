@@ -17,13 +17,13 @@ Model architecture layers used in the paper "Elucidating the Design Space of
 Diffusion-Based Generative Models".
 """
 
+from typing import Any, Dict, List
+
 import numpy as np
 import torch
 from torch.nn.functional import silu
 
 from modulus.models.diffusion import weight_init
-
-from typing import List, Dict, Any
 
 
 class Linear(torch.nn.Module):
@@ -141,7 +141,9 @@ class Conv2d(torch.nn.Module):
         init_weight: float = 1.0,
         init_bias: float = 0.0,
     ):
-        assert not (up and down)
+        if up and down:
+            raise ValueError("Both 'up' and 'down' cannot be true at the same time.")
+
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels

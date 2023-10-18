@@ -13,8 +13,8 @@
 # limitations under the License.
 
 
-import torch
 import numpy as np
+import torch
 
 
 def weight_init(shape: tuple, mode: str, fan_in: int, fan_out: int):
