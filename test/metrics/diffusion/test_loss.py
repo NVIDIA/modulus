@@ -135,9 +135,7 @@ def test_call_method_edm():
     def mock_augment_pipe(imgs):
         return imgs, None
 
-    loss_value_with_augmentation = loss_func(
-        fake_net, img, labels, mock_augment_pipe
-    )
+    loss_value_with_augmentation = loss_func(fake_net, img, labels, mock_augment_pipe)
     assert isinstance(loss_value_with_augmentation, torch.Tensor)
 
 

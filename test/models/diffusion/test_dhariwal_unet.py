@@ -113,7 +113,6 @@ def test_dhariwal_unet_checkpoint(device):
     with torch.no_grad():
         model_2.out_conv.bias += 1
 
-
     noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
     input_image = torch.ones([1, 2, 16, 16]).to(device)
