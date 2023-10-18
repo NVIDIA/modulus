@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .utils import weight_init
+from .dhariwal_unet import DhariwalUNet
 from .layers import (
     AttentionOp,
     Conv2d,
@@ -22,7 +22,7 @@ from .layers import (
     PositionalEmbedding,
     UNetBlock,
 )
-from .song_unet import SongUNet
-from .dhariwal_unet import DhariwalUNet
 from .preconditioning import EDMPrecond, VEPrecond, VPPrecond, iDDPMPrecond
+from .song_unet import SongUNet
 from .unet import UNet
+from .utils import weight_init
