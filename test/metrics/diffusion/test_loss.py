@@ -124,12 +124,11 @@ def test_edmloss_initialization():
 def test_call_method_edm():
     loss_func = EDMLoss()
 
-    img_clean = torch.tensor([[[[1.0]]]])
-    img_lr = torch.tensor([[[[0.5]]]])
+    img = torch.tensor([[[[1.0]]]])
     labels = None
 
     # Without augmentation
-    loss_value = loss_func(fake_net, img_clean, img_lr, labels)
+    loss_value = loss_func(fake_net, img, labels)
     assert isinstance(loss_value, torch.Tensor)
 
     # With augmentation
@@ -137,7 +136,7 @@ def test_call_method_edm():
         return imgs, None
 
     loss_value_with_augmentation = loss_func(
-        fake_net, img_clean, img_lr, labels, mock_augment_pipe
+        fake_net, img, labels, mock_augment_pipe
     )
     assert isinstance(loss_value_with_augmentation, torch.Tensor)
 

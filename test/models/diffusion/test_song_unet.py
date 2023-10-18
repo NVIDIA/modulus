@@ -178,7 +178,7 @@ def test_song_unet_checkpoint(device):
     ).to(device)
 
     model_2 = UNet(
-        img_resolution=64,
+        img_resolution=16,
         in_channels=2,
         out_channels=2,
     ).to(device)
@@ -196,7 +196,7 @@ def test_song_unet_checkpoint(device):
 def test_son_unet_deploy(device):
     """Test Song UNet deployment support"""
     model = UNet(
-        img_resolution=64,
+        img_resolution=16,
         in_channels=2,
         out_channels=2,
         embedding_type="fourier",

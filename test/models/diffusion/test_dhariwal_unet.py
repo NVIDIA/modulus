@@ -67,7 +67,7 @@ def test_dhariwal_unet_optims(device):
 
     def setup_model():
         model = UNet(
-            img_resolution=64,
+            img_resolution=16,
             in_channels=2,
             out_channels=2,
         ).to(device)
@@ -107,6 +107,12 @@ def test_dhariwal_unet_checkpoint(device):
         in_channels=2,
         out_channels=2,
     ).to(device)
+    # This test doesn't like the model outputs to be the same.
+    # Change the bias in the last layer of the second model as a hack
+    # Because this model is initialized with all zeros
+    with torch.no_grad():
+        model_2.out_conv.bias += 1
+
 
     noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
