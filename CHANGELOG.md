@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+- Updated the base container to PyTorch 23.10.
+
 ## [0.3.0] - 2023-09-21
 
 ### Added
