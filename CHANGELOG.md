@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The AFNO input argument `img_size` to `inp_shape`
+- Integrated the network architecture layers from Modulus-Sym.
 
 ### Deprecated
 
