@@ -174,7 +174,7 @@ def irradiance(
 
     # newton iterations
     # initial guess
-    E = M / (1 - e)
+    E = M
     for _ in range(newton_iterations):
         E = E - f(E) / fp(E)
 
