@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from .dhariwal_unet import DhariwalUNet
+# ruff: noqa
+from .utils import weight_init
 from .layers import (
     AttentionOp,
     Conv2d,
@@ -24,5 +24,5 @@ from .layers import (
 )
 from .preconditioning import EDMPrecond, VEPrecond, VPPrecond, iDDPMPrecond
 from .song_unet import SongUNet
+from .dhariwal_unet import DhariwalUNet
 from .unet import UNet
-from .utils import weight_init
