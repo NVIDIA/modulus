@@ -57,15 +57,16 @@ def silu_backward_for(
 
     Parameters
     ----------
+    df : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
@@ -103,15 +104,16 @@ def silu_double_backward_for(
 
     Parameters
     ----------
+    df : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
@@ -158,15 +160,16 @@ def silu_triple_backward_for(
 
     Parameters
     ----------
+    df : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
