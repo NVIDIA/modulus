@@ -74,14 +74,6 @@ class UNet(Module):
     Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
     arXiv preprint arXiv:2309.15214.
-
-    Example:
-    --------
-    >>> model = SongUNet(img_resolution=64, in_channels=3, out_channels=3, label_dim=10)
-    >>> noise_labels = torch.randn([batch_size, noise_dim])
-    >>> class_labels = torch.randint(0, num_classes, [batch_size])
-    >>> input_image = torch.randn([batch_size, 3, 64, 64])
-    >>> output_image = model(input_image, noise_labels, class_labels)
     """
 
     def __init__(
