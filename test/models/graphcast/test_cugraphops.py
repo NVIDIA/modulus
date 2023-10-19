@@ -12,13 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib.util
-
 import numpy as np
 import pytest
 import torch
 from pytest_utils import import_or_fail
 from utils import fix_random_seeds, get_icosphere_path
+
+
+def is_fusion_definition_available():
+    try:
+        return hasattr(
+            __import__("nvfuser", fromlist=["FusionDefinition"]), "FusionDefinition"
+        )
+    except ImportError:
+        return False
 
 
 @import_or_fail("dgl")
@@ -32,13 +39,8 @@ def test_cugraphops(
 
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-    if recomp_act:
-        spec = importlib.util.find_spec("nvfuser.FusionDefinition")
-        if spec is None:
-            print(
-                "Error: Either nvfuser is not installed or the version is incompatible. Please retry after installing correct version of nvfuser. The new version of nvfuser should be available in PyTorch container version >= 23.10. https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html"
-            )
-            pytest.skip("Skipping pytest")
+    if recomp_act and not is_fusion_definition_available():
+        pytest.skip("nvfuser module is not available or has incorrect version")
 
     # Fix random seeds
     fix_random_seeds()
