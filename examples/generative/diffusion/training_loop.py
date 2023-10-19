@@ -23,6 +23,7 @@ import time
 import numpy as np
 import psutil
 import torch
+from torch.nn.parallel import DistributedDataParallel
 from training_stats import default_collector, report, report0
 from utils import (
     InfiniteSampler,
@@ -171,6 +172,17 @@ def training_loop(
     )  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
     # net = torch.compile(net)
+    # Distributed data parallel
+    if dist.world_size > 1:
+        ddp = DistributedDataParallel(
+            net,
+            device_ids=[dist.local_rank],
+            broadcast_buffers=dist.broadcast_buffers,
+            output_device=dist.device,
+            find_unused_parameters=dist.find_unused_parameters,
+        )  # broadcast_buffers=True for weather data
+    else:
+        ddp = net
 
     if dist.rank == 0:
         with torch.no_grad():
@@ -210,16 +222,6 @@ def training_loop(
         if augment_kwargs is not None
         else None
     )  # training.augment.AugmentPipe
-    if dist.world_size > 1:
-        ddp = torch.nn.parallel.DistributedDataParallel(
-            net,
-            device_ids=[dist.local_rank],
-            broadcast_buffers=dist.broadcast_buffers,
-            output_device=dist.device,
-            find_unused_parameters=dist.find_unused_parameters,
-        )  # broadcast_buffers=True for weather data
-    else:
-        ddp = net
     ema = copy.deepcopy(net).eval().requires_grad_(False)
 
     # # Import autoresume module
