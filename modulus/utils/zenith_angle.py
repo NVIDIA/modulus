@@ -55,12 +55,16 @@ def cos_zenith_angle(
     be assumed to be in degrees, unless they have a units attribute that
     contains "rad"; in that case they will automatically be converted to having
     units of degrees.
-    Args:
-        time: time in UTC
-        lon: float or np.ndarray in degrees (E/W)
-        lat: float or np.ndarray in degrees (N/S)
-    Returns:
-        float, np.ndarray
+
+    Parameters
+    ----------
+    time: time in UTC
+    lon: float or np.ndarray in degrees (E/W)
+    lat: float or np.ndarray in degrees (N/S)
+
+    Returns
+    --------
+    float, np.ndarray
 
     Example:
     --------
@@ -119,36 +123,38 @@ def irradiance(
     Over the period of 1900-2100 this will result in an error of at most 0.02%,
     so can be neglected for many applications.
 
-    Args:
-        t: linux timestamp
-        S0: the solar constant in W/m2. This is the mean irradiance received by
-            earth over a year.
-        e: the eccentricity of earths elliptical orbit
-        perihelion_longitude: spatial angle from moving vernal equinox to perihelion with Sun as angle vertex.
-            Perihelion is moment when earth is closest to sun. vernal equinox is
-            the longitude when the Earth crosses the equator from South to North.
-        newton_iterations: number of iterations for newton solver for elliptic anomaly
+    Parameters
+    ----------
+    t: linux timestamp
+    S0: the solar constant in W/m2. This is the mean irradiance received by
+        earth over a year.
+    e: the eccentricity of earths elliptical orbit
+    perihelion_longitude: spatial angle from moving vernal equinox to perihelion with Sun as angle vertex.
+        Perihelion is moment when earth is closest to sun. vernal equinox is
+        the longitude when the Earth crosses the equator from South to North.
+    newton_iterations: number of iterations for newton solver for elliptic anomaly
 
 
-    Notes:
+    Notes
+    -----
 
-        TISR can be computed from Berger's formulas:
+    TISR can be computed from Berger's formulas:
 
-            Berger, A. (1978). Long-Term Variations of Daily Insolation and
-            Quaternary Climatic Changes. Journal of the Atmospheric Sciences,
-            35(12), 2362–2367.
-            https://doi.org/10.1175/1520-0469(1978)035<2362:LTVODI>2.0.CO;2
+        Berger, A. (1978). Long-Term Variations of Daily Insolation and
+        Quaternary Climatic Changes. Journal of the Atmospheric Sciences,
+        35(12), 2362–2367.
+        https://doi.org/10.1175/1520-0469(1978)035<2362:LTVODI>2.0.CO;2
 
-        NASA Example computing the orbital parameters: https://data.giss.nasa.gov/modelE/ar5plots/srorbpar.html. From 1900-2100 these are the ranges::
-            Orbital Parmameters
+    NASA Example computing the orbital parameters: https://data.giss.nasa.gov/modelE/ar5plots/srorbpar.html. From 1900-2100 these are the ranges::
+        Orbital Parmameters
 
-                                                Long. of
-            Year     Eccentri    Obliquity    Perihel.
-            (A.D.)      city      (degrees)    (degrees)
-            ------    --------    ---------    --------
-                1900   0.016744      23.4528      281.183
-                2000   0.016704      23.4398      282.895
-                2100   0.016663      23.4268      284.609
+                                            Long. of
+        Year     Eccentri    Obliquity    Perihel.
+        (A.D.)      city      (degrees)    (degrees)
+        ------    --------    ---------    --------
+            1900   0.016744      23.4528      281.183
+            2000   0.016704      23.4398      282.895
+            2100   0.016663      23.4268      284.609
 
     """
     seconds_per_solar_day = 86400
@@ -194,55 +200,56 @@ def toa_incident_solar_radiation_accumulated(
 ):
     """Approximate ECMWF TISR with analytical formulas
 
-    According to the ECWMF docs, the TISR variable is integrated over the preceeding hour.
+    According to the ECWMF docs, the TISR variable is integrated over the
+    preceeding hour.  Error is about 0.1% different from the ECMWF TISR
+    variable.
 
-    Error is about 0.1% different from the ECMWF TISR variable.
-
-    Args:
-        t: linux timestamp
-        lat, lon: latitude and longitude in degrees
-        interval: the integral length in seconds over which the irradiance is integrated
-        S0: the solar constant in W/m2. This is the mean irradiance received by
-            earth over a year.
-        e: the eccentricity of earths elliptical orbit
-        perihelion_longitude: spatial angle from moving vernal equinox to perihelion with Sun as angle vertex.
-            Perihelion is moment when earth is closest to sun. vernal equinox is
-            the longitude when the Earth crosses the equator from South to North.
-
-
-    Returns:
-        TOA incident solar radiation accumulated from [t-inteval, t] in J/m2
-
-    Notes:
-
-        We make some approximations:
-
-        The default orbital parameters are set to 2000 values.
-        Over the period of 1900-2100 this will result in an error of at most 0.02%,
-        so can be neglected for many applications.
-
-        The irradiance is constant over the ``interval``.
+    Parameters
+    ----------
+    t: linux timestamp
+    lat, lon: latitude and longitude in degrees
+    interval: the integral length in seconds over which the irradiance is integrated
+    S0: the solar constant in W/m2. This is the mean irradiance received by
+        earth over a year.
+    e: the eccentricity of earths elliptical orbit
+    perihelion_longitude: spatial angle from moving vernal equinox to perihelion with Sun as angle vertex.
+        Perihelion is moment when earth is closest to sun. vernal equinox is
+        the longitude when the Earth crosses the equator from South to North.
 
 
+    Returns
+    -------
+    TOA incident solar radiation accumulated from [t-inteval, t] in J/m2
 
-        From ECWMF [docs](https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation#ERA5:datadocumentation-Meanrates/fluxesandaccumulations)
+    Notes
+    -----
 
-            Such parameters, which are only available from forecasts, have undergone particular types of statistical processing (temporal mean or accumulation, respectively) over a period of time called the processing period. In addition, these parameters may, or may not, have been averaged in time, to produce monthly means.
+    We make some approximations:
 
-            The accumulations (over the accumulation/processing period) in the short forecasts (from 06 and 18 UTC) of ERA5 are treated differently compared with those in ERA-Interim and operational data (where the accumulations are from the beginning of the forecast to the validity date/time). In the short forecasts of ERA5, the accumulations are since the previous post processing (archiving), so for:
+    The default orbital parameters are set to 2000 values.
+    Over the period of 1900-2100 this will result in an error of at most 0.02%,
+    so can be neglected for many applications.
 
-            reanalysis: accumulations are over the hour (the accumulation/processing period) ending at the validity date/time
-            ensemble: accumulations are over the 3 hours (the accumulation/processing period) ending at the validity date/time
-            Monthly means (of daily means, stream=moda/edmo): accumulations have been scaled to have an "effective" processing period of one day, see section Monthly means
-            Mean rate/flux parameters in ERA5 (e.g. Table 4 for surface and single levels) provide similar information to accumulations (e.g. Table 3 for surface and single levels), except they are expressed as temporal means, over the same processing periods, and so have units of "per second".
+    The irradiance is constant over the ``interval``.
 
-            Mean rate/flux parameters are easier to deal with than accumulations because the units do not vary with the processing period.
-            The mean rate hydrological parameters (e.g. the "Mean total precipitation rate") have units of "kg m-2 s-1", which are equivalent to "mm s-1". They can be multiplied by 86400 seconds (24 hours) to convert to kg m-2 day-1 or mm day-1.
-            Note that:
+    From ECWMF [docs](https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation#ERA5:datadocumentation-Meanrates/fluxesandaccumulations)
 
-            For the CDS time, or validity time, of 00 UTC, the mean rates/fluxes and accumulations are over the hour (3 hours for the EDA) ending at 00 UTC i.e. the mean or accumulation is during part of the previous day.
-            Mean rates/fluxes and accumulations are not available from the analyses.
-            Mean rates/fluxes and accumulations at step=0 have values of zero because the length of the processing period is zero.
+        Such parameters, which are only available from forecasts, have undergone particular types of statistical processing (temporal mean or accumulation, respectively) over a period of time called the processing period. In addition, these parameters may, or may not, have been averaged in time, to produce monthly means.
+
+        The accumulations (over the accumulation/processing period) in the short forecasts (from 06 and 18 UTC) of ERA5 are treated differently compared with those in ERA-Interim and operational data (where the accumulations are from the beginning of the forecast to the validity date/time). In the short forecasts of ERA5, the accumulations are since the previous post processing (archiving), so for:
+
+        reanalysis: accumulations are over the hour (the accumulation/processing period) ending at the validity date/time
+        ensemble: accumulations are over the 3 hours (the accumulation/processing period) ending at the validity date/time
+        Monthly means (of daily means, stream=moda/edmo): accumulations have been scaled to have an "effective" processing period of one day, see section Monthly means
+        Mean rate/flux parameters in ERA5 (e.g. Table 4 for surface and single levels) provide similar information to accumulations (e.g. Table 3 for surface and single levels), except they are expressed as temporal means, over the same processing periods, and so have units of "per second".
+
+        Mean rate/flux parameters are easier to deal with than accumulations because the units do not vary with the processing period.
+        The mean rate hydrological parameters (e.g. the "Mean total precipitation rate") have units of "kg m-2 s-1", which are equivalent to "mm s-1". They can be multiplied by 86400 seconds (24 hours) to convert to kg m-2 day-1 or mm day-1.
+        Note that:
+
+        For the CDS time, or validity time, of 00 UTC, the mean rates/fluxes and accumulations are over the hour (3 hours for the EDA) ending at 00 UTC i.e. the mean or accumulation is during part of the previous day.
+        Mean rates/fluxes and accumulations are not available from the analyses.
+        Mean rates/fluxes and accumulations at step=0 have values of zero because the length of the processing period is zero.
 
     """  # noqa
     lat = np.deg2rad(lat)
