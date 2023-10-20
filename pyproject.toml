@@ -21,6 +21,7 @@ dependencies = [
     "nvidia_dali_cuda110>=1.16.0",
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
+    "pytz>=2023.3",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
