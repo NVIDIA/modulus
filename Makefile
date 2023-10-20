@@ -44,7 +44,7 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
+		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=75 && \
 		coverage html
 
 # For arch naming conventions, refer

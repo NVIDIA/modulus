@@ -107,7 +107,7 @@ class Pix2Pix(Module):
         Number of upsampling blocks, by default 3
     n_blocks : int, optional
         Number of residual blocks in middle of model, by default 3
-    activation_fn : str, optional
+    activation_fn : Any, optional
         Activation function, by default "relu"
     batch_norm : bool, optional
         Batch normalization, by default False
@@ -151,7 +151,7 @@ class Pix2Pix(Module):
         n_downsampling: int = 3,
         n_upsampling: int = 3,
         n_blocks: int = 3,
-        activation_fn: str = "relu",
+        activation_fn: str = "relu",  # TODO need support for type Activation
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
@@ -161,7 +161,12 @@ class Pix2Pix(Module):
             raise ValueError("Invalid padding type")
         super().__init__(meta=MetaData())
 
-        activation = get_activation(activation_fn)
+        # activation function
+        if isinstance(activation_fn, str):
+            activation = get_activation(activation_fn)
+        else:
+            activation = activation_fn
+
         # set padding and convolutions
         if dimension == 1:
             padding = nn.ReflectionPad1d(3)

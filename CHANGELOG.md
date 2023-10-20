@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An experimental version of SFNO to be used in unified training recipe for weather models
 - Added distributed FFT utility.
 - Added ruff as a linting tool.
+- Ported utilities from Modulus Launch to main package.
 
 ### Changed
 
 - The AFNO input argument `img_size` to `inp_shape`
+- Integrated the network architecture layers from Modulus-Sym.
 
 ### Deprecated
 
