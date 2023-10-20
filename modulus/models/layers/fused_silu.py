@@ -13,21 +13,26 @@
 # limitations under the License.
 
 import functools
+import logging
 from typing import Tuple
 
 import torch
 from torch.autograd import Function
 
+logger = logging.getLogger(__name__)
+
 try:
     import nvfuser
     from nvfuser import DataType, FusionDefinition
-except ImportError:
-    print(
-        "Error: Either nvfuser is not installed or the version is incompatible. "
+except ImportError as e:
+    logger.error(
+        "An error occured. Details: %s "
+        "Either nvfuser is not installed or the version is incompatible. "
         "Please retry after installing correct version of nvfuser. "
         "The new version of nvfuser should be available in PyTorch container version "
         ">= 23.10. "
-        "https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html"
+        "https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html",
+        e,
     )
 
 _torch_dtype_to_nvfuser = {
@@ -57,7 +62,7 @@ def silu_backward_for(
 
     Parameters
     ----------
-    df : FusionDefition
+    fd : FusionDefition
         nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
@@ -104,7 +109,7 @@ def silu_double_backward_for(
 
     Parameters
     ----------
-    df : FusionDefition
+    fd : FusionDefition
         nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
@@ -160,7 +165,7 @@ def silu_triple_backward_for(
 
     Parameters
     ----------
-    df : FusionDefition
+    fd : FusionDefition
         nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
