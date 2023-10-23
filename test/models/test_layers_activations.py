@@ -22,15 +22,6 @@ from modulus.models.layers.activations import Identity, SquarePlus, Stan
 from . import common
 
 
-def is_fusion_definition_available():
-    try:
-        return hasattr(
-            __import__("nvfuser", fromlist=["FusionDefinition"]), "FusionDefinition"
-        )
-    except ImportError:
-        return False
-
-
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_activation_identity(device):
     """Test identity function in layers"""
@@ -81,7 +72,7 @@ def test_activation_squareplus(device):
 
 
 @pytest.mark.skipif(
-    not is_fusion_definition_available(),
+    not common.utils.is_fusion_available("FusionDefinition"),
     reason="nvfuser module is not available or has incorrect version",
 )
 @pytest.mark.parametrize("device", ["cuda:0"])
