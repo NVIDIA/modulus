@@ -24,16 +24,17 @@ logger = logging.getLogger(__name__)
 try:
     import nvfuser
     from nvfuser import DataType, FusionDefinition
-except ImportError as e:
+except ImportError:
     logger.error(
-        "An error occured. Details: %s \n"
-        "Either nvfuser is not installed or the version is incompatible. "
-        "Please retry after installing correct version of nvfuser. "
+        "An error occured. Either nvfuser is not installed or the version is "
+        "incompatible. Please retry after installing correct version of nvfuser. "
         "The new version of nvfuser should be available in PyTorch container version "
         ">= 23.10. "
-        "https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html",
-        e,
+        "https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html. "
+        "If using a source install method, please refer nvFuser repo for installation "
+        "guidelines https://github.com/NVIDIA/Fuser.",
     )
+    raise
 
 _torch_dtype_to_nvfuser = {
     torch.double: DataType.Double,
