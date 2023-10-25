@@ -139,8 +139,6 @@ class Module(torch.nn.Module):
         )
         """
 
-        # Add a check if the class is one in the model registry
-
         _cls_name = arg_dict["__name__"]
         registry = ModelRegistry()
         if cls.__name__ == arg_dict["__name__"]:  # If cls is the class
