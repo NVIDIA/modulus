@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
+import pytest
+import torch
+
 from modulus.models.afno import AFNO
+
 from . import common
 
 
@@ -25,10 +27,10 @@ def test_afno_forward(device):
     """Test AFNO forward pass"""
     torch.manual_seed(0)
     model = AFNO(
-        img_size=(32, 32),
+        inp_shape=[32, 32],
         in_channels=2,
         out_channels=1,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=16,
         depth=2,
         num_blocks=2,
@@ -46,19 +48,19 @@ def test_afno_constructor(device):
     # Define dictionary of constructor args
     arg_list = [
         {
-            "img_size": (32, 32),
+            "inp_shape": [32, 32],
             "in_channels": random.randint(1, 4),
             "out_channels": random.randint(1, 4),
-            "patch_size": (8, 8),
+            "patch_size": [8, 8],
             "embed_dim": 4,
             "depth": 2,
             "num_blocks": 2,
         },
         {
-            "img_size": (8, 16),
+            "inp_shape": [8, 16],
             "in_channels": random.randint(1, 4),
             "out_channels": random.randint(1, 4),
-            "patch_size": (4, 4),
+            "patch_size": [4, 4],
             "embed_dim": 6,
             "depth": 4,
             "mlp_ratio": 2.0,
@@ -76,30 +78,30 @@ def test_afno_constructor(device):
         invar = torch.randn(
             bsize,
             kw_args["in_channels"],
-            kw_args["img_size"][0],
-            kw_args["img_size"][1],
+            kw_args["inp_shape"][0],
+            kw_args["inp_shape"][1],
         ).to(device)
         outvar = model(invar)
         assert outvar.shape == (
             bsize,
             kw_args["out_channels"],
-            kw_args["img_size"][0],
-            kw_args["img_size"][1],
+            kw_args["inp_shape"][0],
+            kw_args["inp_shape"][1],
         )
 
     # Also test failure case
     try:
         model = AFNO(
-            img_size=(32, 32),
+            inp_shape=[32, 32],
             in_channels=2,
             out_channels=1,
-            patch_size=(8, 8),
+            patch_size=[8, 8],
             embed_dim=7,
             depth=1,
             num_blocks=4,
         ).to(device)
         raise AssertionError("Failed to error for invalid embed and block number")
-    except AssertionError:
+    except ValueError:
         pass
 
 
@@ -110,10 +112,10 @@ def test_afno_optims(device):
     def setup_model():
         """Setups up fresh AFNO model and inputs for each optim test"""
         model = AFNO(
-            img_size=(32, 32),
+            inp_shape=[32, 32],
             in_channels=2,
             out_channels=2,
-            patch_size=(8, 8),
+            patch_size=[8, 8],
             embed_dim=16,
             depth=2,
             num_blocks=2,
@@ -142,20 +144,20 @@ def test_afno_checkpoint(device):
     """Test AFNO checkpoint save/load"""
     # Construct AFNO models
     model_1 = AFNO(
-        img_size=(32, 32),
+        inp_shape=[32, 32],
         in_channels=2,
         out_channels=2,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=8,
         depth=2,
         num_blocks=2,
     ).to(device)
 
     model_2 = AFNO(
-        img_size=(32, 32),
+        inp_shape=[32, 32],
         in_channels=2,
         out_channels=2,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=8,
         depth=2,
         num_blocks=2,
@@ -172,10 +174,10 @@ def test_afno_deploy(device):
     """Test AFNO deployment support"""
     # Construct AFNO model
     model = AFNO(
-        img_size=(16, 16),
+        inp_shape=[16, 16],
         in_channels=2,
         out_channels=2,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=4,
         depth=1,  # Small depth for onnx export speed
         num_blocks=2,

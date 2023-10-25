@@ -12,26 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pytest
+import torch
+from pytest_utils import import_or_fail
+from utils import create_random_input, fix_random_seeds, get_icosphere_path
 
-from utils import fix_random_seeds, create_random_input, get_icosphere_path
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_grad_checkpointing(device):
+def test_grad_checkpointing(device, pytestconfig, num_channels=2, res_h=15, res_w=15):
     """Test gradient checkpointing"""
     icosphere_path = get_icosphere_path()
+
+    from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     # constants
     model_kwds = {
         "meshgraph_path": icosphere_path,
         "static_dataset_path": None,
-        "input_dim_grid_nodes": 2,
+        "input_res": (res_h, res_w),
+        "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
+        "output_dim_grid_nodes": num_channels,
         "processor_layers": 3,
         "hidden_dim": 4,
         "do_concat_trick": True,
@@ -42,7 +45,9 @@ def test_grad_checkpointing(device):
     fix_random_seeds()
 
     # Random input
-    x = create_random_input(model_kwds["input_dim_grid_nodes"]).to(device)
+    x = create_random_input(
+        model_kwds["input_res"], model_kwds["input_dim_grid_nodes"]
+    ).to(device)
 
     # Instantiate the model
     model = GraphCastNet(**model_kwds).to(device)
@@ -71,7 +76,9 @@ def test_grad_checkpointing(device):
     fix_random_seeds()
 
     # Random input
-    x = create_random_input().to(device)
+    x = create_random_input(
+        model_kwds["input_res"], model_kwds["input_dim_grid_nodes"]
+    ).to(device)
 
     # Instantiate the model
     model = GraphCastNet(**model_kwds).to(device)

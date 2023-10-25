@@ -13,10 +13,28 @@
 # limitations under the License.
 
 import functools
+import logging
+from typing import Tuple
+
 import torch
 from torch.autograd import Function
-from torch._C._nvfuser import Fusion, FusionDefinition, DataType
 
+logger = logging.getLogger(__name__)
+
+try:
+    import nvfuser
+    from nvfuser import DataType, FusionDefinition
+except ImportError:
+    logger.error(
+        "An error occured. Either nvfuser is not installed or the version is "
+        "incompatible. Please retry after installing correct version of nvfuser. "
+        "The new version of nvfuser should be available in PyTorch container version "
+        ">= 23.10. "
+        "https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html. "
+        "If using a source install method, please refer nvFuser repo for installation "
+        "guidelines https://github.com/NVIDIA/Fuser.",
+    )
+    raise
 
 _torch_dtype_to_nvfuser = {
     torch.double: DataType.Double,
@@ -32,149 +50,167 @@ _torch_dtype_to_nvfuser = {
 
 
 @functools.lru_cache(maxsize=None)
-def silu_backward_for(dtype: torch.dtype, dim: int):  # pragma: no cover
+def silu_backward_for(
+    fd: FusionDefinition,
+    dtype: torch.dtype,
+    dim: int,
+    size: torch.Size,
+    stride: Tuple[int, ...],
+):  # pragma: no cover
     """
     nvfuser frontend implmentation of SiLU backward as a fused kernel and with
     activations recomputation
 
     Parameters
     ----------
+    fd : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
     except KeyError:
         raise TypeError("Unsupported dtype")
 
-    fusion = Fusion()
+    x = fd.define_tensor(
+        shape=[-1] * dim,
+        contiguity=nvfuser.compute_contiguity(size, stride),
+        dtype=dtype,
+    )
+    one = fd.define_constant(1.0)
 
-    with FusionDefinition(fusion) as fd:
-        x = fd.define_tensor(dim, dtype)
-        one = fd.define_constant(1.0)
+    # y = sigmoid(x)
+    y = fd.ops.sigmoid(x)
+    # z = sigmoid(x)
+    grad_input = fd.ops.mul(y, fd.ops.add(one, fd.ops.mul(x, fd.ops.sub(one, y))))
 
-        # y = sigmoid(x)
-        y = fd.ops.sigmoid(x)
-        # z = sigmoid(x)
-        grad_input = fd.ops.mul(y, fd.ops.add(one, fd.ops.mul(x, fd.ops.sub(one, y))))
+    grad_input = fd.ops.cast(grad_input, dtype)
 
-        grad_input = fd.ops.cast(grad_input, dtype)
-
-        fd.add_output(grad_input)
-
-    return fusion
+    fd.add_output(grad_input)
 
 
 @functools.lru_cache(maxsize=None)
-def silu_double_backward_for(dtype: torch.dtype, dim: int):  # pragma: no cover
+def silu_double_backward_for(
+    fd: FusionDefinition,
+    dtype: torch.dtype,
+    dim: int,
+    size: torch.Size,
+    stride: Tuple[int, ...],
+):  # pragma: no cover
     """
     nvfuser frontend implmentation of SiLU double backward as a fused kernel and with
     activations recomputation
 
     Parameters
     ----------
+    fd : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
     except KeyError:
         raise TypeError("Unsupported dtype")
 
-    fusion = Fusion()
+    x = fd.define_tensor(
+        shape=[-1] * dim,
+        contiguity=nvfuser.compute_contiguity(size, stride),
+        dtype=dtype,
+    )
+    one = fd.define_constant(1.0)
 
-    with FusionDefinition(fusion) as fd:
-        x = fd.define_tensor(dim, dtype)
-        one = fd.define_constant(1.0)
+    # y = sigmoid(x)
+    y = fd.ops.sigmoid(x)
+    # dy = y * (1 - y)
+    dy = fd.ops.mul(y, fd.ops.sub(one, y))
+    # z = 1 + x * (1 - y)
+    z = fd.ops.add(one, fd.ops.mul(x, fd.ops.sub(one, y)))
+    # term1 = dy * z
+    term1 = fd.ops.mul(dy, z)
 
-        # y = sigmoid(x)
-        y = fd.ops.sigmoid(x)
-        # dy = y * (1 - y)
-        dy = fd.ops.mul(y, fd.ops.sub(one, y))
-        # z = 1 + x * (1 - y)
-        z = fd.ops.add(one, fd.ops.mul(x, fd.ops.sub(one, y)))
-        # term1 = dy * z
-        term1 = fd.ops.mul(dy, z)
+    # term2 = y * ((1 - y) - x * dy)
+    term2 = fd.ops.mul(y, fd.ops.sub(fd.ops.sub(one, y), fd.ops.mul(x, dy)))
 
-        # term2 = y * ((1 - y) - x * dy)
-        term2 = fd.ops.mul(y, fd.ops.sub(fd.ops.sub(one, y), fd.ops.mul(x, dy)))
+    grad_input = fd.ops.add(term1, term2)
 
-        grad_input = fd.ops.add(term1, term2)
+    grad_input = fd.ops.cast(grad_input, dtype)
 
-        grad_input = fd.ops.cast(grad_input, dtype)
-
-        fd.add_output(grad_input)
-
-    return fusion
+    fd.add_output(grad_input)
 
 
 @functools.lru_cache(maxsize=None)
-def silu_triple_backward_for(dtype: torch.dtype, dim: int):  # pragma: no cover
+def silu_triple_backward_for(
+    fd: FusionDefinition,
+    dtype: torch.dtype,
+    dim: int,
+    size: torch.Size,
+    stride: Tuple[int, ...],
+):  # pragma: no cover
     """
     nvfuser frontend implmentation of SiLU triple backward as a fused kernel and with
     activations recomputation
 
     Parameters
     ----------
+    fd : FusionDefition
+        nvFuser's FusionDefition class
     dtype : torch.dtype
         Data type to use for the implementation
     dim : int
         Dimension of the input tensor
-
-    Returns
-    -------
-    fusion :
-        An nvfuser fused executor for SiLU backward
+    size : torch.Size
+        Size of the input tensor
+    stride : Tuple[int, ...]
+        Stride of the input tensor
     """
     try:
         dtype = _torch_dtype_to_nvfuser[dtype]
     except KeyError:
         raise TypeError("Unsupported dtype")
 
-    fusion = Fusion()
+    x = fd.define_tensor(
+        shape=[-1] * dim,
+        contiguity=nvfuser.compute_contiguity(size, stride),
+        dtype=dtype,
+    )
+    one = fd.define_constant(1.0)
+    two = fd.define_constant(2.0)
 
-    with FusionDefinition(fusion) as fd:
-        x = fd.define_tensor(dim, dtype)
-        one = fd.define_constant(1.0)
-        two = fd.define_constant(2.0)
+    # y = sigmoid(x)
+    y = fd.ops.sigmoid(x)
+    # dy = y * (1 - y)
+    dy = fd.ops.mul(y, fd.ops.sub(one, y))
+    # ddy = (1 - 2y) * dy
+    ddy = fd.ops.mul(fd.ops.sub(one, fd.ops.mul(two, y)), dy)
+    # term1 = ddy * (2 + x - 2xy)
+    term1 = fd.ops.mul(
+        ddy, fd.ops.sub(fd.ops.add(two, x), fd.ops.mul(two, fd.ops.mul(x, y)))
+    )
 
-        # y = sigmoid(x)
-        y = fd.ops.sigmoid(x)
-        # dy = y * (1 - y)
-        dy = fd.ops.mul(y, fd.ops.sub(one, y))
-        # ddy = (1 - 2y) * dy
-        ddy = fd.ops.mul(fd.ops.sub(one, fd.ops.mul(two, y)), dy)
-        # term1 = ddy * (2 + x - 2xy)
-        term1 = fd.ops.mul(
-            ddy, fd.ops.sub(fd.ops.add(two, x), fd.ops.mul(two, fd.ops.mul(x, y)))
-        )
+    # term2 = dy * (1 - 2 (y + x * dy))
+    term2 = fd.ops.mul(
+        dy, fd.ops.sub(one, fd.ops.mul(two, fd.ops.add(y, fd.ops.mul(x, dy))))
+    )
 
-        # term2 = dy * (1 - 2 (y + x * dy))
-        term2 = fd.ops.mul(
-            dy, fd.ops.sub(one, fd.ops.mul(two, fd.ops.add(y, fd.ops.mul(x, dy))))
-        )
+    grad_input = fd.ops.add(term1, term2)
 
-        grad_input = fd.ops.add(term1, term2)
+    grad_input = fd.ops.cast(grad_input, dtype)
 
-        grad_input = fd.ops.cast(grad_input, dtype)
-
-        fd.add_output(grad_input)
-
-    return fusion
+    fd.add_output(grad_input)
 
 
 class FusedSiLU(Function):
@@ -231,8 +267,10 @@ class FusedSiLU_deriv_1(Function):
     @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
-        silu_backward = silu_backward_for(x.dtype, x.dim())
-        return silu_backward.execute([x])[0]
+        with FusionDefinition() as fd:
+            silu_backward_for(fd, x.dtype, x.dim(), x.size(), x.stride())
+        out = fd.execute([x])[0]
+        return out
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
@@ -249,8 +287,10 @@ class FusedSiLU_deriv_2(Function):
     @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
-        silu_double_backward = silu_double_backward_for(x.dtype, x.dim())
-        return silu_double_backward.execute([x])[0]
+        with FusionDefinition() as fd:
+            silu_double_backward_for(fd, x.dtype, x.dim(), x.size(), x.stride())
+        out = fd.execute([x])[0]
+        return out
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
@@ -267,8 +307,10 @@ class FusedSiLU_deriv_3(Function):
     @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
-        silu_triple_backward = silu_triple_backward_for(x.dtype, x.dim())
-        return silu_triple_backward.execute([x])[0]
+        with FusionDefinition() as fd:
+            silu_triple_backward_for(fd, x.dtype, x.dim(), x.size(), x.stride())
+        out = fd.execute([x])[0]
+        return out
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover

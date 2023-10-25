@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .models.module import Module
-from .models.meta import ModelMetaData
 from .datapipes.datapipe import Datapipe
 from .datapipes.meta import DatapipeMetaData
+from .models.meta import ModelMetaData
+from .models.module import Module
 
-from .datapipes.datapipe import Datapipe
-
-__version__ = "23.03.0-alpha"
+__version__ = "0.4.0a0"

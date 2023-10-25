@@ -13,7 +13,12 @@
 # limitations under the License.
 
 import os
+
+import pytest
+import torch
+
 from modulus.distributed import DistributedManager
+
 
 # TODO: Need to figure out how to test parallel set up
 def test_manager():
@@ -44,7 +49,7 @@ def test_manager_slurm():
     os.environ["MASTER_PORT"] = "12345"
     os.environ["SLURM_PROCID"] = "0"
     os.environ["SLURM_NPROCS"] = "1"
-    os.environ["SLURM_LOCALID"] = "1"
+    os.environ["SLURM_LOCALID"] = "0"
     os.environ["SLURM_LAUNCH_NODE_IPADDR"] = "localhost"
     # Reset class state
     DistributedManager._shared_state = {}
@@ -67,9 +72,9 @@ def test_manager_ompi():
     # Test distributed manager with openMPI variables
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
-    os.environ["OMPI_COMM_WORLD_RANK"] = "1"
+    os.environ["OMPI_COMM_WORLD_RANK"] = "0"
     os.environ["OMPI_COMM_WORLD_SIZE"] = "1"
-    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "1"
+    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "0"
     # Reset class state
     DistributedManager._shared_state = {}
     DistributedManager.initialize()
@@ -84,6 +89,53 @@ def test_manager_ompi():
     del os.environ["OMPI_COMM_WORLD_RANK"]
     del os.environ["OMPI_COMM_WORLD_SIZE"]
     del os.environ["OMPI_COMM_WORLD_LOCAL_RANK"]
+
+
+def test_manager_specified_initialization():
+    # PyTorch env vars
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+    os.environ["LOCAL_RANK"] = "0"
+
+    # SLURM env vars
+    os.environ["SLURM_PROCID"] = "0"
+    os.environ["SLURM_NPROCS"] = "1"
+    os.environ["SLURM_LOCALID"] = "0"
+    os.environ["SLURM_LAUNCH_NODE_IPADDR"] = "localhost"
+
+    # OpenMPI env vars
+    os.environ["OMPI_COMM_WORLD_RANK"] = "0"
+    os.environ["OMPI_COMM_WORLD_SIZE"] = "1"
+    os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "0"
+
+    # Test SLURM initialization
+    os.environ["MODULUS_DISTRIBUTED_INITIALIZATION_METHOD"] = "SLURM"
+    DistributedManager._shared_state = {}
+    DistributedManager.initialize()
+    manager = DistributedManager()
+    assert manager.is_initialized()
+    assert manager._initialization_method == "slurm"
+    assert not manager.distributed, "Manager should be in serial mode"
+    assert manager.rank == 0
+    assert manager.world_size == 1
+    assert manager.local_rank == 0
+
+    # Test OpenMPI initialization
+    os.environ["MODULUS_DISTRIBUTED_INITIALIZATION_METHOD"] = "OPENMPI"
+    DistributedManager._shared_state = {}
+    DistributedManager.initialize()
+    manager = DistributedManager()
+    assert manager.is_initialized()
+    assert manager._initialization_method == "openmpi"
+    assert not manager.distributed, "Manager should be in serial mode"
+    assert manager.rank == 0
+    assert manager.world_size == 1
+    assert manager.local_rank == 0
+
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
 
 
 def test_manager_singleton():
@@ -116,3 +168,47 @@ def test_manager_singleton():
     assert manager_1.broadcast_buffers == manager_2.broadcast_buffers
     assert manager_1.find_unused_parameters == manager_2.find_unused_parameters
     DistributedManager._shared_state = {}
+
+
+def run_process_groups(rank, model_parallel_size, verbose):
+    os.environ["RANK"] = f"{rank}"
+    os.environ["WORLD_SIZE"] = f"{model_parallel_size}"
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = str(12355)
+    DistributedManager._shared_state = {}
+
+    DistributedManager.initialize()
+
+    # Create model parallel process group
+    DistributedManager.create_process_subgroup(
+        "model_parallel", int(model_parallel_size), verbose=verbose
+    )
+    # Create data parallel process group for DDP allreduce
+    DistributedManager.create_orthogonal_process_group(
+        "data_parallel", "model_parallel", verbose=verbose
+    )
+
+    manager = DistributedManager()
+
+    assert manager.rank == rank
+    assert manager.rank == manager.group_rank(name="model_parallel")
+    assert 0 == manager.group_rank(name="data_parallel")
+
+
+@pytest.mark.multigpu
+def test_process_groups():
+    num_gpus = torch.cuda.device_count()
+    assert num_gpus >= 2, "Not enough GPUs available for test"
+    model_parallel_size = 2
+    verbose = False  # Change to True for debug
+
+    torch.multiprocessing.spawn(
+        run_process_groups,
+        args=(model_parallel_size, verbose),
+        nprocs=model_parallel_size,
+        start_method="spawn",
+    )
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

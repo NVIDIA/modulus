@@ -13,19 +13,23 @@
 # limitations under the License.
 
 import logging
-import modulus
-import torch
+
 import onnx
 import pytest
+import torch
+
+import modulus
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
-from typing import Tuple
 from pathlib import Path
+from typing import Tuple
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
+
 from .utils import compare_output
 
 Tensor = torch.Tensor
@@ -38,10 +42,10 @@ def check_ort_version():
             True,
             reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
         )
-    elif ort.__version__ != "1.14.0":
+    elif ort.__version__ != "1.15.1":
         return pytest.mark.skipif(
             True,
-            reason="Must install custom ORT 1.14.0. Other versions do not work \
+            reason="Must install custom ORT 1.15.1. Other versions do not work \
         due to bug in IRFFT: https://github.com/microsoft/onnxruntime/issues/13236",
         )
     else:

@@ -12,17 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 
-from modulus.models.layers.activations import Identity, Stan, SquarePlus
-from modulus.models.layers.fused_silu import (
-    FusedSiLU,
-    FusedSiLU_deriv_1,
-    FusedSiLU_deriv_2,
-    FusedSiLU_deriv_3,
-)
+import pytest
+import torch
+
+from modulus.models.layers.activations import Identity, SquarePlus, Stan
+
 from . import common
 
 
@@ -75,9 +71,21 @@ def test_activation_squareplus(device):
     assert common.compare_output(torch.ones_like(invar), outvar)
 
 
+@pytest.mark.skipif(
+    not common.utils.is_fusion_available("FusionDefinition"),
+    reason="nvfuser module is not available or has incorrect version",
+)
 @pytest.mark.parametrize("device", ["cuda:0"])
 def test_activation_fused_silu(device):
     """Test fused SiLU implementation"""
+
+    from modulus.models.layers.fused_silu import (
+        FusedSiLU,
+        FusedSiLU_deriv_1,
+        FusedSiLU_deriv_2,
+        FusedSiLU_deriv_3,
+    )
+
     input = torch.randn(20, 20, dtype=torch.double, requires_grad=True, device=device)
     assert torch.autograd.gradcheck(
         FusedSiLU.apply, input, eps=1e-6, atol=1e-4
