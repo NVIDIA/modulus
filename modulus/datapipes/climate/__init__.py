@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from .era5_hdf5 import ERA5HDF5Datapipe
+from .era5_mirror import ERA5Mirror
