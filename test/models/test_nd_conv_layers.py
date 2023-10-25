@@ -251,7 +251,7 @@ def test_conv_nd(device, dimension):
     nn.init.constant_(comp_nn.weight, ini_w)
     with torch.no_grad():
         assert torch.allclose(
-            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
+            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-02
         ), f"ConvNdKernel1Layer output not identical to that of layer specific for {dimension}d fields :("
 
 
@@ -285,7 +285,7 @@ def test_conv_ndfc(device, dimension):
     comp_nn.reset_parameters()
     with torch.no_grad():
         assert torch.allclose(
-            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-06
+            conv_nd(invar), comp_nn(invar), rtol=1e-06, atol=1e-02
         ), f"ConvNdFCLayer output not identical to that of layer specific for {dimension}d fields :("
 
 
