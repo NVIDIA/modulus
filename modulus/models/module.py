@@ -139,14 +139,20 @@ class Module(torch.nn.Module):
         )
         """
 
-        # Add a check if the class is one in the model registry
         _cls_name = arg_dict["__name__"]
         registry = ModelRegistry()
-        if _cls_name in registry.list_models():
+        if cls.__name__ == arg_dict["__name__"]:  # If cls is the class
+            _cls = cls
+        elif _cls_name in registry.list_models():  # Built in registry
             _cls = registry.factory(_cls_name)
-        else:  # Otherwise, try to import the class
-            _mod = importlib.import_module(arg_dict["__module__"])
-            _cls = getattr(_mod, arg_dict["__name__"])
+        else:
+            try:
+                # Otherwise, try to import the class
+                _mod = importlib.import_module(arg_dict["__module__"])
+                _cls = getattr(_mod, arg_dict["__name__"])
+            except AttributeError:
+                # Cross fingers and hope for the best (maybe the class name changed)
+                _cls = cls
         return _cls(**arg_dict["__args__"])
 
     def debug(self):

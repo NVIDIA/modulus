@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+
 ### Security
 
 ### Dependencies
