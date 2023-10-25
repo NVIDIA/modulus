@@ -29,6 +29,6 @@ def test_from_checkpoint_custom(device, LoadModel):
     mock_model.save("checkpoint.mdlus")
 
     # Load from checkpoint using class
-    mock_model2 = LoadModel.from_checkpoint("checkpoint.mdlus")
+    LoadModel.from_checkpoint("checkpoint.mdlus")
     # Delete checkpoint file (it should exist!)
     Path("checkpoint.mdlus").unlink(missing_ok=False)
