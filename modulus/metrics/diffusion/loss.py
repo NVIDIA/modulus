@@ -16,7 +16,7 @@
 """Loss functions used in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-from typing import Union
+from typing import Callable, Optional, Union
 
 import torch
 
@@ -49,7 +49,52 @@ class VPLoss:
         self.beta_min = beta_min
         self.epsilon_t = epsilon_t
 
-    def __call__(self, net, images, labels, augment_pipe=None):
+    def __call__(
+        self,
+        net: torch.nn.Module,
+        images: torch.Tensor,
+        labels: torch.Tensor,
+        augment_pipe: Optional[Callable] = None,
+    ):
+        """
+        Calculate and return a loss for a neural network with added noise.
+
+        This method is typically used for regularization by adding noise to the input data
+        and calculating the loss based on the network's predictions.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and returns
+            augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's predictions.
+
+        Notes:
+        ------
+        - The method adds random noise to the input images and calculates the loss as the
+          square difference between the network's predictions and the noisy input images.
+
+        - The noise level is determined by 'sigma', which is computed as a function of
+          'epsilon_t' and random values.
+
+        - If 'augment_pipe' is provided, data augmentation is applied to the input images
+          before feeding them to the network for prediction.
+
+        - The calculated loss is weighted based on the inverse of 'sigma^2'.
+        """
         rnd_uniform = torch.rand([images.shape[0], 1, 1, 1], device=images.device)
         sigma = self.sigma(1 + rnd_uniform * (self.epsilon_t - 1))
         weight = 1 / sigma**2

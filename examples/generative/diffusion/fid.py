@@ -19,16 +19,15 @@
 import os
 import pickle
 
-import click
 import hydra
 import numpy as np
-import scipy.linalg
 import torch
 import tqdm
 from dataset import ImageFolderDataset
 from omegaconf import DictConfig
 from utils import open_url
 
+from modulus.metrics.diffusion import calculate_fid_from_inception_stats
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
@@ -113,13 +112,6 @@ def calculate_inception_stats(
     sigma -= mu.ger(mu) * len(dataset_obj)
     sigma /= len(dataset_obj) - 1
     return mu.cpu().numpy(), sigma.cpu().numpy()
-
-
-def calculate_fid_from_inception_stats(mu, sigma, mu_ref, sigma_ref):
-    m = np.square(mu - mu_ref).sum()
-    s, _ = scipy.linalg.sqrtm(np.dot(sigma, sigma_ref), disp=False)
-    fid = m + np.trace(sigma + sigma_ref - s * 2)
-    return float(np.real(fid))
 
 
 def calc(image_path, ref_path, num_expected, seed, batch, dist, logger, logger0):
