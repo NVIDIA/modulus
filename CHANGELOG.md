@@ -28,9 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+
 ### Security
 
 ### Dependencies
+
+- Updated the base container to PyTorch 23.10.
 
 ## [0.3.0] - 2023-09-21
 
