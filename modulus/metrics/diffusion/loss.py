@@ -57,10 +57,14 @@ class VPLoss:
         augment_pipe: Optional[Callable] = None,
     ):
         """
-        Calculate and return a loss for a neural network with added noise.
+        Calculate and return the loss corresponding to the variance preserving (VP)
+        formulation.
 
-        This method is typically used for regularization by adding noise to the input data
-        and calculating the loss based on the network's predictions.
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'epsilon_t' and random values. The calculated loss is weighted based on the
+        inverse of 'sigma^2'.
 
         Parameters:
         ----------
@@ -74,26 +78,14 @@ class VPLoss:
             Ground truth labels for the input images.
 
         augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and returns
-            augmented images. If not provided, no data augmentation is applied.
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
 
         Returns:
         -------
         torch.Tensor
-            A tensor representing the loss calculated based on the network's predictions.
-
-        Notes:
-        ------
-        - The method adds random noise to the input images and calculates the loss as the
-          square difference between the network's predictions and the noisy input images.
-
-        - The noise level is determined by 'sigma', which is computed as a function of
-          'epsilon_t' and random values.
-
-        - If 'augment_pipe' is provided, data augmentation is applied to the input images
-          before feeding them to the network for prediction.
-
-        - The calculated loss is weighted based on the inverse of 'sigma^2'.
+            A tensor representing the loss calculated based on the network's
+            predictions.
         """
         rnd_uniform = torch.rand([images.shape[0], 1, 1, 1], device=images.device)
         sigma = self.sigma(1 + rnd_uniform * (self.epsilon_t - 1))
@@ -152,6 +144,37 @@ class VELoss:
         self.sigma_max = sigma_max
 
     def __call__(self, net, images, labels, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the variance exploding (VE)
+        formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'sigma_min' and 'sigma_max' and random values. The calculated loss is weighted
+        based on the inverse of 'sigma^2'.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
         rnd_uniform = torch.rand([images.shape[0], 1, 1, 1], device=images.device)
         sigma = self.sigma_min * ((self.sigma_max / self.sigma_min) ** rnd_uniform)
         weight = 1 / sigma**2
@@ -238,6 +261,36 @@ class EDMLoss:
         self.sigma_data = sigma_data
 
     def __call__(self, net, images, labels=None, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the EDM formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'P_mean' and 'P_std' random values. The calculated loss is weighted as a
+        function of 'sigma' and 'sigma_data'.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
         rnd_normal = torch.randn([images.shape[0], 1, 1, 1], device=images.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
@@ -279,6 +332,33 @@ class RegressionLoss:
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+        """
+        Calculate and return the loss for the U-Net for deterministic predictions.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        img_clean: torch.Tensor
+            Input images (high resolution) to the neural network.
+
+        img_lr: torch.Tensor
+            Input images (low resolution) to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
@@ -328,6 +408,33 @@ class MixtureLoss:
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+        """
+        Calculate and return the loss for regression and denoising score matching.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        img_clean: torch.Tensor
+            Input images (high resolution) to the neural network.
+
+        img_lr: torch.Tensor
+            Input images (low resolution) to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (
             rnd_normal * self.P_std + self.P_mean
@@ -392,6 +499,33 @@ class ResLoss:
             # misc.copy_params_and_buffers(src_module=data['net'], dst_module=net, require_all=True)
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+        """
+        Calculate and return the loss for denoising score matching.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        img_clean: torch.Tensor
+            Input images (high resolution) to the neural network.
+
+        img_lr: torch.Tensor
+            Input images (low resolution) to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
