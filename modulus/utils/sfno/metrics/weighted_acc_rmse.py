@@ -24,66 +24,6 @@ from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
 
 logging_utils.config_logger()
 
-
-def mean(x, axis=None):  # pragma: no cover
-    """Calculates the spatial mean."""
-    y = np.sum(x, axis) / np.size(x, axis)
-    return y
-
-
-def lat_np(j, num_lat):  # pragma: no cover
-    """Calculates the latitude in degrees."""
-    return 90 - j * 180 / (num_lat - 1)
-
-
-def weighted_acc(pred, target, weighted=True):  # pragma: no cover
-    """takes in arrays of size [1, h, w]  and returns latitude-weighted correlation"""
-    if len(pred.shape) == 2:
-        pred = np.expand_dims(pred, 0)
-    if len(target.shape) == 2:
-        target = np.expand_dims(target, 0)
-
-    num_lat = np.shape(pred)[1]
-    pred -= mean(pred)
-    target -= mean(target)
-    s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))
-    weight = (
-        np.expand_dims(latitude_weighting_factor(np.arange(0, num_lat), num_lat, s), -1)
-        if weighted
-        else 1
-    )
-    r = (weight * pred * target).sum() / np.sqrt(
-        (weight * pred * pred).sum() * (weight * target * target).sum()
-    )
-    return r
-
-
-def weighted_rmse(pred, target):  # pragma: no cover
-    """takes in arrays of size [1, h, w]  and returns latitude-weighted rmse"""
-    if len(pred.shape) == 2:
-        pred = np.expand_dims(pred, 0)
-    if len(target.shape) == 2:
-        target = np.expand_dims(target, 0)
-    num_lat = np.shape(pred)[1]
-    num_long = np.shape(target)[2]
-    s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))
-    weight = np.expand_dims(
-        latitude_weighting_factor(np.arange(0, num_lat), num_lat, s), -1
-    )
-    return np.sqrt(
-        1
-        / num_lat
-        * 1
-        / num_long
-        * np.sum(np.dot(weight.T, (pred[0] - target[0]) ** 2))
-    )
-
-
-def latitude_weighting_factor(j, num_lat, s):  # pragma: no cover
-    """Calculates the latitude weighting factor."""
-    return np.clip(num_lat * np.cos(np.pi / 180.0 * lat_np(j, num_lat)) / s, a_min=0.0)
-
-
 # torch version for rmse comp
 @torch.jit.script
 def l1_torch_local(
@@ -94,11 +34,13 @@ def l1_torch_local(
 
 
 def l1_torch_distributed(
-    pred: torch.Tensor, target: torch.Tensor
+    pred: torch.Tensor, target: torch.Tensor, group_name: str
 ) -> torch.Tensor:  # pragma: no cover
     """Calculates the L1 loss between prediction and target in a distributed setting."""
     res = nn.functional.l1_loss(pred, target)
-    res = reduce_from_parallel_region(res, "matmul") / float(comm.get_size("matmul"))
+    res = reduce_from_parallel_region(res, group_name) / float(
+        comm.get_size(group_name)
+    )
     return res
 
 
@@ -110,10 +52,13 @@ def lat_torch(j: torch.Tensor, num_lat: int) -> torch.Tensor:  # pragma: no cove
 
 @torch.jit.script
 def latitude_weighting_factor_torch(
-    lat: torch.Tensor, num_lat: int, norm: torch.Tensor
+    lat: torch.Tensor,
 ) -> torch.Tensor:  # pragma: no cover
     """Calculates the latitude weighting factor."""
-    return torch.clamp(num_lat * torch.cos(torch.deg2rad(lat)) / norm, min=0.0)
+    cos_lat = torch.cos(torch.deg2rad(lat))
+    cos_lat_norm = torch.sum(cos_lat)
+    lwf = torch.clamp(cos_lat / cos_lat_norm, min=0.0) * float(cos_lat.shape[0])
+    return lwf
 
 
 @torch.jit.script
@@ -141,7 +86,7 @@ def weighted_rmse_torch_local(
 
 
 def weighted_rmse_torch_distributed(
-    pred: torch.Tensor, target: torch.Tensor, weight: torch.Tensor
+    pred: torch.Tensor, target: torch.Tensor, weight: torch.Tensor, group_name: str
 ) -> torch.Tensor:  # pragma: no cover
     """Calculates the weighted rmse between prediction and target in a distributed
     setting."""
@@ -150,7 +95,9 @@ def weighted_rmse_torch_distributed(
     res = weighted_rmse_torch_kernel(pred, target, weight)
 
     # perform model parallel mean:
-    res = reduce_from_parallel_region(res, "matmul") / float(comm.get_size("matmul"))
+    res = reduce_from_parallel_region(res, group_name) / float(
+        comm.get_size(group_name)
+    )
 
     # average over batches
     res = torch.mean(torch.sqrt(res), dim=0)
@@ -200,7 +147,7 @@ def weighted_acc_torch_local_no_reduction(
 
 
 def weighted_acc_torch_distributed(
-    pred: torch.Tensor, target: torch.Tensor, weight: torch.Tensor
+    pred: torch.Tensor, target: torch.Tensor, weight: torch.Tensor, group_name: str
 ) -> torch.Tensor:  # pragma: no cover
     """Calculates the weighted acc between prediction and target in a distributed
     setting."""
@@ -208,9 +155,9 @@ def weighted_acc_torch_distributed(
     cov, var1, var2 = weighted_acc_torch_kernel(pred, target, weight)
 
     # reductions:
-    cov = reduce_from_parallel_region(cov, "matmul")
-    var1 = reduce_from_parallel_region(var1, "matmul")
-    var2 = reduce_from_parallel_region(var2, "matmul")
+    cov = reduce_from_parallel_region(cov, group_name)
+    var1 = reduce_from_parallel_region(var1, group_name)
+    var2 = reduce_from_parallel_region(var2, group_name)
 
     # compute ratio
     res = cov / (torch.sqrt(var1 * var2) + eps)

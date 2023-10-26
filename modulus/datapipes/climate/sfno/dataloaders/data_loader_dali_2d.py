@@ -155,7 +155,6 @@ class ERA5DaliESDataloader(object):
         self, params, location, train, seed=333, final_eval=False
     ):  # pragma: no cover
         self.num_data_workers = params.num_data_workers
-        self.host_prefetch_buffers = params["host_prefetch_buffers"]
         self.device_index = torch.cuda.current_device()
         self.batchsize = int(params.batch_size)
 
@@ -172,6 +171,7 @@ class ERA5DaliESDataloader(object):
         self.location = location
         self.train = train
         self.dt = params.dt
+        self.dhours = params.dhours if hasattr(params, "dhours") else 6
         self.n_history = params.n_history
         self.n_future = params.n_future if train else params.valid_autoreg_steps
         self.in_channels = params.in_channels
@@ -179,9 +179,11 @@ class ERA5DaliESDataloader(object):
         self.add_noise = params.add_noise if train else False
         self.noise_std = params.noise_std
         self.add_zenith = params.add_zenith if hasattr(params, "add_zenith") else False
-        self.timestep_hours = (
-            params.timestep_hours if hasattr(params, "timestep_hours") else 6
-        )
+        if hasattr(params, "lat") and hasattr(params, "lon"):
+            lat_lon = (params["lat"], params["lon"])
+        else:
+            lat_lon = None
+        self.dataset_path = params.h5_path if hasattr(params, "h5_path") else "fields"
         if train:
             self.n_samples = (
                 params.n_train_samples if hasattr(params, "n_train_samples") else None
@@ -241,6 +243,7 @@ class ERA5DaliESDataloader(object):
             train=self.train,
             batch_size=self.batchsize,
             dt=self.dt,
+            dhours=self.dhours,
             n_history=self.n_history,
             n_future=self.n_future,
             in_channels=self.in_channels,
@@ -254,11 +257,11 @@ class ERA5DaliESDataloader(object):
             device_id=self.device_index,
             truncate_old=True,
             zenith_angle=self.add_zenith,
+            lat_lon=lat_lon,
+            dataset_path=self.dataset_path,
             enable_logging=params.log_to_screen,
             seed=333,
             is_parallel=True,
-            host_prefetch_buffers=self.host_prefetch_buffers,
-            timestep_hours=self.timestep_hours,
         )
 
         # some image properties
@@ -301,15 +304,6 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.in_channels]
                 self.in_bias = means
                 self.in_scale = stds
-            elif params.normalization == "mixed":
-                means = np.load(params.global_means_path)[:, self.in_channels]
-                stds = np.load(params.global_stds_path)[:, self.in_channels]
-                self.in_bias = means
-                self.in_scale = stds
-                for i, c in enumerate(self.in_channels):
-                    if params.channel_names[c][0] == "r":
-                        self.in_bias[:, i] = 0.0
-                        self.in_scale[:, i] = 150.0
             elif params.normalization == "none":
                 N_in_channels = len(self.in_channels)
                 self.in_bias = np.zeros((1, N_in_channels, 1, 1))
@@ -326,15 +320,6 @@ class ERA5DaliESDataloader(object):
                 stds = np.load(params.global_stds_path)[:, self.out_channels]
                 self.out_bias = means
                 self.out_scale = stds
-            elif params.normalization == "mixed":
-                means = np.load(params.global_means_path)[:, self.out_channels]
-                stds = np.load(params.global_stds_path)[:, self.out_channels]
-                self.out_bias = means
-                self.out_scale = stds
-                for o, c in enumerate(self.out_channels):
-                    if params.channel_names[c][0] == "r":  # replace with regex
-                        self.out_bias[:, o] = 0.0
-                        self.out_scale[:, o] = 150.0
             elif params.normalization == "none":
                 N_out_channels = len(self.out_channels)
                 self.out_bias = np.zeros((1, N_out_channels, 1, 1))
@@ -410,21 +395,9 @@ class ERA5DaliESDataloader(object):
             if self.add_zenith:
                 izen = token[0]["izen"]
                 tzen = token[0]["tzen"]
-                if self.host_prefetch_buffers:
-                    result = (
-                        inp.to(torch.cuda.current_device()),
-                        tar.to(torch.cuda.current_device()),
-                        izen.to(torch.cuda.current_device()),
-                        tzen.to(torch.cuda.current_device()),
-                    )
-                else:
-                    result = inp, tar, izen, tzen
+
+                result = inp, tar, izen, tzen
             else:
-                if self.host_prefetch_buffers:
-                    result = inp.to(torch.cuda.current_device()), tar.to(
-                        torch.cuda.current_device()
-                    )
-                else:
-                    result = inp, tar
+                result = inp, tar
 
             yield result

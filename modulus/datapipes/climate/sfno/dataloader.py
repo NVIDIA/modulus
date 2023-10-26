@@ -51,9 +51,9 @@ def init_distributed_io(params):  # pragma: no cover
     num_io_ranks = math.prod(params.io_grid)
     if not ((num_io_ranks == 1) or (num_io_ranks == comm.get_size("spatial"))):
         raise AssertionError
-    if not (params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1):
+    if not ((params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1)):
         raise AssertionError
-    if not (params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1):
+    if not ((params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1)):
         raise AssertionError
 
     params.io_rank = [0, 0, 0]
@@ -79,9 +79,10 @@ def get_dataloader(
         return zarr.get_data_loader(params, files_pattern, train)
 
     elif params.get("multifiles", False):
-        from utils.dataloaders.data_loader_multifiles import (
+        from modulus.datapipes.climate.sfno.dataloaders.data_loader_multifiles import (
             MultifilesDataset as MultifilesDataset2D,
         )
+        from torch.utils.data.distributed import DistributedSampler
 
         # multifiles dataset
         dataset = MultifilesDataset2D(params, files_pattern, train)
@@ -101,11 +102,15 @@ def get_dataloader(
             dataset,
             batch_size=int(params.batch_size),
             num_workers=params.num_data_workers,
-            shuffle=False,  # (sampler is None),
+            shuffle=False,
             sampler=sampler if train else None,
             drop_last=True,
             pin_memory=torch.cuda.is_available(),
         )
+
+        # for compatibility with the DALI dataloader
+        dataloader.get_output_normalization = dataset.get_output_normalization
+        dataloader.get_input_normalization = dataset.get_input_normalization
 
     elif params.enable_synthetic_data:
         from modulus.datapipes.climate.sfno.dataloaders.data_loader_dummy import (
@@ -127,6 +132,8 @@ def get_dataloader(
             img_local_shape_y=dataloader.img_local_shape_y,
             img_local_offset_x=dataloader.img_local_offset_x,
             img_local_offset_y=dataloader.img_local_offset_y,
+            img_local_pad_x=dataloader.img_local_pad_x,
+            img_local_pad_y=dataloader.img_local_pad_y,
         )
 
         # not needed for the no multifiles case
@@ -154,6 +161,8 @@ def get_dataloader(
             img_local_shape_y=dataloader.img_local_shape_y,
             img_local_offset_x=dataloader.img_local_offset_x,
             img_local_offset_y=dataloader.img_local_offset_y,
+            img_local_pad_x=dataloader.img_local_pad_x,
+            img_local_pad_y=dataloader.img_local_pad_y,
         )
 
         if params.enable_benchy and train:

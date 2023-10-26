@@ -33,6 +33,7 @@ class DummyLoader(object):
         self.location = location
         self.train = train
         self.dt = params.dt
+        self.dhours = params.dhours
         self.batch_size = int(params.batch_size)
         self.n_history = params.n_history
         self.n_future = params.n_future if train else params.valid_autoreg_steps
@@ -97,7 +98,11 @@ class DummyLoader(object):
                 "No input files found, specifying dataset properties from parameter inputs"
             )
             self.n_years = self.params.n_years
-            self.n_samples_per_year = self.params.n_samples_per_year
+            self.n_samples_per_year = (
+                self.params.n_samples_per_year
+                if hasattr(self.params, "n_samples_per_year")
+                else 8760 // self.dhours
+            )
             self.img_shape_x = self.params.img_shape_x
             self.img_shape_y = self.params.img_shape_y
 
@@ -157,20 +162,12 @@ class DummyLoader(object):
         self.n_out_channels_local = self.n_out_channels
 
         self.files = [None for _ in range(self.n_years)]
-        logging.info("Number of samples per year: {}".format(self.n_samples_per_year))
+        logging.info(f"Number of samples per year: {self.n_samples_per_year}.")
         logging.info(
-            "Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(
-                self.location,
-                self.n_samples_total,
-                self.img_shape_x,
-                self.img_shape_y,
-                self.n_in_channels_local,
-            )
+            f"Number of examples: {self.n_samples_total}. Image Shape:{self.img_shape_x} x {self.img_shape_y} x {self.n_in_channels_local}"
         )
         logging.info(
-            "Including {} hours of past history in training at a frequency of {} hours".format(
-                6 * self.dt * self.n_history, 6 * self.dt
-            )
+            f"Including {self.dhours*self.dt*self.n_history} hours of past history in training at a frequency of {self.dhours*self.dt} hours"
         )
         logging.info("WARNING: using dummy data")
 

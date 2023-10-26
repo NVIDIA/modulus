@@ -36,16 +36,17 @@ from modulus.models.module import Module
 # helpers
 # import global convolution and non-linear spectral layers
 # wrap fft, to unify interface to spectral transforms
-from modulus.models.sfno.initialization import trunc_normal_
 from modulus.models.sfno.layers import (
     MLP,
     DropPath,
     EncoderDecoder,
-    RealFFT2,
-    SpectralAttention2d,
-    SpectralAttentionS2,
+    InverseRealFFT2,
 )
-from modulus.models.sfno.s2convolutions import SpectralConvS2
+from modulus.models.sfno.spectral_convolution import (
+    SpectralConv,
+    FactorizedSpectralConv,
+    SpectralAttention,
+)
 
 # more distributed stuff
 from modulus.utils.sfno.distributed import comm
@@ -89,53 +90,45 @@ class SpectralFilterLayer(nn.Module):
         filter_type="linear",
         operator_type="diagonal",
         sparsity_threshold=0.0,
-        use_complex_kernels=True,
         hidden_size_factor=1,
         rank=1.0,
         factorization=None,
         separable=False,
-        complex_network=True,
         complex_activation="real",
         spectral_layers=1,
+        bias=False,
         drop_rate=0.0,
     ):  # pragma: no cover
         super(SpectralFilterLayer, self).__init__()
 
-        if filter_type == "non-linear" and (
-            isinstance(forward_transform, th.RealSHT)
-            or isinstance(forward_transform, thd.DistributedRealSHT)
-        ):
-            self.filter = SpectralAttentionS2(
+        if filter_type == "non-linear":
+            self.filter = SpectralAttention(
                 forward_transform,
                 inverse_transform,
                 embed_dim,
+                embed_dim,
+                operator_type=operator_type,
                 sparsity_threshold=sparsity_threshold,
                 hidden_size_factor=hidden_size_factor,
                 complex_activation=complex_activation,
                 spectral_layers=spectral_layers,
                 drop_rate=drop_rate,
-                bias=False,
+                bias=bias,
             )
 
-        elif filter_type == "non-linear" and (
-            isinstance(forward_transform, RealFFT2)
-            or isinstance(forward_transform, DistributedRealFFT2)
-        ):
-            self.filter = SpectralAttention2d(
+        elif filter_type == "linear" and factorization is None:
+            self.filter = SpectralConv(
                 forward_transform,
                 inverse_transform,
                 embed_dim,
-                sparsity_threshold=sparsity_threshold,
-                hidden_size_factor=hidden_size_factor,
-                complex_activation=complex_activation,
-                spectral_layers=spectral_layers,
-                drop_rate=drop_rate,
-                bias=False,
+                embed_dim,
+                operator_type=operator_type,
+                separable=separable,
+                bias=bias,
             )
 
-        # spectral transform is passed to the module
-        elif filter_type == "linear":
-            self.filter = SpectralConvS2(
+        elif filter_type == "linear" and factorization is not None:
+            self.filter = FactorizedSpectralConv(
                 forward_transform,
                 inverse_transform,
                 embed_dim,
@@ -144,8 +137,7 @@ class SpectralFilterLayer(nn.Module):
                 rank=rank,
                 factorization=factorization,
                 separable=separable,
-                bias=False,
-                use_tensorly=False if factorization is None else True,
+                bias=bias,
             )
 
         else:
@@ -169,9 +161,8 @@ class FourierNeuralOperatorBlock(nn.Module):
         drop_rate=0.0,
         drop_path=0.0,
         act_layer="gelu",
-        norm_layer=(nn.LayerNorm, nn.LayerNorm),
+        norm_layer=(nn.Identity, nn.Identity),
         sparsity_threshold=0.0,
-        use_complex_kernels=True,
         rank=1.0,
         factorization=None,
         separable=False,
@@ -180,14 +171,15 @@ class FourierNeuralOperatorBlock(nn.Module):
         use_mlp=False,
         comm_feature_inp_name=None,
         comm_feature_hidden_name=None,
-        complex_network=True,
         complex_activation="real",
         spectral_layers=1,
+        final_activation=False,
+        bias=False,
         checkpointing=0,
     ):  # pragma: no cover
         super(FourierNeuralOperatorBlock, self).__init__()
 
-        if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
+        if comm.get_size("spatial") > 1:
             self.input_shape_loc = (
                 forward_transform.nlat_local,
                 forward_transform.nlon_local,
@@ -200,6 +192,15 @@ class FourierNeuralOperatorBlock(nn.Module):
             self.input_shape_loc = (forward_transform.nlat, forward_transform.nlon)
             self.output_shape_loc = (inverse_transform.nlat, inverse_transform.nlon)
 
+        if inner_skip == "linear":
+            self.inner_skip = nn.Conv2d(embed_dim, embed_dim, 1, 1, bias=False)
+        elif inner_skip == "identity":
+            self.inner_skip = nn.Identity()
+        elif inner_skip == "none":
+            pass
+        else:
+            raise ValueError(f"Unknown skip connection type {inner_skip}")
+
         # norm layer
         self.norm0 = norm_layer[0]()
 
@@ -211,27 +212,18 @@ class FourierNeuralOperatorBlock(nn.Module):
             filter_type,
             operator_type,
             sparsity_threshold,
-            use_complex_kernels=use_complex_kernels,
             hidden_size_factor=mlp_ratio,
-            rank=rank,
             factorization=factorization,
+            rank=rank,
             separable=separable,
-            complex_network=complex_network,
             complex_activation=complex_activation,
             spectral_layers=spectral_layers,
+            bias=bias,
             drop_rate=drop_rate,
         )
 
-        if inner_skip == "linear":
-            self.inner_skip = nn.Conv2d(embed_dim, embed_dim, 1, 1)
-        elif inner_skip == "identity":
-            self.inner_skip = nn.Identity()
-
         if filter_type == "linear" or filter_type == "real linear":
             self.act_layer = get_activation(act_layer)
-
-        # dropout
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
         # norm layer
         self.norm1 = norm_layer[1]()
@@ -249,10 +241,20 @@ class FourierNeuralOperatorBlock(nn.Module):
                 checkpointing=checkpointing,
             )
 
+        # dropout
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+
         if outer_skip == "linear":
-            self.outer_skip = nn.Conv2d(embed_dim, embed_dim, 1, 1)
+            self.outer_skip = nn.Conv2d(embed_dim, embed_dim, 1, 1, bias=False)
         elif outer_skip == "identity":
             self.outer_skip = nn.Identity()
+        elif outer_skip == "none":
+            pass
+        else:
+            raise ValueError(f"Unknown skip connection type {outer_skip}")
+
+        if final_activation:
+            self.act_layer1 = act_layer()
 
     def forward(self, x):  # pragma: no cover
         x_norm = torch.zeros_like(x)
@@ -264,8 +266,8 @@ class FourierNeuralOperatorBlock(nn.Module):
         if hasattr(self, "inner_skip"):
             x = x + self.inner_skip(residual)
 
-        if hasattr(self, "act_layer"):
-            x = self.act_layer(x)
+        if hasattr(self, "act_layer0"):
+            x = self.act_layer0(x)
 
         x_norm = torch.zeros_like(x)
         x_norm[
@@ -281,6 +283,9 @@ class FourierNeuralOperatorBlock(nn.Module):
         if hasattr(self, "outer_skip"):
             x = x + self.outer_skip(residual)
 
+        if hasattr(self, "act_layer1"):
+            x = self.act_layer1(x)
+
         return x
 
 
@@ -290,8 +295,6 @@ class SphericalFourierNeuralOperatorNet(Module):
 
     Parameters
     ----------
-    params : dict
-        Dictionary of parameters
     spectral_transform : str, optional
         Type of spectral transformation to use, by default "sht"
     grid : str, optional
@@ -361,7 +364,6 @@ class SphericalFourierNeuralOperatorNet(Module):
     --------
     >>> from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
     >>> model = SFNO(
-    ...         params={},
     ...         inp_shape=(8, 16),
     ...         scale_factor=4,
     ...         in_chans=2,
@@ -377,20 +379,21 @@ class SphericalFourierNeuralOperatorNet(Module):
 
     def __init__(
         self,
-        params: dict,
         spectral_transform: str = "sht",
-        grid="legendre-gauss",
         filter_type: str = "non-linear",
-        operator_type: str = "diagonal",
+        operator_type: str = "dhconv",
         inp_shape: Tuple[int] = (721, 1440),
-        scale_factor: int = 16,
-        in_chans: int = 2,
+        out_shape: Tuple[int] = (721, 1440),
+        scale_factor: int = 8,
+        inp_chans: int = 2,
         out_chans: int = 2,
-        embed_dim: int = 256,
-        num_layers: int = 12,
+        embed_dim: int = 32,
+        num_layers: int = 4,
         repeat_layers=1,
         use_mlp: int = True,
         mlp_ratio: int = 2.0,
+        encoder_ratio: int = 1,
+        decoder_ratio: int = 1,
         activation_function: str = "gelu",
         encoder_layers: int = 1,
         pos_embed: str = "direct",
@@ -400,119 +403,41 @@ class SphericalFourierNeuralOperatorNet(Module):
         normalization_layer: str = "instance_norm",
         max_modes: Any = None,
         hard_thresholding_fraction: float = 1.0,
-        use_complex_kernels: bool = True,
         big_skip: bool = True,
         rank: float = 1.0,
         factorization: Any = None,
         separable: bool = False,
-        complex_network: bool = True,
         complex_activation: str = "real",
         spectral_layers: int = 3,
-        output_transform: bool = False,
+        bias: bool = False,
         checkpointing: int = 0,
+        **kwargs,
     ):  # pragma: no cover
         super(SphericalFourierNeuralOperatorNet, self).__init__(meta=MetaData())
 
-        self.params = params
-        self.spectral_transform = (
-            params.spectral_transform
-            if hasattr(params, "spectral_transform")
-            else spectral_transform
-        )
-        self.grid = params.grid if hasattr(params, "grid") else grid
-        self.filter_type = (
-            params.filter_type if hasattr(params, "filter_type") else filter_type
-        )
-        self.operator_type = (
-            params.operator_type if hasattr(params, "operator_type") else operator_type
-        )
-        self.inp_shape = (
-            (params.img_shape_x, params.img_shape_y)
-            if hasattr(params, "img_shape_x") and hasattr(params, "img_shape_y")
-            else inp_shape
-        )
-        self.out_shape = (
-            (params.out_shape_x, params.out_shape_y)
-            if hasattr(params, "out_shape_x") and hasattr(params, "out_shape_y")
-            else self.inp_shape
-        )
-        self.scale_factor = (
-            params.scale_factor if hasattr(params, "scale_factor") else scale_factor
-        )
-        self.in_chans = (
-            params.N_in_channels if hasattr(params, "N_in_channels") else in_chans
-        )
-        self.out_chans = (
-            params.N_out_channels if hasattr(params, "N_out_channels") else out_chans
-        )
-        self.embed_dim = self.num_features = (
-            params.embed_dim if hasattr(params, "embed_dim") else embed_dim
-        )
-        self.num_layers = (
-            params.num_layers if hasattr(params, "num_layers") else num_layers
-        )
-        self.repeat_layers = (
-            params.repeat_layers if hasattr(params, "repeat_layers") else repeat_layers
-        )
-        self.max_modes = (
-            (params.lmax, params.mmax)
-            if hasattr(params, "lmax") and hasattr(params, "mmax")
-            else max_modes
-        )
-
-        self.hard_thresholding_fraction = (
-            params.hard_thresholding_fraction
-            if hasattr(params, "hard_thresholding_fraction")
-            else hard_thresholding_fraction
-        )
-        self.normalization_layer = (
-            params.normalization_layer
-            if hasattr(params, "normalization_layer")
-            else normalization_layer
-        )
-        self.use_mlp = params.use_mlp if hasattr(params, "use_mlp") else use_mlp
-        self.mlp_ratio = params.mlp_ratio if hasattr(params, "mlp_ratio") else mlp_ratio
-        self.activation_function = (
-            params.activation_function
-            if hasattr(params, "activation_function")
-            else activation_function
-        )
-        self.encoder_layers = (
-            params.encoder_layers
-            if hasattr(params, "encoder_layers")
-            else encoder_layers
-        )
-        self.pos_embed = params.pos_embed if hasattr(params, "pos_embed") else pos_embed
-        self.big_skip = params.big_skip if hasattr(params, "big_skip") else big_skip
-        self.rank = params.rank if hasattr(params, "rank") else rank
-        self.factorization = (
-            params.factorization if hasattr(params, "factorization") else factorization
-        )
-        self.separable = params.separable if hasattr(params, "separable") else separable
-        self.complex_network = (
-            params.complex_network
-            if hasattr(params, "complex_network")
-            else complex_network
-        )
-        self.complex_activation = (
-            params.complex_activation
-            if hasattr(params, "complex_activation")
-            else complex_activation
-        )
-        self.spectral_layers = (
-            params.spectral_layers
-            if hasattr(params, "spectral_layers")
-            else spectral_layers
-        )
-        self.output_transform = (
-            params.output_transform
-            if hasattr(params, "output_transform")
-            else output_transform
-        )
-        self.checkpointing = (
-            params.checkpointing if hasattr(params, "checkpointing") else checkpointing
-        )
-        # self.pretrain_encoding = params.pretrain_encoding if hasattr(params, "pretrain_encoding") else False
+        self.spectral_transform = spectral_transform
+        self.inp_shape = inp_shape
+        self.out_shape = out_shape
+        self.scale_factor = scale_factor
+        self.inp_chans = inp_chans
+        self.out_chans = out_chans
+        self.embed_dim = embed_dim
+        self.num_layers = num_layers
+        self.max_modes = max_modes
+        self.hard_thresholding_fraction = hard_thresholding_fraction
+        self.repeat_layers = repeat_layers
+        self.use_mlp = use_mlp
+        self.mlp_ratio = mlp_ratio
+        self.activation_function = activation_function
+        self.encoder_layers = encoder_layers
+        self.normalization_layer = normalization_layer
+        self.big_skip = big_skip
+        self.rank = rank
+        self.factorization = factorization
+        self.separable = separable
+        self.complex_activation = complex_activation
+        self.spectral_layers = spectral_layers
+        self.checkpointing = checkpointing
 
         # compute the downscaled image size
         self.h = int(self.inp_shape[0] // self.scale_factor)
@@ -531,7 +456,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             isht_handle = th.InverseRealSHT
 
             # parallelism
-            if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
+            if comm.get_size("spatial") > 1:
                 polar_group = None if (comm.get_size("h") == 1) else comm.get_group("h")
                 azimuth_group = (
                     None if (comm.get_size("w") == 1) else comm.get_group("w")
@@ -548,10 +473,10 @@ class SphericalFourierNeuralOperatorNet(Module):
                 *self.out_shape, lmax=modes_lat, mmax=modes_lon, grid="equiangular"
             ).float()
             self.trans = sht_handle(
-                self.h, self.w, lmax=modes_lat, mmax=modes_lon, grid=self.grid
+                self.h, self.w, lmax=modes_lat, mmax=modes_lon, grid="legendre-gauss"
             ).float()
             self.itrans = isht_handle(
-                self.h, self.w, lmax=modes_lat, mmax=modes_lon, grid=self.grid
+                self.h, self.w, lmax=modes_lat, mmax=modes_lon, grid="legendre-gauss"
             ).float()
 
         elif self.spectral_transform == "fft":
@@ -597,7 +522,7 @@ class SphericalFourierNeuralOperatorNet(Module):
                 self.out_shape_eff[1] // comm.get_size("w"),
             ]
 
-            if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
+            if comm.get_size("spatial") > 1:
                 fft_handle = DistributedRealFFT2
                 ifft_handle = DistributedInverseRealFFT2
 
@@ -617,7 +542,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             raise (ValueError("Unknown spectral transform"))
 
         # use the SHT/FFT to compute the local, downscaled grid dimensions
-        if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
+        if comm.get_size("spatial") > 1:
             self.inp_shape_loc = (
                 self.trans_down.nlat_local,
                 self.trans_down.nlon_local,
@@ -626,11 +551,13 @@ class SphericalFourierNeuralOperatorNet(Module):
                 self.trans_down.nlat_local + self.trans_down.nlatpad_local,
                 self.trans_down.nlon_local + self.trans_down.nlonpad_local,
             ]
+            self.out_shape_loc = (self.itrans_up.nlat_local, self.itrans_up.nlon_local)
             self.h_loc = self.itrans.nlat_local
             self.w_loc = self.itrans.nlon_local
         else:
             self.inp_shape_loc = (self.trans_down.nlat, self.trans_down.nlon)
             self.inp_shape_eff = [self.trans_down.nlat, self.trans_down.nlon]
+            self.out_shape_loc = (self.itrans_up.nlat, self.itrans_up.nlon)
             self.h_loc = self.itrans.nlat
             self.w_loc = self.itrans.nlon
 
@@ -638,9 +565,9 @@ class SphericalFourierNeuralOperatorNet(Module):
         if comm.get_size("matmul") > 1:
             self.encoder = DistributedEncoderDecoder(
                 num_layers=self.encoder_layers,
-                input_dim=self.in_chans,
+                input_dim=self.inp_chans,
                 output_dim=self.embed_dim,
-                hidden_dim=int(1 * self.embed_dim),
+                hidden_dim=int(encoder_ratio * self.embed_dim),
                 act=self.activation_function,
                 comm_inp_name="fin",
                 comm_out_name="fout",
@@ -652,9 +579,9 @@ class SphericalFourierNeuralOperatorNet(Module):
         else:
             self.encoder = EncoderDecoder(
                 num_layers=self.encoder_layers,
-                input_dim=self.in_chans,
+                input_dim=self.inp_chans,
                 output_dim=self.embed_dim,
-                hidden_dim=int(1 * self.embed_dim),
+                hidden_dim=int(encoder_ratio * self.embed_dim),
                 act=self.activation_function,
             )
             fblock_mlp_inp_name = "fin"
@@ -668,15 +595,28 @@ class SphericalFourierNeuralOperatorNet(Module):
         if self.normalization_layer == "layer_norm":
             norm_layer_inp = partial(
                 nn.LayerNorm,
-                normalized_shape=(self.inp_shape_loc[0], self.inp_shape_loc[1]),
+                normalized_shape=(
+                    embed_dim,
+                    self.inp_shape_loc[0],
+                    self.inp_shape_loc[1],
+                ),
+                elementwise_affine=False,
                 eps=1e-6,
             )
             norm_layer_mid = partial(
-                nn.LayerNorm, normalized_shape=(self.h_loc, self.w_loc), eps=1e-6
+                nn.LayerNorm,
+                normalized_shape=(embed_dim, self.h_loc, self.w_loc),
+                elementwise_affine=False,
+                eps=1e-6,
             )
             norm_layer_out = partial(
                 nn.LayerNorm,
-                normalized_shape=(self.out_shape_loc[0], self.out_shape_loc[1]),
+                normalized_shape=(
+                    embed_dim,
+                    self.out_shape_loc[0],
+                    self.out_shape_loc[1],
+                ),
+                elementwise_affine=False,
                 eps=1e-6,
             )
         elif self.normalization_layer == "instance_norm":
@@ -716,18 +656,12 @@ class SphericalFourierNeuralOperatorNet(Module):
             inner_skip = "linear"
             outer_skip = "identity"
 
-            if first_layer and last_layer:
-                norm_layer = (norm_layer_inp, norm_layer_out)
-            elif first_layer:
+            if first_layer:
                 norm_layer = (norm_layer_inp, norm_layer_mid)
             elif last_layer:
                 norm_layer = (norm_layer_mid, norm_layer_out)
             else:
                 norm_layer = (norm_layer_mid, norm_layer_mid)
-
-            filter_type = self.filter_type
-
-            operator_type = self.operator_type
 
             block = FourierNeuralOperatorBlock(
                 forward_transform,
@@ -741,7 +675,6 @@ class SphericalFourierNeuralOperatorNet(Module):
                 act_layer=self.activation_function,
                 norm_layer=norm_layer,
                 sparsity_threshold=sparsity_threshold,
-                use_complex_kernels=use_complex_kernels,
                 inner_skip=inner_skip,
                 outer_skip=outer_skip,
                 use_mlp=self.use_mlp,
@@ -750,9 +683,9 @@ class SphericalFourierNeuralOperatorNet(Module):
                 rank=self.rank,
                 factorization=self.factorization,
                 separable=self.separable,
-                complex_network=self.complex_network,
                 complex_activation=self.complex_activation,
                 spectral_layers=self.spectral_layers,
+                bias=bias,
                 checkpointing=self.checkpointing,
             )
 
@@ -766,7 +699,7 @@ class SphericalFourierNeuralOperatorNet(Module):
                 num_layers=self.encoder_layers,
                 input_dim=self.embed_dim,
                 output_dim=self.out_chans,
-                hidden_dim=int(1 * self.embed_dim),
+                hidden_dim=int(decoder_ratio * self.embed_dim),
                 act=self.activation_function,
                 comm_inp_name=comm_inp_name,
                 comm_out_name=comm_out_name,
@@ -774,9 +707,9 @@ class SphericalFourierNeuralOperatorNet(Module):
         else:
             self.decoder = EncoderDecoder(
                 num_layers=self.encoder_layers,
-                input_dim=self.embed_dim + self.big_skip * self.out_chans,
+                input_dim=self.embed_dim,
                 output_dim=self.out_chans,
-                hidden_dim=int(1 * self.embed_dim),
+                hidden_dim=int(decoder_ratio * self.embed_dim),
                 act=self.activation_function,
             )
 
@@ -787,19 +720,21 @@ class SphericalFourierNeuralOperatorNet(Module):
             )
 
         # learned position embedding
-        if self.pos_embed == "direct":
+        if pos_embed == "direct":
             # currently using deliberately a differently shape position embedding
             self.pos_embed = nn.Parameter(
                 torch.zeros(
                     1, self.embed_dim, self.inp_shape_loc[0], self.inp_shape_loc[1]
                 )
             )
+            # information about how tensors are shared / sharded across ranks
             self.pos_embed.is_shared_mp = ["matmul"]
             self.pos_embed.sharded_dims_mp = [None, None, "h", "w"]
             self.pos_embed.type = "direct"
-            trunc_normal_(self.pos_embed, std=0.02)
-        elif self.pos_embed == "frequency":
-            if (comm.get_size("h") > 1) or (comm.get_size("w") > 1):
+            with torch.no_grad():
+                nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        elif pos_embed == "frequency":
+            if comm.get_size("spatial") > 1:
                 lmax_loc = self.itrans_up.lmax_local
                 mmax_loc = self.itrans_up.mmax_local
             else:
@@ -816,35 +751,57 @@ class SphericalFourierNeuralOperatorNet(Module):
                     torch.randn(1, self.embed_dim, lmax_loc, mmax_loc - 1), diagonal=-1
                 )
             )
-            trunc_normal_(rcoeffs, std=0.02)
-            trunc_normal_(ccoeffs, std=0.02)
+            with torch.no_grad():
+                nn.init.trunc_normal_(rcoeffs, std=0.02)
+                nn.init.trunc_normal_(ccoeffs, std=0.02)
             self.pos_embed = nn.ParameterList([rcoeffs, ccoeffs])
             self.pos_embed.type = "frequency"
 
-        elif self.pos_embed == "none" or self.pos_embed == "None":
-            delattr(self, "pos_embed")
+        elif (
+            pos_embed == "none"
+            or pos_embed == "None"
+            or pos_embed == None
+        ):
+            pass
         else:
             raise ValueError("Unknown position embedding type")
-
-        if self.output_transform:
-            minmax_channels = []
-            for o, c in enumerate(params.out_channels):
-                if params.channel_names[c][0] == "r":
-                    minmax_channels.append(o)
-            self.register_buffer(
-                "minmax_channels",
-                torch.Tensor(minmax_channels).to(torch.long),
-                persistent=False,
-            )
 
         self.apply(self._init_weights)
 
     def _init_weights(self, m):  # pragma: no cover
         """Helper routine for weight initialization"""
-        if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
-            trunc_normal_(m.weight, std=0.02)
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+        if isinstance(m, DistributedMLP):
+            nn.init.kaiming_normal_(m.fc1.weight, mode="fan_in", nonlinearity="relu")
+            nn.init.kaiming_normal_(m.fc1.bias, mode="fan_in", nonlinearity="relu")
+            nn.init.kaiming_normal_(m.fc2.weight, mode="fan_in", nonlinearity="=linear")
+        elif (
+            isinstance(m, MLP)
+            or isinstance(m, EncoderDecoder)
+            or isinstance(m, DistributedEncoderDecoder)
+        ):
+            last = True
+            for conv in reversed(m.fwd):
+                if isinstance(conv, nn.Conv2d) and last:
+                    nn.init.kaiming_normal_(
+                        conv.weight, mode="fan_in", nonlinearity="linear"
+                    )
+                elif isinstance(conv, nn.Conv2d):
+                    nn.init.kaiming_normal_(
+                        conv.weight, mode="fan_in", nonlinearity="relu"
+                    )
+                    nn.init.kaiming_normal_(
+                        conv.bias, mode="fan_in", nonlinearity="relu"
+                    )
+                    last = False
+        elif isinstance(m, FourierNeuralOperatorBlock):
+            if hasattr(m, "inner_skip") and isinstance(m.inner_skip, nn.Conv2d):
+                nn.init.kaiming_normal_(
+                    m.inner_skip.weight, mode="fan_in", nonlinearity="linear"
+                )
+            if hasattr(m, "outer_skip") and isinstance(m.outer_skip, nn.Conv2d):
+                nn.init.kaiming_normal_(
+                    m.outer_skip.weight, mode="fan_in", nonlinearity="linear"
+                )
         elif isinstance(m, nn.LayerNorm) or isinstance(m, FusedLayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
@@ -855,18 +812,15 @@ class SphericalFourierNeuralOperatorNet(Module):
         return {"pos_embed", "cls_token"}
 
     def _forward_features(self, x):  # pragma: no cover
-
         for r in range(self.repeat_layers):
             for blk in self.blocks:
                 if self.checkpointing >= 3:
                     x = checkpoint(blk, x)
                 else:
                     x = blk(x)
-
         return x
 
     def forward(self, x):  # pragma: no cover
-
         if comm.get_size("fin") > 1:
             x = scatter_to_parallel_region(x, "fin", 1)
 
@@ -880,7 +834,6 @@ class SphericalFourierNeuralOperatorNet(Module):
                 with amp.autocast(enabled=False):
                     residual = self.trans_down(residual)
                     residual = residual.contiguous()
-                    # residual = self.inverse_transform(residual)
                     residual = self.itrans_up(residual)
                     residual = residual.to(dtype=xtype)
             else:
@@ -927,9 +880,6 @@ class SphericalFourierNeuralOperatorNet(Module):
         # do the feature extraction
         x = self._forward_features(x)
 
-        if self.big_skip:
-            x = torch.cat((x, residual), dim=1)
-
         if self.checkpointing >= 1:
             x = checkpoint(self.decoder, x)
         else:
@@ -942,8 +892,5 @@ class SphericalFourierNeuralOperatorNet(Module):
 
         if self.big_skip:
             x = x + self.residual_transform(residual)
-
-        if self.output_transform:
-            x[:, self.minmax_channels] = torch.sigmoid(x[:, self.minmax_channels])
 
         return x

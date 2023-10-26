@@ -29,7 +29,7 @@ class LossHandler(nn.Module):
     Wrapper class that will handle computing losses.
     """
 
-    def __init__(self, params, img_size=(720, 1440), d=2):  # pragma: no cover
+    def __init__(self, params):  # pragma: no cover
 
         super(LossHandler, self).__init__()
 
@@ -41,17 +41,28 @@ class LossHandler(nn.Module):
 
         loss_type = self.loss_type = params.loss
 
-        if loss_type[:11] == "pole-masked":
+        loss_type = set(loss_type.split())
+
+        # pole_mask is index not boolean
+        if "pole-masked" in loss_type:
             pole_mask = 1
-            loss_type = loss_type[12:]
         else:
             pole_mask = 0
 
-        if loss_type[:8] == "weighted":
+        if "weighted" in loss_type:
             if params.channel_weights == "auto":
                 channel_weights = torch.ones(params.N_out_channels, dtype=torch.float32)
                 for c, chn in enumerate(params.channel_names):
-                    if chn in ["u10m", "v10m", "u100m", "v100m", "sp", "msl", "tcwv"]:
+                    if chn in [
+                        "u10m",
+                        "v10m",
+                        "u100m",
+                        "v100m",
+                        "tp",
+                        "sp",
+                        "msl",
+                        "tcwv",
+                    ]:
                         channel_weights[c] = 0.1
                     elif chn in ["t2m", "2d"]:
                         channel_weights[c] = 1.0
@@ -63,7 +74,6 @@ class LossHandler(nn.Module):
             else:
                 channel_weights = torch.Tensor(params.channel_weights).float()
 
-            loss_type = loss_type[9:]
         else:
             channel_weights = torch.ones(params.N_out_channels, dtype=torch.float32)
 
@@ -71,65 +81,65 @@ class LossHandler(nn.Module):
         channel_weights = channel_weights.reshape(1, -1, 1, 1)
         channel_weights = channel_weights / torch.sum(channel_weights)
 
-        if loss_type[:8] == "absolute":
+        if "absolute" in loss_type:
             absolute = True
-            loss_type = loss_type[9:]
         else:
             absolute = False
 
-        if loss_type[:7] == "squared":
+        if "squared" in loss_type:
             squared = True
-            loss_type = loss_type[8:]
         else:
             squared = False
 
-        if loss_type[:8] == "temp-std":
+        if "temp-std" in loss_type:
             eps = 1e-6
             global_stds = torch.from_numpy(np.load(params.global_stds_path)).reshape(
                 1, -1, 1, 1
-            )[:, params.in_channels]
-            time_diff_stds = torch.from_numpy(
-                np.load(params.time_diff_stds_path)
-            ).reshape(1, -1, 1, 1)[:, params.in_channels]
+            )[:, params.out_channels]
+            time_diff_stds = (
+                np.sqrt(params.dt)
+                * torch.from_numpy(np.load(params.time_diff_stds_path)).reshape(
+                    1, -1, 1, 1
+                )[:, params.out_channels]
+            )
             time_var_weights = global_stds / (time_diff_stds + eps)
-            # time_var_weights = 1 / (time_diff_stds+eps)
             if squared:
                 time_var_weights = time_var_weights**2
             channel_weights = channel_weights * time_var_weights
-            loss_type = loss_type[9:]
 
         self.register_buffer("channel_weights", channel_weights)
 
-        # TODO: clean this up and replace it with string parsing to set the parameters
-        if loss_type == "l2":
-            self.loss_obj = GeometricLpLoss(
-                self.img_shape,
-                p=2,
-                absolute=absolute,
-                pole_mask=pole_mask,
-                jacobian="flat",
-            )
-        elif loss_type == "l1":
-            self.loss_obj = GeometricLpLoss(
-                self.img_shape,
-                p=1,
-                absolute=absolute,
-                pole_mask=pole_mask,
-                jacobian="flat",
-            )
-        elif loss_type == "geometric l2":
-            self.loss_obj = GeometricLpLoss(
-                self.img_shape,
-                p=2,
-                absolute=absolute,
-                squared=squared,
-                pole_mask=pole_mask,
-            )
-        elif loss_type == "geometric l1":
-            self.loss_obj = GeometricLpLoss(
-                self.img_shape, p=1, absolute=absolute, pole_mask=pole_mask
-            )
-        elif loss_type == "geometric h1":
+        if "l2" in loss_type:
+            if "geometric" in loss_type:
+                self.loss_obj = GeometricLpLoss(
+                    self.img_shape,
+                    p=2,
+                    absolute=absolute,
+                    squared=squared,
+                    pole_mask=pole_mask,
+                )
+            else:
+                self.loss_obj = GeometricLpLoss(
+                    self.img_shape,
+                    p=2,
+                    absolute=absolute,
+                    pole_mask=pole_mask,
+                    jacobian="flat",
+                )
+        elif "l1" in loss_type:
+            if "geometric" in loss_type:
+                self.loss_obj = GeometricLpLoss(
+                    self.img_shape, p=1, absolute=absolute, pole_mask=pole_mask
+                )
+            else:
+                self.loss_obj = GeometricLpLoss(
+                    self.img_shape,
+                    p=1,
+                    absolute=absolute,
+                    pole_mask=pole_mask,
+                    jacobian="flat",
+                )
+        elif "geometric h1" in loss_type:
             self.loss_obj = GeometricH1Loss(
                 self.img_shape, absolute=absolute, squared=squared
             )
@@ -138,15 +148,16 @@ class LossHandler(nn.Module):
 
         # weighting factor for the case of multistep training
         # TODO change hardcoded weighting
-        multistep_weight = torch.arange(1, self.n_future + 2, dtype=torch.float32)
-        multistep_weight = multistep_weight / torch.sum(multistep_weight)
+        multistep_weight = torch.ones(self.n_future + 1, dtype=torch.float32) / float(
+            self.n_future + 1
+        )
         multistep_weight = multistep_weight.reshape(-1, 1, 1, 1)
 
         self.register_buffer("multistep_weight", multistep_weight)
 
         # # decide whether to gather the input
         self.do_gather_input = False
-        if comm.get_size("h") * comm.get_size("w") > 1:
+        if comm.get_size("spatial") > 1:
             self.do_gather_input = True
 
     @torch.jit.ignore
@@ -181,9 +192,9 @@ class LossHandler(nn.Module):
             chw = self.channel_weights
 
         if self.training:
-            chw = (chw * self.multistep_weight).reshape(1, -1, 1, 1)
+            chw = (chw * self.multistep_weight).reshape(1, -1)
         else:
-            chw = chw
+            chw = chw.reshape(1, -1)
 
         return self.loss_obj(prd, tar, chw)
 
@@ -194,7 +205,7 @@ class GeometricLpLoss(nn.Module):
 
     def __init__(
         self,
-        img_size: Tuple[int, int],
+        img_shape: Tuple[int, int],
         p: Optional[float] = 2.0,
         size_average: Optional[bool] = False,
         reduction: Optional[bool] = True,
@@ -207,7 +218,7 @@ class GeometricLpLoss(nn.Module):
         super(GeometricLpLoss, self).__init__()
 
         self.p = p
-        self.img_size = img_size
+        self.img_shape = img_shape
         self.reduction = reduction
         self.size_average = size_average
         self.absolute = absolute
@@ -216,19 +227,19 @@ class GeometricLpLoss(nn.Module):
 
         if jacobian == "s2":
             jacobian = torch.sin(
-                torch.linspace(0, torch.pi, self.img_size[0])
+                torch.linspace(0, torch.pi, self.img_shape[0])
             ).unsqueeze(1)
         else:
-            jacobian = torch.ones(self.img_size[0], 1)
+            jacobian = torch.ones(self.img_shape[0], 1)
 
         if quadrature_rule == "naive":
-            dtheta = torch.pi / self.img_size[0]
-            dlambda = 2 * torch.pi / self.img_size[1]
+            dtheta = torch.pi / self.img_shape[0]
+            dlambda = 2 * torch.pi / self.img_shape[1]
             dA = dlambda * dtheta
             quad_weight = dA * jacobian
         elif quadrature_rule == "clenshaw-curtiss":
-            cost, w = clenshaw_curtiss_weights(self.img_size[0], -1, 1)
-            dlambda = 2 * torch.pi / self.img_size[1]
+            cost, w = clenshaw_curtiss_weights(self.img_shape[0], -1, 1)
+            dlambda = 2 * torch.pi / self.img_shape[1]
             quad_weight = dlambda * torch.from_numpy(w).unsqueeze(-1)
         else:
             raise ValueError(f"Unknown quadrature rule {quadrature_rule}")
@@ -262,7 +273,7 @@ class GeometricLpLoss(nn.Module):
             all_norms = all_norms ** (1 / self.p)
 
         # apply channel weighting
-        all_norms = chw.reshape(1, -1) * all_norms
+        all_norms = chw * all_norms
 
         if self.reduction:
             if self.size_average:
@@ -307,7 +318,7 @@ class GeometricLpLoss(nn.Module):
             tar_norms = tar_norms ** (1 / self.p)
 
         # setup return value
-        retval = chw.reshape(1, -1) * (diff_norms / tar_norms)
+        retval = chw * (diff_norms / tar_norms)
         if mask is not None:
             retval = retval * mask
 
@@ -343,7 +354,7 @@ class GeometricH1Loss(nn.Module):
 
     def __init__(
         self,
-        img_size: Tuple[int, int],
+        img_shape: Tuple[int, int],
         p: Optional[float] = 2.0,
         size_average: Optional[bool] = False,
         reduction: Optional[bool] = True,
@@ -359,7 +370,7 @@ class GeometricH1Loss(nn.Module):
         self.squared = squared
         self.alpha = alpha
 
-        self.sht = harmonics.RealSHT(*img_size, grid="equiangular").float()
+        self.sht = harmonics.RealSHT(*img_shape, grid="equiangular").float()
         h1_weights = torch.arange(self.sht.lmax).float()
         h1_weights = h1_weights * (h1_weights + 1)
         self.register_buffer("h1_weights", h1_weights)

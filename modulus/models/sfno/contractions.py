@@ -16,6 +16,19 @@ import torch
 
 
 @torch.jit.script
+def _contract_rank(
+    x: torch.Tensor, w: torch.Tensor, a: torch.Tensor, b: torch.Tensor
+) -> torch.Tensor:
+    wc = torch.view_as_complex(w)
+    ac = torch.view_as_complex(a)
+    bc = torch.view_as_complex(b)
+    resc = torch.einsum("bixy,ior,xr,yr->boxy", x, wc, ac, bc)
+    res = torch.view_as_real(resc)
+    return resc
+
+
+# Helper routines for FNOs
+@torch.jit.script
 def compl_mul1d_fwd(
     a: torch.Tensor, b: torch.Tensor
 ) -> torch.Tensor:  # pragma: no cover

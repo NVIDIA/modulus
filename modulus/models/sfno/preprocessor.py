@@ -394,12 +394,7 @@ class Preprocessor2D(nn.Module):
             return x
 
         xdim = x.dim()
-        if xdim == 4:
-            b_, c_, h_, w_ = x.shape
-            x = torch.reshape(
-                x, (b_, (self.n_history + 1), c_ // (self.n_history + 1), h_, w_)
-            )
-        else:
+        if xdim != 4:
             xshape = x.shape
             x = self.flatten_history(x)
 
@@ -453,9 +448,7 @@ class Preprocessor2D(nn.Module):
 
         return x
 
-    def cache_unpredicted_features(
-        self, x, y=None, xz=None, yz=None
-    ):  # pragma: no cover
+    def cache_unpredicted_features(self, x, y, xz=None, yz=None):  # pragma: no cover
         """Caches features not predicted by the model (such as zenith angle)"""
         if self.training:
             if (self.unpredicted_inp_train is not None) and (xz is not None):

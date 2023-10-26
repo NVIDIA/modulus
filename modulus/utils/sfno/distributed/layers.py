@@ -18,7 +18,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from modulus.models.sfno.initialization import trunc_normal_
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.helpers import _transpose
 
@@ -83,8 +82,12 @@ class DistributedRealFFT2(nn.Module):
         # dimensions
         self.nlat = nlat
         self.nlon = nlon
-        self.lmax = lmax or self.nlat
-        self.mmax = mmax or self.nlon // 2 + 1
+        self.lmax = min(lmax or self.nlat, self.nlat)
+        self.mmax = min(mmax or self.nlon // 2 + 1, self.nlon // 2 + 1)
+
+        # compute half modes
+        self.lmax_high = math.ceil(self.lmax / 2)
+        self.lmax_low = math.floor(self.lmax / 2)
 
         # frequency paddings
         ldist = (self.lmax + self.comm_size_h - 1) // self.comm_size_h
@@ -128,13 +131,18 @@ class DistributedRealFFT2(nn.Module):
             yt = y
 
         # the input data might be padded, make sure to truncate to nlat:
-        # ytt = yt[..., :self.nlat, :]
+        ytt = yt[..., : self.nlat, :].contiguous()
 
         # do second FFT:
-        yo = torch.fft.fft(yt, n=self.nlat, dim=-2, norm="ortho")
+        yo = torch.fft.fft(ytt, n=self.nlat, dim=-2, norm="ortho")
+
+        # apply mode truncation:
+        yot = torch.cat(
+            [yo[..., : self.lmax_high, :], yo[..., -self.lmax_low :, :]], dim=-2
+        )
 
         # pad if required, truncation is implicit
-        yop = F.pad(yo, [0, 0, 0, self.lpad], mode="constant")
+        yop = F.pad(yo, (0, 0, 0, self.lpad), mode="constant")
 
         # transpose: after this, l is split and c is local
         if self.comm_size_h > 1:
@@ -161,8 +169,12 @@ class DistributedInverseRealFFT2(nn.Module):
         # dimensions
         self.nlat = nlat
         self.nlon = nlon
-        self.lmax = lmax or self.nlat
-        self.mmax = mmax or self.nlon // 2 + 1
+        self.lmax = min(lmax or self.nlat, self.nlat)
+        self.mmax = min(mmax or self.nlon // 2 + 1, self.nlon // 2 + 1)
+
+        # compute half modes
+        self.lmax_high = math.ceil(self.lmax / 2)
+        self.lmax_low = math.floor(self.lmax / 2)
 
         # spatial paddings
         latdist = (self.nlat + self.comm_size_h - 1) // self.comm_size_h
@@ -190,14 +202,24 @@ class DistributedInverseRealFFT2(nn.Module):
         else:
             xt = x
 
-        # truncate
+        # truncate: assumes that data was padded at the END!
+        # this is compatible with the forward transform and easier to handle
+        # in a distributed setting
         xtt = xt[..., : self.lmax, :]
+
+        # we should pad the middle here manually, so that the inverse FFT is correct
+        # EXPERIMENTAL
+        if self.lmax < self.nlat:
+            xtth = xtt[..., : self.lmax_high, :]
+            xttl = xtt[..., -self.lmax_low, :]
+            xtthp = F.pad(xtth, (0, 0, 0, self.nlat - self.lmax), mode="constant")
+            xtt = torch.cat([xtthp, xttl], dim=-2)
 
         # do first fft
         xf = torch.fft.ifft(xtt, n=self.nlat, dim=-2, norm="ortho")
 
         # transpose: after this, l is split and channels are local
-        xfp = F.pad(xf, [0, 0, 0, self.latpad])
+        xfp = F.pad(xf, (0, 0, 0, self.latpad), mode="constant")
 
         if self.comm_size_h > 1:
             y = distributed_transpose_h.apply(xfp, (-2, 1))
@@ -217,7 +239,7 @@ class DistributedInverseRealFFT2(nn.Module):
         x = torch.fft.irfft(ytt, n=self.nlon, dim=-1, norm="ortho")
 
         # pad before we transpose back
-        xp = F.pad(x, [0, self.lonpad])
+        xp = F.pad(x, (0, self.lonpad), mode="constant")
 
         # transpose: after this, m is split and channels are local
         if self.comm_size_w > 1:
@@ -338,14 +360,6 @@ class DistributedMatmul(nn.Module):
             self.bias = nn.Parameter(torch.ones(1, out_dim_local, 1, 1))
             self.bias.is_shared_mp = ["spatial"]
             self.bias.sharded_dims_mp = [None, self.comm_out_name, None, None]
-
-        # init weights
-        self._init_weights()
-
-    def _init_weights(self):  # pragma: no cover
-        trunc_normal_(self.weight, std=0.02)
-        if hasattr(self, "bias"):
-            nn.init.constant_(self.bias, 0.0)
 
     def forward(self, x):  # pragma: no cover
         x_cp = copy_to_parallel_region(x, self.comm_out_name)
@@ -583,151 +597,3 @@ def compl_mul_add_fwd_c(
     tmp = torch.einsum("bkixy,kio->bkoxy", ac, bc)
     res = tmp + cc
     return torch.view_as_real(res)
-
-
-class DistributedAFNO2Dv2(nn.Module):
-    """Distributed AFNO"""
-
-    def __init__(
-        self,
-        hidden_size,
-        num_blocks=8,
-        sparsity_threshold=0.01,
-        hard_thresholding_fraction=1,
-        hidden_size_factor=1,
-        input_is_matmul_parallel=False,
-        output_is_matmul_parallel=False,
-        use_complex_kernels=False,
-    ):  # pragma: no cover
-        """Distributed AFNO2Dv2"""
-        super(DistributedAFNO2Dv2, self).__init__()
-        if not (hidden_size % num_blocks == 0):
-            raise ValueError(
-                f"hidden_size {hidden_size} should be divisble by num_blocks {num_blocks}"
-            )
-
-        # get comm sizes:
-        matmul_comm_size = comm.get_size("matmul")
-        self.spatial_comm_size = comm.get_size("spatial")
-
-        # select fft function handles
-        if self.spatial_comm_size > 1:
-            self.fft_handle = DistributedRealFFT2.apply
-            self.ifft_handle = DistributedInverseRealFFT2.apply
-        else:
-            self.fft_handle = torch.fft.rfft2
-            self.ifft_handle = torch.fft.irfft2
-
-        self.hidden_size = hidden_size
-        self.sparsity_threshold = sparsity_threshold
-        self.num_blocks = num_blocks
-        if not (self.num_blocks % matmul_comm_size == 0):
-            raise ValueError(
-                "Error, num_blocks needs to be divisible by matmul_parallel_size"
-            )
-        self.num_blocks_local = self.num_blocks // matmul_comm_size
-        self.block_size = self.hidden_size // self.num_blocks
-        self.hard_thresholding_fraction = hard_thresholding_fraction
-        self.hidden_size_factor = hidden_size_factor
-        self.scale = 0.02
-        self.mult_handle = (
-            compl_mul_add_fwd_c if use_complex_kernels else compl_mul_add_fwd
-        )
-
-        # model paralellism
-        self.input_is_matmul_parallel = input_is_matmul_parallel
-        self.output_is_matmul_parallel = output_is_matmul_parallel
-
-        # new
-        # these weights need to be synced across all spatial ranks!
-        self.w1 = nn.Parameter(
-            self.scale
-            * torch.randn(
-                self.num_blocks_local,
-                self.block_size,
-                self.block_size * self.hidden_size_factor,
-                2,
-            )
-        )
-        self.b1 = nn.Parameter(
-            self.scale
-            * torch.randn(
-                self.num_blocks_local,
-                self.block_size * self.hidden_size_factor,
-                1,
-                1,
-                2,
-            )
-        )
-        self.w2 = nn.Parameter(
-            self.scale
-            * torch.randn(
-                self.num_blocks_local,
-                self.block_size * self.hidden_size_factor,
-                self.block_size,
-                2,
-            )
-        )
-        self.b2 = nn.Parameter(
-            self.scale * torch.randn(self.num_blocks_local, self.block_size, 1, 1, 2)
-        )
-
-        # make sure we reduce them across rank
-        self.w1.is_shared_mp = ["spatial"]
-        self.b1.is_shared_mp = ["spatial"]
-        self.w2.is_shared_mp = ["spatial"]
-        self.b2.is_shared_mp = ["spatial"]
-
-    def forward(self, x):  # pragma: no cover
-        if not self.input_is_matmul_parallel:
-            # distribute data
-            x = scatter_to_parallel_region(x, 1, "matmul")
-
-        # bias
-        bias = x
-
-        dtype = x.dtype
-        x = x.float()
-        B, C, H, W_local = x.shape
-        total_modes = H // 2 + 1
-        kept_modes = int(total_modes * self.hard_thresholding_fraction)
-
-        H_local = H // self.spatial_comm_size
-        W = W_local * self.spatial_comm_size
-        x = self.fft_handle(x, (H, W), (-2, -1), "ortho")
-        x = x.view(B, self.num_blocks_local, self.block_size, H_local, W // 2 + 1)
-
-        # new
-        x = torch.view_as_real(x)
-        o2 = torch.zeros(x.shape, device=x.device)
-
-        o1 = F.relu(
-            self.mult_handle(
-                x[
-                    :,
-                    :,
-                    :,
-                    total_modes - kept_modes : total_modes + kept_modes,
-                    :kept_modes,
-                    :,
-                ],
-                self.w1,
-                self.b1,
-            )
-        )
-        o2[
-            :, :, :, total_modes - kept_modes : total_modes + kept_modes, :kept_modes, :
-        ] = self.mult_handle(o1, self.w2, self.b2)
-
-        # finalize
-        x = F.softshrink(o2, lambd=self.sparsity_threshold)
-        x = torch.view_as_complex(x)
-        x = x.reshape(B, C, H_local, W // 2 + 1)
-        x = self.ifft_handle(x, (H, W), (-2, -1), "ortho")
-        x = x.type(dtype) + bias
-
-        # gather
-        if not self.output_is_matmul_parallel:
-            x = gather_from_parallel_region(x, 1, "matmul")
-
-        return x

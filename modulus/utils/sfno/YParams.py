@@ -38,14 +38,14 @@ class ParamsBase:
     def __contains__(self, key):
         return key in self.params
 
-    def get(self, key, default=None):
+    def get(self, key, default=None):  # pragma: no cover
         """Get a parameter value"""
         if hasattr(self, key):
             return getattr(self, key)
         else:
             return self.params.get(key, default)
 
-    def to_dict(self):
+    def to_dict(self):  # pragma: no cover
         """Return a dictionary representation of the parameters"""
         new_attrs = {
             key: val
@@ -55,7 +55,7 @@ class ParamsBase:
         return {**self.params, **new_attrs}
 
     @staticmethod
-    def from_json(path: str) -> "ParamsBase":
+    def from_json(path: str) -> "ParamsBase":  # pragma: no cover
         """Load parameters from a json file"""
         with open(path) as f:
             c = json.load(f)
@@ -63,7 +63,7 @@ class ParamsBase:
         params.update_params(c)
         return params
 
-    def update_params(self, config):
+    def update_params(self, config):  # pragma: no cover
         """Update parameters from a dictionary"""
         for key, val in config.items():
             if val == "None":
@@ -92,7 +92,7 @@ class YParams(ParamsBase):
                 print(key, val)
             print("---------------------------------------------------")
 
-    def log(self):
+    def log(self):  # pragma: no cover
         """Log the parameters to the console"""
         logging.info("------------------ Configuration ------------------")
         logging.info("Configuration file: " + str(self._yaml_filename))

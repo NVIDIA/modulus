@@ -76,6 +76,7 @@ def cos_zenith_angle(
     lon_rad = np.deg2rad(lon, dtype=dtype)
     lat_rad = np.deg2rad(lat, dtype=dtype)
     julian_centuries = _datetime_to_julian_century(time)
+    time = np.reshape(time, (-1, 1, 1))
     return _star_cos_zenith(julian_centuries, lon_rad, lat_rad)
 
 

@@ -27,6 +27,7 @@ from modulus.utils.sfno.logging_utils import disable_logging
 # dummy placeholders
 _COMM_LIST = []
 _COMM_NAMES = {}
+_COMM_ROOTS = {}
 
 # world comm
 def get_size(comm_id: Union[str, int]) -> int:  # pragma: no cover
@@ -68,6 +69,21 @@ def get_group(comm_id: Union[str, int]) -> int:  # pragma: no cover
         return _COMM_LIST[cid]
 
 
+def get_root(comm_id: Union[str, int]) -> int:  # pragma: no cover
+    """Returns the root of a specified communicator."""
+    if isinstance(comm_id, str):
+        cname = comm_id
+        cid = _COMM_NAMES[comm_id] if (comm_id in _COMM_NAMES) else len(_COMM_LIST)
+    else:
+        cname = _COMM_LIST[comm_id] if comm_id < len(_COMM_LIST) else ""
+        cid = comm_id
+
+    if not dist.is_initialized() or (cid >= len(_COMM_LIST)):
+        return 0
+    else:
+        return _COMM_ROOTS[cname]
+
+
 # specialized routines for world comms
 def get_world_size():  # pragma: no cover
     """Returns the world size"""
@@ -87,7 +103,7 @@ def get_world_rank():  # pragma: no cover
 
 def get_local_rank():  # pragma: no cover
     """Returns the local rank of the current process."""
-    if os.getenv("LOCAL_RANK") is not None and False:
+    if os.getenv("LOCAL_RANK") is not None:
         # Use PyTorch env var if available
         return int(os.getenv("LOCAL_RANK"))
 
@@ -108,11 +124,35 @@ def is_distributed(name: str):  # pragma: no cover
     return name in _COMM_NAMES
 
 
-# get
 def init(params, verbose=False):  # pragma: no cover
     """Initialize distributed training."""
+
+    init_process_group(info=params.wireup_info, store=params.wireup_store)
+
+    # do individual wireup for model parallel comms:
+    model_parallel_sizes = params.get("model_parallel_sizes", [1])
+    model_parallel_names = params.get("model_parallel_names", ["model"])
+
+    params.model_parallel_size = init_model_parallel_info(
+        names=model_parallel_names,
+        sizes=model_parallel_sizes,
+        log_to_screen=params.log_to_screen,
+        verbose=verbose,
+    )
+
+
+def init_process_group(info: str, store: str):  # pragma: no cover
+    """Initial torch distributed process group based on ``info`` and ``store``
+
+    Uses NCCL
+
+    Args:
+        info: either ``env`` or ``mpi``
+        store: either ``file`` or ``tcp``
+
+    """
     # set up global and local communicator
-    if params.wireup_info == "env":
+    if info == "env":
         world_size = int(os.getenv("WORLD_SIZE", 1))
         world_rank = int(os.getenv("RANK", 0))
         if os.getenv("WORLD_RANK") is not None:
@@ -123,7 +163,7 @@ def init(params, verbose=False):  # pragma: no cover
         if os.getenv("MASTER_ADDRESS") is not None:
             # Use MASTER_ADDRESS if available for backwards compatibility
             master_address = int(os.getenv("MASTER_ADDRESS"))
-    elif params.wireup_info == "mpi":
+    elif info == "mpi":
         import socket
 
         try:
@@ -148,16 +188,16 @@ def init(params, verbose=False):  # pragma: no cover
         os.environ["MASTER_ADDRESS"] = master_address
         os.environ["MASTER_PORT"] = str(port)
     else:
-        raise ValueError(f"Error, wireup-info {params.wireup_info} not supported")
+        raise ValueError(f"Error, wireup-info {info} not supported")
 
     if world_size > 1:
         with disable_logging():
-            if params.wireup_store == "file":
+            if store == "file":
                 wireup_file_path = os.getenv("WIREUP_FILE_PATH")
-                wireup_store = dist.FileStore(wireup_file_path, world_size)
-            elif params.wireup_store == "tcp":
+                store = dist.FileStore(wireup_file_path, world_size)
+            elif store == "tcp":
                 # create tcp store
-                wireup_store = dist.TCPStore(
+                store = dist.TCPStore(
                     host_name=master_address,
                     port=port,
                     world_size=world_size,
@@ -165,34 +205,34 @@ def init(params, verbose=False):  # pragma: no cover
                     timeout=dt.timedelta(seconds=900),
                 )
             else:
-                wireup_store = None
+                store = None
 
             # initialize process groups
             dist.init_process_group(
                 backend="nccl",
                 rank=world_rank,
                 world_size=world_size,
-                store=wireup_store,
+                store=store,
             )
 
-            # get sizes
-            world_size = get_world_size()
-            world_rank = get_world_rank()
 
-    # do individual wireup for model parallel comms:
-    if hasattr(params, "model_parallel_sizes"):
-        model_parallel_sizes = params.model_parallel_sizes
-    else:
-        model_parallel_sizes = [1]
+def init_model_parallel_info(
+    names, sizes, log_to_screen=False, verbose=False
+):  # pragma: no cover
+    """Create communicators for model parallelism _COMM_LIST,
+    _COMM_NAMES, and _COMM_ROOTS
+    """
+    # get sizes
+    world_size = get_world_size()
+    world_rank = get_world_rank()
+    local_rank = get_local_rank()
 
-    if hasattr(params, "model_parallel_names"):
-        model_parallel_names = params.model_parallel_names
-    else:
-        model_parallel_names = ["model"]
+    model_parallel_names = names
+    model_parallel_sizes = sizes
+
     if len(model_parallel_names) != len(model_parallel_sizes):
         raise ValueError("Please specify names for your communicators")
     model_parallel_size = math.prod(model_parallel_sizes)
-    params["model_parallel_size"] = model_parallel_size
 
     if world_size % model_parallel_size != 0:
         raise ValueError(
@@ -207,7 +247,7 @@ def init(params, verbose=False):  # pragma: no cover
     # create orthogonal communicators first
     global _COMM_LIST
     global _COMM_NAMES
-    if params.log_to_screen:
+    if log_to_screen:
         logging.info("Starting Wireup")
 
     if world_size > 1:
@@ -235,6 +275,7 @@ def init(params, verbose=False):  # pragma: no cover
                     if world_rank in grp:
                         _COMM_LIST.append(tmp_group)
                         _COMM_NAMES[mpname] = comm_count
+                        _COMM_ROOTS[mpname] = grp[0]
                         comm_count += 1
             ranks_lookup[mpname] = model_groups
 
@@ -250,6 +291,7 @@ def init(params, verbose=False):  # pragma: no cover
                     )
                 _COMM_LIST.append(get_group(comm_name_2))
                 _COMM_NAMES[merge_name] = comm_count
+                _COMM_ROOTS[merge_name] = ranks_lookup[comm_name_2][0]
                 comm_count += 1
             elif (get_size(comm_name_1) > 1) and (get_size(comm_name_2) == 1):
                 if verbose and world_rank == 0:
@@ -258,6 +300,7 @@ def init(params, verbose=False):  # pragma: no cover
                     )
                 _COMM_LIST.append(get_group(comm_name_1))
                 _COMM_NAMES[merge_name] = comm_count
+                _COMM_ROOTS[merge_name] = ranks_lookup[comm_name_1][0]
                 comm_count += 1
             elif (get_size(comm_name_1) > 1) and (get_size(comm_name_2) > 1):
 
@@ -290,6 +333,7 @@ def init(params, verbose=False):  # pragma: no cover
                     if world_rank in grp:
                         _COMM_LIST.append(tmp_group)
                         _COMM_NAMES[merge_name] = comm_count
+                        _COMM_ROOTS[merge_name] = grp[0]
                         comm_count += 1
 
             return comm_count
@@ -310,6 +354,7 @@ def init(params, verbose=False):  # pragma: no cover
                 if world_rank in grp:
                     _COMM_LIST.append(tmp_group)
                     _COMM_NAMES["model"] = comm_count
+                    _COMM_ROOTS["model"] = grp[0]
                     comm_count += 1
 
         if data_parallel_size == world_size:
@@ -320,6 +365,7 @@ def init(params, verbose=False):  # pragma: no cover
 
             _COMM_LIST.append(None)
             _COMM_NAMES["data"] = comm_count
+            _COMM_ROOTS["data"] = 0
         else:
             data_groups = [sorted(list(i)) for i in zip(*model_groups)]
 
@@ -331,8 +377,9 @@ def init(params, verbose=False):  # pragma: no cover
                 if world_rank in grp:
                     _COMM_LIST.append(tmp_group)
                     _COMM_NAMES["data"] = comm_count
+                    _COMM_ROOTS["data"] = grp[0]
 
-    if params.log_to_screen:
+    if log_to_screen:
         logging.info("Finished Wireup")
 
-    return
+    return model_parallel_size

@@ -115,7 +115,6 @@ def _contract_tucker(
     out_syms = list(x_syms)
     if separable:
         core_syms = einsum_symbols[order + 1 : 2 * order]
-        # factor_syms = [einsum_symbols[1]+core_syms[0]] #in only
         factor_syms = [xs + rs for (xs, rs) in zip(x_syms[1:], core_syms)]  # x, y, ...
 
     else:
@@ -231,6 +230,23 @@ def _contract_dense_pytorch(
     return x
 
 
+def _contract_dense_reconstruct(
+    x,
+    weight,
+    separable=False,
+    operator_type="diagonal",
+    complex=True,
+):  # pragma: no cover
+    """Contraction for dense tensors, factorized or not"""
+    if not torch.is_tensor(weight):
+        weight = weight.to_tensor()
+        weight = torch.view_as_real(weight)
+
+    return _contract_dense_pytorch(
+        x, weight, separable=separable, operator_type=operator_type, complex=complex
+    )
+
+
 def get_contract_fun(
     weight,
     implementation="reconstructed",
@@ -253,7 +269,13 @@ def get_contract_fun(
     function : (x, weight) -> x * weight in Fourier space
     """
     if implementation == "reconstructed":
-        return _contract_dense
+        handle = partial(
+            _contract_dense_reconstruct,
+            separable=separable,
+            complex=complex,
+            operator_type=operator_type,
+        )
+        return handle
     elif implementation == "factorized":
         if torch.is_tensor(weight):
             handle = partial(
