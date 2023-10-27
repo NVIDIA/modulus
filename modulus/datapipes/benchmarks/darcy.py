@@ -273,7 +273,6 @@ class Darcy2D(Datapipe):
                     ],
                     device=self.device,
                 )
- 
 
     def __iter__(self) -> Tuple[Tensor, Tensor]:
         """
