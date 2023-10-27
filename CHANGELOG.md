@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added distributed FFT utility.
 - Added ruff as a linting tool.
 - Ported utilities from Modulus Launch to main package.
+- Added ERA5 mirror to core from Lauch example.
+- Added experimental zarr datapipe to core.
 
 ### Changed
 
