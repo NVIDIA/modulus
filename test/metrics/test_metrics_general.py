@@ -332,13 +332,6 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
-    assert torch.allclose(
-        w.wasserstein(binsx, cdfx, cdfx),
-        torch.zeros([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
-    )
-
     # Test Raises Assertion
     with pytest.raises(ValueError):
         crps._crps_from_cdf(torch.zeros((1, 2), device=device), cdfx, y)
@@ -346,6 +339,70 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         crps._crps_from_cdf(binsx, torch.zeros((1, 2), device=device), y)
     with pytest.raises(ValueError):
         crps._crps_from_cdf(binsx, cdfx, torch.zeros((1, 2), device=device))
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_wasserstein(device, rtol: float = 1e-3, atol: float = 1e-3):
+
+    x = torch.randn((10_000, 1), device=device, dtype=torch.float32)
+    y = torch.randn((10_000, 1), device=device, dtype=torch.float32)
+
+    binsx, cdfx = hist.cdf(x, bins=10)
+    _, cdfy = hist.cdf(y, bins=binsx)
+    w_cdf = w.wasserstein_from_cdf(binsx, cdfx, cdfy)
+    w_samples = w.wasserstein_from_samples(x, y)
+
+    assert torch.allclose(
+        w.wasserstein_from_cdf(binsx, cdfx, cdfx),
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=atol,
+    )
+    assert torch.allclose(w_cdf, w_samples, rtol=rtol, atol=atol)
+
+    mu_x = x.mean(dim=0)
+    sig_x = x.var(dim=0)
+    mu_y = y.mean(dim=0)
+    sig_y = y.var(dim=0)
+    w_norm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert torch.allclose(
+        w_norm,
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=100 * atol,
+    )
+
+    x = torch.randn((100_000, 3), device=device, dtype=torch.float32)
+    y = torch.randn((100_000, 3), device=device, dtype=torch.float32)
+    mu_x = x.mean(dim=0)
+    sig_x = torch.cov(x.T)
+    mu_y = y.mean(dim=0)
+    sig_y = torch.cov(y.T)
+    w_norm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert torch.allclose(
+        w_norm,
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=100 * atol,
+    )
+
+    x = torch.randn((1_000, 100_000, 3), device=device, dtype=torch.float32)
+    y = torch.randn((1_000, 100_000, 3), device=device, dtype=torch.float32)
+    mu_x = x.mean(dim=1)
+    sig_x = torch.matmul((x - mu_x[:, None]).transpose(1, 2), (x - mu_x[:, None])) / (
+        1_000 - 1
+    )
+    mu_y = y.mean(dim=1)
+    sig_y = torch.matmul((y - mu_y[:, None]).transpose(1, 2), (y - mu_y[:, None])) / (
+        1_000 - 1
+    )
+    w_mnorm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert torch.allclose(
+        w_mnorm,
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=100 * atol,
+    )
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
