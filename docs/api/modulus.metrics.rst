@@ -180,17 +180,18 @@ Modulus current offers routines for computing online, or out-of-memory, means,
 variances, and histograms.
 
 .. code:: python 
-  
+
+  >>> import torch
   >>> from modulus.metrics.general import ensemble_metrics as em
-  >>> x = torch.randn((1_000,))
-  >>> torch.mean(x) # Compute Full Mean
-  tensor(0.0074)
+  >>> x = torch.randn((1_000, 2)) # Interpret as 1_000 members of size (2,).
+  >>> torch.mean(x, dim = 0) # Compute mean of entire data.
+  tensor([-0.0545,  0.0267])
   >>> x0, x1 = x[:500], x[500:] # Split data into two.
-  >>> M = em.Mean((1,))
+  >>> M = em.Mean(input_shape = (2,)) # Must pass shape of data
   >>> M(x0) # Compute mean of initial batch.
-  tensor([0.0269])
+  tensor([-0.0722,  0.0414])
   >>> M.update(x1) # Update with second batch.
-  tensor([0.0074])
+  tensor([-0.0545,  0.0267])
 
 
 Climate Related Metrics
