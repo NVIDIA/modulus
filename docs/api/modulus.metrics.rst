@@ -100,6 +100,92 @@ To use the histogram for statistical entropy calculations:
     >>> entropy.entropy_from_counts(counts, bins)
     tensor(0.4146)
 
+Many of the functions operate over batches. For example, if one has a collection of two dimensional
+data, then we can compute the histogram over the collection:
+
+.. code:: python
+    >>> import torch
+    >>> from modulus.metrics.general import histogram, entropy
+    >>> x = torch.randn((1_000, 3, 3))
+    >>> bins, counts = histogram.histogram(x, bins = 10)
+    >>> bins.shape, counts.shape
+    (torch.Size([11, 3, 3]), torch.Size([10, 3, 3]))
+    >>> entropy.entropy_from_counts(counts, bins)
+    tensor([[0.5162, 0.4821, 0.3976],
+            [0.5099, 0.5309, 0.4519],
+            [0.4580, 0.4290, 0.5121]])
+
+There are additional metrics to compute differences between distributions: Ranks, Continuous Rank
+Probability Skill, and Wasserstein metric.
+
+CRPS:
+
+.. code:: python
+    >>> from modulus.metrics.general import crps
+    >>> x = torch.randn((1_000,1))
+    >>> y = torch.randn((1,))
+    >>> crps.crps(x, y)
+    tensor([0.8023])
+
+Ranks:
+
+.. code:: python
+    >>> from modulus.metrics.general import histogram, calibration
+    >>> x = torch.randn((1_000,1))
+    >>> y = torch.randn((1,))
+    >>> bins, counts = histogram.histogram(x, bins = 10)
+    >>> ranks = calibration.find_rank(bins, counts, y)
+    tensor([0.1920])
+
+Wasserstein Metric:
+
+.. code:: python 
+    >>> from modulus.metrics.general import wasserstein, histogram
+    >>> x = torch.randn((1_000,1))
+    >>> y = torch.randn((1_000,1))
+    >>> bins, cdf_x = histogram.cdf(x)
+    >>> bins, cdf_y = histogram.cdf(y, bins = bins)
+    >>> wasserstein(bins, cdf_x, cdf_y)
+    >>> wasserstein.wasserstein(bins, cdf_x, cdf_y)
+    tensor([0.0459])
+  
+
+Weighted Reductions
+^^^^^^^^^^^^^^^^^^^
+Modulus currently offers classes for weighted mean and variance reductions.
+
+.. code:: python
+    >>> from modulus.metrics.general import reduction
+    >>> x = torch.randn((1_000,))
+    >>> weights = torch.cos(torch.linspace(-torch.pi/4, torch.pi/4, 1_000))
+    >>> wm = reduction.WeightedMean(weights)
+    >>> wm(x, dim = 0)
+    tensor(0.0365)
+    >>> wv = reduction.WeightedVariance(weights)
+    >>> wv(x, dim = 0)
+    tensor(1.0148)
+
+
+Online Statistical Methods
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+Modulus current offers routines for computing online, or out-of-memory, means,
+variances, and histograms.
+
+.. code:: python 
+  >>> from modulus.metrics.general import ensemble_metrics as em
+  >>> x = torch.randn((1_000,))
+  >>> torch.mean(x) # Compute Full Mean
+  tensor(0.0074)
+  >>> x0, x1 = x[:500], x[500:] # Split data into two.
+  >>> M = em.Mean((1,))
+  >>> M(x0) # Compute mean of initial batch.
+  tensor([0.0269])
+  >>> M.update(x1) # Update with second batch.
+  tensor([0.0074])
+
+
+Climate Related Metrics
+^^^^^^^^^^^^^^^^^^^^^^^
 
 To compute the Anomaly Correlation Coefficient, a metric widely used in weather and
 climate sciences:
@@ -123,7 +209,6 @@ climate sciences:
     >>> lat = torch.from_numpy(y)
     >>> acc(pred_tensor, targ_tensor, means_tensor, lat)
     tensor([0.9841])
-
 
 
 .. autosummary::

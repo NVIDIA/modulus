@@ -37,9 +37,8 @@ def find_rank(
         Tensor [N, ...] containing counts, defined over bins. The non-zeroth dimensions
         of bins and counts must be compatible.
     obs : Union[Tensor, np.ndarray]
-        Tensor or array containing an observation over which the CRPS is computed
-        with respect to. Broadcasting dimensions must be compatible with the non-zeroth
-        dimensions of bins and counts.
+        Tensor or array containing an observation over which the ranks is computed
+        with respect to.
 
     Returns
     -------
@@ -88,7 +87,7 @@ def _rank_probability_score_from_counts(
     Computes
 
     .. math::
-        
+
         3 * \int_0^1 (F_X(x) - F_U(x))^2 dx
 
     where F represents a cumulative distribution function, X represents the rank distribution and
@@ -121,12 +120,12 @@ def rank_probability_score(ranks: Tensor) -> Tensor:
     Rank Probability Score (RPS) using the histogram.
 
     With the histogram the RPS is computed as
-    
+
     .. math::
-        
+
         \int_0^1 (F_X(x) - F_U(x))^2 dx
 
-    where F represents a cumulative distribution function, 
+    where F represents a cumulative distribution function,
     X represents the rank distribution and
     U represents a Uniform distribution.
 
@@ -135,7 +134,7 @@ def rank_probability_score(ranks: Tensor) -> Tensor:
     Parameters
     ----------
     ranks : Tensor
-        Tensor [B, ...] containing ranks, where the leading dimension 
+        Tensor [B, ...] containing ranks, where the leading dimension
         represents the batch, or ensemble, dimension.
         The non-zeroth dimensions are batched over.
 
