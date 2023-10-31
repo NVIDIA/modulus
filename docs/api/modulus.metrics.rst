@@ -71,6 +71,7 @@ To compute RMSE metric:
 To compute the histogram of samples:
 
 .. code:: python
+
     >>> import torch
     >>> from modulus.metrics.general import histogram
     >>> x = torch.randn(1_000)
@@ -85,6 +86,7 @@ To compute the histogram of samples:
 To use compute the continuous density function (CDF):
 
 .. code:: python
+
     >>> bins, cdf = histogram.cdf(x, bins = 10)
     >>> bins
     tensor([-3.7709, -3.0633, -2.3556, -1.6479, -0.9403, -0.2326,  0.4751,  1.1827,
@@ -96,6 +98,7 @@ To use compute the continuous density function (CDF):
 To use the histogram for statistical entropy calculations:
 
 .. code:: python
+
     >> from modulus.metrics.general import entropy
     >>> entropy.entropy_from_counts(counts, bins)
     tensor(0.4146)
@@ -104,6 +107,7 @@ Many of the functions operate over batches. For example, if one has a collection
 data, then we can compute the histogram over the collection:
 
 .. code:: python
+
     >>> import torch
     >>> from modulus.metrics.general import histogram, entropy
     >>> x = torch.randn((1_000, 3, 3))
@@ -121,6 +125,7 @@ Probability Skill, and Wasserstein metric.
 CRPS:
 
 .. code:: python
+
     >>> from modulus.metrics.general import crps
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1,))
@@ -130,6 +135,7 @@ CRPS:
 Ranks:
 
 .. code:: python
+
     >>> from modulus.metrics.general import histogram, calibration
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1,))
@@ -140,6 +146,7 @@ Ranks:
 Wasserstein Metric:
 
 .. code:: python 
+
     >>> from modulus.metrics.general import wasserstein, histogram
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1_000,1))
@@ -155,6 +162,7 @@ Weighted Reductions
 Modulus currently offers classes for weighted mean and variance reductions.
 
 .. code:: python
+
     >>> from modulus.metrics.general import reduction
     >>> x = torch.randn((1_000,))
     >>> weights = torch.cos(torch.linspace(-torch.pi/4, torch.pi/4, 1_000))
@@ -172,6 +180,7 @@ Modulus current offers routines for computing online, or out-of-memory, means,
 variances, and histograms.
 
 .. code:: python 
+  
   >>> from modulus.metrics.general import ensemble_metrics as em
   >>> x = torch.randn((1_000,))
   >>> torch.mean(x) # Compute Full Mean
