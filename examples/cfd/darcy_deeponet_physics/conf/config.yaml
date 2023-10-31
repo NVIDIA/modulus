@@ -1,0 +1,5 @@
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ./outputs_phy_deepo
