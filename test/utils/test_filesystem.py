@@ -58,7 +58,7 @@ def test_http_package():
     assert calculate_checksum(path) == known_checksum
 
 
-# @pytest.mark.skip("Skipping because slow, need better test solution")
+@pytest.mark.skip("Skipping because slow, need better test solution")
 def test_ngc_model_file():
     test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere@v0.2"
     package = filesystem.Package(test_url, seperator="/")
@@ -82,3 +82,37 @@ def test_ngc_model_file_private():
 
     known_checksum = "d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26"
     assert calculate_checksum(path) == known_checksum
+
+
+def test_ngc_model_file_invalid():
+    test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere/v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    try:
+        package.get("dlwp_cubesphere.zip")
+        raise Exception("Processed invalid model url")
+    except ValueError:
+        pass
+
+    test_url = "ngc://nvidia/modulus/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    try:
+        package.get("dlwp_cubesphere.zip")
+        raise Exception("Processed invalid model url")
+    except ValueError:
+        pass
+
+    test_url = "ngc://models/nvidia/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    try:
+        package.get("dlwp_cubesphere.zip")
+        raise Exception("Processed invalid model url")
+    except ValueError:
+        pass
+
+    test_url = "ngc://models/nvidia/modulus/other/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    try:
+        package.get("dlwp_cubesphere.zip")
+        raise Exception("Processed invalid model url")
+    except ValueError:
+        pass
