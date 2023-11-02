@@ -13,7 +13,10 @@
 # limitations under the License.
 
 import hashlib
+import os
 from pathlib import Path
+
+import pytest
 
 from modulus.utils import filesystem
 
@@ -53,3 +56,46 @@ def test_http_package():
 
     known_checksum = "e075b2836d03f7971f754354807dcdca51a7875c8297cb161557946736d1f7fc"
     assert calculate_checksum(path) == known_checksum
+
+
+@pytest.mark.skip("Skipping because slow, need better test solution")
+def test_ngc_model_file():
+    test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    path = package.get("dlwp_cubesphere.zip")
+
+    path = Path(path)
+    folders = [f for f in path.iterdir()]
+    assert len(folders) == 1 and folders[0].name == "dlwp"
+
+    files = [f for f in folders[0].iterdir()]
+    assert len(files) == 11
+
+
+@pytest.mark.skipif(
+    "NGC_API_KEY" not in os.environ, reason="Skipping because no NGC API key"
+)
+def test_ngc_model_file_private():
+    test_url = "ngc://models/nvstaging/simnet/modulus_ci@v0.1"
+    package = filesystem.Package(test_url, seperator="/")
+    path = package.get("test.txt")
+
+    known_checksum = "d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26"
+    assert calculate_checksum(path) == known_checksum
+
+
+def test_ngc_model_file_invalid():
+    test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere/v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    with pytest.raises(ValueError):
+        package.get("dlwp_cubesphere.zip")
+
+    test_url = "ngc://models/nvidia/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    with pytest.raises(ValueError):
+        package.get("dlwp_cubesphere.zip")
+
+    test_url = "ngc://models/nvidia/modulus/other/modulus_dlwp_cubesphere@v0.2"
+    package = filesystem.Package(test_url, seperator="/")
+    with pytest.raises(ValueError):
+        package.get("dlwp_cubesphere.zip")
