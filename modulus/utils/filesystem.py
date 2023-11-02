@@ -74,7 +74,7 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
             session = requests.Session()
             session.auth = ("$oauthtoken", os.environ["API_KEY"])
             headers = {"Accept": "application/json"}
-            authn_url = "https://authn.nvidia.com/token?service=ngc&scope=group/ngc:{org}&group/ngc:{org}/{team}"
+            authn_url = f"https://authn.nvidia.com/token?service=ngc&scope=group/ngc:{org}&group/ngc:{org}/{team}"
             r = session.get(authn_url, headers=headers, timeout=5)
             r.raise_for_status()
             token = json.loads(r.content)["token"]
