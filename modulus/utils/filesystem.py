@@ -48,11 +48,12 @@ def _get_fs(path):
 
 def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> str:
     """Pulls files from model registry on NGC. Supports private registries when NGC
-    API key is set the the API_KEY enviroment variable. If download file is a zip folder
-    it will get unzipped.
+    API key is set the the `NGC_API_KEY` environment variable. If download file is a zip
+    folder it will get unzipped.
 
     Args:
-        path (str): NGC model file path of form `ngc://org/team/model/version/filename`
+        path (str): NGC model file path of form:
+            `ngc://models/<org_id/team_id/model_id>/<version>/<path/in/repo>`
         out_path (str): Output path to save file / folder as
         timeout (int): Time out of requests, default 5 minutes
 
@@ -62,32 +63,34 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
     Returns:
         str: output file / folder path
     """
-    # Strip ngc url prefix
-    if not path.startswith("ngc://"):
+    # Strip ngc model url prefix
+    suffix = "ngc://models/"
+    if not path.startswith(suffix):
         raise ValueError(
-            "Invalid URL, should be of form ngc://org/team/model/version/filename"
+            "Invalid URL, should be of form ngc://models/<repo_id>/<version>/<path/in/repo>"
         )
-    path = path[6:]
+    path = path.replace(suffix, "")
 
-    if len(path.split("/")) != 5:
+    if len(path.split("/", 4)) != 5:
         raise ValueError(
-            "Invalid URL, should be of form ngc://org/team/model/version/filename"
+            "Invalid URL, should be of form ngc://models/<org_id/team_id/model_id>/<version>/<path/in/repo>"
         )
 
-    (org, team, model, version, filename) = path.split("/")
+    (org, team, model, version, filename) = path.split("/", 4)
     token = ""
     # If API key environment variable
-    if "API_KEY" in os.environ:
+    if "NGC_API_KEY" in os.environ:
         try:
             session = requests.Session()
-            session.auth = ("$oauthtoken", os.environ["API_KEY"])
+            session.auth = ("$oauthtoken", os.environ["NGC_API_KEY"])
             headers = {"Accept": "application/json"}
             authn_url = f"https://authn.nvidia.com/token?service=ngc&scope=group/ngc:{org}&group/ngc:{org}/{team}"
             r = session.get(authn_url, headers=headers, timeout=5)
             r.raise_for_status()
             token = json.loads(r.content)["token"]
         except requests.exceptions.RequestException:
-            logger.warning("Failed to get JWT using the API set in API_KEY")
+            logger.warning("Failed to get JWT using the API set in NGC_API_KEY")
+            raise  # Re-raise the exception
 
     # Download file, apparently the URL for private registries is different than the public?
     if len(token) > 0:
@@ -131,13 +134,13 @@ def _download_cached(
     except PermissionError as error:
         logger.error(
             "Failed to create cache folder, check permissions or set a cache"
-            + " location using the LOCAL_CACHE enviroment variable"
+            + " location using the LOCAL_CACHE environment variable"
         )
         raise error
     except OSError as error:
         logger.error(
             "Failed to create cache folder, set a cache"
-            + " location using the LOCAL_CACHE enviroment variable"
+            + " location using the LOCAL_CACHE environment variable"
         )
         raise error
 
@@ -151,7 +154,7 @@ def _download_cached(
         if path.startswith("s3://"):
             fs = _get_fs(path)
             fs.get(path, cache_path, recursive=recursive)
-        elif path.startswith("ngc://"):
+        elif path.startswith("ngc://models/"):
             path = _download_ngc_model_file(path, cache_path)
             return path
         elif url.scheme == "http":
