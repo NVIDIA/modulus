@@ -89,7 +89,9 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
             r.raise_for_status()
             token = json.loads(r.content)["token"]
         except requests.exceptions.RequestException:
-            logger.warning("Failed to get JWT using the API set in NGC_API_KEY")
+            logger.warning(
+                "Failed to get JWT using the API set in NGC_API_KEY environment variable"
+            )
             raise  # Re-raise the exception
 
     # Download file, apparently the URL for private registries is different than the public?
