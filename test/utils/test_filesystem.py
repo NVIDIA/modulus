@@ -87,24 +87,15 @@ def test_ngc_model_file_private():
 def test_ngc_model_file_invalid():
     test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere/v0.2"
     package = filesystem.Package(test_url, seperator="/")
-    try:
+    with pytest.raises(ValueError):
         package.get("dlwp_cubesphere.zip")
-        raise Exception("Processed invalid model url")
-    except ValueError:
-        pass
 
     test_url = "ngc://models/nvidia/modulus_dlwp_cubesphere@v0.2"
     package = filesystem.Package(test_url, seperator="/")
-    try:
+    with pytest.raises(ValueError):
         package.get("dlwp_cubesphere.zip")
-        raise Exception("Processed invalid model url")
-    except ValueError:
-        pass
 
     test_url = "ngc://models/nvidia/modulus/other/modulus_dlwp_cubesphere@v0.2"
     package = filesystem.Package(test_url, seperator="/")
-    try:
+    with pytest.raises(ValueError):
         package.get("dlwp_cubesphere.zip")
-        raise Exception("Processed invalid model url")
-    except ValueError:
-        pass
