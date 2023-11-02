@@ -58,9 +58,9 @@ def test_http_package():
     assert calculate_checksum(path) == known_checksum
 
 
-@pytest.mark.skip("Skipping because slow, need better test solution")
+# @pytest.mark.skip("Skipping because slow, need better test solution")
 def test_ngc_model_file():
-    test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere/v0.2"
+    test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere@v0.2"
     package = filesystem.Package(test_url, seperator="/")
     path = package.get("dlwp_cubesphere.zip")
 
@@ -76,7 +76,7 @@ def test_ngc_model_file():
     "NGC_API_KEY" not in os.environ, reason="Skipping because no NGC API key"
 )
 def test_ngc_model_file_private():
-    test_url = "ngc://models/nvstaging/simnet/modulus_ci/v0.1"
+    test_url = "ngc://models/nvstaging/simnet/modulus_ci@v0.1"
     package = filesystem.Package(test_url, seperator="/")
     path = package.get("test.txt")
 

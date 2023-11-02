@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import urllib.request
 import zipfile
 
@@ -53,7 +54,7 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
 
     Args:
         path (str): NGC model file path of form:
-            `ngc://models/<org_id/team_id/model_id>/<version>/<path/in/repo>`
+            `ngc://models/<org_id/team_id/model_id>@<version>/<path/in/repo>`
         out_path (str): Output path to save file / folder as
         timeout (int): Time out of requests, default 5 minutes
 
@@ -65,18 +66,16 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
     """
     # Strip ngc model url prefix
     suffix = "ngc://models/"
-    if not path.startswith(suffix):
+    # The regex check
+    pattern = re.compile(f"{suffix}[\w-]+/[\w-]+/[\w-]+@[A-Za-z0-9.]+/[\w/]+")
+    if not pattern.match(path):
         raise ValueError(
-            "Invalid URL, should be of form ngc://models/<repo_id>/<version>/<path/in/repo>"
+            "Invalid URL, should be of form ngc://models/<org_id/team_id/model_id>@<version>/<path/in/repo>"
         )
+
     path = path.replace(suffix, "")
-
-    if len(path.split("/", 4)) != 5:
-        raise ValueError(
-            "Invalid URL, should be of form ngc://models/<org_id/team_id/model_id>/<version>/<path/in/repo>"
-        )
-
-    (org, team, model, version, filename) = path.split("/", 4)
+    (org, team, model_version, filename) = path.split("/", 4)
+    (model, version) = model_version.split("@", 1)
     token = ""
     # If API key environment variable
     if "NGC_API_KEY" in os.environ:
