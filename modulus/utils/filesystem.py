@@ -121,11 +121,13 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
     return out_path
 
 
-def _download_cached(path: str, recursive: bool = False) -> str:
+def _download_cached(
+    path: str, recursive: bool = False, local_cache_path: str = LOCAL_CACHE
+) -> str:
     sha = hashlib.sha256(path.encode())
     filename = sha.hexdigest()
     try:
-        os.makedirs(LOCAL_CACHE, exist_ok=True)
+        os.makedirs(local_cache_path, exist_ok=True)
     except PermissionError as error:
         logger.error(
             "Failed to create cache folder, check permissions or set a cache"
@@ -139,7 +141,7 @@ def _download_cached(path: str, recursive: bool = False) -> str:
         )
         raise error
 
-    cache_path = os.path.join(LOCAL_CACHE, filename)
+    cache_path = os.path.join(local_cache_path, filename)
 
     url = urllib.parse.urlparse(path)
 
