@@ -102,7 +102,7 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
         total_size_in_bytes = int(r.headers.get("content-length", 0))
         chunk_size = 1024  # 1 kb
         progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
-        progress_bar.set_description(f"Downloading {filename}")
+        progress_bar.set_description(f"NGC file {filename}")
         with open(local_url, "wb") as f:
             for chunk in r.iter_content(chunk_size=chunk_size):
                 progress_bar.update(len(chunk))
