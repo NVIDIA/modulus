@@ -179,12 +179,23 @@ def _download_cached(
 
 
 class Package:
-    """A package
+    """A generic file system abstraction. Can be used to represent local and remote
+    file systems. Remote files are automatically fetched and stored in the
+    $LOCAL_CACHE or $HOME/.cache/modulus folder. The `get` method can then be used
+    to access files present.
 
-    Represents a potentially remote directory tree
+    Presently one can use Package with the following directories:
+    - Package("/path/to/local/directory") = local file system
+    - Package("s3://bucket/path/to/directory") = object store file system
+    - Package("http://url/path/to/directory") = http file system
+    - Package("ngc://model/<org_id/team_id/model_id>@<version>") = ngc model file system
+
+    Args:
+        root (str): Root directory for file system
+        seperator (str, optional): directory seperator. Defaults to "/".
     """
 
-    def __init__(self, root: str, seperator: str):
+    def __init__(self, root: str, seperator: str = "/"):
         self.root = root
         self.seperator = seperator
 
