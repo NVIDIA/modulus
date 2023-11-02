@@ -14,10 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An experimental version of SFNO to be used in unified training recipe for weather models
 - Added distributed FFT utility.
 - Added ruff as a linting tool.
+- Ported utilities from Modulus Launch to main package.
+- EDM diffusion models and recipes for training and sampling.
+- NGC model registry download integration into package/filesystem.
 
 ### Changed
 
 - The AFNO input argument `img_size` to `inp_shape`
+- Integrated the network architecture layers from Modulus-Sym.
 
 ### Deprecated
 
@@ -25,9 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+
 ### Security
 
 ### Dependencies
+
+- Updated the base container to PyTorch 23.10.
 
 ## [0.3.0] - 2023-09-21
 

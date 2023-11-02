@@ -21,8 +21,6 @@ from dgl import DGLGraph
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
-from modulus.models.layers.fused_silu import silu_backward_for
-
 from .utils import CuGraphCSC, concat_efeat, sum_efeat
 
 try:
@@ -57,6 +55,11 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
         ctx, grad_output: torch.Tensor
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor],]:
         """backward pass of the SiLU + Linear function"""
+
+        from nvfuser import FusionDefinition
+
+        from modulus.models.layers.fused_silu import silu_backward_for
+
         (
             need_dgrad,
             need_wgrad,
@@ -77,8 +80,17 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
 
         if need_dgrad:
             grad_features = grad_output @ weight
-            silu_backward = silu_backward_for(features.dtype, features.dim())
-            grad_silu = silu_backward.execute([features])[0]
+
+            with FusionDefinition() as fd:
+                silu_backward_for(
+                    fd,
+                    features.dtype,
+                    features.dim(),
+                    features.size(),
+                    features.stride(),
+                )
+
+            grad_silu = fd.execute([features])[0]
             grad_features = grad_features * grad_silu
 
         return grad_features, grad_weight, grad_bias

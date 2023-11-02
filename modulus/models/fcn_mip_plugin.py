@@ -27,7 +27,7 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 from modulus.models.sfno import sfnonet
 from modulus.utils import filesystem
 from modulus.utils.sfno.YParams import ParamsBase
-from modulus.utils.sfno.zenith_angle import cos_zenith_angle
+from modulus.utils.zenith_angle import cos_zenith_angle
 
 logger = logging.getLogger(__name__)
 
