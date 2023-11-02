@@ -23,6 +23,7 @@ import fsspec
 import fsspec.implementations.cached
 import requests
 import s3fs
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +62,22 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
     Returns:
         str: output file / folder path
     """
-    if len(path.split("/")) != 5 or not path.startswith("ngc://"):
+    # Strip ngc url prefix
+    if not path.startswith("ngc://"):
+        raise ValueError(
+            "Invalid URL, should be of form ngc://org/team/model/version/filename"
+        )
+    path = path[6:]
+
+    if len(path.split("/")) != 5:
         raise ValueError(
             "Invalid URL, should be of form ngc://org/team/model/version/filename"
         )
 
-    (org, team, model, version, filename) = path.lstrip("ngc://").split("/")
+    (org, team, model, version, filename) = path.split("/")
     token = ""
     # If API key environment variable
-    if os.environ["API_KEY"]:
+    if "API_KEY" in os.environ:
         try:
             session = requests.Session()
             session.auth = ("$oauthtoken", os.environ["API_KEY"])
@@ -81,16 +89,25 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
         except requests.exceptions.RequestException:
             logger.warning("Failed to get JWT using the API set in API_KEY")
 
-    # Download file
-    file_url = f"https://api.ngc.nvidia.com/v2/org/{org}/team/{team}/models/{model}/versions/{version}/files/{filename}"
+    # Download file, apparently the URL for private registries is different than the public?
+    if len(token) > 0:
+        file_url = f"https://api.ngc.nvidia.com/v2/org/{org}/team/{team}/models/{model}/versions/{version}/files/{filename}"
+    else:
+        file_url = f"https://api.ngc.nvidia.com/v2/models/{org}/{team}/{model}/versions/{version}/files/{filename}"
     local_url = f"{LOCAL_CACHE}/{filename}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     # Streaming here for larger files
     with requests.get(file_url, headers=headers, stream=True, timeout=timeout) as r:
         r.raise_for_status()
+        total_size_in_bytes = int(r.headers.get("content-length", 0))
+        chunk_size = 1024  # 1 kb
+        progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
+        progress_bar.set_description("Downloading NGC model file")
         with open(local_url, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                progress_bar.update(len(chunk))
                 f.write(chunk)
+        progress_bar.close()
 
     # Unzip contents if zip file (most model files are)
     if zipfile.is_zipfile(local_url):
