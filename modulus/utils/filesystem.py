@@ -45,13 +45,13 @@ def _get_fs(path):
         return fsspec.filesystem("file")
 
 
-def _download_ngc_model(path: str, out_path: str, timeout: int = 300) -> str:
+def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> str:
     """Pulls files from model registry on NGC. Supports private registries when NGC
     API key is set the the API_KEY enviroment variable. If download file is a zip folder
     it will get unzipped.
 
     Args:
-        path (str): NGC model file path of form `org/team/model/version/filename`
+        path (str): NGC model file path of form `ngc://org/team/model/version/filename`
         out_path (str): Output path to save file / folder as
         timeout (int): Time out of requests, default 5 minutes
 
@@ -61,12 +61,12 @@ def _download_ngc_model(path: str, out_path: str, timeout: int = 300) -> str:
     Returns:
         str: output file / folder path
     """
-    if len(path.split("/")) != 5:
+    if len(path.split("/")) != 5 or not path.startswith("ngc://"):
         raise ValueError(
             "Invalid URL, should be of form ngc://org/team/model/version/filename"
         )
 
-    (org, team, model, version, filename) = path.split("/")
+    (org, team, model, version, filename) = path.lstrip("ngc://").split("/")
     token = ""
     # If API key environment variable
     if os.environ["API_KEY"]:
@@ -132,6 +132,9 @@ def _download_cached(path: str, recursive: bool = False) -> str:
         if path.startswith("s3://"):
             fs = _get_fs(path)
             fs.get(path, cache_path, recursive=recursive)
+        elif path.startswith("ngc://"):
+            path = _download_ngc_model_file(path, cache_path)
+            return path
         elif url.scheme == "http":
             # urllib.request.urlretrieve(path, cache_path)
             # TODO: Check if this supports directory fetches
