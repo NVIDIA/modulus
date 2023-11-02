@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import hashlib
+import json
 import logging
 import os
 import urllib.request
+import zipfile
 
 import fsspec
 import fsspec.implementations.cached
@@ -41,6 +43,65 @@ def _get_fs(path):
         return s3fs.S3FileSystem(client_kwargs=dict(endpoint_url="https://pbss.s8k.io"))
     else:
         return fsspec.filesystem("file")
+
+
+def _download_ngc_model(path: str, out_path: str, timeout: int = 300) -> str:
+    """Pulls files from model registry on NGC. Supports private registries when NGC
+    API key is set the the API_KEY enviroment variable. If download file is a zip folder
+    it will get unzipped.
+
+    Args:
+        path (str): NGC model file path of form `org/team/model/version/filename`
+        out_path (str): Output path to save file / folder as
+        timeout (int): Time out of requests, default 5 minutes
+
+    Raises:
+        ValueError: Invlaid url
+
+    Returns:
+        str: output file / folder path
+    """
+    if len(path.split("/")) != 5:
+        raise ValueError(
+            "Invalid URL, should be of form ngc://org/team/model/version/filename"
+        )
+
+    (org, team, model, version, filename) = path.split("/")
+    token = ""
+    # If API key environment variable
+    if os.environ["API_KEY"]:
+        try:
+            session = requests.Session()
+            session.auth = ("$oauthtoken", os.environ["API_KEY"])
+            headers = {"Accept": "application/json"}
+            authn_url = "https://authn.nvidia.com/token?service=ngc&scope=group/ngc:{org}&group/ngc:{org}/{team}"
+            r = session.get(authn_url, headers=headers, timeout=5)
+            r.raise_for_status()
+            token = json.loads(r.content)["token"]
+        except requests.exceptions.RequestException:
+            logger.warning("Failed to get JWT using the API set in API_KEY")
+
+    # Download file
+    file_url = f"https://api.ngc.nvidia.com/v2/org/{org}/team/{team}/models/{model}/versions/{version}/files/{filename}"
+    local_url = f"{LOCAL_CACHE}/{filename}"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # Streaming here for larger files
+    with requests.get(file_url, headers=headers, stream=True, timeout=timeout) as r:
+        r.raise_for_status()
+        with open(local_url, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+    # Unzip contents if zip file (most model files are)
+    if zipfile.is_zipfile(local_url):
+        with zipfile.ZipFile(local_url, "r") as zip_ref:
+            zip_ref.extractall(out_path)
+        # Clean up zip
+        os.remove(local_url)
+    else:
+        os.rename(local_url, out_path)
+
+    return out_path
 
 
 def _download_cached(path: str, recursive: bool = False) -> str:
