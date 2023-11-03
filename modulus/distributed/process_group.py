@@ -95,7 +95,12 @@ class ProcessGroupConfig:
     >>> from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
     >>>
     >>> # Create model parallel group with data parallel as the orthogonal group
+    >>> mp = ProcessGroupNode("world")
     >>> mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
+    >>>
+    >>> # Create spatial and channel parallel sub-groups
+    >>> config.add_node(ProcessGroupNode("model_parallel"), parent=mp)
+    >>> config.add_node(ProcessGroupNode("data_parallel"), parent=mp)
     >>>
     >>> # Create the process group config with the highest level process group
     >>> config = ProcessGroupConfig(mp)
