@@ -19,12 +19,11 @@ import logging
 import operator
 import os
 from bisect import bisect_right
+from datetime import timezone
 from itertools import accumulate
 
 import h5py
 import numpy as np
-
-from datetime import timezone
 import torch
 from torch.utils.data import Dataset
 

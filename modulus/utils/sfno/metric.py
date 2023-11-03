@@ -401,29 +401,33 @@ class MetricsHandler:
             for var_name, var_idx in self.acc_vars.items():
 
                 # create table
-                for d in range(0, self.valid_autoreg_steps + 1):
-                    table_data.append(
+                table_data.extend(
+                    [
                         [
                             "ACC",
                             f"{var_name}",
                             (d + 1) * self.dtxdh,
                             acc_curve_arr[var_idx, d],
                         ]
-                    )
+                        for d in range(0, self.valid_autoreg_steps + 1)
+                    ]
+                )
 
             rmse_curve_arr = self.rmse_curve_cpu.numpy()
             for var_name, var_idx in self.rmse_vars.items():
 
                 # create table
-                for d in range(0, self.valid_autoreg_steps + 1):
-                    table_data.append(
+                table_data.extend(
+                    [
                         [
                             "RMSE",
                             f"{var_name}",
                             (d + 1) * self.dtxdh,
                             rmse_curve_arr[var_idx, d],
                         ]
-                    )
+                        for d in range(0, self.valid_autoreg_steps + 1)
+                    ]
+                )
 
             # add table
             logs["metrics"]["rollouts"] = wandb.Table(
