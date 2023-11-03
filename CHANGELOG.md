@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added distributed FFT utility.
 - Added ruff as a linting tool.
 - Ported utilities from Modulus Launch to main package.
+- EDM diffusion models and recipes for training and sampling.
+- NGC model registry download integration into package/filesystem.
 
 ### Changed
 
@@ -27,9 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+
 ### Security
 
 ### Dependencies
+
+- Updated the base container to PyTorch 23.10.
 
 ## [0.3.0] - 2023-09-21
 
