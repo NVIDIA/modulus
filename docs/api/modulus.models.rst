@@ -11,7 +11,7 @@ Basics
 Modulus contains its own Model class for constructing neural networks. This model class
 is built on top of PyTorch's ``nn.Module`` and can be used interchangeably within the
 PyTorch ecosystem. Using Modulus models allows you to leverage various features of
-Modulus aimed at improving performance and ease of use. These feature include, but are
+Modulus aimed at improving performance and ease of use. These features include, but are
 not limited to, model zoo, automatic mixed-precision, CUDA Graphs, and easy checkpointing.
 We discuss each of these features in the following sections.
 
@@ -23,7 +23,7 @@ These include some very general models like Fourier Neural Operators (FNOs),
 ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
 Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
-Currently available models include
+Currently available models include:
 
 .. list-table::
    :widths: 20 40 40
@@ -67,7 +67,7 @@ Currently available models include
      - torch.Tensor [N, C_out, H, W]
 
 
-A simple usage of these models looks like the following:
+Bellow are some simple examples of how to use these models.
 
 .. code:: python
 
@@ -195,8 +195,9 @@ enabled. In this case we will enable CUDA Graphs and Automatic Mixed-Precision.
             x = self.dec1(x2)
             return self.final(x)
 
-Now that we have our Modulus model, we can make use of 
-Now, let's use the static capture utils on this model.
+Now that we have our Modulus model, we can make use of these optimizations using the
+``modulus.utils.StaticCaptureTraining`` decorator. This decorator will capture the
+training step function and optimize it for the specified optimizations.
 
 .. code:: python
 
@@ -231,13 +232,18 @@ Now, let's use the static capture utils on this model.
         input.copy_(torch.randn(8, 1, 128, 128).to("cuda"))
 
 For the simple model above, you can observe ~1.1x speed-up due to CUDA Graphs and AMP.
-The speed-up observed changes from model to model and is typically you can observe greater
-speed-up for more complex models. 
+The speed-up observed changes from model to model and is typically greater for more
+complex models. 
 
 .. note::
     The ``ModelMetaData`` and ``modulus.model.module.Module`` do not make the model
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
     to write the model code that enables each of these optimizations. 
+
+.. note::
+    The ``StaticCaptureTraining`` decorator is still under development and may be
+    refactored in the future.
+
 
 Converting PyTorch Models to Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
