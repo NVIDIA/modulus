@@ -1,26 +1,30 @@
-# Learning the flow field of Stokes flow 
+# Learning the flow field of Stokes flow
 
-This example demonstrates how to train the MeshGraphNet model to learn the flow field of Stokes flow and further 
-improve the accuary of the model predictions by physics-informed inference. 
-
+This example demonstrates how to train the MeshGraphNet model to learn the flow field
+of Stokes flow and further
+improve the accuary of the model predictions by physics-informed inference.
 
 ## Problem overview
 
-The partial differential equation is defined as 
+The partial differential equation is defined as
 
 $$\begin{aligned}
     -\nu \Delta \mathbf{u} +\nabla p=0, \\
     \nabla \cdot \mathbf{u} = 0,
 \end{aligned}$$
 
-where $\mathbf{u} = (u, v)$ defines the velocity and $p$ the pressure, and $\nu$ is the kinematic viscosity. 
-The underlying geometry is a pipe without a polygon. On the inlet $\Gamma_3=0 \times[0,0.41]$, a parabolic inflow profile is prescribed,
+where $\mathbf{u} = (u, v)$ defines the velocity and $p$ the pressure, and $\nu$ is the
+kinematic viscosity.
+The underlying geometry is a pipe without a polygon. On the inlet
+$\Gamma_3=0 \times[0,0.41]$, a parabolic inflow profile is prescribed,
 
 $$\begin{aligned}
-    \mathbf{u}(0, y)= \mathbf{u}_{\mathrm{in}} = \left(\frac{4 U y(0.41-y)}{0.41^2}, 0\right)
+    \mathbf{u}(0, y)= \mathbf{u}_{\mathrm{in}} =
+    \left(\frac{4 U y(0.41-y)}{0.41^2}, 0\right)
 \end{aligned}$$
 
-with a maximum velocity $U=0.3$. On the outlet $\Gamma_4=2.2 \times[0,0.41]$, we define the outflow condition
+with a maximum velocity $U=0.3$. On the outlet $\Gamma_4=2.2 \times[0,0.41]$, we
+define the outflow condition
 
 $$\begin{aligned}
     \nu \partial_\mathbf{n} \mathbf{u}-p \mathbf{n}=0,
@@ -28,18 +32,19 @@ $$\begin{aligned}
 
 where $\mathbf{n}$ denotes the outer normal vector.
 
-Our goal is to train a MeshGraphNet to learn the map from the polygon geometry to the velocity and pressure field. 
+Our goal is to train a MeshGraphNet to learn the map from the polygon geometry to the
+velocity and pressure field.
 However, sometimes data-driven models may not be able to yield reasonable predictive
-accuracy due to network capacity or limited dataset. We can fine-tune our results using PINNs
-when the PDE is available. 
-
+accuracy due to network capacity or limited dataset. We can fine-tune our results
+using PINNs when the PDE is available.
 
 ## Dataset
 
-Our dataset provides  numerical simulations of Stokes flow in a pipe domain obstructed by a random polygon.
-It contains 1000 random samples and all the simulations were performed using Fenics. For each sample,
-the numerical solution cotains the mesh and the flow information about velocity, pressure, 
-and markers identifying different boundaries within the domain. 
+Our dataset provides  numerical simulations of Stokes flow in a pipe domain obstructed
+by a random polygon. It contains 1000 random samples and all the simulations were
+performed using Fenics. For each sample, the numerical solution cotains the mesh and
+the flow information about velocity, pressure, and markers identifying different
+boundaries within the domain.
 
 To download the full dataset, please run the bash script in `raw_dataset`
 
@@ -71,7 +76,6 @@ exponentially with a rate of 0.99985.
 ground truth for velocity and pressure for one
 of the samples from the test dataset.](../../../docs/img/stokes.png)
 
-
 ## Getting Started
 
 The dataset for this example is not publicly available. To get access, please reach out
@@ -85,15 +89,16 @@ pip install pyvista vtk
 
 Once you've obtained the dataset, follow these steps to preprocess it:
 
-1. **Unzip the Dataset**: If the dataset is compressed, make sure to extract its contents.
+1. **Unzip the Dataset**: If the dataset is compressed, make sure to extract its
+contents.
 
-2. **Run the Preprocessing Script**: Execute the provided script to process the dataset. This will distribute the data 
+2. **Run the Preprocessing Script**: Execute the provided script to process the dataset.
+This will distribute the data
 randomly across three directories: `training`, `validation`, and `test`.
 
 ```bash
 python preprocess.py
 ````
-
 
 To train the model, run
 
