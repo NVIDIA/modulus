@@ -24,8 +24,7 @@ from itertools import accumulate
 import h5py
 import numpy as np
 
-# can replace this import with zoneinfo from the standard library in python3.9+.
-import pytz
+from datetime import timezone
 import torch
 from torch.utils.data import Dataset
 
@@ -254,7 +253,7 @@ class MultifilesDataset(Dataset):
     def _compute_zenith_angle(self, local_idx, year_idx):
         # compute hours into the year
         year = self.years[year_idx]
-        jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0, tzinfo=pytz.utc)
+        jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
         # zenith angle for input
         inp_times = np.asarray(
