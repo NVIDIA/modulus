@@ -6,7 +6,16 @@ Modulus Models
 .. currentmodule:: modulus.models
 
 Basics
--------
+^^^^^^
+
+Modulus contains its own Model class for constructing neural networks. This model class
+is built on top of PyTorch's ``nn.Module`` and can be used interchangeably within the
+PyTorch ecosystem. Using Modulus models allows you to leverage various features of
+Modulus which are described in the following sections.
+
+
+Model Zoo
+^^^^^^^^^
 
 Modulus comes with several optimized, customizable and easy-to-use models for you to
 leverage them in you training workflows. These include some very general models FNOs,
@@ -92,14 +101,14 @@ How to write your own Modulus model
 
 There are a few different ways in which you can contribute a model to Modulus. If you
 are a seasoned PyTorch user, the easiest way would be to write your model using the
-optimized layers and utilites from Modulus and Pytorch. Once you have the model ready
+optimized layers and utilities from Modulus and Pytorch. Once you have the model ready
 and tested, you can specify the ``ModelMetaData`` to describe the optimizations and
 features supported for the model. This enables the use of the model with other Modulus
 features like the ``StaticCaptureTraining`` and ``StaticCaptureEvaluateNoGrad`` that will
 apply the corresponding optimizations automatically in the training loop.
 
 Let's take a look at writing a simple UNet model. We write the model in such a way that
-it will have support for CUDA Graphs and Automoatic Mixed-Precision. Below is how a
+it will have support for CUDA Graphs and Automatic Mixed-Precision. Below is how a
 simple UNet model in PyTorch would look like:
 
 .. code:: python
@@ -233,11 +242,48 @@ speed-up for more complex models.
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
     to write the model code that enables each of these optimizations. 
 
+Converting PyTorch Models to Modulus Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the above example we show constructing a Modulus model from scratch. However you
+can also convert existing PyTorch models to Modulus models in order to leverage
+Modulus features. To do this, you can use the ``Module.from_torch`` method as shown
+below.
+
+.. code:: python
+
+    from dataclasses import dataclass
+    from modulus.models.meta import ModelMetaData
+    from modulus.models.module import Module 
+    import torch.nn as nn
+
+    class TorchModel(nn.Module):
+        def __init__(self):
+            super(TorchModel, self).__init__()
+            self.conv1 = nn.Conv2d(1, 20, 5)
+            self.conv2 = nn.Conv2d(20, 20, 5)
+    
+        def forward(self, x):
+            x = self.conv1(x)
+            return self.conv2(x)
+
+    @dataclass
+    class MetaData(ModelMetaData):
+        name: str = "UNet"
+        # Optimization
+        jit: bool = False
+        cuda_graphs: bool = True
+        amp_cpu: bool = True
+        amp_gpu: bool = True
+
+    ModulusModel = Module.from_torch(TorchModel, meta=MetaData())
+
+
 Saving and Loading Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As mentioned above, modulus Models are interoperable with PyTorch models. This means that
-you can save and load modulus models using the standard PyTorch APIs however, we provide
+As mentioned above, Modulus models are interoperable with PyTorch models. This means that
+you can save and load Modulus models using the standard PyTorch APIs however, we provide
 a few additional utilities to make this process easier. A key challenge in saving and
 loading models is keeping track of the model metadata such as layer sizes, etc. Modulus
 models can be saved with this metadata to a custom file ``.mdlus``. These files allow
@@ -271,6 +317,10 @@ instantiating a model from a ``.mdlus`` file.
      )
    )
 
+.. note::
+   Inorder to make use of this functionality, the model must have json serializable
+   inputs to the ``__init__`` function. It is highly recommended that all Modulus
+   models be developed with this requirement in mind.
 
 
 Modulus Model Registry and Entry Points
@@ -290,9 +340,9 @@ class.
     >>> model = FullyConnected(in_features=32, out_features=64)
 
 The model registry also allows exposing models via entry points. This allows for
-integration of models into the modulus ecosystem. For example, suppose you have a
+integration of models into the Modulus ecosystem. For example, suppose you have a
 package ``MyPackage`` that contains a model ``MyModel``. You can expose this model
-to the modulus registry by adding an entry point to your ``setup.py`` file. For
+to the Modulus registry by adding an entry point to your ``setup.py`` file. For
 example, suppose your package structure is as follows:
 
 .. code:: python
@@ -331,7 +381,7 @@ example, suppose your package structure is as follows:
    MyModulusModel = Model.from_pytorch(MyModel)
 
 
-Once this package is installed, you can access the model via the modulus model
+Once this package is installed, you can access the model via the Modulus model
 registry.
 
 
