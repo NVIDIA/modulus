@@ -37,6 +37,7 @@ def prepare_data(
     predict_nr_tsteps,
     start_timestep,
 ):
+    """Data pre-processing"""
     if Path(output_data_path).is_file():
         pass
     else:
@@ -67,6 +68,7 @@ def prepare_data(
 
 
 def validation_step(model, dataloader, epoch):
+    """Validation Step"""
     model.eval()
 
     for data in dataloader:
@@ -89,6 +91,8 @@ def validation_step(model, dataloader, epoch):
 
 
 class HDF5MapStyleDataset(Dataset):
+    """Simple map-stype HDF5 dataset"""
+
     def __init__(
         self,
         file_path,

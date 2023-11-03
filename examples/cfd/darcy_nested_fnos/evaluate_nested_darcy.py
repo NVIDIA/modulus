@@ -31,6 +31,7 @@ from utils import NestedDarcyDataset, PlotNestedDarcy
 
 
 def plot_assembled(perm, darc):
+    """Utility for plotting"""
     headers = ["permeability", "darcy"]
     plt.rcParams.update({"font.size": 28})
     fig, ax = plt.subplots(1, 2, figsize=(15 * 2, 15), sharey=True)
@@ -52,6 +53,7 @@ def EvaluateModel(
     parent_result: FloatTensor = None,
     log: PythonLogger = None,
 ):
+    """Utility for running inference on trained model"""
     # define model and load weights
     dist = DistributedManager()
     log.info(f"evaluating model {model_name}")
@@ -111,6 +113,7 @@ def EvaluateModel(
 
 
 def AssembleSolutionToDict(cfg: DictConfig, perm: dict, darcy: dict, pos: dict):
+    """Assemble solution to easily interpretable dict"""
     dat, idx = {}, 0
     for ii in range(perm["ref0"].shape[0]):
         samp = str(ii)
@@ -142,6 +145,7 @@ def AssembleSolutionToDict(cfg: DictConfig, perm: dict, darcy: dict, pos: dict):
 
 
 def AssembleToSingleField(cfg: DictConfig, dat: dict):
+    """Assemble multiple fields to a single dict"""
     ref_fac = cfg.ref_fac
     glob_size = dat["0"]["ref0"]["0"]["darcy"].shape[0]
     inset_size = dat["0"]["ref1"]["0"]["darcy"].shape[0]
@@ -175,6 +179,7 @@ def AssembleToSingleField(cfg: DictConfig, dat: dict):
 
 
 def GetRelativeL2(pred, tar):
+    """Compute L2 error"""
     div = 1.0 / tar["darcy"].shape[0] * tar["darcy"].shape[1]
     err = pred["darcy"] - tar["darcy"]
 
@@ -185,6 +190,7 @@ def GetRelativeL2(pred, tar):
 
 
 def ComputeErrorNorm(cfg: DictConfig, pred_dict: dict, log: PythonLogger, ref0_pred):
+    """Compute relative L2-norm of error"""
     # assemble ref1 and ref2 solutions alongside gound truth to single scalar field
     log.info("computing relative L2-norm of error...")
     tar_dict = np.load(cfg.inference.inference_set, allow_pickle=True).item()["fields"]

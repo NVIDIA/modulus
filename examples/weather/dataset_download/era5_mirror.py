@@ -58,6 +58,7 @@ class ERA5Mirror:
         self.metadata = self.get_metadata()
 
     def get_metadata(self):
+        """Get metadata"""
         if self.fs.exists(self.metadata_file):
             with self.fs.open(self.metadata_file, "r") as f:
                 try:
@@ -69,10 +70,12 @@ class ERA5Mirror:
         return metadata
 
     def save_metadata(self):
+        """Save metadata"""
         with self.fs.open(self.metadata_file, "w") as f:
             json.dump(self.metadata, f)
 
     def chunk_exists(self, variable, year, month, hours, pressure_level):
+        """Check if chunk exists"""
         for chunk in self.metadata["chunks"]:
             if (
                 chunk["variable"] == variable
@@ -155,6 +158,7 @@ class ERA5Mirror:
         return ds
 
     def variable_to_zarr_name(self, variable: str, pressure_level: int = None):
+        """convert variable to zarr name"""
         # create zarr path for variable
         zarr_path = f"{self.base_path}/{variable}"
         if pressure_level:

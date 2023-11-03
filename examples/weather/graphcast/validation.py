@@ -24,6 +24,8 @@ C = Constants()
 
 
 class Validation:
+    """Run validation on GraphCast model"""
+
     def __init__(self, model, dtype, dist, wb):
         self.model = model
         self.dtype = dtype

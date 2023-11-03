@@ -63,6 +63,8 @@ if C.cugraphops_encoder or C.cugraphops_processor or C.cugraphops_decoder:
 
 
 class GraphCastTrainer(BaseTrainer):
+    """GraphCast Trainer"""
+
     def __init__(self, wb, dist, rank_zero_logger):
         super().__init__()
         self.dist = dist
