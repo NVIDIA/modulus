@@ -25,6 +25,8 @@ C = Constants()
 
 
 class BaseTrainer:
+    """Trainer class"""
+
     def __init__(self):
         pass
 

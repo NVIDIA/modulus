@@ -29,7 +29,7 @@ repos:
           "--ignore-magic", "--fail-under=99", "--exclude=['setup.py', 'test', 'build', 'docs']",  
           "--ignore-regex=['forward', 'backward', 'reset_parameters', 'extra_repr', 'MetaData', 'apply_activation','exec_activation']", 
           "--color", "--"]
-      exclude: ^modulus/internal/|^examples/
+      exclude: ^modulus/internal/
 
 -   repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.35.0

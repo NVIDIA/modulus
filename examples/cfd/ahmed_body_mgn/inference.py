@@ -102,6 +102,8 @@ def dgl_to_pyvista(graph: DGLGraph):
 
 
 class AhmedBodyRollout:
+    """MGN inference on Ahmed Body dataset"""
+
     def __init__(self, wb, logger):
         # set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

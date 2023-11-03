@@ -40,6 +40,7 @@ def prepare_data(
     start_idx,
     num_samples,
 ):
+    """Data pre-processing"""
     if Path(output_data_path).is_file():
         pass
     else:
@@ -73,6 +74,7 @@ def prepare_data(
 
 
 def validation_step(model, dataloader, epoch):
+    """Validation step"""
     model.eval()
 
     loss_epoch = 0
@@ -99,6 +101,8 @@ def validation_step(model, dataloader, epoch):
 
 
 class HDF5MapStyleDataset(Dataset):
+    """Simple map-style HDF5 dataset"""
+
     def __init__(
         self,
         file_path,
