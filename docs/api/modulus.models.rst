@@ -11,15 +11,17 @@ Basics
 Modulus contains its own Model class for constructing neural networks. This model class
 is built on top of PyTorch's ``nn.Module`` and can be used interchangeably within the
 PyTorch ecosystem. Using Modulus models allows you to leverage various features of
-Modulus which are described in the following sections.
-
+Modulus aimed at improving performance and ease of use. These feature include, but are
+not limited to, model zoo, automatic mixed-precision, CUDA Graphs, and easy checkpointing.
+We discuss each of these features in the following sections.
 
 Model Zoo
 ^^^^^^^^^
 
-Modulus comes with several optimized, customizable and easy-to-use models for you to
-leverage them in you training workflows. These include some very general models FNOs,
-ResNet, and Graph models and also a few domain-specific models like DLWP, SFNO. 
+Modulus contains several optimized, customizable and easy-to-use models.
+These include some very general models like Fourier Neural Operators (FNOs),
+ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
+Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
 Currently available models include
 
@@ -65,7 +67,7 @@ Currently available models include
      - torch.Tensor [N, C_out, H, W]
 
 
-A simple usage of these models looks like below:
+A simple usage of these models looks like the following:
 
 .. code:: python
 
@@ -99,17 +101,11 @@ A simple usage of these models looks like below:
 How to write your own Modulus model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are a few different ways in which you can contribute a model to Modulus. If you
-are a seasoned PyTorch user, the easiest way would be to write your model using the
-optimized layers and utilities from Modulus and Pytorch. Once you have the model ready
-and tested, you can specify the ``ModelMetaData`` to describe the optimizations and
-features supported for the model. This enables the use of the model with other Modulus
-features like the ``StaticCaptureTraining`` and ``StaticCaptureEvaluateNoGrad`` that will
-apply the corresponding optimizations automatically in the training loop.
-
-Let's take a look at writing a simple UNet model. We write the model in such a way that
-it will have support for CUDA Graphs and Automatic Mixed-Precision. Below is how a
-simple UNet model in PyTorch would look like:
+There are a few different ways to construct a Modulus model. If you are a seasoned
+PyTorch user, the easiest way would be to write your model using the optimized layers and
+utilities from Modulus or Pytorch. Lets take a look at a simple example of a UNet model
+first showing a simple PyTorch implementation and then a Modulus implementation that
+supports CUDA Graphs and Automatic Mixed-Precision.
 
 .. code:: python
 
@@ -145,13 +141,13 @@ simple UNet model in PyTorch would look like:
             x = self.dec1(x2)
             return self.final(x)
 
-To convert this to a Modulus model, we can do a few simple tweaks. First, let's subclass
-the model from ``modulus.models.module.Module`` instead of ``torch.nn.Module``. The
+Now we show this model rewritten in Modulus. First, let's subclass the model from 
+``modulus.models.module.Module`` instead of ``torch.nn.Module``. The
 ``modulus.models.module.Module`` class acts like a direct replacement for the
 ``torch.nn.Module`` and provides additional functionality for saving and loading
 checkpoints, etc. Refer to the API docs of ``modulus.models.module.Module`` for further
 details. Additionally we will add metadata to the model to capture the optimizations
-enabled. 
+enabled. In this case we will enable CUDA Graphs and Automatic Mixed-Precision.
 
 .. code:: python
 
@@ -199,6 +195,7 @@ enabled.
             x = self.dec1(x2)
             return self.final(x)
 
+Now that we have our Modulus model, we can make use of 
 Now, let's use the static capture utils on this model.
 
 .. code:: python
