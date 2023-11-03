@@ -23,7 +23,6 @@ def _contract_rank(
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)
     resc = torch.einsum("bixy,ior,xr,yr->boxy", x, wc, ac, bc)
-    res = torch.view_as_real(resc)
     return resc
 
 

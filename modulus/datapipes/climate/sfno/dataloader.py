@@ -20,7 +20,6 @@ import torch
 # distributed stuff
 import torch.distributed as dist
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 
 from modulus.utils.sfno.distributed import comm
 
@@ -79,10 +78,11 @@ def get_dataloader(
         return zarr.get_data_loader(params, files_pattern, train)
 
     elif params.get("multifiles", False):
+        from torch.utils.data.distributed import DistributedSampler
+
         from modulus.datapipes.climate.sfno.dataloaders.data_loader_multifiles import (
             MultifilesDataset as MultifilesDataset2D,
         )
-        from torch.utils.data.distributed import DistributedSampler
 
         # multifiles dataset
         dataset = MultifilesDataset2D(params, files_pattern, train)

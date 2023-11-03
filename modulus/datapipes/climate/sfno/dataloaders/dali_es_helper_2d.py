@@ -26,12 +26,12 @@ import cupyx as cpx
 import h5py
 import numpy as np
 
+# can replace this import with zoneinfo from the standard library in python3.9+.
+import pytz
+
 # for nvtx annotation
 import torch
 import zarr
-
-# can replace this import with zoneinfo from the standard library in python3.9+.
-import pytz
 
 from modulus.utils.zenith_angle import cos_zenith_angle
 

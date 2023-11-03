@@ -17,7 +17,7 @@ import math
 import torch
 import torch.fft
 import torch.nn as nn
-from torch.cuda import amp
+import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from modulus.models.layers.activations import get_activation

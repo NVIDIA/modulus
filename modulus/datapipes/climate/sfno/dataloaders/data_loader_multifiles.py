@@ -12,26 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+# for the zenith angle
+import datetime
 import glob
 import logging
-
-from itertools import accumulate
 import operator
+import os
 from bisect import bisect_right
+from itertools import accumulate
 
 import h5py
 import numpy as np
-import torch
-from torch.utils.data import Dataset
 
 # can replace this import with zoneinfo from the standard library in python3.9+.
 import pytz
+import torch
+from torch.utils.data import Dataset
 
 from modulus.utils.zenith_angle import cos_zenith_angle
-
-# for the zenith angle
-import datetime
 
 
 class MultifilesDataset(Dataset):
@@ -62,7 +60,10 @@ class MultifilesDataset(Dataset):
 
         # multifiles dataloader doesn't support channel parallelism yet
         # set the read slices
-        assert params.io_grid[0] == 1
+        if params.io_grid[0] != 1:
+            raise ValueError(
+                f"Multifile dataloader doesn't support channel parallelism, got {params.io_grid[0]} channel parallelism"
+            )
         self.io_grid = params.io_grid[1:]
         self.io_rank = params.io_rank[1:]
 
@@ -169,8 +170,14 @@ class MultifilesDataset(Dataset):
             self.crop_size[0] = self.img_shape[0]
         if self.crop_size[1] is None:
             self.crop_size[1] = self.img_shape[1]
-        assert self.crop_anchor[0] + self.crop_size[0] <= self.img_shape[0]
-        assert self.crop_anchor[1] + self.crop_size[1] <= self.img_shape[1]
+        if self.crop_anchor[0] + self.crop_size[0] > self.img_shape[0]:
+            raise ValueError(
+                f"crop anchor x {self.crop_anchor[0]} is outside of image shape {self.img_shape[0]}"
+            )
+        if self.crop_anchor[1] + self.crop_size[1] > self.img_shape[1]:
+            raise ValueError(
+                f"crop anchor y {self.crop_anchor[1]} is outside of image shape {self.img_shape[1]}"
+            )
         # for x
         read_shape_x = (self.crop_size[0] + self.io_grid[0] - 1) // self.io_grid[0]
         read_anchor_x = self.crop_anchor[0] + read_shape_x * self.io_rank[0]

@@ -225,7 +225,6 @@ def init_model_parallel_info(
     # get sizes
     world_size = get_world_size()
     world_rank = get_world_rank()
-    local_rank = get_local_rank()
 
     model_parallel_names = names
     model_parallel_sizes = sizes

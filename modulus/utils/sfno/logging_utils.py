@@ -46,7 +46,6 @@ def log_to_file(
 
 
 def log_versions():  # pragma: no cover
-
     """
     Log the versions of git and torch.
     """

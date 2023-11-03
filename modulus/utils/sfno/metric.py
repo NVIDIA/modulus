@@ -122,7 +122,6 @@ class MetricsHandler:
             torch.arange(start=0, end=params.img_crop_shape_x, device=self.device),
             params.img_crop_shape_x,
         )
-        lat_norm = torch.sum(torch.cos(torch.deg2rad(lat_full)))
         # using the global one for now as we are gathering
         lwf = latitude_weighting_factor_torch(lat_full)[
             params.img_crop_offset_x : params.img_crop_offset_x

@@ -41,11 +41,12 @@ from modulus.models.sfno.layers import (
     DropPath,
     EncoderDecoder,
     InverseRealFFT2,
+    RealFFT2,
 )
 from modulus.models.sfno.spectral_convolution import (
-    SpectralConv,
     FactorizedSpectralConv,
     SpectralAttention,
+    SpectralConv,
 )
 
 # more distributed stuff
@@ -480,8 +481,8 @@ class SphericalFourierNeuralOperatorNet(Module):
             ).float()
 
         elif self.spectral_transform == "fft":
-            fft_handle = th.RealFFT2
-            ifft_handle = th.InverseRealFFT2
+            fft_handle = RealFFT2
+            ifft_handle = InverseRealFFT2
 
             # determine the global padding
             inp_dist_h = (
@@ -757,11 +758,7 @@ class SphericalFourierNeuralOperatorNet(Module):
             self.pos_embed = nn.ParameterList([rcoeffs, ccoeffs])
             self.pos_embed.type = "frequency"
 
-        elif (
-            pos_embed == "none"
-            or pos_embed == "None"
-            or pos_embed == None
-        ):
+        elif pos_embed == "none" or pos_embed == "None" or pos_embed is None:
             pass
         else:
             raise ValueError("Unknown position embedding type")

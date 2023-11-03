@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -26,7 +28,6 @@ from modulus.utils.sfno.distributed.mappings import (
     copy_to_parallel_region,
     gather_from_parallel_region,
     reduce_from_parallel_region,
-    scatter_to_parallel_region,
 )
 
 
@@ -142,7 +143,7 @@ class DistributedRealFFT2(nn.Module):
         )
 
         # pad if required, truncation is implicit
-        yop = F.pad(yo, (0, 0, 0, self.lpad), mode="constant")
+        yop = F.pad(yot, (0, 0, 0, self.lpad), mode="constant")
 
         # transpose: after this, l is split and c is local
         if self.comm_size_h > 1:

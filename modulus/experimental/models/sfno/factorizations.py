@@ -195,7 +195,6 @@ def _contract_tt(
 def _contract_dense_pytorch(
     x, weight, separable=False, operator_type="diagonal", complex=True
 ):  # pragma: no cover
-
     # to cheat the fused optimizers convert to real here
     x = torch.view_as_real(x)
 
