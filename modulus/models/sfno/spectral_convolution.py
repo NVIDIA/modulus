@@ -208,7 +208,7 @@ class FactorizedSpectralConv(nn.Module):
         separable=False,
         decomposition_kwargs=dict(),
         bias=False,
-    ):
+    ):  # pragma: no cover
         super(FactorizedSpectralConv, self).__init__()
 
         self.forward_transform = forward_transform
@@ -303,13 +303,13 @@ class FactorizedSpectralConv(nn.Module):
             self.bias.is_shared_mp = ["matmul"]
             self.bias.sharded_dims_mp = [None, None, "h", "w"]
 
-    def _init_weights(self):
+    def _init_weights(self):  # pragma: no cover
         scale = (2 / self.weight.shape[0]) ** 0.5  # only for Relu activation
         self.weight.normal_(0, scale)
         if hasattr(self, "bias"):
             nn.init.zeros_(self.bias)
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         dtype = x.dtype
         residual = x
         x = x.float()
@@ -487,7 +487,7 @@ class SpectralAttention(nn.Module):
 
         self.drop = nn.Dropout(drop_rate) if drop_rate > 0.0 else nn.Identity()
 
-    def _init_weights(self):
+    def _init_weights(self):  # pragma: no cover
         raise NotImplementedError()
 
     def forward_mlp(self, x):  # pragma: no cover

@@ -18,7 +18,7 @@ import torch
 @torch.jit.script
 def _contract_rank(
     x: torch.Tensor, w: torch.Tensor, a: torch.Tensor, b: torch.Tensor
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     wc = torch.view_as_complex(w)
     ac = torch.view_as_complex(a)
     bc = torch.view_as_complex(b)

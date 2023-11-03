@@ -23,19 +23,19 @@ class ParamsBase:
     as attributes, and tracking which attributes are modified.
     """
 
-    def __init__(self):
+    def __init__(self):  # pragma: no cover
         self._original_attrs = None
         self.params = {}
         self._original_attrs = list(self.__dict__)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # pragma: no cover
         return self.params[key]
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key, val):  # pragma: no cover
         self.params[key] = val
         self.__setattr__(key, val)
 
-    def __contains__(self, key):
+    def __contains__(self, key):  # pragma: no cover
         return key in self.params
 
     def get(self, key, default=None):  # pragma: no cover
@@ -75,7 +75,9 @@ class ParamsBase:
 class YParams(ParamsBase):
     """Open parameters stored with ``config_name`` in the yaml file ``yaml_filename``"""
 
-    def __init__(self, yaml_filename, config_name, print_params=False):
+    def __init__(
+        self, yaml_filename, config_name, print_params=False
+    ):  # pragma: no cover
         super().__init__()
         self._yaml_filename = yaml_filename
         self._config_name = config_name

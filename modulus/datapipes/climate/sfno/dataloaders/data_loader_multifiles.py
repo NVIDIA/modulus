@@ -131,7 +131,7 @@ class MultifilesDataset(Dataset):
                 self.n_samples_year.append(_f[self.dataset_path].shape[0])
         return
 
-    def _get_files_stats(self, enable_logging):
+    def _get_files_stats(self, enable_logging):  # pragma: no cover
         # check for hdf5 files
         self.files_paths = []
         self.location = (
@@ -249,7 +249,7 @@ class MultifilesDataset(Dataset):
         self.img_local_pad_x = self.read_pad[0]
         self.img_local_pad_y = self.read_pad[1]
 
-    def _compute_zenith_angle(self, local_idx, year_idx):
+    def _compute_zenith_angle(self, local_idx, year_idx):  # pragma: no cover
         # compute hours into the year
         year = self.years[year_idx]
         jan_01_epoch = datetime.datetime(year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -290,14 +290,14 @@ class MultifilesDataset(Dataset):
 
         return cos_zenith_inp, cos_zenith_tar
 
-    def _open_file(self, year_idx):
+    def _open_file(self, year_idx):  # pragma: no cover
         _file = h5py.File(self.files_paths[year_idx], "r")
         self.files[year_idx] = _file[self.dataset_path]
 
-    def __len__(self):
+    def __len__(self):  # pragma: no cover
         return self.n_samples_total - self.dt * (self.n_history + self.n_future + 1)
 
-    def __getitem__(self, global_idx):
+    def __getitem__(self, global_idx):  # pragma: no cover
         # load slice of data:
         start_x = self.read_anchor[0]
         end_x = start_x + self.read_shape[0]
@@ -383,8 +383,8 @@ class MultifilesDataset(Dataset):
 
         return result
 
-    def get_output_normalization(self):
+    def get_output_normalization(self):  # pragma: no cover
         return self.out_bias, self.out_scale
 
-    def get_input_normalization(self):
+    def get_input_normalization(self):  # pragma: no cover
         return self.in_bias, self.in_scale

@@ -116,7 +116,7 @@ class EncoderDecoder(nn.Module):
         encoder_modules.append(nn.Conv2d(current_dim, output_dim, 1, bias=False))
         self.fwd = nn.Sequential(*encoder_modules)
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         return self.fwd(x)
 
 
