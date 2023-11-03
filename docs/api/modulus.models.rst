@@ -86,7 +86,6 @@ A simple usage of these models looks like below:
     >>> output = model(input)
     >>> output.size()
     torch.Size([32, 3, 32, 32])
-    
 
 How to write your own Modulus model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -234,11 +233,118 @@ speed-up for more complex models.
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
     to write the model code that enables each of these optimizations. 
 
-How to use the model entrypoints
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Saving and Loading Modulus Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-<TODO>
+As mentioned above, modulus Models are interoperable with PyTorch models. This means that
+you can save and load modulus models using the standard PyTorch APIs however, we provide
+a few additional utilities to make this process easier. A key challenge in saving and
+loading models is keeping track of the model metadata such as layer sizes, etc. Modulus
+models can be saved with this metadata to a custom file ``.mdlus``. These files allow
+for easy loading and instantiation of the model. Below is an example of saving and
+instantiating a model from a ``.mdlus`` file.
 
+.. code:: python
+
+    >>> import torch
+    >>> from modulus.models import Module
+    >>> from modulus.models.mlp.fully_connected import FullyConnected
+    >>> model = FullyConnected(in_features=32, out_features=64)
+    >>> model.save("model.mdlus") # Save model to .mdlus file
+    >>> model.load("model.mdlus") # Load model weights from .mdlus file
+    >>> new_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file
+    >>> new_model
+    FullyConnected(
+     (layers): ModuleList(
+       (0): FCLayer(
+         (activation_fn): SiLU()
+         (linear): Linear(in_features=32, out_features=512, bias=True)
+       )
+       (1-5): 5 x FCLayer(
+         (activation_fn): SiLU()
+         (linear): Linear(in_features=512, out_features=512, bias=True)
+       )
+     )
+     (final_layer): FCLayer(
+       (activation_fn): Identity()
+       (linear): Linear(in_features=512, out_features=64, bias=True)
+     )
+   )
+
+
+
+Modulus Model Registry and Entry Points
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Modulus contains a model registry that allows for easy access and ingestion of
+models. Below is a simple example of how to use the model registry to obtain a model
+class.
+
+.. code:: python
+
+    >>> from modulus.registry import ModelRegistry 
+    >>> model_registry = ModelRegistry()
+    >>> model_registry.list_models()
+    ['AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
+    >>> FullyConnected = model_registry.factory("FullyConnected")
+    >>> model = FullyConnected(in_features=32, out_features=64)
+
+The model registry also allows exposing models via entry points. This allows for
+integration of models into the modulus ecosystem. For example, suppose you have a
+package ``MyPackage`` that contains a model ``MyModel``. You can expose this model
+to the modulus registry by adding an entry point to your ``setup.py`` file. For
+example, suppose your package structure is as follows:
+
+.. code:: python
+    # setup.py
+
+    from setuptools import setup, find_packages
+
+    setup(
+        name="MyPackage",
+        version="0.0.1",
+        packages=find_packages(),
+        entry_points={
+            "modulus.models": [
+                "MyModulusModel = mypackage.models.MyModulusModel:MyModulusModel",
+            ],
+        },
+    )
+
+
+.. code:: python
+   # mypackage/models.py
+
+   import torch.nn as nn
+   from modulus.models import Model
+   
+   class MyModel(nn.Module):
+       def __init__(self):
+           super(MyModel, self).__init__()
+           self.conv1 = nn.Conv2d(1, 20, 5)
+           self.conv2 = nn.Conv2d(20, 20, 5)
+   
+       def forward(self, x):
+           x = self.conv1(x)
+           return self.conv2(x)
+   
+   MyModulusModel = Model.from_pytorch(MyModel)
+
+
+Once this package is installed, you can access the model via the modulus model
+registry.
+
+
+.. code:: python
+   >>> from modulus.registry import ModelRegistry
+   >>> model_registry = ModelRegistry()
+   >>> model_registry.list_models()
+   ['MyModulusModel', 'AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
+   >>> MyModulusModel = model_registry.factory("MyModulusModel")
+
+
+For more information on entry points and potential use cases, see
+`this <https://amir.rachum.com/blog/2017/07/28/python-entry-points/>`_ blog post.
 
 .. autosummary::
    :toctree: generated
