@@ -22,6 +22,43 @@ from .histogram import cdf as cdf_function
 Tensor = torch.Tensor
 
 
+@torch.jit.script
+def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
+    """
+    Computes the local Continuous Ranked Probability Score (CRPS) by using
+    the kernel version of CRPS
+
+    Creates a map of CRPS and does not accumulate over lat/lon regions.
+    Computes:
+        CRPS(X, y) = E[X - y] - 0.5 E[X-X']
+
+    Parameters
+    ----------
+    pred : Tensor
+        Tensor containing the ensemble predictions. The ensemble dimension
+        is assumed to be the leading dimension unless 'dim' is specified.
+    obs : Union[Tensor, np.ndarray]
+        Tensor or array containing an observation over which the CRPS is computed
+        with respect to.
+    dim : int, optional
+        The dimension over which to compute the CRPS, assumed to be 0.
+
+    Returns
+    -------
+    Tensor
+        Map of CRPS
+    """
+    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
+    n = pred.shape[0]
+    _crps = 0.0 * obs
+    for i in range(n):
+        x_i = pred[i]
+        x_j = pred[i:]
+        _crps += torch.abs(x_i - obs) / n
+        _crps -= torch.sum(torch.abs(x_i[None] - x_j) / n, dim=0) / n
+    return _crps
+
+
 def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) -> Tensor:
     """
     Computes the local Continuous Ranked Probability Score (CRPS)
@@ -216,11 +253,11 @@ def _crps_from_counts(
 
 
 def crps(
-    pred: Tensor, obs: Union[Tensor, np.ndarray], bins: Union[int, Tensor] = 10
+    pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0, method: str = "kernel"
 ) -> Tensor:
     """
-    Computes the local Continuous Ranked Probability Score (CRPS) by computing
-    a histogram and CDF of the predictions.
+    Computes the local Continuous Ranked Probability Score (CRPS) by either
+    computing a histogram and CDF of the predictions, or using the kernel definition.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
     
@@ -228,27 +265,40 @@ def crps(
         
     .. math::
 
-        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx
+        CRPS(x, y) = E[X-y] - 0.5*E[X-X'] if B < 100
+        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx otherwise
         
     where F is the empirical cdf of X.
+
 
     Parameters
     ----------
     pred : Tensor
-        Tensor [B, ...] containing the ensemble predictions. The leading dimension must represent the
-        ensemble dimension.
+        Tensor containing the ensemble predictions.
     obs : Union[Tensor, np.ndarray]
         Tensor or array containing an observation over which the CRPS is computed
-        with respect to. Broadcasting dimensions must be compatible with the non-zeroth
-        dimensions of bins and cdf.
-    bins : Union[int, Tensor], optional
-        Either the number of bins, or a tensor of bin edges with dimension [N+1, ...]
-        where N is the number of bins, by default 10.
+        with respect to.
+    dim : int, Optional
+        Dimension with which to calculate the CRPS over, the ensemble dimension.
+        Assumed to be zero.
+    method: str, Optional
+        The method to calculate the crps. Can either be "kernel" or "histogram".
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
-    bin_edges, cdf = cdf_function(pred, bins=bins)
-    return _crps_from_cdf(bin_edges, cdf, obs)
+    if method not in ["kernel", "histogram"]:
+        raise ValueError("Method must either be 'kernel' or 'histogram'.")
+
+    n = pred.shape[dim]
+    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
+    obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
+    if method == "kernel":
+        return kcrps(pred, obs, dim=0)
+    else:
+        number_of_bins = max(int(np.sqrt(n)), 100)
+        bin_edges, cdf = cdf_function(pred, bins=number_of_bins)
+        _crps = _crps_from_cdf(bin_edges, cdf, obs)
+        return _crps
