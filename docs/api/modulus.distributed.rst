@@ -5,7 +5,7 @@ Modulus Distributed
 .. currentmodule:: modulus.distributed
 
 Distributed utilites in Modulus are designed to simplify implementation of parallel training and
-inference scripts easier by providing a unified way to configure and query parameters associated 
+make inference scripts easier by providing a unified way to configure and query parameters associated 
 with the distributed environment. The utilites in ``modulus.distributed`` build on top of the 
 utilites from ``torch.distributed`` and abstract out some of the complexities of setting up a
 distributed execution environment.
@@ -111,7 +111,7 @@ This means that ``DistributedManager`` essentially functions like a singleton
 class and once configured, all utilities in Modulus can access the same configuration 
 and adapt to the specified distributed structure.
 
-For example, see the consturctor of the ``DistributedAFNO`` class:
+For example, see the constructor of the ``DistributedAFNO`` class:
 
 .. literalinclude:: ../../modulus/models/afno/distributed/afno.py
    :pyobject: DistributedAFNO.__init__
