@@ -82,7 +82,7 @@ class SRResNet(Module):
     scaling_factor : int, optional
         Scaling factor to increase the output feature size
         compared to the input (2, 4, or 8), by default 8
-    activation_fn : str, optional
+    activation_fn : Any, optional
         Activation function, by default "prelu"
 
     Example
@@ -119,7 +119,10 @@ class SRResNet(Module):
     ):
         super().__init__(meta=MetaData())
         self.var_dim = 1
-        activation_fn = get_activation(activation_fn)
+
+        # Activation function
+        if isinstance(activation_fn, str):
+            activation_fn = get_activation(activation_fn)
 
         # Scaling factor must be 2, 4, or 8
         scaling_factor = int(scaling_factor)

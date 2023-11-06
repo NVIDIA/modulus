@@ -30,7 +30,7 @@ import numpy as np
 import torch
 import zarr
 
-from modulus.utils.sfno.zenith_angle import cos_zenith_angle
+from modulus.utils.zenith_angle import cos_zenith_angle
 
 
 class GeneralES(object):
