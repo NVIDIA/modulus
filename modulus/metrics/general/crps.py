@@ -65,11 +65,11 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     using assuming that the forecast distribution is normal.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    
+
     Computes:
 
     .. math::
-        
+
         CRPS(mean, std, y) = std * [ \\frac{1}{\\sqrt{\\pi}}} - 2 \\phi ( \\frac{x-mean}{std} ) -
                 ( \\frac{x-mean}{std} ) * (2 \\Phi(\\frac{x-mean}{std}) - 1) ]
 
@@ -129,13 +129,13 @@ def _crps_from_cdf(
     using a cumulative distribution function.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    
+
     Computes:
-    
+
     .. math::
 
         CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx
-        
+
     where F is the empirical cdf of X.
 
     Parameters
@@ -195,13 +195,13 @@ def _crps_from_counts(
     using a histogram of counts.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    
+
     Computes:
-       
+
     .. math::
 
         CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx
-    
+
     where F is the empirical cdf of X.
 
     Parameters
@@ -260,14 +260,14 @@ def crps(
     computing a histogram and CDF of the predictions, or using the kernel definition.
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    
+
     Computes:
-        
+
     .. math::
 
         CRPS(x, y) = E[X-y] - 0.5*E[X-X'] if B < 100
         CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx otherwise
-        
+
     where F is the empirical cdf of X.
 
 

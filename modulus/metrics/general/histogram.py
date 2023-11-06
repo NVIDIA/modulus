@@ -708,9 +708,9 @@ def normal_pdf(
     of the bin_edges.
 
     This function uses the standard formula:
-    
+
     .. math::
-        
+
         \\frac{1}{\\sqrt{2*\\pi} std } \\exp( -\\frac{1}{2} (\\frac{x-mean}{std})^2 )
 
     where erf is the error function.
@@ -760,9 +760,9 @@ def normal_cdf(
     of the bin_edges.
 
     This function uses the standard formula:
-    
+
     .. math::
-        
+
         \\frac{1}{2} ( 1 + erf( \\frac{x-mean}{std \\sqrt{2}}) ) )
 
     where erf is the error function.
