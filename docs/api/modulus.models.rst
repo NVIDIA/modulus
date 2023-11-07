@@ -291,19 +291,16 @@ you can save and load Modulus models using the standard PyTorch APIs however, we
 a few additional utilities to make this process easier. A key challenge in saving and
 loading models is keeping track of the model metadata such as layer sizes, etc. Modulus
 models can be saved with this metadata to a custom ``.mdlus`` file. These files allow
-for easy loading and instantiation of the model. Below is an example of saving and
-instantiating a model from a ``.mdlus`` file.
+for easy loading and instantiation of the model. We show two examples of this below.
+The first example shows saving and loading a model from an already instantiated model.
 
 .. code:: python
 
-    >>> import torch
-    >>> from modulus import Module
     >>> from modulus.models.mlp.fully_connected import FullyConnected
     >>> model = FullyConnected(in_features=32, out_features=64)
     >>> model.save("model.mdlus") # Save model to .mdlus file
     >>> model.load("model.mdlus") # Load model weights from .mdlus file from already instantiated model
-    >>> new_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file. Note that in this case we don't even need to know the class or constructor parameters to pass it.
-    >>> new_model
+    >>> model
     FullyConnected(
      (layers): ModuleList(
        (0): FCLayer(
@@ -320,6 +317,35 @@ instantiating a model from a ``.mdlus`` file.
        (linear): Linear(in_features=512, out_features=64, bias=True)
      )
    )
+
+The second example shows loading a model from a ``.mdlus`` file without having to
+instantiate the model first. We note that in this case we don't know the class or
+parameters to pass to the constructor of the model. However, we can still load the
+model from the ``.mdlus`` file.
+
+.. code:: python
+
+    >>> from modulus import Module
+    >>> fc_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file.
+    >>> fc_model
+    FullyConnected(
+     (layers): ModuleList(
+       (0): FCLayer(
+         (activation_fn): SiLU()
+         (linear): Linear(in_features=32, out_features=512, bias=True)
+       )
+       (1-5): 5 x FCLayer(
+         (activation_fn): SiLU()
+         (linear): Linear(in_features=512, out_features=512, bias=True)
+       )
+     )
+     (final_layer): FCLayer(
+       (activation_fn): Identity()
+       (linear): Linear(in_features=512, out_features=64, bias=True)
+     )
+   )
+
+
 
 .. note::
    Inorder to make use of this functionality, the model must have json serializable
@@ -346,7 +372,7 @@ class.
 The model registry also allows exposing models via entry points. This allows for
 integration of models into the Modulus ecosystem. For example, suppose you have a
 package ``MyPackage`` that contains a model ``MyModel``. You can expose this model
-to the Modulus registry by adding an entry point to your ``setup.py`` file. For
+to the Modulus registry by adding an entry point to your ``toml`` file. For
 example, suppose your package structure is as follows:
 
 .. code:: python
@@ -354,17 +380,22 @@ example, suppose your package structure is as follows:
 
     from setuptools import setup, find_packages
 
-    setup(
-        name="MyPackage",
-        version="0.0.1",
-        packages=find_packages(),
-        entry_points={
-            "modulus.models": [
-                "MyModulusModel = mypackage.models.MyModulusModel:MyModulusModel",
-            ],
-        },
-    )
+    setup()
 
+.. code:: python
+    # pyproject.toml
+
+    [build-system]
+    requires = ["setuptools", "wheel"]
+    build-backend = "setuptools.build_meta"
+    
+    [project]
+    name = "MyPackage"
+    description = "My Neural Network Zoo."
+    version = "0.1.0"
+    
+    [project.entry-points."modulus.models"]
+    MyModulusModel = "mypackage.models.MyModulusModel:MyModulusModel"
 
 .. code:: python
    # mypackage/models.py
