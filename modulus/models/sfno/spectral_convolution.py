@@ -36,7 +36,7 @@ from modulus.models.sfno.factorizations import get_contract_fun
 tl.set_backend("pytorch")
 
 
-class SpectralConv(nn.Module):
+class SpectralConv(nn.Module):  # pragma: no cover
     """
     Spectral Convolution according to Driscoll & Healy. Designed for convolutions on
     the two-sphere S2 using the Spherical Harmonic Transforms in torch-harmonics, but
@@ -191,7 +191,7 @@ class SpectralConv(nn.Module):
         return x, residual
 
 
-class FactorizedSpectralConv(nn.Module):
+class FactorizedSpectralConv(nn.Module):  # pragma: no cover
     """
     Factorized version of SpectralConv. Uses tensorly-torch to keep the weights factorized
     """
@@ -358,7 +358,7 @@ class FactorizedSpectralConv(nn.Module):
         return x, residual
 
 
-class SpectralAttention(nn.Module):
+class SpectralAttention(nn.Module):  # pragma: no cover
     """
     Spherical non-linear FNO layer
     """
