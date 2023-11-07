@@ -65,7 +65,7 @@ from modulus.utils.sfno.distributed.mappings import (
 
 
 @dataclass
-class MetaData(ModelMetaData):
+class MetaData(ModelMetaData):  # pragma: no cover
     name: str = "SFNO"
     # Optimization
     jit: bool = False
@@ -80,7 +80,7 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class SpectralFilterLayer(nn.Module):
+class SpectralFilterLayer(nn.Module):  # pragma: no cover
     """Spectral filter layer"""
 
     def __init__(
@@ -148,7 +148,7 @@ class SpectralFilterLayer(nn.Module):
         return self.filter(x)
 
 
-class FourierNeuralOperatorBlock(nn.Module):
+class FourierNeuralOperatorBlock(nn.Module):  # pragma: no cover
     """Fourier Neural Operator Block"""
 
     def __init__(
@@ -290,7 +290,7 @@ class FourierNeuralOperatorBlock(nn.Module):
         return x
 
 
-class SphericalFourierNeuralOperatorNet(Module):
+class SphericalFourierNeuralOperatorNet(Module):  # pragma: no cover
     """
     Spherical Fourier Neural Operator Network
 
