@@ -233,9 +233,11 @@ The speed-up observed changes from model to model and is typically greater for m
 complex models. 
 
 .. note::
-    The ``ModelMetaData`` and ``modulus.model.module.Module`` do not make the model
+    The ``ModelMetaData`` and ``modulus.Module`` do not make the model
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
     to write the model code that enables each of these optimizations. 
+    Models in the Modulus Model Zoo are written to support many of these optimizations
+    and checked against Modulus's CI to ensure that they work correctly.
 
 .. note::
     The ``StaticCaptureTraining`` decorator is still under development and may be
