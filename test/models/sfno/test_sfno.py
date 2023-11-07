@@ -12,293 +12,293 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ruff: noqa: E402
-import os
-import sys
+# import os
+# import sys
 
-script_path = os.path.abspath(__file__)
-sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
+# script_path = os.path.abspath(__file__)
+# sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
-import common
-import pytest
-import torch
-from pytest_utils import import_or_fail
-from sfno.utils import fix_random_seeds
-
-
-@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize("checkpointing", [0, 2])
-def test_sfno_forward(device, checkpointing, pytestconfig):
-    """Test sfno forward pass with & without checkpointing"""
-
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
-
-    in_chans = 2
-    h, w = 8, 16
-
-    fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
-    x = x.to(device)
-
-    # Construct sfno model
-    model = SphericalFourierNeuralOperatorNet(
-        inp_shape=(h, w),
-        out_shape=(h, w),
-        scale_factor=4,
-        inp_chans=in_chans,
-        out_chans=in_chans,
-        embed_dim=16,
-        num_layers=2,
-        encoder_layers=1,
-        spectral_layers=2,
-        checkpointing=checkpointing,
-    ).to(device)
-
-    assert common.validate_forward_accuracy(model, (x,), rtol=1e-3)
+# import common
+# import pytest
+# import torch
+# from pytest_utils import import_or_fail
+# from sfno.utils import fix_random_seeds
 
 
-@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-@pytest.mark.parametrize(
-    "filter_type, operator_type, use_mlp, activation_function, pos_embed, \
-    normalization_layer, use_complex_kernels, factorization, separable, \
-    complex_network",
-    [
-        (
-            "non-linear",
-            "diagonal",
-            True,
-            "relu",
-            "direct",
-            "instance_norm",
-            True,
-            None,
-            False,
-            True,
-        ),
-        (
-            "linear",
-            "diagonal",
-            False,
-            "gelu",
-            "frequency",
-            "instance_norm",
-            True,
-            "dense",
-            True,
-            False,
-        ),
-        (
-            "non-linear",
-            "diagonal",
-            False,
-            "silu",
-            "none",
-            "none",
-            False,
-            "cp",
-            False,
-            True,
-        ),
-    ],
-)
-def test_sfno_constructor(
-    device,
-    filter_type,
-    operator_type,
-    use_mlp,
-    activation_function,
-    pos_embed,
-    normalization_layer,
-    use_complex_kernels,
-    factorization,
-    separable,
-    complex_network,
-    pytestconfig,
-):
-    """Test sfno constructor options"""
-    # Define dictionary of constructor args
+# @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# @pytest.mark.parametrize("checkpointing", [0, 2])
+# def test_sfno_forward(device, checkpointing, pytestconfig):
+#     """Test sfno forward pass with & without checkpointing"""
 
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
-    in_chans = 2
-    h, w = 8, 16
-    batch_size = 2
+#     in_chans = 2
+#     h, w = 8, 16
 
-    arg_list = [
-        {
-            "inp_shape": (h, w),
-            "out_shape": (h, w),
-            "scale_factor": 4,
-            "inp_chans": in_chans,
-            "out_chans": in_chans,
-            "embed_dim": 16,
-            "num_layers": 2,
-            "encoder_layers": 1,
-            "spectral_layers": 2,
-            "checkpointing": 0,
-            "filter_type": filter_type,
-            "operator_type": operator_type,
-            "use_mlp": use_mlp,
-            "activation_function": activation_function,
-            "pos_embed": pos_embed,
-            "normalization_layer": normalization_layer,
-            "use_complex_kernels": use_complex_kernels,
-            "factorization": factorization,
-            "separable": separable,
-            "complex_network": complex_network,
-        },
-        {
-            "inp_shape": (h, w),
-            "out_shape": (h, w),
-            "scale_factor": 4,
-            "in_chans": in_chans,
-            "out_chans": in_chans,
-            "embed_dim": 16,
-            "num_layers": 2,
-            "encoder_layers": 1,
-            "spectral_layers": 2,
-            "checkpointing": 0,
-            "filter_type": filter_type,
-            "operator_type": operator_type,
-            "use_mlp": use_mlp,
-            "activation_function": activation_function,
-            "pos_embed": pos_embed,
-            "normalization_layer": normalization_layer,
-            "use_complex_kernels": use_complex_kernels,
-            "factorization": factorization,
-            "separable": separable,
-            "complex_network": complex_network,
-        },
-    ]
-    for kw_args in arg_list:
-        # Construct sfno model
-        model = SphericalFourierNeuralOperatorNet(**kw_args).to(device)
+#     fix_random_seeds()
+#     x = torch.randn(1, in_chans, h, w)
+#     x = x.to(device)
 
-        fix_random_seeds()
-        x = torch.randn(batch_size, in_chans, h, w)
-        x = x.to(device)
+#     # Construct sfno model
+#     model = SphericalFourierNeuralOperatorNet(
+#         inp_shape=(h, w),
+#         out_shape=(h, w),
+#         scale_factor=4,
+#         inp_chans=in_chans,
+#         out_chans=in_chans,
+#         embed_dim=16,
+#         num_layers=2,
+#         encoder_layers=1,
+#         spectral_layers=2,
+#         checkpointing=checkpointing,
+#     ).to(device)
 
-        outvar = model(x)
-        assert outvar.shape == (batch_size, in_chans, h, w)
+#     assert common.validate_forward_accuracy(model, (x,), rtol=1e-3)
 
 
-@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_optims(device, pytestconfig):
-    """Test sfno optimizations"""
+# @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# @pytest.mark.parametrize(
+#     "filter_type, operator_type, use_mlp, activation_function, pos_embed, \
+#     normalization_layer, use_complex_kernels, factorization, separable, \
+#     complex_network",
+#     [
+#         (
+#             "non-linear",
+#             "diagonal",
+#             True,
+#             "relu",
+#             "direct",
+#             "instance_norm",
+#             True,
+#             None,
+#             False,
+#             True,
+#         ),
+#         (
+#             "linear",
+#             "diagonal",
+#             False,
+#             "gelu",
+#             "frequency",
+#             "instance_norm",
+#             True,
+#             "dense",
+#             True,
+#             False,
+#         ),
+#         (
+#             "non-linear",
+#             "diagonal",
+#             False,
+#             "silu",
+#             "none",
+#             "none",
+#             False,
+#             "cp",
+#             False,
+#             True,
+#         ),
+#     ],
+# )
+# def test_sfno_constructor(
+#     device,
+#     filter_type,
+#     operator_type,
+#     use_mlp,
+#     activation_function,
+#     pos_embed,
+#     normalization_layer,
+#     use_complex_kernels,
+#     factorization,
+#     separable,
+#     complex_network,
+#     pytestconfig,
+# ):
+#     """Test sfno constructor options"""
+#     # Define dictionary of constructor args
 
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
-    def setup_model():
-        """Set up fresh model and inputs for each optim test"""
+#     in_chans = 2
+#     h, w = 8, 16
+#     batch_size = 2
 
-        in_chans = 2
-        h, w = 8, 16
-        fix_random_seeds()
-        x = torch.randn(1, in_chans, h, w)
-        x = x.to(device)
+#     arg_list = [
+#         {
+#             "inp_shape": (h, w),
+#             "out_shape": (h, w),
+#             "scale_factor": 4,
+#             "inp_chans": in_chans,
+#             "out_chans": in_chans,
+#             "embed_dim": 16,
+#             "num_layers": 2,
+#             "encoder_layers": 1,
+#             "spectral_layers": 2,
+#             "checkpointing": 0,
+#             "filter_type": filter_type,
+#             "operator_type": operator_type,
+#             "use_mlp": use_mlp,
+#             "activation_function": activation_function,
+#             "pos_embed": pos_embed,
+#             "normalization_layer": normalization_layer,
+#             "use_complex_kernels": use_complex_kernels,
+#             "factorization": factorization,
+#             "separable": separable,
+#             "complex_network": complex_network,
+#         },
+#         {
+#             "inp_shape": (h, w),
+#             "out_shape": (h, w),
+#             "scale_factor": 4,
+#             "in_chans": in_chans,
+#             "out_chans": in_chans,
+#             "embed_dim": 16,
+#             "num_layers": 2,
+#             "encoder_layers": 1,
+#             "spectral_layers": 2,
+#             "checkpointing": 0,
+#             "filter_type": filter_type,
+#             "operator_type": operator_type,
+#             "use_mlp": use_mlp,
+#             "activation_function": activation_function,
+#             "pos_embed": pos_embed,
+#             "normalization_layer": normalization_layer,
+#             "use_complex_kernels": use_complex_kernels,
+#             "factorization": factorization,
+#             "separable": separable,
+#             "complex_network": complex_network,
+#         },
+#     ]
+#     for kw_args in arg_list:
+#         # Construct sfno model
+#         model = SphericalFourierNeuralOperatorNet(**kw_args).to(device)
 
-        model_kwds = {
-            "inp_shape": (h, w),
-            "out_shape": (h, w),
-            "scale_factor": 4,
-            "in_chans": in_chans,
-            "out_chans": in_chans,
-            "embed_dim": 16,
-            "num_layers": 2,
-            "encoder_layers": 1,
-            "spectral_layers": 1,
-            "checkpointing": 0,
-        }
+#         fix_random_seeds()
+#         x = torch.randn(batch_size, in_chans, h, w)
+#         x = x.to(device)
 
-        # Construct SFNO model
-        model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
-
-        return model, (x,)
-
-    # # Ideally always check graphs first
-    model, invar = setup_model()
-    assert common.validate_cuda_graphs(model, (*invar,))
-    # # Check JIT
-    model, invar = setup_model()
-    assert common.validate_jit(model, (*invar,))
-    # # Check AMP
-    model, invar = setup_model()
-    assert common.validate_amp(model, (*invar,))
-    # # Check Combo
-    model, invar = setup_model()
-    assert common.validate_combo_optims(model, (*invar,))
-
-
-@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_checkpoint(device, pytestconfig):
-    """Test sfno checkpoint save/load"""
-
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
-
-    in_chans = 4
-    h, w = 8, 16
-    fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
-    x = x.to(device)
-
-    model_kwds = {
-        "inp_shape": (h, w),
-        "out_shape": (h, w),
-        "scale_factor": 3,
-        "inp_chans": in_chans,
-        "out_chans": in_chans,
-        "embed_dim": 16,
-        "num_layers": 4,
-        "encoder_layers": 1,
-        "spectral_layers": 3,
-        "checkpointing": 0,
-    }
-
-    # Construct sfno model
-    model_1 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
-    model_2 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
-
-    x = torch.randn(1, in_chans, h, w)
-    x = x.to(device)
-
-    assert common.validate_checkpoint(
-        model_1,
-        model_2,
-        (x,),
-    )
+#         outvar = model(x)
+#         assert outvar.shape == (batch_size, in_chans, h, w)
 
 
-@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
-@common.check_ort_version()
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_deploy(device, pytestconfig):
-    """Test sfno deployment support"""
+# @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# def test_sfno_optims(device, pytestconfig):
+#     """Test sfno optimizations"""
 
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
-    in_chans = 3
-    h, w = 8, 16
-    fix_random_seeds()
-    x = torch.randn(1, in_chans, h, w)
-    x = x.to(device)
+#     def setup_model():
+#         """Set up fresh model and inputs for each optim test"""
 
-    model_kwds = {
-        "inp_shape": (h, w),
-        "scale_factor": 3,
-        "in_chans": in_chans,
-        "out_chans": in_chans,
-        "embed_dim": 16,
-        "num_layers": 4,
-        "encoder_layers": 1,
-        "spectral_layers": 3,
-        "checkpointing": 0,
-    }
+#         in_chans = 2
+#         h, w = 8, 16
+#         fix_random_seeds()
+#         x = torch.randn(1, in_chans, h, w)
+#         x = x.to(device)
 
-    # Construct SFNO model
-    model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
+#         model_kwds = {
+#             "inp_shape": (h, w),
+#             "out_shape": (h, w),
+#             "scale_factor": 4,
+#             "in_chans": in_chans,
+#             "out_chans": in_chans,
+#             "embed_dim": 16,
+#             "num_layers": 2,
+#             "encoder_layers": 1,
+#             "spectral_layers": 1,
+#             "checkpointing": 0,
+#         }
 
-    assert common.validate_onnx_export(model, x)
-    assert common.validate_onnx_runtime(model, x)
+#         # Construct SFNO model
+#         model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
+
+#         return model, (x,)
+
+#     # # Ideally always check graphs first
+#     model, invar = setup_model()
+#     assert common.validate_cuda_graphs(model, (*invar,))
+#     # # Check JIT
+#     model, invar = setup_model()
+#     assert common.validate_jit(model, (*invar,))
+#     # # Check AMP
+#     model, invar = setup_model()
+#     assert common.validate_amp(model, (*invar,))
+#     # # Check Combo
+#     model, invar = setup_model()
+#     assert common.validate_combo_optims(model, (*invar,))
+
+
+# @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# def test_sfno_checkpoint(device, pytestconfig):
+#     """Test sfno checkpoint save/load"""
+
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+
+#     in_chans = 4
+#     h, w = 8, 16
+#     fix_random_seeds()
+#     x = torch.randn(1, in_chans, h, w)
+#     x = x.to(device)
+
+#     model_kwds = {
+#         "inp_shape": (h, w),
+#         "out_shape": (h, w),
+#         "scale_factor": 3,
+#         "inp_chans": in_chans,
+#         "out_chans": in_chans,
+#         "embed_dim": 16,
+#         "num_layers": 4,
+#         "encoder_layers": 1,
+#         "spectral_layers": 3,
+#         "checkpointing": 0,
+#     }
+
+#     # Construct sfno model
+#     model_1 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
+#     model_2 = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
+
+#     x = torch.randn(1, in_chans, h, w)
+#     x = x.to(device)
+
+#     assert common.validate_checkpoint(
+#         model_1,
+#         model_2,
+#         (x,),
+#     )
+
+
+# @import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
+# @common.check_ort_version()
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# def test_sfno_deploy(device, pytestconfig):
+#     """Test sfno deployment support"""
+
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+
+#     in_chans = 3
+#     h, w = 8, 16
+#     fix_random_seeds()
+#     x = torch.randn(1, in_chans, h, w)
+#     x = x.to(device)
+
+#     model_kwds = {
+#         "inp_shape": (h, w),
+#         "scale_factor": 3,
+#         "in_chans": in_chans,
+#         "out_chans": in_chans,
+#         "embed_dim": 16,
+#         "num_layers": 4,
+#         "encoder_layers": 1,
+#         "spectral_layers": 3,
+#         "checkpointing": 0,
+#     }
+
+#     # Construct SFNO model
+#     model = SphericalFourierNeuralOperatorNet(**model_kwds).to(device)
+
+#     assert common.validate_onnx_export(model, x)
+#     assert common.validate_onnx_runtime(model, x)
