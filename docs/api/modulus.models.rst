@@ -67,7 +67,7 @@ Currently available models include:
      - torch.Tensor [N, C_out, H, W]
 
 
-Bellow are some simple examples of how to use these models.
+Below are some simple examples of how to use these models.
 
 .. code:: python
 
@@ -142,32 +142,31 @@ supports CUDA Graphs and Automatic Mixed-Precision.
             return self.final(x)
 
 Now we show this model rewritten in Modulus. First, let's subclass the model from 
-``modulus.models.module.Module`` instead of ``torch.nn.Module``. The
-``modulus.models.module.Module`` class acts like a direct replacement for the
+``modulus.Module`` instead of ``torch.nn.Module``. The
+``modulus.Module`` class acts like a direct replacement for the
 ``torch.nn.Module`` and provides additional functionality for saving and loading
-checkpoints, etc. Refer to the API docs of ``modulus.models.module.Module`` for further
+checkpoints, etc. Refer to the API docs of ``modulus.Module`` for further
 details. Additionally we will add metadata to the model to capture the optimizations
-enabled. In this case we will enable CUDA Graphs and Automatic Mixed-Precision.
+that this model supports. In this case we will enable CUDA Graphs and Automatic Mixed-Precision.
 
 .. code:: python
 
     from dataclasses import dataclass
-    from modulus.models.meta import ModelMetaData
-    from modulus.models.module import Module 
+    import modulus
     import torch.nn as nn
 
     @dataclass
-    class MetaData(ModelMetaData):
+    class UNetMetaData(modulus.ModelMetaData):
         name: str = "UNet"
         # Optimization
-        jit: bool = False
+        jit: bool = True
         cuda_graphs: bool = True
         amp_cpu: bool = True
         amp_gpu: bool = True
     
-    class UNet(Module):
+    class UNet(modulus.Module):
         def __init__(self, in_channels=1, out_channels=1):
-            super(UNet, self).__init__(meta=MetaData())
+            super(UNet, self).__init__(meta=UNetMetaData())
 
             self.enc1 = self.conv_block(in_channels, 64)
             self.enc2 = self.conv_block(64, 128)
@@ -211,6 +210,9 @@ training step function and optimize it for the specified optimizations.
     optim = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # Create training step function with optimization wrapper
+    # StaticCaptureTraining calls `backward` on the loss and
+    # `optimizer.step()` so you don't have to do that
+    # explicitly.
     @StaticCaptureTraining(
         model=model,
         optim=optim,
@@ -256,8 +258,7 @@ below.
 .. code:: python
 
     from dataclasses import dataclass
-    from modulus.models.meta import ModelMetaData
-    from modulus.models.module import Module 
+    import modulus
     import torch.nn as nn
 
     class TorchModel(nn.Module):
@@ -271,15 +272,15 @@ below.
             return self.conv2(x)
 
     @dataclass
-    class MetaData(ModelMetaData):
+    class ConvMetaData(ModelMetaData):
         name: str = "UNet"
         # Optimization
-        jit: bool = False
+        jit: bool = True
         cuda_graphs: bool = True
         amp_cpu: bool = True
         amp_gpu: bool = True
 
-    ModulusModel = Module.from_torch(TorchModel, meta=MetaData())
+    ModulusModel = modulus.Module.from_torch(TorchModel, meta=ConvMetaData())
 
 
 Saving and Loading Modulus Models
@@ -289,19 +290,19 @@ As mentioned above, Modulus models are interoperable with PyTorch models. This m
 you can save and load Modulus models using the standard PyTorch APIs however, we provide
 a few additional utilities to make this process easier. A key challenge in saving and
 loading models is keeping track of the model metadata such as layer sizes, etc. Modulus
-models can be saved with this metadata to a custom file ``.mdlus``. These files allow
+models can be saved with this metadata to a custom ``.mdlus`` file. These files allow
 for easy loading and instantiation of the model. Below is an example of saving and
 instantiating a model from a ``.mdlus`` file.
 
 .. code:: python
 
     >>> import torch
-    >>> from modulus.models import Module
+    >>> from modulus import Module
     >>> from modulus.models.mlp.fully_connected import FullyConnected
     >>> model = FullyConnected(in_features=32, out_features=64)
     >>> model.save("model.mdlus") # Save model to .mdlus file
-    >>> model.load("model.mdlus") # Load model weights from .mdlus file
-    >>> new_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file
+    >>> model.load("model.mdlus") # Load model weights from .mdlus file from already instantiated model
+    >>> new_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file. Note that in this case we don't even need to know the class or constructor parameters to pass it.
     >>> new_model
     FullyConnected(
      (layers): ModuleList(
