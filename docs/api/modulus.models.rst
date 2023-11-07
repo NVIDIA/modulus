@@ -223,14 +223,9 @@ training step function and optimize it for the specified optimizations.
         loss = torch.sum(torch.pow(predvar - outvar, 2))
         return loss
 
-    import time
-
     # Sample training loop
     for i in range(20):
-        start_time = time.time()
         loss = training_step(input, output)
-        elapsed_time = time.time() - start_time
-        print(f"Iteration {i + 1} took {elapsed_time:.4f} seconds")
         input.copy_(torch.randn(8, 1, 128, 128).to("cuda"))
 
 For the simple model above, you can observe ~1.1x speed-up due to CUDA Graphs and AMP.
