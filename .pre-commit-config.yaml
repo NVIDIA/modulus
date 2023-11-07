@@ -45,7 +45,6 @@ repos:
       entry: python test/ci_tests/header_check.py
       language: python
       pass_filenames: false
-      exclude: "experimental"
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.0.290
