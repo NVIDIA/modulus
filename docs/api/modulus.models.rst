@@ -225,8 +225,12 @@ training step function and optimize it for the specified optimizations.
 
     # Sample training loop
     for i in range(20):
-        loss = training_step(input, output)
+        # In place copy of input and output to support cuda graphs
         input.copy_(torch.randn(8, 1, 128, 128).to("cuda"))
+        output.copy_(torch.zeros(8, 1, 64, 64).to("cuda"))
+
+        # Run training step
+        loss = training_step(input, output)
 
 For the simple model above, you can observe ~1.1x speed-up due to CUDA Graphs and AMP.
 The speed-up observed changes from model to model and is typically greater for more
