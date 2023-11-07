@@ -23,7 +23,7 @@ from modulus.utils.sfno.distributed.mappings import (
 )
 
 
-class Preprocessor2D(nn.Module):
+class Preprocessor2D(nn.Module):  # pragma: no cover
     """
     Preprocessing methods to flatten image history, add static features, and
     convert the data format from NCHW to NHWC.
