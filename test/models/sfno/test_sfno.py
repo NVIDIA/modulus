@@ -35,7 +35,6 @@ def test_sfno_forward(device, checkpointing, pytestconfig):
 
     in_chans = 2
     h, w = 8, 16
-    params = {}
 
     fix_random_seeds()
     x = torch.randn(1, in_chans, h, w)
@@ -43,10 +42,10 @@ def test_sfno_forward(device, checkpointing, pytestconfig):
 
     # Construct sfno model
     model = SphericalFourierNeuralOperatorNet(
-        params,
         inp_shape=(h, w),
+        out_shape=(h, w),
         scale_factor=4,
-        in_chans=in_chans,
+        inp_chans=in_chans,
         out_chans=in_chans,
         embed_dim=16,
         num_layers=2,
@@ -128,10 +127,10 @@ def test_sfno_constructor(
 
     arg_list = [
         {
-            "params": {},
             "inp_shape": (h, w),
+            "out_shape": (h, w),
             "scale_factor": 4,
-            "in_chans": in_chans,
+            "inp_chans": in_chans,
             "out_chans": in_chans,
             "embed_dim": 16,
             "num_layers": 2,
@@ -150,8 +149,8 @@ def test_sfno_constructor(
             "complex_network": complex_network,
         },
         {
-            "params": {},
             "inp_shape": (h, w),
+            "out_shape": (h, w),
             "scale_factor": 4,
             "in_chans": in_chans,
             "out_chans": in_chans,
@@ -201,8 +200,8 @@ def test_sfno_optims(device, pytestconfig):
         x = x.to(device)
 
         model_kwds = {
-            "params": {},
             "inp_shape": (h, w),
+            "out_shape": (h, w),
             "scale_factor": 4,
             "in_chans": in_chans,
             "out_chans": in_chans,
@@ -246,10 +245,10 @@ def test_sfno_checkpoint(device, pytestconfig):
     x = x.to(device)
 
     model_kwds = {
-        "params": {},
         "inp_shape": (h, w),
+        "out_shape": (h, w),
         "scale_factor": 3,
-        "in_chans": in_chans,
+        "inp_chans": in_chans,
         "out_chans": in_chans,
         "embed_dim": 16,
         "num_layers": 4,
@@ -287,7 +286,6 @@ def test_sfno_deploy(device, pytestconfig):
     x = x.to(device)
 
     model_kwds = {
-        "params": {},
         "inp_shape": (h, w),
         "scale_factor": 3,
         "in_chans": in_chans,

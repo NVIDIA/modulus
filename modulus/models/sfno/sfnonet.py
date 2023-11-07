@@ -303,7 +303,7 @@ class SphericalFourierNeuralOperatorNet(Module):
     filter_type : str, optional
         Type of filter to use ('linear', 'non-linear'), by default "non-linear"
     operator_type : str, optional
-        Type of operator to use ('diaginal', 'dhconv'), by default "diagonal"
+        Type of operator to use ('l-dependant', 'dhconv'), by default "diagonal"
     inp_shape : tuple, optional
         Shape of the input channels, by default (721, 1440)
     scale_factor : int, optional
@@ -382,7 +382,7 @@ class SphericalFourierNeuralOperatorNet(Module):
         self,
         spectral_transform: str = "sht",
         filter_type: str = "non-linear",
-        operator_type: str = "dhconv",
+        operator_type: str = "diagonal",
         inp_shape: Tuple[int] = (721, 1440),
         out_shape: Tuple[int] = (721, 1440),
         scale_factor: int = 8,

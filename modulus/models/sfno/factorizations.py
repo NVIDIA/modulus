@@ -223,7 +223,7 @@ def _contract_dense_pytorch(
             else:
                 x = _contract_dhconv_real(x, weight)
         else:
-            raise ValueError(f"Unkonw operator type {operator_type}")
+            raise ValueError(f"Unknown operator type {operator_type}")
 
     # to cheat the fused optimizers convert to real here
     x = torch.view_as_complex(x)
@@ -240,7 +240,6 @@ def _contract_dense_reconstruct(
     """Contraction for dense tensors, factorized or not"""
     if not torch.is_tensor(weight):
         weight = weight.to_tensor()
-        weight = torch.view_as_real(weight)
 
     return _contract_dense_pytorch(
         x, weight, separable=separable, operator_type=operator_type, complex=complex

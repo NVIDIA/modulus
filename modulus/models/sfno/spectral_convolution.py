@@ -385,7 +385,7 @@ class SpectralAttention(nn.Module):
         self.operator_type = operator_type
         self.spectral_layers = spectral_layers
 
-        scale = (2 / in_channels) ** 0.5
+        self.scale = (2 / in_channels) ** 0.5
 
         self.modes_lat = forward_transform.lmax
         self.modes_lon = forward_transform.mmax
@@ -412,7 +412,7 @@ class SpectralAttention(nn.Module):
             self.mul_handle = compl_mul2d_fwd
 
             # weights
-            w = [scale * torch.randn(self.in_channels, hidden_size, 2)]
+            w = [self.scale * torch.randn(self.in_channels, hidden_size, 2)]
 
             [
                 w.append(self.scale * torch.randn(hidden_size, hidden_size, 2))
