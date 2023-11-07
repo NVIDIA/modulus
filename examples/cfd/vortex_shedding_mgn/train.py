@@ -39,7 +39,6 @@ from constants import Constants
 # Instantiate constants
 C = Constants()
 
-
 class MGNTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
@@ -148,7 +147,7 @@ if __name__ == "__main__":
         with open(
             os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
         ) as json_file:
-            json_file.write(C.json(indent=4))
+            json_file.write(C.model_dump_json(indent=4))
 
     # initialize loggers
     initialize_wandb(
