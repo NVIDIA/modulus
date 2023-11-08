@@ -40,6 +40,7 @@ process group config
 ### Dependencies
 
 - Updated the base container to PyTorch 23.10.
+- Updated examples to use Pydantic v2.
 
 ## [0.3.0] - 2023-09-21
 

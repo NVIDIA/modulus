@@ -207,7 +207,7 @@ if __name__ == "__main__":
     if dist.rank == 0:
         os.makedirs(C.ckpt_path, exist_ok=True)
         with open(os.path.join(C.ckpt_path, C.ckpt_name + ".json"), "w") as json_file:
-            json_file.write(C.json(indent=4))
+            json_file.write(C.model_dump_json(indent=4))
 
     # initialize loggers
     initialize_wandb(
