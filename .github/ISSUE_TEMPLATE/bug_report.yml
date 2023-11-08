@@ -31,7 +31,7 @@ body:
     attributes:
       label: Version
       description: What version of Modulus are you running?
-      placeholder: "example: 0.3.0"
+      placeholder: "example: 0.4.0"
     validations:
       required: true
 
