@@ -74,7 +74,8 @@ def split_tensor_along_dim(tensor, dim, num_chunks):
     """splits tensor along specific dim"""
     if not (dim < tensor.dim()):
         raise AssertionError(
-            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
+            f"Error, tensor dimension is {tensor.dim()} which cannot be"
+            f"split along {dim}"
         )
     if not (tensor.shape[dim] % num_chunks == 0):
         raise AssertionError(
@@ -210,7 +211,8 @@ def _gather(input_, dim_, group=None):  # pragma: no cover
     # sanity checks
     if not (dim_ < input_.dim()):
         raise AssertionError(
-            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} "
+            "dimensions."
         )
 
     # Size and dimension.
@@ -382,7 +384,8 @@ def gather_v_wrapper(
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     dst : int, optional
-        destination rank which contains the full global tensor after the operation, by default 0
+        destination rank which contains the full global tensor after the
+        operation, by default 0
     group : Optional[dist.ProcessGroup], optional
         process group along which global tensor is shared, by default None
 

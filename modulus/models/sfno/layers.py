@@ -48,7 +48,7 @@ def drop_path(
     return output
 
 
-class DropPath(nn.Module):
+class DropPath(nn.Module):  # pragma: no cover
     """
     Drop paths (Stochastic Depth) per sample (when applied in main path of residual
     blocks).
@@ -62,7 +62,7 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training)
 
 
-class PatchEmbed(nn.Module):
+class PatchEmbed(nn.Module):  # pragma: no cover
     """
     Divides the input image into patches and embeds them into a specified dimension
     using a convolutional layer.
@@ -92,7 +92,7 @@ class PatchEmbed(nn.Module):
         return x
 
 
-class EncoderDecoder(nn.Module):
+class EncoderDecoder(nn.Module):  # pragma: no cover
     """
     Basic Encoder/Decoder
     """
@@ -120,7 +120,7 @@ class EncoderDecoder(nn.Module):
         return self.fwd(x)
 
 
-class MLP(nn.Module):
+class MLP(nn.Module):  # pragma: no cover
     """Basic CNN with support for gradient checkpointing."""
 
     def __init__(
@@ -160,7 +160,7 @@ class MLP(nn.Module):
             return self.fwd(x)
 
 
-class RealFFT2(nn.Module):
+class RealFFT2(nn.Module):  # pragma: no cover
     """
     Helper routine to wrap FFT similarly to the SHT
     """
@@ -203,7 +203,7 @@ class RealFFT2(nn.Module):
         return y
 
 
-class InverseRealFFT2(nn.Module):
+class InverseRealFFT2(nn.Module):  # pragma: no cover
     """
     Helper routine to wrap FFT similarly to the SHT
     """

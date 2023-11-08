@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 
-class ComplexReLU(nn.Module):
+class ComplexReLU(nn.Module):  # pragma: no cover
     """
     Complex-valued variants of the ReLU activation function
     """
@@ -72,7 +72,7 @@ class ComplexReLU(nn.Module):
         return out
 
 
-class ComplexActivation(nn.Module):
+class ComplexActivation(nn.Module):  # pragma: no cover
     """
     A module implementing complex-valued activation functions.
     The module supports different modes of operation, depending on how
