@@ -17,9 +17,7 @@ repos:
     rev: 22.10.0
     hooks:
     - id: black
-      exclude:
-      - "docs"
-      - "modulus/experimental"
+      exclude: "(docs|modulus/experimental)"
 
 -   repo: https://github.com/econchick/interrogate
     rev: 1.5.0
