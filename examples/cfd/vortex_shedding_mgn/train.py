@@ -39,6 +39,7 @@ from constants import Constants
 # Instantiate constants
 C = Constants()
 
+
 class MGNTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
