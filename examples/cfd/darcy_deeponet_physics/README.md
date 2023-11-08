@@ -43,4 +43,4 @@ converting the equation into a pytorch representation.
 
 ## References
 
-- [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/abs/2010.03409)
+
