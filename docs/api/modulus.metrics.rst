@@ -9,7 +9,7 @@ Basics
 
 Modulus provides several general and domain-specific metric calculations you can
 leverage in your custom training and inference workflows. These metrics are optimized to
-oprate on PyTorch tensors. 
+operate on PyTorch tensors. 
 
 General Metrics and Statistical Methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -230,8 +230,6 @@ General
 .. automodule:: modulus.metrics.general.mse
     :members:
     :show-inheritance:
-
-.. _histogram:
 
 .. automodule:: modulus.metrics.general.histogram
     :members:
