@@ -16,7 +16,7 @@
 
 import torch
 
-from modulus.metrics.general.entropy import _entropy_from_counts
+from modulus.metrics.general.entropy import entropy_from_counts
 from modulus.metrics.general.histogram import normal_cdf
 
 Tensor = torch.Tensor
@@ -136,6 +136,6 @@ def normalized_entropy(
             + f"but recieved {pred_pdf.shape} and {climatology_pdf.shape}."
         )
 
-    return 1.0 - _entropy_from_counts(pred_pdf, bin_edges) / _entropy_from_counts(
+    return 1.0 - entropy_from_counts(pred_pdf, bin_edges) / entropy_from_counts(
         climatology_pdf, bin_edges
     )
