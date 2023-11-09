@@ -705,10 +705,12 @@ def normal_pdf(
 ) -> Tensor:
     """Computes the probability density function of a normal variable with given mean
     and standard deviation. This PDF is given at the locations given by the midpoint
-     of the bin_edges.
+    of the bin_edges.
 
     This function uses the standard formula:
-    .. math:
+
+    .. math::
+
         \\frac{1}{\\sqrt{2*\\pi} std } \\exp( -\\frac{1}{2} (\\frac{x-mean}{std})^2 )
 
     where erf is the error function.
@@ -755,10 +757,12 @@ def normal_cdf(
 ) -> Tensor:
     """Computes the cumulative density function of a normal variable with given mean
     and standard deviation. This CDF is given at the locations given by the midpoint
-     of the bin_edges.
+    of the bin_edges.
 
     This function uses the standard formula:
-    .. math:
+
+    .. math::
+
         \\frac{1}{2} ( 1 + erf( \\frac{x-mean}{std \\sqrt{2}}) ) )
 
     where erf is the error function.
