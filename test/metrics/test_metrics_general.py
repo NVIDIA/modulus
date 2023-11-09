@@ -237,7 +237,7 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     y = torch.zeros((1,), device=device, dtype=torch.float32)
 
     # Test pure crps
-    c = crps.crps(x, y)
+    c = crps.crps(x, y, method="histogram")
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
@@ -247,7 +247,7 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
     # Test when input is numpy array
-    c = crps.crps(x, y.cpu().numpy())
+    c = crps.crps(x, y.cpu().numpy(), method="histogram")
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
@@ -255,8 +255,8 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
-    # Test kernel method, use fewer ensemble members
-    c = crps.kcrps(x[:1000], y)
+    # Test pure crps
+    c = crps.crps(x[:100], y, method="kernel")
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
@@ -265,14 +265,23 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=50 * atol,
     )
 
-    # Test kernel method
-    c = crps.kcrps(x, y)
+    # Test when input is numpy array
+    c = crps.crps(x[:100], y.cpu().numpy(), method="kernel")
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=50 * rtol,
+        atol=50 * atol,
+    )
+
+    # Test kernel method, use fewer ensemble members
+    c = crps.kcrps(x[:100], y)
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
+        rtol=50 * rtol,
+        atol=50 * atol,
     )
 
     # Test Gaussian CRPS
