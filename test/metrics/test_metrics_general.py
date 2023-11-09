@@ -582,29 +582,29 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
 
     x = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, bin_counts = hist.histogram(x, bins=30)
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=False)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=False)
     assert entropy.shape == (10, 10)
     assert torch.allclose(
         entropy, (0.5 + 0.5 * np.log(2 * np.pi)) * one, atol=atol, rtol=rtol
     )
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=True)
     assert torch.all(torch.le(entropy, one))
     assert torch.all(torch.ge(entropy, 0.0 * one))
 
     # Test raises Assertion
     with pytest.raises(ValueError):
-        ent._entropy_from_counts(
+        ent.entropy_from_counts(
             torch.zeros((bin_counts.shape[0], 1, 1), device=device), bin_edges
         )
     with pytest.raises(ValueError):
-        ent._entropy_from_counts(
+        ent.entropy_from_counts(
             torch.zeros((1,) + bin_counts.shape[1:], device=device), bin_edges
         )
 
     # Test Maximum Entropy
     x = torch.rand((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, bin_counts = hist.histogram(x, bins=30)
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=True)
     assert entropy.shape == (10, 10)
     assert torch.allclose(entropy, one, rtol=rtol, atol=atol)
 
@@ -616,12 +616,8 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     x2 = 0.1 * torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
     _, x2_bin_counts = hist.histogram(x2, bins=bin_edges)
 
-    rel_ent_1 = ent._relative_entropy_from_counts(
-        x_bin_counts, x1_bin_counts, bin_edges
-    )
-    rel_ent_2 = ent._relative_entropy_from_counts(
-        x_bin_counts, x2_bin_counts, bin_edges
-    )
+    rel_ent_1 = ent.relative_entropy_from_counts(x_bin_counts, x1_bin_counts, bin_edges)
+    rel_ent_2 = ent.relative_entropy_from_counts(x_bin_counts, x2_bin_counts, bin_edges)
 
     assert torch.all(torch.le(rel_ent_1, rel_ent_2))
     # assert torch.allclose(rel_ent_1, 0.0 * one, rtol=10.*rtol, atol = 10.*atol) # TODO
@@ -629,19 +625,19 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
 
     # Test raises Assertion
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             torch.zeros((x_bin_counts.shape[0], 1, 1), device=device),
             x1_bin_counts,
             bin_edges,
         )
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
             x1_bin_counts,
             bin_edges,
         )
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             x_bin_counts,
             torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
             bin_edges,
