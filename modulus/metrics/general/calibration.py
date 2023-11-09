@@ -37,9 +37,8 @@ def find_rank(
         Tensor [N, ...] containing counts, defined over bins. The non-zeroth dimensions
         of bins and counts must be compatible.
     obs : Union[Tensor, np.ndarray]
-        Tensor or array containing an observation over which the CRPS is computed
-        with respect to. Broadcasting dimensions must be compatible with the non-zeroth
-        dimensions of bins and counts.
+        Tensor or array containing an observation over which the ranks is computed
+        with respect to.
 
     Returns
     -------
@@ -86,7 +85,9 @@ def _rank_probability_score_from_counts(
     """Finds the rank of the observation with respect to the given counts and bins.
 
     Computes
-    .. math:
+
+    .. math::
+
         3 * \int_0^1 (F_X(x) - F_U(x))^2 dx
 
     where F represents a cumulative distribution function, X represents the rank distribution and
@@ -113,14 +114,19 @@ def _rank_probability_score_from_counts(
 
 
 def rank_probability_score(ranks: Tensor) -> Tensor:
-    """Computes the Rank Probability Score for the passed ranks. Internally, this creates a histogram
-    for the ranks and computes the Rank Probability Score (RPS) using the histogram.
+    """
+    Computes the Rank Probability Score for the passed ranks.
+    Internally, this creates a histogram for the ranks and computes the
+    Rank Probability Score (RPS) using the histogram.
 
     With the histogram the RPS is computed as
-    .. math:
+
+    .. math::
+
         \int_0^1 (F_X(x) - F_U(x))^2 dx
 
-    where F represents a cumulative distribution function, X represents the rank distribution and
+    where F represents a cumulative distribution function,
+    X represents the rank distribution and
     U represents a Uniform distribution.
 
     For computation of the ranks, use _find_rank.
@@ -128,7 +134,8 @@ def rank_probability_score(ranks: Tensor) -> Tensor:
     Parameters
     ----------
     ranks : Tensor
-        Tensor [B, ...] containing ranks, where the leading dimension represents the batch, or ensemble, dimension.
+        Tensor [B, ...] containing ranks, where the leading dimension
+        represents the batch, or ensemble, dimension.
         The non-zeroth dimensions are batched over.
 
     Returns
