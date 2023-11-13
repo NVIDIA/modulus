@@ -1,0 +1,38 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+CMD: "torchrun  --nnodes=1  --nproc_per_node=8  --max_restarts=3  --rdzv_id=1   --rdzv_backend=c10d   --rdzv_endpoint=localhost:29400   train.py"   #--nnodes=$NUM_NODES   $--rdzv_endpoint=HOST_NODE_ADDR   --rdzv_backend=etcd 
+
+
+#SELENE
+HPARAMS: [
+  {
+  batch: 128,
+  arch: 'ddpmpp',
+  precond: 'edm',
+  data: '/lustre/fsw/sw_climate_fno/nbrenowitz/2022-01-19-cwb.zarr',
+  outdir: LOGDIR/output,
+  lr: 2e-4,   #10e-4
+  duration: 200,
+  snap: 2,   #tick
+  dump: 2,   #tick
+  resume: None,   #checkpoint
+  fp16: False,
+  workers: 4,
+  data_config: 'full_field_train_crop112_grid_20inchans_4x',
+  task: 'sr',                 #['sr', 'pred']
+  data_type: 'era5-cwb-v2',   #['era5', 'cwb', 'era5-cwb', 'zarr_v1']
+  },
+]

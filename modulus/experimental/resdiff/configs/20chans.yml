@@ -1,0 +1,58 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+#CMD: "python train.py"
+
+#single node
+#CMD: "torchrun --standalone --nproc_per_node=8  --nnodes=1   train.py"  #train.py"   #--nnodes=$NUM_NODES
+
+#multinode
+#CMD: "torchrun  --nnodes=1:2  --nproc_per_node=8  --max_restarts=3   train.py"   #--nnodes=$NUM_NODES
+
+CMD: "torchrun  --nnodes=1  --nproc_per_node=8  --max_restarts=3  --rdzv_id=1   --rdzv_backend=c10d   --rdzv_endpoint=localhost:29400   train.py"   #--nnodes=$NUM_NODES   $HOST_NODE_ADDR   --rdzv_backend=etcd 
+
+# torchrun
+#     --nnodes=1:4
+#     --nproc_per_node=$NUM_TRAINERS
+#     --max_restarts=3
+#     --rdzv_id=$JOB_ID
+#     --rdzv_backend=c10d
+#     --rdzv_endpoint=$HOST_NODE_ADDR
+#     YOUR_TRAINING_SCRIPT.py (--arg1 ... train script args...)
+
+
+#SELENE
+HPARAMS: [
+  {
+  batch: 512,
+  arch: 'ddpmpp',
+  precond: 'edm',
+  data: '/lustre/fsw/sw_climate_fno/cwb-rwrf-2211/all_ranges',
+  outdir: LOGDIR/output,
+  lr: 2e-4,   #10e-4
+  duration: 200,
+  snap: 10,   #tick
+  dump: 10,   #tick
+  resume: None,   #checkpoint
+  fp16: False,
+  workers: 4,
+  data_config: 'full_field_train_crop64_grid',
+  task: 'sr',              #['sr', 'pred']
+  data_type: 'era5-cwb',   #['era5', 'cwb', 'era5-cwb']
+  },
+]
+
+
+# python3 train.py --outdir=training-runs --data=/lustre/fsw/sw_climate_fno/cwb-rwrf-2211/all_ranges  --data_config='full_field_train_crop64_grid'   --task='sr'    --data_type='era5-cwb'

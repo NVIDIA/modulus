@@ -1,0 +1,13 @@
+--- /usr/local/lib/python3.8/dist-packages/torch/_utils.py	2023-05-04 13:53:35.299734013 -0700
++++ _utils_t2.py	2023-05-04 14:00:47.487198476 -0700
+@@ -357,6 +357,10 @@
+     return param
+ 
+ 
++def _rebuild_parameter_v2(data, requires_grad, backward_hooks, state):
++    return _rebuild_parameter_with_state(data, requires_grad, backward_hooks, state)
++
++
+ def _rebuild_parameter_with_state(data, requires_grad, backward_hooks, state):
+     param = torch.nn.Parameter(data, requires_grad)
+     # NB: This line exists only for backwards compatibility; the
