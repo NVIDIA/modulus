@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 -->
 # Makani: Massively parallel training of machine-learning based weather and climate models
 
 [**Overview**](#overview) | [**Getting started**](#getting-started) | [**More information**](#more-about-makani) | [**Contributing**](#contributing) | [**Further reading**](#further-reading) | [**References**](#references)
