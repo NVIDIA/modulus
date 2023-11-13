@@ -1,0 +1,93 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+full_field: &FULL_FIELD
+
+  loss: 'l2'
+  lr: 1E-3
+  weight_decay: 0.
+  scheduler: 'ReduceLROnPlateau'
+  lr_warmup_steps: 0
+
+  train_data_path: '/train'
+  valid_data_path: '/test'
+  inf_data_path: '/out_of_sample'
+  exp_dir: '/runs'
+
+  num_data_workers: 4
+  dt: 1 # how many timesteps ahead the model will predict
+  n_history: 0 #how many previous timesteps to consider
+  prediction_type: 'iterative'
+  prediction_length: 50 #applicable only if prediction_type == 'iterative'
+  n_initial_conditions: 5 #applicable only if prediction_type == 'iterative'
+ 
+  add_grid: !!bool False
+  n_grid_channels: 0
+  gridtype: 'sinusoidal' #options 'sinusoidal' or 'linear'
+  roll: !!bool True
+  
+  max_epochs: 50
+  batch_size: 32
+  nettype: 'unet'
+
+  #fno hyperparams
+  width: 56
+  modes: 32
+  pad_h: 10
+  pad_w: 10
+
+  patch_size: [8, 8]
+  num_blocks: 8
+  embed_dim: 8
+  num_layers: 12
+
+
+  #options default, residual
+  target: 'default' 
+
+  #channel ordering in ERA5_full_set: [z500, t850, t2m, u10, v10, orography, land-sea mask, total incoming solar radiation]
+  #channel ordering in ERA5_wind: [u10, v10, u1000, v1000, z1000, z50]
+
+  channel_names: ['u10m', 'v10m', 't2m', 'sp', 'msl', 't850', 'u1000', 'v1000', 'z1000', 'u850', 'v850', 'z850', 'u500', 'v500', 'z500', 't500', 'z50', 'r500', 'r850', 'tcwv', 'u100m', 'v100m', 'u250', 'v250', 'z250', 't250']
+  normalization: 'zscore' #options zscore or minmax
+
+  min_path: '/stats/mins.npy'
+  max_path: '/stats/maxs.npy'
+  time_means_path:   '/stats/time_means.npy'
+  global_means_path: '/stats/global_means.npy'
+  global_stds_path:  '/stats/global_stds.npy'
+
+  log_to_screen: !!bool True
+  log_to_wandb: !!bool True
+  save_checkpoint: 'flexible'
+
+  enable_nhwc: !!bool False
+  optimizer_type: 'Adam'
+  optimizer_beta1: 0.9
+  optimizer_beta2: 0.999
+  optimizer_max_grad_norm: 1.0 
+
+  crop_size_x: None
+  crop_size_y: None
+
+
+
+full_field_test_fno:
+  <<: *FULL_FIELD
+  lr: 1E-3
+  batch_size: 1
+  nettype: 'afno'
+  modes: 32
+  width: 32
+

@@ -1,0 +1,236 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+base_config: &BASE_CONFIG
+
+    # metadata file for the dataset
+    metadata_json_path: "/metadata/data.json"
+
+    # data 
+    train_data_path: "/train"
+    valid_data_path: "/test"
+    exp_dir: "/runs"
+
+    # files used for normalization of the data
+    min_path: "/stats/mins.npy"
+    max_path: "/stats/maxs.npy"
+    time_means_path:   "/stats/time_means.npy"
+    global_means_path: "/stats/global_means.npy"
+    global_stds_path:  "/stats/global_stds.npy"
+    time_diff_means_path: "/stats/time_diff_means.npy"
+    time_diff_stds_path: "/stats/time_diff_stds.npy"
+
+    # architecture
+    nettype: "sfno"
+    scale_factor: 4
+    num_blocks: 8
+    embed_dim: 256
+    num_layers: 12
+    normalization_layer: "instance_norm"
+    hard_thresholding_fraction: 1.0 # turning it off for now
+    verbose: !!bool False
+
+    loss: "geometric l2"
+    lr: 5E-4
+
+    # n_train_samples_per_year: 1460
+    n_eval_samples: 320
+
+    max_epochs: 60
+    batch_size: 64
+
+    scheduler: "CosineAnnealingLR" # "ReduceLROnPlateau"
+    scheduler_T_max: 70
+    lr_warmup_steps: 0
+    weight_decay: 0.0 # 0.1
+
+    # wireup stuff
+    wireup_info: "mpi"
+    wireup_store: "tcp"
+
+    num_data_workers: 2
+    num_visualization_workers: 2
+    dt: 1 # how many timesteps ahead the model will predict
+    n_history: 0 #how many previous timesteps to consider
+    prediction_type: "iterative"
+    prediction_length: 35 #applicable only if prediction_type == "iterative"
+    n_initial_conditions: 5 #applicable only if prediction_type == "iterative"
+    valid_autoreg_steps: 20 # number of autoregressive steps for validation
+
+    ics_type: "specify_number"
+    save_raw_forecasts: !!bool True
+    save_channel: !!bool False
+    masked_acc: !!bool False
+    maskpath: None
+    perturb: !!bool False
+    add_noise: !!bool False
+    noise_std: 0.
+    add_zenith: !!bool True
+
+    N_grid_channels: 0
+    gridtype: "sinusoidal" #options "sinusoidal" or "linear"
+    roll: !!bool False
+
+    #options default, residual
+    target: "default"
+
+    # predicted channels
+    channel_names: ["u10m", "v10m", "t2m", "sp", "msl", "t850", "u1000", "v1000", "z1000", "u850", "v850", "z850", "u500", "v500", "z500", "t500", "z50", "r500", "r850", "tcwv", "u100m", "v100m", "u250", "v250", "z250", "t250"]
+    normalization: "zscore" #options zscore or minmax or none
+
+    # invariants
+    add_grid: !!bool False
+    add_orography: !!bool False
+    orography_path: /invariants/orography.nc
+    add_landmask: !!bool False
+    landmask_path: /invariants/land_sea_mask.nc
+
+    finetune: !!bool False
+
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool True
+    log_video: 10 # if > 0 will log every i-th epoch
+    save_checkpoint: !!bool True
+
+    enable_nhwc: !!bool False
+    optimizer_type: "FusedAdam"
+    optimizer_beta1: 0.9
+    optimizer_beta2: 0.95
+    optimizer_max_grad_norm: 32
+    crop_size_x: None
+    crop_size_y: None
+
+    inf_data_path: "/out_of_sample"
+
+    # Weights and biases configuration
+    wandb_name: None # If None, config will be used but you can override it here
+    wandb_group: None # If None, will be "era5_wind" + config, but you can override it here
+    wandb_project: "distributed sfno training"
+    wandb_entity: "sfno-large-model-training" # put your username here
+
+###########################################################################################################################
+# linear SFNO models
+###########################################################################################################################
+
+sfno_dhealy: &SFNO_BASELINE_DHEALY
+    <<: *BASE_CONFIG
+    filter_type: "linear"
+    use_mlp: !!bool True
+    separable: !!bool False
+    # to set the convolution to Driscoll-Healy style convolution
+    operator_type: "dhconv"
+
+    mlp_mode: "serial"
+    num_layers: 8
+    scale_factor: 2
+    hard_thresholding_fraction: 0.5
+    embed_dim: 384
+
+    activation_function: "gelu"
+
+sfno_dhealy_26ch: &SFNO_BASELINE_DHEALY_26CH
+    <<: *SFNO_BASELINE_DHEALY
+
+sfno_dhealy_26ch_pmasked:
+    <<: *SFNO_BASELINE_DHEALY
+    loss: "pole-masked geometric l2"
+
+sfno_dhealy_26ch_finetune: &SFNO_BASELINE_DHEALY_26CH_FINETUNE
+    <<: *SFNO_BASELINE_DHEALY
+    lr: 1E-4
+    max_epochs: 10
+    finetune: !!bool True
+
+sfno_dhealy_26ch_2step:
+    <<: *SFNO_BASELINE_DHEALY_26CH_FINETUNE
+    pretrained_checkpoint_path: "/runs/sfno_dhealy_26ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+sfno_dhealy_26ch_layers12_edim256:
+    <<: *SFNO_BASELINE_DHEALY
+    num_layers: 12
+    embed_dim: 256
+
+###########################################################################################################################
+# experimental stuff
+###########################################################################################################################
+
+sfno_dhealy_26ch_absl2loss:
+    <<: *SFNO_BASELINE_DHEALY
+    loss: "absolute geometric l2"
+    lr: 2E-4
+
+sfno_dhealy_26ch_wabsl2loss:
+    <<: *SFNO_BASELINE_DHEALY
+    loss: "weighted absolute geometric l2"
+    lr: 2E-4
+    channel_weights: [0.1, 0.1, 1.0, 0.1, 0.1, 0.05525, 0.065, 0.065, 0.065, 0.05525, 0.05525, 0.05525, 0.0325, 0.0325, 0.0325, 0.0325, 0.00325, 0.0325, 0.05525, 0.1, 0.1, 0.1, 0.01625, 0.01625, 0.01625, 0.01625]
+
+sfno_dhealy_26ch_wl2loss:
+    <<: *SFNO_BASELINE_DHEALY
+
+    channel_weights: [0.1, 0.1, 1.0, 0.1, 0.1, 0.05525, 0.065, 0.065, 0.065, 0.05525, 0.05525, 0.05525, 0.0325, 0.0325, 0.0325, 0.0325, 0.00325, 0.0325, 0.05525, 0.1, 0.1, 0.1, 0.01625, 0.01625, 0.01625, 0.01625]
+    loss: "weighted geometric l2"
+
+###########################################################################################################################
+# ICML Paper models
+###########################################################################################################################
+
+sfno_dhealy_73ch: &SFNO_BASELINE_DHEALY_73CH
+    <<: *SFNO_BASELINE_DHEALY
+    in_channels:   [0,      1,      2,       3,       4,     5,    6,     7,      8,     9,      10,     11,     12,     13,     14,     15,     16,     17,     18,     19,     20,      21,    22,     23,     24,     25,     26,     27,     28,     29,     30,     31,     32,     33,      34,    35,     36,     37,     38,     39,     40,     41,     42,     43,     44,     45,     46,      47,    48,     49,     50,     51,     52,     53,     54,     55,     56,     57,     58,     59,      60,    61,     62,     63,     64,     65,     66,     67,     68,     69,     70,     71,     72]
+    out_channels:  [0,      1,      2,       3,       4,     5,    6,     7,      8,     9,      10,     11,     12,     13,     14,     15,     16,     17,     18,     19,     20,      21,    22,     23,     24,     25,     26,     27,     28,     29,     30,     31,     32,     33,      34,    35,     36,     37,     38,     39,     40,     41,     42,     43,     44,     45,     46,      47,    48,     49,     50,     51,     52,     53,     54,     55,     56,     57,     58,     59,      60,    61,     62,     63,     64,     65,     66,     67,     68,     69,     70,     71,     72]
+    channel_names: ["u10m", "v10m", "u100m", "v100m", "t2m", "sp", "msl", "tcwv", "u50", "u100", "u150", "u200", "u250", "u300", "u400", "u500", "u600", "u700", "u850", "u925", "u1000", "v50", "v100", "v150", "v200", "v250", "v300", "v400", "v500", "v600", "v700", "v850", "v925", "v1000", "z50", "z100", "z150", "z200", "z250", "z300", "z400", "z500", "z600", "z700", "z850", "z925", "z1000", "t50", "t100", "t150", "t200", "t250", "t300", "t400", "t500", "t600", "t700", "t850", "t925", "t1000", "r50", "r100", "r150", "r200", "r250", "r300", "r400", "r500", "r600", "r700", "r850", "r925", "r1000"]
+
+sfno_dhealy_231ch: &SFNO_BASELINE_DHEALY_235CH
+    <<: *SFNO_BASELINE_DHEALY
+    scale_factor: 4
+    metadata_json_path: "/invariants/data.json"
+    in_channels: None #read from metadata if not specified
+    out_channels: None #read from metadata if not specified
+    channel_names: None #read from metadata if not specified
+    n_eval_samples: 256
+    valid_autoreg_steps: 1
+    log_video: 0
+    drop_masked_channels: True # this drops the last 4 channels which have land or sea masking (sst, stl1, swvl1, skt)
+
+sfno_dhealy_73ch_nozen:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    add_zenith: !!bool False
+
+sfno_nonlinear_73ch: &SFNO_NONLINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    filter_type: "non-linear"
+    operator_type: "diagonal"
+
+fno_linear_73ch: &FNO_LINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    nettype: "fno"
+    filter_type: "linear"
+    operator_type: "diagonal"
+
+fno_nonlinear_73ch: &FNO_NONLINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    nettype: "fno"
+    filter_type: "non-linear"
+    # operator_type: "diagonal"
+
+###########################################################################################################################
+# Debug
+###########################################################################################################################
+
+sfno_dhealy_73ch_debug:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    add_zenith: !!bool True
+    n_train_samples: 800
+    n_eval_samples: 320
