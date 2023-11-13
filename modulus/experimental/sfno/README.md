@@ -1,23 +1,17 @@
 <!-- markdownlint-disable MD033 -->
-# Makani: Massively parallel training of machine-learning based weather and climate models
+# Spherical Fourienr Neural Operator (SFNO) for Weather and Climate Forecasting (Experimental version, Modulus integration in progress)
 
-[**Overview**](#overview) | [**Getting started**](#getting-started) | [**More information**](#more-about-makani) | [**Contributing**](#contributing) | [**Further reading**](#further-reading) | [**References**](#references)
-
-[![pipeline status](https://gitlab-master.nvidia.com/tkurth/era5_wind/badges/main/pipeline.svg)](https://gitlab-master.nvidia.com/tkurth/era5_wind/-/commits/main)[![coverage report](https://gitlab-master.nvidia.com/tkurth/era5_wind/badges/main/coverage.svg)](https://gitlab-master.nvidia.com/tkurth/era5_wind/-/commits/main)
-
-Makani (Hawaiian word for wind 🍃🌺) is a library designed to enable the research and development of machine-learning based weather and climate models in PyTorch.
+[**Overview**](#overview) | [**Getting started**](#getting-started) | [**Further reading**](#further-reading) | [**References**](#references)
 
 ## Overview
 
-Makani was started by engineers and researchers at NVIDIA and NERSC to train [FourCastNet](https://github.com/NVlabs/FourCastNet), a deep-learning based weather prediction model.
-
-Makani is a research code built for massively parallel training of weather and climate prediction models on 100+ GPUs and to enable the development of the next generation of weather and climate models. Among others, Makani was used to train [Spherical Fourier Neural Operators (SFNO)](https://developer.nvidia.com/blog/modeling-earths-atmosphere-with-spherical-fourier-neural-operators/) [1] and Adaptive Fourier Neural Operators (AFNO) [2] on the ERA5 dataset. Makani is written in PyTorch and supports various forms of model- and data-parallelism, asynchronous loading of data, unpredicted channels, autoregressive training and much more.
+This is a research code built for massively parallel training of SFNO for weather and climate forecasting on 100+ GPUs and to enable the development of the next generation of weather and climate models. The code is written in PyTorch and supports various forms of model- and data-parallelism, asynchronous loading of data, unpredicted channels, autoregressive training and much more.
 
 ![SFNO](https://developer-blogs.nvidia.com/wp-content/uploads/2023/07/figure_1.11-2.gif)
 
 ## Getting started
 
-### Training:
+### Training
 
 Training is launched by calling `train.py` and passing it the necessary CLI arguments to specify the configuration file `--yaml_config` and he configuration target `--config`:
 
@@ -25,7 +19,7 @@ Training is launched by calling `train.py` and passing it the necessary CLI argu
 mpirun -np 8 --allow-run-as-root python -u train.py --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq"
 ```
 
-era5_wind supports various optimization to fit large models ino GPU memory and enable computationally efficient training. An overview of these features and corresponding CLI arguments is provided in the following table:
+SFNO code supports various optimization to fit large models ino GPU memory and enable computationally efficient training. An overview of these features and corresponding CLI arguments is provided in the following table:
 
 | Feature                   | CLI argument                                  | options                      |
 |---------------------------|-----------------------------------------------|------------------------------|
@@ -45,7 +39,7 @@ mpirun -np 256 --allow-run-as-root python -u train.py --amp_mode=bf16 --cuda_gra
 ```
 Here we train the model on 256 GPUs, split horizontally across 4 ranks with a batch size of 64, which amounts to a local batch size of 1/4. Memory requirements are further reduced by the use of `bf16` automatic mixed precision.
 
-### Inference:
+### Inference
 
 In a similar fashion to training, inference can be called from the CLI by calling `inference.py` and handled by `inferencer.py`. To launch inference on the out-of-sample dataset, we can call:
 
@@ -53,16 +47,14 @@ In a similar fashion to training, inference can be called from the CLI by callin
 mpirun -np 256 --allow-run-as-root python -u inference.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq_sc3_layers8_edim960" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
 ```
 
-By default, the inference script will perform inference on the out-of-sample dataset specified 
-
-## More about Makani
+By default, the inference script will perform inference on the out-of-sample dataset specified
 
 ### Project structure
 
 The project is structured as follows:
 
 ```
-makani
+sfno
 ├── ...
 ├── config                  # configuration files, also known as recipes
 ├── data_process            # data pre-processing such as computation of statistics
@@ -90,7 +82,8 @@ makani
 ```
 
 ### Model and Training configuration
-Model training in Makani is specified through the use of `.yaml` files located in the `config` folder. The corresponding models are located in `networks` and registered in the `get_model` routine in `networks/models.py`. The following table lists the most important configuration options.
+
+Model training in is specified through the use of `.yaml` files located in the `config` folder. The corresponding models are located in `networks` and registered in the `get_model` routine in `networks/models.py`. The following table lists the most important configuration options.
 
 | Configuration Key         | Description                                             | Options                                                 |
 |---------------------------|---------------------------------------------------------|---------------------------------------------------------|
@@ -109,13 +102,13 @@ Model training in Makani is specified through the use of `.yaml` files located i
 | `metadata_json_path`      | Path to the metadata file `data.json`.                  | string                                                  |
 | `channel_names`           | Channels to be used for training.                       | List[string]                                            |
 
-
 For a more comprehensive overview, we suggest looking into existing `.yaml` configurations. More details about the available configurations can be found in [this file](config/README.md).
 
 ### Training data
-Makani expects the training/test data in HDF5 format, where each file contains the data for an entire year. The dataloaders in Makani will then load the input `inp` and the target `tar`, which correspond to the state of the atmosphere at a given point in time and at a later time for the target. The time difference between input and target is determined by the parameter `dt`, which determines how many steps the two are apart. The physical time difference is determined by the temporal resolution `dhours` of the dataset.
 
-Makani requires a metadata file named `data.json`, which describes important properties of the dataset such as the HDF5 variable name that contains the data. Another example are channels to load in the dataloader, which arespecified via channel names. The metadata file has the following structure:
+This model expects the training/test data in HDF5 format, where each file contains the data for an entire year. The dataloaders will then load the input `inp` and the target `tar`, which correspond to the state of the atmosphere at a given point in time and at a later time for the target. The time difference between input and target is determined by the parameter `dt`, which determines how many steps the two are apart. The physical time difference is determined by the temporal resolution `dhours` of the dataset.
+
+The model requires a metadata file named `data.json`, which describes important properties of the dataset such as the HDF5 variable name that contains the data. Another example are channels to load in the dataloader, which arespecified via channel names. The metadata file has the following structure:
 
 ```json
 {
@@ -138,16 +131,7 @@ Makani requires a metadata file named `data.json`, which describes important pro
 
 ### Model packages
 
-By default, Makani will save out a model package when training starts. Model packages allow easily contain all the necessary data to run the model. This includes statistics used to normalize inputs and outputs, unpredicted static channels and even the code which appends celestial features such as the cosine of the solar zenith angle. Read more about model packages [here](networks/Readme.md).
-
-## Contributing
-
-Thanks for your interest in contributing. There are many ways to contribute to this project.
-
-- If you find a bug, let us know and open an issue. Even better, if you feel like fixing it and making a pull-request, we are incredibly grateful for that. 🙏
-- If you feel like adding a feature, we encourage you to discuss it with us first, so we can guide you on how to best achieve it.
-
-While this is a research project, we aim to have functional unit tests with decent coverage. We kindly ask you to implement unit tests if you add a new feature and it can be tested.
+By default, the code will save out a model package when training starts. Model packages allow easily contain all the necessary data to run the model. This includes statistics used to normalize inputs and outputs, unpredicted static channels and even the code which appends celestial features such as the cosine of the solar zenith angle. Read more about model packages [here](networks/Readme.md).
 
 ## Further reading
 
@@ -164,7 +148,6 @@ While this is a research project, we aim to have functional unit tests with dece
 <img src="https://www.nersc.gov/assets/Logos/NERSClogocolor.png"  height="120px">
 
 The code was developed by [Thorsten Kurth](https://github.com/azrael417), [Boris Bonev](https://bonevbs.github.io), [Jaideep Pathak](https://scholar.google.com/citations?user=cevw0gkAAAAJ&hl=en), [Jean Kossaifi](http://jeankossaifi.com), [Noah Brenowitz](https://www.noahbrenowitz.com), Animashree Anandkumar, Kamyar Azizzadenesheli, Ashesh Chattopadhyay, Yair Cohen, David Hall, Peter Harrington, Pedram Hassanzadeh, Christian Hundt, Karthik Kashinath, Zongyi Li, Morteza Mardani, Mike Pritchard, David Pruitt, Sanjeev Raja, Shashank Subramanian.
-
 
 ## References
 
