@@ -19,7 +19,6 @@ perform inference and its interface is compatible with earth2mip
 import os
 import shutil
 import json
-import jsbeautifier
 import numpy as np
 import torch
 from modulus.experimental.sfno.networks.models import get_model
@@ -30,6 +29,10 @@ import datetime
 
 import logging
 
+try:
+    import jsbeautifier
+except ImportError:
+    raise ImportError('jsbeautifier is not installed. Please install it with "pip install jsbeautifier"')
 
 class LocalPackage:
     """
