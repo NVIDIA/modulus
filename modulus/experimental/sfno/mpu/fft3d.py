@@ -17,8 +17,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from utils import comm
-from .layers import distributed_transpose_h, distributed_transpose_w
+from modulus.experimental.sfno.utils import comm
+from modulus.experimental.sfno.mpu.layers import distributed_transpose_h, distributed_transpose_w
 
 # 3D routines
 # forward

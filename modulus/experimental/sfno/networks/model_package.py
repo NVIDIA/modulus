@@ -22,9 +22,9 @@ import json
 import jsbeautifier
 import numpy as np
 import torch
-from networks.models import get_model
-from utils.YParams import ParamsBase
-from third_party.climt.zenith_angle import cos_zenith_angle
+from modulus.experimental.sfno.networks.models import get_model
+from modulus.experimental.sfno.utils.YParams import ParamsBase
+from modulus.experimental.sfno.third_party.climt.zenith_angle import cos_zenith_angle
 
 import datetime
 

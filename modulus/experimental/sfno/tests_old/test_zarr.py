@@ -15,7 +15,7 @@
 import xarray
 import numpy as np
 import datetime
-from utils.dataloaders import zarr_helper
+from modulus.experimental.sfno.utils.dataloaders import zarr_helper
 
 
 def test_xarray_to_data_loader():

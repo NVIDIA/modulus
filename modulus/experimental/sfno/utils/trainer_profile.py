@@ -29,23 +29,23 @@ import torch.cuda.amp as amp
 import logging
 import wandb
 
-from networks.models import get_model
-from utils.dataloader import get_dataloader
-from mpu.mappings import init_gradient_reduction_hooks
-from mpu.helpers import sync_params, gather_uneven
-from utils.losses import LossHandler
-from utils.metric import MetricsHandler
+from modulus.experimental.sfno.networks.models import get_model
+from modulus.experimental.sfno.utils.dataloader import get_dataloader
+from modulus.experimental.sfno.mpu.mappings import init_gradient_reduction_hooks
+from modulus.experimental.sfno.mpu.helpers import sync_params, gather_uneven
+from modulus.experimental.sfno.utils.losses import LossHandler
+from modulus.experimental.sfno.utils.metric import MetricsHandler
 
 # distributed computing stuff
-from utils import comm
-from utils import visualize
+from modulus.experimental.sfno.utils import comm
+from modulus.experimental.sfno.utils import visualize
 import torch.distributed as dist
 
 # for the manipulation of state dict
 from collections import OrderedDict
 
 # for counting model parameters
-from networks.helpers import count_parameters
+from modulus.experimental.sfno.networks.helpers import count_parameters
 
 # profile stuff
 from ctypes import cdll

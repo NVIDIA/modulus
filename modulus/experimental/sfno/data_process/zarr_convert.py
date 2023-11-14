@@ -21,7 +21,7 @@ import argparse as ap
 import dask.diagnostics    
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-import datasets.era5
+import modulus.experimental.sfno.datasets.era5
 
 
 def main(args):

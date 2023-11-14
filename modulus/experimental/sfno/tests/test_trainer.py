@@ -22,13 +22,13 @@ import unittest
 
 import torch
 
-from utils.trainer import Trainer
-from utils.YParams import YParams, ParamsBase
-from inference.inferencer import Inferencer
-from networks.model_package import load_model_package
+from modulus.experimental.sfno.utils.trainer import Trainer
+from modulus.experimental.sfno.utils.YParams import YParams, ParamsBase
+from modulus.experimental.sfno.inference.inferencer import Inferencer
+from modulus.experimental.sfno.networks.model_package import load_model_package
 
-from testutils import get_default_parameters, init_dataset
-from testutils import H5_PATH
+from modulus.experimental.sfno.tests.testutils import get_default_parameters, init_dataset
+from modulus.experimental.sfno.tests.testutils import H5_PATH
 
 def init_params(exp_path: str,
                 train_path: str,

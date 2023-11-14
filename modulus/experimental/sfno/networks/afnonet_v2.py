@@ -29,8 +29,8 @@ from typing import Optional
 import math
 
 # helpers
-from networks.layers import DropPath, MLP
-from networks.activations import ComplexReLU
+from modulus.experimental.sfno.networks.layers import DropPath, MLP
+from modulus.experimental.sfno.networks.activations import ComplexReLU
 
 class PatchEmbed(nn.Module):
     def __init__(self, img_size=(224, 224), patch_size=(16, 16), inp_chans=3, embed_dim=768):

@@ -7,7 +7,7 @@ This folder contains models for training and associated code. Models that are cu
 This folder is organized as follows:
 
 ```
-makani
+sfno
 ├── ...
 ├── networks                    # code for ML models
 │   ├── activations.py          # complex activation functions

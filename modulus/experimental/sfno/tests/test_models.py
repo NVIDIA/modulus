@@ -19,9 +19,9 @@ import unittest
 from parameterized import parameterized
 import torch
 
-from networks.models import list_models, get_model
+from modulus.experimental.sfno.networks.models import list_models, get_model
 
-from testutils import get_default_parameters
+from modulus.experimental.sfno.tests.testutils import get_default_parameters
 
 class TestModels(unittest.TestCase):
 

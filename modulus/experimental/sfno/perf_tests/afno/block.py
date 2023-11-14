@@ -27,9 +27,9 @@ from torch.cuda import amp
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  
 
-from utils import comm  
+from modulus.experimental.sfno.utils import comm  
 
-from networks.afnonet_v2 import Block
+from modulus.experimental.sfno.networks.afnonet_v2 import Block
 
 # profile stuff
 from ctypes import cdll

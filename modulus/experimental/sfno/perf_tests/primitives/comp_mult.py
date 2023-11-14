@@ -25,7 +25,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 
-from mpu.layers import compl_mul_add_fwd, compl_mul_add_fwd_c
+from modulus.experimental.sfno.mpu.layers import compl_mul_add_fwd, compl_mul_add_fwd_c
 
 class ComplexMult(nn.Module):
     def __init__(self, num_blocks, block_size, hidden_size_factor, use_complex_kernels=True):

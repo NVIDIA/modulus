@@ -25,12 +25,12 @@ from torch.cuda import amp
 
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import comm
-from utils.YParams import ParamsBase
+from modulus.experimental.sfno.utils import comm
+from modulus.experimental.sfno.utils.YParams import ParamsBase
 
-from networks.layers import RealFFT2, InverseRealFFT2
-from mpu.mappings import gather_from_parallel_region, scatter_to_parallel_region, reduce_from_parallel_region
-from mpu.layers import DistributedRealFFT2, DistributedInverseRealFFT2
+from modulus.experimental.sfno.networks.layers import RealFFT2, InverseRealFFT2
+from modulus.experimental.sfno.mpu.mappings import gather_from_parallel_region, scatter_to_parallel_region, reduce_from_parallel_region
+from modulus.experimental.sfno.mpu.layers import DistributedRealFFT2, DistributedInverseRealFFT2
 
 
 def main(args, verify):

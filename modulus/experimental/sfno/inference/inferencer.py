@@ -27,15 +27,15 @@ import torch.cuda.amp as amp
 import logging
 import wandb
 
-from utils.dataloader import get_dataloader
-from networks.models import get_model
-from utils.trainer import Trainer
-from utils.losses import LossHandler
-from utils.metric import MetricsHandler
+from modulus.experimental.sfno.utils.dataloader import get_dataloader
+from modulus.experimental.sfno.networks.models import get_model
+from modulus.experimental.sfno.utils.trainer import Trainer
+from modulus.experimental.sfno.utils.losses import LossHandler
+from modulus.experimental.sfno.utils.metric import MetricsHandler
 
 # distributed computing stuff
-from utils import comm
-from utils import visualize
+from modulus.experimental.sfno.utils import comm
+from modulus.experimental.sfno.utils import visualize
 import torch.distributed as dist
 
 

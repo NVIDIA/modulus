@@ -31,7 +31,7 @@ from mpi4py.util import dtlib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
-from utils.grids import GridQuadrature
+from modulus.experimental.sfno.utils.grids import GridQuadrature
 
 def allgather_safe(comm, obj):
     

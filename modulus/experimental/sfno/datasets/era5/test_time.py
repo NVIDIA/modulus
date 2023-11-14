@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import datetime
-from datasets.era5 import time
+from modulus.experimental.sfno.datasets.era5 import time
 
 
 def test_datetime_range():

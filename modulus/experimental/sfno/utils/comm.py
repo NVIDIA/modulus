@@ -15,7 +15,7 @@
 import os
 import time
 import logging
-from utils.logging_utils import disable_logging
+from modulus.experimental.sfno.utils.logging_utils import disable_logging
 import math
 import torch
 import torch.distributed as dist

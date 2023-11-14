@@ -17,9 +17,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
-from utils.img_utils import PeriodicPad2d
+from modulus.experimental.sfno.utils.img_utils import PeriodicPad2d
 
-from networks.layers import DropPath
+from modulus.experimental.sfno.networks.layers import DropPath
 
 
 class Mlp(nn.Module):

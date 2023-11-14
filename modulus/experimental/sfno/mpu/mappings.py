@@ -18,16 +18,16 @@ from typing import Any
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel  
-from utils import comm
+from modulus.experimental.sfno.utils import comm
 
 # torch utils
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 # helper functions
-from mpu.helpers import split_tensor_along_dim
-from mpu.helpers import _reduce
-from mpu.helpers import _split
-from mpu.helpers import _gather
+from modulus.experimental.sfno.mpu.helpers import split_tensor_along_dim
+from modulus.experimental.sfno.mpu.helpers import _reduce
+from modulus.experimental.sfno.mpu.helpers import _split
+from modulus.experimental.sfno.mpu.helpers import _gather
 
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):

@@ -28,24 +28,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.cuda.amp as amp
 
-from utils import logging_utils
-from utils.YParams import YParams
-from networks.preprocessor import get_preprocessor
-from networks.models import get_model
-from utils.dataloader import get_dataloader
+from modulus.experimental.sfno.utils import logging_utils
+from modulus.experimental.sfno.utils.YParams import YParams
+from modulus.experimental.sfno.networks.preprocessor import get_preprocessor
+from modulus.experimental.sfno.networks.models import get_model
+from modulus.experimental.sfno.utils.dataloader import get_dataloader
 from apex import optimizers
 
 # distributed modules
-from utils import comm
+from modulus.experimental.sfno.utils import comm
 import torch.distributed as dist
 import torch.distributed.autograd as dist_autograd
-from mpu.mappings import init_gradient_reduction_hooks
-from mpu.helpers import sync_params
+from modulus.experimental.sfno.mpu.mappings import init_gradient_reduction_hooks
+from modulus.experimental.sfno.mpu.helpers import sync_params
 
-from utils.losses import LossHandler
-from utils.metric import MetricsHandler
-from networks.helpers import count_parameters
-from mpu.mappings import scatter_to_parallel_region, gather_from_parallel_region
+from modulus.experimental.sfno.utils.losses import LossHandler
+from modulus.experimental.sfno.utils.metric import MetricsHandler
+from modulus.experimental.sfno.networks.helpers import count_parameters
+from modulus.experimental.sfno.mpu.mappings import scatter_to_parallel_region, gather_from_parallel_region
 
 class ModelTester():
 

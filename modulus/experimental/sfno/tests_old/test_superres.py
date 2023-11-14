@@ -16,8 +16,8 @@ import os, sys
 
 import torch
 import random
-from utils.YParams import YParams
-from networks.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
+from modulus.experimental.sfno.utils.YParams import YParams
+from modulus.experimental.sfno.networks.sfnonet import SphericalFourierNeuralOperatorNet as SFNO
 
 import pytest
 

@@ -17,15 +17,15 @@ import numpy as np
 import argparse
 import torch
 import logging
-from utils import logging_utils
-from utils.YParams import YParams
+from modulus.experimental.sfno.utils import logging_utils
+from modulus.experimental.sfno.utils.YParams import YParams
 
 # distributed computing stuff
-from utils import comm
+from modulus.experimental.sfno.utils import comm
 
 # import trainer
-from utils.parse_dataset_metada import parse_dataset_metadata
-from utils.trainer import Trainer
+from modulus.experimental.sfno.utils.parse_dataset_metada import parse_dataset_metadata
+from modulus.experimental.sfno.utils.trainer import Trainer
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

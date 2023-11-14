@@ -19,8 +19,8 @@ from functools import partial
 import tensorly as tl
 tl.set_backend('pytorch')
 
-from networks.contractions import _contract_diagonal, _contract_dhconv, _contract_sep_diagonal, _contract_sep_dhconv
-from networks.contractions import _contract_diagonal_real, _contract_dhconv_real, _contract_sep_diagonal_real, _contract_sep_dhconv_real
+from modulus.experimental.sfno.networks.contractions import _contract_diagonal, _contract_dhconv, _contract_sep_diagonal, _contract_sep_dhconv
+from modulus.experimental.sfno.networks.contractions import _contract_diagonal_real, _contract_dhconv_real, _contract_sep_diagonal_real, _contract_sep_dhconv_real
 
 
 from tltorch.factorized_tensors.core import FactorizedTensor

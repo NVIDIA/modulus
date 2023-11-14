@@ -16,10 +16,10 @@ import torch
 import wandb
 
 # distributed computing stuff
-from utils import comm
-from utils.metrics.functions import GeometricL1, GeometricRMSE, GeometricACC, Quadrature
+from modulus.experimental.sfno.utils import comm
+from modulus.experimental.sfno.utils.metrics.functions import GeometricL1, GeometricRMSE, GeometricACC, Quadrature
 import torch.distributed as dist
-from mpu.mappings import gather_from_parallel_region
+from modulus.experimental.sfno.mpu.mappings import gather_from_parallel_region
 
 class MetricsHandler():
     """

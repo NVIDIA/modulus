@@ -15,7 +15,7 @@
 import pathlib
 import h5py
 
-from datasets import era5
+from modulus.experimental.sfno.datasets import era5
 
 
 def test_open_34_vars(tmp_path: pathlib.Path):

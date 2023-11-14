@@ -22,8 +22,8 @@ import torch
 import xarray as xr
 import xskillscore as xs
 
-from utils.grids import GridQuadrature
-from utils.metrics.functions import GeometricL1, GeometricRMSE, GeometricACC
+from modulus.experimental.sfno.utils.grids import GridQuadrature
+from modulus.experimental.sfno.utils.metrics.functions import GeometricL1, GeometricRMSE, GeometricACC
 
 quadrature_list = ['naive', 'clenshaw-curtiss', 'legendre-gauss']
 param_list = [(1, 10, 20, 101), (4, 21, 721, 1440)]

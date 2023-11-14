@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 
 # distributed stuff
 import torch.distributed as dist
-from utils import comm
+from modulus.experimental.sfno.utils import comm
 
 
 def init_distributed_io(params):
