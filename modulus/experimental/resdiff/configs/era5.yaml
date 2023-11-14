@@ -1,0 +1,134 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+full_field: &FULL_FIELD
+
+  batch_size: 1
+  dt: 1
+  n_history: 0
+  crop_size_x: 32
+  crop_size_y: 32
+  train_data_path: '/tmp/dataset/era5/train'
+  test_data_path: '/tmp/dataset/era5/train'
+  num_data_workers: 3
+  min_path: '/tmp/dataset/era5/stats/mins.npy'
+  max_path: '/tmp/dataset/era5/stats/maxs.npy'
+  time_means_path: '/tmp/dataset/era5/stats/time_means.npy'
+  global_means_path: '/tmp/dataset/era5/stats/global_means.npy'
+  global_stds_path: '/tmp/dataset/era5/stats/global_stds.npy'
+  normalization: 'zscore'    #minmax
+  add_grid: !!bool False      #adds position embedding
+  N_grid_channels: 0
+  gridtype: 'sinusoidal' #options 'sinusoidal' or 'linear'
+
+
+full_field_train: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 32
+  crop_size_x: 32
+  crop_size_y: 32
+
+full_field_val: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 32
+  crop_size_x: 704
+  crop_size_y: 1408
+
+full_field_train_crop128: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+
+full_field_val_crop128: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 640
+  crop_size_y: 1280
+
+full_field_train_crop128_pred_1step: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+  n_history: 0   #current frame --> next frame
+
+full_field_train_crop128_pred_1step_val: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 640
+  crop_size_y: 1280
+  n_history: 0   #current frame --> next frame
+
+full_field_train_crop128_pred_2step: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+  n_history: 0   #current frame --> next frame
+  dt: 2
+
+full_field_train_crop128_pred_5step: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+  n_history: 0   #current frame --> next frame
+  dt: 5
+
+full_field_train_crop128_pred_10step: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+  n_history: 0   #current frame --> next frame
+  dt: 10
+
+full_field_train_crop128_pred_30step: #config for single gpu training to catch bugs and overfit
+  <<: *FULL_FIELD
+  in_channels: [0, 1, 2]
+  out_channels: [0, 1, 2]
+  roll: !!bool False
+  patch_size: 128
+  crop_size_x: 128
+  crop_size_y: 128
+  n_history: 0   #current frame --> next frame
+  dt: 30

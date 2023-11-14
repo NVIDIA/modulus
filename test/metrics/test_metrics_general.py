@@ -237,7 +237,7 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     y = torch.zeros((1,), device=device, dtype=torch.float32)
 
     # Test pure crps
-    c = crps.crps(x, y, bins=1_000)
+    c = crps.crps(x, y)
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
@@ -247,7 +247,27 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
     # Test when input is numpy array
-    c = crps.crps(x, y.cpu().numpy(), bins=1_000)
+    c = crps.crps(x, y.cpu().numpy())
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # Test kernel method, use fewer ensemble members
+    c = crps.kcrps(x[:1000], y)
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=50 * rtol,
+        atol=50 * atol,
+    )
+
+    # Test kernel method
+    c = crps.kcrps(x, y)
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
@@ -346,6 +366,32 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         crps._crps_from_cdf(binsx, torch.zeros((1, 2), device=device), y)
     with pytest.raises(ValueError):
         crps._crps_from_cdf(binsx, cdfx, torch.zeros((1, 2), device=device))
+
+    # Test different shape
+    x = torch.randn((2, 3, 50, 100), device=device, dtype=torch.float32)
+    y = torch.zeros((2, 3, 100), device=device, dtype=torch.float32)
+    z = torch.zeros((2, 3, 50), device=device, dtype=torch.float32)
+
+    # Test dim
+    c = crps.crps(x, y, dim=2)
+    assert c.shape == y.shape
+
+    # Test when input is numpy array
+    c = crps.crps(x, y.cpu().numpy(), dim=2)
+    assert c.shape == y.shape
+
+    # Test different dim
+    c = crps.crps(x, z, dim=3)
+    assert c.shape == z.shape
+
+    # Test when input is numpy array
+    c = crps.crps(x, z.cpu().numpy(), dim=3)
+    assert c.shape == z.shape
+
+    # Test kernel method
+    c = crps.kcrps(x, z, dim=3)
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert c.shape == z.shape
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

@@ -1,0 +1,46 @@
+{
+    "simulation_length": 12,
+    "weather_event": {
+      "properties": {
+        "name": "Globe",
+        "netcdf": "ic.nc"
+      },
+      "domains": [
+        {
+          "name": "global",
+          "type": "Window",
+          "diagnostics": [
+            {
+              "type": "raw",
+              "channels": [
+                  "tcwv",
+                  "z500",
+                  "t500",
+                  "u500",
+                  "v500",
+                  "z700",
+                  "t700",
+                  "u700",
+                  "v700",
+                  "z850",
+                  "t850",
+                  "u850",
+                  "v850",
+                  "z925",
+                  "t925",
+                  "u925",
+                  "v925",
+                  "t2m",
+                  "u10m",
+                  "v10m"
+                ]
+
+            }
+          ]
+        }
+      ]
+    },
+    "output_path": "output",
+    "output_frequency": 1,
+    "fcn_model": "sfno_coszen"
+}
