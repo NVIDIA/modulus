@@ -53,8 +53,6 @@ class EnsembleMetrics(ABC):
         """
         Check input shapes for non-batched dimension.
         """
-        print(inputs.shape, self.input_shape)
-        print([i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)])
         if not all([i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)]):
             raise ValueError(
                 "Expected new input to have compatible shape with existing shapes but got"

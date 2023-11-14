@@ -18,3 +18,17 @@ help:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+convert-markdown-to-rst:
+	@echo "Converting Markdown files to reStructuredText..."
+	@mkdir -p examples
+	@find ../examples -name '*.md' -type f -exec sh -c ' \
+		mkdir -p "examples/$$(dirname {})"; \
+		pandoc "{}" -o "examples/$$(dirname {})/$$(basename -s .md {}).rst"; \
+		sed -i ":a; /:alt:/ { N; s/\n   / /; ta }" "examples/$$(dirname {})/$$(basename -s .md {}).rst"; \
+		sed -i "s|.. figure:: ../../../docs/img|.. figure:: ../../../img|g" "examples/$$(dirname {})/$$(basename -s .md {}).rst" \
+	' \;
+
+html: convert-markdown-to-rst
+	@echo "Running custom commands..."
+	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
