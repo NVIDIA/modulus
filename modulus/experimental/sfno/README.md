@@ -37,6 +37,7 @@ Especially larger models are enabled by using a mix of these techniques. Spatial
 ```bash
 mpirun -np 256 --allow-run-as-root python -u train.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq_sc3_layers8_edim960" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
 ```
+
 Here we train the model on 256 GPUs, split horizontally across 4 ranks with a batch size of 64, which amounts to a local batch size of 1/4. Memory requirements are further reduced by the use of `bf16` automatic mixed precision.
 
 ### Inference
