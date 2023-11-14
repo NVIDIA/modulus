@@ -349,7 +349,7 @@ model from the ``.mdlus`` file.
 
 
 .. note::
-   Inorder to make use of this functionality, the model must have json serializable
+   In order to make use of this functionality, the model must have json serializable
    inputs to the ``__init__`` function. It is highly recommended that all Modulus
    models be developed with this requirement in mind.
 
@@ -377,6 +377,7 @@ to the Modulus registry by adding an entry point to your ``toml`` file. For
 example, suppose your package structure is as follows:
 
 .. code:: python
+    
     # setup.py
 
     from setuptools import setup, find_packages
@@ -384,6 +385,7 @@ example, suppose your package structure is as follows:
     setup()
 
 .. code:: python
+    
     # pyproject.toml
 
     [build-system]
@@ -399,6 +401,7 @@ example, suppose your package structure is as follows:
     MyModulusModel = "mypackage.models.MyModulusModel:MyModulusModel"
 
 .. code:: python
+   
    # mypackage/models.py
 
    import torch.nn as nn
@@ -422,6 +425,7 @@ registry.
 
 
 .. code:: python
+   
    >>> from modulus.registry import ModelRegistry
    >>> model_registry = ModelRegistry()
    >>> model_registry.list_models()
