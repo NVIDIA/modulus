@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD033 -->
+<!-- markdownlint-disable -->
 # Spherical Fourienr Neural Operator (SFNO) for Weather and Climate Forecasting (Experimental version, Modulus integration in progress)
 
 [**Overview**](#overview) | [**Getting started**](#getting-started) | [**Further reading**](#further-reading) | [**References**](#references)
