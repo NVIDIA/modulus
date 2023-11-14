@@ -6,7 +6,7 @@ training pipeline. Once the initial setup is complete, we will also look into op
 and also run it in a distributed fashion. We will finish the tutorial with an inference
 workflow that will demonstrate how to use Modulus models in inference.
 
-Let's get started. For the pusposes of this tutorial, we will focus more on the Modulus
+Let's get started. For the purposes of this tutorial, we will focus more on the Modulus
 utilities and not the correctness of the problem definition or the results.
 
 Basic Training workflow
