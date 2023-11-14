@@ -131,7 +131,7 @@ Alternatively, you can also convert the model to a pytorch
 
 Let's say you don't want to make changes to the code, but you have a PyTorch model
 already. You can convert it to a Modulus model by using the ``modulus.Module.from_torch``
-method. This is described in detail in :ref:`Modulus models from torch`. 
+method. This is described in detail in :ref:`modulus-models-from-torch`. 
 
 .. literalinclude:: ../test_scripts/test_custom_model_demo_1.py
    :language: python
@@ -185,6 +185,10 @@ For an deep-dive on Modulus Distributed utilities, refer :ref:`Modulus Distribut
    :language: python
    :start-after: [code] 
    :end-before: [code]
+
+
+
+.. _running-inference-on-trained-models:
 
 Running infernece on trained models
 ------------------------------------

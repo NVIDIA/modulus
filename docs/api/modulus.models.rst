@@ -248,6 +248,8 @@ complex models.
     refactored in the future.
 
 
+.. _modulus-models-from-torch:
+
 Converting PyTorch Models to Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -283,6 +285,10 @@ below.
 
     ModulusModel = modulus.Module.from_torch(TorchModel, meta=ConvMetaData())
 
+
+
+
+.. _saving-and-loading-modulus-models:
 
 Saving and Loading Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
