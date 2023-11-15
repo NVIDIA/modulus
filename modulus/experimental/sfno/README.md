@@ -11,6 +11,42 @@ This is a research code built for massively parallel training of SFNO for weathe
 
 ## Getting started
 
+## Installing optional dependencies
+
+Install the optional dependencies by running
+
+```bash
+pip install jsbeautifier xskillscore
+```
+
+To enable MPI for HDF5 for accelerated file preprocessing, we need a custom build of h5py:
+
+```bash
+# uninstall h5py
+pip uninstall h5py -y
+
+# upgrade cmake
+apt remove cmake -y
+pip install cmake --upgrade
+
+# hdf5
+cd /tmp
+wget https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.14/hdf5-1.14.2/src/hdf5-1.14.2.tar.gz
+gzip -cd hdf5-1.14.2.tar.gz | tar xvf -
+mkdir hdf5-1.14.2/build
+cd hdf5-1.14.2/build
+cmake -DCMAKE_INSTALL_PREFIX=/opt/hdf5 \
+    -DHDF5_ENABLE_DIRECT_VFD=1 \
+    -DHDF5_ENABLE_PARALLEL=1 \
+    -DHDF5_TEST_API=1 \
+    -DHDF5_TEST_VFD=1 \
+    ..
+make -j 8 && make install
+
+# h5py
+CC="mpicc" HDF5_MPI="ON" HDF5_DIR=/opt/hdf5 pip install --no-binary=h5py h5py
+```
+
 ### Training
 
 Training is launched by calling `train.py` and passing it the necessary CLI arguments to specify the configuration file `--yaml_config` and he configuration target `--config`:
