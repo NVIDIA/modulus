@@ -15,8 +15,12 @@ from modulus.utils import StaticCaptureTraining
 
 
 def main():
-
+    # Initialize the DistributedManager. This will automatically
+    # detect the number of processes the job was launched with and
+    # set those configuration parameters appropriately.
     DistributedManager.initialize()
+    
+    # Get instance of the DistributedManager
     dist = DistributedManager()
 
     normaliser = {
@@ -36,16 +40,15 @@ def main():
         num_fno_layers=4,
         num_fno_modes=12,
         padding=5,
-    ).to("cuda")
-
+    ).to(dist.device)
+    
+    # Set up DistributedDataParallel if using more than a single process.
     if dist.distributed:
         ddps = torch.cuda.Stream()
         with torch.cuda.stream(ddps):
             model = DistributedDataParallel(
                 model,
-                device_ids=[dist.local_rank],  # Set the device_id to be
-                # the local rank of this process on
-                # this node
+                device_ids=[dist.local_rank],  # Set the device_id to be the local rank of this process on this node
                 output_device=dist.device,
                 broadcast_buffers=dist.broadcast_buffers,
                 find_unused_parameters=dist.find_unused_parameters,
