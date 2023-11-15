@@ -24,20 +24,18 @@ import xarray
 import modulus  # noqa: F401 for docs
 from modulus.models.dlwp import DLWP
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.models.sfno import sfnonet
 from modulus.utils import filesystem
-from modulus.utils.sfno.YParams import ParamsBase
 from modulus.utils.zenith_angle import cos_zenith_angle
 
 logger = logging.getLogger(__name__)
 
 
-class _DummyModule(torch.nn.Module):
-    """Hack to handle that checkpoint parameter names begin with "module." """
+# class _DummyModule(torch.nn.Module):
+#     """Hack to handle that checkpoint parameter names begin with "module." """
 
-    def __init__(self, model):
-        super().__init__()
-        self.module = model
+#     def __init__(self, model):
+#         super().__init__()
+#         self.module = model
 
 
 class _CosZenWrapper(torch.nn.Module):
@@ -57,29 +55,29 @@ class _CosZenWrapper(torch.nn.Module):
         return self.model(x)
 
 
-def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Module:
-    """Load SFNO model from checkpoints trained with era5_wind"""
-    path = package.get("config.json")
-    params = ParamsBase.from_json(path)
-    model = sfnonet.SphericalFourierNeuralOperatorNet(params)
-    logger.info(str(params.to_dict()))
+# def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Module:
+#     """Load SFNO model from checkpoints trained with era5_wind"""
+#     path = package.get("config.json")
+#     params = ParamsBase.from_json(path)
+#     model = sfnonet.SphericalFourierNeuralOperatorNet(params)
+#     logger.info(str(params.to_dict()))
 
-    if pretrained:
-        weights = package.get("weights.tar")
-        checkpoint = torch.load(weights)
-        load_me = _DummyModule(model)
-        state = checkpoint["model_state"]
-        state = {"module.device_buffer": model.device_buffer, **state}
-        load_me.load_state_dict(state)
+#     if pretrained:
+#         weights = package.get("weights.tar")
+#         checkpoint = torch.load(weights)
+#         load_me = _DummyModule(model)
+#         state = checkpoint["model_state"]
+#         state = {"module.device_buffer": model.device_buffer, **state}
+#         load_me.load_state_dict(state)
 
-    if params.add_zenith:
-        nlat = params.img_shape_x
-        nlon = params.img_shape_y
-        lat = 90 - np.arange(nlat) * 0.25
-        lon = np.arange(nlon) * 0.25
-        model = _CosZenWrapper(model, lon, lat)
+#     if params.add_zenith:
+#         nlat = params.img_shape_x
+#         nlon = params.img_shape_y
+#         lat = 90 - np.arange(nlat) * 0.25
+#         lon = np.arange(nlon) * 0.25
+#         model = _CosZenWrapper(model, lon, lat)
 
-    return model
+#     return model
 
 
 class _GraphCastWrapper(torch.nn.Module):

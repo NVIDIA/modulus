@@ -1,0 +1,539 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+base_config: &BASE_CONFIG
+
+    # metadata file for the dataset
+    metadata_json_path: "/metadata/data.json"
+
+    # data 
+    train_data_path: "/train"
+    valid_data_path: "/test"
+    exp_dir: "/runs"
+    n_years: 1
+    img_shape_x: 721
+    img_shape_y: 1440
+
+    # files used for normalization of the data
+    min_path: "/stats/mins.npy"
+    max_path: "/stats/maxs.npy"
+    time_means_path:   "/stats/time_means.npy"
+    global_means_path: "/stats/global_means.npy"
+    global_stds_path:  "/stats/global_stds.npy"
+    time_diff_means_path: "/stats/time_diff_means.npy"
+    time_diff_stds_path: "/stats/time_diff_stds.npy"
+
+    # architecture related 
+    nettype: "sfno"
+    model_grid_type: "equiangular"
+    sht_grid_type: "legendre-gauss"
+    filter_type: "linear"
+    scale_factor: 3
+    embed_dim: 384
+    num_layers: 8
+    complex_activation: "real"
+    normalization_layer: "instance_norm"
+    hard_thresholding_fraction: 0.5
+    use_mlp: !!bool True
+    mlp_mode: "serial"
+    mlp_ratio: 2
+    separable: !!bool False
+    operator_type: "dhconv"
+    activation_function: "gelu"
+    pos_embed: "none" # "none", "direct" or "frequency". For resoltuion invariance, use add_grid instead or use "frequency"
+
+    # training parameters
+    loss: "absolute squared geometric l2"
+    channel_weights: "auto"
+    lr: 1E-3
+    n_eval_samples: 8760
+    max_epochs: 500
+    batch_size: 64
+    weight_decay: 0.0
+
+    # scheduler parameters
+    scheduler: "StepLR" # "ReduceLROnPlateau" or "CosineAnnealingLR"
+    scheduler_T_max: 70
+    scheduler_factor: 0.1
+    scheduler_patience: 10
+    scheduler_step_size: 100
+    scheduler_gamma: 0.5
+    lr_warmup_steps: 0
+
+    # general
+    verbose: !!bool False
+
+    # wireup stuff
+    wireup_info: "mpi"
+    wireup_store: "tcp"
+
+    num_data_workers: 2
+    num_visualization_workers: 2
+    dt: 1 # how many timesteps ahead the model will predict
+    n_history: 0 # how many previous timesteps to consider
+    prediction_type: "iterative"
+    prediction_length: 35 # applicable only if prediction_type == "iterative"
+    n_initial_conditions: 5 # applicable only if prediction_type == "iterative"
+    valid_autoreg_steps: 19 # number of autoregressive steps for validation, 20 steps in total
+
+    # we make the "epochs" shorter so we have more reporting
+    n_train_samples_per_epoch: 54000
+
+    ics_type: "specify_number"
+    save_raw_forecasts: !!bool True
+    save_channel: !!bool False
+    masked_acc: !!bool False
+    maskpath: None
+    perturb: !!bool False
+    add_noise: !!bool False
+    noise_std: 0.
+
+    target: "default" # options default, residual
+
+    # define channels to be read from data
+    channel_names: ["u10m", "v10m", "u100m", "v100m", "t2m", "sp", "msl", "tcwv", "u50", "u100", "u150", "u200", "u250", "u300", "u400", "u500", "u600", "u700", "u850", "u925", "u1000", "v50", "v100", "v150", "v200", "v250", "v300", "v400", "v500", "v600", "v700", "v850", "v925", "v1000", "z50", "z100", "z150", "z200", "z250", "z300", "z400", "z500", "z600", "z700", "z850", "z925", "z1000", "t50", "t100", "t150", "t200", "t250", "t300", "t400", "t500", "t600", "t700", "t850", "t925", "t1000", "q50", "q100", "q150", "q200", "q250", "q300", "q400", "q500", "q600", "q700", "q850", "q925", "q1000"]
+    normalization: "zscore" # options zscore or minmax or none
+
+    # extra channels
+    add_grid: !!bool True
+    gridtype: "sinusoidal"
+    grid_num_frequencies: 16
+    roll: !!bool False
+    add_zenith: !!bool True
+    # invariants
+    add_orography: !!bool True
+    orography_path: /invariants/orography.nc
+    add_landmask: !!bool True
+    landmask_path: /invariants/land_sea_mask.nc
+
+    finetune: !!bool False
+
+    # logging options
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool True
+    log_video: 20 # if > 0 will log every i-th epoch
+    save_checkpoint: "legacy"
+
+    enable_nhwc: !!bool False
+    optimizer_type: "AdamW"
+    optimizer_beta1: 0.9
+    optimizer_beta2: 0.95
+    optimizer_max_grad_norm: 32
+    crop_size_x: None
+    crop_size_y: None
+
+    # required for validation and scoring
+    inf_data_path: "/out_of_sample"
+
+    # Weights and biases configuration
+    wandb_name: None # If None, wandb will assign a random name, recommended
+    wandb_group: "sfnonet development" # If None, will be "era5_wind" + config, but you can override it here
+    wandb_project: "sfno architecture validation"
+    wandb_entity: "sfno-large-model-training"
+
+###########################################################################################################################
+# 73 channels + Q base
+###########################################################################################################################
+
+# 1 GPUS, h=1, no cuda graphs
+
+base_73chq: &BASELINE_73CHQ
+    <<: *BASE_CONFIG
+
+base_73chq_finetune: &BASELINE_73CHQ_FINETUNE
+    <<: *BASELINE_73CHQ
+    finetune: !!bool True
+    lr: 1E-6
+    scheduler: "CosineAnnealingLR"
+    max_epochs: 20
+    scheduler_T_max: 20
+
+# current best single GPU model
+sfno_linear_73chq_sc3_layers8_edim384_wstgl2:
+    <<: *BASELINE_73CHQ
+    wandb_group: "sfno_linear_73chq_sc3_layers8_edim384_wstgl2"
+
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    hard_thresholding_fraction: 1.0
+
+    loss: "weighted squared temp-std geometric l2"
+    channel_weights: "auto"
+
+sfno_linear_73chq_sc3_layers8_edim384_asgl2:
+    <<: *BASELINE_73CHQ
+    wandb_group: "sfno_linear_73chq_sc3_layers8_edim384_asgl2"
+
+    # log_weights_and_grads: 10
+
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    hard_thresholding_fraction: 1.0
+
+    optimizer_type: "Adam"
+
+    loss: "absolute squared geometric l2"
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2: &BASELINE_73CHQ_ABS
+    <<: *BASELINE_73CHQ
+    wandb_group: "sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2"
+
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    dt: 6
+
+    optimizer_type: "AdamW"
+
+    loss: "absolute squared geometric l2"
+    channel_weights: "auto"
+
+    scheduler: "StepLR"
+    lr_warmup_steps: 0
+    lr_start: 1e-7
+    scheduler_step_size: 40
+    scheduler_gamma: 0.1
+    log_weights_and_grads: 0
+    weight_decay: 0.0
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2_warm:
+    <<: *BASELINE_73CHQ_ABS
+
+    lr_warmup_steps: 1
+    lr_start: 1e-7
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2_ln:
+    <<: *BASELINE_73CHQ_ABS
+
+    normalization_layer: "layer_norm"
+    log_weights_and_grads: 0
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2_largebs:
+    <<: *BASELINE_73CHQ_ABS
+
+    lr: 3E-3
+    lr_warmup_steps: 1
+    lr_start: 1e-7
+    weight_decay: 0.001
+    scheduler_step_size: 40
+    scheduler_gamma: 0.1
+    log_weights_and_grads: 0
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_asgl2_ln_largebs:
+    <<: *BASELINE_73CHQ_ABS
+
+    normalization_layer: "layer_norm"
+
+    lr: 3E-3
+    lr_warmup_steps: 1
+    lr_start: 1e-7
+    weight_decay: 0.001
+    scheduler_step_size: 40
+    scheduler_gamma: 0.1
+    log_weights_and_grads: 0
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched: &BASELINE_73CHQ_BEST
+    <<: *BASELINE_73CHQ
+    wandb_group: "sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2"
+
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    dt: 6
+
+    loss: "weighted squared temp-std geometric l2"
+    channel_weights: "auto"
+
+    lr_warmup_steps: 10
+    lr_start: 0.001
+    scheduler: "StepLR"
+    scheduler_step_size: 100
+    scheduler_gamma: 0.1
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched_lamb:
+    <<: *BASELINE_73CHQ_BEST
+    wandb_group: "sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched"
+
+    optimizer_type: "FusedLAMB"
+    optimizer_beta1: 0.9
+    optimizer_beta2: 0.999
+    optimizer_max_grad_norm: 1.
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched_legau:
+    <<: *BASELINE_73CHQ_BEST
+    wandb_group: "sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched_legau"
+
+    model_grid_type: "legendre-gauss"
+    sht_grid_type: "legendre-gauss"
+
+
+sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched_legau_lamb:
+    <<: *BASELINE_73CHQ_BEST
+    wandb_group: "sfno_linear_73chq_sc3_dt6_layers8_edim384_wstgl2_newsched_legau"
+
+    model_grid_type: "legendre-gauss"
+    sht_grid_type: "legendre-gauss"
+
+    optimizer_type: "FusedLAMB"
+    optimizer_beta1: 0.9
+    optimizer_beta2: 0.999
+    optimizer_max_grad_norm: 1.
+
+# 4 GPUS, h=4, fwdbwd cuda graphs
+sfno_linear_73chq_sc3_layers8_edim960_asgl2:
+    <<: *BASELINE_73CHQ
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 3
+
+    lr: 5e-4
+
+# current baseline for multi-GPU
+sfno_linear_73chq_sc2_layers8_edim960_asgl2:
+    <<: *BASELINE_73CHQ
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+
+
+sfno_linear_73chq_sc2_dt6_layers8_edim960_wstgl2: &BASELINE_MULTIGPU
+    <<: *BASELINE_73CHQ
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+
+    dt: 6
+
+    loss: "weighted squared temp-std geometric l2"
+    channel_weights: "auto"
+
+    scheduler: "CosineAnnealingLR"
+    scheduler_T_max: 500
+
+
+sfno_linear_73chq_sc2_dt6_layers8_edim960_asgl2:
+    <<: *BASELINE_MULTIGPU
+
+    loss: "absolute squared geometric l2"
+    channel_weights: "auto"
+
+    lr: 1e-3
+    lr_warmup_steps: 1
+    lr_start: 1e-7
+    weight_decay: 0.001
+    scheduler_step_size: 100
+    scheduler_gamma: 0.1
+    log_weights_and_grads: 0
+
+
+sfno_linear_73chq_sc2_dt6_layers8_edim960_asgl2_ln:
+    <<: *BASELINE_MULTIGPU
+
+    normalization_layer: "layer_norm"
+
+    loss: "absolute squared geometric l2"
+    channel_weights: "auto"
+
+    lr: 1e-3
+    lr_warmup_steps: 1
+    lr_start: 1e-7
+    weight_decay: 0.001
+    scheduler_step_size: 100
+    scheduler_gamma: 0.1
+    log_weights_and_grads: 0
+
+
+sfno_linear_73chq_sc1_dt6_layers8_edim960_wstgl2:
+    <<: *BASELINE_MULTIGPU
+    scale_factor: 1
+
+
+# 8 GPUS, h=8, with graphs
+sfno_linear_73chq_sc2_layers8_edim960_asgl2_th1:
+    <<: *BASELINE_73CHQ
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+
+    hard_thresholding_fraction: 1.0
+
+# testing
+sfno_linear_73chqh_cel_sc3_layers8_edim256_asgl2:
+    <<: *BASELINE_73CHQ
+    embed_dim: 256
+    num_layers: 1
+    scale_factor: 3
+    # add_celestial: !!bool True
+
+    n_train_samples: 80
+    n_eval_samples: 80
+
+###########################################################################################################################
+# 73 channels + Q base, hourly dataset
+###########################################################################################################################
+
+# 1 GPUS, h=1, no cuda graphs
+
+base_73chqh: &BASELINE_73CHQH
+    <<: *BASE_CONFIG
+
+    # we make the "epochs" shorter so we have more reporting
+    n_train_samples_per_epoch: 54000
+
+base_73chqh_finetune: &BASELINE_73CHQH_FINETUNE
+    <<: *BASELINE_73CHQH
+    finetune: !!bool True
+    lr: 1E-6
+    scheduler: "CosineAnnealingLR"
+    max_epochs: 20
+    scheduler_T_max: 20
+
+# current best single GPU model
+sfno_linear_73chqh_dt6_sc3_layers8_edim384_asgl2:
+    <<: *BASELINE_73CHQH
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    dt: 6
+
+sfno_linear_73chqh_dt6_sc3_layers8_edim384_wstgl2_ln:
+    <<: *BASELINE_73CHQH
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    normalization_layer: "layer_norm"
+    dt: 6
+
+sfno_linear_73chqh_dt6_sc3_layers8_edim384_wstgl2_newsched:
+    <<: *BASELINE_73CHQH
+    embed_dim: 384
+    num_layers: 8
+    scale_factor: 3
+    dt: 6
+
+    # scheduler
+    lr: 5e-3
+    lr_warmup_steps: 10
+    lr_start: 1e-6
+    scheduler: "CosineAnnealingLR"
+    scheduler_T_max: 300
+    
+
+sfno_linear_73chqh_sc1_layers8_edim640_wstgl2_th1_dt6:
+    <<: *BASELINE_73CHQH
+    embed_dim: 640
+    num_layers: 8
+    scale_factor: 1
+    dt: 6
+    valid_autoreg_steps: 19
+
+    hard_thresholding_fraction: 1.0
+
+sfno_linear_73chqh_sc1_layers8_edim640_asgl2_th1_dt6_lr5em4:
+    <<: *BASELINE_73CHQH
+    embed_dim: 640
+    num_layers: 8
+    scale_factor: 1
+    dt: 6
+    valid_autoreg_steps: 19
+
+    lr: 5e-4
+
+    hard_thresholding_fraction: 1.0
+
+sfno_linear_73chqh_sc2_layers8_edim960_asgl2_th1_dt6:
+    <<: *BASELINE_73CHQH
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+    dt: 6
+    valid_autoreg_steps: 19
+
+    hard_thresholding_fraction: 1.0
+
+
+sfno_linear_73chqh_sc2_layers8_edim960_asgl2_th1_dt6_lr5em4:
+    <<: *BASELINE_73CHQH
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+    dt: 6
+    valid_autoreg_steps: 19
+
+    lr: 5e-4
+
+    hard_thresholding_fraction: 1.0
+
+sfno_linear_73chqh_sc2_layers8_edim960_asgl2_th1_dt6_lr5em3:
+    <<: *BASELINE_73CHQH
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+    dt: 6
+    valid_autoreg_steps: 19
+
+    lr: 5e-3
+
+    hard_thresholding_fraction: 1.0
+
+# small dt
+sfno_linear_73chqh_sc2_layers8_edim960_asgl2_th1_dt1:
+    <<: *BASELINE_73CHQH
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+    dt: 1
+    # only 48h rollout here
+    valid_autoreg_steps: 47
+
+    hard_thresholding_fraction: 1.0
+
+
+# large dt
+sfno_linear_73chqh_sc2_layers8_edim960_asgl2_th1_dh1_dt24:
+    <<: *BASELINE_73CHQH
+    embed_dim: 960
+    num_layers: 8
+    scale_factor: 2
+    dt: 24
+    valid_autoreg_steps: 4
+
+    hard_thresholding_fraction: 1.0
+
+###############
+# Debug
+###############
+
+sfno_linear_73chq_sc3_layers4_edim128_wstgl2_cadam:
+    <<: *BASELINE_73CHQ
+    wandb_group: "sfno_linear_73chq_sc3_layers4_edim128_wstgl2_cadam"
+
+    embed_dim: 128
+    num_layers: 4
+    scale_factor: 3
+    hard_thresholding_fraction: 1.0
+
+    optimizer_type: "Adam"
+
+    loss: "weighted squared temp-std geometric l2"
+
+    log_weights_and_grads: 100
