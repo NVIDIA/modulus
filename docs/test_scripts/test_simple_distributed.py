@@ -3,6 +3,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import modulus
+from modulus.datapipes.benchmarks.darcy import Darcy2D
 from modulus.distributed import DistributedManager
 from modulus.metrics.general.mse import mse
 from modulus.models.fno.fno import FNO
@@ -22,7 +23,7 @@ def main():
         "permeability": (1.25, 0.75),
         "darcy": (4.52e-2, 2.79e-2),
     }
-    dataloader = modulus.datapipes.benchmarks.darcy.Darcy2D(
+    dataloader = Darcy2D(
         resolution=256, batch_size=64, nr_permeability_freq=5, normaliser=normaliser
     )
     model = FNO(
