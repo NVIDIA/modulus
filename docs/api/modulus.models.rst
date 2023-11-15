@@ -506,37 +506,3 @@ DLWP Model
     :members:
     :show-inheritance:
 
-Spherical Harmonics Fourier Neural Operator
---------------------------------------------
-
-.. automodule:: modulus.models.sfno.sfnonet
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.activations
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.factorizations
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.layers
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.s2convolutions
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.contractions
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.initialization
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.preprocessor
-    :members:
-    :show-inheritance:
