@@ -1,9 +1,7 @@
 # [imports]
 import torch
-import numpy as np
+
 import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
 from modulus.models.fno.fno import FNO
 
 # [imports]
@@ -22,8 +20,8 @@ model = FNO(
     padding=5,
 ).to("cuda")
 
-# Save the checkpoint. For demo, we will just save untrained checkpoint, 
-# but in typical workflows is saved after model training. 
+# Save the checkpoint. For demo, we will just save untrained checkpoint,
+# but in typical workflows is saved after model training.
 model.save("untrained_checkpoint.mdlus")
 
 # Inference code

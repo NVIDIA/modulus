@@ -1,11 +1,10 @@
 # [imports]
 import torch
-import numpy as np
+
 import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.models.fno.fno import FNO
 from modulus.metrics.general.mse import mse
+from modulus.models.fno.fno import FNO
+
 # [imports]
 
 # [code]

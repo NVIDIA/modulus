@@ -1,17 +1,17 @@
 # [imports]
 import torch
-import numpy as np
-import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.models.fno.fno import FNO
 from torch.nn.parallel import DistributedDataParallel
+
+import modulus
 from modulus.distributed import DistributedManager
-from modulus.utils import StaticCaptureTraining
 from modulus.metrics.general.mse import mse
+from modulus.models.fno.fno import FNO
+from modulus.utils import StaticCaptureTraining
+
 # [imports]
 
 # [code]
+
 
 def main():
 
@@ -36,15 +36,15 @@ def main():
         num_fno_modes=12,
         padding=5,
     ).to("cuda")
-    
+
     if dist.distributed:
         ddps = torch.cuda.Stream()
         with torch.cuda.stream(ddps):
             model = DistributedDataParallel(
                 model,
                 device_ids=[dist.local_rank],  # Set the device_id to be
-                                               # the local rank of this process on
-                                               # this node
+                # the local rank of this process on
+                # this node
                 output_device=dist.device,
                 broadcast_buffers=dist.broadcast_buffers,
                 find_unused_parameters=dist.find_unused_parameters,
@@ -57,6 +57,9 @@ def main():
     )
 
     # Create training step function with optimization wrapper
+    # StaticCaptureTraining calls `backward` on the loss and
+    # `optimizer.step()` so you don't have to do that
+    # explicitly.
     @StaticCaptureTraining(
         model=model,
         optim=optimizer,
@@ -73,7 +76,8 @@ def main():
         true = batch["darcy"]
         input = batch["permeability"]
         loss = training_step(input, true)
-        
+        scheduler.step()
+
 if __name__ == "__main__":
     main()
 

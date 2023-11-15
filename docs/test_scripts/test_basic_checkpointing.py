@@ -1,12 +1,11 @@
 # [imports]
 import torch
-import numpy as np
+
 import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.models.fno.fno import FNO
-from modulus.metrics.general.mse import mse
 from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.metrics.general.mse import mse
+from modulus.models.fno.fno import FNO
+
 # [imports]
 
 # [code]
@@ -34,8 +33,8 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(
     optimizer, lr_lambda=lambda step: 0.85**step
 )
 
-# load the epoch and optimizer, model ans scheduler parameters from the checkpoint if 
-# it exists 
+# load the epoch and optimizer, model ans scheduler parameters from the checkpoint if
+# it exists
 loaded_epoch = load_checkpoint(
     "./checkpoints",
     models=model,

@@ -1,12 +1,11 @@
 # [imports]
 import torch
-import numpy as np
+
 import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.models.fno.fno import FNO
+from modulus.launch.logging import LaunchLogger, PythonLogger
 from modulus.metrics.general.mse import mse
-from modulus.launch.logging import PythonLogger, LaunchLogger
+from modulus.models.fno.fno import FNO
+
 # [imports]
 
 # [code]
@@ -46,7 +45,7 @@ for i in range(20):
     # wrap the epoch in launch logger to control frequency of output for console logs
     with LaunchLogger("train", epoch=i) as launchlog:
         # this would be iterations through different batches
-        for _ in range(5):    
+        for _ in range(5):
             batch = next(iter(dataloader))
             true = batch["darcy"]
             pred = model(batch["permeability"])
@@ -57,7 +56,7 @@ for i in range(20):
             launchlog.log_minibatch({"Loss": loss.detach().cpu().numpy()})
 
         launchlog.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
-        
+
 
 logger.info("Finished Training!")
 # [code]

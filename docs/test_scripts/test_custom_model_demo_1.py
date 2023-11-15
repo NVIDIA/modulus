@@ -1,15 +1,12 @@
 # [imports]
 import torch
-import numpy as np
-import modulus
-import matplotlib.pyplot as plt
-from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.metrics.general.mse import mse
+
 # [imports]
-
 # [pytorch model]
-
 import torch.nn as nn
+
+import modulus
+from modulus.metrics.general.mse import mse
 
 
 class UNet(nn.Module):
@@ -50,9 +47,11 @@ class UNet(nn.Module):
 # [modulus model]
 
 from dataclasses import dataclass
+
+import torch.nn as nn
+
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-import torch.nn as nn
 
 
 @dataclass
@@ -71,9 +70,10 @@ MdlsUNet = Module.from_torch(UNet, meta=MdlsUNetMetaData)
 
 # [modulus sym model]
 
-from modulus.sym.models.arch import Arch
+from typing import Dict, Optional
+
 from modulus.sym.key import Key
-from typing import Optional, Dict
+from modulus.sym.models.arch import Arch
 
 
 class MdlsSymUNet(Arch):
@@ -107,6 +107,7 @@ class MdlsSymUNet(Arch):
 # [code]
 
 import time
+
 from modulus.utils import StaticCaptureTraining
 
 normaliser = {
@@ -145,5 +146,5 @@ for i in range(20):
     true = batch["darcy"]
     input = batch["permeability"]
     loss = training_step(input, true)
-
+    scheduler.step()
 # [code]
