@@ -25,7 +25,7 @@ class ProcessGroupNode:
     name : str
         Name of the process group
     size : Optional[int]
-        Optional, size of the process group
+        Optional, number of processes in the process group
     orthogonal_group : Optional[str]
         Optional, name of an orthogonal process group to create
     """
@@ -93,10 +93,14 @@ class ProcessGroupConfig:
     Examples
     --------
     >>> from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
-    >>> mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
     >>>
     >>> # Create model parallel group with data parallel as the orthogonal group
+    >>> mp = ProcessGroupNode("world")
     >>> mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
+    >>>
+    >>> # Create spatial and channel parallel sub-groups
+    >>> config.add_node(ProcessGroupNode("model_parallel"), parent=mp)
+    >>> config.add_node(ProcessGroupNode("data_parallel"), parent=mp)
     >>>
     >>> # Create the process group config with the highest level process group
     >>> config = ProcessGroupConfig(mp)
@@ -179,7 +183,7 @@ class ProcessGroupConfig:
         int
             Size of the root node
         """
-        return tree_product_reduction(self.tree, self.root_id, verbose=verbose)
+        return _tree_product_reduction(self.tree, self.root_id, verbose=verbose)
 
     def leaf_groups(self) -> List[str]:
         """
@@ -190,7 +194,6 @@ class ProcessGroupConfig:
         List[str]
             List of all leaf node names
         """
-        # return find_leaf_nodes(self.tree, self.root_id)
         return [n.identifier for n in self.tree.leaves()]
 
     def set_leaf_group_sizes(
@@ -219,7 +222,7 @@ class ProcessGroupConfig:
             self.update_parent_sizes()
 
 
-def tree_product_reduction(tree, node_id, verbose=False):
+def _tree_product_reduction(tree, node_id, verbose=False):
     """
     Function to traverse a tree and compute the product reduction of
     the sub-tree for each node starting from `node_id`
@@ -233,7 +236,7 @@ def tree_product_reduction(tree, node_id, verbose=False):
     product = 1
 
     for child in children:
-        product *= tree_product_reduction(tree, child.identifier)
+        product *= _tree_product_reduction(tree, child.identifier)
 
     if node.data.size != product:
         if verbose:
@@ -244,16 +247,3 @@ def tree_product_reduction(tree, node_id, verbose=False):
         node.data.size = product
 
     return product
-
-
-def find_leaf_nodes(tree, node_id):
-    """
-    Function to find all leaf node identifiers of `tree` starting from `node_id`
-    """
-    if not tree.children(node_id):
-        return [node_id]
-    else:
-        leaf_nodes = []
-        for child_id in tree.children(node_id):
-            leaf_nodes.extend(find_leaf_nodes(tree, child_id.identifier))
-        return leaf_nodes

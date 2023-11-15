@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
+from modulus.distributed import ProcessGroupNode, ProcessGroupConfig
 
 
 def test_config():
