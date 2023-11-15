@@ -86,7 +86,7 @@ def _recursive_to(inputs: T, target_device: torch.device, use_side_stream_for_te
     ...
 
 
-def _recursive_to(inputs, target_device, use_side_stream_for_tensor_copies):
+def _recursive_to(inputs, target_device, use_side_stream_for_tensor_copies):  # this one
     r"""
     Recursively moves input to the target_device.
     """
@@ -149,7 +149,7 @@ def _p_assert(cond: Any, s: str, raise_assertion_error: bool = True) -> None:
             raise AssertionError(s)
 
 
-def _alloc_storage(tensor: torch.Tensor, size: torch.Size) -> bool:
+def _alloc_storage(tensor: torch.Tensor, size: torch.Size) -> bool:  # this one
     """
     Allocate storage for ``tensor`` with the given size.
 
@@ -169,7 +169,7 @@ def _alloc_storage(tensor: torch.Tensor, size: torch.Size) -> bool:
         return not already_allocated
 
 
-def _free_storage(tensor: torch.Tensor) -> bool:
+def _free_storage(tensor: torch.Tensor) -> bool:  # this one
     """
     Frees the underlying storage of ``tensor``.
 
@@ -267,7 +267,7 @@ def _verify_param_shape_across_processes(
     return dist._verify_params_across_processes(process_group, tensors, logger)
 
 
-def _sync_module_states(
+def _sync_module_states(  # this one
     module: nn.Module,
     process_group: dist.ProcessGroup,
     broadcast_bucket_size: int,
