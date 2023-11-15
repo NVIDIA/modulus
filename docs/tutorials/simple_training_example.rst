@@ -1,5 +1,5 @@
-Simple Training and Inference recipe in Modulus
-================================================
+Simple Training and Inference recipe
+=====================================
 
 In this tutorial, we will see how to use utilites from Modulus to setup a simple model
 training pipeline. Once the initial setup is complete, we will also look into optimizing,

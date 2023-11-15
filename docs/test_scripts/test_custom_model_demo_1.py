@@ -125,6 +125,9 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(
 
 
 # Create training step function with optimization wrapper
+# StaticCaptureTraining calls `backward` on the loss and
+# `optimizer.step()` so you don't have to do that
+# explicitly.
 @StaticCaptureTraining(
     model=model,
     optim=optimizer,
@@ -137,7 +140,7 @@ def training_step(invar, outvar):
 
 
 # run for 20 iterations
-for i in range(21):
+for i in range(20):
     batch = next(iter(dataloader))
     true = batch["darcy"]
     input = batch["permeability"]

@@ -48,20 +48,23 @@ LaunchLogger.initialize(use_wandb=True)
 
 # Use logger methods to track various information during training
 logger.info("Starting Training!")
-# run for 20 iterations
-for i in range(21):
-    # wrap the epoch in launch logger to control frequency of output for console logs
-    with LaunchLogger("train", epoch=i) as log:    
-        batch = next(iter(dataloader))
-        true = batch["darcy"]
-        pred = model(batch["permeability"])
-        loss = mse(pred, true)
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
-        log.log_epoch({"Loss": loss.detach().cpu().numpy()})
 
-        log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
+# we will setup the training to run for 20 epochs each epoch running for 10 iterations
+for i in range(20):
+    # wrap the epoch in launch logger to control frequency of output for console logs
+    with LaunchLogger("train", epoch=i) as launchlog:    
+        # this would be iterations through different batches
+        for _ in range(10):         
+            batch = next(iter(dataloader))
+            true = batch["darcy"]
+            pred = model(batch["permeability"])
+            loss = mse(pred, true)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            launchlog.log_minibatch({"Loss": loss.detach().cpu().numpy()})
+
+        launchlog.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
         
 
 logger.info("Finished Training!")

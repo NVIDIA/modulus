@@ -29,13 +29,13 @@ model.save("untrained_checkpoint.mdlus")
 # Inference code
 
 # The parameters to instantitate the model will be loaded from the checkpoint
-model_inf = FNO.from_checkpoint("untrained_checkpoint.mdlus").to("cuda")
+model_inf = modulus.Module.from_checkpoint("untrained_checkpoint.mdlus").to("cuda")
 
 # put the model in evaluation mode
 model_inf.eval()
 
 # run inference
-with torch.no_grad():
+with torch.inference_mode():
     input = torch.ones(8, 1, 256, 256).to("cuda")
     output = model_inf(input)
     print(output.shape)

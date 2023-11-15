@@ -34,7 +34,7 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(
 )
 
 # run for 20 iterations
-for i in range(21):
+for i in range(20):
     batch = next(iter(dataloader))
     true = batch["darcy"]
     pred = model(batch["permeability"])

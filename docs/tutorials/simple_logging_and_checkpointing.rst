@@ -1,5 +1,5 @@
-Simple Logging and Checkpointing recipe in Modulus
-===================================================
+Simple Logging and Checkpointing recipe
+========================================
 
 Logging and checkpointing are important comonents of model training workflow. It allows
 users to keep a record of the model hyper-parameters and its performance on training.
@@ -36,38 +36,38 @@ The logger output can be seen below.
 
 .. code-block:: bash
 
-    Warp 0.10.1 initialized:
-       CUDA Toolkit: 11.5, Driver: 12.2
-       Devices:
-         "cpu"    | x86_64
-         "cuda:0" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:1" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:2" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:3" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:4" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:5" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:6" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:7" | Tesla V100-SXM2-16GB-N (sm_70)
-       Kernel cache: /root/.cache/warp/0.10.1
-    /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_fields.py:128: UserWarning: Field "model_server_url" has conflict with protected namespace "model_".
+   Warp 0.10.1 initialized:
+      CUDA Toolkit: 11.5, Driver: 12.2
+      Devices:
+        "cpu"    | x86_64
+        "cuda:0" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:1" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:2" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:3" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:4" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:5" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:6" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:7" | Tesla V100-SXM2-16GB-N (sm_70)
+      Kernel cache: /root/.cache/warp/0.10.1
+   /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_fields.py:128: UserWarning: Field "model_server_url" has conflict with protected namespace "model_".
 
-    You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
-      warnings.warn(
-    /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_config.py:317: UserWarning: Valid config keys have changed in V2:
-    * 'schema_extra' has been renamed to 'json_schema_extra'
-      warnings.warn(message, UserWarning)
-    [17:46:03 - main - INFO] Starting Training!
-    Module modulus.datapipes.benchmarks.kernels.initialization load on device 'cuda:0' took 436.98 ms
-    Module modulus.datapipes.benchmarks.kernels.utils load on device 'cuda:0' took 954.73 ms
-    Module modulus.datapipes.benchmarks.kernels.finite_difference load on device 'cuda:0' took 543.46 ms
-    [17:46:07 - train - INFO] Epoch 0 Metrics: Loss =  1.008e+00, Learning Rate =  8.500e-03
-    [17:46:07 - train - INFO] Epoch Execution Time:  4.291e+00s, Time/Iter:  4.291e+03ms
-    [17:46:08 - train - INFO] Epoch 1 Metrics: Loss =  1.037e+00, Learning Rate =  7.225e-03
-    [17:46:08 - train - INFO] Epoch Execution Time:  8.026e-01s, Time/Iter:  8.026e+02ms
-    ...
-    [17:46:28 - train - INFO] Epoch 20 Metrics: Loss =  1.509e-01, Learning Rate =  3.295e-04
-    [17:46:28 - train - INFO] Epoch Execution Time:  8.007e-01s, Time/Iter:  8.007e+02ms
-    [17:46:28 - main - INFO] Finished Training!
+   You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+     warnings.warn(
+   /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_config.py:317: UserWarning: Valid config keys have changed in V2:
+   * 'schema_extra' has been renamed to 'json_schema_extra'
+     warnings.warn(message, UserWarning)
+   [21:23:57 - main - INFO] Starting Training!
+   Module modulus.datapipes.benchmarks.kernels.initialization load on device 'cuda:0' took 73.06 ms
+   Module modulus.datapipes.benchmarks.kernels.utils load on device 'cuda:0' took 314.91 ms
+   Module modulus.datapipes.benchmarks.kernels.finite_difference load on device 'cuda:0' took 149.86 ms
+   [21:24:02 - train - INFO] Epoch 0 Metrics: Learning Rate =  4.437e-03, Loss =  1.009e+00
+   [21:24:02 - train - INFO] Epoch Execution Time:  5.664e+00s, Time/Iter:  1.133e+03ms
+   [21:24:06 - train - INFO] Epoch 1 Metrics: Learning Rate =  1.969e-03, Loss =  6.040e-01
+   [21:24:06 - train - INFO] Epoch Execution Time:  4.013e+00s, Time/Iter:  8.025e+02ms
+   ...
+   [21:25:32 - train - INFO] Epoch 19 Metrics: Learning Rate =  8.748e-10, Loss =  1.384e-01
+   [21:25:32 - train - INFO] Epoch Execution Time:  4.010e+00s, Time/Iter:  8.020e+02ms
+   [21:25:32 - main - INFO] Finished Training!
 
 
 MLFlow logging
@@ -128,58 +128,58 @@ The logger output can also be seen below.
 
 .. code-block:: bash
 
-    Warp 0.10.1 initialized:
-       CUDA Toolkit: 11.5, Driver: 12.2
-       Devices:
-         "cpu"    | x86_64
-         "cuda:0" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:1" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:2" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:3" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:4" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:5" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:6" | Tesla V100-SXM2-16GB-N (sm_70)
-         "cuda:7" | Tesla V100-SXM2-16GB-N (sm_70)
-       Kernel cache: /root/.cache/warp/0.10.1
-    /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_fields.py:128: UserWarning: Field "model_server_url" has conflict with protected namespace "model_".
+   Warp 0.10.1 initialized:
+      CUDA Toolkit: 11.5, Driver: 12.2
+      Devices:
+        "cpu"    | x86_64
+        "cuda:0" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:1" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:2" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:3" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:4" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:5" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:6" | Tesla V100-SXM2-16GB-N (sm_70)
+        "cuda:7" | Tesla V100-SXM2-16GB-N (sm_70)
+      Kernel cache: /root/.cache/warp/0.10.1
+   /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_fields.py:128: UserWarning: Field "model_server_url" has conflict with protected namespace "model_".
 
-    You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
-      warnings.warn(
-    /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_config.py:317: UserWarning: Valid config keys have changed in V2:
-    * 'schema_extra' has been renamed to 'json_schema_extra'
-      warnings.warn(message, UserWarning)
-    wandb: Tracking run with wandb version 0.15.12
-    wandb: W&B syncing is set to `offline` in this directory.  
-    wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
-    [22:06:16 - main - INFO] Starting Training!
-    Module modulus.datapipes.benchmarks.kernels.initialization load on device 'cuda:0' took 73.49 ms
-    Module modulus.datapipes.benchmarks.kernels.utils load on device 'cuda:0' took 311.67 ms
-    Module modulus.datapipes.benchmarks.kernels.finite_difference load on device 'cuda:0' took 146.65 ms
-    [22:06:19 - train - INFO] Epoch 0 Metrics: Loss =  1.061e+00, Learning Rate =  8.500e-03
-    [22:06:19 - train - INFO] Epoch Execution Time:  2.478e+00s, Time/Iter:  2.478e+03ms
-    ...
-    [22:06:35 - train - INFO] Epoch 20 Metrics: Loss =  1.317e-01, Learning Rate =  3.295e-04
-    [22:06:35 - train - INFO] Epoch Execution Time:  8.073e-01s, Time/Iter:  8.073e+02ms
-    [22:06:35 - main - INFO] Finished Training!
-    wandb: Waiting for W&B process to finish... (success).
-    wandb: 
-    wandb: Run history:
-    wandb:                    epoch ▁▁▂▂▂▃▃▃▄▄▅▅▅▆▆▆▇▇▇██
-    wandb:     train/Epoch Time (s) █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-    wandb:      train/Learning Rate █▇▆▅▅▄▃▃▃▂▂▂▂▂▁▁▁▁▁▁▁
-    wandb:               train/Loss ███▇▇▆▅▄▃▃▄▄▄▃▂▁▁▁▁▁▁
-    wandb: train/Time per iter (ms) █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-    wandb: 
-    wandb: Run summary:
-    wandb:                    epoch 20
-    wandb:     train/Epoch Time (s) 0.80729
-    wandb:      train/Learning Rate 0.00033
-    wandb:               train/Loss 0.13166
-    wandb: train/Time per iter (ms) 807.29163
-    wandb: 
-    wandb: You can sync this run to the cloud by running:
-    wandb: wandb sync /workspace/release_23.11/docs_upgrade/modulus/docs/wandb/wandb/offline-run-20231114_220616-7iwbiukr
-    wandb: Find logs at: ./wandb/wandb/offline-run-20231114_220616-7iwbiukr/logs
+   You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+     warnings.warn(
+   /usr/local/lib/python3.10/dist-packages/pydantic/_internal/_config.py:317: UserWarning: Valid config keys have changed in V2:
+   * 'schema_extra' has been renamed to 'json_schema_extra'
+     warnings.warn(message, UserWarning)
+   wandb: Tracking run with wandb version 0.15.12
+   wandb: W&B syncing is set to `offline` in this directory.  
+   wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+   [21:26:38 - main - INFO] Starting Training!
+   Module modulus.datapipes.benchmarks.kernels.initialization load on device 'cuda:0' took 74.11 ms
+   Module modulus.datapipes.benchmarks.kernels.utils load on device 'cuda:0' took 310.06 ms
+   Module modulus.datapipes.benchmarks.kernels.finite_difference load on device 'cuda:0' took 151.24 ms
+   [21:26:48 - train - INFO] Epoch 0 Metrics: Learning Rate =  1.969e-03, Loss =  7.164e-01
+   [21:26:48 - train - INFO] Epoch Execution Time:  9.703e+00s, Time/Iter:  9.703e+02ms
+   ...
+   [21:29:47 - train - INFO] Epoch 19 Metrics: Learning Rate =  7.652e-17, Loss =  3.519e-01
+   [21:29:47 - train - INFO] Epoch Execution Time:  1.125e+01s, Time/Iter:  1.125e+03ms
+   [21:29:47 - main - INFO] Finished Training!
+   wandb: Waiting for W&B process to finish... (success).
+   wandb: 
+   wandb: Run history:
+   wandb:                    epoch ▁▁▂▂▂▃▃▄▄▄▅▅▅▆▆▇▇▇██
+   wandb:     train/Epoch Time (s) ▃▁▃▃▃▃▁█▁▁▁▃▃▃▃▆▁▃▃▆
+   wandb:      train/Learning Rate █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+   wandb:               train/Loss █▁▂▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+   wandb: train/Time per iter (ms) ▃▁▃▃▃▃▁█▁▁▁▃▃▃▃▆▁▃▃▆
+   wandb: 
+   wandb: Run summary:
+   wandb:                    epoch 19
+   wandb:     train/Epoch Time (s) 11.24806
+   wandb:      train/Learning Rate 0.0
+   wandb:               train/Loss 0.35193
+   wandb: train/Time per iter (ms) 1124.80645
+   wandb: 
+   wandb: You can sync this run to the cloud by running:
+   wandb: wandb sync /workspace/modulus/docs/test_scripts/wandb/wandb/offline-run-20231115_212638-ib4ylq4e
+   wandb: Find logs at: ./wandb/wandb/offline-run-20231115_212638-ib4ylq4e/logs
 
 
 To visulaize the logs interactively, simply follow the instructions printed in the outputs. 

@@ -44,18 +44,20 @@ loaded_epoch = load_checkpoint(
     device="cuda",
 )
 
-# run for 20 iterations
+# we will setup the training to run for 20 epochs each epoch running for 5 iterations
 # starting with the loaded epoch
-for i in range(max(1, loaded_epoch), 21):
-    batch = next(iter(dataloader))
-    true = batch["darcy"]
-    pred = model(batch["permeability"])
-    loss = mse(pred, true)
-    loss.backward()
-    optimizer.step()
-    scheduler.step()
+for i in range(max(1, loaded_epoch), 20):
+    # this would be iterations through different batches
+    for _ in range(5):
+        batch = next(iter(dataloader))
+        true = batch["darcy"]
+        pred = model(batch["permeability"])
+        loss = mse(pred, true)
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
 
-    # save checkpoint every 5th iteration
+    # save checkpoint every 5th epoch
     if i % 5 == 0:
         save_checkpoint(
             "./checkpoints",

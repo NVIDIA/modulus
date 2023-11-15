@@ -68,11 +68,12 @@ def main():
         return loss
 
     # run for 20 iterations
-    for i in range(21):
+    for i in range(20):
         batch = next(iter(dataloader))
         true = batch["darcy"]
         input = batch["permeability"]
-
+        loss = training_step(input, true)
+        
 if __name__ == "__main__":
     main()
 
