@@ -38,21 +38,21 @@ logger = logging.getLogger(__name__)
 #         self.module = model
 
 
-# class _CosZenWrapper(torch.nn.Module):
-#     def __init__(self, model, lon, lat):
-#         super().__init__()
-#         self.model = model
-#         self.lon = lon
-#         self.lat = lat
+class _CosZenWrapper(torch.nn.Module):
+    def __init__(self, model, lon, lat):
+        super().__init__()
+        self.model = model
+        self.lon = lon
+        self.lat = lat
 
-#     def forward(self, x, time):
-#         lon_grid, lat_grid = np.meshgrid(self.lon, self.lat)
-#         cosz = cos_zenith_angle(time, lon_grid, lat_grid)
-#         cosz = cosz.astype(np.float32)
-#         z = torch.from_numpy(cosz).to(device=x.device)
-#         x, z = torch.broadcast_tensors(x, z)
-#         x = torch.cat([x, z], dim=1)
-#         return self.model(x)
+    def forward(self, x, time):
+        lon_grid, lat_grid = np.meshgrid(self.lon, self.lat)
+        cosz = cos_zenith_angle(time, lon_grid, lat_grid)
+        cosz = cosz.astype(np.float32)
+        z = torch.from_numpy(cosz).to(device=x.device)
+        x, z = torch.broadcast_tensors(x, z)
+        x = torch.cat([x, z], dim=1)
+        return self.model(x)
 
 
 # def sfno(package: filesystem.Package, pretrained: bool = True) -> torch.nn.Module:
