@@ -16,7 +16,8 @@ This is a research code built for massively parallel training of SFNO for weathe
 Install the optional dependencies by running
 
 ```bash
-pip install jsbeautifier xskillscore
+pip install jsbeautifier xskillscore numba
+ENV NUMBA_DISABLE_CUDA=1
 ```
 
 To enable MPI for HDF5 for accelerated file preprocessing, we need a custom build of h5py:
@@ -48,6 +49,12 @@ CC="mpicc" HDF5_MPI="ON" HDF5_DIR=/opt/hdf5 pip install --no-binary=h5py h5py
 
 # export the environment variable
 export ENABLE_H5PY_ODIRECT=True
+```
+
+If needed, you can also install some useful scripts from mlperf
+
+```bash
+pip install --ignore-installed "git+https://github.com/NVIDIA/mlperf-common.git"
 ```
 
 ### Training
