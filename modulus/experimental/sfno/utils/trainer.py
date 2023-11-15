@@ -48,6 +48,10 @@ from collections import OrderedDict
 # for counting model parameters
 from modulus.experimental.sfno.networks.helpers import count_parameters
 
+# Custom optimizers to to enable optimization of complex parameters
+from modulus.experimental.sfno.third_party.torch.optim.adam import Adam as CustomAdam
+from modulus.experimental.sfno.third_party.torch.optim.adamw import AdamW as CustomAdamW
+
 class Trainer():
     """
     Trainer class holding all the necessary information to perform training.
@@ -453,17 +457,17 @@ class Trainer():
         if params.optimizer_type == 'Adam':
             if params.log_to_screen:
                 self.logger.info("using Adam")
-            self.optimizer = torch.optim.Adam(all_parameters, betas = betas,
-                                              lr = params.lr,
-                                              weight_decay = params.weight_decay,
-                                              foreach = True)
+            self.optimizer = CustomAdam(all_parameters, betas = betas,
+                                        lr = params.lr,
+                                        weight_decay = params.weight_decay,
+                                        foreach = True)
         elif params.optimizer_type == 'AdamW':
             if params.log_to_screen:
                 self.logger.info("using AdamW")
-            self.optimizer = torch.optim.AdamW(all_parameters, betas = betas,
-                                              lr = params.lr,
-                                              weight_decay = params.weight_decay,
-                                              foreach = True)
+            self.optimizer = CustomAdamW(all_parameters, betas = betas,
+                                         lr = params.lr,
+                                         weight_decay = params.weight_decay,
+                                         foreach = True)
         elif params.optimizer_type == 'FusedLAMB':
             try:
                 import doesnotexist
