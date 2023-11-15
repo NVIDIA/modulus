@@ -45,6 +45,9 @@ make -j 8 && make install
 
 # h5py
 CC="mpicc" HDF5_MPI="ON" HDF5_DIR=/opt/hdf5 pip install --no-binary=h5py h5py
+
+# export the environment variable
+export ENABLE_H5PY_ODIRECT=True
 ```
 
 ### Training
