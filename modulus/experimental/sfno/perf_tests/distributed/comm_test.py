@@ -20,13 +20,15 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 from torch.cuda import amp
 
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modulus.experimental.sfno.utils import comm
 
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 # profile stuff
 from ctypes import cdll
