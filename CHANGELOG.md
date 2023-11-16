@@ -6,9 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [0.5.0a0] - 2024-01-XX
 
 ### Added
+
+- Added distributed process group configuration mechanism.
+- Added DistributedManager utility to instantiate process groups based on they
+process group config
 
 ### Changed
 
@@ -34,9 +38,7 @@ weather models
 - Ported utilities from Modulus Launch to main package.
 - EDM diffusion models and recipes for training and sampling.
 - NGC model registry download integration into package/filesystem.
-- Added distributed process group configuration mechanism.
-- Added DistributedManager utility to instantiate process groups based on they
-process group config
+- Denoising diffusion tutorial.
 
 ### Changed
 
@@ -44,15 +46,9 @@ process group config
 - Integrated the network architecture layers from Modulus-Sym.
 - Updated the SFNO model, and the training and inference recipes.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - Fixed modulus.Module `from_checkpoint` to work from custom model classes
-
-### Security
 
 ### Dependencies
 
