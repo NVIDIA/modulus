@@ -432,14 +432,14 @@ class DistributedManager(object):
 
     @staticmethod
     def create_orthogonal_process_group(
-        name: str, group_name: str, verbose: bool = False
+        orthogonal_group_name: str, group_name: str, verbose: bool = False
     ):  # pragma: no cover
         """
         Create a process group that is orthogonal to the specified process group.
 
         Parameters
         ----------
-        name : str
+        orthogonal_group_name : str
             Name of the process group to be created.
 
         group_name : str
@@ -455,8 +455,8 @@ class DistributedManager(object):
 
         if group_name not in manager._groups:
             raise ValueError(f"Group with name {group_name} does not exist")
-        if name in manager._groups:
-            raise ValueError(f"Group with name {name} already exists")
+        if orthogonal_group_name in manager._groups:
+            raise ValueError(f"Group with name {orthogonal_group_name} already exists")
 
         group_ranks = manager._group_ranks[group_name]
         orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
@@ -465,14 +465,14 @@ class DistributedManager(object):
             tmp_group = dist.new_group(ranks=ranks)
             if manager.rank in ranks:
                 # Set group in manager only if this rank is part of the group
-                manager._groups[name] = tmp_group
-                manager._group_names[tmp_group] = name
+                manager._groups[orthogonal_group_name] = tmp_group
+                manager._group_names[tmp_group] = orthogonal_group_name
 
-        manager._group_ranks[name] = orthogonal_ranks
+        manager._group_ranks[orthogonal_group_name] = orthogonal_ranks
 
         if verbose and manager.rank == 0:
-            print(f"Process group '{name}':")
-            for grp in manager._group_ranks[name]:
+            print(f"Process group '{orthogonal_group_name}':")
+            for grp in manager._group_ranks[orthogonal_group_name]:
                 print("    ", grp)
 
     @staticmethod
