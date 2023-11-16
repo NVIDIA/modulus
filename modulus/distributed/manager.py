@@ -482,17 +482,13 @@ class DistributedManager(object):
             node.size is not None
         ), "Cannot create groups from a ProcessGroupNode that is not fully populated. "
         "Ensure that config.set_leaf_group_sizes is called first with "
-        "update_parent_sizes = True"
+        "`update_parent_sizes = True`"
 
         DistributedManager.create_process_subgroup(
             node.name, node.size, group_name=parent, verbose=verbose
         )
-        orthogonal_group = (
-            node.orthogonal_group
-            if node.orthogonal_group is not None
-            else f"__orthogonal_to_{node.name}"
-        )
         # Create orthogonal process group
+        orthogonal_group = f"__orthogonal_to_{node.name}"
         DistributedManager.create_orthogonal_process_group(
             orthogonal_group, node.name, verbose=verbose
         )

@@ -217,26 +217,32 @@ def run_process_groups_from_config(rank, model_parallel_size, verbose):
 
     DistributedManager.initialize()
 
-    # Create model parallel group with data parallel as the orthogonal group
-    mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
+    # Create world group that contains all processes that are part of this job
+    world = ProcessGroupNode("world")
 
     # Create the process group config with the highest level process group
-    pg_config = ProcessGroupConfig(mp)
+    config = ProcessGroupConfig(world)
+
+    # Create model and data parallel sub-groups
+    config.add_node(ProcessGroupNode("model_parallel"), parent="world")
+    config.add_node(ProcessGroupNode("data_parallel"), parent="world")
 
     # Create spatial and channel parallel sub-groups
-    pg_config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
-    pg_config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
+    config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
+    config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
 
     # Set leaf group sizes
-    group_sizes = {"channel_parallel": 1, "spatial_parallel": 2}
-    pg_config.set_leaf_group_sizes(group_sizes)  # Updates all parent group sizes too
+    group_sizes = {"channel_parallel": 1, "spatial_parallel": 2, "data_parallel": 1}
+    config.set_leaf_group_sizes(group_sizes)  # Updates all parent group sizes too
 
     assert (
-        pg_config.get_node("model_parallel").size == 2
-    ), "Incorrect size for parent node"
+        config.get_node("model_parallel").size == 2
+    ), "Incorrect size for 'model_parallel' parent node"
+
+    assert config.get_node("world").size == 2, "Incorrect size for 'world' parent node"
 
     # Create model parallel process group
-    DistributedManager.create_groups_from_config(pg_config, verbose=verbose)
+    DistributedManager.create_groups_from_config(config, verbose=verbose)
 
     manager = DistributedManager()
 
