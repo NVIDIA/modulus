@@ -204,12 +204,12 @@ class ProcessGroupConfig:
         """
         for id, size in group_sizes.items():
             if not self.tree.contains(id):
-                raise RuntimeError(
+                raise AssertionError(
                     f"Process group {id} is not in this process group config"
                 )
             node = self.tree.get_node(id)
             if not node.is_leaf():
-                raise RuntimeError(f"Process group {id} is not a leaf group")
+                raise AssertionError(f"Process group {id} is not a leaf group")
             node.data.size = size
 
         if update_parent_sizes:
@@ -225,7 +225,7 @@ def _tree_product_reduction(tree, node_id, verbose=False):
     node = tree.get_node(node_id)
     if not children:
         if node.data.size is None:
-            raise RuntimeError("Leaf nodes should have a valid size set")
+            raise AssertionError("Leaf nodes should have a valid size set")
         return node.data.size
 
     product = 1

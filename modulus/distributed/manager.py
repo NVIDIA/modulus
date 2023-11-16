@@ -482,7 +482,7 @@ class DistributedManager(object):
         verbose: bool = False,
     ):  # pragma: no cover
         if node.size is None:
-            raise RuntimeError(
+            raise AssertionError(
                 "Cannot create groups from a ProcessGroupNode that is not fully"
                 " populated. Ensure that config.set_leaf_group_sizes is called first"
                 " with `update_parent_sizes = True`"
