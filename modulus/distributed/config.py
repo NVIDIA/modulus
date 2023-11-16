@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from treelib import Tree
 from typing import Dict, List, Optional, Union
+
+from treelib import Tree
 
 
 class ProcessGroupNode:
@@ -98,14 +99,14 @@ class ProcessGroupConfig:
     >>> config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
     >>> config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
     >>>
-    >>> pg_config.leaf_groups()
+    >>> config.leaf_groups()
     ['spatial_parallel', 'channel_parallel', 'data_parallel']
     >>>
     >>> # Set leaf group sizes
     >>> # Note: product of all leaf-node sizes should be the world size
     >>> group_sizes = {"channel_parallel": 3, "spatial_parallel": 2, "data_parallel": 4}
-    >>> pg_config.set_leaf_group_sizes(group_sizes)  # Update all parent group sizes too
-    >>> pg_config.get_node("model_parallel").size
+    >>> config.set_leaf_group_sizes(group_sizes)  # Update all parent group sizes too
+    >>> config.get_node("model_parallel").size
     6
     """
 
@@ -202,11 +203,13 @@ class ProcessGroupConfig:
             If False, only set the leaf group sizes.
         """
         for id, size in group_sizes.items():
-            assert self.tree.contains(
-                id
-            ), f"Process group {id} is not in this process group config"
+            if not self.tree.contains(id):
+                raise RuntimeError(
+                    f"Process group {id} is not in this process group config"
+                )
             node = self.tree.get_node(id)
-            assert node.is_leaf(), f"Process group {id} is not a leaf group"
+            if not node.is_leaf():
+                raise RuntimeError(f"Process group {id} is not a leaf group")
             node.data.size = size
 
         if update_parent_sizes:
@@ -221,7 +224,8 @@ def _tree_product_reduction(tree, node_id, verbose=False):
     children = tree.children(node_id)
     node = tree.get_node(node_id)
     if not children:
-        assert node.data.size is not None, "Leaf nodes should have a valid size set"
+        if node.data.size is None:
+            raise RuntimeError("Leaf nodes should have a valid size set")
         return node.data.size
 
     product = 1
