@@ -14,11 +14,14 @@
 
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
 
 from modulus.experimental.sfno.utils import comm
 
 from torch._utils import _flatten_dense_tensors
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 def get_memory_format(tensor):
     if tensor.is_contiguous(memory_format=torch.channels_last):

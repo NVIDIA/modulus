@@ -16,7 +16,8 @@ This is a research code built for massively parallel training of SFNO for weathe
 Install the optional dependencies by running
 
 ```bash
-pip install jsbeautifier xskillscore
+pip install jsbeautifier xskillscore numba mpi4py
+ENV NUMBA_DISABLE_CUDA=1
 ```
 
 To enable MPI for HDF5 for accelerated file preprocessing, we need a custom build of h5py:
@@ -45,6 +46,15 @@ make -j 8 && make install
 
 # h5py
 CC="mpicc" HDF5_MPI="ON" HDF5_DIR=/opt/hdf5 pip install --no-binary=h5py h5py
+
+# export the environment variable
+export ENABLE_H5PY_ODIRECT=True
+```
+
+If needed, you can also install some useful scripts from mlperf
+
+```bash
+pip install --ignore-installed "git+https://github.com/NVIDIA/mlperf-common.git"
 ```
 
 ### Training
@@ -52,7 +62,7 @@ CC="mpicc" HDF5_MPI="ON" HDF5_DIR=/opt/hdf5 pip install --no-binary=h5py h5py
 Training is launched by calling `train.py` and passing it the necessary CLI arguments to specify the configuration file `--yaml_config` and he configuration target `--config`:
 
 ```bash
-mpirun -np 8 --allow-run-as-root python -u train.py --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq"
+mpirun -np 8 --allow-run-as-root python -u train.py --yaml_config="config/sfnonet_devel.yaml" --config="sfno_linear_73chq_sc3_layers8_edim384_asgl2"
 ```
 
 SFNO code supports various optimization to fit large models ino GPU memory and enable computationally efficient training. An overview of these features and corresponding CLI arguments is provided in the following table:
@@ -71,7 +81,7 @@ SFNO code supports various optimization to fit large models ino GPU memory and e
 Especially larger models are enabled by using a mix of these techniques. Spatial model parallelism splits both the model and the data onto multiple GPUs, thus reducing both the memory footprint of the model and the load on the IO as each rank only needs to read a fraction of the data. A typical "large" training run of SFNO can be launched by running
 
 ```bash
-mpirun -np 256 --allow-run-as-root python -u train.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq_sc3_layers8_edim960" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
+mpirun -np 256 --allow-run-as-root python -u train.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet_devel.yaml" --config="sfno_linear_73chq_sc3_layers8_edim384_asgl2" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
 ```
 
 Here we train the model on 256 GPUs, split horizontally across 4 ranks with a batch size of 64, which amounts to a local batch size of 1/4. Memory requirements are further reduced by the use of `bf16` automatic mixed precision.
@@ -81,7 +91,7 @@ Here we train the model on 256 GPUs, split horizontally across 4 ranks with a ba
 In a similar fashion to training, inference can be called from the CLI by calling `inference.py` and handled by `inferencer.py`. To launch inference on the out-of-sample dataset, we can call:
 
 ```bash
-mpirun -np 256 --allow-run-as-root python -u inference.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet.yaml" --config="sfno_linear_73chq_sc3_layers8_edim960" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
+mpirun -np 256 --allow-run-as-root python -u inference.py --amp_mode=bf16 --cuda_graph_mode=fwdbwd --multistep_count=1 --run_num="ngpu256_sp4" --yaml_config="config/sfnonet_devel.yaml" --config="sfno_linear_73chq_sc3_layers8_edim384_asgl2" --h_parallel_size=4 --w_parallel_size=1 --batch_size=64
 ```
 
 By default, the inference script will perform inference on the out-of-sample dataset specified
