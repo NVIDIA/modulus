@@ -20,12 +20,15 @@ from torch import nn
 from torch.cuda import amp
 import time
 import apex
-import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 
 from modulus.experimental.sfno.mpu.layers import compl_mul_add_fwd, compl_mul_add_fwd_c
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 class ComplexMult(nn.Module):
     def __init__(self, num_blocks, block_size, hidden_size_factor, use_complex_kernels=True):

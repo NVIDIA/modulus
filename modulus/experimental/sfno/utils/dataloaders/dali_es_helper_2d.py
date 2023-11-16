@@ -341,7 +341,7 @@ class GeneralES(object):
         torch.cuda.nvtx.range_push("GeneralES:_compute_zenith_angle")
 
         # import
-        from third_party.climt.zenith_angle import cos_zenith_angle
+        from modulus.experimental.sfno.third_party.climt.zenith_angle import cos_zenith_angle
         
         # compute hours into the year
         year = self.years[year_idx]

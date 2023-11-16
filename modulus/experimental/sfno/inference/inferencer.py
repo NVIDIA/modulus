@@ -36,8 +36,10 @@ from modulus.experimental.sfno.utils.metric import MetricsHandler
 # distributed computing stuff
 from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils import visualize
-import torch.distributed as dist
 
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 class Inferencer(Trainer):
     """

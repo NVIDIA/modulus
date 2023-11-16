@@ -16,7 +16,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 from torch.cuda.amp import custom_fwd, custom_bwd
 from modulus.experimental.sfno.utils import comm
 
@@ -28,6 +27,10 @@ from modulus.experimental.sfno.mpu.mappings import copy_to_parallel_region
 from modulus.experimental.sfno.mpu.helpers import _transpose
 from modulus.experimental.sfno.mpu.helpers import pad_helper
 from modulus.experimental.sfno.mpu.helpers import truncate_helper 
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 
 class distributed_transpose_w(torch.autograd.Function):
