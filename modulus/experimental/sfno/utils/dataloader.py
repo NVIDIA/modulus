@@ -19,8 +19,11 @@ import torch
 from torch.utils.data import DataLoader
 
 # distributed stuff
-import torch.distributed as dist
 from modulus.experimental.sfno.utils import comm
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 
 def init_distributed_io(params):

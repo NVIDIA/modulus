@@ -21,7 +21,6 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 from torch.cuda import amp
 
 sys.path.append(os.path.join("/opt", "makani"))
@@ -31,6 +30,10 @@ from modulus.experimental.sfno.utils import comm
 
 from torch_harmonics import RealSHT as RealSphericalHarmonicTransform
 from torch_harmonics import InverseRealSHT as InverseRealSphericalHarmonicTransform
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 # profile stuff
 from ctypes import cdll

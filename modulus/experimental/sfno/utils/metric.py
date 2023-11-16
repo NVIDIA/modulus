@@ -18,8 +18,11 @@ import wandb
 # distributed computing stuff
 from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils.metrics.functions import GeometricL1, GeometricRMSE, GeometricACC, Quadrature
-import torch.distributed as dist
 from modulus.experimental.sfno.mpu.mappings import gather_from_parallel_region
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 class MetricsHandler():
     """
