@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ported utilities from Modulus Launch to main package.
 - EDM diffusion models and recipes for training and sampling.
 - NGC model registry download integration into package/filesystem.
+- Denoising diffusion tutorial.
 
 ### Changed
 
