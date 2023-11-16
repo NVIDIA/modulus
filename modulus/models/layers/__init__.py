@@ -12,19 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .activations import Identity, Stan, SquarePlus, get_activation
-from .weight_norm import WeightNormLinear
+from .activations import Identity, SquarePlus, Stan, get_activation
+from .dgm_layers import DGMLayer
+from .fourier_layers import FourierFilter, FourierLayer, GaborFilter
+from .fully_connected_layers import (
+    Conv1dFCLayer,
+    Conv2dFCLayer,
+    Conv3dFCLayer,
+    ConvNdFCLayer,
+    ConvNdKernel1Layer,
+    FCLayer,
+)
+from .siren_layers import SirenLayer, SirenLayerType
 from .spectral_layers import (
     SpectralConv1d,
     SpectralConv2d,
     SpectralConv3d,
     SpectralConv4d,
 )
-from .fully_connected_layers import (
-    FCLayer,
-    Conv1dFCLayer,
-    Conv2dFCLayer,
-    Conv3dFCLayer,
-    ConvNdFCLayer,
-    ConvNdKernel1Layer,
-)
+from .weight_fact import WeightFactLinear
+from .weight_norm import WeightNormLinear

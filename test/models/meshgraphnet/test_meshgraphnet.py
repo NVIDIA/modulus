@@ -11,24 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import torch
-import pytest
+# ruff: noqa: E402
+import os
 import random
-import dgl
+import sys
+
 import numpy as np
-import os, sys
+import pytest
+import torch
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
-from modulus.models.meshgraphnet import MeshGraphNet
 import common
+from pytest_utils import import_or_fail
+
+dgl = pytest.importorskip("dgl")
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_meshgraphnet_forward(device):
+def test_meshgraphnet_forward(device, pytestconfig):
     """Test mehsgraphnet forward pass"""
+
+    from modulus.models.meshgraphnet import MeshGraphNet
+
     torch.manual_seed(0)
     dgl.seed(0)
     np.random.seed(0)
@@ -56,9 +63,13 @@ def test_meshgraphnet_forward(device):
     )
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_mehsgraphnet_constructor(device):
+def test_mehsgraphnet_constructor(device, pytestconfig):
     """Test mehsgraphnet constructor options"""
+
+    from modulus.models.meshgraphnet import MeshGraphNet
+
     # Define dictionary of constructor args
     arg_list = [
         {
@@ -109,9 +120,12 @@ def test_mehsgraphnet_constructor(device):
         assert outvar.shape == (bsize * num_nodes, kw_args["output_dim"])
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_meshgraphnet_optims(device):
+def test_meshgraphnet_optims(device, pytestconfig):
     """Test meshgraphnet optimizations"""
+
+    from modulus.models.meshgraphnet import MeshGraphNet
 
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
@@ -145,9 +159,13 @@ def test_meshgraphnet_optims(device):
     assert common.validate_combo_optims(model, (*invar,))
 
 
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_meshgraphnet_checkpoint(device):
+def test_meshgraphnet_checkpoint(device, pytestconfig):
     """Test meshgraphnet checkpoint save/load"""
+
+    from modulus.models.meshgraphnet import MeshGraphNet
+
     # Construct MGN model
     model_1 = MeshGraphNet(
         input_dim_nodes=4,
@@ -179,10 +197,14 @@ def test_meshgraphnet_checkpoint(device):
     )
 
 
+@import_or_fail("dgl")
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_meshgraphnet_deploy(device):
+def test_meshgraphnet_deploy(device, pytestconfig):
     """Test mesh-graph net deployment support"""
+
+    from modulus.models.meshgraphnet import MeshGraphNet
+
     # Construct MGN model
     model = MeshGraphNet(
         input_dim_nodes=4,

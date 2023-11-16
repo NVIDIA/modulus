@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import datetime as dt
 import logging
-from modulus.utils.sfno.logging_utils import disable_logging
 import math
+import os
+from typing import Union
+
+import numpy as np
 import torch
 import torch.distributed as dist
-import datetime as dt
-from typing import Union
-import numpy as np
+
+from modulus.utils.sfno.logging_utils import disable_logging
 
 # dummy placeholders
 _COMM_LIST = []
@@ -147,8 +149,6 @@ def init(params, verbose=False):  # pragma: no cover
         os.environ["MASTER_PORT"] = str(port)
     else:
         raise ValueError(f"Error, wireup-info {params.wireup_info} not supported")
-    # set local rank to 0 if env var not available
-    local_rank = int(os.getenv("LOCAL_RANK", 0))
 
     if world_size > 1:
         with disable_logging():
@@ -178,7 +178,6 @@ def init(params, verbose=False):  # pragma: no cover
             # get sizes
             world_size = get_world_size()
             world_rank = get_world_rank()
-            local_rank = get_local_rank()
 
     # do individual wireup for model parallel comms:
     if hasattr(params, "model_parallel_sizes"):
@@ -190,15 +189,16 @@ def init(params, verbose=False):  # pragma: no cover
         model_parallel_names = params.model_parallel_names
     else:
         model_parallel_names = ["model"]
-    assert len(model_parallel_names) == len(
-        model_parallel_sizes
-    ), "Please specify names for your communicators"
+    if len(model_parallel_names) != len(model_parallel_sizes):
+        raise ValueError("Please specify names for your communicators")
     model_parallel_size = math.prod(model_parallel_sizes)
     params["model_parallel_size"] = model_parallel_size
 
-    assert (
-        world_size % model_parallel_size == 0
-    ), "Error, please make sure that the product of model parallel ranks evenly divides the total number of ranks"
+    if world_size % model_parallel_size != 0:
+        raise ValueError(
+            "Error, please make sure that the product of model parallel ranks evenly \
+            divides the total number of ranks"
+        )
 
     # we set this to be orthogonal to the MP groups
     # we can play tricks with the ddp_group later, in case if all the weights are shared
@@ -213,7 +213,6 @@ def init(params, verbose=False):  # pragma: no cover
     if world_size > 1:
 
         # set up the strides:
-        model_parallel_sizes_reversed = model_parallel_sizes[::-1]
         model_grid = np.reshape(
             np.arange(0, model_parallel_size), model_parallel_sizes[::-1]
         )

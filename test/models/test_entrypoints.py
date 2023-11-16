@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import pkg_resources
+import pytest
+from pytest_utils import _import_or_fail
 
 
 @pytest.mark.parametrize(
@@ -31,8 +32,12 @@ import pkg_resources
         "SRResNet",
     ],
 )
-def test_model_entry_points(model_name):
+def test_model_entry_points(model_name, pytestconfig):
     """Test model entry points"""
+
+    if model_name == "GraphCastNet" or model_name == "MeshGraphNet":
+        _import_or_fail("dgl", pytestconfig)
+
     # Get all the models exposed by the package
     models = {
         entry_point.name: entry_point
@@ -44,6 +49,6 @@ def test_model_entry_points(model_name):
 
     # Try loading the model
     try:
-        model = models[model_name].load()
+        models[model_name].load()
     except Exception as e:
         pytest.fail(f"Failed to load {model_name}: {e}")

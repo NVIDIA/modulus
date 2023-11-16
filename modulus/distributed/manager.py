@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.distributed as dist
-from typing import Optional
 import os
-import numpy as np
 import queue
-
+from typing import Optional
 from warnings import warn
 
-from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
+import numpy as np
+import torch
+import torch.distributed as dist
+
+from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
 
 
 class DistributedManager(object):
@@ -388,7 +388,8 @@ class DistributedManager(object):
         if not manager.distributed:
             return None
 
-        assert name not in manager._groups, f"Group with name {name} already exists"
+        if name in manager._groups:
+            raise AssertionError(f"Group with name {name} already exists")
 
         # Get parent group's params
         group = manager._groups[group_name] if group_name else None
@@ -396,9 +397,11 @@ class DistributedManager(object):
         num_groups = manager.world_size // group_size
 
         # Get number of sub-groups per parent group
-        assert (
-            group_size % size == 0
-        ), f"Cannot divide group size {group_size} evenly into subgroups of size {size}"
+        if group_size % size != 0:
+            raise AssertionError(
+                f"Cannot divide group size {group_size} evenly into subgroups of"
+                f" size {size}"
+            )
         num_subgroups = group_size // size
 
         # Create all the sub-groups
@@ -450,10 +453,10 @@ class DistributedManager(object):
         if not manager.distributed:
             return None
 
-        assert (
-            group_name in manager._groups
-        ), f"Group with name {group_name} does not exist"
-        assert name not in manager._groups, f"Group with name {name} already exists"
+        if group_name not in manager._groups:
+            raise ValueError(f"Group with name {group_name} does not exist")
+        if name in manager._groups:
+            raise ValueError(f"Group with name {name} already exists")
 
         group_ranks = manager._group_ranks[group_name]
         orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
@@ -478,11 +481,12 @@ class DistributedManager(object):
         parent: Optional[str] = None,
         verbose: bool = False,
     ):  # pragma: no cover
-        assert (
-            node.size is not None
-        ), "Cannot create groups from a ProcessGroupNode that is not fully populated. "
-        "Ensure that config.set_leaf_group_sizes is called first with "
-        "`update_parent_sizes = True`"
+        if node.size is None:
+            raise RuntimeError(
+                "Cannot create groups from a ProcessGroupNode that is not fully"
+                " populated. Ensure that config.set_leaf_group_sizes is called first"
+                " with `update_parent_sizes = True`"
+            )
 
         DistributedManager.create_process_subgroup(
             node.name, node.size, group_name=parent, verbose=verbose
@@ -529,5 +533,6 @@ class DistributedManager(object):
     def cleanup():
         """Clean up distributed group and singleton"""
         # Destroying group.WORLD is enough for all process groups to get destroyed
+        dist.barrier()  # just make sure that no process hangs
         dist.destroy_process_group()
         DistributedManager._shared_state = {}

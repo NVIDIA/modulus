@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pytest
+import torch
+from pytest_utils import import_or_fail
+from utils import create_random_input, fix_random_seeds, get_icosphere_path
 
-from utils import fix_random_seeds, create_random_input, get_icosphere_path
-from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-
+@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_grad_checkpointing(device, num_channels=2, res_h=15, res_w=15):
+def test_grad_checkpointing(device, pytestconfig, num_channels=2, res_h=15, res_w=15):
     """Test gradient checkpointing"""
     icosphere_path = get_icosphere_path()
+
+    from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     # constants
     model_kwds = {

@@ -12,32 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from functools import partial
+from typing import Any, Tuple, Union
+
 import torch
-import torch.nn as nn
-import torch.fft
-from torch import Tensor
-from typing import Tuple, Union, Any
 
 # distributed stuff
 import torch.distributed as dist
+import torch.fft
+import torch.nn as nn
+from torch import Tensor
 
 import modulus
 from modulus.distributed.manager import DistributedManager
-
-from modulus.models.afno.distributed.mappings import copy_to_matmul_parallel_region
-from modulus.models.afno.distributed.mappings import (
-    scatter_to_matmul_parallel_region,
-    gather_from_matmul_parallel_region,
+from modulus.distributed.mappings import (
+    copy_to_parallel_region,
+    gather_from_parallel_region,
+    scatter_to_parallel_region,
 )
-from modulus.models.afno.distributed.layers import trunc_normal_, DropPath
 from modulus.models.afno.distributed.layers import (
-    DistributedPatchEmbed,
-    DistributedMLP,
     DistributedAFNO2D,
+    DistributedMLP,
+    DistributedPatchEmbed,
+    DropPath,
+    trunc_normal_,
 )
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class DistributedBlock(nn.Module):
     def forward(self, x):
 
         if not self.input_is_matmul_parallel:
-            x = scatter_to_matmul_parallel_region(x, dim=1)
+            x = scatter_to_parallel_region(x, dim=1, group="model_parallel")
 
         residual = x
         x = self.norm1(x)
@@ -114,7 +114,7 @@ class DistributedBlock(nn.Module):
         x = x + residual
 
         if not self.output_is_matmul_parallel:
-            x = gather_from_matmul_parallel_region(x, dim=1)
+            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
 
         return x
 
@@ -122,7 +122,7 @@ class DistributedBlock(nn.Module):
 class DistributedAFNONet(nn.Module):
     def __init__(
         self,
-        img_size=(720, 1440),
+        inp_shape=(720, 1440),
         patch_size=(16, 16),
         in_chans=2,
         out_chans=2,
@@ -142,7 +142,7 @@ class DistributedAFNONet(nn.Module):
         # comm sizes
         matmul_comm_size = DistributedManager().group_size("model_parallel")
 
-        self.img_size = img_size
+        self.inp_shape = inp_shape
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.out_chans = out_chans
@@ -153,7 +153,7 @@ class DistributedAFNONet(nn.Module):
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         self.patch_embed = DistributedPatchEmbed(
-            img_size=img_size,
+            inp_shape=inp_shape,
             patch_size=self.patch_size,
             in_chans=self.in_chans,
             embed_dim=embed_dim,
@@ -171,8 +171,8 @@ class DistributedAFNONet(nn.Module):
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
 
-        self.h = img_size[0] // self.patch_size[0]
-        self.w = img_size[1] // self.patch_size[1]
+        self.h = inp_shape[0] // self.patch_size[0]
+        self.w = inp_shape[1] // self.patch_size[1]
 
         # add blocks
         blks = []
@@ -251,7 +251,7 @@ class DistributedAFNONet(nn.Module):
 
         # be careful if head is distributed
         if self.output_is_matmul_parallel:
-            x = copy_to_matmul_parallel_region(x)
+            x = copy_to_parallel_region(x, group="model_parallel")
         else:
             if not self.synchronized_head:
                 # If output is not model parallel, synchronize all GPUs params for head
@@ -283,7 +283,7 @@ class DistributedAFNO(modulus.Module):
 
     Parameters
     ----------
-    img_shape : Tuple[int, int]
+    inp_shape : Tuple[int, int]
         Input image dimensions (height, width)
     in_channels : int
         Number of input channels
@@ -318,7 +318,7 @@ class DistributedAFNO(modulus.Module):
 
     def __init__(
         self,
-        img_shape: Tuple[int, int],
+        inp_shape: Tuple[int, int],
         in_channels: int,
         out_channels: Union[int, Any] = None,
         patch_size: int = 16,
@@ -340,12 +340,13 @@ class DistributedAFNO(modulus.Module):
 
         comm_size = DistributedManager().group_size("model_parallel")
         if channel_parallel_inputs:
-            assert (
-                in_channels % comm_size == 0
-            ), "Error, in_channels needs to be divisible by model_parallel size"
+            if not (in_channels % comm_size == 0):
+                raise ValueError(
+                    "Error, in_channels needs to be divisible by model_parallel size"
+                )
 
         self._impl = DistributedAFNONet(
-            img_size=img_shape,
+            inp_shape=inp_shape,
             patch_size=(patch_size, patch_size),
             in_chans=in_channels,
             out_chans=out_channels,

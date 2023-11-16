@@ -18,16 +18,16 @@
 
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
-from modulus.utils.sfno.distributed import comm
 
 # torch utils
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from torch.nn.parallel import DistributedDataParallel
+
+from modulus.utils.sfno.distributed import comm
 
 # helper functions
-from modulus.utils.sfno.distributed.helpers import _reduce
-from modulus.utils.sfno.distributed.helpers import _split
-from modulus.utils.sfno.distributed.helpers import _gather
+from modulus.utils.sfno.distributed.helpers import _gather, _reduce, _split
+
 
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):
@@ -271,10 +271,7 @@ def init_gradient_reduction_hooks(
             if group == "data":
                 continue
 
-            grads = []
-            for p in params:
-                if group in p.is_shared_mp:
-                    grads.append(p.grad.data)
+            grads = [p.grad.data for p in params if group in p.is_shared_mp]
 
             if not grads:
                 continue

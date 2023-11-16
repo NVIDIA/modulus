@@ -13,18 +13,20 @@
 # limitations under the License.
 
 import logging
+
 import pytest
 import torch
 import torch.nn as nn
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
 from pathlib import Path
-from modulus.models.mlp import FullyConnected
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
+from modulus.models.mlp import FullyConnected
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")

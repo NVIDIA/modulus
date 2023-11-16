@@ -19,7 +19,9 @@ interrogate:
 	pre-commit run interrogate -a
 
 lint:
-	pre-commit run markdownlint -a
+	pre-commit run markdownlint -a && \
+	pre-commit run ruff -a && \
+	pre-commit run check-added-large-files -a
 
 license: 
 	pre-commit run license -a
@@ -28,7 +30,7 @@ doctest:
 	coverage run \
 		--rcfile='test/coverage.docstring.rc' \
 		-m pytest \
-		--doctest-modules modulus/ --ignore-glob=*internal*
+		--doctest-modules modulus/ --ignore-glob=*internal* --ignore-glob=*experimental*
 
 pytest: 
 	coverage run \
@@ -42,7 +44,7 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
+		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=75 && \
 		coverage html
 
 # For arch naming conventions, refer

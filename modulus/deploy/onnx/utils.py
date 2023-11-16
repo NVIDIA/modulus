@@ -14,12 +14,13 @@
 
 import io
 import logging
+
 import torch
 import torch.nn as nn
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
 from typing import Tuple, Union

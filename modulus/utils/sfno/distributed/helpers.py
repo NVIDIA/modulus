@@ -15,12 +15,10 @@
 # limitations under the License.
 
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
+import torch.nn.functional as F
 
 from modulus.utils.sfno.distributed import comm
-
-from torch._utils import _flatten_dense_tensors
 
 
 def get_memory_format(tensor):  # pragma: no cover
@@ -141,13 +139,15 @@ def truncate_helper(tensor, dim, new_size):  # pragma: no cover
 
 def split_tensor_along_dim(tensor, dim, num_chunks):  # pragma: no cover
     """Helper routine to split a tensor along a given dimension"""
-    assert (
-        dim < tensor.dim()
-    ), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    assert (
-        tensor.shape[dim] % num_chunks == 0
-    ), f"Error, cannot split dim {dim} evenly. Dim size is \
-                                                  {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+    if not (dim < tensor.dim()):
+        raise ValueError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
+        )
+    if not (tensor.shape[dim] % num_chunks == 0):
+        raise ValueError(
+            f"Error, cannot split dim {dim} evenly. Dim size is \
+                {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+        )
     chunk_size = tensor.shape[dim] // num_chunks
     tensor_list = torch.split(tensor, chunk_size, dim=dim)
 
@@ -227,9 +227,10 @@ def _gather(input_, dim_, group=None):  # pragma: no cover
         return input_
 
     # sanity checks
-    assert (
-        dim_ < input_.dim()
-    ), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+    if not (dim_ < input_.dim()):
+        raise ValueError(
+            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+        )
 
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)

@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import json
-import torch
+import os
+from typing import Any, Dict
 
-from typing import Dict, Any
+import torch
 
 try:
     import vtk
-except:
+except ImportError:
     raise ImportError("vtk package is required. Install with pip install vtk.")
 
 

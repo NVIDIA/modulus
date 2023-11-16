@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import numpy as np
+import torch
+
 from modulus.utils.sfno import logging_utils
 
 logging_utils.config_logger()
-import torch
 
 
 def unlog_tp(x, eps=1e-5):  # pragma: no cover
@@ -55,7 +56,6 @@ def weighted_acc(pred, target, weighted=True):  # pragma: no cover
         target = np.expand_dims(target, 0)
 
     num_lat = np.shape(pred)[1]
-    num_long = np.shape(target)[2]
     #    pred -= mean(pred)
     #    target -= mean(target)
     s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))
@@ -82,7 +82,6 @@ def weighted_acc_masked(pred, target, weighted=True, maskarray=1):  # pragma: no
         target = np.expand_dims(target, 0)
 
     num_lat = np.shape(pred)[1]
-    num_long = np.shape(target)[2]
     pred -= mean(pred)
     target -= mean(target)
     s = np.sum(np.cos(np.pi / 180 * lat(np.arange(0, num_lat), num_lat)))

@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
-from modulus.metrics.general.mse import mse, rmse
-from modulus.metrics.climate.acc import acc
-import modulus.metrics.climate.reduction as clim_red
-import modulus.metrics.climate.efi as efi
 
-import modulus.metrics.general.reduction as gen_red
+import modulus.metrics.climate.efi as efi
+import modulus.metrics.climate.reduction as clim_red
 import modulus.metrics.general.histogram as hist
+import modulus.metrics.general.reduction as gen_red
+from modulus.metrics.climate.acc import acc
+from modulus.metrics.general.mse import mse, rmse
 
 Tensor = torch.Tensor
 
@@ -69,6 +69,22 @@ def test_climate_acc_mse(test_data, device, rtol: float = 1e-3, atol: float = 1e
         atol=atol,
     )
 
+    # Test exceptions
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(torch.zeros((10,), device=device), targ_tensor, means_tensor, lat)
+
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(pred_tensor, torch.zeros((10,), device=device), means_tensor, lat)
+
+    with pytest.raises(
+        AssertionError, match="Expected predictions to have at least two dimensions"
+    ):
+        acc(pred_tensor, targ_tensor, torch.zeros((10,), device=device), lat)
+
     # int( cos(x)^2 - cos(2x)^2 )dx, x = 0...2*pi = pi/4
     # So MSE should be pi/4 / (pi) = 0.25
     error = mse(pred_tensor**2, targ_tensor**2, dim=(1, 2))
@@ -102,6 +118,18 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         rtol=rtol,
         atol=atol,
     )
+
+    # Test assertion error
+    with pytest.raises(ValueError):
+        gen_red.WeightedStatistic(-1.0 * weights)
+
+    with pytest.raises(ValueError):
+        www = gen_red.WeightedStatistic(torch.rand((10,), device=device))
+        www(torch.randn((13, 13), device=device), dim=1)
+
+    with pytest.raises(ValueError):
+        www = gen_red.WeightedStatistic(torch.rand((10, 10), device=device))
+        www(torch.randn((13, 13), device=device), dim=1)
 
     # Check when weights are 1 dimensional
     weights = weights.flatten()
@@ -184,6 +212,13 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         atol=atol,
     )
 
+    # Test Raises Assertion
+    with pytest.raises(
+        AssertionError,
+        match="Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively",
+    ):
+        clim_red.global_mean(torch.zeros((10,), device=device), lat)
+
     # Global variance of cos(2x) should be
     # int[ (cos(2x) - E[cos(2x)])^2 * cos(2x)/2 ] dx
     # = int[ (cos(2x) - 1/3)^2 * cos(2x)/2 ] dx
@@ -202,6 +237,13 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         rtol=rtol,
         atol=atol,
     )
+
+    # Test Raises Assertion
+    with pytest.raises(
+        AssertionError,
+        match="Expected x to have at least two dimensions, with the last two dimensions representing lat and lon respectively",
+    ):
+        clim_red.global_var(torch.zeros((10,), device=device), lat)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -240,19 +282,29 @@ def test_climate_efi(test_data, device, rtol: float = 1e-1, atol: float = 1e-1):
 
     x = torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e = efi.efi(cdf, bin_edges, clim_mean, clim_std)
-
+    e = efi.efi_gaussian(cdf, bin_edges, clim_mean, clim_std)
+    _, pdf = hist.histogram(x, bins=bin_edges)
+    e1 = efi.efi(bin_edges, pdf, clim_cdf)
     assert torch.allclose(e, 0.0 * one, rtol=rtol, atol=atol)
+    assert torch.allclose(e1, 0.0 * one, rtol=rtol, atol=atol)
+    assert torch.allclose(e, e1, rtol=rtol, atol=atol)
 
     x = 2.0 + 2.0 * torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e1 = efi.efi(cdf, bin_edges, clim_mean, clim_std)
+    e = efi.efi_gaussian(cdf, bin_edges, clim_mean, clim_std)
+    _, pdf = hist.histogram(x, bins=bin_edges)
+    e1 = efi.efi(bin_edges, pdf, clim_cdf)
+    assert torch.all(torch.ge(e, 0.0 * one))
     assert torch.all(torch.ge(e1, 0.0 * one))
+    assert torch.allclose(e, e1, rtol=rtol, atol=atol)
 
     x = 0.1 * torch.randn((1_000_000, 1, 1), dtype=torch.float32, device=device)
     _, cdf = hist.cdf(x, bins=bin_edges)
-    e2 = efi.efi(cdf, bin_edges, clim_mean, clim_std)
-    assert torch.allclose(e2, 0.0 * one, rtol=rtol, atol=atol)
+    e = efi.efi_gaussian(cdf, bin_edges, clim_mean, clim_std)
+    _, pdf = hist.histogram(x, bins=bin_edges)
+    e1 = efi.efi(bin_edges, pdf, clim_cdf)
+    assert torch.allclose(e, 0.0 * one, rtol=rtol, atol=atol)
+    assert torch.allclose(e1, 0.0 * one, rtol=rtol, atol=atol)
 
-    ne = efi.normalized_entropy(test_pdf, bin_edges, clim_mean, clim_std)
+    ne = efi.normalized_entropy(test_pdf, bin_edges, clim_pdf)
     assert torch.allclose(ne, 0.0 * one, rtol=rtol, atol=atol)

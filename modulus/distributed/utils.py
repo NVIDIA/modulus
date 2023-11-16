@@ -13,10 +13,12 @@
 # limitations under the License.
 
 # TODO this also needs more docstrings
-import torch
-import torch.nn.functional as F
-import torch.distributed as dist
 from typing import List, Optional
+
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
+
 from .manager import DistributedManager
 
 
@@ -70,13 +72,16 @@ def truncate_helper(tensor, dim, new_size):
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
     """splits tensor along specific dim"""
-    assert (
-        dim < tensor.dim()
-    ), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    assert (
-        tensor.shape[dim] % num_chunks == 0
-    ), f"Error, cannot split dim {dim} evenly. Dim size is \
+    if not (dim < tensor.dim()):
+        raise AssertionError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be"
+            f"split along {dim}"
+        )
+    if not (tensor.shape[dim] % num_chunks == 0):
+        raise AssertionError(
+            f"Error, cannot split dim {dim} evenly. Dim size is \
         {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+        )
     chunk_size = tensor.shape[dim] // num_chunks
     tensor_list = torch.split(tensor, chunk_size, dim=dim)
 
@@ -84,7 +89,7 @@ def split_tensor_along_dim(tensor, dim, num_chunks):
 
 
 @torch.no_grad()
-def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
+def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):  # pragma: no cover
     """Gathers loss from all processes to one for logging
 
     Parameters
@@ -132,7 +137,7 @@ def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):
 
 
 # distributed primitives
-def _transpose(tensor, dim0, dim1, group=None, async_op=False):
+def distributed_transpose(tensor, dim0, dim1, group=None, async_op=False):
     """Perform distributed transpose of tensor to switch sharding dimension"""
     # get input format
     input_format = get_memory_format(tensor)
@@ -154,7 +159,7 @@ def _transpose(tensor, dim0, dim1, group=None, async_op=False):
     return x_recv, req
 
 
-def _reduce(input_, use_fp32=True, group=None):
+def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     """All-reduce the input tensor across model parallel group."""
 
     # Bypass the function if we are using only 1 GPU.
@@ -173,7 +178,7 @@ def _reduce(input_, use_fp32=True, group=None):
     return input_
 
 
-def _split(input_, dim_, group=None):
+def _split(input_, dim_, group=None):  # pragma: no cover
     """Split the tensor along its last dimension and keep the corresponding slice."""
     # get input format
     input_format = get_memory_format(input_)
@@ -193,7 +198,7 @@ def _split(input_, dim_, group=None):
     return output
 
 
-def _gather(input_, dim_, group=None):
+def _gather(input_, dim_, group=None):  # pragma: no cover
     """Gather tensors and concatenate along the specified dimension."""
     # get input format
     input_format = get_memory_format(input_)
@@ -204,9 +209,11 @@ def _gather(input_, dim_, group=None):
         return input_
 
     # sanity checks
-    assert (
-        dim_ < input_.dim()
-    ), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+    if not (dim_ < input_.dim()):
+        raise AssertionError(
+            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} "
+            "dimensions."
+        )
 
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
@@ -226,7 +233,7 @@ def all_gather_v_wrapper(
     sizes: List[int],
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed AllGatherV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -253,9 +260,10 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
 
     if comm_size == 1:
         return tensor
@@ -284,7 +292,7 @@ def all_reduce_v_wrapper(
     dim: int = 0,
     use_fp32: bool = True,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed AllReduceV primitive. It is based
     on the idea of a single global tensor which which can be distributed
@@ -319,10 +327,10 @@ def all_reduce_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert dim < tensor.dim()
-
-    global_size = sum(sizes)
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
@@ -357,7 +365,7 @@ def gather_v_wrapper(
     dim: int = 0,
     dst: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed GatherV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -376,7 +384,8 @@ def gather_v_wrapper(
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     dst : int, optional
-        destination rank which contains the full global tensor after the operation, by default 0
+        destination rank which contains the full global tensor after the
+        operation, by default 0
     group : Optional[dist.ProcessGroup], optional
         process group along which global tensor is shared, by default None
 
@@ -388,10 +397,14 @@ def gather_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert 0 <= dst < comm_size
-    assert dim < tensor.dim()
-    assert tensor.size(dim) == sizes[rank]
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if not (0 <= dst < comm_size):
+        raise ValueError()
+    if tensor.size(dim) != sizes[rank]:
+        raise ValueError()
 
     if comm_size == 1:
         return tensor
@@ -436,7 +449,7 @@ def scatter_v_wrapper(
     dim: int = 0,
     src: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements a distributed ScatterV primitive. It is based
     on the idea of a single global tensor which is distributed along
@@ -466,9 +479,12 @@ def scatter_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
-    assert len(sizes) == comm_size
-    assert 0 <= src < comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if not (0 <= src < comm_size):
+        raise ValueError()
 
     tensor_shape = list(tensor.shape)
     tensor_shape[dim] = sizes[rank]
@@ -508,7 +524,7 @@ def indexed_all_to_all_v_wrapper(
     sizes: List[List[int]],
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements an indexed version of a distributed AllToAllV
     primitive. It is based on the idea of a single global tensor which
@@ -542,10 +558,14 @@ def indexed_all_to_all_v_wrapper(
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(sizes) == comm_size
-    assert len(sizes[rank]) == comm_size
-    assert len(indices) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if len(sizes[rank]) != comm_size:
+        raise ValueError()
+    if len(indices) != comm_size:
+        raise ValueError()
 
     indices = torch.cat(indices, dim=0)
     tensor_to_send = torch.index_select(tensor, dim=dim, index=indices)
@@ -572,7 +592,7 @@ def indexed_all_to_all_v_wrapper_bwd(
     use_fp32: bool = True,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
-) -> torch.Tensor:
+) -> torch.Tensor:  # pragma: no cover
     """
     Implements the backward pass to the indexed version of a distributed
     AllToAllV primitive.
@@ -606,18 +626,22 @@ def indexed_all_to_all_v_wrapper_bwd(
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
 
-    assert len(sizes) == comm_size
-    assert len(sizes[rank]) == comm_size
-    assert len(indices) == comm_size
-    assert dim < tensor.dim()
+    if len(sizes) != comm_size:
+        raise ValueError()
+    if dim >= tensor.dim():
+        raise ValueError()
+    if len(sizes[rank]) != comm_size:
+        raise ValueError()
+    if len(indices) != comm_size:
+        raise ValueError()
 
     indices = torch.cat(indices, dim=0)
     tensor_shape = list(tensor.shape)
 
     # scatter gradients, roles reversed compared to forward pass
-    recv_sizes = [sizes[r][rank] for r in range(comm_size)]
     recv_list = [None] * comm_size
     for r in range(comm_size):
+        recv_sizes = [sizes[i][r] for i in range(comm_size)]
         recv_list[r] = scatter_v_wrapper(
             tensor, recv_sizes, dim=dim, src=r, group=group
         )
@@ -640,6 +664,7 @@ def indexed_all_to_all_v_wrapper_bwd(
             dtype=tensor.dtype,
             device=tensor.device,
         )
+
     out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
     if use_fp32:
         out = out.to(tensor.dtype)

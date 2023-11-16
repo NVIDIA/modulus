@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG PYT_VER=23.07
-FROM nvcr.io/nvidia/pytorch:$PYT_VER-py3 as builder
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.10-py3
+FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
 
@@ -27,6 +27,10 @@ RUN apt-get update && \
 
 ENV _CUDA_COMPAT_TIMEOUT=90
 
+# Install other dependencies
+RUN pip install "h5py>=3.7.0" "mpi4py>=3.1.4" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" 
+RUN pip install "hydra-core>=1.2.0" "termcolor>=2.1.1" "wandb>=0.13.7" "mlflow>=2.1.1" "pydantic>=1.10.2" "imageio>=2.28.1" "moviepy>=1.0.3" "tqdm>=4.60.0"
+
 # TODO remove benchy dependency
 RUN pip install git+https://github.com/romerojosh/benchy.git
 # TODO use torch-harmonics pip package after the upgrade
@@ -36,20 +40,36 @@ RUN pip install "tensorly>=0.8.1" https://github.com/tensorly/torch/archive/715a
 # copy modulus source
 COPY . /modulus/
 
+# Install Numcodecs (This needs a separate install because Numcodecs ARM pip install has issues) 
+# A fix is being added here: https://github.com/zarr-developers/numcodecs/pull/315 but the public release is not ready yet.
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        echo "Pip install for numcodecs for $TARGETPLATFORM exists, installing!" && \
+        pip install numcodecs; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl" ]; then \
+        echo "Numcodecs wheel for $TARGETPLATFORM exists, installing!" && \
+        pip install --force-reinstall /modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl; \
+    else \
+        echo "Numcodecs wheel for $TARGETPLATFORM is not present, attempting to build from pip, but might fail" && \
+	pip install numcodecs; \
+    fi
+
 # install vtk and pyvista
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
+	echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
+	pip install /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+	echo "Installing vtk for: $TARGETPLATFORM" && \
+	pip install "vtk>=9.2.6"; \ 
+    else \
+	echo "Installing vtk for: $TARGETPLATFORM from source" && \
 	apt-get update && apt-get install -y libgl1-mesa-dev && \
 	git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
 	mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
 	python setup.py bdist_wheel && \
 	pip install dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
-	cd ../../ && rm -r vtk && \
-	pip install "pyvista>=0.40.1"; \ 
-    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-	echo "Installing vtk and pyvista for: $TARGETPLATFORM" && \
-	pip install "vtk>=9.2.6" "pyvista>=0.40.1"; \ 
+	cd ../../ && rm -r vtk; \
     fi
+RUN pip install "pyvista>=0.40.1"
 
 # Install DGL from source
 ARG DGL_BACKEND=pytorch
@@ -69,7 +89,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp
 	python setup.py install && \
 	python setup.py build_ext --inplace; \
     fi
-RUN rm -r /workspace/dgl
+RUN rm -rf /workspace/dgl
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
@@ -93,7 +113,6 @@ FROM builder as ci
 
 ARG TARGETPLATFORM
 
-RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.0" "mpi4py>=3.1.4"
 COPY . /modulus/
 RUN cd /modulus/ && pip install -e . && pip uninstall nvidia-modulus -y && rm -rf /modulus/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
@@ -102,12 +121,13 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
+RUN pip install "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3" "mpi4py>=3.1.4"
 
 # Deployment image
 FROM builder as deploy
-RUN pip install "protobuf==3.20.0"
 COPY . /modulus/
 RUN cd /modulus/ && pip install .
+RUN pip install "protobuf==3.20.3"
 
 # Clean up
 RUN rm -rf /modulus/ 
@@ -118,7 +138,7 @@ FROM deploy as docs
 ARG TARGETPLATFORM
 
 # Install CI packages
-RUN pip install "protobuf==3.20.0"
+RUN pip install "protobuf==3.20.3"
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 

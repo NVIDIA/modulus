@@ -13,28 +13,28 @@
 # limitations under the License.
 
 import torch
-from torch import Tensor
 import torch.nn as nn
-import dgl
+from torch import Tensor
 
 try:
+    import dgl  # noqa: F401 for docs
     from dgl import DGLGraph
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
-from typing import Callable, Tuple, List, Union
 from dataclasses import dataclass
+from itertools import chain
+from typing import Callable, List, Tuple, Union
 
-import modulus
+import modulus  # noqa: F401 for docs
+from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
+from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
+from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-
-from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
-from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
-from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 
 
 @dataclass
@@ -176,7 +176,7 @@ class MeshGraphNet(Module):
         self,
         node_features: Tensor,
         edge_features: Tensor,
-        graph: Union[DGLGraph, List[DGLGraph]],
+        graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
         edge_features = self.edge_encoder(edge_features)
         node_features = self.node_encoder(node_features)
@@ -228,19 +228,13 @@ class MeshGraphNetProcessor(nn.Module):
             False,
         )
 
-        edge_blocks = []
-        node_blocks = []
-        layers = []
-
-        for _ in range(self.processor_size):
-            edge_blocks.append(MeshEdgeBlock(*edge_block_invars))
-
-        for _ in range(self.processor_size):
-            node_blocks.append(MeshNodeBlock(*node_block_invars))
-
-        for i in range(self.processor_size):
-            layers.append(edge_blocks[i])
-            layers.append(node_blocks[i])
+        edge_blocks = [
+            MeshEdgeBlock(*edge_block_invars) for _ in range(self.processor_size)
+        ]
+        node_blocks = [
+            MeshNodeBlock(*node_block_invars) for _ in range(self.processor_size)
+        ]
+        layers = list(chain(*zip(edge_blocks, node_blocks)))
 
         self.processor_layers = nn.ModuleList(layers)
         self.num_processor_layers = len(self.processor_layers)

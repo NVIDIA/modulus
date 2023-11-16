@@ -14,31 +14,31 @@
 
 import os
 import re
-from typing import List, Tuple, Dict, Union, Optional, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
-from dataclasses import dataclass
 
-from .utils import read_vtp_file, save_json, load_json
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
+
+from .utils import load_json, read_vtp_file, save_json
 
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the DGL library. Install the "
         + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
     )
 
 try:
-    import vtk
     import pyvista as pv
-except:
+    import vtk
+except ImportError:
     raise ImportError(
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
         + "pip install vtk pyvista"
@@ -175,7 +175,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         info_list = [info_list[index] for index in args]
         numbers_info = [numbers_info[index] for index in args]
 
-        assert sorted(numbers) == sorted(numbers_info)
+        if sorted(numbers) != sorted(numbers_info):
+            raise AssertionError
         self.numbers = numbers
 
         # create the graphs and add the node and features
@@ -267,6 +268,14 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             self.node_stats = self._get_node_stats(keys=normalize_keys)
             self.edge_stats = self._get_edge_stats()
         else:
+            if not os.path.exists("node_stats.json"):
+                raise FileNotFoundError(
+                    "node_stats.json not found! Node stats must be computed on the training set."
+                )
+            if not os.path.exists("edge_stats.json"):
+                raise FileNotFoundError(
+                    "edge_stats.json not found! Edge stats must be computed on the training set."
+                )
             self.node_stats = load_json("node_stats.json")
             self.edge_stats = load_json("edge_stats.json")
 
@@ -319,14 +328,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
     def normalize_node(self) -> List[dgl.DGLGraph]:
         """
-        Normalize node data in each graph in the list of graphs using min-max normalization.
-        The normalization is performed in-place. The normalization formula used is:
-
-        normalized_data = 2.0 * normalization_bound[1] * (data - node_min) / (node_max - node_min) + normalization_bound[0]
-
-        This will bring the node data in each graph into the range of [normalization_bound[0], normalization_bound[1]].
-        After normalization, node data is concatenated according to the keys defined in 'self.input_keys'
-        and 'self.output_keys', resulting in new node data 'x' and 'y', respectively.
+        Normalize node data in each graph in the list of graphs.
 
         Returns
         -------
@@ -343,59 +345,27 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         invar_keys = set(
             [
-                key.replace("_min", "").replace("_max", "")
+                key.replace("_mean", "").replace("_std", "")
                 for key in self.node_stats.keys()
             ]
         )
-
-        for graph in self.graphs:
+        for i in range(len(self.graphs)):
             for key in invar_keys:
-                node_min = self.node_stats.get(key + "_min")
-                node_max = self.node_stats.get(key + "_max")
+                self.graphs[i].ndata[key] = (
+                    self.graphs[i].ndata[key] - self.node_stats[key + "_mean"]
+                ) / self.node_stats[key + "_std"]
 
-                if node_min is None or node_max is None:
-                    raise ValueError(
-                        f"The keys '{key}_min' and/or '{key}_max' do not exist in 'node_stats'."
-                    )
-
-                if node_max.equal(node_min):
-                    raise ValueError(
-                        f"The values of '{key}_max' and '{key}_min' are equal, causing a division by zero."
-                    )
-
-                node_data_key = graph.ndata.get(key)
-                if node_data_key is None:
-                    raise ValueError(
-                        f"The key '{key}' does not exist in the node data of one or more graphs."
-                    )
-
-                graph.ndata[key] = (
-                    2.0
-                    * self.normalization_bound[1]
-                    * (node_data_key - node_min)
-                    / (node_max - node_min)
-                    + self.normalization_bound[0]
-                )
-
-            graph.ndata["x"] = torch.cat(
-                [graph.ndata.get(key) for key in self.input_keys],
-                dim=-1,
+            self.graphs[i].ndata["x"] = torch.cat(
+                [self.graphs[i].ndata[key] for key in self.input_keys], dim=-1
             )
-            graph.ndata["y"] = torch.cat(
-                [graph.ndata.get(key) for key in self.output_keys],
-                dim=-1,
+            self.graphs[i].ndata["y"] = torch.cat(
+                [self.graphs[i].ndata[key] for key in self.output_keys], dim=-1
             )
-
         return self.graphs
 
     def normalize_edge(self) -> List[dgl.DGLGraph]:
         """
-        Normalize edge data 'x' in each graph in the list of graphs using min-max normalization.
-        The normalization is performed in-place. The normalization formula used is:
-
-        normalized_x = 2.0 * normalization_bound[1] * (x - edge_min) / (edge_max - edge_min) + normalization_bound[0]
-
-        This will bring the edge data 'x' in each graph into the range of [normalization_bound[0], normalization_bound[1]].
+        Normalize edge data 'x' in each graph in the list of graphs.
 
         Returns
         -------
@@ -410,34 +380,10 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 "The 'edge_stats' attribute does not exist or is not a dictionary."
             )
 
-        edge_min = self.edge_stats.get("edge_min")
-        edge_max = self.edge_stats.get("edge_max")
-
-        if edge_min is None or edge_max is None:
-            raise ValueError(
-                "The keys 'edge_min' and/or 'edge_max' do not exist in 'edge_stats'."
-            )
-
-        if edge_max.equal(edge_min):
-            raise ValueError(
-                "The values of 'edge_max' and 'edge_min' are equal, causing a division by zero."
-            )
-
-        for graph in self.graphs:
-            edge_data_x = graph.edata.get("x")
-            if edge_data_x is None:
-                raise ValueError(
-                    "The key 'x' does not exist in the edge data of one or more graphs."
-                )
-
-            graph.edata["x"] = (
-                2.0
-                * self.normalization_bound[1]
-                * (edge_data_x - edge_min)
-                / (edge_max - edge_min)
-                + self.normalization_bound[0]
-            )
-
+        for i in range(len(self.graphs)):
+            self.graphs[i].edata["x"] = (
+                self.graphs[i].edata["x"] - self.edge_stats["edge_mean"]
+            ) / self.edge_stats["edge_std"]
         return self.graphs
 
     def denormalize(self, pred, gt, device) -> Tuple[Tensor, Tensor]:
@@ -461,74 +407,56 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         stats = self.node_stats
         stats = {key: val.to(device) for key, val in stats.items()}
-        p_pred = pred
         p_pred = pred[:, [0]]
         s_pred = pred[:, 1:]
         p_gt = gt[:, [0]]
         s_gt = gt[:, 1:]
-        p_pred = (p_pred - self.normalization_bound[0]) * (
-            stats["p_max"] - stats["p_min"]
-        ) / (2 * self.normalization_bound[1]) + stats["p_min"]
-        s_pred = (s_pred - self.normalization_bound[0]) * (
-            stats["wallShearStress_max"] - stats["wallShearStress_min"]
-        ) / (2 * self.normalization_bound[1]) + stats["wallShearStress_min"]
-        p_gt = (p_gt - self.normalization_bound[0]) * (
-            stats["p_max"] - stats["p_min"]
-        ) / (2 * self.normalization_bound[1]) + stats["p_min"]
-        s_gt = (s_gt - self.normalization_bound[0]) * (
-            stats["wallShearStress_max"] - stats["wallShearStress_min"]
-        ) / (2 * self.normalization_bound[1]) + stats["wallShearStress_min"]
+        p_pred = p_pred * stats["p_std"] + stats["p_mean"]
+        s_pred = s_pred * stats["wallShearStress_std"] + stats["wallShearStress_mean"]
+        p_gt = p_gt * stats["p_std"] + stats["p_mean"]
+        s_gt = s_gt * stats["wallShearStress_std"] + stats["wallShearStress_mean"]
         pred = torch.cat((p_pred, s_pred), dim=-1)
         gt = torch.cat((p_gt, s_gt), dim=-1)
         return pred, gt
 
     def _get_edge_stats(self) -> Dict[str, Any]:
         """
-        Compute and save the minimum and maximum values of each edge attribute 'x' in the graphs.
+        Computes the mean and standard deviation of each edge attribute 'x' in the
+        graphs, and saves to a JSON file.
 
         Returns
         -------
         dict
-            A dictionary with keys 'edge_min' and 'edge_max' and the corresponding values being
-            1-D tensors containing the min or max value for each dimension of the edge attribute 'x'.
+            A dictionary with keys 'edge_mean' and 'edge_std' and the corresponding values being
+            1-D tensors containing the mean or standard deviation value for each dimension of the edge attribute 'x'.
         """
         if not self.graphs:
             raise ValueError("The list 'graphs' is empty.")
 
-        first_edge_data = self.graphs[0].edata.get("x")
-        if first_edge_data is None:
-            raise ValueError(
-                "The key 'x' does not exist in the edge data of the first graph."
-            )
-
         stats = {
-            "edge_min": torch.full_like(first_edge_data[0, :], float("inf")),
-            "edge_max": torch.full_like(first_edge_data[0, :], float("-inf")),
+            "edge_mean": 0,
+            "edge_meansqr": 0,
         }
+        for i in range(self.length):
+            stats["edge_mean"] += (
+                torch.mean(self.graphs[i].edata["x"], dim=0) / self.length
+            )
+            stats["edge_meansqr"] += (
+                torch.mean(torch.square(self.graphs[i].edata["x"]), dim=0) / self.length
+            )
+        stats["edge_std"] = torch.sqrt(
+            stats["edge_meansqr"] - torch.square(stats["edge_mean"])
+        )
+        stats.pop("edge_meansqr")
 
-        for i in range(len(self.graphs)):
-            edge_data = self.graphs[i].edata.get("x")
-            if edge_data is None:
-                raise ValueError(
-                    f"The key 'x' does not exist in the edge data of the {i}-th graph."
-                )
-
-            min_val, _ = edge_data.min(dim=0)
-            max_val, _ = edge_data.max(dim=0)
-            min_val, max_val = min_val.reshape(-1), max_val.reshape(-1)
-
-            stats["edge_min"] = torch.minimum(stats["edge_min"], min_val)
-            stats["edge_max"] = torch.maximum(stats["edge_max"], max_val)
-
-        # Save to file
+        # save to file
         save_json(stats, "edge_stats.json")
-
         return stats
 
     def _get_node_stats(self, keys: List[str]) -> Dict[str, Any]:
         """
-        Compute and save the minimum and maximum values of each node attribute
-        for the list of keys in the graphs.
+        Computes the mean and standard deviation values of each node attribute
+        for the list of keys in the graphs, and saves to a JSON file.
 
         Parameters
         ----------
@@ -538,8 +466,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         Returns
         -------
         dict
-            A dictionary with each key being a string of format '[key]_min' or '[key]_max'
-            and each value being a 1-D tensor containing the min or max value for each
+            A dictionary with each key being a string of format '[key]_mean' or '[key]_std'
+            and each value being a 1-D tensor containing the mean or standard deviation for each
             dimension of the node attribute.
         """
         if not self.graphs:
@@ -547,33 +475,27 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         stats = {}
         for key in keys:
-            first_node_data = self.graphs[0].ndata.get(key)
-            if first_node_data is None:
-                raise ValueError(
-                    f"The key '{key}' does not exist in the node data of the first graph."
+            stats[key + "_mean"] = 0
+            stats[key + "_meansqr"] = 0
+
+        for i in range(self.length):
+            for key in keys:
+                stats[key + "_mean"] += (
+                    torch.mean(self.graphs[i].ndata[key], dim=0) / self.length
+                )
+                stats[key + "_meansqr"] += (
+                    torch.mean(torch.square(self.graphs[i].ndata[key]), dim=0)
+                    / self.length
                 )
 
-            stats[key + "_min"] = torch.full_like(first_node_data[0, :], float("inf"))
-            stats[key + "_max"] = torch.full_like(first_node_data[0, :], float("-inf"))
+        for key in keys:
+            stats[key + "_std"] = torch.sqrt(
+                stats[key + "_meansqr"] - torch.square(stats[key + "_mean"])
+            )
+            stats.pop(key + "_meansqr")
 
-        for i in range(len(self.graphs)):
-            for key in keys:
-                node_data = self.graphs[i].ndata.get(key)
-                if node_data is None:
-                    raise ValueError(
-                        f"The key '{key}' does not exist in the node data of the {i}-th graph."
-                    )
-
-                min_val, _ = node_data.min(dim=0)
-                max_val, _ = node_data.max(dim=0)
-                min_val, max_val = min_val.reshape(-1), max_val.reshape(-1)
-
-                stats[key + "_min"] = torch.minimum(stats[key + "_min"], min_val)
-                stats[key + "_max"] = torch.maximum(stats[key + "_max"], max_val)
-
-        # Save to file
+        # save to file
         save_json(stats, "node_stats.json")
-
         return stats
 
     @staticmethod
@@ -674,12 +596,15 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             raise ValueError("Failed to get polygons from the polydata.")
 
         polys.InitTraversal()
+
         edge_list = []
         for i in range(polys.GetNumberOfCells()):
             id_list = vtk.vtkIdList()
             polys.GetNextCell(id_list)
             for j in range(id_list.GetNumberOfIds() - 1):
-                edge_list.append((id_list.GetId(j), id_list.GetId(j + 1)))
+                edge_list.append(  # noqa: PERF401
+                    (id_list.GetId(j), id_list.GetId(j + 1))
+                )
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)

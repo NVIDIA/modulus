@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import sys, os
+# ruff: noqa: E402
+import os
+import sys
 
 script_path = os.path.abspath(__file__)
 sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
@@ -20,15 +21,17 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 import common
 import pytest
 import torch
+from pytest_utils import import_or_fail
+from sfno.utils import fix_random_seeds
 
-from utils import fix_random_seeds
-from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
-
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("checkpointing", [0, 2])
-def test_sfno_forward(device, checkpointing):
+def test_sfno_forward(device, checkpointing, pytestconfig):
     """Test sfno forward pass with & without checkpointing"""
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 2
     h, w = 8, 16
@@ -55,6 +58,7 @@ def test_sfno_forward(device, checkpointing):
     assert common.validate_forward_accuracy(model, (x,), rtol=1e-3)
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize(
     "filter_type, operator_type, use_mlp, activation_function, pos_embed, \
@@ -111,9 +115,12 @@ def test_sfno_constructor(
     factorization,
     separable,
     complex_network,
+    pytestconfig,
 ):
     """Test sfno constructor options"""
     # Define dictionary of constructor args
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 2
     h, w = 8, 16
@@ -177,9 +184,12 @@ def test_sfno_constructor(
         assert outvar.shape == (batch_size, in_chans, h, w)
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_optims(device):
+def test_sfno_optims(device, pytestconfig):
     """Test sfno optimizations"""
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
@@ -222,9 +232,12 @@ def test_sfno_optims(device):
     assert common.validate_combo_optims(model, (*invar,))
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_checkpoint(device):
+def test_sfno_checkpoint(device, pytestconfig):
     """Test sfno checkpoint save/load"""
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 4
     h, w = 8, 16
@@ -259,10 +272,13 @@ def test_sfno_checkpoint(device):
     )
 
 
+@import_or_fail(["tensorly", "tltorch", "torch_harmonics"])
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_sfno_deploy(device):
+def test_sfno_deploy(device, pytestconfig):
     """Test sfno deployment support"""
+
+    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
     in_chans = 3
     h, w = 8, 16

@@ -17,7 +17,7 @@ repos:
     rev: 22.10.0
     hooks:
     - id: black
-      exclude: "docs"
+      exclude: "(docs|modulus/experimental)"
 
 -   repo: https://github.com/econchick/interrogate
     rev: 1.5.0
@@ -29,7 +29,7 @@ repos:
           "--ignore-magic", "--fail-under=99", "--exclude=['setup.py', 'test', 'build', 'docs']",  
           "--ignore-regex=['forward', 'backward', 'reset_parameters', 'extra_repr', 'MetaData', 'apply_activation','exec_activation']", 
           "--color", "--"]
-      exclude: ^modulus/internal/
+      exclude: ^modulus/internal/|^modulus/experimental/
 
 -   repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.35.0
@@ -43,3 +43,15 @@ repos:
       entry: python test/ci_tests/header_check.py
       language: python
       pass_filenames: false
+
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.0.290
+    hooks:
+    - id: ruff
+      args: [--fix]
+
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.4.0
+    hooks:
+    - id: check-added-large-files
+      args: [--maxkb=5000]

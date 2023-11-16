@@ -14,9 +14,8 @@
 
 import pytest
 import torch
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
-from typing import Tuple
-from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from . import common
 
 Tensor = torch.Tensor
@@ -24,11 +23,17 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    return "/data/nfs/modulus-data/datasets/ahmed_body/"
+    path = "/data/nfs/modulus-data/datasets/ahmed_body/"
+    return path
 
 
+@nfsdata_or_fail
+@import_or_fail(["vtk", "pyvista", "dgl"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ahmed_body_constructor(data_dir, device):
+def test_ahmed_body_constructor(data_dir, device, pytestconfig):
+
+    # _nfsdata_or_fail(pytestconfig)
+    from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 
     # construct dataset
     dataset = AhmedBodyDataset(

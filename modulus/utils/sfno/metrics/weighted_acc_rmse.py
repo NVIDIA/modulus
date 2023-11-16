@@ -13,16 +13,16 @@
 # limitations under the License.
 
 import numpy as np
-from modulus.utils.sfno import logging_utils
-
-logging_utils.config_logger()
 import torch
 import torch.nn as nn
 
+from modulus.utils.sfno import logging_utils
 
 # distributed stuff
 from modulus.utils.sfno.distributed import comm
 from modulus.utils.sfno.distributed.mappings import reduce_from_parallel_region
+
+logging_utils.config_logger()
 
 
 def mean(x, axis=None):  # pragma: no cover
@@ -44,7 +44,6 @@ def weighted_acc(pred, target, weighted=True):  # pragma: no cover
         target = np.expand_dims(target, 0)
 
     num_lat = np.shape(pred)[1]
-    num_long = np.shape(target)[2]
     pred -= mean(pred)
     target -= mean(target)
     s = np.sum(np.cos(np.pi / 180 * lat_np(np.arange(0, num_lat), num_lat)))

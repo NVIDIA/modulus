@@ -1,4 +1,5 @@
 # ignore_header_test
+# ruff: noqa: E402
 
 """"""
 """
@@ -30,14 +31,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import torch
-from torch import nn
 import math
-from typing import Union, List, Any
 from dataclasses import dataclass
 
-import modulus
+import torch
+from torch import nn
+
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import get_activation
+
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -80,7 +82,7 @@ class SRResNet(Module):
     scaling_factor : int, optional
         Scaling factor to increase the output feature size
         compared to the input (2, 4, or 8), by default 8
-    activation_fn : str, optional
+    activation_fn : Any, optional
         Activation function, by default "prelu"
 
     Example
@@ -117,11 +119,15 @@ class SRResNet(Module):
     ):
         super().__init__(meta=MetaData())
         self.var_dim = 1
-        activation_fn = get_activation(activation_fn)
+
+        # Activation function
+        if isinstance(activation_fn, str):
+            activation_fn = get_activation(activation_fn)
 
         # Scaling factor must be 2, 4, or 8
         scaling_factor = int(scaling_factor)
-        assert scaling_factor in {2, 4, 8}, "The scaling factor must be 2, 4, or 8!"
+        if scaling_factor not in {2, 4, 8}:
+            raise ValueError("The scaling factor must be 2, 4, or 8!")
 
         # The first convolutional block
         self.conv_block1 = ConvolutionalBlock3d(
@@ -356,17 +362,16 @@ class ResidualConvBlock3d(nn.Module):
     ):
         super().__init__()
 
-        layers = []
-        for i in range(n_layers - 1):
-            layers.append(
-                ConvolutionalBlock3d(
-                    in_channels=conv_layer_size,
-                    out_channels=conv_layer_size,
-                    kernel_size=kernel_size,
-                    batch_norm=True,
-                    activation_fn=activation_fn,
-                )
+        layers = [
+            ConvolutionalBlock3d(
+                in_channels=conv_layer_size,
+                out_channels=conv_layer_size,
+                kernel_size=kernel_size,
+                batch_norm=True,
+                activation_fn=activation_fn,
             )
+            for _ in range(n_layers - 1)
+        ]
         # The final convolutional block with no activation
         layers.append(
             ConvolutionalBlock3d(

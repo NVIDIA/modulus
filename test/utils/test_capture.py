@@ -14,18 +14,16 @@
 
 
 import logging
+
 import pytest
 import torch
 import torch.nn as nn
 
 from modulus.models.mlp import FullyConnected
-from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
+from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 from modulus.utils.capture import _StaticCapture
 
-try:
-    from apex import optimizers
-except:
-    pass
+optimizers = pytest.importorskip("apex.optimizers")
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
@@ -204,8 +202,8 @@ def test_capture_scaler_checkpointing(model, model2, device):
 
     # Load state dict
     _StaticCapture.load_state_dict(state_dict)
-    capture1 = StaticCaptureTraining(model=model, optim=optim)
-    capture2 = StaticCaptureTraining(model=model2, optim=optim2)
+    StaticCaptureTraining(model=model, optim=optim)
+    StaticCaptureTraining(model=model2, optim=optim2)
 
     assert state_dict == _StaticCapture.state_dict()
 
