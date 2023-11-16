@@ -440,7 +440,7 @@ class DistributedManager(object):
         Parameters
         ----------
         orthogonal_group_name : str
-            Name of the process group to be created.
+            Name of the orthogonal process group to be created.
 
         group_name : str
             Name of the existing process group.

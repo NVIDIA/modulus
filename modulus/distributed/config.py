@@ -92,6 +92,7 @@ class ProcessGroupConfig:
     >>>
     >>> # Create model and data parallel sub-groups
     >>> # Sub-groups of a single node are guaranteed to be orthogonal by construction
+    >>> # Nodes can be added with either the name of the node or the node itself
     >>> config.add_node(ProcessGroupNode("model_parallel"), parent=world)
     >>> config.add_node(ProcessGroupNode("data_parallel"), parent="world")
     >>>
