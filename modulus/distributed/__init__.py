@@ -15,5 +15,5 @@
 
 from .config import ProcessGroupNode, ProcessGroupConfig
 from .manager import DistributedManager
-from .process_group import ProcessGroupNode, ProcessGroupConfig
+from .config import ProcessGroupNode, ProcessGroupConfig
 from .utils import gather_loss

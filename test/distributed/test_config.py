@@ -16,23 +16,34 @@ from modulus.distributed import ProcessGroupNode, ProcessGroupConfig
 
 
 def test_config():
-    # Create model parallel group with data parallel as the orthogonal group
-    mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
+    # Create world group that contains all processes that are part of this job
+    world = ProcessGroupNode("world")
 
     # Create the process group config with the highest level process group
-    pg_config = ProcessGroupConfig(mp)
+    config = ProcessGroupConfig(world)
+
+    # Create model and data parallel sub-groups
+    # Sub-groups of a single node are guaranteed to be orthogonal by construction
+    config.add_node(ProcessGroupNode("model_parallel"), parent=world)
+    config.add_node(ProcessGroupNode("data_parallel"), parent="world")
 
     # Create spatial and channel parallel sub-groups
-    pg_config.add_node(ProcessGroupNode("spatial_parallel"), parent=mp)
-    pg_config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
+    config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
+    config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
 
     # Now check that the leaf nodes are correct
-    assert sorted(pg_config.leaf_groups()) == ["channel_parallel", "spatial_parallel"]
+    assert sorted(config.leaf_groups()) == [
+        "channel_parallel",
+        "data_parallel",
+        "spatial_parallel",
+    ]
 
     # Set leaf group sizes
-    group_sizes = {"channel_parallel": 3, "spatial_parallel": 2}
-    pg_config.set_leaf_group_sizes(group_sizes)  # Updates all parent group sizes too
+    group_sizes = {"channel_parallel": 3, "spatial_parallel": 2, "data_parallel": 4}
+    config.set_leaf_group_sizes(group_sizes)  # Update all parent group sizes too
 
     assert (
-        pg_config.get_node("model_parallel").size == 6
-    ), "Incorrect size for parent node"
+        config.get_node("model_parallel").size == 6
+    ), "Incorrect size for 'model_parallel' parent node"
+
+    assert config.get_node("world").size == 24, "Incorrect size for 'world' parent node"

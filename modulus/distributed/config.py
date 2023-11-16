@@ -26,15 +26,12 @@ class ProcessGroupNode:
         Name of the process group
     size : Optional[int]
         Optional, number of processes in the process group
-    orthogonal_group : Optional[str]
-        Optional, name of an orthogonal process group to create
     """
 
     def __init__(
         self,
         name: str,
         size: Optional[int] = None,
-        orthogonal_group: Optional[str] = None,
     ):
         """
         Constructor for the ProcessGroupNode class
@@ -45,12 +42,9 @@ class ProcessGroupNode:
             Name of the process group
         size : Optional[int]
             Optional, size of the process group
-        orthogonal_group : Optional[str]
-            Optional, name of an orthogonal process group to create
         """
         self.name = name
         self.size = size
-        self.orthogonal_group = orthogonal_group
 
     def __str__(self):
         """
@@ -61,12 +55,7 @@ class ProcessGroupNode:
         str
             String representation of the process group node
         """
-        return (
-            "ProcessGroupNode("
-            f"name={self.name}, "
-            f"size={self.size}, "
-            f"orthogonal_group={self.orthogonal_group})"
-        )
+        return "ProcessGroupNode(" f"name={self.name}, " f"size={self.size}, "
 
     def __repr__(self):
         """
@@ -92,28 +81,29 @@ class ProcessGroupConfig:
 
     Examples
     --------
-    >>> from modulus.distributed.config import ProcessGroupNode, ProcessGroupConfig
+    >>> from modulus.distributed import ProcessGroupNode, ProcessGroupConfig
     >>>
-    >>> # Create model parallel group with data parallel as the orthogonal group
-    >>> mp = ProcessGroupNode("world")
-    >>> mp = ProcessGroupNode("model_parallel", orthogonal_group="data_parallel")
-    >>>
-    >>> # Create spatial and channel parallel sub-groups
-    >>> config.add_node(ProcessGroupNode("model_parallel"), parent=mp)
-    >>> config.add_node(ProcessGroupNode("data_parallel"), parent=mp)
+    >>> # Create world group that contains all processes that are part of this job
+    >>> world = ProcessGroupNode("world")
     >>>
     >>> # Create the process group config with the highest level process group
-    >>> config = ProcessGroupConfig(mp)
+    >>> config = ProcessGroupConfig(world)
+    >>>
+    >>> # Create model and data parallel sub-groups
+    >>> # Sub-groups of a single node are guaranteed to be orthogonal by construction
+    >>> config.add_node(ProcessGroupNode("model_parallel"), parent=world)
+    >>> config.add_node(ProcessGroupNode("data_parallel"), parent="world")
     >>>
     >>> # Create spatial and channel parallel sub-groups
-    >>> config.add_node(ProcessGroupNode("spatial_parallel"), parent=mp)
+    >>> config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
     >>> config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
     >>>
     >>> pg_config.leaf_groups()
-    ['spatial_parallel', 'channel_parallel']
+    ['spatial_parallel', 'channel_parallel', 'data_parallel']
     >>>
     >>> # Set leaf group sizes
-    >>> group_sizes = {"channel_parallel": 3, "spatial_parallel": 2}
+    >>> # Note: product of all leaf-node sizes should be the world size
+    >>> group_sizes = {"channel_parallel": 3, "spatial_parallel": 2, "data_parallel": 4}
     >>> pg_config.set_leaf_group_sizes(group_sizes)  # Update all parent group sizes too
     >>> pg_config.get_node("model_parallel").size
     6
@@ -126,10 +116,11 @@ class ProcessGroupConfig:
         Parameters
         ----------
         node : ProcessGroupNode
-            Root node of the tree, typically would be 'model_parallel'
-            Note, it is generally recommended to always set the orthogonal_group for
-            the 'model_parallel' group to be 'data_parallel' to aid with distributed
-            data parallel training
+            Root node of the tree, typically would be 'world'
+            Note, it is generally recommended to set the child groups for 'world'
+            to 'model_parallel' and 'data_parallel' to aid with distributed
+            data parallel training unless there is a specific reason to choose a
+            different structure
         """
         self.root = node
         self.root_id = node.name
