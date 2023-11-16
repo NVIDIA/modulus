@@ -63,11 +63,8 @@ if __name__ == '__main__':
 
     # check whether the right h5py package is installed
     odirect_env_var_name = "ENABLE_H5PY_ODIRECT"
-    if args.enable_odirect:
-        if (odirect_env_var_name in os.environ) and (os.environ[odirect_env_var_name].lower() == "true"):
-            pass
-        else:
-            raise RuntimeError(f"Error, {odirect_env_var_name} h5py with MPI support is not installed. Please refer to README for instructions on how to install it.")
+    if args.enable_odirect and os.environ.get(odirect_env_var_name, "False").lower() != "true":
+        raise RuntimeError(f"Error, {odirect_env_var_name} h5py with MPI support is not installed. Please refer to README for instructions on how to install it.")
 
     # parse parameters
     params = YParams(os.path.abspath(args.yaml_config), args.config)
