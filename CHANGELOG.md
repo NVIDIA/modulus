@@ -42,6 +42,7 @@ process group config
 
 - The AFNO input argument `img_size` to `inp_shape`
 - Integrated the network architecture layers from Modulus-Sym.
+- Updated the SFNO model, and the training and inference recipes.
 
 ### Deprecated
 
