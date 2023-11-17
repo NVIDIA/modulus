@@ -18,13 +18,10 @@ import logging
 from modulus.experimental.sfno.utils.logging_utils import disable_logging
 import math
 import torch
+import torch.distributed as dist
 import datetime as dt
 from typing import Union
 import numpy as np
-
-# import patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
 
 # dummy placeholders
 _COMM_LIST = []

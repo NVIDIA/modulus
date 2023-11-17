@@ -15,10 +15,7 @@
 import torch
 
 from utils import comm
-
-# imprt patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
+import torch.distributed as dist
 
 def count_parameters(model, device):
     with torch.no_grad():
