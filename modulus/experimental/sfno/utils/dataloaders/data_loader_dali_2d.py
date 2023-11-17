@@ -23,6 +23,7 @@ import math
 #import cv2
 
 # distributed stuff
+import torch.distributed as dist
 from modulus.experimental.sfno.utils import comm
 
 # DALI stuff
@@ -34,10 +35,6 @@ from nvidia.dali.plugin.pytorch import DALIGenericIterator, LastBatchPolicy
 # es helper
 import modulus.experimental.sfno.utils.dataloaders.dali_es_helper_2d as esh
 from modulus.experimental.sfno.utils.grids import GridConverter
-
-# import patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
 
 
 class ERA5DaliESDataloader(object):

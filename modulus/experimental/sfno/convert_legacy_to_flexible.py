@@ -28,6 +28,7 @@ from modulus.experimental.sfno.networks.model_package import (
 )
 from modulus.experimental.sfno.utils import logging_utils
 
+import torch.distributed as dist
 
 from modulus.experimental.sfno.networks.models import get_model
 
@@ -35,10 +36,6 @@ from modulus.experimental.sfno.networks.models import get_model
 from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils.trainer import Trainer
 from modulus.experimental.sfno.utils.YParams import ParamsBase
-
-# import patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
 
 
 class CheckpointSaver(Trainer):
