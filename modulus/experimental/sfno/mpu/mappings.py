@@ -18,6 +18,7 @@ from typing import Any
 import torch
 from torch.nn.parallel import DistributedDataParallel  
 from modulus.experimental.sfno.utils import comm
+import torch.distributed as dist
 
 # torch utils
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
@@ -28,9 +29,6 @@ from modulus.experimental.sfno.mpu.helpers import _reduce
 from modulus.experimental.sfno.mpu.helpers import _split
 from modulus.experimental.sfno.mpu.helpers import _gather
 
-# import patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
 
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):
