@@ -2,17 +2,16 @@ Simple Training and Inference recipe
 =====================================
 
 In this tutorial, we will see how to use utilites from Modulus to setup a simple model
-training pipeline. Once the initial setup is complete, we will also look into optimizing,
-and also run it in a distributed fashion. We will finish the tutorial with an inference
-workflow that will demonstrate how to use Modulus models in inference.
+training pipeline. Once the initial setup is complete, we will look into optimizing
+the training loop, and also run it in a distributed fashion. 
+We will finish the tutorial with an inference workflow that will demonstrate how to use
+Modulus models in inference.
 
-Let's get started. For the purposes of this tutorial, we will focus more on the Modulus
-utilities and not the correctness of the problem definition or the results.
 
 Basic Training workflow
 ------------------------
 
-Let's get started. For the pusposes of this tutorial, we will focus more on the Modulus
+Let's get started. For the purposes of this tutorial, we will focus more on the Modulus
 utilities and not the correctness of the problem definition or the results. A typical
 training workflow requires data, a trainable model and an optimizer to update the model
 parameters. 
@@ -126,7 +125,8 @@ With simple changes like this you can convert a PyTorch model to a Modulus Model
    For utilizing the checkpointing functionality of Modulus, the Model instantiation
    arguments must be json serializable.  
 
-Alternatively, you can also convert the model to a pytorch 
+
+You can also use a Modulus model as a standard PyTorch model as they are interoperable.
 
 
 Let's say you don't want to make changes to the code, but you have a PyTorch model
@@ -154,7 +154,7 @@ to go from a tensor data to a dict format which Modulus Sym uses.
 Optimized Training workflow
 ----------------------------
 
-Once we have a model defined in the Modulus style, we can make use the optimizations 
+Once we have a model defined in the Modulus style, we can use the optimizations 
 like AMP, CUDA Graphs, and JIT using the ``modulus.utils.StaticCaptureTraining`` decorator.
 This decorator will capture the training step function and optimize it for the specified
 optimizations.

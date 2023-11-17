@@ -189,14 +189,14 @@ Checkpointing in Modulus
 --------------------------
 
 Modulus provides easy utilities to save and load the checkpoints of the model, optimizer,
-scheduler, and scaler during the training and inference. Similar to logging, custom
+scheduler, and scaler during training and inference. Similar to logging, custom
 implementation can be used, but in this example we will see the utilites from Modulus and
 some of its benefits.
 
 Loading and saving checkpoints during training
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Below example shows how you can save and load a checkpoint during training. The implementation
+The example below shows how you can save and load a checkpoint during training. The implementation
 allows the model training to be resumed from the last saved checkpoint. Here, we will
 demonstrate the use of ``load_checkpoint`` and the ``save_checkpoint`` functions. 
 
