@@ -35,7 +35,7 @@ doctest:
 pytest: 
 	coverage run \
 		--rcfile='test/coverage.pytest.rc' \
-		-m pytest 
+		-m pytest --ignore-glob=*docs* 
 
 pytest-internal:
 	cd test/internal && \
