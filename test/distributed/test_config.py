@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from modulus.distributed import ProcessGroupConfig, ProcessGroupNode
+import os
+
+import pytest
+import torch
+
+from modulus.distributed import DistributedManager, ProcessGroupConfig, ProcessGroupNode
+from modulus.distributed.mappings import reduce_from_parallel_region
 
 
 def test_config():
@@ -47,3 +53,95 @@ def test_config():
     ), "Incorrect size for 'model_parallel' parent node"
 
     assert config.get_node("world").size == 24, "Incorrect size for 'world' parent node"
+
+
+class MockDistributedModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.manager = DistributedManager()
+        self.alpha = torch.nn.Parameter(data=torch.tensor(0.5), requires_grad=True)
+        self.group = "model_parallel"
+
+    def forward(self, x):
+        return reduce_from_parallel_region(self.alpha * x, self.group)
+
+    @staticmethod
+    def get_process_group_config() -> ProcessGroupConfig:
+        world = ProcessGroupNode("world")
+        config = ProcessGroupConfig(world)
+
+        # Create model and data parallel sub-groups
+        config.add_node(ProcessGroupNode("model_parallel"), parent="world")
+        config.add_node(ProcessGroupNode("data_parallel"), parent="world")
+
+        return config
+
+
+def run_distributed_model_config(rank, model_parallel_size, verbose):
+    os.environ["RANK"] = f"{rank}"
+    os.environ["WORLD_SIZE"] = f"{model_parallel_size}"
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = str(12355)
+    DistributedManager._shared_state = {}
+
+    DistributedManager.initialize()
+
+    # Query model for the process group config
+    config = MockDistributedModel.get_process_group_config()
+
+    # Set leaf group sizes
+    group_sizes = {"model_parallel": 2, "data_parallel": 1}
+    config.set_leaf_group_sizes(group_sizes)  # Updates all parent group sizes too
+
+    assert (
+        config.get_node("model_parallel").size == 2
+    ), "Incorrect size for 'model_parallel' parent node"
+
+    assert config.get_node("world").size == 2, "Incorrect size for 'world' parent node"
+
+    # Create model parallel process group
+    DistributedManager.create_groups_from_config(config, verbose=verbose)
+
+    manager = DistributedManager()
+
+    assert manager.rank == rank
+    assert manager.rank == manager.group_rank(name="model_parallel")
+    assert 0 == manager.group_rank(name="data_parallel")
+
+    # Now actually instantiate the model
+    model = MockDistributedModel().to(manager.device)
+    x = torch.randn(1, device=manager.device)
+    y = model(x)
+    loss = y.sum()
+    loss.backward()
+
+    if verbose:
+        print(
+            f"{manager.group_rank('model_parallel')}: {[p.grad for p in model.parameters()]}, x: {x}, y: {y}"
+        )
+    # Test that the output of the model is correct
+    y_true = 0.5 * torch.clone(x)
+    torch.distributed.all_reduce(y_true)
+    assert torch.allclose(y, y_true, rtol=1e-05, atol=1e-08)
+
+    # Check that the backward pass produces the right result
+    for p in model.parameters():
+        assert torch.allclose(p.grad, x, rtol=1e-05, atol=1e-08)
+
+    # Cleanup process groups
+    DistributedManager.cleanup()
+
+
+@pytest.mark.multigpu
+def test_distributed_model_config():
+    num_gpus = torch.cuda.device_count()
+    assert num_gpus == 2, "Not enough GPUs available for test"
+    model_parallel_size = 2
+    verbose = False  # Change to True for debug
+
+    torch.multiprocessing.spawn(
+        run_distributed_model_config,
+        args=(model_parallel_size, verbose),
+        nprocs=model_parallel_size,
+        start_method="spawn",
+    )
