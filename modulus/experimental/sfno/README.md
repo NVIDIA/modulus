@@ -11,6 +11,8 @@ This is a research code built for massively parallel training of SFNO for weathe
 
 ## Getting started
 
+**For distributed training or inference, run `patch_pytorch.sh` in advance. This will patch the pytorch distributed utilities to support complex values.**
+
 ## Installing optional dependencies
 
 Install the optional dependencies by running
