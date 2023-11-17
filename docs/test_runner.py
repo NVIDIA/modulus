@@ -1,6 +1,7 @@
-import subprocess
-import pytest
 import os
+import subprocess
+
+import pytest
 
 # Collecting all the Python files in the scripts directory
 script_files = [f for f in os.listdir("test_scripts/") if f.endswith('.py')]
