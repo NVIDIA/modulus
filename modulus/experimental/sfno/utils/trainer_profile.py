@@ -39,6 +39,7 @@ from modulus.experimental.sfno.utils.metric import MetricsHandler
 # distributed computing stuff
 from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils import visualize
+import torch.distributed as dist
 
 # for the manipulation of state dict
 from collections import OrderedDict
@@ -50,9 +51,6 @@ from modulus.experimental.sfno.networks.helpers import count_parameters
 from modulus.experimental.sfno.third_party.torch.optim.adam import Adam as CustomAdam
 from modulus.experimental.sfno.third_party.torch.optim.adamw import AdamW as CustomAdamW
 
-# import patched distributed
-from modulus.experimental.sfno.utils.distributed_patch import dist_patch
-dist = dist_patch()
 
 # profile stuff
 from ctypes import cdll
