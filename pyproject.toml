@@ -22,6 +22,7 @@ dependencies = [
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytz>=2023.3",
+    "treelib>=1.2.5"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
