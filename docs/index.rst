@@ -1,6 +1,13 @@
 Welcome to Modulus Core's documentation!
 ========================================
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Modulus Tutorials
+   :name: Modulus Tutorials
+
+   tutorials/simple_training_example.rst
+   tutorials/simple_logging_and_checkpointing.rst
 
 .. toctree::
    :maxdepth: 2
