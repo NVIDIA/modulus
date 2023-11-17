@@ -248,6 +248,8 @@ complex models.
     refactored in the future.
 
 
+.. _modulus-models-from-torch:
+
 Converting PyTorch Models to Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -283,6 +285,10 @@ below.
 
     ModulusModel = modulus.Module.from_torch(TorchModel, meta=ConvMetaData())
 
+
+
+
+.. _saving-and-loading-modulus-models:
 
 Saving and Loading Modulus Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -500,37 +506,3 @@ DLWP Model
     :members:
     :show-inheritance:
 
-Spherical Harmonics Fourier Neural Operator
---------------------------------------------
-
-.. automodule:: modulus.models.sfno.sfnonet
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.activations
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.factorizations
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.layers
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.s2convolutions
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.contractions
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.initialization
-    :members:
-    :show-inheritance:
-
-.. automodule:: modulus.models.sfno.preprocessor
-    :members:
-    :show-inheritance:
