@@ -14,6 +14,7 @@
 
 import io
 import numpy as np
+import os
 import concurrent.futures as cf
 from PIL import Image
 from moviepy.editor import ImageSequenceClip
