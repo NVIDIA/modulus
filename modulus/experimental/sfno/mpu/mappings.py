@@ -16,7 +16,6 @@ import types
 from typing import Any
 
 import torch
-import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel  
 from modulus.experimental.sfno.utils import comm
 
@@ -28,6 +27,10 @@ from modulus.experimental.sfno.mpu.helpers import split_tensor_along_dim
 from modulus.experimental.sfno.mpu.helpers import _reduce
 from modulus.experimental.sfno.mpu.helpers import _split
 from modulus.experimental.sfno.mpu.helpers import _gather
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):

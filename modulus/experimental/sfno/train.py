@@ -61,6 +61,11 @@ if __name__ == '__main__':
     # parse
     args = parser.parse_args()
 
+    # check whether the right h5py package is installed
+    odirect_env_var_name = "ENABLE_H5PY_ODIRECT"
+    if args.enable_odirect and os.environ.get(odirect_env_var_name, "False").lower() != "true":
+        raise RuntimeError(f"Error, {odirect_env_var_name} h5py with MPI support is not installed. Please refer to README for instructions on how to install it.")
+
     # parse parameters
     params = YParams(os.path.abspath(args.yaml_config), args.config)
     params['epsilon_factor'] = args.epsilon_factor

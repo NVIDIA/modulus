@@ -39,13 +39,20 @@ from modulus.experimental.sfno.utils.metric import MetricsHandler
 # distributed computing stuff
 from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils import visualize
-import torch.distributed as dist
 
 # for the manipulation of state dict
 from collections import OrderedDict
 
 # for counting model parameters
 from modulus.experimental.sfno.networks.helpers import count_parameters
+
+# Custom optimizers to to enable optimization of complex parameters
+from modulus.experimental.sfno.third_party.torch.optim.adam import Adam as CustomAdam
+from modulus.experimental.sfno.third_party.torch.optim.adamw import AdamW as CustomAdamW
+
+# import patched distributed
+from modulus.experimental.sfno.utils.distributed_patch import dist_patch
+dist = dist_patch()
 
 # profile stuff
 from ctypes import cdll
@@ -422,17 +429,17 @@ class Trainer():
         if params.optimizer_type == 'Adam':
             if params.log_to_screen:
                 self.logger.info("using Adam")
-            self.optimizer = torch.optim.Adam(all_parameters, betas = betas,
-                                              lr = params.lr,
-                                              weight_decay = params.weight_decay,
-                                              foreach = True)
+            self.optimizer = CustomAdam(all_parameters, betas = betas,
+                                        lr = params.lr,
+                                        weight_decay = params.weight_decay,
+                                        foreach = True)
         elif params.optimizer_type == 'AdamW':
             if params.log_to_screen:
                 self.logger.info("using AdamW")
-            self.optimizer = torch.optim.AdamW(all_parameters, betas = betas,
-                                              lr = params.lr,
-                                              weight_decay = params.weight_decay,
-                                              foreach = True)
+            self.optimizer = CustomAdamW(all_parameters, betas = betas,
+                                        lr = params.lr,
+                                        weight_decay = params.weight_decay,
+                                        foreach = True)
         elif params.optimizer_type == 'FusedLAMB':
             try:
                 import doesnotexist
