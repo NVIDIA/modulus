@@ -29,10 +29,14 @@ import datetime
 
 import logging
 
+import warnings
+
 try:
     import jsbeautifier
+    use_jsbeautifier = True
 except ImportError:
-    raise ImportError('jsbeautifier is not installed. Please install it with "pip install jsbeautifier"')
+    warnings.warn('jsbeautifier is not installed. Please install it with "pip install jsbeautifier"')
+    use_jsbeautifier = False
 
 class LocalPackage:
     """
@@ -101,11 +105,15 @@ def save_model_package(params):
     """
     # save out the current state of the parameters, make it human readable
     config_path = os.path.join(params.experiment_dir, "config.json")
-    jsopts = jsbeautifier.default_options()
-    jsopts.indent_size = 2
+
+    msg = json.dumps(params.to_dict())
+    if use_jsbeautifier:
+        jsopts = jsbeautifier.default_options()
+        jsopts.indent_size = 2
+
+        msg = jsbeautifier.beautify(msg, jsopts)
 
     with open(config_path, "w") as f:
-        msg = jsbeautifier.beautify(json.dumps(params.to_dict()), jsopts)
         f.write(msg)
 
     if hasattr(params, "add_orography") and params.add_orography:
@@ -131,7 +139,9 @@ def save_model_package(params):
         "entrypoint": {"name": "networks.model_package:load_time_loop"},
     }
     with open(os.path.join(params.experiment_dir, "metadata.json"), "w") as f:
-        msg = jsbeautifier.beautify(json.dumps(fcn_mip_data), jsopts)
+        msg = json.dumps(fcn_mip_data)
+        if use_jsbeautifier:
+            msg = jsbeautifier.beautify(msg, jsopts)
         f.write(msg)
 
 

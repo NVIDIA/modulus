@@ -45,6 +45,7 @@ if __name__ == '__main__':
     parser.add_argument("--cuda_graph_mode", default='none', type=str, choices=["none", "fwdbwd", "step"], help="Specify which parts to capture under cuda graph")
     parser.add_argument("--enable_benchy", action='store_true')
     parser.add_argument("--disable_ddp", action='store_true')
+    parser.add_argument("--enable_odirect", action='store_true')
     parser.add_argument("--enable_nhwc", action='store_true')
     parser.add_argument("--checkpointing_level", default=0, type=int, help="How aggressively checkpointing is used")
     parser.add_argument("--epsilon_factor", default = 0, type = float)
@@ -57,6 +58,11 @@ if __name__ == '__main__':
    
     # parse
     args = parser.parse_args()
+
+    # check whether the right h5py package is installed
+    odirect_env_var_name = "ENABLE_H5PY_ODIRECT"
+    if args.enable_odirect and os.environ.get(odirect_env_var_name, "False").lower() != "true":
+        raise RuntimeError(f"Error, {odirect_env_var_name} h5py with MPI support is not installed. Please refer to README for instructions on how to install it.")
 
     # parse parameters
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -122,6 +128,7 @@ if __name__ == '__main__':
     params['cuda_graph_mode'] = args.cuda_graph_mode
     params['enable_benchy'] = args.enable_benchy
     params['disable_ddp'] = args.disable_ddp
+    params['enable_odirect'] = args.enable_odirect
     params['enable_nhwc'] = args.enable_nhwc
     params['checkpointing'] = args.checkpointing_level
     params['enable_synthetic_data'] = args.enable_synthetic_data
