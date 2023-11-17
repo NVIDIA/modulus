@@ -101,7 +101,7 @@ class ProcessGroupConfig:
     >>> config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
     >>>
     >>> config.leaf_groups()
-    ['spatial_parallel', 'channel_parallel', 'data_parallel']
+    ['data_parallel', 'spatial_parallel', 'channel_parallel']
     >>>
     >>> # Set leaf group sizes
     >>> # Note: product of all leaf-node sizes should be the world size
