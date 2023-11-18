@@ -14,12 +14,19 @@ equations, constraints, etc. In this example, we will only levarage the physics-
 utilites to see how we can add physics to an existing data-driven model with ease while
 still maintaining the flexibility to define our own training loop and other details.
 For a more abstracted definition of these type of problems, where the training loop definition
-etc. is taken care of implictily, you may refer 
+etc. is taken care of implictily, you may refer
 [Modulus Sym](https://github.com/NVIDIA/modulus-sym)
 
 ## Dataset
 
-<TODO: some notes on data>
+The training and validation datasets for this example can be found on the [Fourier Neural
+Operator Github page](https://github.com/neuraloperator/neuraloperator). The downloading
+and pre-processing of the data can also be done by running the below set of commands:
+
+```bash
+pip install -r requirements.txt
+python download_data.py
+```
 
 ## Model overview and architecture
 
@@ -38,9 +45,14 @@ converting the equation into a pytorch representation.
 
 ## Getting Started
 
-<TODO: some run instructions>
+To get started with the example, simply run,
 
+```bash
+python 
+physics_informed_deeponet.py
+```
 
 ## References
 
-
+- [Fourier Neural Operator for Parametric Partial Differential Equations](https://arxiv.org/abs/2010.08895)
+- [Learning nonlinear operators via DeepONet based on the universal approximation theorem of operators](https://www.nature.com/articles/s42256-021-00302-5)

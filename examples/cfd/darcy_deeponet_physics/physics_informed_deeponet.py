@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import hydra
 from omegaconf import DictConfig
 import h5py
@@ -19,6 +33,8 @@ from modulus.sym.eq.pde import PDE
 
 
 class Darcy(PDE):
+    """Darcy PDE using Modulus Sym"""
+
     name = "Darcy"
 
     def __init__(self):
@@ -46,6 +62,8 @@ class Darcy(PDE):
 
 
 class HDF5MapStyleDataset(Dataset):
+    """Simple map-style HDF5 dataset"""
+
     def __init__(
         self,
         file_path,
@@ -104,6 +122,7 @@ class HDF5MapStyleDataset(Dataset):
 
 
 def validation_step(model_branch, model_trunk, dataloader, epoch):
+    """Validation Step"""
     model_branch.eval()
     model_trunk.eval()
 
@@ -227,6 +246,10 @@ def main(cfg: DictConfig):
                 deepo_out = trunk_out * branch_out
 
                 # Compute physics loss
+                # note: the derivative computation can be done using Modulus-Sym
+                # utilities. However, for the purposes of this example, we show it using
+                # torch.autograd. This example will soon be updated to use the graph and
+                # autograd computation from Modulus Sym.
                 grad_sol = torch.autograd.grad(
                     deepo_out.sum(), [x_invar, y_invar], create_graph=True
                 )
