@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EDM diffusion models and recipes for training and sampling.
 - NGC model registry download integration into package/filesystem.
 - Denoising diffusion tutorial.
+- Example for Physics Informed DeepONet using utilites from Modulus Sym.
 
 ### Changed
 
