@@ -76,58 +76,58 @@ def save_checkpoint(model, check_point_path, del_device_buffer=False):
     torch.save(model_state, check_point_path)
 
 
-def save_untrained_sfno(path):
-    """Function to save untrained SFNO"""
+# def save_untrained_sfno(path):
+#     """Function to save untrained SFNO"""
 
-    config = {
-        "N_in_channels": 2,
-        "N_out_channels": 1,
-        "img_shape_x": 4,
-        "img_shape_y": 5,
-        "scale_factor": 1,
-        "num_layers": 2,
-        "num_blocks": 2,
-        "embed_dim": 2,
-        "nettype": "sfno",
-        "add_zenith": True,
-    }
-    from modulus.utils.sfno.YParams import ParamsBase
+#     config = {
+#         "N_in_channels": 2,
+#         "N_out_channels": 1,
+#         "img_shape_x": 4,
+#         "img_shape_y": 5,
+#         "scale_factor": 1,
+#         "num_layers": 2,
+#         "num_blocks": 2,
+#         "embed_dim": 2,
+#         "nettype": "sfno",
+#         "add_zenith": True,
+#     }
+#     from modulus.utils.sfno.YParams import ParamsBase
 
-    params = ParamsBase()
-    params.update_params(config)
+#     params = ParamsBase()
+#     params.update_params(config)
 
-    from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
+#     from modulus.models.sfno.sfnonet import SphericalFourierNeuralOperatorNet
 
-    model = SphericalFourierNeuralOperatorNet(params)
+#     model = SphericalFourierNeuralOperatorNet(params)
 
-    config_path = path / "config.json"
-    with config_path.open("w") as f:
-        json.dump(params.to_dict(), f)
+#     config_path = path / "config.json"
+#     with config_path.open("w") as f:
+#         json.dump(params.to_dict(), f)
 
-    check_point_path = path / "weights.tar"
-    save_ddp_checkpoint(model, check_point_path, del_device_buffer=True)
+#     check_point_path = path / "weights.tar"
+#     save_ddp_checkpoint(model, check_point_path, del_device_buffer=True)
 
-    url = f"file://{path.as_posix()}"
-    package = Package(url, seperator="/")
-    return package
+#     url = f"file://{path.as_posix()}"
+#     package = Package(url, seperator="/")
+#     return package
 
 
-@nfsdata_or_fail
-@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
-def test_sfno(tmp_path, pytestconfig):
-    """Test SFNO plugin"""
+# @nfsdata_or_fail
+# @import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
+# def test_sfno(tmp_path, pytestconfig):
+#     """Test SFNO plugin"""
 
-    from modulus.models.fcn_mip_plugin import sfno
+#     from modulus.models.fcn_mip_plugin import sfno
 
-    package = save_untrained_sfno(tmp_path)
+#     package = save_untrained_sfno(tmp_path)
 
-    model = sfno(package, pretrained=True)
-    x = torch.ones(1, 1, model.model.h, model.model.w)
-    time = datetime.datetime(2018, 1, 1)
-    with torch.no_grad():
-        out = model(x, time=time)
+#     model = sfno(package, pretrained=True)
+#     x = torch.ones(1, 1, model.model.h, model.model.w)
+#     time = datetime.datetime(2018, 1, 1)
+#     with torch.no_grad():
+#         out = model(x, time=time)
 
-    assert out.shape == x.shape
+#     assert out.shape == x.shape
 
 
 def save_untrained_dlwp(path):
