@@ -1,0 +1,27 @@
+arch:
+  decoder:
+    out_features: 1
+    layers: 1
+    layer_size : 32
+
+  fno:
+    in_channels: 21
+    dimension: 3
+    latent_channels: 32
+    fno_layers: 4
+    fno_modes: 12
+    padding: 9
+scheduler:
+  initial_lr: 4.E-3
+  decay_rate: .95
+  decay_steps: 1000
+
+training:
+  batch_size: 4
+  rec_results_freq : 500
+test:
+  batch_size: 1
+
+checkpoint_save_freq: 50
+start_epochs : 0
+max_epochs : 2000
