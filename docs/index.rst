@@ -20,6 +20,9 @@ Welcome to Modulus Core's documentation!
    api/modulus.deploy.rst
    api/modulus.distributed.rst
    api/modulus.utils.rst
+   api/modulus.launch.logging.rst
+   api/modulus.launch.utils.rst
+
 
 .. toctree::
    :maxdepth: 1
