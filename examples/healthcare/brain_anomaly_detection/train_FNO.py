@@ -1,3 +1,17 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import modulus
 import modulus.sym
 from modulus.sym.hydra import to_absolute_path
@@ -20,6 +34,7 @@ from torch.optim import Adam, lr_scheduler
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 import torch.nn.functional as F
 
+
 class HDF5MapStyleDataset(Dataset):
     """Simple map-stype HDF5 dataset"""
 
@@ -38,9 +53,11 @@ class HDF5MapStyleDataset(Dataset):
         if device.type == "cuda" and device.index == None:
             device = torch.device("cuda:0")
         self.device = device
+
     def __len__(self):
         with h5py.File(self.file_path, "r") as f:
             return len(f[self.keys[0]])
+
     def __getitem__(self, idx):
         data = {}
         with h5py.File(self.file_path, "r") as f:
@@ -58,6 +75,10 @@ class HDF5MapStyleDataset(Dataset):
 
 @hydra.main(version_base="1.3", config_path="./conf/", config_name="config_FNO_launch")
 def main(cfg: DictConfig) -> None:
+    """
+    Create surrogate acoustic forward operator using FNO from acoustic
+    wavefield generated from 2D acoustic modeling
+    """
     DistributedManager.initialize()  # Only call this once in the entire script!
     dist = DistributedManager()  # call if required elsewhere
 
@@ -68,27 +89,22 @@ def main(cfg: DictConfig) -> None:
     LaunchLogger.initialize()
 
     ### get the data
-    train_path = to_absolute_path(
-        "./train_sets/data_scale_train.hdf5"
-    )
-    train_dataset = HDF5MapStyleDataset(train_path, device="cuda")
+    train_path = to_absolute_path("./train_sets/data_scale_train.hdf5")
+    train_dataset = HDF5MapStyleDataset(train_path, device=dist.device)
     train_dataloader = DataLoader(
         train_dataset, batch_size=cfg.training.batch_size, shuffle=True
     )
 
-    test_path = to_absolute_path(
-        "./train_sets/data_scale_test.hdf5")
+    test_path = to_absolute_path("./train_sets/data_scale_test.hdf5")
     # rewrite this into class
-    test_dataset = HDF5MapStyleDataset(test_path, device="cuda")
+    test_dataset = HDF5MapStyleDataset(test_path, device=dist.device)
     test_dataloader = DataLoader(
-    test_dataset, batch_size=cfg.test.batch_size, shuffle=False
+        test_dataset, batch_size=cfg.test.batch_size, shuffle=False
     )
-    # set device as GPU
-    device = "cuda"
 
     model = FNO(
         in_channels=cfg.arch.fno.in_channels,
-        out_channels=cfg.arch.decoder.out_features ,
+        out_channels=cfg.arch.decoder.out_features,
         decoder_layers=cfg.arch.decoder.layers,
         decoder_layer_size=cfg.arch.decoder.layer_size,
         dimension=cfg.arch.fno.dimension,
@@ -103,15 +119,15 @@ def main(cfg: DictConfig) -> None:
     optimizer = Adam(model.parameters())
 
     scheduler = lr_scheduler.ExponentialLR(
-        optimizer, gamma=(cfg.scheduler.decay_rate)**(1.0/cfg.scheduler.decay_steps) )
-
+        optimizer, gamma=(cfg.scheduler.decay_rate) ** (1.0 / cfg.scheduler.decay_steps)
+    )
 
     loaded_epoch = load_checkpoint(
         "./checkpoints",
         models=model,
         optimizer=optimizer,
         scheduler=scheduler,
-        device="cuda",
+        device=dist.device,
     )
 
     # Training loop
@@ -148,6 +164,6 @@ def main(cfg: DictConfig) -> None:
             )
     logger.info("Finished Training")
 
+
 if __name__ == "__main__":
     main()
-
