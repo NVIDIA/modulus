@@ -17,6 +17,7 @@ from typing import List, Optional
 
 import torch
 import torch.distributed as dist
+import torch.nn as nn
 import torch.nn.functional as F
 
 from .manager import DistributedManager
@@ -670,3 +671,58 @@ def indexed_all_to_all_v_wrapper_bwd(
         out = out.to(tensor.dtype)
 
     return out
+
+
+def mark_module_as_shared(
+    module: nn.Module,
+    process_group: Optional[str],
+    recurse: bool = True,
+    use_fp32_reduction: bool = True,
+) -> nn.Module:
+    group = DistributedManager().group(process_group)
+    handle_key = "_shared_weight_dist_hook"
+
+    def hook(grad: torch.Tensor) -> torch.Tensor:
+        # the documentation states that
+        # "The hook should not modify its argument, but it can optionally return a new gradient
+        #  which will be used in place of grad."
+        # as all_reduce is an in-place operation, need to copy gradient
+        grad = _reduce(grad.clone().detach(), group=group, use_fp32=use_fp32_reduction)
+        return grad
+
+    def hook_post_accum(param: torch.Tensor) -> None:
+        # the documentation states that
+        # "Note that, unlike other autograd hooks, this hook operates on the tensor that requires grad
+        #  and not the grad itself. The hook can in-place modify and access its Tensor argument,
+        # including its .grad field."
+        param.grad = _reduce(param.grad, group=group, use_fp32=use_fp32_reduction)
+
+    for name, param in module.named_parameters(recurse=recurse):
+        error_msg = f"Parameter {name} already marked as having shared weights, can't mark it again!"
+        if hasattr(param, handle_key):
+            raise RuntimeError(error_msg)
+        if torch.__version__ < (2, 1):
+            handle = param.register_hook(hook)
+        else:
+            handle = param.register_post_accumulate_grad_hook(hook_post_accum)
+        setattr(param, handle_key, handle)
+
+    return module
+
+
+def unmark_module_as_shared(
+    module: nn.Module,
+    recurse: bool = True,
+) -> nn.Module:
+    handle_key = "_shared_weight_dist_hook"
+    for name, param in module.named_parameters(recurse=recurse):
+        error_msg = (
+            f"Parameter {name} NOT marked as having shared weights, can't unmark it!"
+        )
+        if not hasattr(param, handle_key):
+            raise RuntimeError(error_msg)
+        handle = getattr(param, handle_key)
+        handle.remove()
+        delattr(param, handle_key)
+
+    return module
