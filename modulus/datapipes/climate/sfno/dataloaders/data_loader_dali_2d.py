@@ -155,7 +155,6 @@ class ERA5DaliESDataloader(object):
         self, params, location, train, seed=333, final_eval=False
     ):  # pragma: no cover
         self.num_data_workers = params.num_data_workers
-        self.host_prefetch_buffers = params["host_prefetch_buffers"]
         self.device_index = torch.cuda.current_device()
         self.batchsize = int(params.batch_size)
 
@@ -257,7 +256,6 @@ class ERA5DaliESDataloader(object):
             enable_logging=params.log_to_screen,
             seed=333,
             is_parallel=True,
-            host_prefetch_buffers=self.host_prefetch_buffers,
             timestep_hours=self.timestep_hours,
         )
 
@@ -410,21 +408,8 @@ class ERA5DaliESDataloader(object):
             if self.add_zenith:
                 izen = token[0]["izen"]
                 tzen = token[0]["tzen"]
-                if self.host_prefetch_buffers:
-                    result = (
-                        inp.to(torch.cuda.current_device()),
-                        tar.to(torch.cuda.current_device()),
-                        izen.to(torch.cuda.current_device()),
-                        tzen.to(torch.cuda.current_device()),
-                    )
-                else:
-                    result = inp, tar, izen, tzen
+                result = inp, tar, izen, tzen
             else:
-                if self.host_prefetch_buffers:
-                    result = inp.to(torch.cuda.current_device()), tar.to(
-                        torch.cuda.current_device()
-                    )
-                else:
-                    result = inp, tar
+                result = inp, tar
 
             yield result

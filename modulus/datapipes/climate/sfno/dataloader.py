@@ -51,9 +51,9 @@ def init_distributed_io(params):  # pragma: no cover
     num_io_ranks = math.prod(params.io_grid)
     if not ((num_io_ranks == 1) or (num_io_ranks == comm.get_size("spatial"))):
         raise AssertionError
-    if not (params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1):
+    if not ((params.io_grid[1] == comm.get_size("h")) or (params.io_grid[1] == 1)):
         raise AssertionError
-    if not (params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1):
+    if not ((params.io_grid[2] == comm.get_size("w")) or (params.io_grid[2] == 1)):
         raise AssertionError
 
     params.io_rank = [0, 0, 0]
@@ -79,9 +79,10 @@ def get_dataloader(
         return zarr.get_data_loader(params, files_pattern, train)
 
     elif params.get("multifiles", False):
-        from utils.dataloaders.data_loader_multifiles import (
+        from modulus.datapipes.climate.sfno.dataloaders.data_loader_multifiles import (
             MultifilesDataset as MultifilesDataset2D,
         )
+        from torch.utils.data.distributed import DistributedSampler
 
         # multifiles dataset
         dataset = MultifilesDataset2D(params, files_pattern, train)
@@ -107,6 +108,10 @@ def get_dataloader(
             pin_memory=torch.cuda.is_available(),
         )
 
+        # for compatibility with the DALI dataloader
+        dataloader.get_output_normalization = dataset.get_output_normalization
+        dataloader.get_input_normalization = dataset.get_input_normalization
+
     elif params.enable_synthetic_data:
         from modulus.datapipes.climate.sfno.dataloaders.data_loader_dummy import (
             DummyLoader,
@@ -130,6 +135,51 @@ def get_dataloader(
         )
 
         # not needed for the no multifiles case
+        sampler = None
+    # caching dataloader only used in training
+    elif params.get("caching_dataloader", False) and train:
+        from modulus.datapipes.climate.sfno.dataloaders.dataset_caching import (
+            CachingDataset as CachingDataset,
+        )
+
+        # caching loader
+        caching_ds = CachingDataset(params, files_pattern, train)
+
+        dataset = types.SimpleNamespace(
+            in_channels=caching_ds.in_channels,
+            out_channels=caching_ds.out_channels,
+            img_shape_x=caching_ds.img_shape[0],
+            img_shape_y=caching_ds.img_shape[1],
+            img_crop_shape_x=caching_ds.crop_size[0],
+            img_crop_shape_y=caching_ds.crop_size[1],
+            img_crop_offset_x=caching_ds.crop_anchor[0],
+            img_crop_offset_y=caching_ds.crop_anchor[1],
+            img_local_shape_x=caching_ds.read_shape[0] + caching_ds.read_pad[0],
+            img_local_shape_y=caching_ds.read_shape[1] + caching_ds.read_pad[1],
+            img_local_offset_x=caching_ds.read_anchor[0],
+            img_local_offset_y=caching_ds.read_anchor[1],
+            img_local_pad_x=caching_ds.read_pad[0],
+            img_local_pad_y=caching_ds.read_pad[1],
+        )
+
+        # we use persistant workers to make sure the random suffling gets updated properly in the dataloader
+        # support for multiple workers doesn't exit (yet)
+        dataloader = DataLoader(
+            caching_ds,
+            batch_size=int(params.batch_size),
+            num_workers=1,
+            drop_last=True,
+            pin_memory=torch.cuda.is_available(),
+            prefetch_factor=1,
+            worker_init_fn=caching_ds.worker_init,
+            persistent_workers=True,
+        )
+
+        # for compatibility with the DALI dataloader
+        dataloader.get_output_normalization = caching_ds.get_output_normalization
+        dataloader.get_input_normalization = caching_ds.get_input_normalization
+
+        # sampler not used in the caching case, handled by the caching
         sampler = None
 
     else:
