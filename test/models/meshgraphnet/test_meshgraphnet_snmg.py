@@ -182,6 +182,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     DistributedManager.cleanup()
 
 
+@import_or_fail("dgl")
 @pytest.mark.multigpu
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 def test_distributed_meshgraphnet(dtype, pytestconfig):

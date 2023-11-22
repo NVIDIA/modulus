@@ -99,6 +99,8 @@ def partition_graph_with_id_mapping(
     graphs to fit in CPU memory. After the partitioning, we can get rid off
     the larger one in CPU memory, only keep the local graphs on each GPU, and
     avoid tedious gather/scatter routines for exchanging partitions in the process.
+    Note: It is up to the user to ensure that the provided mapping is valid. In particular,
+    we expect each rank to receive a non-empty partition of node IDs.
 
     Parameters
     ----------
@@ -129,9 +131,6 @@ def partition_graph_with_id_mapping(
 
     # --------------------------------------------------------------
     # initialize temporary variables used in computing the partition
-    # global information about node ids and edge ids
-    num_global_src_nodes = global_indices.max().item() + 1
-    num_global_dst_nodes = global_offsets.size(0) - 1
 
     # global IDs of in each partition
     dst_nodes_in_each_partition = [None] * partition_size
@@ -166,7 +165,9 @@ def partition_graph_with_id_mapping(
         # to not cause any data races
         ids = src_nodes_in_each_partition[rank]
         mapping_global_src_ids_to_local_ids[ids] = torch.arange(
-            ids.numel(), dtype=mapping_global_src_ids_to_local_ids.dtype, device=mapping_global_src_ids_to_local_ids.device
+            ids.numel(),
+            dtype=mapping_global_src_ids_to_local_ids.dtype,
+            device=mapping_global_src_ids_to_local_ids.device,
         )
 
     graph_partition.num_src_nodes_in_each_partition = num_src_nodes_in_each_partition
@@ -190,7 +191,9 @@ def partition_graph_with_id_mapping(
         # create boolean mask to find contigouus sections of global_indices
         # which are taken care of current rank without using loops
         tmp = torch.arange(
-            global_indices.numel(), dtype=global_indices.dtype, device=global_indices.device
+            global_indices.numel(),
+            dtype=global_indices.dtype,
+            device=global_indices.device,
         )
         mask = (offset_start <= tmp) & (tmp < offset_end)
         mask = torch.any(mask, dim=0)
@@ -362,6 +365,8 @@ def partition_graph_coordinatewise(
     graphs to fit in CPU memory. After the partitioning, we can get rid off
     the larger one in CPU memory, only keep the local graphs on each GPU, and
     avoid tedious gather/scatter routines for exchanging partitions in the process.
+    Note: It is up to the user to ensure that the provided partition is valid.
+    In particular, we expect each rank to receive a non-empty partition of node IDs.
 
     Examples
     --------
@@ -521,12 +526,28 @@ def partition_graph_coordinatewise(
     """
 
     dim = src_coordinates.size(-1)
-    assert dst_coordinates.size(-1) == dim
-    assert len(coordinate_separators_min) == partition_size
-    assert len(coordinate_separators_max) == partition_size
+    if dst_coordinates.size(-1) != dim:
+        raise ValueError()
+    if len(coordinate_separators_min) != partition_size:
+        a, b = len(coordinate_separators_min), partition_size
+        error_msg = "Expected len(coordinate_separators_min) == partition_size"
+        error_msg += f", but got {a} and {b} respectively"
+        raise ValueError(error_msg)
+    if len(coordinate_separators_max) != partition_size:
+        a, b = len(coordinate_separators_max), partition_size
+        error_msg = "Expected len(coordinate_separators_max) == partition_size"
+        error_msg += f", but got {a} and {b} respectively"
+        raise ValueError(error_msg)
+
     for rank in range(partition_size):
-        assert len(coordinate_separators_min[rank]) == dim
-        assert len(coordinate_separators_max[rank]) == dim
+        if len(coordinate_separators_min[rank]) != dim:
+            a, b = len(coordinate_separators_min[rank]), dim
+            error_msg = f"Expected len(coordinate_separators_min[{rank}]) == dim"
+            error_msg += f", but got {a} and {b} respectively"
+        if len(coordinate_separators_max[rank]) != dim:
+            a, b = len(coordinate_separators_max[rank]), dim
+            error_msg = f"Expected len(coordinate_separators_max[{rank}]) == dim"
+            error_msg += f", but got {a} and {b} respectively"
 
     num_global_src_nodes = global_indices.max().item() + 1
     num_global_dst_nodes = global_offsets.size(0) - 1
