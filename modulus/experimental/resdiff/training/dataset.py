@@ -31,7 +31,6 @@ try:
 except ImportError:
     pyspng = None
     
-from torch_utils import distributed as dist
 import cv2
 
 # import dill
