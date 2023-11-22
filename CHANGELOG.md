@@ -6,7 +6,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0a0] - 2023-11-xx
+## [0.5.0a0] - 2024-01-XX
+
+### Added
+
+- Distributed process group configuration mechanism.
+- DistributedManager utility to instantiate process groups based on they
+process group config.
+- Brain anomaly detection example.
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.4.0] - 2023-11-20
 
 ### Added
 
@@ -18,28 +39,22 @@ weather models
 - Ported utilities from Modulus Launch to main package.
 - EDM diffusion models and recipes for training and sampling.
 - NGC model registry download integration into package/filesystem.
-- Added distributed process group configuration mechanism.
-- Added DistributedManager utility to instantiate process groups based on they
-process group config
+- Denoising diffusion tutorial.
 
 ### Changed
 
 - The AFNO input argument `img_size` to `inp_shape`
 - Integrated the network architecture layers from Modulus-Sym.
-
-### Deprecated
-
-### Removed
+- Updated the SFNO model, and the training and inference recipes.
 
 ### Fixed
 
 - Fixed modulus.Module `from_checkpoint` to work from custom model classes
 
-### Security
-
 ### Dependencies
 
 - Updated the base container to PyTorch 23.10.
+- Updated examples to use Pydantic v2.
 
 ## [0.3.0] - 2023-09-21
 
