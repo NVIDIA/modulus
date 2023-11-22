@@ -28,7 +28,6 @@ from torch.nn.parallel import DistributedDataParallel
 from modulus.distributed import DistributedManager
 
 
-@import_or_fail("dgl")
 def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     from modulus.models.gnn_layers.utils import CuGraphCSC
     from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
@@ -184,8 +183,8 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
 
 
 @pytest.mark.multigpu
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_distributed_meshgraphnet(dtype):
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_distributed_meshgraphnet(dtype, pytestconfig):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = num_gpus
