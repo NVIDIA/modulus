@@ -123,9 +123,9 @@ def main(**kwargs):
 
     # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
     class DistributedManagerWrapper(DistributedManager):
-        def print0(self, message):
+        def print0(self, *message):
             if self.rank == 0:
-                print(message)
+                print(*message)
 
     dist = DistributedManagerWrapper()
 
