@@ -283,10 +283,11 @@ from .img_utils import reshape_fields
 
 #Era5
 class Era5Dataset(torch.utils.data.Dataset):
-  def __init__(self, params, path, train, cache=True, task='sr'):
+  def __init__(self, params, path, train, dist, cache=True, task='sr'):
     self.params = params
     self.location = path
     self.train = train
+    self.dist = dist
     self.dt = params.dt
     self.n_history = params.n_history
     self.in_channels = np.array(params.in_channels)
@@ -305,7 +306,7 @@ class Era5Dataset(torch.utils.data.Dataset):
     self.files_paths.sort()
     self.n_years = len(self.files_paths)
     with h5py.File(self.files_paths[0], 'r') as _f:
-        dist.print0("Getting file stats from {}".format(self.files_paths[0]))
+        self.dist.print0("Getting file stats from {}".format(self.files_paths[0]))
         self.n_samples_per_year = _f['fields'].shape[0]
         #original image shape (before padding)
         self.img_shape_x = _f['fields'].shape[2] -1   #just get rid of one of the pixels
@@ -313,10 +314,10 @@ class Era5Dataset(torch.utils.data.Dataset):
 
     self.n_samples_total = self.n_years * self.n_samples_per_year
     self.files = [None for _ in range(self.n_years)]
-    dist.print0("Number of samples per year: {}".format(self.n_samples_per_year))
-    dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
-    dist.print0("Delta t: {} hours".format(6*self.dt))
-    dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(6*self.dt*self.n_history, 6*self.dt))
+    self.dist.print0("Number of samples per year: {}".format(self.n_samples_per_year))
+    self.dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
+    self.dist.print0("Delta t: {} hours".format(6*self.dt))
+    self.dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(6*self.dt*self.n_history, 6*self.dt))
 
 
   def _open_file(self, year_idx):
@@ -400,10 +401,11 @@ class Era5Dataset(torch.utils.data.Dataset):
 
 #CWB
 class CWBDataset(torch.utils.data.Dataset):
-  def __init__(self, params, path, train, cache=True, task='sr'):
+  def __init__(self, params, path, train, dist, cache=True, task='sr'):
     self.params = params
     self.location = path
     self.train = train
+    self.dist = dist
     self.dt = params.dt
     self.n_history = params.n_history
     self.in_channels = np.array(params.in_channels)
@@ -430,7 +432,7 @@ class CWBDataset(torch.utils.data.Dataset):
     self.len_list = []
     for path in self.files_paths:
         with h5py.File(path, 'r') as _f:
-            dist.print0("Getting file stats from {}".format(path))
+            self.dist.print0("Getting file stats from {}".format(path))
             self.n_samples_per_year = _f['fields'].shape[0]
             self.len_list.append(_f['fields'].shape[0])
             #original image shape (before padding)
@@ -448,11 +450,11 @@ class CWBDataset(torch.utils.data.Dataset):
     self.n_samples_total = self.length
     
     self.files = [None for _ in range(self.n_years)]
-    dist.print0("Number of years: {}".format(self.n_years))
+    self.dist.print0("Number of years: {}".format(self.n_years))
     #util.print0("Number of samples per year: {}".format(self.n_samples_per_year))
-    dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
-    dist.print0("Delta t: {} hours".format(1*self.dt))
-    dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(1*self.dt*self.n_history, 1*self.dt))
+    self.dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
+    self.dist.print0("Delta t: {} hours".format(1*self.dt))
+    self.dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(1*self.dt*self.n_history, 1*self.dt))
 
 
   def _open_file(self, year_idx):
