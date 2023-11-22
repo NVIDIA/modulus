@@ -26,7 +26,7 @@ process group config
 
 ### Dependencies
 
-## [0.4.0] - 2023-11-13
+## [0.4.0] - 2023-11-20
 
 ### Added
 
