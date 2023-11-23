@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DistributedManager utility to instantiate process groups based on they
 process group config.
 - Brain anomaly detection example.
+- ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 
 ### Changed
 
