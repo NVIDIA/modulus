@@ -45,6 +45,8 @@ from einops import rearrange, reduce, repeat
 import math   
 import matplotlib.pyplot as plt
 
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+
 try:
     from edm_sampler import edm_sampler
 except ImportError:
@@ -213,11 +215,11 @@ class StackedRandomGenerator:
         return torch.stack([torch.randint(*args, size=size[1:], generator=gen, **kwargs) for gen in self.generators])
 
 
-def load_pickle(network_pkl):
+def load_pickle(network_pkl, logger):
     # Load network.
-    dist.print0(f'Loading network from "{network_pkl}"...')
+    logger.info(f'Loading network from "{network_pkl}"...')
     with dnnlib.util.open_url(network_pkl, verbose=(dist.get_rank() == 0)) as f:
-        print('torch.__version__', torch.__version__)
+        logger.info('torch.__version__', torch.__version__)
         
         return pickle.load(f)['ema']
 
@@ -239,20 +241,20 @@ def parse_int_list(s):
     return ranges
 
 
-def get_config_file(data_type):
+def get_config_file(data_type, logger):
     config_root = os.getenv("CONFIG_ROOT", "configs")
     config_file = os.path.join(config_root, data_type + '.yaml')
-    print(config_file)
+    logger.info(config_file)
     return config_file
 
 
-def get_dataset_and_sampler(data_type, data_config, config_file=None):
+def get_dataset_and_sampler(data_type, data_config, logger, config_file=None):
     root = os.getenv("DATA_ROOT", "")
     if config_file is None:
         config_file = get_config_file(data_type)
     params = YParams(config_file, config_name=data_config)
     params["train_data_path"] = os.path.join(root, params["train_data_path"])
-    print(params.train_data_path)
+    logger.info(params.train_data_path)
 
     if data_type == 'cwb':
         dataset = CWBDataset(params, params.test_data_path, train=False, task=opts.task)
@@ -330,6 +332,11 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
     opts = dnnlib.EasyDict(kwargs)
     
     dist.init()
+
+    # Initialize logger.
+    logger = PythonLogger("main")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging()
     
     det_batch = None
     gen_batch = None
@@ -338,7 +345,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
     if det_batch is None: det_batch = 1  #max(gen_batch, 64)
     assert det_batch % gen_batch == 0
     
-    print('opts.data_config', opts.data_config)
+    logger0.info(f'opts.data_config: {opts.data_config}')
         
     # Data
     config_file = get_config_file(opts.data_type)
@@ -347,17 +354,17 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
     crop_size_x = params.crop_size_x
     crop_size_y = params.crop_size_y
 
-    dataset, sampler = get_dataset_and_sampler(opts.data_type, opts.data_config)
+    dataset, sampler = get_dataset_and_sampler(opts.data_type, opts.data_config, logger0)
     with nc.Dataset(opts.outdir.format(rank=dist.get_rank()), "w") as f:
         # add attributes
         f.history = ' '.join(sys.argv)
         f.network_pkl = kwargs["network_pkl"]
 
         # Load network
-        dist.print0('Generating images...')
+        logger0.info('Generating images...')
 
-        net = load_pickle(opts.network_pkl)
-        net_reg = load_pickle(opts.network_reg_pkl) if opts.res_edm else None
+        net = load_pickle(opts.network_pkl, logger0)
+        net_reg = load_pickle(opts.network_reg_pkl, logger0) if opts.res_edm else None
 
         # move to device
         num_gpus = dist.get_world_size()
@@ -390,18 +397,21 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                 image_mean = generate(
                     net=net_reg, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
-                    pretext='reg', class_idx=class_idx
+                    pretext='reg', class_idx=class_idx,
+                    logger=logger0
                 )
                 image_out = image_mean + generate(
                     net=net, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
-                    pretext='gen', class_idx=class_idx
+                    pretext='gen', class_idx=class_idx,
+                    logger=logger0
                 )
             else:
                 image_out = generate(
                     net=net, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
-                    pretext=opts.pretext, class_idx=class_idx
+                    pretext=opts.pretext, class_idx=class_idx,
+                    logger=logger0
                 )
             
             #reshape: (1*9*9)x3x50x50  --> 1x3x450x450
@@ -412,12 +422,12 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
 
             return image_out
         
-        generate_and_save(dataset, sampler, f, generate_fn, device, batch_size)
+        generate_and_save(dataset, sampler, f, generate_fn, device, batch_size, logger0)
 
     # Done.
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
-    dist.print0('Done.')
+    logger0.info('Done.')
 
 
 def _get_name(channel_info):
@@ -494,7 +504,7 @@ def writer_from_input_dataset(f, dataset):
     return NetCDFWriter(f, lat=dataset.latitude(), lon=dataset.longitude(), input_channels=dataset.input_channels(), output_channels=dataset.output_channels())
 
 
-def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batch_size):
+def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batch_size, logger):
     data_loader = torch.utils.data.DataLoader(dataset=dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
@@ -502,7 +512,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batc
     for image_tar, image_lr, index in iter(data_loader):
         time_index  += 1
         if dist.get_rank() == 0:
-            print("starting index", time_index)
+            logger.info(f"starting index: {time_index}")
         input_data = image_lr = image_lr.to(device=device).to(torch.float32)
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
@@ -567,7 +577,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batc
             
 
 
-def generate(net, seeds, class_idx, max_batch_size, img_lr=None, device=torch.device('cuda'), pretext=None, **sampler_kwargs):
+def generate(net, seeds, class_idx, max_batch_size, logger, img_lr=None, device=torch.device('cuda'), pretext=None, **sampler_kwargs):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     
@@ -584,7 +594,7 @@ def generate(net, seeds, class_idx, max_batch_size, img_lr=None, device=torch.de
         --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
     
-    dist.print0('seeds', seeds)
+    logger.info(f'seeds: {seeds}')
 
     #dist.init()
     num_batches = ((len(seeds) - 1) // (max_batch_size * dist.get_world_size()) + 1) * dist.get_world_size()

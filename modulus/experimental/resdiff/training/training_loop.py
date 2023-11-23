@@ -63,7 +63,8 @@ def training_loop(
     device              = torch.device('cuda'),
     data_type           = None,
     data_config         = None,
-    task                = None    
+    task                = None,
+    logger0             = None      # rank 0 logger    
 ):
     # Initialize.
     start_time = time.time()
@@ -76,7 +77,7 @@ def training_loop(
 
     # Select batch size per GPU.
     batch_gpu_total = batch_size // dist.get_world_size()
-    dist.print0('batch_gpu', batch_gpu)
+    logger0.info(f'batch_gpu: {batch_gpu}')
     if batch_gpu is None or batch_gpu > batch_gpu_total:
         batch_gpu = batch_gpu_total
     num_accumulation_rounds = batch_gpu_total // batch_gpu
@@ -91,7 +92,7 @@ def training_loop(
     '''
     
     # Load dataset: weather
-    dist.print0('Loading dataset...')
+    logger0.info('Loading dataset...')
     yparams = YParams(data_type + '.yaml', config_name=data_config)
 
     
@@ -133,7 +134,7 @@ def training_loop(
     #     img_in_channels = img_in_channels + yparams.N_grid_channels + img_out_channels
     
     # Construct network.
-    dist.print0('Constructing network...')
+    logger0.info('Constructing network...')
     #interface_kwargs = dict(img_resolution=dataset_obj.resolution, img_channels=dataset_obj.num_channels, label_dim=dataset_obj.label_dim)    #cifar10
     interface_kwargs = dict(img_resolution=yparams.crop_size_x, img_channels=img_out_channels, img_in_channels=img_in_channels, img_out_channels=img_out_channels, label_dim=0)    #weather
     net = dnnlib.util.construct_class_by_name(**network_kwargs, **interface_kwargs) # subclass of torch.nn.Module
@@ -163,7 +164,7 @@ def training_loop(
     
 
     # Setup optimizer.
-    dist.print0('Setting up optimizer...')
+    logger0.info('Setting up optimizer...')
     loss_fn = dnnlib.util.construct_class_by_name(**loss_kwargs) # training.loss.(VP|VE|EDM)Loss
     optimizer = dnnlib.util.construct_class_by_name(params=net.parameters(), **optimizer_kwargs) # subclass of torch.optim.Optimizer
     augment_pipe = dnnlib.util.construct_class_by_name(**augment_kwargs) if augment_kwargs is not None else None # training.augment.AugmentPipe
@@ -182,11 +183,11 @@ def training_loop(
         from userlib.auto_resume import AutoResume
         AutoResume.init()
     except ImportError:
-        print('AutoResume not imported')
+        raise ImportError('AutoResume not imported')
         
     # Resume training from previous snapshot.
     if resume_pkl is not None:
-        dist.print0(f'Loading network weights from "{resume_pkl}"...')
+        logger0.info(f'Loading network weights from "{resume_pkl}"...')
         if dist.get_rank() != 0:
             torch.distributed.barrier() # rank 0 goes first
         with dnnlib.util.open_url(resume_pkl, verbose=(dist.get_rank() == 0)) as f:
@@ -197,7 +198,7 @@ def training_loop(
         misc.copy_params_and_buffers(src_module=data['ema'], dst_module=ema, require_all=False)
         del data # conserve memory
     if resume_state_dump:
-        dist.print0(f'Loading training state from "{resume_state_dump}"...')
+        logger0.info(f'Loading training state from "{resume_state_dump}"...')
         data = torch.load(resume_state_dump, map_location=torch.device('cpu'))
         misc.copy_params_and_buffers(src_module=data['net'], dst_module=net, require_all=True)
         #dist.print0('data-optimizer', data['optimizer_state'])
@@ -215,8 +216,7 @@ def training_loop(
     # import pdb; pdb.set_trace()
         
     # Train.
-    dist.print0(f'Training for {total_kimg} kimg...')
-    dist.print0()
+    logger0.info(f'Training for {total_kimg} kimg...')
     cur_nimg = resume_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
@@ -298,30 +298,28 @@ def training_loop(
         fields += [f"gpumem {training_stats.report0('Resources/peak_gpu_mem_gb', torch.cuda.max_memory_allocated(device) / 2**30):<6.2f}"]
         fields += [f"reserved {training_stats.report0('Resources/peak_gpu_mem_reserved_gb', torch.cuda.max_memory_reserved(device) / 2**30):<6.2f}"]
         torch.cuda.reset_peak_memory_stats()
-        dist.print0(' '.join(fields))
+        logger0.info(' '.join(fields))
                 
         ckpt_dir = run_dir
         
-        print('AutoResume.termination_requested()', AutoResume.termination_requested())
-        print('AutoResume', AutoResume)
+        logger0.info(f'AutoResume.termination_requested(): {AutoResume.termination_requested()}')
+        logger0.info(f'AutoResume: {AutoResume}')
 
         if AutoResume.termination_requested():
             AutoResume.request_resume()
-            print("Training terminated. Returning")
+            logger0.info("Training terminated. Returning")
             done = True
             #print('dist.get_rank()', dist.get_rank())
             #with open(os.path.join(os.path.split(ckpt_dir)[0],'resume.txt'), "w") as f: 
             with open(os.path.join(ckpt_dir,'resume.txt'), "w") as f:
                 f.write(os.path.join(ckpt_dir, f'training-state-{cur_nimg//1000:06d}.pt'))
-                print(os.path.join(ckpt_dir, f'training-state-{cur_nimg//1000:06d}.pt'))
+                logger0.info(os.path.join(ckpt_dir, f'training-state-{cur_nimg//1000:06d}.pt'))
                 f.close()
                 #return 0
 
         # Check for abort.
-        dist.print0('*********************************************')
-        dist.print0('dist.should_stop()', dist.should_stop())
-        dist.print0('done', done)
-        dist.print0('*********************************************')
+        logger0.info(f'dist.should_stop(): {dist.should_stop()}')
+        logger0.info(f'done: {done}')
 
         # if (not done) and dist.should_stop():
         #     done = True
@@ -366,7 +364,6 @@ def training_loop(
             
     
     # Done.
-    dist.print0()
-    dist.print0('Exiting...')
+    logger0.info('Exiting...')
 
 #----------------------------------------------------------------------------
