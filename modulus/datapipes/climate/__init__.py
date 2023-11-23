@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .climate import ClimateHDF5Datapipe
 from .era5_hdf5 import ERA5HDF5Datapipe
