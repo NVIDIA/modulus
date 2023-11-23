@@ -28,8 +28,16 @@ def data_dir():
 
 
 @pytest.fixture
-def stats_dir():
-    path = "/data/nfs/modulus-data/datasets/hdf5/stats/"
+def stats_files():
+    return {
+        "mean": "/data/nfs/modulus-data/datasets/hdf5/stats/global_means.py",
+        "std": "/data/nfs/modulus-data/datasets/hdf5/stats/global_stds.py",
+    }
+
+
+@pytest.fixture
+def metadata_path():
+    path = "/data/nfs/modulus-data/datasets/hdf5/data.json"
     return path
 
 
@@ -46,34 +54,55 @@ def geopotential_filename():
     return path
 
 
+# default keyword args for DRY
+spec_kwargs = dict(
+    name="era5",
+    file_type="hdf5",
+    channels=None,
+    use_cos_zenith=True,
+    num_steps=1,
+    stride=1,
+)
+datapipe_kwargs = dict(
+    dt=1,
+    start_year=2018,
+    patch_size=8,
+    num_samples_per_year=None,
+    batch_size=1,
+    use_latlon=True,
+    num_workers=1,
+    shuffle=False,
+)
+
+
 @nfsdata_or_fail
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_constructor(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
+    data_dir,
+    stats_files,
+    metadata_path,
+    lsm_filename,
+    geopotential_filename,
+    device,
+    pytestconfig,
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.datapipes.climate import ClimateDatapipe, ClimateDataSourceSpec
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
-        channels=None,
-        stride=1,
-        dt=1,
-        start_year=2018,
-        num_steps=1,
-        patch_size=8,
-        num_samples_per_year=None,
-        batch_size=1,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        **spec_kwargs
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
         lsm_filename=lsm_filename,
         geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
-        use_latlon=True,
-        num_workers=1,
-        shuffle=False,
         device=torch.device(device),
+        **datapipe_kwargs
     )
 
     # iterate datapipe is iterable
@@ -83,24 +112,18 @@ def test_climate_hdf5_constructor(
     try:
         # init datapipe with empty path
         # if datapipe throws an IO error then this should pass
-        datapipe = ClimateHDF5Datapipe(
+        spec = ClimateDataSourceSpec(
             data_dir="/null_path",
-            stats_dir=stats_dir,
-            channels=None,
-            stride=1,
-            dt=1,
-            start_year=2018,
-            num_steps=1,
-            patch_size=8,
-            num_samples_per_year=None,
-            batch_size=1,
+            stats_files=stats_files,
+            metadata_path=metadata_path,
+            **spec_kwargs
+        )
+        datapipe = ClimateDatapipe(
+            [spec],
             lsm_filename=lsm_filename,
             geopotential_filename=geopotential_filename,
-            use_cos_zenith=True,
-            use_latlon=True,
-            num_workers=1,
-            shuffle=False,
             device=torch.device(device),
+            **datapipe_kwargs
         )
         raise IOError("Failed to raise error given null data path")
     except IOError:
@@ -110,24 +133,18 @@ def test_climate_hdf5_constructor(
     try:
         # init datapipe with empty path
         # if datapipe throws an IO error then this should pass
-        datapipe = ClimateHDF5Datapipe(
+        spec = ClimateDataSourceSpec(
             data_dir=data_dir,
-            stats_dir="/null_path",
-            channels=None,
-            stride=1,
-            dt=1,
-            start_year=2018,
-            num_steps=1,
-            patch_size=8,
-            num_samples_per_year=None,
-            batch_size=1,
+            stats_files={"mean": "/null_path", "std": "/null_path"},
+            metadata_path=metadata_path,
+            **spec_kwargs
+        )
+        datapipe = ClimateDatapipe(
+            [spec],
             lsm_filename=lsm_filename,
             geopotential_filename=geopotential_filename,
-            use_cos_zenith=True,
-            use_latlon=True,
-            num_workers=1,
-            shuffle=False,
             device=torch.device(device),
+            **datapipe_kwargs
         )
         raise IOError("Failed to raise error given null stats path")
     except IOError:
@@ -135,24 +152,18 @@ def test_climate_hdf5_constructor(
 
     # check for failure from invalid num_samples_per_year
     try:
-        datapipe = ClimateHDF5Datapipe(
+        spec = ClimateDataSourceSpec(
             data_dir=data_dir,
-            stats_dir=stats_dir,
-            channels=None,
-            stride=1,
-            dt=1,
-            start_year=2018,
-            num_steps=1,
-            patch_size=8,
-            num_samples_per_year=100,
-            batch_size=1,
+            stats_files=stats_files,
+            metadata_path=metadata_path,
+            **spec_kwargs
+        )
+        datapipe = ClimateDatapipe(
+            [spec],
             lsm_filename=lsm_filename,
             geopotential_filename=geopotential_filename,
-            use_cos_zenith=True,
-            use_latlon=True,
-            num_workers=1,
-            shuffle=False,
             device=torch.device(device),
+            **datapipe_kwargs.copy().update({"num_samples_per_year": 100})
         )
         raise ValueError("Failed to raise error given invalid num_samples_per_year")
     except ValueError:
@@ -160,24 +171,18 @@ def test_climate_hdf5_constructor(
 
     # check invalid channel
     try:
-        datapipe = ClimateHDF5Datapipe(
+        spec = ClimateDataSourceSpec(
             data_dir=data_dir,
-            stats_dir=stats_dir,
-            channels=[20],
-            stride=1,
-            dt=1,
-            start_year=2018,
-            num_steps=1,
-            patch_size=8,
-            num_samples_per_year=None,
-            batch_size=1,
+            stats_files=stats_files,
+            metadata_path=metadata_path,
+            **spec_kwargs.copy().update({"channels": [20]})
+        )
+        datapipe = ClimateDatapipe(
+            [spec],
             lsm_filename=lsm_filename,
             geopotential_filename=geopotential_filename,
-            use_cos_zenith=True,
-            use_latlon=True,
-            num_workers=1,
-            shuffle=False,
             device=torch.device(device),
+            **datapipe_kwargs.copy().update({"num_samples_per_year": 100})
         )
         raise ValueError("Failed to raise error given invalid channel id")
     except ValueError:
@@ -188,41 +193,44 @@ def test_climate_hdf5_constructor(
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_device(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
+    data_dir,
+    stats_files,
+    metadata_path,
+    lsm_filename,
+    geopotential_filename,
+    device,
+    pytestconfig,
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.experimental.datapipes.climate import (
+        ClimateDatapipe,
+        ClimateDataSourceSpec,
+    )
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
-        channels=None,
-        stride=1,
-        dt=1,
-        start_year=2018,
-        num_steps=1,
-        patch_size=8,
-        num_samples_per_year=None,
-        batch_size=1,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        **spec_kwargs
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
         lsm_filename=lsm_filename,
         geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
-        use_latlon=True,
-        num_workers=1,
-        shuffle=False,
         device=torch.device(device),
+        **datapipe_kwargs
     )
 
     # test single sample
     for data in datapipe:
-        common.check_datapipe_device(data[0]["state_seq"], device)
-        common.check_datapipe_device(data[0]["timestamps"], device)
+        common.check_datapipe_device(data[0]["state_seq-era5"], device)
+        common.check_datapipe_device(data[0]["timestamps-era5"], device)
         common.check_datapipe_device(data[0]["land_sea_mask"], device)
         common.check_datapipe_device(data[0]["geopotential"], device)
         common.check_datapipe_device(data[0]["latlon"], device)
         common.check_datapipe_device(data[0]["cos_latlon"], device)
-        common.check_datapipe_device(data[0]["cos_zenith"], device)
+        common.check_datapipe_device(data[0]["cos_zenith-era5"], device)
         break
 
 
@@ -235,7 +243,8 @@ def test_climate_hdf5_device(
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_climate_hdf5_shape(
     data_dir,
-    stats_dir,
+    stats_files,
+    metadata_path,
     lsm_filename,
     geopotential_filename,
     data_channels,
@@ -246,38 +255,47 @@ def test_climate_hdf5_shape(
     pytestconfig,
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.experimental.datapipes.climate import (
+        ClimateDatapipe,
+        ClimateDataSourceSpec,
+    )
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        name="era5",
+        file_type="hdf5",
         channels=data_channels,
+        use_cos_zenith=True,
+        num_steps=num_steps,
         stride=1,
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
+        lsm_filename=lsm_filename,
+        geopotential_filename=geopotential_filename,
+        device=torch.device(device),
         dt=1,
         start_year=2018,
-        num_steps=num_steps,
         patch_size=patch_size,
         num_samples_per_year=None,
         batch_size=batch_size,
-        lsm_filename=lsm_filename,
-        geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
         use_latlon=True,
         num_workers=1,
         shuffle=False,
-        device=torch.device(device),
     )
 
     # test single sample
     for data in datapipe:
-        state_seq = data[0]["state_seq"]
-        timestamps = data[0]["timestamps"]
+        state_seq = data[0]["state_seq-era5"]
+        timestamps = data[0]["timestamps-era5"]
         land_sea_mask = data[0]["land_sea_mask"]
         geopotential = data[0]["geopotential"]
         latlon = data[0]["latlon"]
         cos_latlon = data[0]["cos_latlon"]
-        cos_zenith = data[0]["cos_zenith"]
+        cos_zenith = data[0]["cos_zenith-era5"]
 
         # check batch size
         assert common.check_batch_size(
@@ -320,7 +338,7 @@ def test_climate_hdf5_shape(
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_era5_hdf5_sequence(
     data_dir,
-    stats_dir,
+    stats_files,
     lsm_filename,
     geopotential_filename,
     num_steps,
@@ -329,33 +347,35 @@ def test_era5_hdf5_sequence(
     pytestconfig,
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.experimental.datapipes.climate import (
+        ClimateDatapipe,
+        ClimateDataSourceSpec,
+    )
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        name="era5",
+        file_type="hdf5",
         channels=None,
-        stride=stride,
-        dt=1,
-        start_year=2018,
+        use_cos_zenith=True,
         num_steps=num_steps,
-        patch_size=None,
-        num_samples_per_year=None,
-        batch_size=1,
+        stride=stride,
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
         lsm_filename=lsm_filename,
         geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
-        use_latlon=True,
-        num_workers=1,
-        shuffle=False,
         device=torch.device(device),
+        **datapipe_kwargs
     )
 
     # get single sample
     # TODO generalize tests for sequence type datapipes
     for data in datapipe:
-        state_seq = data[0]["state_seq"]
+        state_seq = data[0]["state_seq-era5"]
         break
 
     # check if tensor has correct shape
@@ -374,7 +394,7 @@ def test_era5_hdf5_sequence(
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_era5_hdf5_shuffle(
     data_dir,
-    stats_dir,
+    stats_files,
     lsm_filename,
     geopotential_filename,
     shuffle,
@@ -383,32 +403,41 @@ def test_era5_hdf5_shuffle(
     pytestconfig,
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.experimental.datapipes.climate import (
+        ClimateDatapipe,
+        ClimateDataSourceSpec,
+    )
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        name="era5",
+        file_type="hdf5",
         channels=None,
+        use_cos_zenith=True,
+        num_steps=1,
         stride=stride,
-        dt=1,
-        start_year=2018,
-        num_steps=2,
-        patch_size=None,
-        num_samples_per_year=None,
-        batch_size=1,
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
         lsm_filename=lsm_filename,
         geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
+        device=torch.device(device),
+        dt=1,
+        start_year=2018,
+        patch_size=8,
+        num_samples_per_year=None,
+        batch_size=1,
         use_latlon=True,
         num_workers=1,
         shuffle=shuffle,
-        device=torch.device(device),
     )
 
     # get all samples
     # TODO generalize this
-    tensors = [data[0]["state_seq"] for data in datapipe]
+    tensors = [data[0]["state_seq-era5"] for data in datapipe]
 
     # check sample order
     assert common.check_shuffle(tensors, shuffle, stride, 8)
@@ -418,34 +447,31 @@ def test_era5_hdf5_shuffle(
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0"])
 def test_era5_hdf5_cudagraphs(
-    data_dir, stats_dir, lsm_filename, geopotential_filename, device, pytestconfig
+    data_dir, stats_files, lsm_filename, geopotential_filename, device, pytestconfig
 ):
 
-    from modulus.experimental.datapipes.climate import ClimateHDF5Datapipe
+    from modulus.experimental.datapipes.climate import (
+        ClimateDatapipe,
+        ClimateDataSourceSpec,
+    )
 
     # Preprocess function to convert dataloader output into Tuple of tensors
     def input_fn(data) -> Tensor:
-        return data[0]["state_seq"]
+        return data[0]["state_seq-era5"]
 
     # construct data pipe
-    datapipe = ClimateHDF5Datapipe(
+    spec = ClimateDataSourceSpec(
         data_dir=data_dir,
-        stats_dir=stats_dir,
-        channels=None,
-        stride=1,
-        dt=1,
-        start_year=2018,
-        num_steps=1,
-        patch_size=None,
-        num_samples_per_year=None,
-        batch_size=1,
+        stats_files=stats_files,
+        metadata_path=metadata_path,
+        **spec_kwargs
+    )
+    datapipe = ClimateDatapipe(
+        [spec],
         lsm_filename=lsm_filename,
         geopotential_filename=geopotential_filename,
-        use_cos_zenith=True,
-        use_latlon=True,
-        num_workers=1,
-        shuffle=False,
         device=torch.device(device),
+        **datapipe_kwargs
     )
 
     assert common.check_cuda_graphs(datapipe, input_fn)
