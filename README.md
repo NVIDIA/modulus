@@ -29,7 +29,6 @@ Detailed information on features and capabilities can be found in the [Modulus d
 ## Modulus Packages
 
 - [Modulus (Beta)](https://github.com/NVIDIA/modulus)
-- [Modulus Launch (Beta)](https://github.com/NVIDIA/modulus-launch)
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym)
 - [Modulus Tool-Chain (Beta)](https://github.com/NVIDIA/modulus-toolchain)
 
@@ -77,13 +76,13 @@ docker pull nvcr.io/nvidia/modulus/modulus:23.11
 
 Inside the container you can clone the Modulus git repositories and get started with the
 examples. Below command show the instructions to launch the modulus container and run an
-example from the [Modulus Launch](https://github.com/NVIDIA/modulus-launch) repo.
+examples from this repo.
 
 ```bash
 docker run --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --runtime nvidia \
 --rm -it nvcr.io/nvidia/modulus/modulus:23.11 bash
-git clone https://github.com/NVIDIA/modulus-launch.git
-cd modulus-launch/examples/cfd/darcy_fno/
+git clone https://github.com/NVIDIA/modulus.git
+cd modulus/examples/cfd/darcy_fno/
 pip install warp-lang # install NVIDIA Warp to run the darcy example
 python train_fno_darcy.py
 ```
