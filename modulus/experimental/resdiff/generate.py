@@ -45,9 +45,9 @@ import math
 import matplotlib.pyplot as plt
 
 try:
-    from edm_sampler import edm_sampler
+    from edmss import edm_sampler
 except ImportError:
-    raise ImportError(f"Please get the edm_sampler from https://github.com/NVlabs/edm/blob/main/generate.py#L25 and include that in an edm_sampler.py file in this directory: {os.path.dirname(os.path.abspath(__file__))}")
+    raise ImportError(f"Please get the edm_sampler by running pip install git+https://github.com/mnabian/edmss.git)
 
 from modulus.distributed import DistributedManager
 
