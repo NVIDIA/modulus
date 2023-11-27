@@ -28,10 +28,13 @@ Detailed information on features and capabilities can be found in the [Modulus d
 
 ## Modulus Packages
 
-- [Modulus (Beta)](https://github.com/NVIDIA/modulus)
-- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym)
-- [Modulus Tool-Chain (Beta)](https://github.com/NVIDIA/modulus-toolchain)
+- [Modulus (Beta)](https://github.com/NVIDIA/modulus): Open-source deep-learning framework for building, training, and fine-tuning deep learning models using state-of-the-art Physics-ML methods.
+- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): Framework providing pythonic APIs, algorithms and utilities to be used with Modulus core to physics inform model training as well as higher level abstraction for domain experts.
 
+### Domain Specific Packages
+
+- [Earth-2 MIP (Alpha)](https://github.com/NVIDIA/earth2mip): Python framework to enable climate researchers and scientists to explore and experiment with AI models for weather and climate.
+  
 ## Installation
 
 ### PyPi
