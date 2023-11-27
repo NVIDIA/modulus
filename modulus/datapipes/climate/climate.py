@@ -99,8 +99,6 @@ class ClimateDataSourceSpec:
         data source will be produced, default False
     num_steps : int, optional
         Number of timesteps to return, by default 1
-    num_steps : int, optional
-        Number of timesteps to return, by default 1
     stride : int, optional
         Number of steps between input and output variables. For example, if the dataset
         contains data at every 6 hours, a stride 1 = 6 hour delta t and
