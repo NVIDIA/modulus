@@ -210,7 +210,7 @@ class ResLossv1:
         with torch.no_grad():
             #resume_state_dump = '/lustre/fsw/nvresearch/mmardani/output/logs/edm_era5_cwb_12chans_fcn_4x_crop448_zarr_fulldata_unetregression/complex-mayfly_2023.04.25_16.42/output/training-state-006924.pt'
             resume_state_dump = '/lustre/fsw/nvresearch/mmardani/output/logs/edm_era5_cwb_12chans_fcn_4x_crop448_zarr_fulldata_unetregression/mindful-parakeet_2023.04.03_22.54/output/training-state-042650.pt'
-            # dist.print0(f'Loading training state from "{resume_state_dump}"...')
+            print(f'Loading training state from "{resume_state_dump}"...')
             data = torch.load(resume_state_dump, map_location=torch.device('cpu'))
             self.unet = data['net'].cuda()
             #misc.copy_params_and_buffers(src_module=data['net'], dst_module=net, require_all=True)
