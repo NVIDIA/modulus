@@ -38,7 +38,7 @@ Detailed information on features and capabilities can be found in the [Modulus d
 
 ### Domain Specific Packages
 
-- [Earth-2 MIP (Alpha)](https://github.com/NVIDIA/earth2mip): Python framework
+- [Earth-2 MIP (Beta)](https://github.com/NVIDIA/earth2mip): Python framework
   to enable climate researchers and scientists to explore and experiment with
   AI models for weather and climate.
   
