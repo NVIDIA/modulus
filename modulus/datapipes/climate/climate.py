@@ -550,6 +550,13 @@ class ClimateDatapipe(Datapipe):
             np.stack((sin_lat, cos_lat, sin_lon, cos_lon), axis=0)
         )  # TODO: calling this cos_latlon is a bit misleading?
 
+    def _source_cls_from_type(self, source_type: str) -> type:
+        """Get the external source class based on a string descriptor."""
+        return {
+            "hdf5": ClimateHDF5DaliExternalSource,
+            "netcdf4": ClimateNetCDF4DaliExternalSource,
+        }[source_type]
+
     def _source_outputs(self, spec: ClimateDataSourceSpec) -> List:
         """Create DALI outputs for a given data source specification.
 
@@ -557,13 +564,9 @@ class ClimateDatapipe(Datapipe):
         ----------
         spec: ClimateDataSourceSpec
             The data source specification.
-
         """
         # HDF5/NetCDF source
-        source_cls = {
-            "hdf5": ClimateHDF5DaliExternalSource,
-            "netcdf4": ClimateNetCDF4DaliExternalSource,
-        }[spec.file_type]
+        source_cls = self._source_cls_from_type(spec.file_type)
         source = source_cls(
             data_paths=spec.data_paths,
             num_samples=spec.total_length,
