@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-from scipy.linalg import sqrtm
+import torch
+
+from modulus.metrics.general.wasserstein import wasserstein_from_normal
 
 
 def calculate_fid_from_inception_stats(
-    mu: np.ndarray, sigma: np.ndarray, mu_ref: np.ndarray, sigma_ref: np.ndarray
-) -> float:
+    mu: torch.Tensor, sigma: torch.Tensor, mu_ref: torch.Tensor, sigma_ref: torch.Tensor
+) -> torch.Tensor:
     """
     Calculate the Fréchet Inception Distance (FID) between two sets
     of Inception statistics.
@@ -29,13 +30,13 @@ def calculate_fid_from_inception_stats(
 
     Parameters
     ----------
-    mu:  np.ndarray:
+    mu:  torch.Tensor:
         Mean of Inception statistics for the generated dataset.
-    sigma: np.ndarray:
+    sigma: torch.Tensor:
         Covariance matrix of Inception statistics for the generated dataset.
-    mu_ref: np.ndarray
+    mu_ref: torch.Tensor
         Mean of Inception statistics for the reference dataset.
-    sigma_ref: np.ndarray
+    sigma_ref: torch.Tensor
         Covariance matrix of Inception statistics for the reference dataset.
 
     Returns
@@ -43,7 +44,4 @@ def calculate_fid_from_inception_stats(
     float
         The Fréchet Inception Distance (FID) between the two datasets.
     """
-    m = np.square(mu - mu_ref).sum()
-    s, _ = sqrtm(np.dot(sigma, sigma_ref), disp=False)
-    fid = m + np.trace(sigma + sigma_ref - s * 2)
-    return float(np.real(fid))
+    return wasserstein_from_normal(mu, sigma, mu_ref, sigma_ref)
