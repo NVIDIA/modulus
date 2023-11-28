@@ -142,7 +142,7 @@ FROM deploy as docs
 ARG TARGETPLATFORM
 
 # Install CI packages
-RUN pip install "protobuf==3.20.3"
+RUN pip install --no-cache-dir "protobuf==3.20.3"
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
 	pip install --no-cache-dir "tensorflow==2.9.0" "warp-lang>=0.6.0"; \ 
