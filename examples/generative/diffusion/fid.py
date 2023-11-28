@@ -111,7 +111,7 @@ def calculate_inception_stats(
     mu /= len(dataset_obj)
     sigma -= mu.ger(mu) * len(dataset_obj)
     sigma /= len(dataset_obj) - 1
-    return mu.cpu().numpy(), sigma.cpu().numpy()
+    return mu, sigma
 
 
 def calc(image_path, ref_path, num_expected, seed, batch, dist, logger, logger0):
@@ -122,6 +122,8 @@ def calc(image_path, ref_path, num_expected, seed, batch, dist, logger, logger0)
     if dist.rank == 0:
         with open_url(ref_path) as f:
             ref = dict(np.load(f))
+            mu_ref = torch.as_tensor(ref["mu"], device=dist.device)
+            sigma_ref = torch.as_tensor(ref["sigma"], device=dist.device)
 
     mu, sigma = calculate_inception_stats(
         image_path=image_path,
@@ -133,7 +135,7 @@ def calc(image_path, ref_path, num_expected, seed, batch, dist, logger, logger0)
     )
     logger0.info("Calculating FID...")
     if dist.rank == 0:
-        fid = calculate_fid_from_inception_stats(mu, sigma, ref["mu"], ref["sigma"])
+        fid = calculate_fid_from_inception_stats(mu, sigma, mu_ref, sigma_ref)
         logger.info(f"{fid:g}")
     if dist.world_size > 1:
         torch.distributed.barrier()
