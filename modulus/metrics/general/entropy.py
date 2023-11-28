@@ -15,19 +15,18 @@
 # TODO(Dallas) Introduce Distributed Class for computation.
 
 import torch
-import numpy as np
-from .histogram import histogram
-from typing import Union
 
 Tensor = torch.Tensor
 
 
-def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tensor:
+def entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tensor:
     """Computes the Statistical Entropy of a random variable using
     a histogram.
 
     Uses the formula:
-    .. math:
+
+    .. math::
+
         Entropy(X) = \\int p(x) * \\log( p(x) ) dx
 
     Parameters
@@ -49,20 +48,22 @@ def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tenso
     Tensor
         Tensor containing the Information/Statistical Entropy
     """
-    assert bin_edges.shape[1:] == p.shape[1:], (
-        "Expected bins and pdf to have compatible non-zeroth dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(p.shape[1:])
-        + "."
-    )
-    assert bin_edges.shape[0] == p.shape[0] + 1, (
-        "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
-        + str(bin_edges.shape[0])
-        + " and "
-        + str(p.shape[0])
-        + "+1."
-    )
+    if bin_edges.shape[1:] != p.shape[1:]:
+        raise ValueError(
+            "Expected bins and pdf to have compatible non-zeroth dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(p.shape[1:])
+            + "."
+        )
+    if bin_edges.shape[0] != p.shape[0] + 1:
+        raise ValueError(
+            "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
+            + str(bin_edges.shape[0])
+            + " and "
+            + str(p.shape[0])
+            + "+1."
+        )
     dbins = bin_edges[1:] - bin_edges[:-1]
     bin_mids = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     p = p / torch.trapz(p, bin_mids, dim=0) + 1e-8
@@ -76,7 +77,7 @@ def _entropy_from_counts(p: Tensor, bin_edges: Tensor, normalized=True) -> Tenso
         return ent
 
 
-def _relative_entropy_from_counts(
+def relative_entropy_from_counts(
     p: Tensor,
     q: Tensor,
     bin_edges: Tensor,
@@ -85,7 +86,9 @@ def _relative_entropy_from_counts(
     random variables using their histograms.
 
     Uses the formula:
-    .. math:
+
+    .. math::
+
         Entropy(X) = \\int p(x) * \\log( p(x)/q(x) ) dx
 
     Parameters
@@ -106,29 +109,31 @@ def _relative_entropy_from_counts(
     Tensor
         Map of Statistical Entropy
     """
-    assert bin_edges.shape[1:] == p.shape[1:], (
-        "Expected bins and pdf to have compatible non-zeroth dimensions but have shapes"
-        + str(bin_edges.shape[1:])
-        + " and "
-        + str(p.shape[1:])
-        + "."
-    )
-    assert bin_edges.shape[0] == p.shape[0] + 1, (
-        "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
-        + str(bin_edges.shape[0])
-        + " and "
-        + str(p.shape[0])
-        + "+1."
-    )
+    if bin_edges.shape[1:] != p.shape[1:]:
+        raise ValueError(
+            "Expected bins and pdf to have compatible non-zeroth dimensions but have shapes"
+            + str(bin_edges.shape[1:])
+            + " and "
+            + str(p.shape[1:])
+            + "."
+        )
+    if bin_edges.shape[0] != p.shape[0] + 1:
+        raise ValueError(
+            "Expected zeroth dimension of cdf to be equal to the zeroth dimension of bins + 1 but have shapes"
+            + str(bin_edges.shape[0])
+            + " and "
+            + str(p.shape[0])
+            + "+1."
+        )
 
-    assert p.shape == q.shape, (
-        "Expected p and q to have compatible shapes but have shapes"
-        + str(p.shape)
-        + " and "
-        + str(q.shape)
-        + "."
-    )
-    dbins = bin_edges[1:] - bin_edges[:-1]
+    if p.shape != q.shape:
+        raise ValueError(
+            "Expected p and q to have compatible shapes but have shapes"
+            + str(p.shape)
+            + " and "
+            + str(q.shape)
+            + "."
+        )
     bin_mids = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     p = p / torch.trapz(p, bin_mids, dim=0) + 1e-8
     q = q / torch.trapz(q, bin_mids, dim=0) + 1e-8

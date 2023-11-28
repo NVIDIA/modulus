@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import netCDF4 as nc
 import numpy as np
 import torch
 from torch import Tensor
-import os
 
 from .graph_utils import deg2rad
 
@@ -58,7 +59,7 @@ class StaticData:
         lsm = np.expand_dims(ds["lsm"], axis=0)
         return torch.tensor(lsm, dtype=torch.float32)
 
-    def get_geop(self, normalize: True) -> Tensor:  # pragma: no cover
+    def get_geop(self, normalize: bool = True) -> Tensor:  # pragma: no cover
         """Get geopotential from netCDF file.
 
         Parameters

@@ -1,0 +1,19 @@
+
+#CODE_IGNORE_PATTERNS: '.git,*.pyc,docs*,test*'
+
+LOGROOT: /lustre/fsw/nvresearch/mmardani/output/logs
+
+FARM: draco
+
+draco:
+    SUBMIT_CMD: 'SUBMIT_SUBPROJECT_NAME=earth2-diffusion  submit_job'
+    RESOURCES:
+        image: gitlab-master.nvidia.com/tkurth/era5_wind:latest  #gitlab-master.nvidia.com/mmardani/diffusions-weather-forecast:latest   #gitlab-master.nvidia.com/tkurth/era5_wind:latest
+        duration: 4
+        autoresume_timer: 235
+        nodes: 16
+        gpu: 8
+        mounts: $SHARE_SOURCE,$SHARE_OUTPUT,$SHARE_DATA,/lustre/fsw
+        setenv: SUBMIT_ACCOUNT=sw_earth2_ml  #devtech  #sw_earth2_ml   #devtech, gpu_adlr_graphics
+        partition: luna
+        prolog_command: "\"pip install --upgrade torch\""

@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import logging
 
-from typing import Union
-from pathlib import Path
 from modulus.datapipes.meta import DatapipeMetaData
 
 
@@ -40,7 +37,7 @@ class Datapipe:
         self.logger = logging.getLogger("core.datapipe")
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
-            f"[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
+            "[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
         )
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)

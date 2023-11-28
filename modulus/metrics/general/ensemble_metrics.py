@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import ABC
+from typing import List, Tuple, Union
+
 import torch
 import torch.distributed as dist
-from typing import Union, Tuple, List
-from abc import ABC, abstractmethod
+
 from modulus.distributed.manager import DistributedManager
-from warnings import warn
 
 Tensor = torch.Tensor
 
@@ -40,32 +41,26 @@ class EnsembleMetrics(ABC):
     def __init__(
         self,
         input_shape: Union[Tuple[int, ...], List[int]],
-        device: torch.device = "cpu",
+        device: Union[str, torch.device] = "cpu",
         dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         self.input_shape = list(input_shape)
-        self.device = device
+        self.device = torch.device(device)
         self.dtype = dtype
 
-        if DistributedManager.is_initialized() and not (dist.is_initialized()):
-            warn(
-                "DistributedManager is detected and initialized but torch distributed \
-    process group is not initialized. In order to use this class, please initialize \
-    torch process group, see https://pytorch.org/docs/stable/distributed.html"
-            )
-
-    def _check_shape(self, input: Tensor) -> None:
+    def _check_shape(self, inputs: Tensor) -> None:
         """
         Check input shapes for non-batched dimension.
         """
-        assert [i == s for (i, s) in zip(input.shape[1:], self.input_shape)], (
-            "Expected new input to have compatible shape with existing shapes but got"
-            + str(input.shape)
-            + "and"
-            + str(self.input_shape)
-            + "."
-        )
+        if not all([i == s for (i, s) in zip(inputs.shape[1:], self.input_shape)]):
+            raise ValueError(
+                "Expected new input to have compatible shape with existing shapes but got"
+                + str(inputs.shape)
+                + "and"
+                + str(self.input_shape)
+                + "."
+            )
 
     def __call__(self, *args):
         """
@@ -89,7 +84,7 @@ class EnsembleMetrics(ABC):
 def _update_mean(
     old_sum: Tensor,
     old_n: Union[int, Tensor],
-    input: Tensor,
+    inputs: Tensor,
     batch_dim: Union[int, None] = 0,
 ) -> Tuple[Tensor, Union[int, Tensor]]:
     """Updated mean sufficient statistics given new data
@@ -116,11 +111,11 @@ def _update_mean(
         Updated (rolling sum, number of samples)
     """
     if batch_dim is None:
-        input = torch.unsqueeze(input, 0)
+        inputs = torch.unsqueeze(inputs, 0)
         batch_dim = 0
 
-    new_sum = old_sum + torch.sum(input, dim=batch_dim)
-    new_n = old_n + input.shape[batch_dim]
+    new_sum = old_sum + torch.sum(inputs, dim=batch_dim)
+    new_n = old_n + inputs.shape[batch_dim]
 
     return new_sum, new_n
 
@@ -139,54 +134,77 @@ class Mean(EnsembleMetrics):
     def __init__(self, input_shape: Union[Tuple, List], **kwargs):
         super().__init__(input_shape, **kwargs)
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
-        self.n = torch.zeros(1, dtype=torch.int32, device=self.device)
+        self.n = torch.zeros([1], dtype=torch.int32, device=self.device)
 
-    def __call__(self, input: Tensor) -> Tensor:
+    def __call__(self, inputs: Tensor, dim: int = 0) -> Tensor:
         """Calculate an initial mean
 
         Parameters
         ----------
-        input : Tensor
+        inputs : Tensor
             Input data
+        dim : Int
+            Dimension of batched data
 
         Returns
         -------
         Tensor
             Mean value
         """
-        self.sum = torch.sum(input, dim=0)
-        self.n = torch.as_tensor(input.shape[0])
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
+        self.sum = torch.sum(inputs, dim=dim)
+        self.n = torch.as_tensor([inputs.shape[dim]], device=self.device)
         # TODO(Dallas) Move distributed calls into finalize.
 
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
             dist.all_reduce(self.n, op=dist.ReduceOp.SUM)
 
         return self.sum / self.n
 
-    def update(self, input: Tensor) -> Tensor:
+    def update(self, inputs: Tensor, dim: int = 0) -> Tensor:
         """Update current mean and essential statistics with new data
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor
+        inputs : Tensor
+            Inputs tensor
+        dim : int
+            Dimension of batched data
 
         Returns
         -------
         Tensor
             Current mean value
         """
-        self._check_shape(input)
+        self._check_shape(inputs)
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
+
         # TODO(Dallas) Move distributed calls into finalize.
-        if DistributedManager.is_initialized() and dist.is_initialized():
-            sums, n = _update_mean(self.sum, self.n, input, batch_dim=0)
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
+            # Collect local sums, n
+            sums = torch.sum(inputs, batch_dim=dim)
+            n = torch.as_tensor([inputs.shape[dim]], device=self.device)
+
+            # Reduce
             dist.all_reduce(sums, op=dist.ReduceOp.SUM)
             dist.all_reduce(n, op=dist.ReduceOp.SUM)
+
+            # Update
             self.sum += sums
             self.n += n
         else:
-            self.sum, self.n = _update_mean(self.sum, self.n, input, batch_dim=0)
+            self.sum, self.n = _update_mean(self.sum, self.n, inputs, batch_dim=dim)
         return self.sum / self.n
 
     def finalize(
@@ -208,7 +226,7 @@ def _update_var(
     old_sum: Tensor,
     old_sum2: Tensor,
     old_n: Union[int, Tensor],
-    input: Tensor,
+    inputs: Tensor,
     batch_dim: Union[int, None] = 0,
 ) -> Tuple[Tensor, Tensor, Union[int, Tensor]]:
     """Updated variance sufficient statistics given new data
@@ -224,7 +242,7 @@ def _update_var(
         Current, or old, running squared sum
     old_n : Union[int, Tensor]
         Current, or old, number of samples
-    input : Tensor
+    inputs : Tensor
         New input to add to current/old sum. May be batched, in which case the batched
         dimension must be flagged by passing an int to batch_dim.
     batch_dim : Union[int, None], optional
@@ -245,12 +263,12 @@ def _update_var(
     """
 
     if batch_dim is None:
-        input = torch.unsqueeze(input, 0)
+        inputs = torch.unsqueeze(inputs, 0)
         batch_dim = 0
 
-    temp_n = input.shape[batch_dim]
-    temp_sum = torch.sum(input, dim=batch_dim)
-    temp_sum2 = torch.sum((input - temp_sum / temp_n) ** 2, dim=batch_dim)
+    temp_n = inputs.shape[batch_dim]
+    temp_sum = torch.sum(inputs, dim=batch_dim)
+    temp_sum2 = torch.sum((inputs - temp_sum / temp_n) ** 2, dim=batch_dim)
 
     delta = old_sum * temp_n / old_n - temp_sum
 
@@ -282,35 +300,44 @@ class Variance(EnsembleMetrics):
 
     def __init__(self, input_shape: Union[Tuple, List], **kwargs):
         super().__init__(input_shape, **kwargs)
-        self.n = torch.zeros(1, dtype=torch.int32, device=self.device)
+        self.n = torch.zeros([1], dtype=torch.int32, device=self.device)
         self.sum = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
         self.sum2 = torch.zeros(self.input_shape, dtype=self.dtype, device=self.device)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: Tensor, dim: int = 0) -> Tensor:
         """Calculate an initial variance
 
         Parameters
         ----------
-        input : Tensor
+        inputs : Tensor
             Input data
+        dim : Int
+            Dimension of batched data
 
         Returns
         -------
         Tensor
             Unbiased variance values
         """
-        self.sum = torch.sum(inputs, dim=0)
-        self.n = torch.as_tensor(inputs.shape[0])
-        # TODO(Dallas) Move distributed calls into finalize.
-        if DistributedManager.is_initialized() and dist.is_initialized():
+
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
+        self.sum = torch.sum(inputs, dim=dim)
+        self.n = torch.as_tensor([inputs.shape[0]], device=self.device)
+
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             # Compute mean and send around.
             dist.all_reduce(self.sum, op=dist.ReduceOp.SUM)
             dist.all_reduce(self.n, op=dist.ReduceOp.SUM)
 
-            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=0)
+            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=dim)
             dist.all_reduce(self.sum2, op=dist.ReduceOp.SUM)
         else:
-            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=0)
+            self.sum2 = torch.sum((inputs - self.sum / self.n) ** 2, dim=dim)
 
         if self.n < 2.0:
             return self.sum2
@@ -322,7 +349,7 @@ class Variance(EnsembleMetrics):
 
         Parameters
         ----------
-        input : Tensor
+        inputs : Tensor
             Input data
 
         Returns
@@ -330,11 +357,19 @@ class Variance(EnsembleMetrics):
         Tensor
             Unbiased variance tensor
         """
+
         self._check_shape(inputs)
-        new_n = torch.as_tensor(inputs.shape[0])
+        if inputs.device != self.device:
+            raise AssertionError(
+                f"Input device, {inputs.device}, and Module device, {self.device}, must be the same."
+            )
+
+        new_n = torch.as_tensor([inputs.shape[0]], device=self.device)
         new_sum = torch.sum(inputs, dim=0)
         # TODO(Dallas) Move distributed calls into finalize.
-        if DistributedManager.is_initialized() and dist.is_initialized():
+        if (
+            DistributedManager.is_initialized() and dist.is_initialized()
+        ):  # pragma: no cover
             dist.all_reduce(new_n, op=dist.ReduceOp.SUM)
             dist.all_reduce(new_sum, op=dist.ReduceOp.SUM)
             new_sum2 = torch.sum((inputs - new_sum / new_n) ** 2, dim=0)
@@ -373,9 +408,10 @@ class Variance(EnsembleMetrics):
         Tensor
             Final (mean, variance/std) value
         """
-        assert (
-            self.n > 1.0
-        ), "Error! In order to finalize, there needs to be at least 2 samples."
+        if not (self.n > 1.0):
+            raise ValueError(
+                "Error! In order to finalize, there needs to be at least 2 samples."
+            )
         self.var = self.sum2 / (self.n - 1.0)
         if std:
             self.std = torch.sqrt(self.var)

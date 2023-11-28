@@ -12,25 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import Any, Optional
+
 import torch
-import torch.nn as nn
 from torch import Tensor
 
-from typing import Any
-from dataclasses import dataclass
+try:
+    from typing import Self
+except ImportError:
+    # for Python versions < 3.11
+    from typing_extensions import Self
 
-from .utils import set_checkpoint_fn, CuGraphCSC
-from .mlp import MLP
-from .processor import Processor
-from .utils import set_checkpoint_fn
-from .embedder import EncoderEmbedder, DecoderEmbedder
-from .encoder import EncoderSum, EncoderConcat
-from .decoder import DecoderSum, DecoderConcat
-
-from modulus.models.module import Module
+from modulus.models.gnn_layers.embedder import (
+    GraphCastDecoderEmbedder,
+    GraphCastEncoderEmbedder,
+)
+from modulus.models.gnn_layers.mesh_graph_decoder import MeshGraphDecoder
+from modulus.models.gnn_layers.mesh_graph_encoder import MeshGraphEncoder
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
+from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
+from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
-from modulus.utils.graphcast.graph import Graph
+from modulus.models.module import Module
 from modulus.utils.graphcast.data_utils import StaticData
+from modulus.utils.graphcast.graph import Graph
+
+from .graph_cast_processor import GraphCastProcessor
 
 
 @dataclass
@@ -42,6 +50,8 @@ class MetaData(ModelMetaData):
     amp_cpu: bool = False
     amp_gpu: bool = True
     torch_fx: bool = False
+    # Data type
+    bf16: bool = True
     # Inference
     onnx: bool = False
     # Physics informed
@@ -77,8 +87,8 @@ class GraphCastNet(Module):
         Number of neurons in each hidden layer, by default 512
     aggregation : str, optional
         Message passing aggregation method ("sum", "mean"), by default "sum"
-    activation_fn : nn.Module, optional
-        Type of activation function, by default nn.SiLU()
+    activation_fn : str, optional
+        Type of activation function, by default "silu"
     norm_type : str, optional
         Normalization type, by default "LayerNorm"
     use_cugraphops_encoder : bool, default=False
@@ -92,6 +102,26 @@ class GraphCastNet(Module):
     recompute_activation : bool, optional
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
+    partition_size : int, default=1
+        Number of process groups across which graphs are distributed. If equal to 1,
+        the model is run in a normal Single-GPU configuration.
+    partition_group_name : str, default=None
+        Name of process group across which graphs are distributed. If partition_size
+        is set to 1, the model is run in a normal Single-GPU configuration and the
+        specification of a process group is not necessary. If partitition_size > 1,
+        passing no process group name leads to a parallelism across the default
+        process group. Otherwise, the group size of a process group is expected
+        to match partition_size.
+    expect_partitioned_input : bool, default=False,
+        Flag indicating whether the model expects the input to be already
+        partitioned. This can be helpful e.g. in multi-step rollouts to avoid
+        aggregating the output just to distribute it in the next step again.
+    produce_aggregated_output : bool, default=True,
+        Flag indicating whether the model produces the aggregated output on each
+        rank of the progress group across which the graph is distributed or
+        whether the output is kept distributed. This can be helpful e.g.
+        in multi-step rollouts to avoid aggregating the output just to distribute
+        it in the next step again.
 
     Note
     ----
@@ -119,21 +149,25 @@ class GraphCastNet(Module):
         hidden_layers: int = 1,
         hidden_dim: int = 512,
         aggregation: str = "sum",
-        activation_fn: nn.Module = nn.SiLU(),
+        activation_fn: str = "silu",
         norm_type: str = "LayerNorm",
         use_cugraphops_encoder: bool = False,
         use_cugraphops_processor: bool = False,
         use_cugraphops_decoder: bool = False,
         do_concat_trick: bool = False,
         recompute_activation: bool = False,
+        partition_size: int = 1,
+        partition_group_name: Optional[str] = None,
+        expect_partitioned_input: bool = False,
+        produce_aggregated_output: bool = True,
     ):
         super().__init__(meta=MetaData())
 
-        # check the input resolution
-        if input_res != (721, 1440):
-            raise NotImplementedError(
-                "Currently only native ERA5 input resolution (721, 1440) is supported"
-            )
+        self.is_distributed = False
+        if partition_size > 1:
+            self.is_distributed = True
+        self.expect_partitioned_input = expect_partitioned_input
+        self.produce_aggregated_output = produce_aggregated_output
 
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
@@ -143,23 +177,13 @@ class GraphCastNet(Module):
         )
         self.has_static_data = static_dataset_path is not None
 
-        # Get the static data
-        if self.has_static_data:
-            self.static_data = StaticData(
-                static_dataset_path, self.latitudes, self.longitudes
-            ).get()
-            num_static_feat = self.static_data.size(1)
-            input_dim_grid_nodes += num_static_feat
-        else:
-            self.static_data = None
-        self.input_dim_grid_nodes = input_dim_grid_nodes
-        self.output_dim_grid_nodes = output_dim_grid_nodes
-        self.input_res = input_res
+        # Set activation function
+        activation_fn = get_activation(activation_fn)
 
         # construct the graph
         try:
             self.graph = Graph(meshgraph_path, self.lat_lon_grid)
-        except:
+        except FileNotFoundError:
             raise FileNotFoundError(
                 "The icospheres_path is corrupted. "
                 "Tried using pymesh to generate the graph but could not find pymesh"
@@ -173,35 +197,69 @@ class GraphCastNet(Module):
         self.mesh_edata = self.mesh_graph.edata["x"]
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
-        if use_cugraphops_encoder:
-            offsets, indices, edge_ids = self.g2m_graph.adj_sparse("csc")
-            n_in_nodes, n_out_nodes = (
-                self.g2m_graph.num_src_nodes(),
-                self.g2m_graph.num_dst_nodes(),
+        if use_cugraphops_encoder or self.is_distributed:
+            self.g2m_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.g2m_graph,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
-            self.g2m_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
-            )
+            self.g2m_edata = self.g2m_edata[edge_perm]
 
-        if use_cugraphops_decoder:
-            offsets, indices, edge_ids = self.m2g_graph.adj_sparse("csc")
-            n_in_nodes, n_out_nodes = (
-                self.m2g_graph.num_src_nodes(),
-                self.m2g_graph.num_dst_nodes(),
-            )
-            self.m2g_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
-            )
+            if self.is_distributed:
+                self.g2m_edata = self.g2m_graph.get_edge_features_in_partition(
+                    self.g2m_edata
+                )
 
-        if use_cugraphops_processor:
-            offsets, indices, edge_ids = self.mesh_graph.adj_sparse("csc")
-            n_in_nodes, n_out_nodes = (
-                self.mesh_graph.num_src_nodes(),
-                self.mesh_graph.num_dst_nodes(),
+        if use_cugraphops_decoder or self.is_distributed:
+            self.m2g_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.m2g_graph,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
-            self.mesh_graph = CuGraphCSC(
-                offsets, indices, n_in_nodes, n_out_nodes, edge_ids
+            self.m2g_edata = self.m2g_edata[edge_perm]
+
+            if self.is_distributed:
+                self.m2g_edata = self.m2g_graph.get_edge_features_in_partition(
+                    self.m2g_edata
+                )
+
+        if use_cugraphops_processor or self.is_distributed:
+            self.mesh_graph, edge_perm = CuGraphCSC.from_dgl(
+                graph=self.mesh_graph,
+                partition_size=partition_size,
+                partition_group_name=partition_group_name,
             )
+            self.mesh_edata = self.mesh_edata[edge_perm]
+            if self.is_distributed:
+                self.mesh_edata = self.mesh_graph.get_edge_features_in_partition(
+                    self.mesh_edata
+                )
+                self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
+                    self.mesh_ndata
+                )
+
+        # Get the static data
+        if self.has_static_data:
+            self.static_data = StaticData(
+                static_dataset_path, self.latitudes, self.longitudes
+            ).get()
+            num_static_feat = self.static_data.size(1)
+            input_dim_grid_nodes += num_static_feat
+            if self.is_distributed and expect_partitioned_input:
+                # if input itself is distributed, we also need to distribute static data
+                self.static_data(
+                    self.static_data[0].view(num_static_feat, -1).permute(1, 0)
+                )
+                self.static_data = self.g2m_graph.get_src_node_features_in_partition(
+                    self.static_data
+                )
+                self.static_data = self.static_data.permute(1, 0).unsqueeze(dim=0)
+        else:
+            self.static_data = None
+
+        self.input_dim_grid_nodes = input_dim_grid_nodes
+        self.output_dim_grid_nodes = output_dim_grid_nodes
+        self.input_res = input_res
 
         # by default: don't checkpoint at all
         self.model_checkpoint_fn = set_checkpoint_fn(False)
@@ -209,7 +267,7 @@ class GraphCastNet(Module):
         self.decoder_checkpoint_fn = set_checkpoint_fn(False)
 
         # initial feature embedder
-        self.encoder_embedder = EncoderEmbedder(
+        self.encoder_embedder = GraphCastEncoderEmbedder(
             input_dim_grid_nodes=input_dim_grid_nodes,
             input_dim_mesh_nodes=input_dim_mesh_nodes,
             input_dim_edges=input_dim_edges,
@@ -220,7 +278,7 @@ class GraphCastNet(Module):
             norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
-        self.decoder_embedder = DecoderEmbedder(
+        self.decoder_embedder = GraphCastDecoderEmbedder(
             input_dim_edges=input_dim_edges,
             output_dim=hidden_dim,
             hidden_dim=hidden_dim,
@@ -231,9 +289,7 @@ class GraphCastNet(Module):
         )
 
         # grid2mesh encoder
-        Encoder = EncoderSum if do_concat_trick else EncoderConcat
-        self.encoder = Encoder(
-            graph=self.g2m_graph,
+        self.encoder = MeshGraphEncoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -245,13 +301,14 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 
         # icosahedron processor
-        assert processor_layers > 2, "Expected at least 3 processor layers"
-        self.processor_encoder = Processor(
-            graph=self.mesh_graph,
+        if processor_layers <= 2:
+            raise ValueError("Expected at least 3 processor layers")
+        self.processor_encoder = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=1,
             input_dim_nodes=hidden_dim,
@@ -263,8 +320,7 @@ class GraphCastNet(Module):
             do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
-        self.processor = Processor(
-            graph=self.mesh_graph,
+        self.processor = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=processor_layers - 2,
             input_dim_nodes=hidden_dim,
@@ -276,8 +332,7 @@ class GraphCastNet(Module):
             do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
-        self.processor_decoder = Processor(
-            graph=self.mesh_graph,
+        self.processor_decoder = GraphCastProcessor(
             aggregation=aggregation,
             processor_layers=1,
             input_dim_nodes=hidden_dim,
@@ -291,9 +346,7 @@ class GraphCastNet(Module):
         )
 
         # mesh2grid decoder
-        Decoder = DecoderSum if do_concat_trick else DecoderConcat
-        self.decoder = Decoder(
-            graph=self.m2g_graph,
+        self.decoder = MeshGraphDecoder(
             aggregation=aggregation,
             input_dim_src_nodes=hidden_dim,
             input_dim_dst_nodes=hidden_dim,
@@ -304,11 +357,12 @@ class GraphCastNet(Module):
             hidden_layers=hidden_layers,
             activation_fn=activation_fn,
             norm_type=norm_type,
+            do_concat_trick=do_concat_trick,
             recompute_activation=recompute_activation,
         )
 
         # final MLP
-        self.finale = MLP(
+        self.finale = MeshGraphMLP(
             input_dim=hidden_dim,
             output_dim=output_dim_grid_nodes,
             hidden_dim=hidden_dim,
@@ -459,11 +513,14 @@ class GraphCastNet(Module):
             g2m_efeat_embedded,
             grid_nfeat_embedded,
             mesh_nfeat_embedded,
+            self.g2m_graph,
         )
 
         # process multimesh graph
         mesh_efeat_processed, mesh_nfeat_processed = self.processor_encoder(
-            mesh_efeat_embedded, mesh_nfeat_encoded
+            mesh_efeat_embedded,
+            mesh_nfeat_encoded,
+            self.mesh_graph,
         )
 
         return mesh_efeat_processed, mesh_nfeat_processed, grid_nfeat_encoded
@@ -496,13 +553,14 @@ class GraphCastNet(Module):
         _, mesh_nfeat_processed = self.processor_decoder(
             mesh_efeat_processed,
             mesh_nfeat_processed,
+            self.mesh_graph,
         )
 
         m2g_efeat_embedded = self.decoder_embedder(self.m2g_edata)
 
         # decode multimesh to lat/lon
         grid_nfeat_decoded = self.decoder(
-            m2g_efeat_embedded, grid_nfeat_encoded, mesh_nfeat_processed
+            m2g_efeat_embedded, grid_nfeat_encoded, mesh_nfeat_processed, self.m2g_graph
         )
 
         # map to the target output dimension
@@ -540,6 +598,7 @@ class GraphCastNet(Module):
         mesh_efeat_processed, mesh_nfeat_processed = self.processor(
             mesh_efeat_processed,
             mesh_nfeat_processed,
+            self.mesh_graph,
         )
 
         grid_nfeat_finale = self.decoder_checkpoint_fn(
@@ -557,16 +616,16 @@ class GraphCastNet(Module):
         self,
         grid_nfeat: Tensor,
     ) -> Tensor:
-        invar = self.prepare_input(grid_nfeat)
+        invar = self.prepare_input(grid_nfeat, self.expect_partitioned_input)
         outvar = self.model_checkpoint_fn(
             self.custom_forward,
             invar,
             use_reentrant=False,
             preserve_rng_state=False,
         )
-        return self.prepare_output(outvar)
+        return self.prepare_output(outvar, self.produce_aggregated_output)
 
-    def prepare_input(self, invar: Tensor) -> Tensor:
+    def prepare_input(self, invar: Tensor, expect_partitioned_input: bool) -> Tensor:
         """Prepares the input to the model in the required shape.
 
         Parameters
@@ -574,19 +633,33 @@ class GraphCastNet(Module):
         invar : Tensor
             Input in the shape [N, C, H, W].
 
+        expect_partitioned_input : bool
+            flag indicating whether input is partioned according to graph partitioning scheme
+
         Returns
         -------
         Tensor
             Reshaped input.
         """
-        assert invar.size(0) == 1, "GraphCast does not support batch size > 1"
-        # concat static data
-        if self.has_static_data:
-            invar = torch.concat((invar, self.static_data), dim=1)
-        invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
+        if expect_partitioned_input and self.is_distributed:
+            # partitioned input is [N, C, P] instead of [N, C, H, W]
+            if self.has_static_data:
+                invar = torch.concat((invar, self.static_data), dim=1)
+                invar = invar[0].permute(1, 0)
+        else:
+            if invar.size(0) != 1:
+                raise ValueError("GraphCast does not support batch size > 1")
+            # concat static data
+            if self.has_static_data:
+                invar = torch.concat((invar, self.static_data), dim=1)
+            invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
+            if self.is_distributed:
+                # partition node features
+                invar = self.g2m_graph.get_src_node_features_in_partition(invar)
+
         return invar
 
-    def prepare_output(self, outvar: Tensor) -> Tensor:
+    def prepare_output(self, outvar: Tensor, produce_aggregated_output: bool) -> Tensor:
         """Prepares the output of the model in the shape [N, C, H, W].
 
         Parameters
@@ -594,17 +667,31 @@ class GraphCastNet(Module):
         outvar : Tensor
             Output of the final MLP of the model.
 
+        produce_aggregated_output : bool
+            flag indicating whether output is gathered onto each rank
+            or kept distributed
+
         Returns
         -------
         Tensor
             The reshaped output of the model.
         """
-        outvar = outvar.permute(1, 0)
-        outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)
-        outvar = torch.unsqueeze(outvar, dim=0)
+        if produce_aggregated_output or not self.is_distributed:
+            # default case: output of shape [N, C, H, W]
+            if self.is_distributed:
+                outvar = self.m2g_graph.get_global_dst_node_features(outvar)
+
+            outvar = outvar.permute(1, 0)
+            outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)
+            outvar = torch.unsqueeze(outvar, dim=0)
+
+        else:
+            # keep partition of H, W, i.e. produce [N, C, P]
+            outvar = outvar.permute(1, 0).unsqueeze(dim=0)
+
         return outvar
 
-    def to(self, *args: Any, **kwargs: Any) -> "GraphCastNet":
+    def to(self, *args: Any, **kwargs: Any) -> Self:
         """Moves the object to the specified device, dtype, or format.
         This method moves the object and its underlying graph and graph features to
         the specified device, dtype, or format, and returns the updated object.
@@ -621,7 +708,8 @@ class GraphCastNet(Module):
         GraphCastNet
             The updated object after moving to the specified device, dtype, or format.
         """
-        self = super().to(*args, **kwargs)
+        self = super(GraphCastNet, self).to(*args, **kwargs)
+
         self.g2m_edata = self.g2m_edata.to(*args, **kwargs)
         self.m2g_edata = self.m2g_edata.to(*args, **kwargs)
         self.mesh_ndata = self.mesh_ndata.to(*args, **kwargs)
@@ -629,9 +717,9 @@ class GraphCastNet(Module):
         if self.has_static_data:
             self.static_data = self.static_data.to(*args, **kwargs)
 
-        self.encoder = self.encoder.to(*args, **kwargs)
-        self.decoder = self.decoder.to(*args, **kwargs)
-        self.processor = self.processor.to(*args, **kwargs)
-        self.processor_encoder = self.processor_encoder.to(*args, **kwargs)
-        self.processor_decoder = self.processor_decoder.to(*args, **kwargs)
+        device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
+        self.g2m_graph = self.g2m_graph.to(device)
+        self.mesh_graph = self.mesh_graph.to(device)
+        self.m2g_graph = self.m2g_graph.to(device)
+
         return self

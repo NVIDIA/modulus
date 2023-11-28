@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import modulus
+import logging
+from typing import Callable, Tuple, Union
 
 import torch
-import logging
-from typing import Tuple, Union, Callable
+
+import modulus
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
@@ -56,7 +57,7 @@ class MiniNetwork(torch.nn.Module):
 
 
 def check_cuda_graphs(
-    datapipe: modulus.Datapipe,
+    datapipe: "modulus.Datapipe",
     input_fn: Union[Callable, None] = None,
     iterations: int = 5,
     warmup_length: int = 3,

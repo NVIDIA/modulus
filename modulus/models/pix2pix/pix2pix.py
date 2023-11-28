@@ -1,5 +1,5 @@
 # ignore_header_test
-
+# ruff: noqa: E402
 """"""
 """
 Pix2Pix model. This code was modified from, https://github.com/NVIDIA/pix2pixHD
@@ -53,12 +53,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import torch
-import torch.nn as nn
-from typing import Union, List
 from dataclasses import dataclass
 
-import modulus
+import torch
+import torch.nn as nn
+
+import modulus  # noqa: F401 for docs
+from modulus.models.layers import get_activation
+
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -105,8 +107,8 @@ class Pix2Pix(Module):
         Number of upsampling blocks, by default 3
     n_blocks : int, optional
         Number of residual blocks in middle of model, by default 3
-    activation_fn : Activation, optional
-        Activation function, by default ReLU
+    activation_fn : Any, optional
+        Activation function, by default "relu"
     batch_norm : bool, optional
         Batch normalization, by default False
     padding_type : str, optional
@@ -149,17 +151,22 @@ class Pix2Pix(Module):
         n_downsampling: int = 3,
         n_upsampling: int = 3,
         n_blocks: int = 3,
-        activation_fn: Union[nn.Module, List[nn.Module]] = nn.ReLU(),
+        activation_fn: str = "relu",  # TODO need support for type Activation
         batch_norm: bool = False,
         padding_type: str = "reflect",
     ):
-        assert (
-            n_blocks >= 0 and n_downsampling >= 0 and n_upsampling >= 0
-        ), "Invalid arch params"
-        assert padding_type in ["reflect", "zero", "replicate"], "Invalid padding type"
+        if not (n_blocks >= 0 and n_downsampling >= 0 and n_upsampling >= 0):
+            raise ValueError("Invalid arch params")
+        if padding_type not in ["reflect", "zero", "replicate"]:
+            raise ValueError("Invalid padding type")
         super().__init__(meta=MetaData())
 
-        activation = activation_fn
+        # activation function
+        if isinstance(activation_fn, str):
+            activation = get_activation(activation_fn)
+        else:
+            activation = activation_fn
+
         # set padding and convolutions
         if dimension == 1:
             padding = nn.ReflectionPad1d(3)
@@ -289,11 +296,12 @@ class ResnetBlock(nn.Module):
         use_dropout: bool = False,
     ):
         super().__init__()
-        assert padding_type in [
+        if padding_type not in [
             "reflect",
             "zero",
             "replicate",
-        ], f"Invalid padding type {padding_type}"
+        ]:
+            raise ValueError(f"Invalid padding type {padding_type}")
 
         if dimension == 1:
             conv = nn.Conv1d

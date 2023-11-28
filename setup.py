@@ -14,4 +14,19 @@
 
 from setuptools import setup
 
-setup()
+setup(
+    entry_points={
+        "modulus.models": [
+            "AFNO = modulus.models.afno:AFNO",
+            "DLWP = modulus.models.dlwp:DLWP",
+            "FNO = modulus.models.fno:FNO",
+            "GraphCastNet = modulus.models.graphcast:GraphCastNet",
+            "MeshGraphNet = modulus.models.meshgraphnet:MeshGraphNet",
+            "FullyConnected = modulus.models.mlp:FullyConnected",
+            "Pix2Pix = modulus.models.pix2pix:Pix2Pix",
+            "One2ManyRNN = modulus.models.rnn:One2ManyRNN",
+            "SFNO = modulus.experimental.models.sfno:SFNO",
+            "SRResNet = modulus.models.srrn:SRResNet",
+        ],
+    }
+)

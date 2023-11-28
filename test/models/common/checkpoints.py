@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import logging
-import modulus
+from pathlib import Path
+from typing import Tuple
+
 import torch
 
-from typing import Tuple
-from pathlib import Path
+import modulus
+
 from .utils import compare_output
 
 Tensor = torch.Tensor
@@ -58,12 +60,12 @@ def validate_checkpoint(
     """
     # First check fail safes of save/load functions
     try:
-        model_1.save("folder_does_not_exist/checkpoint.pth")
+        model_1.save("folder_does_not_exist/checkpoint.mdlus")
     except IOError:
         pass
 
     try:
-        model_1.load("does_not_exist.pth")
+        model_1.load("does_not_exist.mdlus")
     except IOError:
         pass
 
@@ -76,12 +78,19 @@ def validate_checkpoint(
         output_1, output_2, rtol, atol
     ), "Model outputs should initially be different"
 
-    # Safe checkpoint from model 1 and load it into model 2
-    model_1.save("checkpoint.pth")
-    model_2.load("checkpoint.pth")
+    # Save checkpoint from model 1 and load it into model 2
+    model_1.save("checkpoint.mdlus")
+    model_2.load("checkpoint.mdlus")
+
     # Forward with loaded checkpoint
     output_2 = model_2.forward(*in_args)
-    # Delete checkpoint file (it should exist!)
-    Path("checkpoint.pth").unlink(missing_ok=False)
+    loaded_checkpoint = compare_output(output_1, output_2, rtol, atol)
 
-    return compare_output(output_1, output_2, rtol, atol)
+    # Restore checkpoint with from_checkpoint, checks initialization of model directly from checkpoint
+    model_2 = modulus.Module.from_checkpoint("checkpoint.mdlus").to(model_1.device)
+    output_2 = model_2.forward(*in_args)
+    restored_checkpoint = compare_output(output_1, output_2, rtol, atol)
+
+    # Delete checkpoint file (it should exist!)
+    Path("checkpoint.mdlus").unlink(missing_ok=False)
+    return loaded_checkpoint and restored_checkpoint

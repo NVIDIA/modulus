@@ -13,18 +13,20 @@
 # limitations under the License.
 
 import logging
+
 import pytest
 import torch
 import torch.nn as nn
 
 try:
     import onnxruntime as ort
-except:
+except ImportError:
     ort = None
 
 from pathlib import Path
-from modulus.models.mlp import FullyConnected
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
+from modulus.models.mlp import FullyConnected
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
@@ -38,10 +40,10 @@ def check_ort_version():
             True,
             reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
         )
-    elif ort.__version__ != "1.14.0":
+    elif ort.__version__ != "1.15.1":
         return pytest.mark.skipif(
             True,
-            reason="Must install custom ORT 1.14.0. Other versions do not work \
+            reason="Must install custom ORT 1.15.1. Other versions do not work \
         due to bug in IRFFT: https://github.com/microsoft/onnxruntime/issues/13236",
         )
     else:

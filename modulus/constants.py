@@ -16,8 +16,8 @@
 constant values used by Modulus
 """
 
-import torch
 import numpy as np
+import torch
 
 # string used to determine derivatives
 diff_str: str = "__"

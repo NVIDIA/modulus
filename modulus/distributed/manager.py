@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import queue
+from typing import Optional
+from warnings import warn
+
+import numpy as np
 import torch
 import torch.distributed as dist
-import os
-import numpy as np
 
-from warnings import warn
+from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
 
 
 class DistributedManager(object):
@@ -29,7 +33,8 @@ class DistributedManager(object):
 
     Note
     ----
-    One should call `DistributedManager.initialize()` prior to constructing a manager object
+    One should call `DistributedManager.initialize()` prior to constructing a manager
+    object
 
     Example
     -------
@@ -57,9 +62,7 @@ class DistributedManager(object):
         if not hasattr(obj, "_distributed"):
             obj._distributed = False
         if not hasattr(obj, "_device"):
-            obj._device = torch.device(
-                f"cuda:0" if torch.cuda.is_available() else "cpu"
-            )
+            obj._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         if not hasattr(obj, "_cuda"):
             obj._cuda = torch.cuda.is_available()
         if not hasattr(obj, "_broadcast_buffers"):
@@ -68,6 +71,12 @@ class DistributedManager(object):
             obj._find_unused_parameters = False
         if not hasattr(obj, "_initialization_method"):
             obj._initialization_method = "None"
+        if not hasattr(obj, "_groups"):
+            obj._groups = {}
+        if not hasattr(obj, "_group_ranks"):
+            obj._group_ranks = {}
+        if not hasattr(obj, "_group_names"):
+            obj._group_names = {}
 
         return obj
 
@@ -168,7 +177,8 @@ class DistributedManager(object):
         """Setter for find_unused_parameters"""
         if find_params:
             warn(
-                "Setting `find_unused_parameters` in DDP to true, use only if necessary."
+                "Setting `find_unused_parameters` in DDP to true, "
+                "use only if necessary."
             )
         self._find_unused_parameters = find_params
 
@@ -201,6 +211,7 @@ class DistributedManager(object):
             local_rank = int(os.environ.get("LOCAL_RANK"))
         else:
             local_rank = rank % torch.cuda.device_count()
+        # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
 
@@ -250,7 +261,24 @@ class DistributedManager(object):
 
     @staticmethod
     def initialize():
-        """Initialize distributed manager"""
+        """
+        Initialize distributed manager
+
+        Current supported initialization methods are:
+            `ENV`: PyTorch environment variable initialization
+                 https://pytorch.org/docs/stable/distributed.html#environment-variable-initialization
+            `SLURM`: Initialization on SLURM systems.
+                   Uses `SLURM_PROCID`, `SLURM_NPROCS`, `SLURM_LOCALID` and
+                   `SLURM_LAUNCH_NODE_IPADDR` environment variables.
+            `OPENMPI`: Initialization for OpenMPI launchers.
+                     Uses `OMPI_COMM_WORLD_RANK`, `OMPI_COMM_WORLD_SIZE` and
+                     `OMPI_COMM_WORLD_LOCAL_RANK` environment variables.
+
+        Initialization by default is done using the first valid method in the order
+        listed above. Initialization method can also be explicitly controlled using the
+        `MODULUS_DISTRIBUTED_INITIALIZATION_METHOD` environment variable and setting it
+        to one of the options above.
+        """
         if DistributedManager.is_initialized():
             warn("Distributed manager is already intialized")
             return
@@ -259,13 +287,29 @@ class DistributedManager(object):
         port = os.getenv("MASTER_PORT", "12355")
         # https://pytorch.org/docs/master/notes/cuda.html#id5
         os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
-        try:
+        initialization_method = os.getenv("MODULUS_DISTRIBUTED_INITIALIZATION_METHOD")
+        if initialization_method is None:
+            try:
+                DistributedManager.initialize_env()
+            except TypeError:
+                if "SLURM_PROCID" in os.environ:
+                    DistributedManager.initialize_slurm(port)
+                elif "OMPI_COMM_WORLD_RANK" in os.environ:
+                    DistributedManager.initialize_open_mpi(addr, port)
+        elif initialization_method == "ENV":
             DistributedManager.initialize_env()
-        except:
-            if "SLURM_PROCID" in os.environ:
-                DistributedManager.initialize_slurm(port)
-            elif "OMPI_COMM_WORLD_RANK" in os.environ:
-                DistributedManager.initialize_open_mpi(addr, port)
+        elif initialization_method == "SLURM":
+            DistributedManager.initialize_slurm(port)
+        elif initialization_method == "OPENMPI":
+            DistributedManager.initialize_open_mpi(addr, port)
+        else:
+            raise RuntimeError(
+                "Unknown initialization method "
+                f"{initialization_method}. "
+                "Supported values for "
+                "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
+                "ENV, SLURM and OPENMPI"
+            )
 
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)
@@ -302,10 +346,6 @@ class DistributedManager(object):
                 backend, rank=manager.rank, world_size=manager.world_size
             )
 
-        manager._groups = {}
-        manager._group_ranks = {}
-        manager._group_names = {}
-
         manager._device = torch.device(
             f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
         )
@@ -319,84 +359,180 @@ class DistributedManager(object):
         torch.cuda.device(manager.device)
         torch.cuda.empty_cache()
 
-    # @staticmethod
-    # def create_process_subgroup(name: str, size: int, group_name=None, verbose=False):
-    #     """TODO add documentation"""
-    #     manager = DistributedManager()
-    #     if not manager.distributed:
-    #         return None
+    @staticmethod
+    def create_process_subgroup(
+        name: str, size: int, group_name: Optional[str] = None, verbose: bool = False
+    ):  # pragma: no cover
+        """
+        Create a process subgroup of a parent process group. This must be a collective
+        call by all processes participating in this application.
 
-    #     assert name not in manager._groups, f"Group with name {name} already exists"
+        Parameters
+        ----------
+        name : str
+        Name of the process subgroup to be created.
 
-    #     # Get parent group's params
-    #     group = manager._group[group_name] if group_name else None
-    #     group_size = dist.get_world_size(group=group)
-    #     group_rank = dist.get_rank(group=group)
-    #     num_groups = manager.world_size // group_size
+        size : int
+        Size of the process subgroup to be created. This must be an integer factor of
+        the parent group's size.
 
-    #     # Get number of sub-groups per parent group
-    #     assert (
-    #         group_size % size == 0
-    #     ), f"Cannot divide group size {group_size} evenly into subgroups of size {size}"
-    #     num_subgroups = group_size // size
+        group_name : Optional[str]
+        Name of the parent process group, optional. If None, the default process group
+        will be used. Default None.
 
-    #     # Create all the sub-groups
-    #     # Note: all ranks in the job need to create all sub-groups in
-    #     # the same order even if a rank is not part of a sub-group
-    #     manager._group_ranks[name] = []
-    #     for g in range(num_groups):
-    #         for i in range(num_subgroups):
-    #             # Get global ranks that are part of this sub-group
-    #             start = i * size
-    #             end = start + size
-    #             if group_name:
-    #                 ranks = manager._group_ranks[group_name][g][start:end]
-    #             else:
-    #                 ranks = list(range(start, end))
-    #             # Create sub-group and keep track of ranks
-    #             tmp_group = dist.new_group(ranks=ranks)
-    #             manager._group_ranks[name].append(ranks)
-    #             if manager.rank in ranks:
-    #                 # Set group in manager only if this rank is part of the group
-    #                 manager._groups[name] = tmp_group
-    #                 manager._group_names[tmp_group] = name
+        verbose : bool
+        Print out ranks of each created process group, default False.
 
-    #     if verbose and manager.rank == 0:
-    #         print(f"Process group '{name}':")
-    #         for grp in manager._group_ranks[name]:
-    #             print("    ", grp)
+        """
+        manager = DistributedManager()
+        if not manager.distributed:
+            return None
 
-    # @staticmethod
-    # def create_orthogonal_process_group(name: str, group_name: str, verbose=False):
-    #     """TODO add documentation"""
-    #     manager = DistributedManager()
-    #     if not manager.distributed:
-    #         return None
+        if name in manager._groups:
+            raise AssertionError(f"Group with name {name} already exists")
 
-    #     assert (
-    #         group_name in manager._groups
-    #     ), f"Group with name {group_name} does not exist"
-    #     assert name not in manager._groups, f"Group with name {name} already exists"
+        # Get parent group's params
+        group = manager._groups[group_name] if group_name else None
+        group_size = dist.get_world_size(group=group)
+        num_groups = manager.world_size // group_size
 
-    #     group_ranks = manager._group_ranks[group_name]
-    #     orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
+        # Get number of sub-groups per parent group
+        if group_size % size != 0:
+            raise AssertionError(
+                f"Cannot divide group size {group_size} evenly into subgroups of"
+                f" size {size}"
+            )
+        num_subgroups = group_size // size
 
-    #     for ranks in orthogonal_ranks:
-    #         tmp_group = dist.new_group(ranks=ranks)
-    #         if manager.rank in ranks:
-    #             # Set group in manager only if this rank is part of the group
-    #             manager._groups[name] = tmp_group
-    #             manager._group_names[tmp_group] = name
+        # Create all the sub-groups
+        # Note: all ranks in the job need to create all sub-groups in
+        # the same order even if a rank is not part of a sub-group
+        manager._group_ranks[name] = []
+        for g in range(num_groups):
+            for i in range(num_subgroups):
+                # Get global ranks that are part of this sub-group
+                start = i * size
+                end = start + size
+                if group_name:
+                    ranks = manager._group_ranks[group_name][g][start:end]
+                else:
+                    ranks = list(range(start, end))
+                # Create sub-group and keep track of ranks
+                tmp_group = dist.new_group(ranks=ranks)
+                manager._group_ranks[name].append(ranks)
+                if manager.rank in ranks:
+                    # Set group in manager only if this rank is part of the group
+                    manager._groups[name] = tmp_group
+                    manager._group_names[tmp_group] = name
 
-    #     manager._group_ranks[name] = orthogonal_ranks
+        if verbose and manager.rank == 0:
+            print(f"Process group '{name}':")
+            for grp in manager._group_ranks[name]:
+                print("    ", grp)
 
-    #     if verbose and manager.rank == 0:
-    #         print(f"Process group '{name}':")
-    #         for grp in manager._group_ranks[name]:
-    #             print("    ", grp)
+    @staticmethod
+    def create_orthogonal_process_group(
+        orthogonal_group_name: str, group_name: str, verbose: bool = False
+    ):  # pragma: no cover
+        """
+        Create a process group that is orthogonal to the specified process group.
+
+        Parameters
+        ----------
+        orthogonal_group_name : str
+            Name of the orthogonal process group to be created.
+
+        group_name : str
+            Name of the existing process group.
+
+        verbose : bool
+            Print out ranks of each created process group, default False.
+
+        """
+        manager = DistributedManager()
+        if not manager.distributed:
+            return None
+
+        if group_name not in manager._groups:
+            raise ValueError(f"Group with name {group_name} does not exist")
+        if orthogonal_group_name in manager._groups:
+            raise ValueError(f"Group with name {orthogonal_group_name} already exists")
+
+        group_ranks = manager._group_ranks[group_name]
+        orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
+
+        for ranks in orthogonal_ranks:
+            tmp_group = dist.new_group(ranks=ranks)
+            if manager.rank in ranks:
+                # Set group in manager only if this rank is part of the group
+                manager._groups[orthogonal_group_name] = tmp_group
+                manager._group_names[tmp_group] = orthogonal_group_name
+
+        manager._group_ranks[orthogonal_group_name] = orthogonal_ranks
+
+        if verbose and manager.rank == 0:
+            print(f"Process group '{orthogonal_group_name}':")
+            for grp in manager._group_ranks[orthogonal_group_name]:
+                print("    ", grp)
+
+    @staticmethod
+    def create_group_from_node(
+        node: ProcessGroupNode,
+        parent: Optional[str] = None,
+        verbose: bool = False,
+    ):  # pragma: no cover
+        if node.size is None:
+            raise AssertionError(
+                "Cannot create groups from a ProcessGroupNode that is not fully"
+                " populated. Ensure that config.set_leaf_group_sizes is called first"
+                " with `update_parent_sizes = True`"
+            )
+
+        DistributedManager.create_process_subgroup(
+            node.name, node.size, group_name=parent, verbose=verbose
+        )
+        # Create orthogonal process group
+        orthogonal_group = f"__orthogonal_to_{node.name}"
+        DistributedManager.create_orthogonal_process_group(
+            orthogonal_group, node.name, verbose=verbose
+        )
+        return orthogonal_group
+
+    @staticmethod
+    def create_groups_from_config(
+        config: ProcessGroupConfig, verbose: bool = False
+    ):  # pragma: no cover
+        # Traverse process group tree in breadth first order
+        # to create nested process groups
+        q = queue.Queue()
+        q.put(config.root_id)
+        DistributedManager.create_group_from_node(config.root)
+
+        while not q.empty():
+            node_id = q.get()
+            if verbose:
+                print(f"Node ID: {node_id}")
+
+            children = config.tree.children(node_id)
+            if verbose:
+                print(f"  Children: {children}")
+
+            parent_group = node_id
+            for child in children:
+                # Create child group and replace parent group by orthogonal group so
+                # that each child forms an independent block of processes
+                parent_group = DistributedManager.create_group_from_node(
+                    child.data,
+                    parent=parent_group,
+                )
+
+                # Add child ids to the queue
+                q.put(child.identifier)
 
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
+        # Destroying group.WORLD is enough for all process groups to get destroyed
+        dist.barrier()  # just make sure that no process hangs
         dist.destroy_process_group()
         DistributedManager._shared_state = {}
