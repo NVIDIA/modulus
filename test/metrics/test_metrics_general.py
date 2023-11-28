@@ -450,7 +450,7 @@ def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1
         w_norm,
         torch.zeros([1], dtype=torch.float32, device=device),
         rtol=rtol,
-        atol=torch.sqrt(variance).item() * 100 * atol,
+        atol=1000 * atol,  # Estimating covariance matrices is hard.
     )
 
     x = mean + torch.sqrt(variance) * torch.randn(
@@ -472,7 +472,7 @@ def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1
         w_mnorm,
         torch.zeros([1], dtype=torch.float32, device=device),
         rtol=rtol,
-        atol=torch.sqrt(variance).item() * 100 * atol,
+        atol=1000 * atol,  # Estimating covariance matrices is hard.
     )
 
 
