@@ -342,10 +342,18 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_wasserstein(device, rtol: float = 1e-3, atol: float = 1e-3):
+@pytest.mark.parametrize("mean", [0.0, 3.0])
+@pytest.mark.parametrize("variance", [1.0, 0.1, 3.0])
+def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1e-3):
+    mean = torch.as_tensor([mean], device=device, dtype=torch.float32)
+    variance = torch.as_tensor([variance], device=device, dtype=torch.float32)
 
-    x = torch.randn((10_000, 1), device=device, dtype=torch.float32)
-    y = torch.randn((10_000, 1), device=device, dtype=torch.float32)
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (10_000, 1), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (10_000, 1), device=device, dtype=torch.float32
+    )
 
     binsx, cdfx = hist.cdf(x, bins=10)
     _, cdfy = hist.cdf(y, bins=binsx)
@@ -372,8 +380,12 @@ def test_wasserstein(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=100 * atol,
     )
 
-    x = torch.randn((100_000, 3), device=device, dtype=torch.float32)
-    y = torch.randn((100_000, 3), device=device, dtype=torch.float32)
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (100_000, 3), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (100_000, 3), device=device, dtype=torch.float32
+    )
     mu_x = x.mean(dim=0)
     sig_x = torch.cov(x.T)
     mu_y = y.mean(dim=0)
@@ -386,8 +398,12 @@ def test_wasserstein(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=100 * atol,
     )
 
-    x = torch.randn((1_000, 100_000, 3), device=device, dtype=torch.float32)
-    y = torch.randn((1_000, 100_000, 3), device=device, dtype=torch.float32)
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (1_000, 100_000, 3), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (1_000, 100_000, 3), device=device, dtype=torch.float32
+    )
     mu_x = x.mean(dim=1)
     sig_x = torch.matmul((x - mu_x[:, None]).transpose(1, 2), (x - mu_x[:, None])) / (
         1_000 - 1
