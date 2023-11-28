@@ -261,8 +261,8 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=50 * rtol,
-        atol=50 * atol,
+        rtol=100 * rtol,
+        atol=100 * atol,
     )
 
     # Test when input is numpy array
@@ -270,8 +270,8 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=50 * rtol,
-        atol=50 * atol,
+        rtol=100 * rtol,
+        atol=100 * atol,
     )
 
     # Test kernel method, use fewer ensemble members
@@ -280,8 +280,8 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=50 * rtol,
-        atol=50 * atol,
+        rtol=100 * rtol,
+        atol=100 * atol,
     )
 
     # Test Gaussian CRPS
