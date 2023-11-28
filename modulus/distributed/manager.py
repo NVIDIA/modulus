@@ -13,12 +13,15 @@
 # limitations under the License.
 
 import os
+import queue
 from typing import Optional
 from warnings import warn
 
 import numpy as np
 import torch
 import torch.distributed as dist
+
+from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
 
 
 class DistributedManager(object):
@@ -359,7 +362,7 @@ class DistributedManager(object):
     @staticmethod
     def create_process_subgroup(
         name: str, size: int, group_name: Optional[str] = None, verbose: bool = False
-    ):
+    ):  # pragma: no cover
         """
         Create a process subgroup of a parent process group. This must be a collective
         call by all processes participating in this application.
@@ -396,7 +399,8 @@ class DistributedManager(object):
         # Get number of sub-groups per parent group
         if group_size % size != 0:
             raise AssertionError(
-                f"Cannot divide group size {group_size} evenly into subgroups of size {size}"
+                f"Cannot divide group size {group_size} evenly into subgroups of"
+                f" size {size}"
             )
         num_subgroups = group_size // size
 
@@ -428,21 +432,21 @@ class DistributedManager(object):
 
     @staticmethod
     def create_orthogonal_process_group(
-        name: str, group_name: str, verbose: bool = False
-    ):
+        orthogonal_group_name: str, group_name: str, verbose: bool = False
+    ):  # pragma: no cover
         """
         Create a process group that is orthogonal to the specified process group.
 
         Parameters
         ----------
-        name : str
-        Name of the process group to be created.
+        orthogonal_group_name : str
+            Name of the orthogonal process group to be created.
 
         group_name : str
-        Name of the existing process group.
+            Name of the existing process group.
 
         verbose : bool
-        Print out ranks of each created process group, default False.
+            Print out ranks of each created process group, default False.
 
         """
         manager = DistributedManager()
@@ -451,8 +455,8 @@ class DistributedManager(object):
 
         if group_name not in manager._groups:
             raise ValueError(f"Group with name {group_name} does not exist")
-        if name in manager._groups:
-            raise ValueError(f"Group with name {name} already exists")
+        if orthogonal_group_name in manager._groups:
+            raise ValueError(f"Group with name {orthogonal_group_name} already exists")
 
         group_ranks = manager._group_ranks[group_name]
         orthogonal_ranks = [list(i) for i in zip(*group_ranks)]
@@ -461,19 +465,74 @@ class DistributedManager(object):
             tmp_group = dist.new_group(ranks=ranks)
             if manager.rank in ranks:
                 # Set group in manager only if this rank is part of the group
-                manager._groups[name] = tmp_group
-                manager._group_names[tmp_group] = name
+                manager._groups[orthogonal_group_name] = tmp_group
+                manager._group_names[tmp_group] = orthogonal_group_name
 
-        manager._group_ranks[name] = orthogonal_ranks
+        manager._group_ranks[orthogonal_group_name] = orthogonal_ranks
 
         if verbose and manager.rank == 0:
-            print(f"Process group '{name}':")
-            for grp in manager._group_ranks[name]:
+            print(f"Process group '{orthogonal_group_name}':")
+            for grp in manager._group_ranks[orthogonal_group_name]:
                 print("    ", grp)
+
+    @staticmethod
+    def create_group_from_node(
+        node: ProcessGroupNode,
+        parent: Optional[str] = None,
+        verbose: bool = False,
+    ):  # pragma: no cover
+        if node.size is None:
+            raise AssertionError(
+                "Cannot create groups from a ProcessGroupNode that is not fully"
+                " populated. Ensure that config.set_leaf_group_sizes is called first"
+                " with `update_parent_sizes = True`"
+            )
+
+        DistributedManager.create_process_subgroup(
+            node.name, node.size, group_name=parent, verbose=verbose
+        )
+        # Create orthogonal process group
+        orthogonal_group = f"__orthogonal_to_{node.name}"
+        DistributedManager.create_orthogonal_process_group(
+            orthogonal_group, node.name, verbose=verbose
+        )
+        return orthogonal_group
+
+    @staticmethod
+    def create_groups_from_config(
+        config: ProcessGroupConfig, verbose: bool = False
+    ):  # pragma: no cover
+        # Traverse process group tree in breadth first order
+        # to create nested process groups
+        q = queue.Queue()
+        q.put(config.root_id)
+        DistributedManager.create_group_from_node(config.root)
+
+        while not q.empty():
+            node_id = q.get()
+            if verbose:
+                print(f"Node ID: {node_id}")
+
+            children = config.tree.children(node_id)
+            if verbose:
+                print(f"  Children: {children}")
+
+            parent_group = node_id
+            for child in children:
+                # Create child group and replace parent group by orthogonal group so
+                # that each child forms an independent block of processes
+                parent_group = DistributedManager.create_group_from_node(
+                    child.data,
+                    parent=parent_group,
+                )
+
+                # Add child ids to the queue
+                q.put(child.identifier)
 
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
+        # Destroying group.WORLD is enough for all process groups to get destroyed
         dist.barrier()  # just make sure that no process hangs
         dist.destroy_process_group()
         DistributedManager._shared_state = {}

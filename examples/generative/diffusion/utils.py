@@ -552,6 +552,7 @@ _constant_cache = dict()
 
 
 def constant(value, shape=None, dtype=None, device=None, memory_format=None):
+    """Cached construction of constant tensors"""
     value = np.asarray(value)
     if shape is not None:
         shape = tuple(shape)
@@ -591,6 +592,7 @@ except AttributeError:
     def nan_to_num(
         input, nan=0.0, posinf=None, neginf=None, *, out=None
     ):  # pylint: disable=redefined-builtin
+        """Replace NaN/Inf with specified numerical values"""
         assert isinstance(input, torch.Tensor)
         if posinf is None:
             posinf = torch.finfo(input.dtype).max
@@ -617,6 +619,10 @@ except AttributeError:
 
 @contextlib.contextmanager
 def suppress_tracer_warnings():
+    """
+    Context manager to temporarily suppress known warnings in torch.jit.trace().
+    Note: Cannot use catch_warnings because of https://bugs.python.org/issue29672
+    """
     flt = ("ignore", None, torch.jit.TracerWarning, None, 0)
     warnings.filters.insert(0, flt)
     yield
@@ -630,6 +636,11 @@ def suppress_tracer_warnings():
 
 
 def assert_shape(tensor, ref_shape):
+    """
+    Assert that the shape of a tensor matches the given list of integers.
+    None indicates that the size of a dimension is allowed to vary.
+    Performs symbolic assertion when used in torch.jit.trace().
+    """
     if tensor.ndim != len(ref_shape):
         raise AssertionError(
             f"Wrong number of dimensions: got {tensor.ndim}, expected {len(ref_shape)}"
@@ -660,6 +671,8 @@ def assert_shape(tensor, ref_shape):
 
 
 def profiled_function(fn):
+    """Function decorator that calls torch.autograd.profiler.record_function()."""
+
     def decorator(*args, **kwargs):
         with torch.autograd.profiler.record_function(fn.__name__):
             return fn(*args, **kwargs)
@@ -674,6 +687,11 @@ def profiled_function(fn):
 
 
 class InfiniteSampler(torch.utils.data.Sampler):
+    """
+    Sampler for torch.utils.data.DataLoader that loops over the dataset
+    indefinitely, shuffling items as it goes.
+    """
+
     def __init__(
         self, dataset, rank=0, num_replicas=1, shuffle=True, seed=0, window_size=0.5
     ):
@@ -714,17 +732,20 @@ class InfiniteSampler(torch.utils.data.Sampler):
 
 
 def params_and_buffers(module):
+    """Get parameters and buffers of a nn.Module"""
     assert isinstance(module, torch.nn.Module)
     return list(module.parameters()) + list(module.buffers())
 
 
 def named_params_and_buffers(module):
+    """Get named parameters and buffers of a nn.Module"""
     assert isinstance(module, torch.nn.Module)
     return list(module.named_parameters()) + list(module.named_buffers())
 
 
 @torch.no_grad()
 def copy_params_and_buffers(src_module, dst_module, require_all=False):
+    """Copy parameters and buffers from a source module to target module"""
     assert isinstance(src_module, torch.nn.Module)
     assert isinstance(dst_module, torch.nn.Module)
     src_tensors = dict(named_params_and_buffers(src_module))
@@ -741,6 +762,10 @@ def copy_params_and_buffers(src_module, dst_module, require_all=False):
 
 @contextlib.contextmanager
 def ddp_sync(module, sync):
+    """
+    Context manager for easily enabling/disabling DistributedDataParallel
+    synchronization.
+    """
     assert isinstance(module, torch.nn.Module)
     if sync or not isinstance(module, torch.nn.parallel.DistributedDataParallel):
         yield
@@ -754,6 +779,7 @@ def ddp_sync(module, sync):
 
 
 def check_ddp_consistency(module, ignore_regex=None):
+    """Check DistributedDataParallel consistency across processes."""
     assert isinstance(module, torch.nn.Module)
     for name, tensor in named_params_and_buffers(module):
         fullname = type(module).__name__ + "." + name
@@ -772,6 +798,7 @@ def check_ddp_consistency(module, ignore_regex=None):
 
 
 def print_module_summary(module, inputs, max_nesting=3, skip_redundant=True):
+    """Print summary table of module hierarchy."""
     assert isinstance(module, torch.nn.Module)
     assert not isinstance(module, torch.jit.ScriptModule)
     assert isinstance(inputs, (tuple, list))

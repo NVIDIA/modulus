@@ -22,6 +22,7 @@ dependencies = [
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytz>=2023.3",
+    "treelib>=1.2.5"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -36,7 +37,7 @@ launch = [
     "termcolor>=2.1.1",
     "wandb>=0.13.7",
     "mlflow>=2.1.1",
-    "pydantic>=1.10.2",
+    "pydantic>=2.4.2",
     "imageio>=2.28.1",
     "moviepy>=1.0.3",
     "tqdm>=4.60.0",
@@ -85,8 +86,8 @@ fixable = ["I"]
 # and `S311` (random number generators)
 ignore = ["E501", "S311"]
 
-# Exclude the examples folder 
-exclude = ["examples"]
+# Exclude the examples and experimental folders 
+exclude = ["examples", "modulus/experimental"]
 
 [tool.ruff.per-file-ignores]
 # Ignore `F401` (import violations) in all `__init__.py` files, and in `docs/*.py`.

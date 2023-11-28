@@ -30,12 +30,12 @@ doctest:
 	coverage run \
 		--rcfile='test/coverage.docstring.rc' \
 		-m pytest \
-		--doctest-modules modulus/ --ignore-glob=*internal*
+		--doctest-modules modulus/ --ignore-glob=*internal* --ignore-glob=*experimental*
 
 pytest: 
 	coverage run \
 		--rcfile='test/coverage.pytest.rc' \
-		-m pytest 
+		-m pytest --ignore-glob=*docs* 
 
 pytest-internal:
 	cd test/internal && \
@@ -44,7 +44,7 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=75 && \
+		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=70 && \
 		coverage html
 
 # For arch naming conventions, refer

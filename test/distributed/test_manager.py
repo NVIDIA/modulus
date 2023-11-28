@@ -17,7 +17,7 @@ import os
 import pytest
 import torch
 
-from modulus.distributed import DistributedManager
+from modulus.distributed import DistributedManager, ProcessGroupConfig, ProcessGroupNode
 
 
 # TODO: Need to figure out how to test parallel set up
@@ -204,6 +204,76 @@ def test_process_groups():
 
     torch.multiprocessing.spawn(
         run_process_groups,
+        args=(model_parallel_size, verbose),
+        nprocs=model_parallel_size,
+        start_method="spawn",
+    )
+
+
+def run_process_groups_from_config(rank, model_parallel_size, verbose):
+    os.environ["RANK"] = f"{rank}"
+    os.environ["WORLD_SIZE"] = f"{model_parallel_size}"
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = str(12355)
+    DistributedManager._shared_state = {}
+
+    DistributedManager.initialize()
+
+    # Create world group that contains all processes that are part of this job
+    world = ProcessGroupNode("world")
+
+    # Create the process group config with the highest level process group
+    config = ProcessGroupConfig(world)
+
+    # Create model and data parallel sub-groups
+    config.add_node(ProcessGroupNode("model_parallel"), parent="world")
+    config.add_node(ProcessGroupNode("data_parallel"), parent="world")
+
+    # Create spatial and channel parallel sub-groups
+    config.add_node(ProcessGroupNode("spatial_parallel"), parent="model_parallel")
+    config.add_node(ProcessGroupNode("channel_parallel"), parent="model_parallel")
+
+    # Set leaf group sizes
+    group_sizes = {"channel_parallel": 1, "spatial_parallel": 2, "data_parallel": 1}
+    config.set_leaf_group_sizes(group_sizes)  # Updates all parent group sizes too
+
+    assert (
+        config.get_node("model_parallel").size == 2
+    ), "Incorrect size for 'model_parallel' parent node"
+
+    assert config.get_node("world").size == 2, "Incorrect size for 'world' parent node"
+
+    # Create model parallel process group
+    DistributedManager.create_groups_from_config(config, verbose=verbose)
+
+    manager = DistributedManager()
+
+    assert manager.rank == rank
+
+    # Test that model_parallel and spatial_parallel span all the processes
+    assert manager.rank == manager.group_rank(name="model_parallel")
+    assert manager.rank == manager.group_rank(name="spatial_parallel")
+
+    # Test orthogonal data_parallel group, only one total model_parallel group so
+    # data_parallel rank should always be 0
+    assert 0 == manager.group_rank(name="data_parallel")
+
+    # Test channel_parallel group, group with size 1, so rank must be 0
+    assert 0 == manager.group_rank(name="channel_parallel")
+
+    # Cleanup process groups
+    DistributedManager.cleanup()
+
+
+@pytest.mark.multigpu
+def test_process_groups_from_config():
+    num_gpus = torch.cuda.device_count()
+    assert num_gpus == 2, "Not enough GPUs available for test"
+    model_parallel_size = 2
+    verbose = False  # Change to True for debug
+
+    torch.multiprocessing.spawn(
+        run_process_groups_from_config,
         args=(model_parallel_size, verbose),
         nprocs=model_parallel_size,
         start_method="spawn",

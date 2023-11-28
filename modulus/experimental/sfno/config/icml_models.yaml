@@ -1,0 +1,314 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+base_config: &BASE_CONFIG
+
+    # metadata file for the dataset
+    metadata_json_path: "/metadata/data.json"
+
+    # data 
+    train_data_path: "/train"
+    valid_data_path: "/test"
+    exp_dir: "/runs"
+
+    # files used for normalization of the data
+    min_path: "/stats/mins.npy"
+    max_path: "/stats/maxs.npy"
+    time_means_path:   "/stats/time_means.npy"
+    global_means_path: "/stats/global_means.npy"
+    global_stds_path:  "/stats/global_stds.npy"
+    time_diff_means_path: "/stats/time_diff_means.npy"
+    time_diff_stds_path: "/stats/time_diff_stds.npy"
+
+    # architecture
+    nettype: "sfno"
+    scale_factor: 4
+    num_blocks: 8
+    embed_dim: 256
+    num_layers: 12
+    complex_activation: "real"
+    normalization_layer: "instance_norm"
+    hard_thresholding_fraction: 1.0 # turning it off for now
+    verbose: !!bool False
+
+    loss: "geometric l2"
+    lr: 1E-3
+
+    # n_train_samples_per_year: 1460
+    n_eval_samples: 320
+
+    max_epochs: 60
+    batch_size: 64
+
+    scheduler: "CosineAnnealingLR" # "ReduceLROnPlateau"
+    scheduler_T_max: 70
+    lr_warmup_steps: 0
+    weight_decay: 0.0 # 0.1
+
+    # wireup stuff
+    wireup_info: "mpi"
+    wireup_store: "tcp"
+
+    num_data_workers: 2
+    num_visualization_workers: 2
+    dt: 1 # how many timesteps ahead the model will predict
+    n_history: 0 #how many previous timesteps to consider
+    prediction_type: "iterative"
+    prediction_length: 35 #applicable only if prediction_type == "iterative"
+    n_initial_conditions: 5 #applicable only if prediction_type == "iterative"
+    valid_autoreg_steps: 20 # number of autoregressive steps for validation
+
+    ics_type: "specify_number"
+    save_raw_forecasts: !!bool True
+    save_channel: !!bool False
+    masked_acc: !!bool False
+    maskpath: None
+    perturb: !!bool False
+    add_noise: !!bool False
+    noise_std: 0.
+    add_zenith: !!bool False
+
+    N_grid_channels: 0
+    gridtype: "sinusoidal" #options "sinusoidal" or "linear"
+    roll: !!bool False
+
+    #options default, residual
+    target: "default"
+
+    channel_names: ["u10m", "v10m", "t2m", "sp", "msl", "t850", "u1000", "v1000", "z1000", "u850", "v850", "z850", "u500", "v500", "z500", "t500", "z50", "r500", "r850", "tcwv", "u100m", "v100m", "u250", "v250", "z250", "t250", "u100", "v100", "z100", "t100", "u900", "v900", "z900", "t900"]
+    normalization: "zscore" #options zscore or minmax or none
+
+    # invariants
+    add_grid: !!bool False
+    add_orography: !!bool False
+    orography_path: /invariants/orography.nc
+    add_landmask: !!bool False
+    landmask_path: /invariants/land_sea_mask.nc
+
+    finetune: !!bool False
+
+    log_to_screen: !!bool True
+    log_to_wandb: !!bool True
+    log_video: 10 # if > 0 will log every i-th epoch
+    save_checkpoint: !!bool True
+
+    enable_nhwc: !!bool False
+    optimizer_type: "FusedAdam"
+    optimizer_beta1: 0.9
+    optimizer_beta2: 0.95
+    optimizer_max_grad_norm: 32
+    crop_size_x: None
+    crop_size_y: None
+
+    inf_data_path: "/out_of_sample"
+
+    # Weights and biases configuration
+    wandb_name: None # If None, config will be used but you can override it here
+    wandb_group: None # If None, will be "era5_wind" + config, but you can override it here
+    wandb_project: "icml models 26ch"
+    wandb_entity: "sfno-large-model-training" # but your username here
+
+
+
+###########################################################################################################################
+# linear SFNO models
+###########################################################################################################################
+
+sfno_dhealy: &SFNO_BASELINE_DHEALY
+    <<: *BASE_CONFIG
+    nettype: "sfno"
+    filter_type: "linear"
+    use_mlp: !!bool True
+    separable: !!bool False
+    # to set the convolution to Driscoll-Healy style convolution
+    operator_type: "dhconv"
+
+    mlp_mode: "serial"
+    num_layers: 8
+    scale_factor: 2
+    hard_thresholding_fraction: 0.5
+    embed_dim: 384
+
+    activation_function: "gelu"
+
+sfno_dhealy_26ch_edim128:
+    <<: *SFNO_BASELINE_DHEALY
+    embed_dim: 128
+
+sfno_dhealy_26ch_finetune: &SFNO_BASELINE_DHEALY_26CH_FINETUNE
+    <<: *SFNO_BASELINE_DHEALY
+    lr: 2E-4
+    max_epochs: 10
+    finetune: !!bool True
+
+###########################################################################################################################
+# ICML Paper models 26 channels
+###########################################################################################################################
+
+sfno_dhealy_26ch: &SFNO_BASELINE_DHEALY_26CH
+    <<: *SFNO_BASELINE_DHEALY
+
+sfno_dhealy_26ch_2step:
+    <<: *SFNO_BASELINE_DHEALY_26CH
+    lr: 1E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/sfno_dhealy_26ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+sfno_dhealy_26ch_filterskip:
+    <<: *SFNO_BASELINE_DHEALY
+
+sfno_dhealy_26ch_nobigskip:
+    <<: *SFNO_BASELINE_DHEALY
+    big_skip: !!bool False
+
+sfno_nonlinear_26ch: &SFNO_NONLINEAR_26CH
+    <<: *SFNO_BASELINE_DHEALY_26CH
+    filter_type: "non-linear"
+    operator_type: "diagonal"
+    lr: 5E-4
+
+sfno_nonlinear_26ch_2step:
+    <<: *SFNO_NONLINEAR_26CH
+    lr: 1E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/sfno_nonlinear_26ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+fno_linear_26ch: &FNO_LINEAR_26CH
+    <<: *SFNO_BASELINE_DHEALY_26CH
+    nettype: "fno"
+    filter_type: "linear"
+    operator_type: "diagonal"
+    embed_dim: 64
+
+fno_linear_26ch_2step:
+    <<: *FNO_LINEAR_26CH
+    lr: 1E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/fno_linear_26ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+fno_nonlinear_26ch: &FNO_NONLINEAR_26CH
+    <<: *SFNO_BASELINE_DHEALY_26CH
+    nettype: "fno"
+    filter_type: "non-linear"
+    operator_type: "diagonal"
+    lr: 5E-4
+
+fno_nonlinear_26ch_2step:
+    <<: *FNO_NONLINEAR_26CH
+    lr: 1E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/fno_nonlinear_26ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+###########################################################################################################################
+# ICML Paper models
+###########################################################################################################################
+
+sfno_dhealy_73ch: &SFNO_BASELINE_DHEALY_73CH
+    <<: *SFNO_BASELINE_DHEALY
+    channel_names: ["u10m", "v10m", "u100m", "v100m", "t2m", "sp", "msl", "tcwv", "u50", "u100", "u150", "u200", "u250", "u300", "u400", "u500", "u600", "u700", "u850", "u925", "u1000", "v50", "v100", "v150", "v200", "v250", "v300", "v400", "v500", "v600", "v700", "v850", "v925", "v1000", "z50", "z100", "z150", "z200", "z250", "z300", "z400", "z500", "z600", "z700", "z850", "z925", "z1000", "t50", "t100", "t150", "t200", "t250", "t300", "t400", "t500", "t600", "t700", "t850", "t925", "t1000", "r50", "r100", "r150", "r200", "r250", "r300", "r400", "r500", "r600", "r700", "r850", "r925", "r1000"]
+    
+    wandb_project: "icml models 73ch"
+
+sfno_dhealy_73ch_2step:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    lr: 2E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/sfno_dhealy_73ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+sfno_nonlinear_73ch: &SFNO_NONLINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    filter_type: "non-linear"
+    operator_type: "diagonal"
+
+sfno_nonlinear_73ch_2step:
+    <<: *SFNO_NONLINEAR_73CH
+    lr: 2E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/sfno_nonlinear_73ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+fno_linear_73ch: &FNO_LINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    nettype: "fno"
+    filter_type: "linear"
+    operator_type: "diagonal"
+    embed_dim: 64
+
+fno_linear_73ch_2step:
+    <<: *FNO_LINEAR_73CH
+    lr: 2E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/fno_linear_73ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+fno_nonlinear_73ch: &FNO_NONLINEAR_73CH
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    nettype: "fno"
+    filter_type: "non-linear"
+    operator_type: "diagonal"
+
+fno_nonlinear_73ch_2step:
+    <<: *FNO_NONLINEAR_73CH
+    lr: 2E-4
+    max_epochs: 5
+    scheduler: None
+    finetune: !!bool True
+    pretrained_checkpoint_path: "/runs/fno_nonlinear_73ch/ngpu64_mp1_sp1/training_checkpoints/best_ckpt_mp0.tar"
+
+sfno_dhealy_73ch_layers12_edim256:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    add_zenith: !!bool True
+    num_layers: 12
+    embed_dim: 256
+
+###########################################################################################################################
+# Big model for paper
+###########################################################################################################################
+
+# runs at h=4, w=1
+sfno_dhealy_73ch_edim768:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    add_zenith: !!bool True
+    # scheduler: None
+    embed_dim: 768
+    scale_factor: 2
+    hard_thresholding_fraction: 0.5
+
+###########################################################################################################################
+# Debug
+###########################################################################################################################
+
+# runs at h=4, w=1
+sfno_dhealy_73ch_edim768_debug:
+    <<: *SFNO_BASELINE_DHEALY_73CH
+    add_zenith: !!bool True
+    # scheduler: None
+    embed_dim: 768
+    scale_factor: 2
+    hard_thresholding_fraction: 0.5
+
+    n_train_samples: 80
+    n_eval_samples: 20

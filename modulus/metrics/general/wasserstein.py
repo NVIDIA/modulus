@@ -124,9 +124,12 @@ def wasserstein_from_cdf(bin_edges: Tensor, cdf_x: Tensor, cdf_y: Tensor) -> Ten
     This norm is typically used to compare two different forecast ensembles (for X and
     Y). Creates a map of distance and does not accumulate over lat/lon regions.
     Computes
+
+    .. math::
+
         W(F_X, F_Y) = int[ |F_X(x) - F_Y(x)| ] dx
-        where F_X is the empirical cdf of X and
-                F_Y is the empirical cdf of Y.
+
+    where F_X is the empirical cdf of X and F_Y is the empirical cdf of Y.
 
     Parameters
     ----------
