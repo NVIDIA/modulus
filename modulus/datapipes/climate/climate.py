@@ -22,6 +22,7 @@ import netCDF4 as nc
 import numpy as np
 import scipy
 import torch
+import xarray as xr
 
 try:
     import nvidia.dali as dali
@@ -480,10 +481,10 @@ class ClimateDatapipe(Datapipe):
 
     def _read_invariant_autoflip(self, filename, var, normalize=False):
         """Get invariant from netCDF file."""
-        with nc.Dataset(filename) as ds:
-            x = np.array(ds[var]).astype(np.float32)
+        with xr.open_dataset(filename) as ds:
+            x = ds[var].to_numpy().astype(np.float32)
             try:
-                lat = np.array(ds["latitude"])
+                lat = ds["latitude"].to_numpy()
                 flip = lat[1] > lat[0]  # TODO: this could be more foolproof
             except (IndexError, KeyError):
                 self.logger.warning(
