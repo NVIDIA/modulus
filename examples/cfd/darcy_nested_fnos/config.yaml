@@ -57,13 +57,12 @@ scheduler:
 training:
   batch_size: 64
   rec_results_freq : 5
-  max_epochs: 2
+  max_epochs: 100
   training_set: './data/training_data.npy'
 
 validation:
   batch_size: 64
-  validation_epochs: 1
-  # validation_epochs: 5
+  validation_epochs: 5
   validation_set: './data/validation_data.npy'
 
 inference:

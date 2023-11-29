@@ -23,7 +23,6 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
-from modulus.models.mlp import FullyConnected
 from modulus.models.fno import FNO
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
@@ -136,17 +135,20 @@ class SetUpInfrastructure:
             drop_last=False,
         )
 
-        # TODO: remove below before opening PR
-        if True:
-            import random
-            total = cfg.training.batch_size*int(8/dist.world_size)
-            samples = list(range(len(self.training_set)))
-            random.shuffle(samples)
-            train_sampler = samples[:total]
-            samples = list(range(len(self.valid_set)))
-            random.shuffle(samples)
-            valid_sampler = samples[:total]
-        # TODO remove above before opening PR
+        # # TODO: remove below before merging PR
+        # if True:
+        #     cfg.training.max_epochs = 2
+        #     cfg.validation.validation_epochs = 1
+
+        #     import random
+        #     total = cfg.training.batch_size*int(8/dist.world_size)
+        #     samples = list(range(len(self.training_set)))
+        #     random.shuffle(samples)
+        #     train_sampler = samples[:total]
+        #     samples = list(range(len(self.valid_set)))
+        #     random.shuffle(samples)
+        #     valid_sampler = samples[:total]
+        # # TODO remove above before merging PR
 
         self.train_loader = DataLoader(
             self.training_set,
@@ -161,12 +163,12 @@ class SetUpInfrastructure:
             sampler=valid_sampler,
         )
         self.validator = GridValidator(loss_fun=loss_fun, norm=norm)
-        decoder = FullyConnected(
-            in_features=model_cfg.fno.latent_channels,
-            out_features=model_cfg.decoder.out_features,
-            num_layers=model_cfg.decoder.layers,
-            layer_size=model_cfg.decoder.layer_size,
-        )
+        # decoder = FullyConnected(
+        #     in_features=model_cfg.fno.latent_channels,
+        #     out_features=model_cfg.decoder.out_features,
+        #     num_layers=model_cfg.decoder.layers,
+        #     layer_size=model_cfg.decoder.layer_size,
+        # )
         self.model = FNO(
             in_channels=model_cfg.fno.in_channels,
             out_channels=model_cfg.decoder.out_features,
@@ -178,8 +180,6 @@ class SetUpInfrastructure:
             num_fno_modes=model_cfg.fno.fno_modes,
             padding=model_cfg.fno.padding,
         ).to(dist.device)
-
-        # print(f"dist.local_rank: {dist.local_rank}, device id: {dist.device}")
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -274,7 +274,7 @@ def TrainModel(cfg: DictConfig, base: SetUpInfrastructure, loaded_epoch: int) ->
                         epoch,
                     )
                     total_loss += loss * batch["darcy"].shape[0] / len(base.valid_set)
-                log.log_epoch({"Validation error": total_loss})
+                    log.log_minibatch({"Validation error": total_loss})
 
         # save checkpoint
         if (

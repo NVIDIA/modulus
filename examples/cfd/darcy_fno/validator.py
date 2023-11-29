@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import os
-import torch
 import matplotlib.pyplot as plt
 from torch import FloatTensor
-from torch.nn import MSELoss
-from mlflow import log_figure
+from modulus.launch.logging import LaunchLogger
 
 
 class GridValidator:
@@ -102,7 +100,7 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        log_figure(fig, f"val_step_{step}.png")
-        fig.savefig(os.path.join(self.out_dir, f"validation_step_{step}.png"))
+        LaunchLogger('valid').log_mlflow_figure(figure=fig,
+                                                artifact_file=f"validation_step_{step}.png")
 
         return loss
