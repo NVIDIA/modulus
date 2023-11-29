@@ -28,6 +28,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch_utils import training_stats
 from torch_utils import misc
 
+from modulus.distributed import DistributedManager
+
 #weather related
 from .YParams import YParams
 #from .dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
@@ -64,10 +66,18 @@ def training_loop(
     data_type           = None,
     data_config         = None,
     task                = None,
-    dist                = None,     # distributed object    
 ):
     # Initialize.
     start_time = time.time()
+
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+
     device = dist.device
     np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
@@ -98,10 +108,10 @@ def training_loop(
 
     
     if data_type == 'era5': 
-        dataset_obj = Era5Dataset(yparams, yparams.train_data_path, train=True, dist=dist, task=task)
+        dataset_obj = Era5Dataset(yparams, yparams.train_data_path, train=True, task=task)
         worker_init_fn = None
     elif data_type == 'cwb':
-        dataset_obj = CWBDataset(yparams, yparams.train_data_path, train=True, dist=dist, task=task)
+        dataset_obj = CWBDataset(yparams, yparams.train_data_path, train=True, task=task)
         worker_init_fn = None
     elif data_type == 'era5-cwb-v1':
         #filelist = os.listdir(path=yparams.cwb_data_dir + '/2018') 
@@ -219,7 +229,6 @@ def training_loop(
         
     # Train.
     dist.print0(f'Training for {total_kimg} kimg...')
-    dist.print0()
     cur_nimg = resume_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
@@ -358,7 +367,6 @@ def training_loop(
             
     
     # Done.
-    dist.print0()
     dist.print0('Exiting...')
 
 #----------------------------------------------------------------------------

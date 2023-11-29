@@ -47,7 +47,7 @@ import matplotlib.pyplot as plt
 try:
     from edmss import edm_sampler
 except ImportError:
-    raise ImportError(f"Please get the edm_sampler by running pip install git+https://github.com/mnabian/edmss.git)
+    raise ImportError("Please get the edm_sampler by running pip install git+https://github.com/mnabian/edmss.git")
 
 from modulus.distributed import DistributedManager
 
@@ -214,9 +214,13 @@ class StackedRandomGenerator:
         return torch.stack([torch.randint(*args, size=size[1:], generator=gen, **kwargs) for gen in self.generators])
 
 
-def load_pickle(network_pkl, dist):
+def load_pickle(network_pkl):
+
+    # Instantiate distributed manager
+    dist = DistributedManager()
+
     # Load network.
-    dist.print0(f'Loading network from "{network_pkl}"...')
+    print(f'Loading network from "{network_pkl}"...')  # TODO print on rank zero
     with dnnlib.util.open_url(network_pkl, verbose=(dist.rank == 0)) as f:
         print('torch.__version__', torch.__version__)
         
@@ -329,9 +333,6 @@ def get_dataset_and_sampler(data_type, data_config, config_file=None):
 def main(max_times: Optional[int], seeds: List[int], **kwargs):
     
     opts = dnnlib.EasyDict(kwargs)
-    
-    # Initialize distributed manager.
-    DistributedManager.initialize()
 
     # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
     class DistributedManagerWrapper(DistributedManager):
@@ -366,8 +367,8 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
         # Load network
         dist.print0('Generating images...')
 
-        net = load_pickle(opts.network_pkl, dist)
-        net_reg = load_pickle(opts.network_reg_pkl, dist) if opts.res_edm else None
+        net = load_pickle(opts.network_pkl)
+        net_reg = load_pickle(opts.network_reg_pkl) if opts.res_edm else None
 
         # move to device
         num_gpus = dist.world_size
@@ -401,20 +402,17 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                     net=net_reg, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
                     pretext='reg', class_idx=class_idx,
-                    dist=dist
                 )
                 image_out = image_mean + generate(
                     net=net, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
                     pretext='gen', class_idx=class_idx,
-                    dist=dist
                 )
             else:
                 image_out = generate(
                     net=net, img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0], seeds=sample_seeds,
                     pretext=opts.pretext, class_idx=class_idx, 
-                    dist=dist
                 )
             
             #reshape: (1*9*9)x3x50x50  --> 1x3x450x450
@@ -425,7 +423,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
 
             return image_out
         
-        generate_and_save(dataset, sampler, f, generate_fn, dist, batch_size)
+        generate_and_save(dataset, sampler, f, generate_fn, batch_size)
 
     # Done.
     if dist.world_size > 1:
@@ -507,8 +505,12 @@ def writer_from_input_dataset(f, dataset):
     return NetCDFWriter(f, lat=dataset.latitude(), lon=dataset.longitude(), input_channels=dataset.input_channels(), output_channels=dataset.output_channels())
 
 
-def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, dist, batch_size):
+def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, batch_size):
+
+    # Instantiate distributed manager.
+    dist = DistributedManager()
     device = dist.device
+
     data_loader = torch.utils.data.DataLoader(dataset=dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
@@ -516,7 +518,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, dist, batch_
     for image_tar, image_lr, index in iter(data_loader):
         time_index  += 1
         if dist.rank == 0:
-            print("starting index", time_index)
+            print("starting index", time_index)  # TODO print on rank zero
         input_data = image_lr = image_lr.to(device=device).to(torch.float32)
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
@@ -581,7 +583,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, dist, batch_
             
 
 
-def generate(net, seeds, dist, class_idx, max_batch_size, img_lr=None, pretext=None, **sampler_kwargs):
+def generate(net, seeds, class_idx, max_batch_size, img_lr=None, pretext=None, **sampler_kwargs):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     
@@ -597,9 +599,12 @@ def generate(net, seeds, dist, class_idx, max_batch_size, img_lr=None, pretext=N
     torchrun --standalone --nproc_per_node=2 generate.py --outdir=out --seeds=0-999 --batch=64 \\
         --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
+
+    # Instantiate distributed manager.
+    dist = DistributedManager()
     
     device = dist.device
-    dist.print0('seeds', seeds)
+    dist.print0('seeds', seeds)  # TODO fix in logging
 
     num_batches = ((len(seeds) - 1) // (max_batch_size * dist.world_size) + 1) * dist.world_size
     all_batches = torch.as_tensor(seeds).tensor_split(num_batches)

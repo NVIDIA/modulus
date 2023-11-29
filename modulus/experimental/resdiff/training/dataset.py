@@ -25,6 +25,7 @@ import zarr
 import netCDF4 as nc
 import logging
 
+from modulus.distributed import DistributedManager
 
 try:
     import pyspng
@@ -282,11 +283,10 @@ from .img_utils import reshape_fields
 
 #Era5
 class Era5Dataset(torch.utils.data.Dataset):
-  def __init__(self, params, path, train, dist, cache=True, task='sr'):
+  def __init__(self, params, path, train, cache=True, task='sr'):
     self.params = params
     self.location = path
     self.train = train
-    self.dist = dist
     self.dt = params.dt
     self.n_history = params.n_history
     self.in_channels = np.array(params.in_channels)
@@ -299,6 +299,15 @@ class Era5Dataset(torch.utils.data.Dataset):
     self._get_files_stats()
     self._cache = cache
     self._task = task
+
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+    self.dist = dist
 
   def _get_files_stats(self):
     self.files_paths = glob.glob(self.location + "/*.h5")
@@ -400,11 +409,10 @@ class Era5Dataset(torch.utils.data.Dataset):
 
 #CWB
 class CWBDataset(torch.utils.data.Dataset):
-  def __init__(self, params, path, train, dist, cache=True, task='sr'):
+  def __init__(self, params, path, train, cache=True, task='sr'):
     self.params = params
     self.location = path
     self.train = train
-    self.dist = dist
     self.dt = params.dt
     self.n_history = params.n_history
     self.in_channels = np.array(params.in_channels)
@@ -418,6 +426,15 @@ class CWBDataset(torch.utils.data.Dataset):
     self._cache = cache
     self._task = task
     self.grid = params.add_grid
+    
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+    self.dist = dist
 
   def _get_files_stats(self):
     self.files_paths = glob.glob(self.location + "/*.h5")

@@ -344,7 +344,7 @@ def main(**kwargs):
     
 
     # Train.
-    training_loop.training_loop(**c, dist=dist)
+    training_loop.training_loop(**c)
 
 #----------------------------------------------------------------------------
 

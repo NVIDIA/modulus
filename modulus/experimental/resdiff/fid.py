@@ -29,9 +29,13 @@ from modulus.distributed import DistributedManager
 #----------------------------------------------------------------------------
 
 def calculate_inception_stats(
-    image_path, dist, num_expected=None, seed=0, max_batch_size=64,
+    image_path, num_expected=None, seed=0, max_batch_size=64,
     num_workers=3, prefetch_factor=2
 ):
+    
+    # Instantiate distributed manager
+    dist = DistributedManager()
+    
     # Set the device
     device = dist.device
 
