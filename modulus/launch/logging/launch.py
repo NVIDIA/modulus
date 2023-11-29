@@ -325,6 +325,14 @@ class LaunchLogger(object):
             metric_dict[step[0]] = step[1]
             wandb.log(metric_dict)
 
+    def log_mlflow_figure(self,
+                          figure,
+                          artifact_file: str=f'artifact'):
+        if self.mlflow_backend:
+            self.mlflow_client.log_figure(figure=figure,
+                                          artifact_file=artifact_file,
+                                          run_id=self.mlflow_run.info.run_id)
+
     @classmethod
     def toggle_wandb(cls, value: bool):
         """Toggle WandB logging
@@ -368,8 +376,12 @@ class LaunchLogger(object):
             wandb.define_metric("iter")
 
         # let only root process log to mlflow
+        root = True
         if DistributedManager.is_initialized():
             root = DistributedManager().rank == 0
+
+        if not root:
+            use_mlflow = False
 
         if LaunchLogger.mlflow_run is None and use_mlflow and root:
             PythonLogger().warning("MLFlow not initialized, turning off")

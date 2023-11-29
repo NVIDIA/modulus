@@ -98,7 +98,6 @@ def initialize_mlflow(
     # Set default value here for Hydra
     if tracking_location is None:
         tracking_location = str(Path(f"./mlruns").absolute())
-        # tracking_location = str(Path(f"./mlruns_{dist.rank}").absolute())
 
     # Set up URI (remote or local)
     if mode == "online":
