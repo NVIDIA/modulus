@@ -25,13 +25,13 @@ import zarr
 import netCDF4 as nc
 import logging
 
+from modulus.distributed import DistributedManager
 
 try:
     import pyspng
 except ImportError:
     pyspng = None
     
-from torch_utils import distributed as dist
 import cv2
 
 # import dill
@@ -300,12 +300,21 @@ class Era5Dataset(torch.utils.data.Dataset):
     self._cache = cache
     self._task = task
 
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+    self.dist = dist
+
   def _get_files_stats(self):
     self.files_paths = glob.glob(self.location + "/*.h5")
     self.files_paths.sort()
     self.n_years = len(self.files_paths)
     with h5py.File(self.files_paths[0], 'r') as _f:
-        dist.print0("Getting file stats from {}".format(self.files_paths[0]))
+        self.dist.print0("Getting file stats from {}".format(self.files_paths[0]))
         self.n_samples_per_year = _f['fields'].shape[0]
         #original image shape (before padding)
         self.img_shape_x = _f['fields'].shape[2] -1   #just get rid of one of the pixels
@@ -313,10 +322,10 @@ class Era5Dataset(torch.utils.data.Dataset):
 
     self.n_samples_total = self.n_years * self.n_samples_per_year
     self.files = [None for _ in range(self.n_years)]
-    dist.print0("Number of samples per year: {}".format(self.n_samples_per_year))
-    dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
-    dist.print0("Delta t: {} hours".format(6*self.dt))
-    dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(6*self.dt*self.n_history, 6*self.dt))
+    self.dist.print0("Number of samples per year: {}".format(self.n_samples_per_year))
+    self.dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
+    self.dist.print0("Delta t: {} hours".format(6*self.dt))
+    self.dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(6*self.dt*self.n_history, 6*self.dt))
 
 
   def _open_file(self, year_idx):
@@ -417,6 +426,15 @@ class CWBDataset(torch.utils.data.Dataset):
     self._cache = cache
     self._task = task
     self.grid = params.add_grid
+    
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+    self.dist = dist
 
   def _get_files_stats(self):
     self.files_paths = glob.glob(self.location + "/*.h5")
@@ -430,7 +448,7 @@ class CWBDataset(torch.utils.data.Dataset):
     self.len_list = []
     for path in self.files_paths:
         with h5py.File(path, 'r') as _f:
-            dist.print0("Getting file stats from {}".format(path))
+            self.dist.print0("Getting file stats from {}".format(path))
             self.n_samples_per_year = _f['fields'].shape[0]
             self.len_list.append(_f['fields'].shape[0])
             #original image shape (before padding)
@@ -448,11 +466,11 @@ class CWBDataset(torch.utils.data.Dataset):
     self.n_samples_total = self.length
     
     self.files = [None for _ in range(self.n_years)]
-    dist.print0("Number of years: {}".format(self.n_years))
+    self.dist.print0("Number of years: {}".format(self.n_years))
     #util.print0("Number of samples per year: {}".format(self.n_samples_per_year))
-    dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
-    dist.print0("Delta t: {} hours".format(1*self.dt))
-    dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(1*self.dt*self.n_history, 1*self.dt))
+    self.dist.print0("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
+    self.dist.print0("Delta t: {} hours".format(1*self.dt))
+    self.dist.print0("Including {} hours of past history in training at a frequency of {} hours".format(1*self.dt*self.n_history, 1*self.dt))
 
 
   def _open_file(self, year_idx):

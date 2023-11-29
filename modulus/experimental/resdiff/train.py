@@ -24,8 +24,15 @@ import json
 import click
 import torch
 import dnnlib
-from torch_utils import distributed as dist
 from training import training_loop
+
+from modulus.distributed import DistributedManager
+
+try:
+    from apex.optimizers import FusedAdam
+    apex_imported = True
+except ImportError:
+    apex_imported = False
 
 import warnings
 warnings.filterwarnings('ignore', 'Grad strides do not match bucket view strides') # False warning printed by PyTorch 1.12.
@@ -110,8 +117,17 @@ def main(**kwargs):
         --data=datasets/cifar10-32x32.zip --cond=1 --arch=ddpmpp
     """
     opts = dnnlib.EasyDict(kwargs)
-    torch.multiprocessing.set_start_method('spawn', force=True)
-    dist.init()
+
+    # Initialize distributed manager.
+    DistributedManager.initialize()
+
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
 
     # Initialize config dict.
     c = dnnlib.EasyDict()
@@ -225,8 +241,9 @@ def main(**kwargs):
     if opts.seed is not None:
         c.seed = opts.seed
     else:
-        seed = torch.randint(1 << 31, size=[], device=torch.device('cuda'))
-        torch.distributed.broadcast(seed, src=0)
+        seed = torch.randint(1 << 31, size=[], device=dist.device)
+        if dist.distributed:
+            torch.distributed.broadcast(seed, src=0)
         c.seed = int(seed)
 
     #output dir
@@ -268,7 +285,7 @@ def main(**kwargs):
     # Description string.
     cond_str = 'cond' if c.dataset_kwargs.use_labels else 'uncond'
     dtype_str = 'fp16' if c.network_kwargs.use_fp16 else 'fp32'
-    desc = f'{dataset_name:s}-{cond_str:s}-{opts.arch:s}-{opts.precond:s}-gpus{dist.get_world_size():d}-batch{c.batch_size:d}-{dtype_str:s}'
+    desc = f'{dataset_name:s}-{cond_str:s}-{opts.arch:s}-{opts.precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}'
     if opts.desc is not None:
         desc += f'-{opts.desc}'
         
@@ -307,7 +324,7 @@ def main(**kwargs):
     dist.print0(f'Class-conditional:       {c.dataset_kwargs.use_labels}')
     dist.print0(f'Network architecture:    {opts.arch}')
     dist.print0(f'Preconditioning & loss:  {opts.precond}')
-    dist.print0(f'Number of GPUs:          {dist.get_world_size()}')
+    dist.print0(f'Number of GPUs:          {dist.world_size}')
     dist.print0(f'Batch size:              {c.batch_size}')
     dist.print0(f'Mixed-precision:         {c.network_kwargs.use_fp16}')
     dist.print0()
@@ -319,7 +336,7 @@ def main(**kwargs):
 
     # Create output directory.
     dist.print0('Creating output directory...')
-    if dist.get_rank() == 0:
+    if dist.rank == 0:
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, 'training_options.json'), 'wt') as f:
             json.dump(c, f, indent=2)

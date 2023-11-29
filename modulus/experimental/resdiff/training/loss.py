@@ -17,7 +17,6 @@
 
 import torch
 from torch_utils import persistence
-from torch_utils import distributed as dist
 
 #----------------------------------------------------------------------------
 # Loss function corresponding to the variance preserving (VP) formulation
@@ -204,14 +203,14 @@ class ResLossv1:
         self.P_std = P_std
         self.sigma_data = sigma_data
         
-        print('dist.get_rank', dist.get_rank)
-        if dist.get_rank == 0:
-            breakpoint()
+        # print('dist.get_rank', dist.get_rank)
+        # if dist.get_rank == 0:
+        #     breakpoint()
          
         with torch.no_grad():
             #resume_state_dump = '/lustre/fsw/nvresearch/mmardani/output/logs/edm_era5_cwb_12chans_fcn_4x_crop448_zarr_fulldata_unetregression/complex-mayfly_2023.04.25_16.42/output/training-state-006924.pt'
             resume_state_dump = '/lustre/fsw/nvresearch/mmardani/output/logs/edm_era5_cwb_12chans_fcn_4x_crop448_zarr_fulldata_unetregression/mindful-parakeet_2023.04.03_22.54/output/training-state-042650.pt'
-            dist.print0(f'Loading training state from "{resume_state_dump}"...')
+            print(f'Loading training state from "{resume_state_dump}"...')  # TODO print on rank zero only
             data = torch.load(resume_state_dump, map_location=torch.device('cpu'))
             self.unet = data['net'].cuda()
             #misc.copy_params_and_buffers(src_module=data['net'], dst_module=net, require_all=True)
@@ -279,7 +278,7 @@ class MixtureLossV1:
         #dropout loss: p*denoise_loss + (1-p)*regression_loss
         probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
         binary_random_variable = torch.bernoulli(probability_tensor).item()
-        dist.print0('binary_random_variable', binary_random_variable)
+        # dist.print0('binary_random_variable', binary_random_variable)
         
         if binary_random_variable == 0:
             input = y + torch.randn_like(y) * sigma
@@ -319,7 +318,7 @@ class MixtureLossV2:
         #dropout loss: p*denoise_loss + (1-p)*regression_loss
         probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
         binary_random_variable = torch.bernoulli(probability_tensor).item()
-        dist.print0('binary_random_variable', binary_random_variable)
+        # dist.print0('binary_random_variable', binary_random_variable)
         
         if binary_random_variable == 0:
             input = y + torch.randn_like(y) * sigma
@@ -359,7 +358,7 @@ class MixtureLossV3:
         #dropout loss: p*denoise_loss + (1-p)*regression_loss
         probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
         binary_random_variable = torch.bernoulli(probability_tensor).item()
-        dist.print0('binary_random_variable', binary_random_variable)
+        # dist.print0('binary_random_variable', binary_random_variable)
         
         if binary_random_variable == 0:
             input = y + torch.randn_like(y) * sigma
@@ -400,7 +399,7 @@ class MixtureLossV4:
         #dropout loss: p*denoise_loss + (1-p)*regression_loss
         probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
         binary_random_variable = torch.bernoulli(probability_tensor).item()
-        dist.print0('binary_random_variable', binary_random_variable)
+        # dist.print0('binary_random_variable', binary_random_variable)
         
         if binary_random_variable == 0:
             input = y + torch.randn_like(y) * sigma
@@ -441,7 +440,7 @@ class MixtureLossV5:
         #dropout loss: p*denoise_loss + (1-p)*regression_loss
         probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
         binary_random_variable = torch.bernoulli(probability_tensor).item()
-        dist.print0('binary_random_variable', binary_random_variable)
+        # dist.print0('binary_random_variable', binary_random_variable)
         
         if binary_random_variable == 0:
             input = y + torch.randn_like(y) * sigma
