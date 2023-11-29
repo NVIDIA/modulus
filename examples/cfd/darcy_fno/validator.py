@@ -29,8 +29,6 @@ class GridValidator:
         loss function for assessing validation error
     norm : Dict, optional
         mean and standard deviation for each channel to normalise input and target
-    out_dir : str, optional
-        directory to which plots shall be stored
     font_size : float, optional
         font size used in figures
 
@@ -40,16 +38,12 @@ class GridValidator:
         self,
         loss_fun,
         norm: dict = {"permeability": (0.0, 1.0), "darcy": (0.0, 1.0)},
-        out_dir: str = "./outputs/validators",
         font_size: float = 28.0,
     ):
         self.norm = norm
         self.criterion = loss_fun
         self.font_size = font_size
         self.headers = ("invar", "truth", "prediction", "relative error")
-        self.out_dir = os.path.abspath(os.path.join(os.getcwd(), out_dir))
-        if not os.path.exists(self.out_dir):
-            os.makedirs(self.out_dir)
 
     def compare(
         self,
