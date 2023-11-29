@@ -24,9 +24,11 @@ import psutil
 import numpy as np
 import torch
 import dnnlib
-from torch_utils import distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 from torch_utils import training_stats
 from torch_utils import misc
+
+from modulus.distributed import DistributedManager
 
 #weather related
 from .YParams import YParams
@@ -68,7 +70,17 @@ def training_loop(
 ):
     # Initialize.
     start_time = time.time()
-    np.random.seed((seed * dist.get_world_size() + dist.get_rank()) % (1 << 31))
+
+    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
+    class DistributedManagerWrapper(DistributedManager):
+        def print0(self, *message):
+            if self.rank == 0:
+                print(*message)
+
+    dist = DistributedManagerWrapper()
+
+    device = dist.device
+    np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
     torch.backends.cudnn.benchmark = cudnn_benchmark
     torch.backends.cudnn.allow_tf32 = False
@@ -76,18 +88,18 @@ def training_loop(
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
     # Select batch size per GPU.
-    batch_gpu_total = batch_size // dist.get_world_size()
+    batch_gpu_total = batch_size // dist.world_size
     logger0.info(f'batch_gpu: {batch_gpu}')
     if batch_gpu is None or batch_gpu > batch_gpu_total:
         batch_gpu = batch_gpu_total
     num_accumulation_rounds = batch_gpu_total // batch_gpu
-    assert batch_size == batch_gpu * num_accumulation_rounds * dist.get_world_size()
+    assert batch_size == batch_gpu * num_accumulation_rounds * dist.world_size
 
     '''
     # Load dataset: cifar10
     dist.print0('Loading dataset...')
     dataset_obj = dnnlib.util.construct_class_by_name(**dataset_kwargs) # subclass of training.dataset.Dataset
-    dataset_sampler = misc.InfiniteSampler(dataset=dataset_obj, rank=dist.get_rank(), num_replicas=dist.get_world_size(), seed=seed)
+    dataset_sampler = misc.InfiniteSampler(dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed)
     dataset_iterator = iter(torch.utils.data.DataLoader(dataset=dataset_obj, sampler=dataset_sampler, batch_size=batch_gpu, **data_loader_kwargs))
     '''
     
@@ -120,7 +132,7 @@ def training_loop(
         #worker_init_fn = dataset_obj.worker_init_fn 
         worker_init_fn = None
 
-    dataset_sampler = misc.InfiniteSampler(dataset=dataset_obj, rank=dist.get_rank(), num_replicas=dist.get_world_size(), seed=seed)
+    dataset_sampler = misc.InfiniteSampler(dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed)
     dataset_iterator = iter(torch.utils.data.DataLoader(dataset=dataset_obj, sampler=dataset_sampler, batch_size=batch_gpu, worker_init_fn=worker_init_fn, **data_loader_kwargs))
 
     
@@ -140,7 +152,7 @@ def training_loop(
     net = dnnlib.util.construct_class_by_name(**network_kwargs, **interface_kwargs) # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
     
-    # if dist.get_rank() == 0:
+    # if dist.rank == 0:
     #     with torch.no_grad():
     #         img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
     #         img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
@@ -153,7 +165,7 @@ def training_loop(
             
     # params = net.parameters()
     # print('************************************')
-    # print('dist.get_rank()', dist.get_rank())
+    # print('dist.rank', dist.rank)
     # print('net.parameters()', net.parameters())
     # for idx, param in enumerate(net.parameters()):
     #     if idx == 230:
@@ -168,7 +180,8 @@ def training_loop(
     loss_fn = dnnlib.util.construct_class_by_name(**loss_kwargs) # training.loss.(VP|VE|EDM)Loss
     optimizer = dnnlib.util.construct_class_by_name(params=net.parameters(), **optimizer_kwargs) # subclass of torch.optim.Optimizer
     augment_pipe = dnnlib.util.construct_class_by_name(**augment_kwargs) if augment_kwargs is not None else None # training.augment.AugmentPipe
-    ddp = torch.nn.parallel.DistributedDataParallel(net, device_ids=[device], broadcast_buffers=True)  #broadcast_buffers=False
+    if dist.world_size > 1:
+        ddp = DistributedDataParallel(net, device_ids=[dist.local_rank], broadcast_buffers=True, output_device=dist.device, find_unused_parameters=dist.find_unused_parameters)
     ema = copy.deepcopy(net).eval().requires_grad_(False)   
     
     
@@ -188,11 +201,11 @@ def training_loop(
     # Resume training from previous snapshot.
     if resume_pkl is not None:
         logger0.info(f'Loading network weights from "{resume_pkl}"...')
-        if dist.get_rank() != 0:
+        if dist.rank != 0:
             torch.distributed.barrier() # rank 0 goes first
-        with dnnlib.util.open_url(resume_pkl, verbose=(dist.get_rank() == 0)) as f:
+        with dnnlib.util.open_url(resume_pkl, verbose=(dist.rank == 0)) as f:
             data = pickle.load(f)
-        if dist.get_rank() == 0:
+        if dist.rank == 0:
             torch.distributed.barrier() # other ranks follow
         misc.copy_params_and_buffers(src_module=data['ema'], dst_module=net, require_all=False)
         misc.copy_params_and_buffers(src_module=data['ema'], dst_module=ema, require_all=False)
@@ -208,7 +221,7 @@ def training_loop(
         
     
     # #check num params per gpu
-    # with open(f"params_{dist.get_rank()}.txt", "w") as fo:
+    # with open(f"params_{dist.rank}.txt", "w") as fo:
     #     dist.print0(net.parameters())
     #     for param in net.parameters():
     #         dist.print0(param.size())
@@ -222,7 +235,7 @@ def training_loop(
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
     maintenance_time = tick_start_time - start_time
-    dist.update_progress(cur_nimg // 1000, total_kimg)
+    # dist.update_progress(cur_nimg // 1000, total_kimg)
     stats_jsonl = None
     while True:
 
@@ -309,7 +322,7 @@ def training_loop(
             AutoResume.request_resume()
             logger0.info("Training terminated. Returning")
             done = True
-            #print('dist.get_rank()', dist.get_rank())
+            #print('dist.rank', dist.rank)
             #with open(os.path.join(os.path.split(ckpt_dir)[0],'resume.txt'), "w") as f: 
             with open(os.path.join(ckpt_dir,'resume.txt'), "w") as f:
                 f.write(os.path.join(ckpt_dir, f'training-state-{cur_nimg//1000:06d}.pt'))
@@ -335,24 +348,24 @@ def training_loop(
                     misc.check_ddp_consistency(value)
                     data[key] = value.cpu()
                 del value # conserve memory
-            if dist.get_rank() == 0:
+            if dist.rank == 0:
                 with open(os.path.join(run_dir, f'network-snapshot-{cur_nimg//1000:06d}.pkl'), 'wb') as f:
                     pickle.dump(data, f)
             del data # conserve memory
 
         # Save full dump of the training state.
-        #if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and cur_tick != 0 and dist.get_rank() == 0:
-        if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and dist.get_rank() == 0:
+        #if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and cur_tick != 0 and dist.rank == 0:
+        if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and dist.rank == 0:
             torch.save(dict(net=net, optimizer_state=optimizer.state_dict()), os.path.join(run_dir, f'training-state-{cur_nimg//1000:06d}.pt'))
 
         # Update logs.
         training_stats.default_collector.update()
-        if dist.get_rank() == 0:
+        if dist.rank == 0:
             if stats_jsonl is None:
                 stats_jsonl = open(os.path.join(run_dir, 'stats.jsonl'), 'at')
             stats_jsonl.write(json.dumps(dict(training_stats.default_collector.as_dict(), timestamp=time.time())) + '\n')
             stats_jsonl.flush()
-        dist.update_progress(cur_nimg // 1000, total_kimg)
+        # dist.update_progress(cur_nimg // 1000, total_kimg)
 
         # Update state.
         cur_tick += 1

@@ -22,17 +22,25 @@ import numpy as np
 import scipy.linalg
 import torch
 import dnnlib
-from torch_utils import distributed as dist
 from training import dataset
+
+from modulus.distributed import DistributedManager
 
 #----------------------------------------------------------------------------
 
 def calculate_inception_stats(
     image_path, num_expected=None, seed=0, max_batch_size=64,
-    num_workers=3, prefetch_factor=2, device=torch.device('cuda'),
+    num_workers=3, prefetch_factor=2
 ):
+    
+    # Instantiate distributed manager
+    dist = DistributedManager()
+    
+    # Set the device
+    device = dist.device
+
     # Rank 0 goes first.
-    if dist.get_rank() != 0:
+    if dist.world_size > 1 and dist.rank != 0:
         torch.distributed.barrier()
 
     # Load Inception-v3 model.
@@ -41,7 +49,7 @@ def calculate_inception_stats(
     detector_url = 'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/metrics/inception-2015-12-05.pkl'
     detector_kwargs = dict(return_features=True)
     feature_dim = 2048
-    with dnnlib.util.open_url(detector_url, verbose=(dist.get_rank() == 0)) as f:
+    with dnnlib.util.open_url(detector_url, verbose=(dist.rank == 0)) as f:
         detector_net = pickle.load(f).to(device)
 
     # List images.
@@ -53,20 +61,20 @@ def calculate_inception_stats(
         raise click.ClickException(f'Found {len(dataset_obj)} images, but need at least 2 to compute statistics')
 
     # Other ranks follow.
-    if dist.get_rank() == 0:
+    if dist.rank == 0:
         torch.distributed.barrier()
 
     # Divide images into batches.
     num_batches = ((len(dataset_obj) - 1) // (max_batch_size * dist.get_world_size()) + 1) * dist.get_world_size()
     all_batches = torch.arange(len(dataset_obj)).tensor_split(num_batches)
-    rank_batches = all_batches[dist.get_rank() :: dist.get_world_size()]
+    rank_batches = all_batches[dist.rank :: dist.get_world_size()]
     data_loader = torch.utils.data.DataLoader(dataset_obj, batch_sampler=rank_batches, num_workers=num_workers, prefetch_factor=prefetch_factor)
 
     # Accumulate statistics.
     dist.print0(f'Calculating statistics for {len(dataset_obj)} images...')
     mu = torch.zeros([feature_dim], dtype=torch.float64, device=device)
     sigma = torch.zeros([feature_dim, feature_dim], dtype=torch.float64, device=device)
-    for images, _labels in tqdm.tqdm(data_loader, unit='batch', disable=(dist.get_rank() != 0)):
+    for images, _labels in tqdm.tqdm(data_loader, unit='batch', disable=(dist.rank != 0)):
         torch.distributed.barrier()
         if images.shape[0] == 0:
             continue
@@ -131,13 +139,13 @@ def calc(image_path, ref_path, num_expected, seed, batch):
 
     dist.print0(f'Loading dataset reference statistics from "{ref_path}"...')
     ref = None
-    if dist.get_rank() == 0:
+    if dist.rank == 0:
         with dnnlib.util.open_url(ref_path) as f:
             ref = dict(np.load(f))
 
     mu, sigma = calculate_inception_stats(image_path=image_path, num_expected=num_expected, seed=seed, max_batch_size=batch)
     dist.print0('Calculating FID...')
-    if dist.get_rank() == 0:
+    if dist.rank == 0:
         fid = calculate_fid_from_inception_stats(mu, sigma, ref['mu'], ref['sigma'])
         print(f'{fid:g}')
     torch.distributed.barrier()
@@ -156,7 +164,7 @@ def ref(dataset_path, dest_path, batch):
 
     mu, sigma = calculate_inception_stats(image_path=dataset_path, max_batch_size=batch)
     dist.print0(f'Saving dataset reference statistics to "{dest_path}"...')
-    if dist.get_rank() == 0:
+    if dist.rank == 0:
         if os.path.dirname(dest_path):
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         np.savez(dest_path, mu=mu, sigma=sigma)

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DistributedManager utility to instantiate process groups based on they
 process group config.
 - Brain anomaly detection example.
+- Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
+stability.
 
 ### Changed
 

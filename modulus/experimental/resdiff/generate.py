@@ -27,7 +27,6 @@ import torch
 import PIL.Image
 import cftime
 import dnnlib
-from torch_utils import distributed as dist
 import cftime
 import sys
 import netCDF4 as nc
@@ -48,9 +47,11 @@ import matplotlib.pyplot as plt
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
 try:
-    from edm_sampler import edm_sampler
+    from edmss import edm_sampler
 except ImportError:
-    raise ImportError(f"Please get the edm_sampler from https://github.com/NVlabs/edm/blob/main/generate.py#L25 and include that in an edm_sampler.py file in this directory: {os.path.dirname(os.path.abspath(__file__))}")
+    raise ImportError("Please get the edm_sampler by running pip install git+https://github.com/mnabian/edmss.git")
+
+from modulus.distributed import DistributedManager
 
 def unet_regression(
     net, latents, img_lr, class_labels=None, randn_like=torch.randn_like,
@@ -214,9 +215,10 @@ class StackedRandomGenerator:
         assert size[0] == len(self.generators)
         return torch.stack([torch.randint(*args, size=size[1:], generator=gen, **kwargs) for gen in self.generators])
 
-
 def load_pickle(network_pkl, logger):
-    # Load network.
+    # Instabtiate distributed manager
+    dist = DistributedManager()
+    # Load network. 
     logger.info(f'Loading network from "{network_pkl}"...')
     with dnnlib.util.open_url(network_pkl, verbose=(dist.get_rank() == 0)) as f:
         logger.info('torch.__version__', torch.__version__)
@@ -331,13 +333,14 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
     
     opts = dnnlib.EasyDict(kwargs)
     
-    dist.init()
+    # Initialize distributed manager
+    dist = DistributedManager()
 
     # Initialize logger.
     logger = PythonLogger("main")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging()
-    
+
     det_batch = None
     gen_batch = None
 
@@ -367,9 +370,9 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
         net_reg = load_pickle(opts.network_reg_pkl, logger0) if opts.res_edm else None
 
         # move to device
-        num_gpus = dist.get_world_size()
-        torch.cuda.set_device(dist.get_rank())
-        device = torch.device('cuda', dist.get_rank())
+        num_gpus = dist.world_size
+        torch.cuda.set_device(dist.rank)
+        device = dist.device
         net = net.to(device)
         net_reg = net_reg.to(device) if net_reg else None
 
@@ -425,7 +428,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
         generate_and_save(dataset, sampler, f, generate_fn, device, batch_size, logger0)
 
     # Done.
-    if torch.distributed.is_initialized():
+    if dist.world_size > 1:
         torch.distributed.barrier()
     logger0.info('Done.')
 
@@ -505,14 +508,18 @@ def writer_from_input_dataset(f, dataset):
 
 
 def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batch_size, logger):
+    # Instantiate distributed manager.
+    dist = DistributedManager()
+    device = dist.device
+
     data_loader = torch.utils.data.DataLoader(dataset=dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
 
     for image_tar, image_lr, index in iter(data_loader):
         time_index  += 1
-        if dist.get_rank() == 0:
-            logger.info(f"starting index: {time_index}")
+        if dist.rank == 0:
+            logger.info(f"starting index: {time_index}")  # TODO print on rank zero
         input_data = image_lr = image_lr.to(device=device).to(torch.float32)
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
@@ -576,7 +583,6 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batc
                 writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
             
 
-
 def generate(net, seeds, class_idx, max_batch_size, logger, img_lr=None, device=torch.device('cuda'), pretext=None, **sampler_kwargs):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
@@ -593,27 +599,29 @@ def generate(net, seeds, class_idx, max_batch_size, logger, img_lr=None, device=
     torchrun --standalone --nproc_per_node=2 generate.py --outdir=out --seeds=0-999 --batch=64 \\
         --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
-    
-    logger.info(f'seeds: {seeds}')
 
-    #dist.init()
-    num_batches = ((len(seeds) - 1) // (max_batch_size * dist.get_world_size()) + 1) * dist.get_world_size()
+    # Instantiate distributed manager.
+    dist = DistributedManager()
+    
+    logger.info(f'seeds: {seeds}')  # TODO print on rank zero
+    device = dist.device
+
+    num_batches = ((len(seeds) - 1) // (max_batch_size * dist.world_size) + 1) * dist.world_size
     all_batches = torch.as_tensor(seeds).tensor_split(num_batches)
-    rank_batches = all_batches[dist.get_rank() :: dist.get_world_size()]
+    rank_batches = all_batches[dist.rank :: dist.world_size]
 
     # Rank 0 goes first.
-    if torch.distributed.is_initialized():
-        if dist.get_rank() != 0:
-            torch.distributed.barrier()
+    if dist.world_size > 1 and dist.rank != 0:
+        torch.distributed.barrier()
 
         # Other ranks follow.
-        if dist.get_rank() == 0:
+        if dist.world_size > 1 and dist.rank == 0:
             torch.distributed.barrier()
         
     # Loop over batches.
     all_images = []
-    for batch_seeds in tqdm.tqdm(rank_batches, unit='batch', disable=(dist.get_rank() != 0)):
-        if torch.distributed.is_initialized():
+    for batch_seeds in tqdm.tqdm(rank_batches, unit='batch', disable=(dist.rank != 0)):
+        if dist.world_size > 1:
             torch.distributed.barrier()
         batch_size = len(batch_seeds)
         if batch_size == 0:
