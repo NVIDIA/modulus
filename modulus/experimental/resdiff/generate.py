@@ -351,13 +351,13 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
     logger0.info(f"Train data path: {params.train_data_path}")
     dataset, sampler = get_dataset_and_sampler(opts.data_type, params)
     
-    with nc.Dataset(opts.outdir.format(rank=dist.get_rank()), "w") as f:
+    with nc.Dataset(opts.outdir.format(rank=dist.rank), "w") as f:
         # add attributes
         f.history = ' '.join(sys.argv)
         f.network_pkl = kwargs["network_pkl"]
 
         # Load network
-        logger.info('torch.__version__', torch.__version__)
+        logger.info(f'torch.__version__: {torch.__version__}')
         logger0.info(f'Loading network from "{opts.network_pkl}"...')
         net = load_pickle(opts.network_pkl, dist.rank)
         logger0.info(f'Loading network from "{opts.network_reg_pkl}"...')
