@@ -26,8 +26,8 @@ import torch
 import dnnlib
 from training import training_loop
 
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.distributed import DistributedManager
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
 try:
     from apex.optimizers import FusedAdam
@@ -121,19 +121,12 @@ def main(**kwargs):
 
     # Initialize distributed manager.
     DistributedManager.initialize()
-
-    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
-    class DistributedManagerWrapper(DistributedManager):
-        def print0(self, *message):
-            if self.rank == 0:
-                print(*message)
-
-    dist = DistributedManagerWrapper()
+    dist = DistributedManager()
 
     # Initialize logger.
-    logger = PythonLogger("main")  # General python logger
+    logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging()
+    logger.file_logging(file_name="train.log")
 
     # Initialize config dict.
     c = dnnlib.EasyDict()
@@ -323,13 +316,12 @@ def main(**kwargs):
     # Print options.
     logger0.info('Training options:')
     logger0.info(json.dumps(c, indent=2))
-    logger0.info()
     logger0.info(f'Output directory:        {c.run_dir}')
     logger0.info(f'Dataset path:            {c.dataset_kwargs.path}')
     logger0.info(f'Class-conditional:       {c.dataset_kwargs.use_labels}')
     logger0.info(f'Network architecture:    {opts.arch}')
     logger0.info(f'Preconditioning & loss:  {opts.precond}')
-    logger0.info(f'Number of GPUs:          {dist.get_world_size()}')
+    logger0.info(f'Number of GPUs:          {dist.world_size}')
     logger0.info(f'Batch size:              {c.batch_size}')
     logger0.info(f'Mixed-precision:         {c.network_kwargs.use_fp16}')
 
@@ -348,7 +340,7 @@ def main(**kwargs):
     
 
     # Train.
-    training_loop.training_loop(**c, logger0=logger0)
+    training_loop.training_loop(**c)
 
 #----------------------------------------------------------------------------
 

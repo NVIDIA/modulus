@@ -29,6 +29,7 @@ from torch_utils import training_stats
 from torch_utils import misc
 
 from modulus.distributed import DistributedManager
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
 #weather related
 from .YParams import YParams
@@ -68,16 +69,17 @@ def training_loop(
     task                = None,
     logger0             = None      # rank 0 logger    
 ):
+    
+    # Instantiate distributed manager.
+    dist = DistributedManager()
+
+    # Initialize logger.
+    logger = PythonLogger(name="training_loop")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging(file_name="training_loop.log")
+
     # Initialize.
     start_time = time.time()
-
-    # wrapper class for distributed manager for print0. This will be removed when Modulus logging is implemented.
-    class DistributedManagerWrapper(DistributedManager):
-        def print0(self, *message):
-            if self.rank == 0:
-                print(*message)
-
-    dist = DistributedManagerWrapper()
 
     device = dist.device
     np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
