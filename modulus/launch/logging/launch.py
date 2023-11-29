@@ -222,7 +222,6 @@ class LaunchLogger(object):
             # Compute global loss
             if DistributedManager.is_initialized() and DistributedManager().distributed:
                 self.epoch_losses[name] = gather_loss(process_loss)
-                # self.epoch_losses[f"Global {name}"] = gather_loss(process_loss)
 
         if self.root:
             # Console printing
@@ -291,7 +290,6 @@ class LaunchLogger(object):
         self,
         metric_dict: Dict[str, float],
         step: Tuple[str, int] = None,
-        print: bool = False,
     ):
         """Logs a dictionary of metrics to different supported backends
 
@@ -376,16 +374,13 @@ class LaunchLogger(object):
             wandb.define_metric("iter")
 
         # let only root process log to mlflow
-        root = True
         if DistributedManager.is_initialized():
-            root = DistributedManager().rank == 0
+            if DistributedManager().rank != 0:
+                return
 
-        if not root:
-            use_mlflow = False
-
-        if LaunchLogger.mlflow_run is None and use_mlflow and root:
+        if LaunchLogger.mlflow_run is None and use_mlflow:
             PythonLogger().warning("MLFlow not initialized, turning off")
             use_mlflow = False
 
-        if use_mlflow and root:
+        if use_mlflow:
             LaunchLogger.toggle_mlflow(True)
