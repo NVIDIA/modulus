@@ -67,7 +67,6 @@ def training_loop(
     data_type           = None,
     data_config         = None,
     task                = None,
-    logger0             = None      # rank 0 logger    
 ):
     
     # Instantiate distributed manager.
