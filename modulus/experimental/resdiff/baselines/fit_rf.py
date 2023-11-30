@@ -32,6 +32,7 @@ datatype, config_name, output_pkl = sys.argv[1:]
 params = YParams(datatype, config_name)
 dataset = get_zarr_dataset(params, train=True)
 
+
 def dataset_to_xy(dataset, n, samples_per_index):
     inds = list(range(len(dataset)))
     random.shuffle(inds)
@@ -58,6 +59,7 @@ def dataset_to_xy(dataset, n, samples_per_index):
     y = np.concatenate(ys)
 
     return X, y
+
 
 X, y = dataset_to_xy(dataset, n=200, samples_per_index=200)
 

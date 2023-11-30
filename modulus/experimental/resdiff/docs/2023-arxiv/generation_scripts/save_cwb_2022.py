@@ -31,10 +31,10 @@ logging.basicConfig(level=logging.DEBUG)
 OUTPUT = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/inputs/random-sample-2022.nc"
 
 
-cwb =xr.open_zarr("/lustre/fsw/nvresearch/nbrenowitz/diffusions/targets/cwb.zarr")
+cwb = xr.open_zarr("/lustre/fsw/nvresearch/nbrenowitz/diffusions/targets/cwb.zarr")
 subset = cwb.sel(time=cwb.time.dt.year == 2022)
 
-plt.plot(subset.time, np.ones_like(subset.time), '.')
+plt.plot(subset.time, np.ones_like(subset.time), ".")
 plt.xticks(rotation=45)
 
 
@@ -43,12 +43,26 @@ r = np.random.default_rng(0)
 times = r.choice(subset.time, replace=False, size=10)
 # %%
 in_channels = [
- 'tcwv', 
- 'z500', 't500', 'u500', 'v500',
- 'z700', 't700', 'u700', 'v700',
- 'z850', 't850', 'u850', 'v850',
- 'z925', 't925', 'u925', 'v925',
- 't2m', 'u10m', 'v10m'
+    "tcwv",
+    "z500",
+    "t500",
+    "u500",
+    "v500",
+    "z700",
+    "t700",
+    "u700",
+    "v700",
+    "z850",
+    "t850",
+    "u850",
+    "v850",
+    "z925",
+    "t925",
+    "u925",
+    "v925",
+    "t2m",
+    "u10m",
+    "v10m",
 ]
 
 
@@ -57,7 +71,7 @@ download_path = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/targets/era5"
 output = []
 for time in times:
     dt = convert_to_datetime(time)
-    time_path = os.path.join(download_path, dt.isoformat() + '.nc')
+    time_path = os.path.join(download_path, dt.isoformat() + ".nc")
     if not os.path.exists(time_path):
         print(f"Downloading {dt.isoformat()} from CDS")
         data = get(0, dt, schema.ChannelSet.var73, schema.InitialConditionSource.cds)
@@ -67,12 +81,12 @@ for time in times:
     data = data.sel(channel=in_channels)
     output.append(data)
 
-output = xr.concat(output, dim='time')
+output = xr.concat(output, dim="time")
 
 # run from ngc
 xlat = cwb["XLAT"]
 xlong = cwb["XLONG"]
 interpolated = output.interp(lat=xlat, lon=xlong)
-interpolated['target'] = cwb.rename(channel='cwb_channel').fields.sel(time=output.time)
-interpolated.attrs['history'] = ' '.join(sys.argv)
+interpolated["target"] = cwb.rename(channel="cwb_channel").fields.sel(time=output.time)
+interpolated.attrs["history"] = " ".join(sys.argv)
 interpolated.to_netcdf(OUTPUT, mode="w")
