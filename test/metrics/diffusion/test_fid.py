@@ -13,17 +13,17 @@
 # limitations under the License.
 
 
-import numpy as np
 import pytest
+import torch
 
 from modulus.metrics.diffusion import calculate_fid_from_inception_stats
 
 
 def test_fid_calculation():
-    mu = np.array([1.0, 2.0])
-    sigma = np.array([[1.0, 0.5], [0.5, 2.0]])
-    mu_ref = np.array([0.0, 1.0])
-    sigma_ref = np.array([[2.0, 0.3], [0.3, 1.5]])
+    mu = torch.Tensor([1.0, 2.0])
+    sigma = torch.Tensor([[1.0, 0.5], [0.5, 2.0]])
+    mu_ref = torch.Tensor([0.0, 1.0])
+    sigma_ref = torch.Tensor([[2.0, 0.3], [0.3, 1.5]])
 
     fid = calculate_fid_from_inception_stats(mu, sigma, mu_ref, sigma_ref)
     expected_fid = 2.234758220608337
