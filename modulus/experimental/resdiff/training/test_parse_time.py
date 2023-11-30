@@ -17,6 +17,7 @@ import datetime
 import cftime
 from training.time import convert_datetime_to_cftime
 
+
 def test_datetime_yaml():
     dt = datetime.datetime(2011, 1, 1)
     s = dt.isoformat()

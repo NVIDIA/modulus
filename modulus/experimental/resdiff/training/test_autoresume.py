@@ -14,7 +14,7 @@
 
 
 # import os
-    
+
 # run_dir = '/lustre/fsw/nvresearch/mmardani/output/logs/edm_cwb/private-frog_2022.12.19_15.31/code/training-runs/00002-cifar10-32x32-cond-ddpmpp-edm-gpus8-batch64-fp32'  #/kire-khar'
 
 # files = os.listdir(run_dir)
@@ -31,9 +31,8 @@
 #     print(path_pt)
 #     print(resume_kimg)
 #     print(type(resume_kimg))
-    
-    
-    
+
+
 import os
 
 path = "/lustre/fsw/nvresearch/mmardani/output/logs/edm_cwb/delicate-boa_2022.12.20_14.24/output/00000-cifar10-32x32-cond-ddpmpp-edm-gpus8-batch64-fp32"
