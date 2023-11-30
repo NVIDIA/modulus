@@ -19,8 +19,6 @@ import numpy as np
 import torch
 from torch_utils import persistence
 from torch.nn.functional import silu
-from torch_utils import distributed as dist
-
 
 #----------------------------------------------------------------------------
 # Unified routine for initializing weights and biases.
@@ -265,7 +263,7 @@ class SongUNet(torch.nn.Module):
         
     ):
         
-        dist.print0('embedding_type', embedding_type)
+        # dist.print0('embedding_type', embedding_type)
         
         assert embedding_type in ['fourier', 'positional', 'zero']
         assert encoder_type in ['standard', 'skip', 'residual']

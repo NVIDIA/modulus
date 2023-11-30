@@ -24,8 +24,16 @@ import json
 import click
 import torch
 import dnnlib
-from torch_utils import distributed as dist
 from training import training_loop
+
+from modulus.distributed import DistributedManager
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+
+try:
+    from apex.optimizers import FusedAdam
+    apex_imported = True
+except ImportError:
+    apex_imported = False
 
 import warnings
 warnings.filterwarnings('ignore', 'Grad strides do not match bucket view strides') # False warning printed by PyTorch 1.12.
@@ -110,8 +118,15 @@ def main(**kwargs):
         --data=datasets/cifar10-32x32.zip --cond=1 --arch=ddpmpp
     """
     opts = dnnlib.EasyDict(kwargs)
-    torch.multiprocessing.set_start_method('spawn', force=True)
-    dist.init()
+
+    # Initialize distributed manager.
+    DistributedManager.initialize()
+    dist = DistributedManager()
+
+    # Initialize logger.
+    logger = PythonLogger(name="train")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging(file_name="train.log")
 
     # Initialize config dict.
     c = dnnlib.EasyDict()
@@ -225,8 +240,9 @@ def main(**kwargs):
     if opts.seed is not None:
         c.seed = opts.seed
     else:
-        seed = torch.randint(1 << 31, size=[], device=torch.device('cuda'))
-        torch.distributed.broadcast(seed, src=0)
+        seed = torch.randint(1 << 31, size=[], device=dist.device)
+        if dist.distributed:
+            torch.distributed.broadcast(seed, src=0)
         c.seed = int(seed)
 
     #output dir
@@ -241,7 +257,7 @@ def main(**kwargs):
             #print('opts.resume', opts.resume)
             f.close()
             
-    dist.print0('opts.resume', opts.resume)
+    logger0.info(f'opts.resume: { opts.resume}')
 
     # Transfer learning and resume.
     if opts.transfer is not None:
@@ -250,25 +266,25 @@ def main(**kwargs):
         c.resume_pkl = opts.transfer
         c.ema_rampup_ratio = None
     elif opts.resume is not None:
-        print('gets into elif opts.resume is not None ...')
+        logger.info('gets into elif opts.resume is not None ...')
         match = re.fullmatch(r'training-state-(\d+).pt', os.path.basename(opts.resume))
-        print('match', match)
-        print('match.group(1)', match.group(1))
+        logger.info('match', match)
+        logger.info('match.group(1)', match.group(1))
         # if not match or not os.path.isfile(opts.resume):
         #      raise click.ClickException('--resume must point to training-state-*.pt from a previous training run')
         c.resume_pkl = os.path.join(os.path.dirname(opts.resume), f'network-snapshot-{match.group(1)}.pkl')
         c.resume_kimg = int(match.group(1))
         c.resume_state_dump = opts.resume
-        dist.print0('c.resume_pkl', c.resume_pkl)
-        dist.print0('c.resume_kimg', c.resume_kimg)
-        dist.print0('c.resume_state_dump', c.resume_state_dump)
+        logger0.info(f'c.resume_pkl: {c.resume_pkl}')
+        logger0.info(f'c.resume_kimg: {c.resume_kimg}')
+        logger0.info(f'c.resume_state_dump: {c.resume_state_dump}')
         # import pdb; pdb.set_trace()
 
 
     # Description string.
     cond_str = 'cond' if c.dataset_kwargs.use_labels else 'uncond'
     dtype_str = 'fp16' if c.network_kwargs.use_fp16 else 'fp32'
-    desc = f'{dataset_name:s}-{cond_str:s}-{opts.arch:s}-{opts.precond:s}-gpus{dist.get_world_size():d}-batch{c.batch_size:d}-{dtype_str:s}'
+    desc = f'{dataset_name:s}-{cond_str:s}-{opts.arch:s}-{opts.precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}'
     if opts.desc is not None:
         desc += f'-{opts.desc}'
         
@@ -298,28 +314,25 @@ def main(**kwargs):
     c.task = opts.task
 
     # Print options.
-    dist.print0()
-    dist.print0('Training options:')
-    dist.print0(json.dumps(c, indent=2))
-    dist.print0()
-    dist.print0(f'Output directory:        {c.run_dir}')
-    dist.print0(f'Dataset path:            {c.dataset_kwargs.path}')
-    dist.print0(f'Class-conditional:       {c.dataset_kwargs.use_labels}')
-    dist.print0(f'Network architecture:    {opts.arch}')
-    dist.print0(f'Preconditioning & loss:  {opts.precond}')
-    dist.print0(f'Number of GPUs:          {dist.get_world_size()}')
-    dist.print0(f'Batch size:              {c.batch_size}')
-    dist.print0(f'Mixed-precision:         {c.network_kwargs.use_fp16}')
-    dist.print0()
+    logger0.info('Training options:')
+    logger0.info(json.dumps(c, indent=2))
+    logger0.info(f'Output directory:        {c.run_dir}')
+    logger0.info(f'Dataset path:            {c.dataset_kwargs.path}')
+    logger0.info(f'Class-conditional:       {c.dataset_kwargs.use_labels}')
+    logger0.info(f'Network architecture:    {opts.arch}')
+    logger0.info(f'Preconditioning & loss:  {opts.precond}')
+    logger0.info(f'Number of GPUs:          {dist.world_size}')
+    logger0.info(f'Batch size:              {c.batch_size}')
+    logger0.info(f'Mixed-precision:         {c.network_kwargs.use_fp16}')
 
     # Dry run?
     if opts.dry_run:
-        dist.print0('Dry run; exiting.')
+        logger0.info('Dry run; exiting.')
         return
 
     # Create output directory.
-    dist.print0('Creating output directory...')
-    if dist.get_rank() == 0:
+    logger0.info('Creating output directory...')
+    if dist.rank == 0:
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, 'training_options.json'), 'wt') as f:
             json.dump(c, f, indent=2)
