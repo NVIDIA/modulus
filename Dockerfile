@@ -133,6 +133,10 @@ COPY . /modulus/
 RUN cd /modulus/ && pip install .
 RUN pip install --no-cache-dir "protobuf==3.20.3"
 
+# Set Git Hash as a environment variable
+ARG MODULUS_GIT_HASH
+ENV MODULUS_GIT_HASH=${MODULUS_GIT_HASH:-unknown}
+
 # Clean up
 RUN rm -rf /modulus/ 
 
