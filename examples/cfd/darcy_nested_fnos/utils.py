@@ -206,7 +206,7 @@ class GridValidator:
 
         plt.close("all")
         plt.rcParams.update({"font.size": self.font_size})
-        fig, ax = plt.subplots(1, 4, figsize=(15*3.5, 15), sharey=True)
+        fig, ax = plt.subplots(1, 4, figsize=(15 * 3.5, 15), sharey=True)
         im = []
         im.append(ax[0].imshow(invar))
         im.append(ax[1].imshow(target))
@@ -217,8 +217,9 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        LaunchLogger('valid').log_mlflow_figure(figure=fig,
-                                                artifact_file=f"validation_step_{step}.png")
+        LaunchLogger("valid").log_mlflow_figure(
+            figure=fig, artifact_file=f"validation_step_{step}.png"
+        )
 
         return loss
 

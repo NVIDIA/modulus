@@ -46,7 +46,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
     if True:
         cfg.training.max_pseudo_epochs = 2
         cfg.training.pseudo_epoch_sample_size = 256
-        cfg.validation.validation_pseudo_epochs=1
+        cfg.validation.validation_pseudo_epochs = 1
     # TODO remove above before merging PR
 
     DistributedManager.initialize()  # Only call this once in the entire script!
@@ -80,7 +80,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
     loss_fun = MSELoss(reduction="mean")
     optimizer = Adam(model.parameters(), lr=cfg.scheduler.initial_lr)
     scheduler = lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate**step
+        optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate ** step
     )
     norm_vars = cfg.normaliser
     normaliser = {

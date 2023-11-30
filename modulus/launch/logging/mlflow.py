@@ -86,7 +86,7 @@ def initialize_mlflow(
     if dist.is_initialized():
         root = dist.rank == 0
 
-    if not root: # only one process should be logging to mlflow
+    if not root:  # only one process should be logging to mlflow
         return
     # if DistributedManager.is_initialized() and dist.distributed:
     #     group_name = create_ddp_group_tag(run_name)

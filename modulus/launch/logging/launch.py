@@ -323,13 +323,13 @@ class LaunchLogger(object):
             metric_dict[step[0]] = step[1]
             wandb.log(metric_dict)
 
-    def log_mlflow_figure(self,
-                          figure,
-                          artifact_file: str=f'artifact'):
+    def log_mlflow_figure(self, figure, artifact_file: str = f"artifact"):
         if self.mlflow_backend:
-            self.mlflow_client.log_figure(figure=figure,
-                                          artifact_file=artifact_file,
-                                          run_id=self.mlflow_run.info.run_id)
+            self.mlflow_client.log_figure(
+                figure=figure,
+                artifact_file=artifact_file,
+                run_id=self.mlflow_run.info.run_id,
+            )
 
     @classmethod
     def toggle_wandb(cls, value: bool):
