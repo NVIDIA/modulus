@@ -575,7 +575,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, batc
                 writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
             
 
-def generate(net, seeds, class_idx, max_batch_size, img_lr=None, device=torch.device('cuda'), pretext=None, **sampler_kwargs):
+def generate(net, seeds, class_idx, max_batch_size, img_lr=None, pretext=None, **sampler_kwargs):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     

@@ -197,7 +197,7 @@ def training_loop(
         from userlib.auto_resume import AutoResume
         AutoResume.init()
     except ImportError:
-        raise ImportError('AutoResume not imported')
+        logger0.warning('AutoResume not imported')
         
     # Resume training from previous snapshot.
     if resume_pkl is not None:
