@@ -27,6 +27,7 @@ from ..meta import ModelMetaData
 from ..mlp import FullyConnected
 from ..module import Module
 
+
 # ===================================================================
 # ===================================================================
 # 1D FNO
@@ -57,7 +58,6 @@ class FNO1DEncoder(nn.Module):
         Use coordinate grid as additional feature map, by default True
     """
 
-
     def __init__(
         self,
         in_channels: int = 1,
@@ -71,25 +71,6 @@ class FNO1DEncoder(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.set_vars(in_channels,
-                      num_fno_layers,
-                      fno_layer_size,
-                      padding,
-                      padding_type,
-                      activation_fn,
-                      coord_features)
-        self.build_lift_network()
-        self.build_fno(num_fno_modes)
-
-
-    def set_vars(self,
-                 in_channels,
-                 num_fno_layers,
-                 fno_layer_size,
-                 padding,
-                 padding_type,
-                 activation_fn,
-                 coord_features):
         self.in_channels = in_channels
         self.num_fno_layers = num_fno_layers
         self.fno_width = fno_layer_size
@@ -107,11 +88,11 @@ class FNO1DEncoder(nn.Module):
         self.ipad = [-pad if pad > 0 else None for pad in self.pad]
         self.padding_type = padding_type
 
-        self.spconv_layers = nn.ModuleList()
-        self.conv_layers = nn.ModuleList()
+        # build lift
+        self.build_lift_network()
+        self.build_fno(num_fno_modes)
 
-
-    def build_lift_network(self):
+    def build_lift_network(self) -> None:
         self.lift_network = torch.nn.Sequential()
         self.lift_network.append(
             layers.Conv1dFCLayer(self.in_channels, int(self.fno_width / 2))
@@ -121,18 +102,18 @@ class FNO1DEncoder(nn.Module):
             layers.Conv1dFCLayer(int(self.fno_width / 2), self.fno_width)
         )
 
-
-    def build_fno(self, num_fno_modes):
+    def build_fno(self, num_fno_modes: int) -> None:
         if isinstance(num_fno_modes, int):
             num_fno_modes = [num_fno_modes]
 
         # Build Neural Fourier Operators
+        self.spconv_layers = nn.ModuleList()
+        self.conv_layers = nn.ModuleList()
         for _ in range(self.num_fno_layers):
             self.spconv_layers.append(
                 layers.SpectralConv1d(self.fno_width, self.fno_width, num_fno_modes[0])
             )
             self.conv_layers.append(nn.Conv1d(self.fno_width, self.fno_width, 1))
-
 
     def forward(self, x: Tensor) -> Tensor:
         if self.coord_features:
@@ -177,7 +158,6 @@ class FNO1DEncoder(nn.Module):
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 1))
         return output.reshape(-1, output.size(-1)), y_shape
-
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
         output = value.reshape(shape[0], shape[2], value.size(-1))
@@ -230,17 +210,28 @@ class FNO2DEncoder(nn.Module):
         self.num_fno_layers = num_fno_layers
         self.fno_width = fno_layer_size
         self.coord_features = coord_features
-        # Spectral modes to have weights
-        if isinstance(num_fno_modes, int):
-            num_fno_modes = [num_fno_modes, num_fno_modes]
+        self.activation_fn = activation_fn
+
         # Add relative coordinate feature
         if self.coord_features:
             self.in_channels = self.in_channels + 2
-        self.activation_fn = activation_fn
 
-        self.spconv_layers = nn.ModuleList()
-        self.conv_layers = nn.ModuleList()
+        # Padding values for spectral conv
+        if isinstance(padding, int):
+            padding = [padding, padding]
+        padding = padding + [0, 0]  # Pad with zeros for smaller lists
+        self.pad = padding[:2]
+        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
+        self.padding_type = padding_type
 
+        if isinstance(num_fno_modes, int):
+            num_fno_modes = [num_fno_modes, num_fno_modes]
+
+        # build lift
+        self.build_lift_network()
+        self.build_fno(num_fno_modes)
+
+    def build_lift_network(self) -> None:
         # Initial lift network
         self.lift_network = torch.nn.Sequential()
         self.lift_network.append(
@@ -251,7 +242,10 @@ class FNO2DEncoder(nn.Module):
             layers.Conv2dFCLayer(int(self.fno_width / 2), self.fno_width)
         )
 
+    def build_fno(self, num_fno_modes: int) -> None:
         # Build Neural Fourier Operators
+        self.spconv_layers = nn.ModuleList()
+        self.conv_layers = nn.ModuleList()
         for _ in range(self.num_fno_layers):
             self.spconv_layers.append(
                 layers.SpectralConv2d(
@@ -259,14 +253,6 @@ class FNO2DEncoder(nn.Module):
                 )
             )
             self.conv_layers.append(nn.Conv2d(self.fno_width, self.fno_width, 1))
-
-        # Padding values for spectral conv
-        if isinstance(padding, int):
-            padding = [padding, padding]
-        padding = padding + [0, 0]  # Pad with zeros for smaller lists
-        self.pad = padding[:2]
-        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
-        self.padding_type = padding_type
 
     def forward(self, x: Tensor) -> Tensor:
         if x.dim() != 4:
@@ -322,7 +308,6 @@ class FNO2DEncoder(nn.Module):
         output = torch.permute(value, (0, 2, 3, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
-
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
         output = value.reshape(shape[0], shape[2], shape[3], value.size(-1))
         return torch.permute(output, (0, 3, 1, 2))
@@ -375,17 +360,28 @@ class FNO3DEncoder(nn.Module):
         self.num_fno_layers = num_fno_layers
         self.fno_width = fno_layer_size
         self.coord_features = coord_features
-        # Spectral modes to have weights
-        if isinstance(num_fno_modes, int):
-            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes]
+        self.activation_fn = activation_fn
+
         # Add relative coordinate feature
         if self.coord_features:
             self.in_channels = self.in_channels + 3
-        self.activation_fn = activation_fn
 
-        self.spconv_layers = nn.ModuleList()
-        self.conv_layers = nn.ModuleList()
+        # Padding values for spectral conv
+        if isinstance(padding, int):
+            padding = [padding, padding, padding]
+        padding = padding + [0, 0, 0]  # Pad with zeros for smaller lists
+        self.pad = padding[:3]
+        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
+        self.padding_type = padding_type
 
+        if isinstance(num_fno_modes, int):
+            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes]
+
+        # build lift
+        self.build_lift_network()
+        self.build_fno(num_fno_modes)
+
+    def build_lift_network(self) -> None:
         # Initial lift network
         self.lift_network = torch.nn.Sequential()
         self.lift_network.append(
@@ -396,7 +392,10 @@ class FNO3DEncoder(nn.Module):
             layers.Conv3dFCLayer(int(self.fno_width / 2), self.fno_width)
         )
 
+    def build_fno(self, num_fno_modes: int) -> None:
         # Build Neural Fourier Operators
+        self.spconv_layers = nn.ModuleList()
+        self.conv_layers = nn.ModuleList()
         for _ in range(self.num_fno_layers):
             self.spconv_layers.append(
                 layers.SpectralConv3d(
@@ -408,14 +407,6 @@ class FNO3DEncoder(nn.Module):
                 )
             )
             self.conv_layers.append(nn.Conv3d(self.fno_width, self.fno_width, 1))
-
-        # Padding values for spectral conv
-        if isinstance(padding, int):
-            padding = [padding, padding, padding]
-        padding = padding + [0, 0, 0]  # Pad with zeros for smaller lists
-        self.pad = padding[:3]
-        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
-        self.padding_type = padding_type
 
     def forward(self, x: Tensor) -> Tensor:
         if self.coord_features:
@@ -465,12 +456,10 @@ class FNO3DEncoder(nn.Module):
         grid_z = grid_z.unsqueeze(0).unsqueeze(0).repeat(bsize, 1, 1, 1, 1)
         return torch.cat((grid_x, grid_y, grid_z), dim=1)
 
-
     def grid_to_points(self, value: Tensor) -> Tuple[Tensor, List[int]]:
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 3, 4, 1))
         return output.reshape(-1, output.size(-1)), y_shape
-
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
         output = value.reshape(shape[0], shape[2], shape[3], shape[4], value.size(-1))
@@ -524,17 +513,28 @@ class FNO4DEncoder(nn.Module):
         self.num_fno_layers = num_fno_layers
         self.fno_width = fno_layer_size
         self.coord_features = coord_features
-        # Spectral modes to have weights
-        if isinstance(num_fno_modes, int):
-            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes, num_fno_modes]
+        self.activation_fn = activation_fn
+
         # Add relative coordinate feature
         if self.coord_features:
             self.in_channels = self.in_channels + 4
-        self.activation_fn = activation_fn
 
-        self.spconv_layers = nn.ModuleList()
-        self.conv_layers = nn.ModuleList()
+        # Padding values for spectral conv
+        if isinstance(padding, int):
+            padding = [padding, padding, padding, padding]
+        padding = padding + [0, 0, 0, 0]  # Pad with zeros for smaller lists
+        self.pad = padding[:4]
+        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
+        self.padding_type = padding_type
 
+        if isinstance(num_fno_modes, int):
+            num_fno_modes = [num_fno_modes, num_fno_modes, num_fno_modes, num_fno_modes]
+
+        # build lift
+        self.build_lift_network()
+        self.build_fno(num_fno_modes)
+
+    def build_lift_network(self) -> None:
         # Initial lift network
         self.lift_network = torch.nn.Sequential()
         self.lift_network.append(
@@ -545,7 +545,10 @@ class FNO4DEncoder(nn.Module):
             layers.ConvNdFCLayer(int(self.fno_width / 2), self.fno_width)
         )
 
+    def build_fno(self, num_fno_modes: int) -> None:
         # Build Neural Fourier Operators
+        self.spconv_layers = nn.ModuleList()
+        self.conv_layers = nn.ModuleList()
         for _ in range(self.num_fno_layers):
             self.spconv_layers.append(
                 layers.SpectralConv4d(
@@ -560,14 +563,6 @@ class FNO4DEncoder(nn.Module):
             self.conv_layers.append(
                 layers.ConvNdKernel1Layer(self.fno_width, self.fno_width)
             )
-
-        # Padding values for spectral conv
-        if isinstance(padding, int):
-            padding = [padding, padding, padding, padding]
-        padding = padding + [0, 0, 0, 0]  # Pad with zeros for smaller lists
-        self.pad = padding[:4]
-        self.ipad = [-pad if pad > 0 else None for pad in self.pad]
-        self.padding_type = padding_type
 
     def forward(self, x: Tensor) -> Tensor:
         if self.coord_features:
@@ -632,18 +627,11 @@ class FNO4DEncoder(nn.Module):
         output = torch.permute(value, (0, 2, 3, 4, 5, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
-
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
         output = value.reshape(
             shape[0], shape[2], shape[3], shape[4], shape[5], value.size(-1)
         )
         return torch.permute(output, (0, 5, 1, 2, 3, 4))
-
-
-# Functions for converting between point based and grid (image) representations
-
-
-
 
 
 # ===================================================================
@@ -755,6 +743,7 @@ class FNO(Module):
         self.padding_type = padding_type
         self.activation_fn = layers.get_activation(activation_fn)
         self.coord_features = coord_features
+        self.dimension = dimension
 
         # decoder net
         self.decoder_net = FullyConnected(
@@ -765,12 +754,7 @@ class FNO(Module):
             activation_fn=decoder_activation_fn,
         )
 
-        if dimension == 1:
-            FNOModel = self.get_FNO1DEncoder()
-        else:
-            raise NotImplementedError(
-                "Invalid dimensionality. Only 1D, 2D, 3D and 4D FNO implemented"
-            )
+        FNOModel = self.getFNOEncoder()
 
         self.spec_encoder = FNOModel(
             in_channels,
@@ -783,8 +767,19 @@ class FNO(Module):
             coord_features=self.coord_features,
         )
 
-    def get_FNO1DEncoder(self): # put all dims in here
-        return FNO1DEncoder
+    def getFNOEncoder(self):
+        if self.dimension == 1:
+            return FNO1DEncoder
+        elif self.dimension == 2:
+            return FNO2DEncoder
+        elif self.dimension == 3:
+            return FNO3DEncoder
+        elif self.dimension == 4:
+            return FNO4DEncoder
+        else:
+            raise NotImplementedError(
+                "Invalid dimensionality. Only 1D, 2D, 3D and 4D FNO implemented"
+            )
 
     def forward(self, x: Tensor) -> Tensor:
         # Fourier encoder
