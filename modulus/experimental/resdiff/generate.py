@@ -594,7 +594,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
         except ImportError:
             raise ImportError(
                 "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
-            )       
+            )
 
     # Initialize distributed manager
     DistributedManager.initialize()
@@ -973,7 +973,7 @@ def generate(
         }
 
         if pretext == "gen":
-            if sampling_method == "deteministic":
+            if sampling_method == "deterministic":
                 sampler_fn = ablation_sampler
             elif sampling_method == "stochastic":
                 sampler_fn = edm_sampler
