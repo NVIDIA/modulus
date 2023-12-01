@@ -23,6 +23,8 @@ stability.
 
 ### Removed
 
+- The experimental SFNO (now lives here: https://github.com/NVIDIA/modulus-makani)
+
 ### Fixed
 
 ### Security
