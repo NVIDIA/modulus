@@ -60,7 +60,8 @@ run () {
         --sample_res='full' \
         --res_edm \
         --network_reg=$url_reg \
-        --sampling_method='stochastic'
+        --sampling_method='stochastic' \
+        --steps=18
 
         python3 concat.py $generateOut/*.nc $zarr_file
         rm -r "$generateOut"
