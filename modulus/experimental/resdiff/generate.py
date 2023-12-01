@@ -260,9 +260,9 @@ def ablation_sampler(
 
         # Euler step.
         h = t_next - t_hat
-        denoised = net(x_hat / s(t_hat), x_lr, sigma(t_hat), class_labels).to(
-            torch.float64
-        )
+        denoised = net(
+            x_hat / s(t_hat), x_lr / s(t_hat), sigma(t_hat), class_labels
+        ).to(torch.float64)
         d_cur = (
             sigma_deriv(t_hat) / sigma(t_hat) + s_deriv(t_hat) / s(t_hat)
         ) * x_hat - sigma_deriv(t_hat) * s(t_hat) / sigma(t_hat) * denoised
@@ -274,9 +274,9 @@ def ablation_sampler(
             x_next = x_hat + h * d_cur
         else:
             assert solver == "heun"
-            denoised = net(x_prime / s(t_prime), x_lr, sigma(t_prime), class_labels).to(
-                torch.float64
-            )
+            denoised = net(
+                x_prime / s(t_prime), x_lr / s(t_prime), sigma(t_prime), class_labels
+            ).to(torch.float64)
             d_prime = (
                 sigma_deriv(t_prime) / sigma(t_prime) + s_deriv(t_prime) / s(t_prime)
             ) * x_prime - sigma_deriv(t_prime) * s(t_prime) / sigma(t_prime) * denoised
