@@ -652,7 +652,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
             """
             sample_res = opts.sample_res
             class_idx = opts.class_idx
-            steps = opts.steps
+            steps = opts.num_steps
             if sample_res == "full":
                 image_lr_patch = image_lr
             else:
@@ -896,6 +896,7 @@ def generate(
     pretext=None,
     **sampler_kwargs,
 ):
+    print(sampler_kwargs);exit()
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     
