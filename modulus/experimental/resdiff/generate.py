@@ -52,13 +52,6 @@ from einops import rearrange, reduce, repeat
 import math
 import matplotlib.pyplot as plt
 
-try:
-    from edmss import edm_sampler
-except ImportError:
-    raise ImportError(
-        "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
-    )
-
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
@@ -114,6 +107,7 @@ def unet_regression(
 def ablation_sampler(
     net,
     latents,
+    img_lr,
     class_labels=None,
     randn_like=torch.randn_like,
     num_steps=18,
@@ -134,6 +128,10 @@ def ablation_sampler(
     S_max=float("inf"),
     S_noise=1,
 ):
+
+    # conditioning
+    x_lr = img_lr
+
     assert solver in ["euler", "heun"]
     assert discretization in ["vp", "ve", "iddpm", "edm"]
     assert schedule in ["vp", "ve", "linear"]
@@ -262,7 +260,9 @@ def ablation_sampler(
 
         # Euler step.
         h = t_next - t_hat
-        denoised = net(x_hat / s(t_hat), sigma(t_hat), class_labels).to(torch.float64)
+        denoised = net(
+            x_hat / s(t_hat), x_lr / s(t_hat), sigma(t_hat), class_labels
+        ).to(torch.float64)
         d_cur = (
             sigma_deriv(t_hat) / sigma(t_hat) + s_deriv(t_hat) / s(t_hat)
         ) * x_hat - sigma_deriv(t_hat) * s(t_hat) / sigma(t_hat) * denoised
@@ -274,9 +274,9 @@ def ablation_sampler(
             x_next = x_hat + h * d_cur
         else:
             assert solver == "heun"
-            denoised = net(x_prime / s(t_prime), sigma(t_prime), class_labels).to(
-                torch.float64
-            )
+            denoised = net(
+                x_prime / s(t_prime), x_lr / s(t_prime), sigma(t_prime), class_labels
+            ).to(torch.float64)
             d_prime = (
                 sigma_deriv(t_prime) / sigma(t_prime) + s_deriv(t_prime) / s(t_prime)
             ) * x_prime - sigma_deriv(t_prime) * s(t_prime) / sigma(t_prime) * denoised
@@ -575,6 +575,12 @@ def get_dataset_and_sampler(data_type, params):
     metavar="PATH|URL",
     type=str,
 )
+@click.option(
+    "--sampling_method",
+    help="Sampling method for generation",
+    metavar="stochastic|deterministic|none",
+    type=click.Choice(["stochastic", "deterministic", "none"]),
+)
 
 # def main(data_config, task, data_type, det_batch=None, gen_batch=None):
 def main(max_times: Optional[int], seeds: List[int], **kwargs):
@@ -646,6 +652,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
             """
             sample_res = opts.sample_res
             class_idx = opts.class_idx
+            num_steps = opts.num_steps
             if sample_res == "full":
                 image_lr_patch = image_lr
             else:
@@ -672,18 +679,22 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                     net=net,
                     img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0],
+                    sampling_method=opts.sampling_method,
                     seeds=sample_seeds,
                     pretext="gen",
                     class_idx=class_idx,
+                    num_steps=num_steps,
                 )
             else:
                 image_out = generate(
                     net=net,
                     img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0],
+                    sampling_method=opts.sampling_method,
                     seeds=sample_seeds,
                     pretext=opts.pretext,
                     class_idx=class_idx,
+                    num_steps=num_steps,
                 )
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
@@ -876,7 +887,14 @@ def generate_and_save(
 
 
 def generate(
-    net, seeds, class_idx, max_batch_size, img_lr=None, pretext=None, **sampler_kwargs
+    net,
+    seeds,
+    class_idx,
+    max_batch_size,
+    sampling_method=None,
+    img_lr=None,
+    pretext=None,
+    **sampler_kwargs,
 ):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
@@ -893,6 +911,15 @@ def generate(
     torchrun --standalone --nproc_per_node=2 generate.py --outdir=out --seeds=0-999 --batch=64 \\
         --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
+
+    if sampling_method == "stochastic":
+        # import stochastic sampler
+        try:
+            from edmss import edm_sampler
+        except ImportError:
+            raise ImportError(
+                "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
+            )
 
     # Instantiate distributed manager.
     dist = DistributedManager()
@@ -947,16 +974,16 @@ def generate(
         sampler_kwargs = {
             key: value for key, value in sampler_kwargs.items() if value is not None
         }
-        have_ablation_kwargs = any(
-            x in sampler_kwargs
-            for x in ["solver", "discretization", "schedule", "scaling"]
-        )
 
         if pretext == "gen":
-            if have_ablation_kwargs:
+            if sampling_method == "deterministic":
                 sampler_fn = ablation_sampler
-            else:
+            elif sampling_method == "stochastic":
                 sampler_fn = edm_sampler
+            else:
+                raise ValueError(
+                    f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
+                )
         elif pretext == "reg":
             latents = torch.zeros_like(latents)
             sampler_fn = unet_regression
