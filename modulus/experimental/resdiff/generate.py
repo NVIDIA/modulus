@@ -652,7 +652,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
             """
             sample_res = opts.sample_res
             class_idx = opts.class_idx
-            steps = opts.num_steps
+            num_steps = opts.num_steps
             if sample_res == "full":
                 image_lr_patch = image_lr
             else:
@@ -683,7 +683,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                     seeds=sample_seeds,
                     pretext="gen",
                     class_idx=class_idx,
-                    steps=steps,
+                    num_steps=num_steps,
                 )
             else:
                 image_out = generate(
@@ -694,7 +694,7 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                     seeds=sample_seeds,
                     pretext=opts.pretext,
                     class_idx=class_idx,
-                    steps=steps,
+                    num_steps=num_steps,
                 )
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
@@ -896,7 +896,6 @@ def generate(
     pretext=None,
     **sampler_kwargs,
 ):
-    print(sampler_kwargs);exit()
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     
