@@ -52,13 +52,6 @@ from einops import rearrange, reduce, repeat
 import math
 import matplotlib.pyplot as plt
 
-try:
-    from edmss import edm_sampler
-except ImportError:
-    raise ImportError(
-        "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
-    )
-
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
@@ -593,6 +586,15 @@ def get_dataset_and_sampler(data_type, params):
 def main(max_times: Optional[int], seeds: List[int], **kwargs):
 
     opts = dnnlib.EasyDict(kwargs)
+
+    if opts.sampling_method == "stochastic":
+        # import stochastic sampler
+        try:
+            from edmss import edm_sampler
+        except ImportError:
+            raise ImportError(
+                "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
+            )       
 
     # Initialize distributed manager
     DistributedManager.initialize()

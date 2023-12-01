@@ -59,7 +59,8 @@ run () {
         --pretext='reg' \
         --sample_res='full' \
         --res_edm \
-        --network_reg=$url_reg
+        --network_reg=$url_reg \
+        --sampling_method='stochastic'
 
         python3 concat.py $generateOut/*.nc $zarr_file
         rm -r "$generateOut"
