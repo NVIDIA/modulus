@@ -587,15 +587,6 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
 
     opts = dnnlib.EasyDict(kwargs)
 
-    if opts.sampling_method == "stochastic":
-        # import stochastic sampler
-        try:
-            from edmss import edm_sampler
-        except ImportError:
-            raise ImportError(
-                "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
-            )
-
     # Initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -917,6 +908,15 @@ def generate(
     torchrun --standalone --nproc_per_node=2 generate.py --outdir=out --seeds=0-999 --batch=64 \\
         --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
+
+    if sampling_method == "stochastic":
+        # import stochastic sampler
+        try:
+            from edmss import edm_sampler
+        except ImportError:
+            raise ImportError(
+                "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
+            )
 
     # Instantiate distributed manager.
     dist = DistributedManager()
