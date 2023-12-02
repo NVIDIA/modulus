@@ -21,11 +21,11 @@ import json
 import os
 import pickle
 import re
-import sys
 import tarfile
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional, Tuple, Union
+
 import click
 import numpy as np
 import PIL.Image
@@ -169,8 +169,8 @@ def open_lmdb(lmdb_dir: str, *, max_images: Optional[int]):
                     yield dict(img=img, label=None)
                     if idx >= max_idx - 1:
                         break
-                except:
-                    print(sys.exc_info()[1])
+                except Exception as e:
+                    raise RuntimeError(f"An error occurred: {e}")
 
     return max_idx, iterate_images()
 
@@ -186,6 +186,7 @@ def open_cifar10(tarball: str, *, max_images: Optional[int]):
         for batch in range(1, 6):
             member = tar.getmember(f"cifar-10-batches-py/data_batch_{batch}")
             with tar.extractfile(member) as file:
+                # ruff: noqa: S301  # TODO remove exception
                 data = pickle.load(file, encoding="latin1")
             images.append(data["data"].reshape(-1, 3, 32, 32))
             labels.append(data["labels"])
@@ -193,10 +194,14 @@ def open_cifar10(tarball: str, *, max_images: Optional[int]):
     images = np.concatenate(images)
     labels = np.concatenate(labels)
     images = images.transpose([0, 2, 3, 1])  # NCHW -> NHWC
-    assert images.shape == (50000, 32, 32, 3) and images.dtype == np.uint8
-    assert labels.shape == (50000,) and labels.dtype in [np.int32, np.int64]
-    assert np.min(images) == 0 and np.max(images) == 255
-    assert np.min(labels) == 0 and np.max(labels) == 9
+    if not (images.shape == (50000, 32, 32, 3) and images.dtype == np.uint8):
+        raise RuntimeError("Unexpected image shape or type")
+    if not (labels.shape == (50000,) and labels.dtype in [np.int32, np.int64]):
+        raise RuntimeError("Unexpected label shape or type")
+    if not (np.min(images) == 0 and np.max(images) == 255):
+        raise RuntimeError("Unexpected image value range")
+    if not (np.min(labels) == 0 and np.max(labels) == 9):
+        raise RuntimeError("Unexpected label value range")
 
     max_idx = maybe_min(len(images), max_images)
 
@@ -214,7 +219,8 @@ def open_cifar10(tarball: str, *, max_images: Optional[int]):
 
 def open_mnist(images_gz: str, *, max_images: Optional[int]):
     labels_gz = images_gz.replace("-images-idx3-ubyte.gz", "-labels-idx1-ubyte.gz")
-    assert labels_gz != images_gz
+    if labels_gz == images_gz:
+        raise RuntimeError("Unexpected filename")
     images = []
     labels = []
 
@@ -225,10 +231,14 @@ def open_mnist(images_gz: str, *, max_images: Optional[int]):
 
     images = images.reshape(-1, 28, 28)
     images = np.pad(images, [(0, 0), (2, 2), (2, 2)], "constant", constant_values=0)
-    assert images.shape == (60000, 32, 32) and images.dtype == np.uint8
-    assert labels.shape == (60000,) and labels.dtype == np.uint8
-    assert np.min(images) == 0 and np.max(images) == 255
-    assert np.min(labels) == 0 and np.max(labels) == 9
+    if not (images.shape == (60000, 32, 32) and images.dtype == np.uint8):
+        raise RuntimeError("Unexpected image shape or type")
+    if not (labels.shape == (60000,) and labels.dtype == np.uint8):
+        raise RuntimeError("Unexpected label shape or type")
+    if not (np.min(images) == 0 and np.max(images) == 255):
+        raise RuntimeError("Unexpected image value range")
+    if not (np.min(labels) == 0 and np.max(labels) == 9):
+        raise RuntimeError("Unexpected label value range")
 
     max_idx = maybe_min(len(images), max_images)
 

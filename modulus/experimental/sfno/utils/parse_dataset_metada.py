@@ -14,42 +14,47 @@
 
 import json
 
+
 def parse_dataset_metadata(metadata_json_path, params):
     """Helper routine for parsing the metadata file data.json in the datasets."""
 
     try:
-        with open(metadata_json_path, 'r') as f:
+        with open(metadata_json_path, "r") as f:
             metadata = json.load(f)
 
-        params['h5_path'] = metadata['h5_path']
-        params['dhours'] = metadata['dhours']
-        params["lat"] = metadata['coords']['lat']
-        params["lon"] = metadata['coords']['lon']
+        params["h5_path"] = metadata["h5_path"]
+        params["dhours"] = metadata["dhours"]
+        params["lat"] = metadata["coords"]["lat"]
+        params["lon"] = metadata["coords"]["lon"]
         params["data_grid_type"] = metadata["coords"]["grid_type"]
 
         # channel name sanitization step
-        channel_names = metadata['coords']['channel']
+        channel_names = metadata["coords"]["channel"]
         channels_idx = []
-        if hasattr(params, 'channel_names'):
-            for pchn in params['channel_names']:
+        if hasattr(params, "channel_names"):
+            for pchn in params["channel_names"]:
                 if pchn not in channel_names:
-                    raise ValueError(f"Error, requested channel {pchn} not found in dataset.")
+                    raise ValueError(
+                        f"Error, requested channel {pchn} not found in dataset."
+                    )
                 else:
                     idx = channel_names.index(pchn)
                     channels_idx.append(idx)
         else:
-            params['channel_names'] = channel_names
+            params["channel_names"] = channel_names
             channels_idx = list(range(len(channel_names)))
 
         # set number of channels
-        params['in_channels'] = channels_idx
-        params['out_channels'] = channels_idx
+        params["in_channels"] = channels_idx
+        params["out_channels"] = channels_idx
 
         # get other metadata:
-        params["dataset"] = dict(name=metadata["dataset_name"],
-                                 description=metadata["attrs"]["description"],
-                                 metadata_file=params['metadata_json_path'])
-    
+        params["dataset"] = dict(
+            name=metadata["dataset_name"],
+            description=metadata["attrs"]["description"],
+            metadata_file=params["metadata_json_path"],
+        )
+
     except Exception as e:
         raise
 

@@ -20,10 +20,12 @@ import torch.nn as nn
 # preprocessor we need too
 from modulus.experimental.sfno.networks.preprocessor import Preprocessor2D
 
-_supported_models = ['fno', 'sfno', 'afno', 'afno:v1', 'debug']
+_supported_models = ["fno", "sfno", "afno", "afno:v1", "debug"]
+
 
 def list_models():
     return _supported_models
+
 
 class SingleStepWrapper(nn.Module):
     def __init__(self, params, model_handle):
@@ -32,14 +34,14 @@ class SingleStepWrapper(nn.Module):
         self.model = model_handle()
 
     def forward(self, inp):
-        
+
         # first append unpredicted features
         inpa = self.preprocessor.append_unpredicted_features(inp)
 
         # now normalize
         self.preprocessor.history_compute_stats(inpa)
         inpan = self.preprocessor.history_normalize(inpa, target=False)
-        
+
         # now add static features if requested
         inpans = self.preprocessor.add_static_features(inpan)
 
@@ -50,8 +52,8 @@ class SingleStepWrapper(nn.Module):
         y = self.preprocessor.history_denormalize(yn, target=True)
 
         return y
-        
-    
+
+
 class MultiStepWrapper(nn.Module):
     def __init__(self, params, model_handle):
         super(MultiStepWrapper, self).__init__()
@@ -86,15 +88,15 @@ class MultiStepWrapper(nn.Module):
             pred = self.preprocessor.history_denormalize(predn, target=True)
             result.append(pred)
 
-            if (step == self.n_future):
+            if step == self.n_future:
                 break
-            
+
             # append history
             inpt = self.preprocessor.append_history(inpt, pred, step)
-            
+
         # concat the tensors along channel dim to be compatible with flattened target
         result = torch.cat(result, dim=1)
-        
+
         return result
 
     def _forward_eval(self, inp):
@@ -107,15 +109,15 @@ class MultiStepWrapper(nn.Module):
 
         # add static features
         inpans = self.preprocessor.add_static_features(inpan)
-        
+
         # important, remove normalization here,
         # because otherwise normalization stats are already outdated
         yn = self.model(inpans)
 
         # important, remove normalization here,
-        # because otherwise normalization stats are already outdated 
+        # because otherwise normalization stats are already outdated
         y = self.preprocessor.history_denormalize(yn, target=True)
-        
+
         return y
 
     def forward(self, inp):
@@ -127,7 +129,7 @@ class MultiStepWrapper(nn.Module):
 
         return y
 
-    
+
 def get_model(params):
     """
     Convenience routine that returns a model handle to construct the model.
@@ -140,44 +142,54 @@ def get_model(params):
 
     # makani requires that these entries are set in params for now
     inp_shape = (params.img_crop_shape_x, params.img_crop_shape_y)
-    out_shape = (params.out_shape_x, params.out_shape_y) if hasattr(params, "out_shape_x") and hasattr(params, "out_shape_y") else inp_shape
+    out_shape = (
+        (params.out_shape_x, params.out_shape_y)
+        if hasattr(params, "out_shape_x") and hasattr(params, "out_shape_y")
+        else inp_shape
+    )
     inp_chans = params.N_in_channels
     out_chans = params.N_out_channels
 
     # choose the right model handle depending on specified architecture
-    if params.nettype == 'fno' or params.nettype == 'sfno':
-        if params.nettype == 'fno':
-            params.spectral_transform = 'fft'
+    if params.nettype == "fno" or params.nettype == "sfno":
+        if params.nettype == "fno":
+            params.spectral_transform = "fft"
         else:
-            params.spectral_transform = 'sht'
+            params.spectral_transform = "sht"
 
         from networks.sfnonet import SphericalFourierNeuralOperatorNet
-        model_handle = partial(SphericalFourierNeuralOperatorNet,
-                               inp_shape = inp_shape,
-                               out_shape = out_shape,
-                               inp_chans = inp_chans,
-                               out_chans = out_chans,
-                               **params.to_dict())
 
-    elif params.nettype == 'afno' or params.nettype == "afno:v1":
-        if params.nettype == 'afno':
+        model_handle = partial(
+            SphericalFourierNeuralOperatorNet,
+            inp_shape=inp_shape,
+            out_shape=out_shape,
+            inp_chans=inp_chans,
+            out_chans=out_chans,
+            **params.to_dict(),
+        )
+
+    elif params.nettype == "afno" or params.nettype == "afno:v1":
+        if params.nettype == "afno":
             from networks.afnonet_v2 import AdaptiveFourierNeuralOperatorNet
         else:
             from networks.afnonet import AdaptiveFourierNeuralOperatorNet
-        
-        model_handle = partial(AdaptiveFourierNeuralOperatorNet,
-                               inp_shape = inp_shape,
-                               inp_chans = inp_chans,
-                               out_chans = out_chans,
-                               use_complex_kernels=True,
-                               **params.to_dict())
+
+        model_handle = partial(
+            AdaptiveFourierNeuralOperatorNet,
+            inp_shape=inp_shape,
+            inp_chans=inp_chans,
+            out_chans=out_chans,
+            use_complex_kernels=True,
+            **params.to_dict(),
+        )
 
     elif params.nettype == "debug":
         from networks.debug import DebugNet
+
         model_handle = DebugNet
 
     else:
-         raise NotImplementedError(f"Error, net type {params.nettype} not implemented")
+        raise NotImplementedError(f"Error, net type {params.nettype} not implemented")
 
     # wrap into Multi-Step if requested
     if params.n_future > 0:
@@ -186,4 +198,3 @@ def get_model(params):
         model = SingleStepWrapper(params, model_handle)
 
     return model
-         

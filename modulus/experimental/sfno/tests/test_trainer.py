@@ -41,7 +41,7 @@
 #                 num_data_workers: int,
 # ):
 
-#     # instantiate params base  
+#     # instantiate params base
 #     params = get_default_parameters()
 
 #     # init paths

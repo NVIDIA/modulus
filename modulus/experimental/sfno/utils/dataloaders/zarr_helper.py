@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Protocol
-import xarray
 from dataclasses import dataclass
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.distributed import DistributedSampler
-from typing import Any
-from modulus.experimental.sfno.utils import comm
+from typing import Any, Protocol
+
 import numpy as np
+import torch
+import xarray
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
+
+from modulus.experimental.sfno.utils import comm
 
 
 class Params(Protocol):
@@ -97,7 +98,7 @@ def get_data_loader(params: Params, files_pattern: str, train: bool):
             dataset,
             shuffle=train,
             num_replicas=params.data_num_shards,
-            rank=params.data_shard_id
+            rank=params.data_shard_id,
         )
         if (params.data_num_shards > 1)
         else None

@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
-import shutil
-import glob
 import argparse as ap
-import numpy as np
+import glob
+import os
+import shutil
+import sys
+
 import h5py as h5
+import numpy as np
 from tqdm import tqdm
 
+
 def main(args):
-    
+
     # get files
     files = glob.glob(os.path.join(args.input_dir, "*.h5"))
 
@@ -35,7 +37,7 @@ def main(args):
     # iterate over files
     for ifname in files:
 
-        #construct output file name
+        # construct output file name
         ofname = os.path.join(args.output_dir, os.path.basename(ifname))
 
         # check if output file exists
@@ -48,12 +50,14 @@ def main(args):
 
         if not args.verify_integrity:
             print(f"Converting {ifname} -> {ofname}", flush=True)
-            with h5.File(ifname, 'r') as fin:
+            with h5.File(ifname, "r") as fin:
                 data_shape = fin["fields"].shape
                 dtype = fin["fields"].dtype
-            
+
                 # create output file
-                fid = h5.h5f.create(ofname.encode("ascii"), flags=h5.h5f.ACC_TRUNC, fcpl=fcpl, fapl=fapl)
+                fid = h5.h5f.create(
+                    ofname.encode("ascii"), flags=h5.h5f.ACC_TRUNC, fcpl=fcpl, fapl=fapl
+                )
                 fout = h5.Group(fid)
                 fout.create_dataset("fields", data_shape, dtype=dtype)
 
@@ -62,10 +66,10 @@ def main(args):
                     start = idx
                     end = min(start + args.batch_size, data_shape[0])
                     data = fin["fields"][start:end, ...]
-                    
+
                     if args.transpose:
                         data = np.transpose(data, (0, 2, 3, 1))
-                        
+
                     # write data
                     fout["fields"][start:end, ...] = data[...]
 
@@ -74,10 +78,10 @@ def main(args):
 
         else:
             print(f"Checking {ifname}", flush=True)
-            fin = h5.File(ifname, 'r', driver="direct")
+            fin = h5.File(ifname, "r", driver="direct")
             dset = fin["fields"]
             print(f"Shape: {dset.shape}", flush=True)
-            
+
             fin.close()
 
     # close file list:
@@ -88,15 +92,30 @@ def main(args):
 if __name__ == "__main__":
     # argparse
     parser = ap.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, help="Directory with input files.", required=True)
-    parser.add_argument("--output_dir", type=str, help="Directory for output files.", required=True)
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for number of rows to convert at a time.")
-    parser.add_argument("--align_size_bytes", type=int, default=4096, help="Default alignment size in bytes.")
-    parser.add_argument("--block_size_bytes", type=int, default=0, help="Default block size in bytes.")
-    parser.add_argument("--verify_integrity", action='store_true')
-    parser.add_argument("--transpose", action='store_true')
-    parser.add_argument("--overwrite", action='store_true')
+    parser.add_argument(
+        "--input_dir", type=str, help="Directory with input files.", required=True
+    )
+    parser.add_argument(
+        "--output_dir", type=str, help="Directory for output files.", required=True
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size for number of rows to convert at a time.",
+    )
+    parser.add_argument(
+        "--align_size_bytes",
+        type=int,
+        default=4096,
+        help="Default alignment size in bytes.",
+    )
+    parser.add_argument(
+        "--block_size_bytes", type=int, default=0, help="Default block size in bytes."
+    )
+    parser.add_argument("--verify_integrity", action="store_true")
+    parser.add_argument("--transpose", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
 
     main(args)
-        

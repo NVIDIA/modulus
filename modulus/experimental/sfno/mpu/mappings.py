@@ -16,23 +16,26 @@ import types
 from typing import Any
 
 import torch
-from torch.nn.parallel import DistributedDataParallel  
-from modulus.experimental.sfno.utils import comm
 import torch.distributed as dist
 
 # torch utils
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from torch.nn.parallel import DistributedDataParallel
 
 # helper functions
-from modulus.experimental.sfno.mpu.helpers import split_tensor_along_dim
-from modulus.experimental.sfno.mpu.helpers import _reduce
-from modulus.experimental.sfno.mpu.helpers import _split
-from modulus.experimental.sfno.mpu.helpers import _gather
+from modulus.experimental.sfno.mpu.helpers import (
+    _gather,
+    _reduce,
+    _split,
+    split_tensor_along_dim,
+)
+from modulus.experimental.sfno.utils import comm
 
 
 # generalized
 class _CopyToParallelRegion(torch.autograd.Function):
     """Pass the input to the parallel region."""
+
     @staticmethod
     def symbolic(graph, input_, comm_id_):
         return input_
@@ -47,12 +50,12 @@ class _CopyToParallelRegion(torch.autograd.Function):
         if comm.is_distributed(ctx.comm_id):
             return _reduce(grad_output, group=comm.get_group(ctx.comm_id)), None
         else:
-            return grad_output, None 
+            return grad_output, None
 
 
 class _ReduceFromParallelRegion(torch.autograd.Function):
     """All-reduce the input from the parallel region."""
-    
+
     @staticmethod
     def symbolic(graph, input_, comm_id_):
         if comm.is_distributed(comm_id_):
@@ -71,7 +74,7 @@ class _ReduceFromParallelRegion(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output, None
 
-    
+
 class _ScatterToParallelRegion(torch.autograd.Function):
     """Split the input and keep only the corresponding chuck to the rank."""
 
@@ -91,7 +94,11 @@ class _ScatterToParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         if comm.is_distributed(ctx.comm_id):
-            return _gather(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)), None, None
+            return (
+                _gather(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)),
+                None,
+                None,
+            )
         else:
             return grad_output, None, None
 
@@ -118,11 +125,15 @@ class _GatherFromParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         if comm.is_distributed(ctx.comm_id):
-            return _split(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)), None, None
+            return (
+                _split(grad_output, ctx.dim, group=comm.get_group(ctx.comm_id)),
+                None,
+                None,
+            )
         else:
             return grad_output, None, None
 
-    
+
 # -----------------
 # Helper functions.
 # -----------------
@@ -130,11 +141,14 @@ class _GatherFromParallelRegion(torch.autograd.Function):
 def copy_to_parallel_region(input_, comm_name):
     return _CopyToParallelRegion.apply(input_, comm_name)
 
+
 def reduce_from_parallel_region(input_, comm_name):
     return _ReduceFromParallelRegion.apply(input_, comm_name)
 
+
 def scatter_to_parallel_region(input_, dim, comm_name):
     return _ScatterToParallelRegion.apply(input_, dim, comm_name)
+
 
 def gather_from_parallel_region(input_, dim, comm_name):
     return _GatherFromParallelRegion.apply(input_, dim, comm_name)
@@ -142,14 +156,16 @@ def gather_from_parallel_region(input_, dim, comm_name):
 
 # handler for additional gradient reductions
 # helper for gradient reduction across channel parallel ranks
-def init_gradient_reduction_hooks(model,
-                                  device_ids,
-                                  output_device,
-                                  bucket_cap_mb = 25,
-                                  broadcast_buffers = True,
-                                  find_unused_parameters = False,
-                                  gradient_as_bucket_view = True,
-                                  static_graph = False):
+def init_gradient_reduction_hooks(
+    model,
+    device_ids,
+    output_device,
+    bucket_cap_mb=25,
+    broadcast_buffers=True,
+    find_unused_parameters=False,
+    gradient_as_bucket_view=True,
+    static_graph=False,
+):
 
     # early exit if we are not in a distributed setting:
     if not dist.is_initialized():
@@ -172,7 +188,7 @@ def init_gradient_reduction_hooks(model,
             # if it does not have any annotation, we assume it is shared between all model ranks
             if not hasattr(param, "is_shared_mp"):
                 param.is_shared_mp = ["model"]
-                #non_singleton_group_names.copy()
+                # non_singleton_group_names.copy()
 
             # add the sharing type to the dict
             num_parameters_total += 1
@@ -180,51 +196,57 @@ def init_gradient_reduction_hooks(model,
                 num_parameters_shared_model += 1
 
         # if all parameters are shared between all model ranks, then the situation is easy
-        if (num_parameters_shared_model == num_parameters_total):
+        if num_parameters_shared_model == num_parameters_total:
             # we can always use DDP
             ddp_group = None
 
             # register some pre-multiply reduction hooks
-            print("Setting up gradient hooks to account for shared parameter multiplicity")
+            print(
+                "Setting up gradient hooks to account for shared parameter multiplicity"
+            )
             for param in model.parameters():
                 param.register_hook(lambda grad: grad * float(comm.get_size("model")))
         else:
             ddp_group = comm.get_group("data")
             broadcast_buffers = False
             need_hooks = True
-            
+
     # we can set up DDP and exit here
     print("Setting up DDP communication hooks")
-    model = DistributedDataParallel(model,
-                                    device_ids = device_ids,
-                                    output_device = output_device,
-                                    bucket_cap_mb = bucket_cap_mb,
-                                    # WAR: this needs to be disabled atm
-                                    # it is used as a workaround for bad complex tensors
-                                    # DDP support in torch
-                                    broadcast_buffers = False, #broadcast_buffers,
-                                    find_unused_parameters = find_unused_parameters,
-                                    gradient_as_bucket_view = gradient_as_bucket_view,
-                                    static_graph = static_graph,
-                                    process_group = ddp_group)
-    
+    model = DistributedDataParallel(
+        model,
+        device_ids=device_ids,
+        output_device=output_device,
+        bucket_cap_mb=bucket_cap_mb,
+        # WAR: this needs to be disabled atm
+        # it is used as a workaround for bad complex tensors
+        # DDP support in torch
+        broadcast_buffers=False,  # broadcast_buffers,
+        find_unused_parameters=find_unused_parameters,
+        gradient_as_bucket_view=gradient_as_bucket_view,
+        static_graph=static_graph,
+        process_group=ddp_group,
+    )
+
     # WAR: same reason as above
     need_hooks = True
-    
+
     if not need_hooks:
         return model
-    
+
     print("Setting up custom communication hooks")
 
     # define comm hook:
-    def reduction_comm_hook(state: object, bucket: dist.GradBucket) -> torch.futures.Future[torch.Tensor]:
+    def reduction_comm_hook(
+        state: object, bucket: dist.GradBucket
+    ) -> torch.futures.Future[torch.Tensor]:
 
         # allreduce everything first:
         buff = bucket.buffer()
         params = bucket.parameters()
 
         # define the grad reduction function
-        def grad_reduction(fut, grads, group, reduction='sum'):
+        def grad_reduction(fut, grads, group, reduction="sum"):
             # check if grads are complex
             is_complex = [g.is_complex() for g in grads]
             grads_real = [torch.view_as_real(g) if g.is_complex() else g for g in grads]
@@ -233,15 +255,29 @@ def init_gradient_reduction_hooks(model,
             coalesced = _flatten_dense_tensors(grads_real)
 
             # reduce
-            if reduction == 'sum':
-                dist.all_reduce(coalesced, op=dist.ReduceOp.SUM, group=comm.get_group(group), async_op=False)
-            elif reduction == 'mean':
-                dist.all_reduce(coalesced, op=dist.ReduceOp.AVG, group=comm.get_group(group), async_op=False)
+            if reduction == "sum":
+                dist.all_reduce(
+                    coalesced,
+                    op=dist.ReduceOp.SUM,
+                    group=comm.get_group(group),
+                    async_op=False,
+                )
+            elif reduction == "mean":
+                dist.all_reduce(
+                    coalesced,
+                    op=dist.ReduceOp.AVG,
+                    group=comm.get_group(group),
+                    async_op=False,
+                )
             else:
-                raise NotImplementedError(f"Error, reduction {reduction} not supported.")
-                
+                raise NotImplementedError(
+                    f"Error, reduction {reduction} not supported."
+                )
+
             # copy back
-            for buf, synced_real, is_comp in zip(grads, _unflatten_dense_tensors(coalesced, grads_real), is_complex):
+            for buf, synced_real, is_comp in zip(
+                grads, _unflatten_dense_tensors(coalesced, grads_real), is_complex
+            ):
                 if is_comp:
                     synced = torch.view_as_complex(synced_real)
                 else:
@@ -250,24 +286,25 @@ def init_gradient_reduction_hooks(model,
 
             return bucket.buffer()
 
-
         # WAR: we need to add a workaround for complex gradients here, therefore we need to hack the allreduce step a little bit.
         # once this is fixed, the below line can be uncommented and we can remove the hack
         # get future for allreduce
-        #fut = dist.all_reduce(buff, op=dist.ReduceOp.AVG, group=comm.get_group("data"), async_op=True).get_future()
+        # fut = dist.all_reduce(buff, op=dist.ReduceOp.AVG, group=comm.get_group("data"), async_op=True).get_future()
 
         # get future
         fut = torch.futures.Future()
         fut.set_result(bucket.buffer())
-        
+
         # get the data gradients first:
         grads = []
         for p in params:
-            if (p.grad is not None):
+            if p.grad is not None:
                 grads.append(p.grad.data)
 
         if grads:
-            fut = fut.then(lambda x: grad_reduction(x, grads=grads, group="data", reduction='mean'))
+            fut = fut.then(
+                lambda x: grad_reduction(x, grads=grads, group="data", reduction="mean")
+            )
 
         # now go through the groups
         for group in comm.get_names():
@@ -282,8 +319,12 @@ def init_gradient_reduction_hooks(model,
 
             # append the new reduction functions
             if grads:
-                fut = fut.then(lambda x: grad_reduction(x, grads=grads, group=group, reduction='sum'))
-            
+                fut = fut.then(
+                    lambda x: grad_reduction(
+                        x, grads=grads, group=group, reduction="sum"
+                    )
+                )
+
         return fut
 
     # register model comm hook

@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ruamel.yaml import YAML
 import json
 
+from ruamel.yaml import YAML
 
-class ParamsBase():
+
+class ParamsBase:
     """Convenience wrapper around a dictionary
 
     Allows referring to dictionary items as attributes, and tracking which
     attributes are modified.
     """
+
     def __init__(self):
         self._original_attrs = None
         self.params = {}
@@ -35,7 +37,7 @@ class ParamsBase():
         self.__setattr__(key, val)
 
     def __contains__(self, key):
-        return (key in self.params)
+        return key in self.params
 
     def get(self, key, default=None):
         if hasattr(self, key):
@@ -45,7 +47,8 @@ class ParamsBase():
 
     def to_dict(self):
         new_attrs = {
-            key: val for key,val in vars(self).items()
+            key: val
+            for key, val in vars(self).items()
             if key not in self._original_attrs
         }
         return {**self.params, **new_attrs}
@@ -54,20 +57,19 @@ class ParamsBase():
     def from_json(path: str) -> "ParamsBase":
         with open(path) as f:
             c = json.load(f)
-        params =  ParamsBase()
+        params = ParamsBase()
         params.update_params(c)
         return params
 
     def update_params(self, config):
         for key, val in config.items():
-            if val =='None': val = None
+            if val == "None":
+                val = None
             self.params[key] = val
             self.__setattr__(key, val)
 
 
-
 class YParams(ParamsBase):
-
     def __init__(self, yaml_filename, config_name, print_params=False):
         """Open parameters stored with ``config_name`` in the yaml file ``yaml_filename``"""
         super().__init__()
@@ -88,8 +90,8 @@ class YParams(ParamsBase):
 
     def log(self, logger):
         logger.info("------------------ Configuration ------------------")
-        logger.info("Configuration file: "+str(self._yaml_filename))
-        logger.info("Configuration name: "+str(self._config_name))
+        logger.info("Configuration file: " + str(self._yaml_filename))
+        logger.info("Configuration name: " + str(self._config_name))
         for key, val in self.to_dict().items():
-            logger.info(str(key) + ' ' + str(val))
+            logger.info(str(key) + " " + str(val))
         logger.info("---------------------------------------------------")

@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse as ap
+import math
+import operator
 import os
+import pickle
 import sys
 import time
-import pickle
-import numpy as np
-import h5py as h5
-import math
-import argparse as ap
-from itertools import groupby, accumulate
-import operator
 from bisect import bisect_right
 from glob import glob
+from itertools import accumulate, groupby
+
+import h5py as h5
+import numpy as np
 
 # MPI
 from mpi4py import MPI
@@ -31,37 +32,39 @@ from mpi4py.util import dtlib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
+
 from modulus.experimental.sfno.utils.grids import GridQuadrature
 
+
 def allgather_safe(comm, obj):
-    
+
     # serialize the stuff
-    fdata = pickle.dumps(obj, protocol = pickle.HIGHEST_PROTOCOL)
-    
-    #total size
+    fdata = pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # total size
     comm_size = comm.Get_size()
     num_bytes = len(fdata)
     total_bytes = num_bytes * comm_size
 
-    #chunk by ~1GB:
-    gigabyte = 1024*1024*1024
-    
+    # chunk by ~1GB:
+    gigabyte = 1024 * 1024 * 1024
+
     # determine number of chunks
     num_chunks = (total_bytes + gigabyte - 1) // gigabyte
-    
+
     # determine local chunksize
     chunksize = (num_bytes + num_chunks - 1) // num_chunks
-    
+
     # datatype stuff
     datatype = MPI.BYTE
     np_dtype = dtlib.to_numpy_dtype(datatype)
-    
+
     # gather stuff
     # prepare buffers:
     sendbuff = np.frombuffer(memoryview(fdata), dtype=np_dtype, count=num_bytes)
     recvbuff = np.empty((comm_size * chunksize), dtype=np_dtype)
     resultbuffs = np.split(np.empty(num_bytes * comm_size, dtype=np_dtype), comm_size)
-    
+
     # do subsequent gathers
     for i in range(0, num_chunks):
         # create buffer views
@@ -69,11 +72,11 @@ def allgather_safe(comm, obj):
         end = min(start + chunksize, num_bytes)
         eff_bytes = end - start
         sendbuffv = sendbuff[start:end]
-        recvbuffv = recvbuff[0:eff_bytes*comm_size]
-        
+        recvbuffv = recvbuff[0 : eff_bytes * comm_size]
+
         # perform allgather on views
         comm.Allgather([sendbuffv, datatype], [recvbuffv, datatype])
-        
+
         # split result buffer for easier processing
         recvbuff_split = np.split(recvbuffv, comm_size)
         for j in range(comm_size):
@@ -82,9 +85,9 @@ def allgather_safe(comm, obj):
 
     # unpickle:
     results = [pickle.loads(x) for x in results]
-    
+
     return results
-            
+
 
 def _get_slices(lst):
     for a, b in groupby(enumerate(lst), lambda pair: pair[1] - pair[0]):
@@ -120,81 +123,110 @@ def welford_combine(stats1, stats2):
             m2_a = s_a["values"][1]
             m2_b = s_b["values"][1]
             delta = mean_b - mean_a
-            
-            values = [(mean_a * float(n_a) + mean_b * float(n_b)) / float(n_ab),
-                      m2_a + m2_b + delta * delta * float(n_a * n_b) / float(n_ab)]
 
-        stats[k] = {"counts": n_ab,
-                    "type": s_a["type"],
-                    "values": values}
+            values = [
+                (mean_a * float(n_a) + mean_b * float(n_b)) / float(n_ab),
+                m2_a + m2_b + delta * delta * float(n_a * n_b) / float(n_ab),
+            ]
+
+        stats[k] = {"counts": n_ab, "type": s_a["type"], "values": values}
 
     return stats
 
 
-def get_file_stats(filename,
-                   indexlist,
-                   wind_indices,
-                   quadrature,
-                   batch_size=16):
+def get_file_stats(filename, indexlist, wind_indices, quadrature, batch_size=16):
 
     # preprocess indexlist into slices:
     slices = list(_get_slices(indexlist))
 
     stats = None
-    with h5.File(filename, 'r') as f:
+    with h5.File(filename, "r") as f:
         for slc in slices:
-            
+
             # create batch
             slc_start = slc.start
             slc_stop = slc.stop
             for batch_start in range(slc_start, slc_stop, batch_size):
-                batch_stop = min(batch_start+batch_size, slc_stop)
+                batch_stop = min(batch_start + batch_size, slc_stop)
                 sub_slc = slice(batch_start, batch_stop)
-                
+
                 # get slice
-                data = f['fields'][sub_slc, ...]
-            
+                data = f["fields"][sub_slc, ...]
+
                 # min/max first:
                 counts_time = data.shape[0]
                 counts = counts_time * data.shape[2] * data.shape[3]
 
                 # compute mean and variance
                 tdata = torch.from_numpy(data)
-                tmean = torch.mean(quadrature(tdata), keepdims=False, dim=0).reshape(1, -1, 1, 1)
-                tvar = torch.mean(quadrature(torch.square(tdata - tmean)), keepdims=False, dim=0).reshape(1, -1, 1, 1)
+                tmean = torch.mean(quadrature(tdata), keepdims=False, dim=0).reshape(
+                    1, -1, 1, 1
+                )
+                tvar = torch.mean(
+                    quadrature(torch.square(tdata - tmean)), keepdims=False, dim=0
+                ).reshape(1, -1, 1, 1)
 
                 # time diffs
                 tdiff = tdata[1:, ...] - tdata[:-1, ...]
-                tdiffmean = torch.mean(quadrature(tdiff), keepdims=False, dim=0).reshape(1, -1, 1, 1)
-                tdiffvar = torch.mean(quadrature(torch.square(tdiff - tdiffmean)), keepdims=False, dim=0).reshape(1, -1, 1, 1)
+                tdiffmean = torch.mean(
+                    quadrature(tdiff), keepdims=False, dim=0
+                ).reshape(1, -1, 1, 1)
+                tdiffvar = torch.mean(
+                    quadrature(torch.square(tdiff - tdiffmean)), keepdims=False, dim=0
+                ).reshape(1, -1, 1, 1)
 
                 # fill the dict
-                tmpstats = dict(maxs = {"values": np.max(data, keepdims=True, axis = (0, 2, 3)),
-                                        "type": "max",
-                                        "counts": counts},
-                                mins = {"values": np.min(data, keepdims=True, axis = (0, 2, 3)),
-                                        "type": "min",
-                                        "counts": counts},
-                                time_means = {"values": np.mean(data, keepdims=True, axis = 0),
-                                              "type": "mean",
-                                              "counts": counts_time},
-                                global_meanvar = {"values": [tmean.numpy(), float(counts) * tvar.numpy()],
-                                                  "type": "meanvar",
-                                                  "counts": counts})
+                tmpstats = dict(
+                    maxs={
+                        "values": np.max(data, keepdims=True, axis=(0, 2, 3)),
+                        "type": "max",
+                        "counts": counts,
+                    },
+                    mins={
+                        "values": np.min(data, keepdims=True, axis=(0, 2, 3)),
+                        "type": "min",
+                        "counts": counts,
+                    },
+                    time_means={
+                        "values": np.mean(data, keepdims=True, axis=0),
+                        "type": "mean",
+                        "counts": counts_time,
+                    },
+                    global_meanvar={
+                        "values": [tmean.numpy(), float(counts) * tvar.numpy()],
+                        "type": "meanvar",
+                        "counts": counts,
+                    },
+                )
                 if counts_time > 1:
-                    tmpstats["time_diff_meanvar"] = {"values": [tdiffmean.numpy(),
-                                                                float(counts_time-1) * 4. * np.pi * tdiffvar.numpy()],
-                                                     "type": "meanvar",
-                                                     "counts": (counts_time-1) * data.shape[2] * data.shape[3]}
+                    tmpstats["time_diff_meanvar"] = {
+                        "values": [
+                            tdiffmean.numpy(),
+                            float(counts_time - 1) * 4.0 * np.pi * tdiffvar.numpy(),
+                        ],
+                        "type": "meanvar",
+                        "counts": (counts_time - 1) * data.shape[2] * data.shape[3],
+                    }
                 else:
-                    tmpstats["time_diff_meanvar"] = {"values": [0., 1.], "type": "meanvar", "counts": 0}
+                    tmpstats["time_diff_meanvar"] = {
+                        "values": [0.0, 1.0],
+                        "type": "meanvar",
+                        "counts": 0,
+                    }
 
                 if wind_indices is not None:
-                    wind_data = np.sqrt(data[:, wind_indices[0]]**2 + data[:, wind_indices[1]]**2)
-                    tmpstats["wind_meanvar"] = {"values": [np.zeros((1, len(wind_indices[0]), 1, 1)),
-                                                           float(counts) * np.var(wind_data, keepdims=True, axis = (0, 2 ,3))],
-                                                "type": "meanvar",
-                                                "counts": counts}
+                    wind_data = np.sqrt(
+                        data[:, wind_indices[0]] ** 2 + data[:, wind_indices[1]] ** 2
+                    )
+                    tmpstats["wind_meanvar"] = {
+                        "values": [
+                            np.zeros((1, len(wind_indices[0]), 1, 1)),
+                            float(counts)
+                            * np.var(wind_data, keepdims=True, axis=(0, 2, 3)),
+                        ],
+                        "type": "meanvar",
+                        "counts": counts,
+                    }
 
                 if stats is not None:
                     stats = welford_combine(stats, tmpstats)
@@ -203,21 +235,22 @@ def get_file_stats(filename,
 
     return stats
 
+
 def get_wind_channels(channel_names):
     # find the pairs in the channel names and alter the stats accordingly
-    channel_dict = { channel_names[ch] : ch for ch in set(range(len(channel_names)))}
+    channel_dict = {channel_names[ch]: ch for ch in set(range(len(channel_names)))}
 
     uchannels = []
     vchannels = []
     for chn, ch in channel_dict.items():
-        if chn[0] == 'u':
-            vchn = 'v' + chn[1:]
+        if chn[0] == "u":
+            vchn = "v" + chn[1:]
             if vchn in channel_dict.keys():
                 vch = channel_dict[vchn]
 
                 uchannels.append(ch)
                 vchannels.append(vch)
-    
+
     return uchannels, vchannels
 
 
@@ -233,19 +266,19 @@ def collective_reduce(comm, stats):
 def binary_reduce(comm, stats):
     csize = comm.Get_size()
     crank = comm.Get_rank()
-    
+
     # check for power of two
-    assert((csize & (csize-1) == 0) and csize != 0)
+    assert (csize & (csize - 1) == 0) and csize != 0
 
     # how many steps do we need:
-    nsteps = int(math.log(csize,2))
+    nsteps = int(math.log(csize, 2))
 
     # init step 1
-    recv_ranks = range(0,csize,2)
-    send_ranks = range(1,csize,2)
+    recv_ranks = range(0, csize, 2)
+    send_ranks = range(1, csize, 2)
 
     for step in range(nsteps):
-        for rrank,srank in zip(recv_ranks, send_ranks):
+        for rrank, srank in zip(recv_ranks, send_ranks):
             if crank == rrank:
                 rstats = comm.recv(source=srank, tag=srank)
                 stats = welford_combine(stats, rstats)
@@ -256,7 +289,7 @@ def binary_reduce(comm, stats):
         comm.Barrier()
 
         # shrink the list
-        if (step < nsteps-1):
+        if step < nsteps - 1:
             recv_ranks = recv_ranks[0::2]
             send_ranks = recv_ranks[1::2]
 
@@ -284,7 +317,7 @@ def main(args):
     num_samples = None
     wind_channels = None
     if comm_rank == 0:
-        #filelist = sorted([os.path.join(args.input_dir, x) for x in os.listdir(args.input_dir) if os.path.isfile(os.path.join(args.input_dir, x))])
+        # filelist = sorted([os.path.join(args.input_dir, x) for x in os.listdir(args.input_dir) if os.path.isfile(os.path.join(args.input_dir, x))])
         filelist = sorted(glob(os.path.join(args.input_dir, "*.h5")))
         if not filelist:
             raise FileNotFoundError(f"Error, directory {args.input_dir} is empty.")
@@ -292,14 +325,47 @@ def main(args):
         # open the first file to check for stats
         num_samples = []
         for filename in filelist:
-            with h5.File(filename, 'r') as f:
-                data_shape = f['fields'].shape
+            with h5.File(filename, "r") as f:
+                data_shape = f["fields"].shape
                 num_samples.append(data_shape[0])
 
     if args.wind_angle:
-        channel_names = ['u10', 'v10', 't2m', 'sp', 'msl', 't850', 'u1000', 'v1000', 'z1000', 'u850', 'v850', 'z850', 'u500', 'v500', 'z500', 't500', \
-                         'z50', 'r500', 'r850', 'tcwv', 'u100m', 'v100m', 'u250', 'v250', 'z250', 't250', 'u100', 'v100', 'z100', 't100', 'u900', 'v900', \
-                         'z900', 't900']
+        channel_names = [
+            "u10",
+            "v10",
+            "t2m",
+            "sp",
+            "msl",
+            "t850",
+            "u1000",
+            "v1000",
+            "z1000",
+            "u850",
+            "v850",
+            "z850",
+            "u500",
+            "v500",
+            "z500",
+            "t500",
+            "z50",
+            "r500",
+            "r850",
+            "tcwv",
+            "u100m",
+            "v100m",
+            "u250",
+            "v250",
+            "z250",
+            "t250",
+            "u100",
+            "v100",
+            "z100",
+            "t100",
+            "u900",
+            "v900",
+            "z900",
+            "t900",
+        ]
         wind_channels = get_wind_channels(channel_names)
 
     # communicate the files
@@ -309,40 +375,47 @@ def main(args):
     wind_channels = comm.bcast(wind_channels, root=0)
 
     # DEBUG
-    #filelist = filelist[:2]
-    #num_samples = num_samples[:2]
+    # filelist = filelist[:2]
+    # num_samples = num_samples[:2]
     # DEBUG
-    
+
     # get file offsets
     num_samples_total = sum(num_samples)
     num_channels = data_shape[1]
     height, width = (data_shape[2], data_shape[3])
 
     # quadrature:
-    quadrature = GridQuadrature(args.quadrature_rule, (height, width),
-                                crop_shape=None, crop_offset=(0, 0),
-                                normalize=True, pole_mask=None)
+    quadrature = GridQuadrature(
+        args.quadrature_rule,
+        (height, width),
+        crop_shape=None,
+        crop_offset=(0, 0),
+        normalize=True,
+        pole_mask=None,
+    )
 
     if comm_rank == 0:
-        print(f"Found {len(filelist)} files with a total of {num_samples_total} samples. Each sample has the shape {num_channels}x{height}x{width} (CxHxW).")
-    
+        print(
+            f"Found {len(filelist)} files with a total of {num_samples_total} samples. Each sample has the shape {num_channels}x{height}x{width} (CxHxW)."
+        )
+
     # do the sharding:
     num_samples_chunk = (num_samples_total + comm_size - 1) // comm_size
     samples_start = num_samples_chunk * comm_rank
     samples_end = min([samples_start + num_samples_chunk, num_samples_total])
     sample_offsets = list(accumulate(num_samples, operator.add))[:-1]
     sample_offsets.insert(0, 0)
-    
+
     # offsets has order like:
-    #[0, 1460, 2920, ...]
-    
+    # [0, 1460, 2920, ...]
+
     # convert list of indices to files and ranges in files:
     mapping = {}
     for idx in range(samples_start, samples_end):
         # compute indices
         file_idx = bisect_right(sample_offsets, idx) - 1
         local_idx = idx - sample_offsets[file_idx]
-        
+
         # lookup
         filename = filelist[file_idx]
         if filename in mapping:
@@ -351,28 +424,60 @@ def main(args):
             mapping[filename] = [local_idx]
 
     # just do be on the safe side, sort again
-    mapping = {k: sorted(v) for k,v in mapping.items()}
+    mapping = {k: sorted(v) for k, v in mapping.items()}
 
     # initialize arrays
-    stats = dict(global_meanvar = {"type": "meanvar", "counts": 0, "values": [np.zeros((1, num_channels, 1, 1)), np.zeros((1, num_channels, 1, 1))]},
-                 mins = {"type": "min", "counts": 0, "values": np.zeros((1, num_channels, 1, 1))},
-                 maxs = {"type": "max", "counts": 0, "values": np.zeros((1, num_channels, 1, 1))},
-                 time_means = {"type": "mean", "counts": 0, "values": np.zeros((1, num_channels, height, width))},
-                 time_diff_meanvar = {"type": "meanvar", "counts": 0, "values": [np.zeros((1, num_channels, 1, 1)), np.zeros((1, num_channels, 1, 1))]})
+    stats = dict(
+        global_meanvar={
+            "type": "meanvar",
+            "counts": 0,
+            "values": [
+                np.zeros((1, num_channels, 1, 1)),
+                np.zeros((1, num_channels, 1, 1)),
+            ],
+        },
+        mins={"type": "min", "counts": 0, "values": np.zeros((1, num_channels, 1, 1))},
+        maxs={"type": "max", "counts": 0, "values": np.zeros((1, num_channels, 1, 1))},
+        time_means={
+            "type": "mean",
+            "counts": 0,
+            "values": np.zeros((1, num_channels, height, width)),
+        },
+        time_diff_meanvar={
+            "type": "meanvar",
+            "counts": 0,
+            "values": [
+                np.zeros((1, num_channels, 1, 1)),
+                np.zeros((1, num_channels, 1, 1)),
+            ],
+        },
+    )
 
     if wind_channels is not None:
         num_wind_channels = len(wind_channels[0])
-        stats["wind_meanvar"] = {"type": "meanvar", "counts": 0, "values": [np.zeros((1, num_wind_channels, 1, 1)), np.zeros((1, num_wind_channels, 1, 1))]}
-    
+        stats["wind_meanvar"] = {
+            "type": "meanvar",
+            "counts": 0,
+            "values": [
+                np.zeros((1, num_wind_channels, 1, 1)),
+                np.zeros((1, num_wind_channels, 1, 1)),
+            ],
+        }
+
     # compute local stats
     start = time.time()
     for filename, indices in mapping.items():
-        tmpstats = get_file_stats(filename, indices, wind_channels, quadrature, args.batch_size)
+        tmpstats = get_file_stats(
+            filename, indices, wind_channels, quadrature, args.batch_size
+        )
         stats = welford_combine(stats, tmpstats)
     duration = time.time() - start
-        
+
     # wait for everybody else
-    print(f"Rank {comm_rank} done. Duration for {(samples_end - samples_start)} samples: {duration:.2f}s", flush=True)
+    print(
+        f"Rank {comm_rank} done. Duration for {(samples_end - samples_start)} samples: {duration:.2f}s",
+        flush=True,
+    )
     group_comm.Barrier()
 
     # now gather the stats across group:
@@ -386,29 +491,60 @@ def main(args):
 
     # wait for everybody
     comm.Barrier()
-    
+
     if comm_rank == 0:
         # compute global stds:
-        stats["global_meanvar"]["values"][1] = np.sqrt(stats["global_meanvar"]["values"][1] / float(stats["global_meanvar"]["counts"]))
-        stats["time_diff_meanvar"]["values"][1] = np.sqrt(stats["time_diff_meanvar"]["values"][1] / float(stats["time_diff_meanvar"]["counts"]))
+        stats["global_meanvar"]["values"][1] = np.sqrt(
+            stats["global_meanvar"]["values"][1]
+            / float(stats["global_meanvar"]["counts"])
+        )
+        stats["time_diff_meanvar"]["values"][1] = np.sqrt(
+            stats["time_diff_meanvar"]["values"][1]
+            / float(stats["time_diff_meanvar"]["counts"])
+        )
 
         # overwrite the wind channels
         if wind_channels is not None:
-            stats["wind_meanvar"]["values"][1] = np.sqrt(stats["wind_meanvar"]["values"][1] / float(stats["wind_meanvar"]["counts"]))
-            stats["global_meanvar"]["values"][0][: , wind_channels[0]] = stats["wind_meanvar"]["values"][0]
-            stats["global_meanvar"]["values"][0][: , wind_channels[1]] = stats["wind_meanvar"]["values"][0]
-            stats["global_meanvar"]["values"][1][: , wind_channels[0]] = stats["wind_meanvar"]["values"][1]
-            stats["global_meanvar"]["values"][1][: , wind_channels[1]] = stats["wind_meanvar"]["values"][1]
-
+            stats["wind_meanvar"]["values"][1] = np.sqrt(
+                stats["wind_meanvar"]["values"][1]
+                / float(stats["wind_meanvar"]["counts"])
+            )
+            stats["global_meanvar"]["values"][0][:, wind_channels[0]] = stats[
+                "wind_meanvar"
+            ]["values"][0]
+            stats["global_meanvar"]["values"][0][:, wind_channels[1]] = stats[
+                "wind_meanvar"
+            ]["values"][0]
+            stats["global_meanvar"]["values"][1][:, wind_channels[0]] = stats[
+                "wind_meanvar"
+            ]["values"][1]
+            stats["global_meanvar"]["values"][1][:, wind_channels[1]] = stats[
+                "wind_meanvar"
+            ]["values"][1]
 
         # save the stats
-        np.save(os.path.join(args.output_dir, 'global_means.npy'), stats["global_meanvar"]["values"][0])
-        np.save(os.path.join(args.output_dir, 'global_stds.npy'), stats["global_meanvar"]["values"][1])
-        np.save(os.path.join(args.output_dir, 'mins.npy'), stats["mins"]["values"])
-        np.save(os.path.join(args.output_dir, 'maxs.npy'), stats["maxs"]["values"])
-        np.save(os.path.join(args.output_dir, 'time_means.npy'), stats["time_means"]["values"])
-        np.save(os.path.join(args.output_dir, 'time_diff_means.npy'), stats["time_diff_meanvar"]["values"][0])
-        np.save(os.path.join(args.output_dir, 'time_diff_stds.npy'), stats["time_diff_meanvar"]["values"][1])
+        np.save(
+            os.path.join(args.output_dir, "global_means.npy"),
+            stats["global_meanvar"]["values"][0],
+        )
+        np.save(
+            os.path.join(args.output_dir, "global_stds.npy"),
+            stats["global_meanvar"]["values"][1],
+        )
+        np.save(os.path.join(args.output_dir, "mins.npy"), stats["mins"]["values"])
+        np.save(os.path.join(args.output_dir, "maxs.npy"), stats["maxs"]["values"])
+        np.save(
+            os.path.join(args.output_dir, "time_means.npy"),
+            stats["time_means"]["values"],
+        )
+        np.save(
+            os.path.join(args.output_dir, "time_diff_means.npy"),
+            stats["time_diff_meanvar"]["values"][0],
+        )
+        np.save(
+            os.path.join(args.output_dir, "time_diff_stds.npy"),
+            stats["time_diff_meanvar"]["values"][1],
+        )
 
         print("means: ", stats["global_meanvar"]["values"][0])
         print("stds: ", stats["global_meanvar"]["values"][1])
@@ -420,16 +556,32 @@ def main(args):
 if __name__ == "__main__":
     # argparse
     parser = ap.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, help="Directory with input files.", required=True)
-    parser.add_argument("--output_dir", type=str, help="Directory for saving stats files.", required=True)
-    parser.add_argument("--group_size", type=int, default=8, help="Size of collective reduction groups.")
-    parser.add_argument("--quadrature_rule", type=str, default="naive", choices=["naive", "clenshaw-curtiss", "gauss-legendre"], help="Specify quadrature_rule for spatial averages.")
-    parser.add_argument('--wind_angle', action='store_true')
-    parser.add_argument("--batch_size", type=int, default=16, help="Batch size used for reading chunks from a file at a time to avoid OOM errors.")
+    parser.add_argument(
+        "--input_dir", type=str, help="Directory with input files.", required=True
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        help="Directory for saving stats files.",
+        required=True,
+    )
+    parser.add_argument(
+        "--group_size", type=int, default=8, help="Size of collective reduction groups."
+    )
+    parser.add_argument(
+        "--quadrature_rule",
+        type=str,
+        default="naive",
+        choices=["naive", "clenshaw-curtiss", "gauss-legendre"],
+        help="Specify quadrature_rule for spatial averages.",
+    )
+    parser.add_argument("--wind_angle", action="store_true")
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=16,
+        help="Batch size used for reading chunks from a file at a time to avoid OOM errors.",
+    )
     args = parser.parse_args()
-    
+
     main(args)
-
-
-
-

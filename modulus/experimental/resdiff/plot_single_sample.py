@@ -14,13 +14,11 @@
 
 import os
 
-import matplotlib.pyplot as plt
-import click
-
-import numpy as np
 import cftime
-
+import click
+import matplotlib.pyplot as plt
 import netCDF4 as nc
+import numpy as np
 
 
 def pattern_correlation(x, y):

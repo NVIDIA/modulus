@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
-import shutil
+import argparse as ap
 import glob
-import argparse as ap 
+import os
+import shutil
+import sys
 
-import dask.diagnostics    
+import dask.diagnostics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import modulus.experimental.sfno.datasets.era5
 
 
 def main(args):
-    
+
     # get files
     files = glob.glob(os.path.join(args.input_dir, "*.h5"))
 
@@ -33,9 +33,11 @@ def main(args):
         array = datasets.era5.open_34_vars(ifname)
         ds = array.to_dataset()
 
-        #construct output file name
-        ofname = os.path.join(args.output_dir, os.path.basename(ifname).replace(".h5", ".zarr"))
-        
+        # construct output file name
+        ofname = os.path.join(
+            args.output_dir, os.path.basename(ifname).replace(".h5", ".zarr")
+        )
+
         if os.path.exists(ofname):
             if not args.overwrite:
                 print(f"File {ofname} already exists, skipping.", flush=True)
@@ -52,10 +54,13 @@ def main(args):
 if __name__ == "__main__":
     # argparse
     parser = ap.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, help="Directory with input files.", required=True)
-    parser.add_argument("--output_dir", type=str, help="Directory for output files.", required=True)
-    parser.add_argument("--overwrite", action='store_true')
+    parser.add_argument(
+        "--input_dir", type=str, help="Directory with input files.", required=True
+    )
+    parser.add_argument(
+        "--output_dir", type=str, help="Directory for output files.", required=True
+    )
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
 
     main(args)
-        

@@ -39,7 +39,7 @@
 #     params.data_grid_type = 'equiangular'
 #     params.model_grid_type = 'equiangular'
 #     params.sht_grid_type = 'legendre-gauss'
-    
+
 #     params.resuming = False
 #     params.amp_mode = 'none'
 #     params.jit_mode = 'none'
@@ -76,7 +76,7 @@
 #                  num_channels: Optional[int]=NUM_CHANNELS,
 #                  img_size_h: Optional[int]=IMG_SIZE_H,
 #                  img_size_w: Optional[int]=IMG_SIZE_W):
-    
+
 #     test_path = os.path.join(path, "test")
 #     os.mkdir(test_path)
 
@@ -88,7 +88,7 @@
 
 #     # rng:
 #     rng = np.random.default_rng(seed=333)
-    
+
 #     # create training files
 #     num_train = 0
 #     for y in [2016, 2017]:
@@ -110,7 +110,7 @@
 #     # create stats files
 #     np.save(os.path.join(stats_path, "mins.npy"),
 #             np.zeros((1, num_channels, 1, 1), dtype=np.float64))
-    
+
 #     np.save(os.path.join(stats_path, "maxs.npy"),
 #             np.ones((1, num_channels, 1, 1), dtype=np.float64))
 
@@ -128,5 +128,5 @@
 
 #     np.save(os.path.join(stats_path, "time_diff_stds.npy"),
 #             np.ones((1, num_channels, 1, 1), dtype=np.float64))
-    
+
 #     return train_path, num_train, test_path, num_test, stats_path
