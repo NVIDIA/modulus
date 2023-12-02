@@ -19,18 +19,21 @@ from functools import partial
 
 import pynvml
 import torch
-import torch.distributed as dist
 
 from modulus.experimental.sfno.networks.model_package import (
-    MODEL_PACKAGE_CHECKPOINT_PATH,
-    LocalPackage,
     _load_static_data,
+    MODEL_PACKAGE_CHECKPOINT_PATH,
     save_model_package,
+    LocalPackage,
 )
+from modulus.experimental.sfno.utils import logging_utils
+
+import torch.distributed as dist
+
 from modulus.experimental.sfno.networks.models import get_model
 
 # distributed computing stuff
-from modulus.experimental.sfno.utils import comm, logging_utils
+from modulus.experimental.sfno.utils import comm
 from modulus.experimental.sfno.utils.trainer import Trainer
 from modulus.experimental.sfno.utils.YParams import ParamsBase
 

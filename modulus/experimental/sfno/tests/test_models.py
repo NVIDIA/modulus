@@ -55,7 +55,7 @@
 
 #         inp_shape = (self.params.batch_size, self.params.N_in_channels, self.params.img_shape_x, self.params.img_shape_y)
 #         out_shape = (self.params.batch_size, self.params.N_out_channels, self.params.img_shape_x, self.params.img_shape_y)
-
+        
 #         # prepare some dummy data
 #         inp = torch.randn(*inp_shape)
 #         inp.requires_grad = True

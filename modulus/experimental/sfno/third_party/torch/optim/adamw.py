@@ -4,24 +4,12 @@
 This is a modified version of PyTorch's ADAM implementation to enable optimization of complex parameters.
 """
 
-from typing import List, Optional, Tuple, Union
-
 import torch
 from torch import Tensor
-from torch.optim.optimizer import (
-    Optimizer,
-    _capturable_doc,
-    _default_to_fused_or_foreach,
-    _differentiable_doc,
-    _dispatch_sqrt,
-    _foreach_doc,
-    _fused_doc,
-    _get_value,
-    _maximize_doc,
-    _stack_if_compiling,
-    _use_grad_for_differentiable,
-    params_t,
-)
+from torch.optim.optimizer import (Optimizer, _use_grad_for_differentiable, _get_value, _dispatch_sqrt,
+                        _stack_if_compiling, _capturable_doc, _differentiable_doc, _foreach_doc,
+                        _fused_doc, _maximize_doc, _default_to_fused_or_foreach, params_t)
+from typing import List, Optional, Tuple, Union
 from torch.utils._foreach_utils import _get_fused_kernels_supported_devices
 
 __all__ = ["AdamW", "adamw"]
@@ -46,9 +34,7 @@ class AdamW(Optimizer):
         if not 0.0 <= lr:
             raise ValueError(f"Invalid learning rate: {lr}")
         if isinstance(lr, Tensor) and foreach and not capturable:
-            raise ValueError(
-                "lr as a Tensor is not supported for capturable=False and foreach=True"
-            )
+            raise ValueError("lr as a Tensor is not supported for capturable=False and foreach=True")
         if not 0.0 <= eps:
             raise ValueError(f"Invalid epsilon value: {eps}")
         if not 0.0 <= betas[0] < 1.0:
@@ -81,14 +67,12 @@ class AdamW(Optimizer):
             # alleviate the loss of information.
             fused_supported_devices = _get_fused_kernels_supported_devices()
             if not all(
-                p.device.type in fused_supported_devices and torch.is_floating_point(p)
-                for pg in self.param_groups
-                for p in pg["params"]
+                p.device.type in fused_supported_devices and
+                torch.is_floating_point(p)
+                for pg in self.param_groups for p in pg['params']
             ):
-                raise RuntimeError(
-                    "`fused=True` requires all the params to be floating point Tensors of "
-                    f"supported devices: {fused_supported_devices}."
-                )
+                raise RuntimeError("`fused=True` requires all the params to be floating point Tensors of "
+                                   f"supported devices: {fused_supported_devices}.")
             if foreach:
                 raise RuntimeError("`fused` and `foreach` cannot be `True` together.")
 
@@ -156,22 +140,14 @@ class AdamW(Optimizer):
             exp_avgs.append(state["exp_avg"])
             exp_avg_sqs.append(state["exp_avg_sq"])
 
-            if group["amsgrad"]:
+            if group['amsgrad']:
                 max_exp_avg_sqs.append(state["max_exp_avg_sq"])
-            if group["differentiable"] and state["step"].requires_grad:
-                raise RuntimeError(
-                    "`requires_grad` is not supported for `step` in differentiable mode"
-                )
+            if group['differentiable'] and state['step'].requires_grad:
+                raise RuntimeError('`requires_grad` is not supported for `step` in differentiable mode')
 
             # Foreach without capturable does not support a tensor lr
-            if (
-                group["foreach"]
-                and isinstance(group["lr"], Tensor)
-                and not group["capturable"]
-            ):
-                raise RuntimeError(
-                    "lr as a Tensor is not supported for capturable=False and foreach=True"
-                )
+            if group['foreach'] and isinstance(group['lr'], Tensor) and not group['capturable']:
+                raise RuntimeError('lr as a Tensor is not supported for capturable=False and foreach=True')
 
             state_steps.append(state["step"])
 
@@ -236,8 +212,7 @@ class AdamW(Optimizer):
         return loss
 
 
-AdamW.__doc__ = (
-    r"""Implements AdamW algorithm.
+AdamW.__doc__ = r"""Implements AdamW algorithm.
 
     .. math::
        \begin{aligned}
@@ -275,8 +250,7 @@ AdamW.__doc__ = (
        \end{aligned}
 
     For further details regarding the algorithm we refer to `Decoupled Weight Decay Regularization`_.
-    """
-    + rf"""
+    """ + fr"""
     Args:
         params (iterable): iterable of parameters to optimize or dicts defining
             parameter groups
@@ -302,7 +276,6 @@ AdamW.__doc__ = (
         https://openreview.net/forum?id=ryQu7f-RZ
 
     """
-)
 
 
 def adamw(
@@ -334,9 +307,7 @@ def adamw(
     See :class:`~torch.optim.AdamW` for details.
     """
 
-    if not torch._utils.is_compiling() and not all(
-        isinstance(t, torch.Tensor) for t in state_steps
-    ):
+    if not torch._utils.is_compiling() and not all(isinstance(t, torch.Tensor) for t in state_steps):
         raise RuntimeError(
             "API has changed, `state_steps` argument must contain a list of singleton tensors"
         )
@@ -346,9 +317,7 @@ def adamw(
     # and pass False to use_fused. This is not a mistake--we want to give the fused impl
     # bake-in time before making it the default, even if it is typically faster.
     if fused is None and foreach is None:
-        _, foreach = _default_to_fused_or_foreach(
-            params, differentiable, use_fused=False
-        )
+        _, foreach = _default_to_fused_or_foreach(params, differentiable, use_fused=False)
         # Do not flip on foreach for the unsupported case where lr is a Tensor and capturable=False.
         if foreach and isinstance(lr, Tensor) and not capturable:
             foreach = False
@@ -427,8 +396,8 @@ def _single_tensor_adamw(
 
         # If compiling, the compiler will handle cudagraph checks, see note [torch.compile x capturable]
         if not torch._utils.is_compiling() and capturable:
-            assert (param.is_cuda and step_t.is_cuda) or (
-                param.is_xla and step_t.is_xla
+            assert (
+                (param.is_cuda and step_t.is_cuda) or (param.is_xla and step_t.is_xla)
             ), "If capturable=True, params and state_steps must be CUDA or XLA tensors."
 
         # if torch.is_complex(param):
@@ -452,8 +421,8 @@ def _single_tensor_adamw(
         if capturable or differentiable:
             step = step_t
 
-            bias_correction1 = 1 - beta1**step
-            bias_correction2 = 1 - beta2**step
+            bias_correction1 = 1 - beta1 ** step
+            bias_correction2 = 1 - beta2 ** step
 
             step_size = lr / bias_correction1
             step_size_neg = step_size.neg()
@@ -484,8 +453,8 @@ def _single_tensor_adamw(
         else:
             step = _get_value(step_t)
 
-            bias_correction1 = 1 - beta1**step
-            bias_correction2 = 1 - beta2**step
+            bias_correction1 = 1 - beta1 ** step
+            bias_correction2 = 1 - beta2 ** step
 
             step_size = lr / bias_correction1
 
@@ -531,9 +500,7 @@ def _multi_tensor_adamw(
         return
 
     if isinstance(lr, Tensor) and not capturable:
-        raise RuntimeError(
-            "lr as a Tensor is not supported for capturable=False and foreach=True"
-        )
+        raise RuntimeError("lr as a Tensor is not supported for capturable=False and foreach=True")
 
     # If compiling, the compiler will handle cudagraph checks, see note [torch.compile x capturable]
     if not torch._utils.is_compiling() and capturable:
@@ -545,20 +512,16 @@ def _multi_tensor_adamw(
 
     assert grad_scale is None and found_inf is None
 
-    grouped_tensors = Optimizer._group_tensors_by_device_and_dtype(
-        [params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, state_steps]
-    )
-    for (
-        (
-            device_params,
-            device_grads,
-            device_exp_avgs,
-            device_exp_avg_sqs,
-            device_max_exp_avg_sqs,
-            device_state_steps,
-        ),
-        _,
-    ) in grouped_tensors.values():
+    grouped_tensors = Optimizer._group_tensors_by_device_and_dtype([
+        params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, state_steps])
+    for ((
+        device_params,
+        device_grads,
+        device_exp_avgs,
+        device_exp_avg_sqs,
+        device_max_exp_avg_sqs,
+        device_state_steps,
+    ), _) in grouped_tensors.values():
         if maximize:
             device_grads = torch._foreach_neg(device_grads)
 
@@ -583,9 +546,7 @@ def _multi_tensor_adamw(
         torch._foreach_lerp_(device_exp_avgs, device_grads, 1 - beta1)
 
         torch._foreach_mul_(device_exp_avg_sqs, beta2)
-        torch._foreach_addcmul_(
-            device_exp_avg_sqs, device_grads, device_grads, 1 - beta2
-        )
+        torch._foreach_addcmul_(device_exp_avg_sqs, device_grads, device_grads, 1 - beta2)
 
         # Delete the local intermediate since it won't be used anymore to save on peak memory
         del device_grads
@@ -627,12 +588,8 @@ def _multi_tensor_adamw(
             # at this point, exp_avg_sq_sqrt = - (1 - beta^t) * [sqrt(exp_avg_sq / (1 - beta2^t)) + eps] / lr
             torch._foreach_addcdiv_(device_params, device_exp_avgs, exp_avg_sq_sqrt)
         else:
-            bias_correction1 = [
-                1 - beta1 ** _get_value(step) for step in device_state_steps
-            ]
-            bias_correction2 = [
-                1 - beta2 ** _get_value(step) for step in device_state_steps
-            ]
+            bias_correction1 = [1 - beta1 ** _get_value(step) for step in device_state_steps]
+            bias_correction2 = [1 - beta2 ** _get_value(step) for step in device_state_steps]
 
             step_size = _stack_if_compiling([(lr / bc) * -1 for bc in bias_correction1])
 
@@ -649,9 +606,7 @@ def _multi_tensor_adamw(
 
             torch._foreach_div_(exp_avg_sq_sqrt, bias_correction2_sqrt)
             torch._foreach_add_(exp_avg_sq_sqrt, eps)
-            torch._foreach_addcdiv_(
-                device_params, device_exp_avgs, exp_avg_sq_sqrt, step_size
-            )
+            torch._foreach_addcdiv_(device_params, device_exp_avgs, exp_avg_sq_sqrt, step_size)
 
 
 def _fused_adamw(
@@ -679,31 +634,21 @@ def _fused_adamw(
     if differentiable:
         raise RuntimeError("Adam with fused=True does not support differentiable=True")
 
-    grad_scale_dict = (
-        {grad_scale.device: grad_scale} if grad_scale is not None else None
-    )
+    grad_scale_dict = {grad_scale.device: grad_scale} if grad_scale is not None else None
     found_inf_dict = {found_inf.device: found_inf} if found_inf is not None else None
 
     # We only shuffle around the lr when it is a Tensor and on CUDA, otherwise, we prefer
     # treating it as a scalar.
-    lr_dict = (
-        {lr.device: lr} if isinstance(lr, Tensor) and str(lr.device) != "cpu" else None
-    )
+    lr_dict = {lr.device: lr} if isinstance(lr, Tensor) and str(lr.device) != "cpu" else None
 
     grouped_tensors = Optimizer._group_tensors_by_device_and_dtype(
-        [params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, state_steps]
-    )
-    for (device, _), (
-        (
-            device_params,
-            device_grads,
-            device_exp_avgs,
-            device_exp_avg_sqs,
-            device_max_exp_avg_sqs,
-            device_state_steps,
-        ),
-        _,
-    ) in grouped_tensors.items():
+        [params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, state_steps])
+    for (device, _), ((device_params,
+                       device_grads,
+                       device_exp_avgs,
+                       device_exp_avg_sqs,
+                       device_max_exp_avg_sqs,
+                       device_state_steps,), _) in grouped_tensors.items():
         device_grad_scale, device_found_inf = None, None
         if grad_scale is not None:
             if device not in grad_scale_dict:
@@ -735,6 +680,4 @@ def _fused_adamw(
             found_inf=device_found_inf,
         )
         if device_found_inf is not None:
-            torch._foreach_sub_(
-                device_state_steps, [device_found_inf] * len(device_state_steps)
-            )
+            torch._foreach_sub_(device_state_steps, [device_found_inf] * len(device_state_steps))

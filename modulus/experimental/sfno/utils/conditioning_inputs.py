@@ -12,58 +12,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
-
-import h5py
 import numpy as np
 import torch
-from netCDF4 import Dataset as DS
-
 from modulus.experimental.sfno.third_party.climt.zenith_angle import cos_zenith_angle
-
+import datetime
+from netCDF4 import Dataset as DS
+import h5py
 
 def get_orography(orography_path):
-    """returns the surface geopotential for each grid point after normalizing it to be in the range [0, 1]"""
+    """ returns the surface geopotential for each grid point after normalizing it to be in the range [0, 1]"""
 
     with DS(orography_path, "r") as f:
-
-        orography = f.variables["Z"][0, :, :]
+            
+        orography = f.variables["Z"][0,:,:]
 
         orography = (orography - orography.min()) / (orography.max() - orography.min())
 
     return orography
 
-
 def get_land_mask(land_mask_path):
-    """returns the land mask for each grid point. land sea mask is between 0 and 1"""
+    """ returns the land mask for each grid point. land sea mask is between 0 and 1 """
 
     with h5py.File(land_mask_path, "r") as f:
 
-        lsm = f["LSM"][0, :, :]
-
+        lsm = f["LSM"][0,:,:]
+    
     return lsm
 
 
 if __name__ == "__main__":
 
-    lsm = get_land_mask(
-        "/code/utils/e5.oper.invariant.128_172_lsm.ll025sc.1979010100_1979010100.nc"
-    )
+    lsm = get_land_mask("/code/utils/e5.oper.invariant.128_172_lsm.ll025sc.1979010100_1979010100.nc")
     figure = plt.figure(figsize=(10, 10))
     ax = figure.add_subplot(111)
     im = ax.imshow(lsm)
     ax.set_title("Land Mask")
-    # add colorbar
+    #add colorbar
     cbar = figure.colorbar(im, ax=ax)
     plt.savefig("land_mask.png")
 
-    orography = get_orography(
-        "/code/utils/e5.oper.invariant.128_129_z.ll025sc.1979010100_1979010100.nc"
-    )
+    orography = get_orography("/code/utils/e5.oper.invariant.128_129_z.ll025sc.1979010100_1979010100.nc")
     figure = plt.figure(figsize=(10, 10))
     ax = figure.add_subplot(111)
     im = ax.imshow(orography)
     ax.set_title("Orography")
-    # add colorbar
+    #add colorbar
     cbar = figure.colorbar(im, ax=ax)
     plt.savefig("orography.png")

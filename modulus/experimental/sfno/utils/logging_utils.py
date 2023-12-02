@@ -12,17 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import os
+import logging
 
-_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
+_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 def config_logger(log_level=logging.INFO):
     logging.basicConfig(format=_format, level=log_level)
 
-
-def log_to_file(logger_name=None, log_level=logging.INFO, log_filename="makani.log"):
+def log_to_file(logger_name=None, log_level=logging.INFO, log_filename='makani.log'):
 
     if not os.path.exists(os.path.dirname(log_filename)):
         os.makedirs(os.path.dirname(log_filename))
@@ -38,25 +36,18 @@ def log_to_file(logger_name=None, log_level=logging.INFO, log_filename="makani.l
     fh.setFormatter(logging.Formatter(_format))
     logger.addHandler(fh)
 
-
 def log_versions():
+    import torch
     import subprocess
 
-    import torch
-
-    logging.info("--------------- Versions ---------------")
+    logging.info('--------------- Versions ---------------')
     try:
-        logging.info(
-            "git branch: " + str(subprocess.check_output(["git", "branch"]).strip())
-        )
-        logging.info(
-            "git hash: "
-            + str(subprocess.check_output(["git", "rev-parse", "HEAD"]).strip())
-        )
+        logging.info('git branch: ' + str(subprocess.check_output(['git', 'branch']).strip()))
+        logging.info('git hash: ' + str(subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()))
     except:
         pass
-    logging.info("Torch: " + str(torch.__version__))
-    logging.info("----------------------------------------")
+    logging.info('Torch: ' + str(torch.__version__))
+    logging.info('----------------------------------------')
 
 
 class disable_logging(object):

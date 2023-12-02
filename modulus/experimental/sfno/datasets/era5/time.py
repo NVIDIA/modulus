@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
-import os
 from typing import List
+import os
+import datetime
 
 
 def filename_to_year(path: str) -> int:

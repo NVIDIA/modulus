@@ -15,7 +15,6 @@
 import torch
 from torch import nn
 
-
 class DebugNet(nn.Module):
     def __init__(self):
         super(DebugNet, self).__init__()
@@ -25,3 +24,4 @@ class DebugNet(nn.Module):
 
     def forward(self, x):
         return self.factor * x
+

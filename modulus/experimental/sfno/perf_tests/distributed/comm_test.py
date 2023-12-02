@@ -12,36 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import os
 import sys
 import time
 import types
-
+import argparse
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
 from torch.cuda import amp
 
 sys.path.append(os.path.join("/opt", "ERA5_wind"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# profile stuff
-from ctypes import cdll
-
 from modulus.experimental.sfno.utils import comm
 
-libcudart = cdll.LoadLibrary("libcudart.so")
 
+# profile stuff
+from ctypes import cdll
+libcudart = cdll.LoadLibrary('libcudart.so')
 
 def cudaProfilerStart(enabled=True):
     if enabled:
         libcudart.cudaProfilerStart()
 
-
 def cudaProfilerStop(enabled=True):
     if enabled:
-        libcudart.cudaProfilerStop()
+        libcudart.cudaProfilerStop()  
 
 
 def main(args, verify):
@@ -53,23 +50,21 @@ def main(args, verify):
     model_parallel_size = args.model_parallel_size
     tensor_size = 84873728
     profile_ranks = [0, 1, 2, 3]
-
+    
     # initialize comms
-    params = types.SimpleNamespace(
-        wireup_info="env",
-        wireup_store="tcp",
-        log_to_screen=True,
-        model_parallel_sizes=[model_parallel_size],
-        model_parallel_names=["mp"],
-    )
+    params = types.SimpleNamespace(wireup_info="env",
+                                   wireup_store="tcp",
+                                   log_to_screen=True,
+                                   model_parallel_sizes=[model_parallel_size],
+                                   model_parallel_names=["mp"])
     comm.init(params, verbose=True)
     comm_model_parallel_size = comm.get_size("mp")
     comm_model_parallel_rank = comm.get_rank("mp")
     comm_local_rank = comm.get_local_rank()
-
+    
     # set device
     device = torch.device(f"cuda:{comm_local_rank}")
-
+    
     # tune
     torch.cuda.manual_seed(333)
     torch.cuda.set_device(device)
@@ -106,16 +101,12 @@ def main(args, verify):
         print("done")
 
     if comm.get_world_rank() == 0:
-        print(
-            f"Runtime: {(end-start)*10**(-9):.2f} s ({(end-start)/num_steps*10**(-6):.2f} ms per step)"
-        )
-
-
+        print(f"Runtime: {(end-start)*10**(-9):.2f} s ({(end-start)/num_steps*10**(-6):.2f} ms per step)")
+    
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_parallel_size", default=1, type=int, help="Model parallelism dimension"
-    )
-    args = parser.parse_args()
-
-    main(args, verify=True)
+    parser.add_argument("--model_parallel_size", default=1, type=int, help="Model parallelism dimension")
+    args = parser.parse_args()  
+    
+    main(args, verify = True)
