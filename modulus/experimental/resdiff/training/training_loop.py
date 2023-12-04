@@ -14,30 +14,28 @@
 
 """Main training loop."""
 
-import os
-import sys
-import time
 import copy
 import json
-import pickle
-import psutil
-import numpy as np
-import torch
+import os
+import pickle  # ruff: noqa: E402
+import sys
+import time
+
 import dnnlib
+import numpy as np
+import psutil
+import torch
 from torch.nn.parallel import DistributedDataParallel
-from torch_utils import training_stats
-from torch_utils import misc
+from torch_utils import misc, training_stats
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
+# from .dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
+from .dataset import CWBDataset, CWBERA5DatasetV2, Era5Dataset, ZarrDataset
+
 # weather related
 from .YParams import YParams
-
-# from .dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-from .dataset import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-
-import glob
 
 # ----------------------------------------------------------------------------
 
@@ -96,7 +94,10 @@ def training_loop(
     if batch_gpu is None or batch_gpu > batch_gpu_total:
         batch_gpu = batch_gpu_total
     num_accumulation_rounds = batch_gpu_total // batch_gpu
-    assert batch_size == batch_gpu * num_accumulation_rounds * dist.world_size
+    if batch_size != batch_gpu * num_accumulation_rounds * dist.world_size:
+        raise ValueError(
+            "batch_size must be equal to batch_gpu * num_accumulation_rounds * dist.world_size"
+        )
 
     """
     # Load dataset: cifar10
@@ -123,11 +124,13 @@ def training_loop(
     elif data_type == "era5-cwb-v1":
         # filelist = os.listdir(path=yparams.cwb_data_dir + '/2018')
         # filelist = [name for name in filelist if "2018" in name]
-        filelist = []
-        for root, dirs, files in os.walk(yparams.cwb_data_dir):
-            for file in files:
-                if "2022" not in file:
-                    filelist.append(file)
+        filelist = [
+            file
+            for root, dirs, files in os.walk(yparams.cwb_data_dir)
+            for file in files
+            if "2022" not in file
+        ]
+
         dataset_obj = CWBERA5DatasetV2(
             yparams, filelist=filelist, chans=list(range(20)), train=True, task=task
         )
@@ -242,6 +245,7 @@ def training_loop(
         if dist.rank != 0:
             torch.distributed.barrier()  # rank 0 goes first
         with dnnlib.util.open_url(resume_pkl, verbose=(dist.rank == 0)) as f:
+            # ruff: noqa: S301  # TODO remove exception
             data = pickle.load(f)
         if dist.rank == 0:
             torch.distributed.barrier()  # other ranks follow

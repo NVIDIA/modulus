@@ -14,16 +14,21 @@
 
 """Streaming images and labels from datasets created with dataset_tool.py."""
 
-import os
-import numpy as np
-import zipfile
-import PIL.Image
+import glob
 import json
-import torch
-import dnnlib
-import zarr
-import netCDF4 as nc
 import logging
+import os
+import random
+import zipfile
+from pathlib import Path
+
+import dnnlib
+import h5py
+import netCDF4 as nc
+import numpy as np
+import PIL.Image
+import torch
+import zarr
 
 from modulus.distributed import DistributedManager
 
@@ -33,6 +38,8 @@ except ImportError:
     pyspng = None
 
 import cv2
+
+from .img_utils import reshape_fields
 
 # import dill
 # import torch.multiprocessing as mp
@@ -79,12 +86,23 @@ class Dataset(torch.utils.data.Dataset):
             self._raw_labels = self._load_raw_labels() if self._use_labels else None
             if self._raw_labels is None:
                 self._raw_labels = np.zeros([self._raw_shape[0], 0], dtype=np.float32)
-            assert isinstance(self._raw_labels, np.ndarray)
-            assert self._raw_labels.shape[0] == self._raw_shape[0]
-            assert self._raw_labels.dtype in [np.float32, np.int64]
+            if not (
+                isinstance(self._raw_labels, np.ndarray)
+                and self._raw_labels.shape[0] == self._raw_shape[0]
+                and self._raw_labels.dtype in [np.float32, np.int64]
+            ):
+                raise ValueError(
+                    "Invalid _raw_labels returned from _load_raw_labels(): {!r}".format(
+                        self._raw_labels
+                    )
+                )
             if self._raw_labels.dtype == np.int64:
-                assert self._raw_labels.ndim == 1
-                assert np.all(self._raw_labels >= 0)
+                if not (self._raw_labels.ndim == 1 and np.all(self._raw_labels >= 0)):
+                    raise ValueError(
+                        "Invalid _raw_labels returned from _load_raw_labels(): {!r}".format(
+                            self._raw_labels
+                        )
+                    )
         return self._raw_labels
 
     def close(self):  # to be overridden by subclass
@@ -102,8 +120,8 @@ class Dataset(torch.utils.data.Dataset):
     def __del__(self):
         try:
             self.close()
-        except:
-            pass
+        except Exception:
+            logging.exception("Exception occurred in destructor")
 
     def __len__(self):
         return self._raw_idx.size
@@ -115,11 +133,21 @@ class Dataset(torch.utils.data.Dataset):
             image = self._load_raw_image(raw_idx)
             if self._cache:
                 self._cached_images[raw_idx] = image
-        assert isinstance(image, np.ndarray)
-        assert list(image.shape) == self.image_shape
-        assert image.dtype == np.uint8
+        if not (
+            isinstance(image, np.ndarray)
+            and list(image.shape) == self.image_shape
+            and image.dtype == np.uint8
+        ):
+            raise ValueError(
+                "Invalid image returned from _load_raw_image(): {!r}".format(image)
+            )
         if self._xflip[idx]:
-            assert image.ndim == 3  # CHW
+            if image.ndim != 3:
+                raise ValueError(
+                    "Invalid number of dimensions for the image returned from _load_raw_image(): {!r}".format(
+                        image
+                    )
+                )
             image = image[:, :, ::-1]
         return image.copy(), self.get_label(idx)
 
@@ -148,13 +176,16 @@ class Dataset(torch.utils.data.Dataset):
 
     @property
     def num_channels(self):
-        assert len(self.image_shape) == 3  # CHW
+        if len(self.image_shape) != 3:  # CHW
+            raise ValueError("Invalid image shape")
         return self.image_shape[0]
 
     @property
     def resolution(self):
-        assert len(self.image_shape) == 3  # CHW
-        assert self.image_shape[1] == self.image_shape[2]
+        if not (
+            len(self.image_shape) == 3 and self.image_shape[1] == self.image_shape[2]
+        ):  # CHW
+            raise ValueError("Invalid image shape")
         return self.image_shape[1]
 
     @property
@@ -169,7 +200,8 @@ class Dataset(torch.utils.data.Dataset):
 
     @property
     def label_dim(self):
-        assert len(self.label_shape) == 1
+        if len(self.label_shape) != 1:
+            raise ValueError("Invalid label shape")
         return self.label_shape[0]
 
     @property
@@ -233,7 +265,8 @@ class ImageFolderDataset(Dataset):
         return os.path.splitext(fname)[1].lower()
 
     def _get_zipfile(self):
-        assert self._type == "zip"
+        if self._type != "zip":
+            raise IOError("This dataset is not a zip file")
         if self._zipfile is None:
             self._zipfile = zipfile.ZipFile(self._path)
         return self._zipfile
@@ -289,16 +322,10 @@ class ImageFolderDataset(Dataset):
 # ----------------------------------------------------------------------------
 
 
-import torch
-import random
-import glob
-import h5py
-import sys
-
 # sys.path.append("~/afnov2-era5-jaideep/utils")
 # # for path in sys.path:
 # #     print(path)
-from .img_utils import reshape_fields
+
 
 # Era5
 class Era5Dataset(torch.utils.data.Dataset):
@@ -719,9 +746,7 @@ class CWBDataset(torch.utils.data.Dataset):
 
 
 # ----------------------------------------------------------------------------
-import re
-from pathlib import Path
-import logging
+
 
 # CWB+ERA5
 class CWBERA5DatasetV1(torch.utils.data.Dataset):
@@ -758,12 +783,14 @@ class CWBERA5DatasetV1(torch.utils.data.Dataset):
         self.n_samples = n_samples
 
         # check root directory exists
-        assert (
-            self.cwb_data_dir.is_dir()
-        ), f"Error, cwb_data_dir directory {self.cwb_data_dir} does not exist"
-        assert (
-            self.era5_data_dir.is_dir()
-        ), f"Error, era5_data_dir directory {self.era5_data_dir} does not exist"
+        if not self.cwb_data_dir.is_dir():
+            raise FileNotFoundError(
+                f"Error, cwb_data_dir directory {self.cwb_data_dir} does not exist"
+            )
+        if not self.era5_data_dir.is_dir():
+            raise FileNotFoundError(
+                f"Error, era5_data_dir directory {self.era5_data_dir} does not exist"
+            )
 
         all_ranges = {}
         with open(os.path.join(self.cwb_data_dir.parents[0], "all_ranges.json")) as f:
@@ -823,13 +850,14 @@ class CWBERA5DatasetV1(torch.utils.data.Dataset):
         self.era5_sd = np.load(f"{self.era5_stats_dir}/global_stds.npy")[
             :, self.chans, ...
         ]  # has shape [1, C, 1, 1]
-        assert (
+        if not (
             self.cwb_mu.shape
             == self.cwb_sd.shape
             == self.era5_mu.shape
             == self.era5_sd.shape
             == (1, self.nchans, 1, 1)
-        ), "Error, normalisation arrays have wrong shape"
+        ):
+            raise ValueError("Normalization arrays have wrong shapes")
 
         cwb_ch = {
             "TCWV": 0,  # Radar
@@ -970,12 +998,14 @@ class CWBERA5DatasetV2(torch.utils.data.Dataset):
         self.ds_factor = params.ds_factor
 
         # check root directory exists
-        assert (
-            self.cwb_data_dir.is_dir()
-        ), f"Error, cwb_data_dir directory {self.cwb_data_dir} does not exist"
-        assert (
-            self.era5_data_dir.is_dir()
-        ), f"Error, era5_data_dir directory {self.era5_data_dir} does not exist"
+        if not self.cwb_data_dir.is_dir():
+            raise FileNotFoundError(
+                f"Error, cwb_data_dir directory {self.cwb_data_dir} does not exist"
+            )
+        if not self.era5_data_dir.is_dir():
+            raise FileNotFoundError(
+                f"Error, era5_data_dir directory {self.era5_data_dir} does not exist"
+            )
 
         all_ranges = {}
         with open(os.path.join(self.cwb_data_dir.parents[0], "all_ranges.json")) as f:
@@ -1049,13 +1079,14 @@ class CWBERA5DatasetV2(torch.utils.data.Dataset):
         self.era5_sd = np.load(f"{self.era5_stats_dir}/global_stds.npy")[
             :, self.chans, ...
         ]  # has shape [1, C, 1, 1]
-        assert (
+        if not (
             self.cwb_mu.shape
             == self.cwb_sd.shape
             == self.era5_mu.shape
             == self.era5_sd.shape
             == (1, self.nchans, 1, 1)
-        ), "Error, normalisation arrays have wrong shape"
+        ):
+            raise ValueError("Error, normalization arrays have wrong shapes")
 
         cwb_ch = {
             "TCWV": 0,  # Radar
@@ -1233,16 +1264,16 @@ class CWBERA5DatasetV2(torch.utils.data.Dataset):
 def normalize(x, center, scale):
     center = np.asarray(center)
     scale = np.asarray(scale)
-    assert center.ndim == 1
-    assert scale.ndim == 1
+    if not (center.ndim == 1 and scale.ndim == 1):
+        raise ValueError("center and scale must be 1D arrays")
     return (x - center[:, np.newaxis, np.newaxis]) / scale[:, np.newaxis, np.newaxis]
 
 
 def denormalize(x, center, scale):
     center = np.asarray(center)
     scale = np.asarray(scale)
-    assert center.ndim == 1
-    assert scale.ndim == 1
+    if not (center.ndim == 1 and scale.ndim == 1):
+        raise ValueError("center and scale must be 1D arrays")
     return x * scale[:, np.newaxis, np.newaxis] + center[:, np.newaxis, np.newaxis]
 
 
@@ -1431,9 +1462,12 @@ class _ZarrDataset(torch.utils.data.Dataset):
         # valid indices
         cwb_valid = self.group["cwb_valid"]
         era5_valid = self.group["era5_valid"]
-        assert era5_valid.ndim == 2
-        assert cwb_valid.ndim == 1
-        assert cwb_valid.shape[0] == era5_valid.shape[0]
+        if not (
+            era5_valid.ndim == 2
+            and cwb_valid.ndim == 1
+            and cwb_valid.shape[0] == era5_valid.shape[0]
+        ):
+            raise ValueError("Invalid dataset shape")
         era5_all_channels_valid = np.all(era5_valid, axis=-1)
         valid_times = cwb_valid & era5_all_channels_valid
         # need to cast to bool since cwb_valis is stored as an int8 type in zarr.
@@ -1445,7 +1479,8 @@ class _ZarrDataset(torch.utils.data.Dataset):
 
     def _get_valid_time_index(self, idx):
         time_indexes = np.arange(self.group["time"].size)
-        assert self.valid_times.dtype == np.bool_
+        if not self.valid_times.dtype == np.bool_:
+            raise ValueError("valid_times must be a boolean array")
         valid_time_indexes = time_indexes[self.valid_times]
         return valid_time_indexes[idx]
 

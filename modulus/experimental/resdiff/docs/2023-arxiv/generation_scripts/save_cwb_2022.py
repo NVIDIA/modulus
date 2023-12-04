@@ -13,18 +13,17 @@
 # limitations under the License.
 
 # %%
-import os
-from fcn_mip.initial_conditions import get
-from fcn_mip import schema
-from fcn_mip.time import convert_to_datetime
-import numpy as np
 import datetime
-import xarray as xr
-import matplotlib.pyplot as plt
-
+import logging
+import os
 import sys
 
-import logging
+import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
+from fcn_mip import schema
+from fcn_mip.initial_conditions import get
+from fcn_mip.time import convert_to_datetime
 
 logging.basicConfig(level=logging.DEBUG)
 

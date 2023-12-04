@@ -13,11 +13,12 @@
 # limitations under the License.
 
 import os
+import tarfile
+
+import config
+import fsspec
 import numpy as np
 import xarray
-import fsspec
-import tarfile
-import config
 
 
 def load_regression_data():

@@ -17,8 +17,8 @@
 
 import numpy as np
 import torch
-from torch_utils import persistence
 from torch.nn.functional import silu
+from torch_utils import persistence
 
 # ----------------------------------------------------------------------------
 # Unified routine for initializing weights and biases.
@@ -91,7 +91,8 @@ class Conv2d(torch.nn.Module):
         init_weight=1,
         init_bias=0,
     ):
-        assert not (up and down)
+        if up and down:
+            raise ValueError("Both 'up' and 'down' cannot be true at the same time.")
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -443,9 +444,21 @@ class SongUNet(torch.nn.Module):
 
         # dist.print0('embedding_type', embedding_type)
 
-        assert embedding_type in ["fourier", "positional", "zero"]
-        assert encoder_type in ["standard", "skip", "residual"]
-        assert decoder_type in ["standard", "skip"]
+        valid_embedding_types = ["fourier", "positional", "zero"]
+        if embedding_type not in valid_embedding_types:
+            raise ValueError(
+                f"Invalid embedding_type: {embedding_type}. Must be one of {valid_embedding_types}."
+            )
+        valid_encoder_types = ["standard", "skip", "residual"]
+        if encoder_type not in valid_encoder_types:
+            raise ValueError(
+                f"Invalid encoder_type: {encoder_type}. Must be one of {valid_encoder_types}."
+            )
+        valid_decoder_types = ["standard", "skip"]
+        if decoder_type not in valid_decoder_types:
+            raise ValueError(
+                f"Invalid decoder_type: {decoder_type}. Must be one of {valid_decoder_types}."
+            )
 
         super().__init__()
         self.label_dropout = label_dropout
@@ -879,7 +892,10 @@ class VPPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 
@@ -959,7 +975,10 @@ class VEPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 
@@ -1042,7 +1061,10 @@ class iDDPMPrecond(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
         D_x = c_skip * x + c_out * F_x[:, : self.img_channels].to(torch.float32)
         return D_x
 
@@ -1138,7 +1160,10 @@ class EDMPrecond(torch.nn.Module):
             **model_kwargs,
         )
 
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
         # skip connection - for SR there's size mismatch bwtween input and output
         x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
@@ -1232,7 +1257,10 @@ class UNet(torch.nn.Module):
             **model_kwargs,
         )
 
-        assert F_x.dtype == dtype
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
         # skip connection - for SR there's size mismatch bwtween input and output
         x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
