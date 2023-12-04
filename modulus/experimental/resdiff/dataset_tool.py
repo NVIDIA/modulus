@@ -195,13 +195,13 @@ def open_cifar10(tarball: str, *, max_images: Optional[int]):
     labels = np.concatenate(labels)
     images = images.transpose([0, 2, 3, 1])  # NCHW -> NHWC
     if not (images.shape == (50000, 32, 32, 3) and images.dtype == np.uint8):
-        raise RuntimeError("Unexpected image shape or type")
+        raise ValueError("Unexpected image shape or type")
     if not (labels.shape == (50000,) and labels.dtype in [np.int32, np.int64]):
-        raise RuntimeError("Unexpected label shape or type")
+        raise ValueError("Unexpected label shape or type")
     if not (np.min(images) == 0 and np.max(images) == 255):
-        raise RuntimeError("Unexpected image value range")
+        raise ValueError("Unexpected image value range")
     if not (np.min(labels) == 0 and np.max(labels) == 9):
-        raise RuntimeError("Unexpected label value range")
+        raise ValueError("Unexpected label value range")
 
     max_idx = maybe_min(len(images), max_images)
 
@@ -232,13 +232,13 @@ def open_mnist(images_gz: str, *, max_images: Optional[int]):
     images = images.reshape(-1, 28, 28)
     images = np.pad(images, [(0, 0), (2, 2), (2, 2)], "constant", constant_values=0)
     if not (images.shape == (60000, 32, 32) and images.dtype == np.uint8):
-        raise RuntimeError("Unexpected image shape or type")
+        raise ValueError("Unexpected image shape or type")
     if not (labels.shape == (60000,) and labels.dtype == np.uint8):
-        raise RuntimeError("Unexpected label shape or type")
+        raise ValueError("Unexpected label shape or type")
     if not (np.min(images) == 0 and np.max(images) == 255):
-        raise RuntimeError("Unexpected image value range")
+        raise ValueError("Unexpected image value range")
     if not (np.min(labels) == 0 and np.max(labels) == 9):
-        raise RuntimeError("Unexpected label value range")
+        raise ValueError("Unexpected label value range")
 
     max_idx = maybe_min(len(images), max_images)
 
