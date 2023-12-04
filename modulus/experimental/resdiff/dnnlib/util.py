@@ -16,28 +16,27 @@
 
 import ctypes
 import fnmatch
+import glob
+import hashlib
+import html
 import importlib
 import inspect
-import numpy as np
-import os
-import shutil
-import sys
-import types
 import io
+import os
 import pickle
 import re
-import requests
-import html
-import hashlib
-import glob
+import shutil
+import sys
 import tempfile
+import types
 import urllib
 import urllib.request
 import uuid
-
 from distutils.util import strtobool
-from typing import Any, List, Tuple, Union, Optional
+from typing import Any, List, Optional, Tuple, Union
 
+import numpy as np
+import requests
 
 # Util classes
 # ------------------------------------------------------------------------------------------
@@ -229,12 +228,19 @@ def get_dtype_and_ctype(type_obj: Any) -> Tuple[np.dtype, Any]:
     else:
         raise RuntimeError("Cannot infer type name from input")
 
-    assert type_str in _str_to_ctype.keys()
+    if type_str not in _str_to_ctype.keys():
+        raise RuntimeError("Unknown type name: " + type_str)
 
     my_dtype = np.dtype(type_str)
     my_ctype = _str_to_ctype[type_str]
 
-    assert my_dtype.itemsize == ctypes.sizeof(my_ctype)
+    if my_dtype.itemsize != ctypes.sizeof(my_ctype):
+        raise RuntimeError(
+            "Numpy and ctypes types have different sizes: "
+            + str(my_dtype.itemsize)
+            + " vs "
+            + str(ctypes.sizeof(my_ctype))
+        )
 
     return my_dtype, my_ctype
 
@@ -315,9 +321,11 @@ def get_obj_by_name(name: str) -> Any:
 
 def call_func_by_name(*args, func_name: str = None, **kwargs) -> Any:
     """Finds the python object with the given name and calls it as a function."""
-    assert func_name is not None
+    if func_name is None:
+        raise ValueError("func_name must be specified")
     func_obj = get_obj_by_name(func_name)
-    assert callable(func_obj)
+    if not callable(func_obj):
+        raise ValueError(func_name + " is not callable")
     return func_obj(*args, **kwargs)
 
 
@@ -339,7 +347,8 @@ def is_top_level_function(obj: Any) -> bool:
 
 def get_top_level_function_name(obj: Any) -> str:
     """Return the fully-qualified name of a top-level function."""
-    assert is_top_level_function(obj)
+    if not is_top_level_function(obj):
+        raise ValueError("Object is not a top-level function")
     module = obj.__module__
     if module == "__main__":
         module = os.path.splitext(os.path.basename(sys.modules[module].__file__))[0]
@@ -355,7 +364,8 @@ def list_dir_recursively_with_ignore(
 ) -> List[Tuple[str, str]]:
     """List all files recursively in a given directory while ignoring given file and directory names.
     Returns list of tuples containing both absolute and relative paths."""
-    assert os.path.isdir(dir_path)
+    if not os.path.isdir(dir_path):
+        raise RuntimeError("Directory does not exist: " + dir_path)
     base_name = os.path.basename(os.path.normpath(dir_path))
 
     if ignores is None:
@@ -379,7 +389,8 @@ def list_dir_recursively_with_ignore(
         if add_base_to_relative:
             relative_paths = [os.path.join(base_name, p) for p in relative_paths]
 
-        assert len(absolute_paths) == len(relative_paths)
+        if len(absolute_paths) != len(relative_paths):
+            raise RuntimeError("Number of absolute and relative paths differ")
         result += zip(absolute_paths, relative_paths)
 
     return result
@@ -429,8 +440,10 @@ def open_url(
     cache: bool = True,
 ) -> Any:
     """Download the given URL and return a binary-mode file object to access the data."""
-    assert num_attempts >= 1
-    assert not (return_filename and (not cache))
+    if not num_attempts >= 1:
+        raise ValueError("num_attempts must be at least 1")
+    if return_filename and (not cache):
+        raise ValueError("return_filename requires cache=True")
 
     # Doesn't look like an URL scheme so interpret it as a local filename.
     if not re.match("^[a-z]+://", url):
@@ -456,7 +469,8 @@ def open_url(
             filename = filename[1:]
         return filename if return_filename else open(filename, "rb")
 
-    assert is_url(url)
+    if not is_url(url):
+        raise RuntimeError("Not a URL: " + url)
 
     # Lookup from cache.
     if cache_dir is None:
@@ -533,5 +547,6 @@ def open_url(
             return cache_file
 
     # Return data as file object.
-    assert not return_filename
+    if return_filename:
+        raise RuntimeError("return_filename requires cache=True")
     return io.BytesIO(url_data)

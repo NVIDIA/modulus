@@ -12,22 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import math
-import netCDF4 as nc
-import pylab as plt
 import datetime
-import xarray
-import matplotlib as mpl
+import math
 import pickle
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.colors as mcolors
-from matplotlib.colors import TwoSlopeNorm
-from scipy import interpolate
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pylab as plt
+import xarray
 from analysis_untils import *
+from matplotlib.colors import TwoSlopeNorm
 from matplotlib.gridspec import GridSpec
+from scipy import interpolate
 
 path_22 = "/lustre/fsw/sw_climate_fno/yacohen/diffusion/paper/2022.nc"
 

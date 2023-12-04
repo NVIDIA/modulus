@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .util import EasyDict, make_cache_dir_path, construct_class_by_name
+from .util import EasyDict, construct_class_by_name, make_cache_dir_path

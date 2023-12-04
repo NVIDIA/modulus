@@ -13,19 +13,20 @@
 # limitations under the License.
 
 import os
-import numpy as np
-import netCDF4 as nc
-import pylab as plt
-import xarray
-import matplotlib as mpl
 import pickle
 from datetime import datetime, timedelta
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.colors as mcolors
-from scipy.signal import periodogram
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pylab as plt
+import xarray
 import zarr
+from scipy.signal import periodogram
 
 path_rf = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/rf/era5-cwb-v3/validation_big/samples.nc"
 path_reg = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/regression/era5-cwb-v3/validation_big/samples.nc"

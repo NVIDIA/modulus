@@ -13,22 +13,21 @@
 # limitations under the License.
 
 import os
-import numpy as np
-import netCDF4 as nc
-import pylab as plt
-import xarray
-import matplotlib as mpl
 import pickle
 from datetime import datetime, timedelta
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-from analysis_untils import *
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pylab as plt
+import xarray
+from analysis_untils import *
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 storm_record = "/lustre/fsw/sw_climate_fno/yacohen/diffusion/paper/taiwan_TC_storms.txt"

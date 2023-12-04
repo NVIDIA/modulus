@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import xarray
-import numpy as np
-from scipy.signal import periodogram
-from scipy.fft import dctn, irfft
-import matplotlib.pyplot as plt
-import typer
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import typer
+import xarray
+from scipy.fft import irfft
+from scipy.signal import periodogram
 
 
 def open_data(file, group=False):
