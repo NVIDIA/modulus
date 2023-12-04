@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import os
-import numpy as np
-import netCDF4 as nc
-import pylab as plt
-import xarray
-import matplotlib as mpl
+import tarfile
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.colors as mcolors
-import tarfile
-import datetime
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pylab as plt
+import xarray
 from analysis_untils import *
 
 dx = 4000.0

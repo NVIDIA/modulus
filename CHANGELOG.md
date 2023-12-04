@@ -23,6 +23,8 @@ stability.
 
 ### Removed
 
+- The experimental SFNO
+
 ### Fixed
 
 ### Security

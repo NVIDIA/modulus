@@ -13,12 +13,12 @@
 # limitations under the License.
 
 # %%
-from fcn_mip.initial_conditions import get
-from fcn_mip import schema
 import datetime
-import xarray as xr
-
 import sys
+
+import xarray as xr
+from fcn_mip import schema
+from fcn_mip.initial_conditions import get
 
 OUTPUT = sys.argv[1]
 print(OUTPUT)

@@ -15,12 +15,13 @@
 """Minimal standalone example to reproduce the main results from the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import tqdm
 import pickle
-import numpy as np
-import torch
-import PIL.Image
+
 import dnnlib
+import numpy as np
+import PIL.Image
+import torch
+import tqdm
 
 # ----------------------------------------------------------------------------
 
@@ -47,6 +48,7 @@ def generate_image_grid(
     # Load network.
     print(f'Loading network from "{network_pkl}"...')
     with dnnlib.util.open_url(network_pkl) as f:
+        # ruff: noqa: S301  # TODO remove exception
         net = pickle.load(f)["ema"].to(device)
 
     # Pick latents and labels.
