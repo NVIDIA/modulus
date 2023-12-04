@@ -31,6 +31,8 @@ stability.
 
 ### Dependencies
 
+- Removed experimental SFNO dependencies
+
 ## [0.4.0] - 2023-11-20
 
 ### Added
