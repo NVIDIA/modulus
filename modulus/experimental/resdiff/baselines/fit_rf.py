@@ -13,20 +13,16 @@
 # limitations under the License.
 
 #%%
-import generate
-import netCDF4
+import random
+import sys
+
 import joblib
 import numpy as np
-import torch
-import typer
-import sys
-from training.YParams import YParams
-from training.dataset import get_zarr_dataset
 import tqdm
-import random
-
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.multioutput import MultiOutputRegressor
+from training.dataset import get_zarr_dataset
+from training.YParams import YParams
 
 datatype, config_name, output_pkl = sys.argv[1:]
 params = YParams(datatype, config_name)

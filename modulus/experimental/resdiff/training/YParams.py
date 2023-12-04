@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ruamel.yaml import YAML
 import logging
+
+from ruamel.yaml import YAML
 
 
 class YParams:

@@ -28,19 +28,22 @@
 
 # %%
 # %cd /home/nbrenowitz/workspace/diffusions-weather-forecast
-import config
 import os
+
+import config
 
 os.chdir("../../../")
 print(os.getcwd())
 import sys
+
 import torch
 
 sys.path.insert(0, ".")
 
+import os
+
 import generate
 from training.YParams import YParams
-import os
 
 
 # %%
@@ -84,8 +87,9 @@ x = x[None].cuda()
 y = y[None].cuda()
 
 # %%
-import torch
 import time
+
+import torch
 
 start = torch.cuda.Event(enable_timing=True)
 end = torch.cuda.Event(enable_timing=True)
@@ -125,9 +129,10 @@ def plot(y):
 plot(y)
 
 # %%
-import torch
 import time
+
 import pandas as pd
+import torch
 
 
 def benchmark_batch_size(x, n, net=net, reg=reg):

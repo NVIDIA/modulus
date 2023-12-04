@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import os
+
 import torch
+
 from . import training_stats
 
 # ----------------------------------------------------------------------------

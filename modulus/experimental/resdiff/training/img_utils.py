@@ -12,18 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import glob
-from types import new_class
-import torch
-import random
+
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
-from torch import Tensor
-import h5py
-import math
-import torchvision.transforms.functional as TF
 
 
 def reshape_fields(
@@ -67,9 +58,9 @@ def reshape_fields(
         means = np.load(params.global_means_path)[:, channels]
         stds = np.load(params.global_stds_path)[:, channels]
 
-    if crop_size_x == None:
+    if crop_size_x is None:
         crop_size_x = img_shape_x
-    if crop_size_y == None:
+    if crop_size_y is None:
         crop_size_y = img_shape_y
 
     if normalize and train:
@@ -84,18 +75,20 @@ def reshape_fields(
     if grid:
         if inp_or_tar == "inp":
             if params.gridtype == "linear":
-                assert (
-                    params.N_grid_channels == 2
-                ), "N_grid_channels must be set to 2 for gridtype linear"
+                if params.N_grid_channels != 2:
+                    raise ValueError(
+                        "N_grid_channels must be set to 2 for gridtype linear"
+                    )
                 x = np.meshgrid(np.linspace(-1, 1, img_shape_x))
                 y = np.meshgrid(np.linspace(-1, 1, img_shape_y))
                 grid_x, grid_y = np.meshgrid(y, x)
                 grid = np.stack((grid_x, grid_y), axis=0)
             elif params.gridtype == "sinusoidal":
                 # print('sinusuidal grid added ......')
-                assert (
-                    params.N_grid_channels == 4
-                ), "N_grid_channels must be set to 4 for gridtype sinusoidal"
+                if params.N_grid_channels != 4:
+                    raise ValueError(
+                        "N_grid_channels must be set to 4 for gridtype sinusoidal"
+                    )
                 n_channels = n_channels + params.N_grid_channels
                 x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_x)))
                 x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, img_shape_x)))
