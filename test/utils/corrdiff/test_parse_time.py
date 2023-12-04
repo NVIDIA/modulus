@@ -16,7 +16,6 @@ import datetime
 
 import cftime
 import yaml
-
 from training.time import convert_datetime_to_cftime
 
 
