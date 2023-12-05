@@ -14,9 +14,7 @@
 
 hydra:
   job:
-    chdir: True
-  run:
-    dir: ./outputs/
+    chdir: False
 
 
 ## Main options

@@ -19,6 +19,7 @@ import pickle
 import re
 
 import cftime
+import datetime
 import dnnlib
 import hydra
 import netCDF4 as nc
@@ -375,7 +376,7 @@ def get_dataset_and_sampler(
         all_times=all_times,
     )
     plot_times = [
-        training.time.convert_datetime_to_cftime(time) for time in times
+        training.time.convert_datetime_to_cftime(datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")) for time in times
     ]
     all_times = dataset.time()
     time_indices = [all_times.index(t) for t in plot_times]
