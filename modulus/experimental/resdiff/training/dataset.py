@@ -372,7 +372,6 @@ class ZarrDataset(torch.utils.data.Dataset):
             self.crop_size_y,
             rnd_x,
             rnd_y,
-            self.params,
             y_roll,
             self.train,
             self.n_history,
