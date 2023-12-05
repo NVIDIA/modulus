@@ -33,8 +33,11 @@ class_idx: null
 num_steps: 18
   # Number of sampling steps
 sample_res: "full"
+  # Sampling resolution
 pretext: null
+  # String to include the task
 res_edm: true
+  # If residual-based edm is used
 sampling_method: "stochastic"
   # Sampling method ["stochastic", "deterministic"]
 
