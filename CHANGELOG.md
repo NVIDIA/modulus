@@ -32,6 +32,7 @@ stability.
 ### Dependencies
 
 - Removed experimental SFNO dependencies
+- Added CorrDiff dependencies (cftime, einops, pyspng)
 
 ## [0.4.0] - 2023-11-20
 
