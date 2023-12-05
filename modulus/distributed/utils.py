@@ -22,6 +22,26 @@ import torch.nn.functional as F
 from .manager import DistributedManager
 
 
+def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
+    
+    # treat trivial case first
+    if num_chunks == 1:
+        return [size]
+    
+    # first, check if we can split using div-up to balance the load: 
+    chunk_size = (size + num_chunks - 1) // num_chunks
+    last_chunk_size = max(0, size - chunk_size * (num_chunks - 1))
+    if last_chunk_size == 0:
+        # in this case, the last shard would be empty, split with floor instead:
+        chunk_size = size // num_chunks
+        last_chunk_size = size - chunk_size * (num_chunks-1)
+
+    # generate sections list
+    sections = [chunk_size for _ in range(num_chunks - 1)] + [last_chunk_size]
+
+    return sections
+
+
 def get_memory_format(tensor):
     """Gets format for tensor"""
     if tensor.is_contiguous(memory_format=torch.channels_last):
@@ -71,20 +91,14 @@ def truncate_helper(tensor, dim, new_size):
 
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
-    """splits tensor along specific dim"""
-    if not (dim < tensor.dim()):
-        raise AssertionError(
-            f"Error, tensor dimension is {tensor.dim()} which cannot be"
-            f"split along {dim}"
-        )
-    if not (tensor.shape[dim] % num_chunks == 0):
-        raise AssertionError(
-            f"Error, cannot split dim {dim} evenly. Dim size is \
-        {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
-        )
-    chunk_size = tensor.shape[dim] // num_chunks
-    tensor_list = torch.split(tensor, chunk_size, dim=dim)
-
+    assert dim < tensor.dim(), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
+    assert (tensor.shape[dim] > num_chunks), f"Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
+                                              {num_chunks} chunks. Empty slices are currently not supported."
+    
+    # get split
+    sections = compute_split_shapes(tensor.shape[dim], num_chunks)
+    tensor_list = torch.split(tensor, sections, dim=dim)
+    
     return tensor_list
 
 
@@ -198,7 +212,7 @@ def _split(input_, dim_, group=None):  # pragma: no cover
     return output
 
 
-def _gather(input_, dim_, group=None):  # pragma: no cover
+def _gather(input_, dim_, shapes_=None, group=None):  # pragma: no cover
     """Gather tensors and concatenate along the specified dimension."""
     # get input format
     input_format = get_memory_format(input_)
@@ -218,7 +232,19 @@ def _gather(input_, dim_, group=None):  # pragma: no cover
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
 
-    tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
+    # make input contiguous
+    input_ = input_.contiguous(memory_format=input_format)
+    
+    if shapes_ is not None:
+        shape = list(input_.shape)
+        gather_shapes = []
+        for i in range(comm_size):
+            shape[dim] = shapes_[i]
+            gather_shapes.append(shape)
+            tensor_list = [torch.empty(shape, device=input_.device, dtype=input_.dtype) for shape in gather_shapes]
+    else:
+        tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
+        
     tensor_list[comm_rank] = input_
     dist.all_gather(tensor_list, input_, group=group)
 
