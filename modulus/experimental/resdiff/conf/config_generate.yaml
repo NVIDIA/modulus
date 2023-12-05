@@ -62,12 +62,12 @@ gridtype: "sinusoidal"
 N_grid_channels: 4
 normalization: "v1"
 times:
-  -2021-02-02T00:00:00
-  -2021-03-02T00:00:00
-  -2021-04-02T00:00:00
+  - 2021-02-02T00:00:00
+  - 2021-03-02T00:00:00
+  - 2021-04-02T00:00:00
   # hurricane
-  -2021-09-12T00:00:00
-  -2021-09-12T12:00:00
+  - 2021-09-12T00:00:00
+  - 2021-09-12T12:00:00
 
 ## Deterministic sampler options
 sigma_min: null
