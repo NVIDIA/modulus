@@ -15,15 +15,12 @@
 """Generate random images using the techniques described in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import os
 import pickle
 import re
-import sys
-from typing import List, Optional
 
 import cftime
-import click
 import dnnlib
+import hydra
 import netCDF4 as nc
 import numpy as np
 import torch
@@ -31,16 +28,10 @@ import tqdm
 import training.dataset
 import training.time
 from einops import rearrange
-from torch_utils import misc
+from omegaconf import DictConfig
 from training.dataset import (
-    CWBDataset,
-    CWBERA5DatasetV2,
-    ZarrDataset,
     denormalize,
 )
-
-# from training.dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-from training.YParams import YParams
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
@@ -51,15 +42,10 @@ def unet_regression(
     latents,
     img_lr,
     class_labels=None,
-    randn_like=torch.randn_like,
     num_steps=2,
     sigma_min=0.0,
     sigma_max=0.0,
     rho=7,
-    S_churn=0,
-    S_min=0,
-    S_max=float("inf"),
-    S_noise=0.0,
 ):
     # Adjust noise levels based on what's supported by the network.
     sigma_min = max(sigma_min, net.sigma_min)
@@ -118,6 +104,11 @@ def ablation_sampler(
     S_max=float("inf"),
     S_noise=1,
 ):
+
+    """
+    Generalized sampler, representing the superset of all sampling methods discussed
+    in the paper "Elucidating the Design Space of Diffusion-Based Generative Models"
+    """
 
     # conditioning
     x_lr = img_lr
@@ -337,58 +328,57 @@ def parse_int_list(s):
     return ranges
 
 
-def get_config_file(data_type):
-    config_root = os.getenv("CONFIG_ROOT", "configs")
-    config_file = os.path.join(config_root, data_type + ".yaml")
-    return config_file
+def get_dataset_and_sampler(
+    path,
+    n_history,
+    in_channels,
+    out_channels,
+    img_shape_x,
+    img_shape_y,
+    crop_size_x,
+    crop_size_y,
+    roll,
+    add_grid,
+    train,
+    ds_factor,
+    min_path,
+    max_path,
+    global_means_path,
+    global_stds_path,
+    gridtype,
+    N_grid_channels,
+    normalization="v1",
+    all_times=False,
+):
 
-
-def get_dataset_and_sampler(data_type, params):
-
-    if data_type == "cwb":
-        dataset = CWBDataset(params, params.test_data_path, train=False, task=opts.task)
-        sampler = misc.InfiniteSampler(
-            dataset=dataset, rank=0, num_replicas=1, seed=0
-        )  # rank=0
-        if max_times:
-            sampler = [
-                i for count, i in enumerate(dataset_sampler) if count < max_times
-            ]
-    elif data_type == "era5-cwb-v1":
-        filelist = os.listdir(path=params.cwb_data_dir)
-        filelist = [name for name in filelist if "2018" in name]
-        dataset = CWBERA5DatasetV2(
-            params, filelist=filelist, train=True, task=opts.task
-        )
-        sampler = misc.InfiniteSampler(
-            dataset=dataset, rank=0, num_replicas=1, seed=0
-        )  # rank=0
-        if max_times:
-            sampler = [
-                i for count, i in enumerate(dataset_sampler) if count < max_times
-            ]
-    elif data_type == "era5-cwb-v2":
-        dataset = ZarrDataset(params, params.train_data_path, train=True)
-        sampler = misc.InfiniteSampler(
-            dataset=dataset, rank=0, num_replicas=1, seed=0
-        )  # rank=0
-        if max_times:
-            sampler = [
-                i for count, i in enumerate(dataset_sampler) if count < max_times
-            ]
-    elif data_type == "era5-cwb-v3":
-        dataset = training.dataset.get_zarr_dataset(params, train=None, all_times=True)
-        plot_times = [
-            training.time.convert_datetime_to_cftime(time) for time in params.times
-        ]
-        all_times = dataset.time()
-        time_indices = [all_times.index(t) for t in plot_times]
-        sampler = time_indices
-    elif data_type == "netcdf":
-        dataset = training.dataset.get_netcdf_dataset(params)
-        sampler = list(range(len(dataset)))
-    else:
-        raise ValueError(data_type)
+    dataset = training.dataset.get_zarr_dataset(
+        path=path,
+        n_history=n_history,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        img_shape_x=img_shape_x,
+        img_shape_y=img_shape_y,
+        crop_size_x=crop_size_x,
+        crop_size_y=crop_size_y,
+        roll=roll,
+        add_grid=add_grid,
+        train=train,
+        ds_factor=ds_factor,
+        min_path=min_path,
+        max_path=max_path,
+        global_means_path=global_means_path,
+        global_stds_path=global_stds_path,
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,
+        normalization=normalization,
+        all_times=all_times,
+    )
+    plot_times = [
+        training.time.convert_datetime_to_cftime(time) for time in params.times
+    ]
+    all_times = dataset.time()
+    time_indices = [all_times.index(t) for t in plot_times]
+    sampler = time_indices
 
     return dataset, sampler
 
@@ -396,200 +386,91 @@ def get_dataset_and_sampler(data_type, params):
 # ----------------------------------------------------------------------------
 
 
-@click.command()
-@click.option(
-    "--network",
-    "network_pkl",
-    help="Network pickle filename",
-    metavar="PATH|URL",
-    type=str,
-    required=True,
-)
-@click.option(
-    "--outdir",
-    help="Where to save the output images",
-    metavar="DIR",
-    type=str,
-    required=True,
-)
-@click.option(
-    "--seeds",
-    help="Random seeds (e.g. 1,2,5-10)",
-    metavar="LIST",
-    type=parse_int_list,
-    default="0-63",
-    show_default=True,
-)
-@click.option(
-    "--max-times", help="maximum number of samples to draw", type=int, default=None
-)
-@click.option(
-    "--subdirs", help="Create subdirectory for every 1000 seeds", is_flag=True
-)
-@click.option(
-    "--class",
-    "class_idx",
-    help="Class label  [default: random]",
-    metavar="INT",
-    type=click.IntRange(min=0),
-    default=None,
-)
-@click.option(
-    "--batch",
-    "max_batch_size",
-    help="Maximum batch size",
-    metavar="INT",
-    type=click.IntRange(min=1),
-    default=64,
-    show_default=True,
-)
-@click.option(
-    "--steps",
-    "num_steps",
-    help="Number of sampling steps",
-    metavar="INT",
-    type=click.IntRange(min=1),
-    default=18,
-    show_default=True,
-)
-@click.option(
-    "--sigma_min",
-    help="Lowest noise level  [default: varies]",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0, min_open=True),
-)
-@click.option(
-    "--sigma_max",
-    help="Highest noise level  [default: varies]",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0, min_open=True),
-)
-@click.option(
-    "--rho",
-    help="Time step exponent",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0, min_open=True),
-    default=7,
-    show_default=True,
-)
-@click.option(
-    "--S_churn",
-    "S_churn",
-    help="Stochasticity strength",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0),
-    default=0,
-    show_default=True,
-)
-@click.option(
-    "--S_min",
-    "S_min",
-    help="Stoch. min noise level",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0),
-    default=0,
-    show_default=True,
-)
-@click.option(
-    "--S_max",
-    "S_max",
-    help="Stoch. max noise level",
-    metavar="FLOAT",
-    type=click.FloatRange(min=0),
-    default="inf",
-    show_default=True,
-)
-@click.option(
-    "--S_noise",
-    "S_noise",
-    help="Stoch. noise inflation",
-    metavar="FLOAT",
-    type=float,
-    default=1,
-    show_default=True,
-)
-@click.option(
-    "--solver",
-    help="Ablate ODE solver",
-    metavar="euler|heun",
-    type=click.Choice(["euler", "heun"]),
-)
-@click.option(
-    "--disc",
-    "discretization",
-    help="Ablate time step discretization {t_i}",
-    metavar="vp|ve|iddpm|edm",
-    type=click.Choice(["vp", "ve", "iddpm", "edm"]),
-)
-@click.option(
-    "--schedule",
-    help="Ablate noise schedule sigma(t)",
-    metavar="vp|ve|linear",
-    type=click.Choice(["vp", "ve", "linear"]),
-)
-@click.option(
-    "--scaling",
-    help="Ablate signal scaling s(t)",
-    metavar="vp|none",
-    type=click.Choice(["vp", "none"]),
-)
-@click.option(
-    "--data_type", help="String to include the data type", metavar="cwb|era5|cwb-era5"
-)
-@click.option(
-    "--data_config",
-    help="String to include the data config",
-    metavar="full_field_val_crop64",
-)
-@click.option(
-    "--task",
-    help="String to include the task",
-    metavar="sr|pred",
-    type=click.Choice(["sr", "pred"]),
-)
-@click.option(
-    "--sample_res",
-    help="String to include the task",
-    metavar="full|patch",
-    type=click.Choice(["full", "patch"]),
-)
-@click.option(
-    "--pretext",
-    help="String to include the task",
-    metavar="full|patch",
-    type=click.Choice(["gen", "reg", "res"]),
-)
-@click.option("--res_edm", help="if residual based edm used", is_flag=True)
-@click.option(
-    "--network_reg",
-    "network_reg_pkl",
-    help="Network pickle filename",
-    metavar="PATH|URL",
-    type=str,
-)
-@click.option(
-    "--sampling_method",
-    help="Sampling method for generation",
-    metavar="stochastic|deterministic|none",
-    type=click.Choice(["stochastic", "deterministic", "none"]),
-)
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
+def main(cfg: DictConfig) -> None:
+    """Generate random images using the techniques described in the paper
+    "Elucidating the Design Space of Diffusion-Based Generative Models".
+    """
 
-# def main(data_config, task, data_type, det_batch=None, gen_batch=None):
-def main(max_times: Optional[int], seeds: List[int], **kwargs):
+    # Parse options
+    res_ckpt_filename = getattr(cfg, "res_ckpt_filename")
+    reg_ckpt_filename = getattr(cfg, "reg_ckpt_filename")
+    image_outdir = getattr(cfg, "image_outdir")
+    seeds = getattr(cfg, "seeds", "0-63")
+    class_idx = getattr(cfg, "class_idx", None)  # TODO: is this needed?
+    num_steps = getattr(cfg, "num_steps", 18)
+    sample_res = getattr(cfg, "sample_res", "full")
+    pretext = getattr(cfg, "pretext", None)
+    res_edm = getattr(cfg, "res_edm", True)
+    sampling_method = getattr(cfg, "sampling_method", "stochastic")
 
-    opts = dnnlib.EasyDict(kwargs)
+    # Parse deterministic sampler options
+    sigma_min = getattr(cfg, "sigma_min", None)
+    sigma_max = getattr(cfg, "sigma_max", None)
+    rho = getattr(cfg, "rho", 7)
+    solver = getattr(cfg, "solver", "heun")
+    discretization = getattr(cfg, "discretization", "edm")
+    schedule = getattr(cfg, "schedule", "linear")
+    scaling = getattr(cfg, "scaling", None)
+    S_churn = getattr(cfg, "S_churn", 0)
+    S_min = getattr(cfg, "S_min", 0)
+    S_max = getattr(cfg, "S_max", float("inf"))
+    S_noise = getattr(cfg, "S_noise", 1)
+
+    # Parse data options
+    train_data_path = getattr(cfg, "train_data_path")
+    patch_size = getattr(cfg, "patch_size", 448)
+    crop_size_x = getattr(cfg, "crop_size_x", 448)
+    crop_size_y = getattr(cfg, "crop_size_y", 448)
+    n_history = (getattr(cfg, "n_history", 0),)
+    in_channels = (
+        getattr(cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]),
+    )
+    out_channels = (getattr(cfg, "out_channels", [0, 17, 18, 19]),)
+    img_shape_x = (getattr(cfg, "img_shape_x", 448),)
+    img_shape_y = (getattr(cfg, "img_shape_y", 448),)
+    roll = (getattr(cfg, "roll", False),)
+    add_grid = (getattr(cfg, "add_grid", True),)
+    ds_factor = (getattr(cfg, "ds_factor", 4),)
+    min_path = (getattr(cfg, "min_path", None),)
+    max_path = (getattr(cfg, "max_path", None),)
+    global_means_path = (getattr(cfg, "global_means_path", None),)
+    global_stds_path = (getattr(cfg, "global_stds_path", None),)
+    gridtype = (getattr(cfg, "gridtype", "sinusoidal"),)
+    N_grid_channels = (getattr(cfg, "N_grid_channels", 4),)
+    normalization = (getattr(cfg, "normalization", "v1"),)
+
+    # Sampler kwargs
+    if sampling_method == "stochastic":
+        sampler_kwargs = {}
+    elif sampling_method == "deterministic":
+        sampler_kwargs = {
+            "sigma_min": sigma_min,
+            "sigma_max": sigma_max,
+            "rho": rho,
+            "solver": solver,
+            "discretization": discretization,
+            "schedule": schedule,
+            "scaling": scaling,
+            "S_churn": S_churn,
+            "S_min": S_min,
+            "S_max": S_max,
+            "S_noise": S_noise,
+        }
+    else:
+        raise ValueError(f"Unknown sampling method {sampling_method}")
 
     # Initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # Initialize logger.
+    # Initialize logger
     logger = PythonLogger("generate")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging("generate.log")
 
     det_batch = None
-    gen_batch = None
+    gen_batch = None  # NOTE: This will always set the batch size to 1. Should be fixed.
 
     if gen_batch is None:
         gen_batch = 1  # max(4096 // net.img_resolution, 1)
@@ -600,41 +481,50 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
             f"det_batch ({det_batch}) must be divisible by gen_batch ({gen_batch})"
         )
 
-    logger0.info(f"opts.data_config: {opts.data_config}")
+    logger0.info(f"Train data path: {train_data_path}")
+    dataset, sampler = get_dataset_and_sampler(
+        path=train_data_path,  # TODO check if this should be train data path
+        n_history=n_history,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        img_shape_x=img_shape_x,
+        img_shape_y=img_shape_y,
+        crop_size_x=crop_size_x,
+        crop_size_y=crop_size_y,
+        roll=roll,
+        add_grid=add_grid,
+        train=None,
+        ds_factor=ds_factor,
+        min_path=min_path,
+        max_path=max_path,
+        global_means_path=global_means_path,
+        global_stds_path=global_stds_path,
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,
+        normalization=normalization,
+        all_times=True,
+    )
 
-    # Data
-    config_file = get_config_file(opts.data_type)
-    logger0.info(f"Config file: {config_file}")
-    params = YParams(config_file, config_name=opts.data_config)
-    patch_size = params.patch_size
-    crop_size_x = params.crop_size_x
-    crop_size_y = params.crop_size_y
-
-    root = os.getenv("DATA_ROOT", "")
-    params["train_data_path"] = os.path.join(root, params["train_data_path"])
-    logger0.info(f"Train data path: {params.train_data_path}")
-    dataset, sampler = get_dataset_and_sampler(opts.data_type, params)
-
-    with nc.Dataset(opts.outdir.format(rank=dist.rank), "w") as f:
+    with nc.Dataset(image_outdir.format(rank=dist.rank), "w") as f:
         # add attributes
-        f.history = " ".join(sys.argv)
-        f.network_pkl = kwargs["network_pkl"]
+        f.cfg = str(cfg)
 
         # Load network
         logger.info(f"torch.__version__: {torch.__version__}")
-        logger0.info(f'Loading network from "{opts.network_pkl}"...')
-        net = load_pickle(opts.network_pkl, dist.rank)
-        logger0.info(f'Loading network from "{opts.network_reg_pkl}"...')
-        net_reg = load_pickle(opts.network_reg_pkl, dist.rank) if opts.res_edm else None
+        logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
+        net_res = load_pickle(res_ckpt_filename, dist.rank)
+        logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
+        net_reg = load_pickle(reg_ckpt_filename, dist.rank) if res_edm else None
 
         # move to device
-        num_gpus = dist.world_size
         torch.cuda.set_device(dist.rank)
         device = dist.device
-        net = net.to(device)
+        net_res = net_res.to(device)
         net_reg = net_reg.to(device) if net_reg else None
 
-        batch_size = min(len(sampler), det_batch)
+        batch_size = min(
+            len(sampler), det_batch
+        )  # TODO: check if batch size can be more than 1
 
         def generate_fn(image_lr):
             """Function to generate an image with
@@ -645,9 +535,6 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
             Return
                 image_hr: high resolution output: shape (b, c, h, w)
             """
-            sample_res = opts.sample_res
-            class_idx = opts.class_idx
-            num_steps = opts.num_steps
             if sample_res == "full":
                 image_lr_patch = image_lr
             else:
@@ -671,25 +558,27 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
                     class_idx=class_idx,
                 )
                 image_out = image_mean + generate(
-                    net=net,
+                    net=net_res,
                     img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0],
-                    sampling_method=opts.sampling_method,
+                    sampling_method=sampling_method,
                     seeds=sample_seeds,
                     pretext="gen",
                     class_idx=class_idx,
                     num_steps=num_steps,
+                    sampler_kwargs=sampler_kwargs,
                 )
             else:
                 image_out = generate(
-                    net=net,
+                    net=net_res,
                     img_lr=image_lr_patch,
                     max_batch_size=image_lr_patch.shape[0],
-                    sampling_method=opts.sampling_method,
+                    sampling_method=sampling_method,
                     seeds=sample_seeds,
-                    pretext=opts.pretext,
+                    pretext=pretext,
                     class_idx=class_idx,
                     num_steps=num_steps,
+                    sampler_kwargs=sampler_kwargs,
                 )
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
