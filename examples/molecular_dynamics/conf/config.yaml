@@ -18,10 +18,12 @@ hydra:
   run:
     dir: ./outputs
 
+# while some parameters are hyper-parameters, some are based on physics of the problem.
+# unless specified explicity, the parameter is a hyper-parameter.
 model: 
-  input_dim_nodes: 1
-  input_dim_edges: 4
-  output_dim: 3
+  input_dim_nodes: 1  # Single atom type (change this if the system contains different type of atoms) 
+  input_dim_edges: 4  # 3 for 3 components of relative distance, 1 for norm of distance
+  output_dim: 3 # Predict 3 components of the forces
   processor_size: 4
   mlp_activation_fn: "gelu"
   num_layers_node_processor: 2
@@ -37,5 +39,5 @@ lr:
   start_lr: 0.0003
   gamma: 0.9999733124642265
 
-distance_threshold: 7.5
-box_size: 27.27
+distance_threshold: 7.5 # threshold for selecting neighbors for forming a fixed-radius graph
+box_size: 27.27 # simulation domain size. Periodic BCs are applied at the faces of this bounding box

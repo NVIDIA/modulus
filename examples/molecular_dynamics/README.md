@@ -2,7 +2,8 @@
 
 This example demonstrates the use of MeshGrapNet from Modulus applied to a Molecular
 Dynamics use case.
-The example solves the Lennard Jones System as described in the [paper here](https://arxiv.org/abs/2112.03383).
+The example is focused on a Lennard Jones System as described in the
+[paper here](https://arxiv.org/abs/2112.03383).
 
 ## Problem overview
 

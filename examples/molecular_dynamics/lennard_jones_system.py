@@ -15,6 +15,7 @@
 import torch
 import os
 from torch.utils.data import DataLoader
+from typing import Tuple
 import numpy as np
 import dgl
 import hydra
@@ -37,12 +38,40 @@ from utils import (
 )
 
 
-def prepare_input(pos, forces, box_size, rotation_matrix=None, add_random_noise=False):
+def prepare_input(
+    pos: np.ndarray,
+    forces: np.ndarray,
+    box_size: float,
+    rotation_matrix: np.ndarray = None,
+    add_random_noise: bool = False,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Perform transformations on the input for data augmentation
+
+    Parameters
+    ----------
+    pos : np.ndarray
+        Coordinates of the atoms. [N, 3]
+    forces : np.ndarray
+        True force components on each atom. [N, 3]
+    box_size : float
+        Bounding box for the periodic domain
+    rotation_matrix : np.ndarray, optional
+        Rotation matrix to rotate the coordinates and forces. [3, 3], by default None
+    add_random_noise : bool, optional
+        Whether to add a random displacement to the coordinates, by default False
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        Transformed coordinates and forces
     """
+
     pos = np.mod(pos, box_size)
     off = np.mean(pos, axis=0)
+
+    # Rotate the whole system. As the interatomic distance remains unchanged,
+    # the forces can just be rotated using the same transformation
     if rotation_matrix is not None:
         pos = pos - off
         pos = np.matmul(pos, rotation_matrix)
@@ -176,6 +205,10 @@ def main(cfg: DictConfig) -> None:
                 ).to(dist.device)
 
                 optimizer.zero_grad()
+
+                # L1 loss to encourage network to learn minimal message-passing required
+                # for force prediction.
+                # Regularization of penalize the total sum of forces.
                 loss = F.l1_loss(out, true_out) + 0.001 * torch.mean(out).abs()
                 loss.backward()
                 optimizer.step()
@@ -236,7 +269,7 @@ def main(cfg: DictConfig) -> None:
                         true_out_np = true_out.detach().cpu().numpy()
                         forces_pair.append((out_np, true_out_np))
 
-                        # angle computation
+                        # Compute the angle of predicted forces
                         dot_product = np.sum(out_np * true_out_np, axis=1)
                         out_np_mag = np.linalg.norm(out_np, axis=1)
                         true_out_np_mag = np.linalg.norm(true_out_np, axis=1)
@@ -246,18 +279,24 @@ def main(cfg: DictConfig) -> None:
 
                     plt.clf()
                     plt.figure(figsize=(5, 5))
+
+                    # Compute the total force vector
                     for force_system in forces_pair:
                         pred, true = force_system
-                        pred_mag = pred[:, 0] + pred[:, 1] + pred[:, 2]
-                        true_mag = true[:, 0] + true[:, 1] + true[:, 2]
-                        plt.scatter(pred_mag, true_mag, s=5, c="black")
+                        pred_total = (
+                            pred[:, 0] + pred[:, 1] + pred[:, 2]
+                        ) * force_sd + force_mean
+                        true_total = (
+                            true[:, 0] + true[:, 1] + true[:, 2]
+                        ) * force_sd + force_mean
+                        plt.scatter(pred_total, true_total, s=5, c="black")
 
                     cosine_percentage = (
                         np.concatenate(cosines, axis=0) > 0.995
                     ).sum() / np.concatenate(cosines, axis=0).shape[0]
 
                     # plot y=x line
-                    x = list(range(-20, 20))
+                    x = list(range(-0.5, 0.5))
                     y = x
                     plt.plot(x, y, color="blue", linestyle="--")
 
@@ -267,8 +306,8 @@ def main(cfg: DictConfig) -> None:
                         f"Cosine Percentage: {round(cosine_percentage, 3)}",
                         fontsize=8,
                     )
-                    plt.xlim([-20, 20])
-                    plt.ylim([-20, 20])
+                    plt.xlim([-0.5, 0.5])
+                    plt.ylim([-0.5, 0.5])
                     plt.gca().set_aspect("equal")
                     plt.savefig(f"results_figure_{epoch}.png")
 
