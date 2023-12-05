@@ -422,23 +422,23 @@ def main(cfg: DictConfig) -> None:
     patch_size = getattr(cfg, "patch_size", 448)
     crop_size_x = getattr(cfg, "crop_size_x", 448)
     crop_size_y = getattr(cfg, "crop_size_y", 448)
-    n_history = (getattr(cfg, "n_history", 0),)
-    in_channels = (
-        getattr(cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]),
+    n_history = getattr(cfg, "n_history", 0)
+    in_channels = getattr(
+        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
     )
-    out_channels = (getattr(cfg, "out_channels", [0, 17, 18, 19]),)
-    img_shape_x = (getattr(cfg, "img_shape_x", 448),)
-    img_shape_y = (getattr(cfg, "img_shape_y", 448),)
-    roll = (getattr(cfg, "roll", False),)
-    add_grid = (getattr(cfg, "add_grid", True),)
-    ds_factor = (getattr(cfg, "ds_factor", 4),)
-    min_path = (getattr(cfg, "min_path", None),)
-    max_path = (getattr(cfg, "max_path", None),)
-    global_means_path = (getattr(cfg, "global_means_path", None),)
-    global_stds_path = (getattr(cfg, "global_stds_path", None),)
-    gridtype = (getattr(cfg, "gridtype", "sinusoidal"),)
-    N_grid_channels = (getattr(cfg, "N_grid_channels", 4),)
-    normalization = (getattr(cfg, "normalization", "v1"),)
+    out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
+    img_shape_x = getattr(cfg, "img_shape_x", 448)
+    img_shape_y = getattr(cfg, "img_shape_y", 448)
+    roll = getattr(cfg, "roll", False)
+    add_grid = getattr(cfg, "add_grid", True)
+    ds_factor = getattr(cfg, "ds_factor", 4)
+    min_path = getattr(cfg, "min_path", None)
+    max_path = getattr(cfg, "max_path", None)
+    global_means_path = getattr(cfg, "global_means_path", None)
+    global_stds_path = getattr(cfg, "global_stds_path", None)
+    gridtype = getattr(cfg, "gridtype", "sinusoidal")
+    N_grid_channels = getattr(cfg, "N_grid_channels", 4)
+    normalization = getattr(cfg, "normalization", "v1")
 
     # Sampler kwargs
     if sampling_method == "stochastic":
