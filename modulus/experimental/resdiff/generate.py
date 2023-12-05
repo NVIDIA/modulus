@@ -347,6 +347,7 @@ def get_dataset_and_sampler(
     global_stds_path,
     gridtype,
     N_grid_channels,
+    times,
     normalization="v1",
     all_times=False,
 ):
@@ -374,7 +375,7 @@ def get_dataset_and_sampler(
         all_times=all_times,
     )
     plot_times = [
-        training.time.convert_datetime_to_cftime(time) for time in params.times
+        training.time.convert_datetime_to_cftime(time) for time in times
     ]
     all_times = dataset.time()
     time_indices = [all_times.index(t) for t in plot_times]
@@ -439,6 +440,7 @@ def main(cfg: DictConfig) -> None:
     gridtype = getattr(cfg, "gridtype", "sinusoidal")
     N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     normalization = getattr(cfg, "normalization", "v1")
+    times = getattr(cfg, "times", ['2021-02-02T00:00:00'])
 
     # Sampler kwargs
     if sampling_method == "stochastic":
@@ -501,6 +503,7 @@ def main(cfg: DictConfig) -> None:
         global_stds_path=global_stds_path,
         gridtype=gridtype,
         N_grid_channels=N_grid_channels,
+        times=times,
         normalization=normalization,
         all_times=True,
     )
