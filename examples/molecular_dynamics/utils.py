@@ -33,9 +33,8 @@ def compute_mean_var(dir_path):
             # Load the .npz file
             with np.load(filepath, "rb") as data:
                 forces = data["forces"].astype(np.float32)
-                all_forces.extend(np.sum(forces, axis=1))
+                all_forces.extend(forces.reshape(1, -1))
 
-    # print(np.array(all_dist).shape)
     force_mean = np.mean(np.array(all_forces))
     force_sd = np.std(np.array(all_forces))
 

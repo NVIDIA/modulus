@@ -257,18 +257,18 @@ def main(cfg: DictConfig) -> None:
                     ).sum() / np.concatenate(cosines, axis=0).shape[0]
 
                     # plot y=x line
-                    x = list(range(-15, 15))
+                    x = list(range(-20, 20))
                     y = x
                     plt.plot(x, y, color="blue", linestyle="--")
 
                     plt.text(
                         1,
-                        -14,
+                        -19,
                         f"Cosine Percentage: {round(cosine_percentage, 3)}",
                         fontsize=8,
                     )
-                    plt.xlim([-15, 15])
-                    plt.ylim([-15, 15])
+                    plt.xlim([-20, 20])
+                    plt.ylim([-20, 20])
                     plt.gca().set_aspect("equal")
                     plt.savefig(f"results_figure_{epoch}.png")
 

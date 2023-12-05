@@ -31,7 +31,7 @@ model:
 
 wb_artifacts: False
 
-max_epochs: 30
+max_epochs: 35
 
 lr:
   start_lr: 0.0003
