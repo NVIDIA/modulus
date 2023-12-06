@@ -123,7 +123,7 @@ def training_loop(
         add_grid=add_grid,
         ds_factor=ds_factor,
         train=True,
-        all_times=False,  # TODO check if this should be False
+        all_times=True,  # TODO check if this should be False
         n_history=n_history,
         min_path=min_path,
         max_path=max_path,
@@ -189,6 +189,8 @@ def training_loop(
             output_device=dist.device,
             find_unused_parameters=dist.find_unused_parameters,
         )
+    else:
+        ddp = net
     ema = copy.deepcopy(net).eval().requires_grad_(False)
 
     # Import autoresume module
