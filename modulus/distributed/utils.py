@@ -239,9 +239,9 @@ def _gather(input_, dim_, shapes_=None, group=None):  # pragma: no cover
         shape = list(input_.shape)
         gather_shapes = []
         for i in range(comm_size):
-            shape[dim] = shapes_[i]
+            shape[dim_] = shapes_[i]
             gather_shapes.append(shape)
-            tensor_list = [torch.empty(shape, device=input_.device, dtype=input_.dtype) for shape in gather_shapes]
+        tensor_list = [torch.empty(shape, device=input_.device, dtype=input_.dtype) for shape in gather_shapes]
     else:
         tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
         
