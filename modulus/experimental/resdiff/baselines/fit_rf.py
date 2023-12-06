@@ -13,24 +13,21 @@
 # limitations under the License.
 
 #%%
-import generate
-import netCDF4
+import random
+import sys
+
 import joblib
 import numpy as np
-import torch
-import typer
-import sys
-from training.YParams import YParams
-from training.dataset import get_zarr_dataset
 import tqdm
-import random
-
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.multioutput import MultiOutputRegressor
+from training.dataset import get_zarr_dataset
+from training.YParams import YParams
 
 datatype, config_name, output_pkl = sys.argv[1:]
 params = YParams(datatype, config_name)
 dataset = get_zarr_dataset(params, train=True)
+
 
 def dataset_to_xy(dataset, n, samples_per_index):
     inds = list(range(len(dataset)))
@@ -58,6 +55,7 @@ def dataset_to_xy(dataset, n, samples_per_index):
     y = np.concatenate(ys)
 
     return X, y
+
 
 X, y = dataset_to_xy(dataset, n=200, samples_per_index=200)
 

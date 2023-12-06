@@ -29,27 +29,30 @@
 # %%
 
 # %%
-import xarray as xr
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import fsspec
 import sys
+
+import fsspec
+import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
+
 sys.path.insert(0, "../../../")
+import os
+
+import analysis_untils
+import config
 import power_spectra
 from scipy.fft import fftshift, irfft
-import os
-import config
-import analysis_untils
 
 url = os.path.join(config.root, "generations/era5-cwb-v3/validation_big/samples.zarr")
 output = os.path.splitext(__file__)[0]
 
 
 # %%
-coords =  xr.open_zarr(url)
-pred = xr.open_zarr(url, group='prediction').merge(coords)
-truth = xr.open_zarr(url, group='truth').merge(coords)
+coords = xr.open_zarr(url)
+pred = xr.open_zarr(url, group="prediction").merge(coords)
+truth = xr.open_zarr(url, group="truth").merge(coords)
 
 reg = analysis_untils.load_regression_data()
 
@@ -71,15 +74,15 @@ pred_avg = pred.mean(["time"]).load()
 truth_avg = truth.mean(["time"]).load()
 
 # %%
-field = 'maximum_radar_reflectivity'
+field = "maximum_radar_reflectivity"
 bottom = 1e-2
 
 
 def plot_spectra_and_acf(output, truth, reg, field, bottom):
-    y, x  = xr.align(truth[field], reg[field].isel(ensemble=0), join="inner")
+    y, x = xr.align(truth[field], reg[field].isel(ensemble=0), join="inner")
 
     f, pw_y = power_spectra.average_power_spectrum(y, d=2)
-    _, pw_anom = power_spectra.average_power_spectrum(y-x, d=2)
+    _, pw_anom = power_spectra.average_power_spectrum(y - x, d=2)
 
     fig, (a, b) = plt.subplots(1, 2, figsize=(7, 3), constrained_layout=True)
 
@@ -90,7 +93,6 @@ def plot_spectra_and_acf(output, truth, reg, field, bottom):
     a.set_xlabel("Frequency (1/km)")
     a.grid()
     a.legend()
-
 
     acf_y = power_spectra.power_spectra_to_acf(f, pw_y)
     acf_anom = power_spectra.power_spectra_to_acf(f, pw_anom)
@@ -108,7 +110,11 @@ def plot_spectra_and_acf(output, truth, reg, field, bottom):
 
 
 os.makedirs(output, exist_ok=True)
-for field in ["maximum_radar_reflectivity", "eastward_wind_10m", "northward_wind_10m", "temperature_2m"]:
+for field in [
+    "maximum_radar_reflectivity",
+    "eastward_wind_10m",
+    "northward_wind_10m",
+    "temperature_2m",
+]:
     path = os.path.join(output, f"{field}.pdf")
     plot_spectra_and_acf(path, truth, reg, field, bottom)
-

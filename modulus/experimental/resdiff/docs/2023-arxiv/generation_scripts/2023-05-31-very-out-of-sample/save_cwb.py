@@ -13,16 +13,15 @@
 # limitations under the License.
 
 # %%
-from fcn_mip.initial_conditions import get
-from fcn_mip import schema
 import datetime
-import xarray as xr
-
 import sys
+
+import xarray as xr
+from fcn_mip import schema
+from fcn_mip.initial_conditions import get
 
 OUTPUT = sys.argv[1]
 print(OUTPUT)
- 
 
 
 times = [
@@ -42,7 +41,6 @@ times = [
 ]
 
 times = sorted(times)
-
 
 
 # from here: https://gitlab-master.nvidia.com/jpathak/parallel-data-preprocessing/-/blob/selene/cwb/run.py#L157
@@ -71,14 +69,27 @@ times = sorted(times)
 # ]
 
 in_channels = [
- 'tcwv', 
- 'z500', 't500', 'u500', 'v500',
- 'z700', 't700', 'u700', 'v700',
- 'z850', 't850', 'u850', 'v850',
- 'z925', 't925', 'u925', 'v925',
- 't2m', 'u10m', 'v10m'
+    "tcwv",
+    "z500",
+    "t500",
+    "u500",
+    "v500",
+    "z700",
+    "t700",
+    "u700",
+    "v700",
+    "z850",
+    "t850",
+    "u850",
+    "v850",
+    "z925",
+    "t925",
+    "u925",
+    "v925",
+    "t2m",
+    "u10m",
+    "v10m",
 ]
-
 
 
 output = []
@@ -87,7 +98,7 @@ for time in times:
     data = data.sel(channel=in_channels)
     output.append(data)
 
-output = xr.concat(output, dim='time')
+output = xr.concat(output, dim="time")
 
 # run from ngc
 cwb_path = "s3://sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"

@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-import h5py
+import datetime
 
-from modulus.experimental.sfno.datasets import era5
+import cftime
+import yaml
+from training.time import convert_datetime_to_cftime
 
 
-def test_open_34_vars(tmp_path: pathlib.Path):
-    path = tmp_path / "1979.h5"
-    with h5py.File(path, "w") as f:
-        f.create_dataset("fields", shape=[1, 34, 721, 1440])
+def test_datetime_yaml():
+    dt = datetime.datetime(2011, 1, 1)
+    s = dt.isoformat()
+    loaded = yaml.safe_load(s)
+    assert dt == loaded
 
-    ds = era5.open_34_vars(path)
-    # ensure that data can be grabbed
-    ds.mean().compute()
 
-    assert set(ds.coords) == {"time", "channel", "lat", "lon"}
+def test_convert_to_cftime():
+    dt = datetime.datetime(2011, 1, 1)
+    expected = cftime.DatetimeGregorian(2011, 1, 1)
+    assert convert_datetime_to_cftime(dt) == expected

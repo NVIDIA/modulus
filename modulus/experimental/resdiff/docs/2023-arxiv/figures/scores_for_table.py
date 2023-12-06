@@ -28,16 +28,23 @@
 
 # %%
 scores = {}
-scores["ResDiff"] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/generations/era5-cwb-v3/validation_big/scores.nc"
-scores["Reg"] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/regression/era5-cwb-v3/validation_big/scores.nc"
-scores["RF"] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/rf/era5-cwb-v3/validation_big/scores.nc"
-scores["ERA5"] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/era5/era5-cwb-v3/validation_big/scores.nc"
+scores[
+    "ResDiff"
+] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/generations/era5-cwb-v3/validation_big/scores.nc"
+scores[
+    "Reg"
+] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/regression/era5-cwb-v3/validation_big/scores.nc"
+scores[
+    "RF"
+] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/rf/era5-cwb-v3/validation_big/scores.nc"
+scores[
+    "ERA5"
+] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/era5/era5-cwb-v3/validation_big/scores.nc"
 
 # %%
-import xarray
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import xarray
 
 arrs = [xarray.open_dataset(path) for path in scores.values()]
 ds = xarray.concat(arrs, dim=xarray.Variable(["model"], list(scores)))
@@ -45,14 +52,19 @@ ds = xarray.concat(arrs, dim=xarray.Variable(["model"], list(scores)))
 # %%
 df = ds.mean("time").to_dataframe()
 idx = pd.IndexSlice
-plotme = df.loc[idx[:, ['crps', 'mae']], :]
+plotme = df.loc[idx[:, ["crps", "mae"]], :]
 
-names = {"eastward_wind_10m": "u10m", "northward_wind_10m": "v10m", "maximum_radar_reflectivity": "Radar", "temperature_2m": "t2m"}
+names = {
+    "eastward_wind_10m": "u10m",
+    "northward_wind_10m": "v10m",
+    "maximum_radar_reflectivity": "Radar",
+    "temperature_2m": "t2m",
+}
 
 plotme.columns = [names[c] for c in plotme.columns]
 
-styler =  (plotme.style
-    .format(precision=2)
+styler = (
+    plotme.style.format(precision=2)
     .format_index(escape="latex", axis=1)
     .format_index(escape="latex", axis=0)
 )

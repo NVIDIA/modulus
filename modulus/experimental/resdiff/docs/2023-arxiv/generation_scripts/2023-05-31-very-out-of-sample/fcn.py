@@ -33,17 +33,18 @@
 # %pip install git+ssh://git@gitlab-master.nvidia.com:12051/earth-2/fcn-mip.git@main
 
 # %%
-from fcn_mip.initial_conditions.cds import get
-from fcn_mip.schema import  ChannelSet
+import datetime
 import os
+
 from fcn_mip import schema, weather_events
 from fcn_mip.initial_conditions import get
-import datetime
+from fcn_mip.initial_conditions.cds import get
+from fcn_mip.schema import ChannelSet
 
 time = datetime.datetime(2021, 9, 10, 0)
 
 kw = dict(time=time, channel_set=schema.ChannelSet.var73, n_history=0)
-ic= get(source=weather_events.InitialConditionSource.cds, **kw)
+ic = get(source=weather_events.InitialConditionSource.cds, **kw)
 # need to hack around bug in cds source
 # https://gitlab-master.nvidia.com/earth-2/fcn-mip/-/issues/56
 cds = ic.roll(lon=720)
@@ -54,48 +55,44 @@ cds.rename("fields").to_netcdf("ic.nc")
 {
     "simulation_length": 12,
     "weather_event": {
-      "properties": {
-        "name": "Globe",
-        "netcdf": "ic.nc"
-      },
-      "domains": [
-        {
-          "name": "global",
-          "type": "Window",
-          "diagnostics": [
+        "properties": {"name": "Globe", "netcdf": "ic.nc"},
+        "domains": [
             {
-              "type": "raw",
-              "channels": [
-                  "tcwv",
-                  "z500",
-                  "t500",
-                  "u500",
-                  "v500",
-                  "z700",
-                  "t700",
-                  "u700",
-                  "v700",
-                  "z850",
-                  "t850",
-                  "u850",
-                  "v850",
-                  "z925",
-                  "t925",
-                  "u925",
-                  "v925",
-                  "t2m",
-                  "u10m",
-                  "v10m"
-                ]
-
+                "name": "global",
+                "type": "Window",
+                "diagnostics": [
+                    {
+                        "type": "raw",
+                        "channels": [
+                            "tcwv",
+                            "z500",
+                            "t500",
+                            "u500",
+                            "v500",
+                            "z700",
+                            "t700",
+                            "u700",
+                            "v700",
+                            "z850",
+                            "t850",
+                            "u850",
+                            "v850",
+                            "z925",
+                            "t925",
+                            "u925",
+                            "v925",
+                            "t2m",
+                            "u10m",
+                            "v10m",
+                        ],
+                    }
+                ],
             }
-          ]
-        }
-      ]
+        ],
     },
     "output_path": "output",
     "output_frequency": 1,
-    "fcn_model": "sfno_coszen"
+    "fcn_model": "sfno_coszen",
 }
 
 # %% language="bash"
@@ -108,43 +105,43 @@ cds.rename("fields").to_netcdf("ic.nc")
 import xarray
 
 root = xarray.open_dataset("output/ensemble_out_0.nc")
-output = xarray.open_dataset("output/ensemble_out_0.nc", group='global').merge(root)
+output = xarray.open_dataset("output/ensemble_out_0.nc", group="global").merge(root)
 output
 
 # %%
 channels = [
-                  "tcwv",
-                  "z500",
-                  "t500",
-                  "u500",
-                  "v500",
-                  "z700",
-                  "t700",
-                  "u700",
-                  "v700",
-                  "z850",
-                  "t850",
-                  "u850",
-                  "v850",
-                  "z925",
-                  "t925",
-                  "u925",
-                  "v925",
-                  "t2m",
-                  "u10m",
-                  "v10m"
-                ]
+    "tcwv",
+    "z500",
+    "t500",
+    "u500",
+    "v500",
+    "z700",
+    "t700",
+    "u700",
+    "v700",
+    "z850",
+    "t850",
+    "u850",
+    "v850",
+    "z925",
+    "t925",
+    "u925",
+    "v925",
+    "t2m",
+    "u10m",
+    "v10m",
+]
 
 cwb_path = "/lustre/fsw/sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"
 cwb = xarray.open_zarr(cwb_path)
 xlat = cwb["XLAT"]
 xlong = cwb["XLONG"]
-p = output.to_array(dim='channel', name='fields').sel(channel=channels).isel(ensemble=0)
+p = output.to_array(dim="channel", name="fields").sel(channel=channels).isel(ensemble=0)
 interpolated = p.interp(lat=xlat, lon=xlong)
 interpolated = interpolated.transpose("time", "channel", "south_north", "west_east")
 
 dataset = interpolated.to_dataset()
-dataset['target'] = cwb.cwb.sel(time=output.time)
+dataset["target"] = cwb.cwb.sel(time=output.time)
 
 dataset.to_netcdf("fcn_outputs.nc")
 
@@ -163,11 +160,14 @@ dataset.to_netcdf("fcn_outputs.nc")
 # convert -delay 25 -loop 0 generations/netcdf/fcn/singlke/*.sample.png generations/netcdf/sample.gif
 
 # %%
-from IPython.display import display, HTML
 import base64
 
+from IPython.display import HTML, display
+
+
 def embed_gif(path):
-    b64 = base64.b64encode(open(path,'rb').read()).decode('ascii')
+    b64 = base64.b64encode(open(path, "rb").read()).decode("ascii")
     return HTML(f'<img src="data:image/gif;base64,{b64}" />')
+
 
 display(embed_gif("../../../generations/netcdf/sample.gif"))

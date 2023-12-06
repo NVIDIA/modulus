@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import yaml
 import datetime
+
 import cftime
+import yaml
+
 from training.time import convert_datetime_to_cftime
+
+# ruff: noqa: S101  # TODo remove exception
+
 
 def test_datetime_yaml():
     dt = datetime.datetime(2011, 1, 1)

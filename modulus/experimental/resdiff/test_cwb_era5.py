@@ -35,7 +35,7 @@
 # #                               filelist=["2018_01.h5", "2018_02.h5"])
 
 # import os
-# filelist = os.listdir(path=params.cwb_data_dir)  
+# filelist = os.listdir(path=params.cwb_data_dir)
 # filelist = [name for name in filelist if "2018" in name]
 # print(filelist)
 # validation_set = CWBERA5DatasetV2(params, filelist=filelist)  #["2018_01.h5", "2018_02.h5"])

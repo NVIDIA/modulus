@@ -14,13 +14,11 @@
 
 import os
 
-import matplotlib.pyplot as plt
-import click
-
-import numpy as np
 import cftime
-
+import click
+import matplotlib.pyplot as plt
 import netCDF4 as nc
+import numpy as np
 
 
 def pattern_correlation(x, y):
@@ -84,9 +82,9 @@ def get_clim(output_channels, f):
 
 
 @click.command()
-@click.argument('file')
-@click.argument('output_dir')
-@click.option('--sample', help='sample to plot', default=0, type=int)
+@click.argument("file")
+@click.argument("output_dir")
+@click.option("--sample", help="sample to plot", default=0, type=int)
 def main(file, output_dir, sample):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -98,7 +96,7 @@ def main(file, output_dir, sample):
     times = cftime.num2date(v, units=v.units, calendar=v.calendar)
 
     def plot_panel(ax, data, **kwargs):
-        return ax.pcolormesh(f['lon'], f['lat'], data, cmap='RdBu_r', **kwargs)
+        return ax.pcolormesh(f["lon"], f["lat"], data, cmap="RdBu_r", **kwargs)
 
     colorlimits = get_clim(output_channels, f)
     for idx in range(len(times)):
@@ -135,12 +133,15 @@ def main(file, output_dir, sample):
 
             vmin, vmax = colorlimits[channel]
 
-
             def plot_panel(ax, data, **kwargs):
                 if channel == "maximum_radar_reflectivity":
-                    return ax.pcolormesh(f['lon'], f['lat'], data, cmap='magma', vmin=0, vmax=vmax)
+                    return ax.pcolormesh(
+                        f["lon"], f["lat"], data, cmap="magma", vmin=0, vmax=vmax
+                    )
                 if channel == "temperature_2m":
-                    return ax.pcolormesh(f['lon'], f['lat'], data, cmap='magma', vmin=vmin, vmax=vmax)
+                    return ax.pcolormesh(
+                        f["lon"], f["lat"], data, cmap="magma", vmin=vmin, vmax=vmax
+                    )
                 else:
                     if vmin < 0 < vmax:
                         bound = max(abs(vmin), abs(vmax))
@@ -149,8 +150,9 @@ def main(file, output_dir, sample):
                     else:
                         vmin1 = vmin
                         vmax1 = vmax
-                    return ax.pcolormesh(f['lon'], f['lat'], data, cmap='RdBu_r', vmin=vmin1, vmax=vmax1)
-
+                    return ax.pcolormesh(
+                        f["lon"], f["lat"], data, cmap="RdBu_r", vmin=vmin1, vmax=vmax1
+                    )
 
             if x is not None:
                 plot_panel(row[0], x)
@@ -169,10 +171,10 @@ def main(file, output_dir, sample):
             row[1].set_title(f"Generated, Pattern correlation: {label_y:.2f}")
 
         for ax in axs[-1]:
-            ax.set_xlabel('longitude [deg E]')
+            ax.set_xlabel("longitude [deg E]")
 
         for ax in axs[:, 0]:
-            ax.set_ylabel('latitude [deg N]')
+            ax.set_ylabel("latitude [deg N]")
 
         time = times[idx]
         plt.suptitle(f"Time {time.isoformat()}")
