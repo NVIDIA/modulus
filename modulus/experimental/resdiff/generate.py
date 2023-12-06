@@ -415,7 +415,7 @@ def main(cfg: DictConfig) -> None:
     crop_size_y = getattr(cfg, "crop_size_y", 448)
     n_history = getattr(cfg, "n_history", 0)
     in_channels = getattr(
-        cfg, "in_channels", [0,1,2,3,4,9,10,11,12,17,18,19] 
+        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
     )
     out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
     img_shape_x = getattr(cfg, "img_shape_x", 448)

@@ -16,12 +16,13 @@
 
 import re
 
+
 def parse_int_list(s):
     """
     Parse a comma separated list of numbers or ranges and return a list of ints.
     Example: '1,2,5-10' returns [1, 2, 5, 6, 7, 8, 9, 10]
     """
-    if isinstance(s, list):
+    if isinstance(s, list) or s is None:
         return s
     ranges = []
     range_re = re.compile(r"^(\d+)-(\d+)$")

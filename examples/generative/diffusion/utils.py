@@ -41,6 +41,7 @@ import numpy as np
 import requests
 import torch
 
+
 class EasyDict(dict):
     """
     Convenience class that behaves like a dict but allows access with the attribute
