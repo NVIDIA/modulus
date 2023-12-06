@@ -27,7 +27,6 @@ from ..meta import ModelMetaData
 from ..mlp import FullyConnected
 from ..module import Module
 
-
 # ===================================================================
 # ===================================================================
 # 1D FNO
