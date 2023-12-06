@@ -36,6 +36,7 @@ from training.dataset import (
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.utils.generative import parse_int_list
 
 
 def unet_regression(
@@ -315,25 +316,6 @@ def load_pickle(network_pkl, rank):
         return pickle.load(f)["ema"]
 
 
-# ----------------------------------------------------------------------------
-# Parse a comma separated list of numbers or ranges and return a list of ints.
-# Example: '1,2,5-10' returns [1, 2, 5, 6, 7, 8, 9, 10]
-
-
-def parse_int_list(s):
-    if isinstance(s, list):
-        return s
-    ranges = []
-    range_re = re.compile(r"^(\d+)-(\d+)$")
-    for p in s.split(","):
-        m = range_re.match(p)
-        if m:
-            ranges.extend(range(int(m.group(1)), int(m.group(2)) + 1))
-        else:
-            ranges.append(int(p))
-    return ranges
-
-
 def get_dataset_and_sampler(
     path,
     n_history,
@@ -381,7 +363,10 @@ def get_dataset_and_sampler(
         all_times=all_times,
     )
     plot_times = [
-        training.time.convert_datetime_to_cftime(datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")) for time in times
+        training.time.convert_datetime_to_cftime(
+            datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")
+        )
+        for time in times
     ]
     all_times = dataset.time()
     time_indices = [all_times.index(t) for t in plot_times]
@@ -446,7 +431,7 @@ def main(cfg: DictConfig) -> None:
     gridtype = getattr(cfg, "gridtype", "sinusoidal")
     N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     normalization = getattr(cfg, "normalization", "v1")
-    times = getattr(cfg, "times", ['2021-02-02T00:00:00'])
+    times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
 
     # Sampler kwargs
     if sampling_method == "stochastic":
@@ -514,7 +499,7 @@ def main(cfg: DictConfig) -> None:
         all_times=True,
     )
 
-    with nc.Dataset(f'{image_outdir}_{dist.rank}.nc', "w") as f:
+    with nc.Dataset(f"{image_outdir}_{dist.rank}.nc", "w") as f:
         # add attributes
         f.cfg = str(cfg)
 

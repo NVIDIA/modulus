@@ -31,32 +31,11 @@ from training import training_loop
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.utils.generative import parse_int_list
 
 warnings.filterwarnings(
     "ignore", "Grad strides do not match bucket view strides"
 )  # False warning printed by PyTorch 1.12.
-
-
-# ----------------------------------------------------------------------------
-# Parse a comma separated list of numbers or ranges and return a list of ints.
-# Example: '1,2,5-10' returns [1, 2, 5, 6, 7, 8, 9, 10]
-
-
-def parse_int_list(s):
-    if isinstance(s, list):
-        return s
-    ranges = []
-    range_re = re.compile(r"^(\d+)-(\d+)$")
-    for p in s.split(","):
-        m = range_re.match(p)
-        if m:
-            ranges.extend(range(int(m.group(1)), int(m.group(2)) + 1))
-        else:
-            ranges.append(int(p))
-    return ranges
-
-
-# ----------------------------------------------------------------------------
 
 
 @click.command()
