@@ -31,11 +31,7 @@ from torch_utils import misc, training_stats
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
-# from .dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-from .dataset import CWBDataset, CWBERA5DatasetV2, Era5Dataset, ZarrDataset
-
-# weather related
-from .YParams import YParams
+from .dataset import ZarrDataset
 
 # ----------------------------------------------------------------------------
 
@@ -64,9 +60,23 @@ def training_loop(
     resume_kimg=0,  # Start from the given training progress.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     device=torch.device("cuda"),
-    data_type=None,
-    data_config=None,
-    task=None,
+    crop_size_x=448,
+    crop_size_y=448,
+    n_history=0,
+    in_channels=[0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19],
+    out_channels=[0, 17, 18, 19],
+    img_shape_x=448,
+    img_shape_y=448,
+    roll=False,
+    add_grid=True,
+    ds_factor=4,
+    min_path=None,
+    max_path=None,
+    global_means_path=None,
+    global_stds_path=None,
+    gridtype="sinusoidal",
+    N_grid_channels=4,
+    normalization="v1",
 ):
 
     # Instantiate distributed manager.
@@ -109,39 +119,27 @@ def training_loop(
 
     # Load dataset: weather
     logger0.info("Loading dataset...")
-    yparams = YParams(data_type + ".yaml", config_name=data_config)
-
-    if data_type == "era5":
-        dataset_obj = Era5Dataset(
-            yparams, yparams.train_data_path, train=True, task=task
-        )
-        worker_init_fn = None
-    elif data_type == "cwb":
-        dataset_obj = CWBDataset(
-            yparams, yparams.train_data_path, train=True, task=task
-        )
-        worker_init_fn = None
-    elif data_type == "era5-cwb-v1":
-        # filelist = os.listdir(path=yparams.cwb_data_dir + '/2018')
-        # filelist = [name for name in filelist if "2018" in name]
-        filelist = [
-            file
-            for root, dirs, files in os.walk(yparams.cwb_data_dir)
-            for file in files
-            if "2022" not in file
-        ]
-
-        dataset_obj = CWBERA5DatasetV2(
-            yparams, filelist=filelist, chans=list(range(20)), train=True, task=task
-        )
-        worker_init_fn = dataset_obj.worker_init_fn
-    elif data_type == "era5-cwb-v2":
-        dataset_obj = ZarrDataset(yparams, yparams.train_data_path, train=True)
-        worker_init_fn = None
-    elif data_type == "era5-cwb-v3":
-        dataset_obj = ZarrDataset(yparams, yparams.train_data_path, train=True)
-        # worker_init_fn = dataset_obj.worker_init_fn
-        worker_init_fn = None
+    dataset_obj = ZarrDataset(path=path,
+        n_history=n_history,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        img_shape_x=img_shape_x,
+        img_shape_y=img_shape_y,
+        crop_size_x=crop_size_x,
+        crop_size_y=crop_size_y,
+        roll=roll,
+        add_grid=add_grid,
+        train=True,
+        ds_factor=ds_factor,
+        min_path=min_path,
+        max_path=max_path,
+        global_means_path=global_means_path,
+        global_stds_path=global_stds_path,
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,
+        normalization=normalization,
+        all_times=all_times,)
+    worker_init_fn = None
 
     dataset_sampler = misc.InfiniteSampler(
         dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed
@@ -156,20 +154,16 @@ def training_loop(
         )
     )
 
-    img_in_channels = len(yparams.in_channels)  # noise + low-res input
-    if yparams.add_grid:
-        img_in_channels = img_in_channels + yparams.N_grid_channels
+    img_in_channels = len(in_channels)  # noise + low-res input
+    if add_grid:
+        img_in_channels = img_in_channels + N_grid_channels
 
-    img_out_channels = len(yparams.out_channels)
-
-    # if use_mean_input:  #add it to the args and store_true in yaml file
-    #     img_in_channels = img_in_channels + yparams.N_grid_channels + img_out_channels
+    img_out_channels = len(out_channels)
 
     # Construct network.
     logger0.info("Constructing network...")
-    # interface_kwargs = dict(img_resolution=dataset_obj.resolution, img_channels=dataset_obj.num_channels, label_dim=dataset_obj.label_dim)    #cifar10
     interface_kwargs = dict(
-        img_resolution=yparams.crop_size_x,
+        img_resolution=crop_size_x,
         img_channels=img_out_channels,
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
@@ -179,28 +173,6 @@ def training_loop(
         **network_kwargs, **interface_kwargs
     )  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
-
-    # if dist.rank == 0:
-    #     with torch.no_grad():
-    #         img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
-    #         img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
-    #         sigma = torch.ones([batch_gpu], device=device)
-    #         labels = torch.zeros([batch_gpu, net.label_dim], device=device)
-    #         misc.print_module_summary(net, [img_clean, img_lr, sigma, labels], max_nesting=2)
-
-    # import pdb; pdb.set_trace()
-    # breakpoint()
-
-    # params = net.parameters()
-    # print('************************************')
-    # print('dist.rank', dist.rank)
-    # print('net.parameters()', net.parameters())
-    # for idx, param in enumerate(net.parameters()):
-    #     if idx == 230:
-    #         print(f"Parameter {idx}: {param.stride()}")
-    #         print(f"Parameter {idx}: {param.shape}")
-    #         break
-    # print('************************************')
 
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
@@ -226,8 +198,6 @@ def training_loop(
     ema = copy.deepcopy(net).eval().requires_grad_(False)
 
     # Import autoresume module
-    # print('os.environ', print(os.environ))
-    # sys.path.append(os.environ.get('SUBMIT_SCRIPTS', '.'))
     SUBMIT_SCRIPTS = "/lustre/fsw/adlr/adlr-others/gpeled/adlr-utils/release/cluster-interface/latest"
     sys.path.append(SUBMIT_SCRIPTS)
     # sync autoresums across gpus ...
@@ -262,18 +232,8 @@ def training_loop(
         misc.copy_params_and_buffers(
             src_module=data["net"], dst_module=net, require_all=True
         )
-        # dist.print0('data-optimizer', data['optimizer_state'])
-        # import pdb; pdb.set_trace()
         optimizer.load_state_dict(data["optimizer_state"])
         del data  # conserve memory
-
-    # #check num params per gpu
-    # with open(f"params_{dist.rank}.txt", "w") as fo:
-    #     dist.print0(net.parameters())
-    #     for param in net.parameters():
-    #         dist.print0(param.size())
-    #         #fo.write(f"{name}\t{param.size()}\n")
-    # import pdb; pdb.set_trace()
 
     # Train.
     logger0.info(f"Training for {total_kimg} kimg...")
@@ -282,7 +242,6 @@ def training_loop(
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
     maintenance_time = tick_start_time - start_time
-    # dist.update_progress(cur_nimg // 1000, total_kimg)
     stats_jsonl = None
     while True:
 
@@ -294,30 +253,12 @@ def training_loop(
                 # Fetch training data: weather
                 img_clean, img_lr, labels = next(dataset_iterator)
 
-                # dist.print0(img_clean.shape)
-                # dist.print0('max-clean', torch.max(img_clean))
-                # dist.print0('min-clean', torch.min(img_clean))
-                # dist.print0('mean-clean', torch.mean(img_clean))
-                # dist.print0('std-clean', torch.std(img_clean))
-                # dist.print0(img_lr.shape)
-                # dist.print0('max-lr', torch.max(img_lr))
-                # dist.print0('min-lr', torch.min(img_lr))
-                # dist.print0('mean-lr', torch.mean(img_lr))
-                # dist.print0('std-lr', torch.std(img_lr))
-                # import pdb; pdb.set_trace()
-
                 # Normalization: weather (normalized already in the dataset)
                 img_clean = (
                     img_clean.to(device).to(torch.float32).contiguous()
                 )  # [-4.5, +4.5]
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
-
-                # # Fetch training data: cifar10
-                # images, labels = next(dataset_iterator)
-                # # Normalization: cifar10 (normalized already in the dataset)
-                # images = images.to(device).to(torch.float32) / 127.5 - 1
-                # labels = labels.to(device)
 
                 loss = loss_fn(
                     net=ddp,
@@ -401,8 +342,6 @@ def training_loop(
             AutoResume.request_resume()
             logger0.info("Training terminated. Returning")
             done = True
-            # print('dist.rank', dist.rank)
-            # with open(os.path.join(os.path.split(ckpt_dir)[0],'resume.txt'), "w") as f:
             with open(os.path.join(ckpt_dir, "resume.txt"), "w") as f:
                 f.write(
                     os.path.join(ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt")
@@ -416,11 +355,6 @@ def training_loop(
         # Check for abort.
         logger0.info(f"dist.should_stop(): {dist.should_stop()}")
         logger0.info(f"done: {done}")
-
-        # if (not done) and dist.should_stop():
-        #     done = True
-        #     dist.print0()
-        #     dist.print0('Aborting...')
 
         # Save network snapshot.
         if (snapshot_ticks is not None) and (done or cur_tick % snapshot_ticks == 0):
@@ -445,7 +379,6 @@ def training_loop(
             del data  # conserve memory
 
         # Save full dump of the training state.
-        # if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and cur_tick != 0 and dist.rank == 0:
         if (
             (state_dump_ticks is not None)
             and (done or cur_tick % state_dump_ticks == 0)
@@ -471,7 +404,6 @@ def training_loop(
                 + "\n"
             )
             stats_jsonl.flush()
-        # dist.update_progress(cur_nimg // 1000, total_kimg)
 
         # Update state.
         cur_tick += 1
