@@ -23,6 +23,14 @@ The model uses a MeshGraphNet model for the prediction of forces. Since all the 
 in this system are of same type (i.e. Argon), the node encoder is dropped.
 The graph edges are generated based on nearest-neighbor search.
 
+<!-- markdownlint-disable -->
+<p align="center">
+  <img src="../../../docs/img/lj_system_modulus_results.png" alt="Results of LJ system"/>
+  <br>
+  <i>Results from Modulus training for the LJ system</i>
+</p>
+<!-- markdownlint-enable -->
+
 ## Getting Started
 
 To download the data, run
