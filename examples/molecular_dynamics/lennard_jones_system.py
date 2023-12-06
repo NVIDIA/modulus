@@ -80,6 +80,7 @@ def prepare_input(
 
     if add_random_noise:
         pos = pos + np.random.randn(*pos.shape) * 0.005
+        pos = np.mod(pos, box_size)
     off_2 = np.min(pos, axis=0)
     pos = pos - off_2
 
