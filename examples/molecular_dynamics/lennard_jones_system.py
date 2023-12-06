@@ -283,12 +283,10 @@ def main(cfg: DictConfig) -> None:
                     # Compute the total force vector
                     for force_system in forces_pair:
                         pred, true = force_system
-                        pred_total = (
-                            pred[:, 0] + pred[:, 1] + pred[:, 2]
-                        ) * force_sd + force_mean
-                        true_total = (
-                            true[:, 0] + true[:, 1] + true[:, 2]
-                        ) * force_sd + force_mean
+                        pred_total = pred[:, 0] + pred[:, 1] + pred[:, 2]
+                        true_total = true[:, 0] + true[:, 1] + true[:, 2]
+                        pred_total = (pred_total * force_sd + force_mean) / 1000
+                        true_total = (true_total * force_sd + force_mean) / 1000
                         plt.scatter(pred_total, true_total, s=5, c="black")
 
                     cosine_percentage = (
@@ -296,7 +294,7 @@ def main(cfg: DictConfig) -> None:
                     ).sum() / np.concatenate(cosines, axis=0).shape[0]
 
                     # plot y=x line
-                    x = list(range(-0.5, 0.5))
+                    x = np.linspace(-0.5, 0.5, 50)
                     y = x
                     plt.plot(x, y, color="blue", linestyle="--")
 
