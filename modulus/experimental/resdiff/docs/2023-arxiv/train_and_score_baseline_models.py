@@ -15,16 +15,19 @@
 import os
 import subprocess
 
+
 def score(sample_output_path, score_output_path):
-    subprocess.check_call(["python3", "score_samples.py", sample_output_path, score_output_path])
+    subprocess.check_call(
+        ["python3", "score_samples.py", sample_output_path, score_output_path]
+    )
 
 
 # Train the RF
-PROJECT_ROOT= "/lustre/fsw/nvresearch/nbrenowitz/diffusions"
-datatype="era5-cwb-v3"
-dataconfig ="validation_big"
+PROJECT_ROOT = "/lustre/fsw/nvresearch/nbrenowitz/diffusions"
+datatype = "era5-cwb-v3"
+dataconfig = "validation_big"
 baseline = "rf"
-outputdir=os.path.join(PROJECT_ROOT, "baselines", "rf", datatype, dataconfig)
+outputdir = os.path.join(PROJECT_ROOT, "baselines", "rf", datatype, dataconfig)
 os.makedirs(outputdir, exist_ok=True)
 rf_pkl = f"{outputdir}/rf.pkl"
 if not os.path.exists(rf_pkl):
@@ -40,7 +43,9 @@ os.makedirs(outputdir, exist_ok=True)
 
 sample_output_path = os.path.join(outputdir, "samples.nc")
 if not os.path.exists(sample_output_path):
-    subprocess.check_call(["python3", "baselines/era5.py", datatype, dataconfig, sample_output_path])
+    subprocess.check_call(
+        ["python3", "baselines/era5.py", datatype, dataconfig, sample_output_path]
+    )
 
 score_output_path = os.path.join(outputdir, "scores.nc")
 if not os.path.exists(score_output_path):
@@ -58,7 +63,9 @@ sample_output_path = os.path.join(outputdir, "samples.nc")
 score_output_path = os.path.join(outputdir, "scores.nc")
 
 if not os.path.exists(sample_output_path):
-    subprocess.check_call(["python3", "baselines/rf.py", rf_pkl, datatype, dataconfig, sample_output_path])
+    subprocess.check_call(
+        ["python3", "baselines/rf.py", rf_pkl, datatype, dataconfig, sample_output_path]
+    )
 
 if not os.path.exists(score_output_path):
     score(sample_output_path, score_output_path)
@@ -83,18 +90,32 @@ res_edm = ""
 network_reg = "$url_reg"
 
 if not os.path.exists(sample_output_path):
-    subprocess.call([
-        "torchrun", "--nproc_per_node", "1", "generate.py",
-        "--outdir", sample_output_path,
-        "--seeds", "0-0",
-        "--batch", '1',
-        "--network", regression_network,
-        "--data_config", dataconfig,
-        "--data_type", datatype,
-        "--task", task,
-        "--pretext", pretext,
-        "--sample_res", sample_res,
-    ])
+    subprocess.call(
+        [
+            "torchrun",
+            "--nproc_per_node",
+            "1",
+            "generate.py",
+            "--outdir",
+            sample_output_path,
+            "--seeds",
+            "0-0",
+            "--batch",
+            "1",
+            "--network",
+            regression_network,
+            "--data_config",
+            dataconfig,
+            "--data_type",
+            datatype,
+            "--task",
+            task,
+            "--pretext",
+            pretext,
+            "--sample_res",
+            sample_res,
+        ]
+    )
 
 if not os.path.exists(score_output_path):
     score(sample_output_path, score_output_path)

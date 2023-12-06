@@ -26,21 +26,24 @@
 #     name: python3
 # ---
 import os
+
 import config
+
 # %%
 url = os.path.join(config.root, "generations/era5-cwb-v3/validation_big/samples.zarr")
 
 # %%
-import xarray as xr
 import os
-import numpy as np
-import cartopy.crs
+
 import analysis_untils
+import cartopy.crs
+import numpy as np
+import xarray as xr
 
 # %%
-coords =  xr.open_zarr(url)
-pred = xr.open_zarr(url, group='prediction').merge(coords)
-truth = xr.open_zarr(url, group='truth').merge(coords)
+coords = xr.open_zarr(url)
+pred = xr.open_zarr(url, group="prediction").merge(coords)
+truth = xr.open_zarr(url, group="truth").merge(coords)
 reg = analysis_untils.load_regression_data()
 reg = reg.merge(coords)
 
@@ -62,50 +65,55 @@ pred_avg = pred.mean(["time"]).load()
 truth_avg = truth.mean(["time"]).load()
 
 # %%
-import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-plt.style.use('dark_background')
+import matplotlib.pyplot as plt
+
+plt.style.use("dark_background")
 
 
-def plot_difference(
-    truth_avg, pred_avg, field, diff_kwargs=None, absolute_kwargs=None
-):
+def plot_difference(truth_avg, pred_avg, field, diff_kwargs=None, absolute_kwargs=None):
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6), subplot_kw=dict(projection=ccrs.PlateCarree()))
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        1, 3, figsize=(18, 6), subplot_kw=dict(projection=ccrs.PlateCarree())
+    )
 
     if diff_kwargs is None:
-        diff_kwargs = dict(cmap='coolwarm', vmin=-1, vmax=1)
-    
+        diff_kwargs = dict(cmap="coolwarm", vmin=-1, vmax=1)
+
     if absolute_kwargs is None:
-        absolute_kwargs = dict(cmap='magma', vmin=0, vmax=8)
+        absolute_kwargs = dict(cmap="magma", vmin=0, vmax=8)
 
-
-    def plot(ax, data, title, vmin=0, vmax=8, cmap='magma'):
+    def plot(ax, data, title, vmin=0, vmax=8, cmap="magma"):
         im = ax.pcolormesh(
-            truth.lon, truth.lat, data,
+            truth.lon,
+            truth.lat,
+            data,
             transform=ccrs.PlateCarree(),
             cmap=cmap,
-            vmin=vmin, vmax=vmax
+            vmin=vmin,
+            vmax=vmax,
         )
-        ax.coastlines(color='white')
+        ax.coastlines(color="white")
         ax.set_title(title)
         return im
 
     # Plotting the first two panels
-    im1 = plot(ax1, pred_avg[field], 'Prediction', **absolute_kwargs)
-    im2 = plot(ax2, truth_avg[field], 'Truth', **absolute_kwargs)
+    im1 = plot(ax1, pred_avg[field], "Prediction", **absolute_kwargs)
+    im2 = plot(ax2, truth_avg[field], "Truth", **absolute_kwargs)
 
     # Plotting the difference in the third panel
-    difference = (pred_avg[field] - truth_avg[field]).assign_coords(lat=truth_avg.lat, lon=truth_avg.lon)
-    rms = np.sqrt((difference ** 2).mean()).item()
-    im3 = plot(ax3, difference, f'Difference\nRMS: {rms:.2f}', **diff_kwargs)
+    difference = (pred_avg[field] - truth_avg[field]).assign_coords(
+        lat=truth_avg.lat, lon=truth_avg.lon
+    )
+    rms = np.sqrt((difference**2).mean()).item()
+    im3 = plot(ax3, difference, f"Difference\nRMS: {rms:.2f}", **diff_kwargs)
 
     # Adding a shared colorbar for the first two panels
-    fig.colorbar(im1, ax=[ax1, ax2], orientation='horizontal', label=field, shrink=0.5)
+    fig.colorbar(im1, ax=[ax1, ax2], orientation="horizontal", label=field, shrink=0.5)
 
     # Adding a separate colorbar for the third panel
-    fig.colorbar(im3, ax=[ax3], orientation='horizontal', label='Difference')
+    fig.colorbar(im3, ax=[ax3], orientation="horizontal", label="Difference")
 
     plt.show()
 
@@ -116,17 +124,29 @@ plot_difference(truth_avg, pred_avg, "maximum_radar_reflectivity")
 plt.savefig(os.path.join("time_means", "maximum_radar_reflectivity.png"))
 
 # %%
-plot_difference(truth_avg, pred_avg, "temperature_2m",
-                absolute_kwargs=dict(cmap='viridis', vmin=273, vmax=305), 
-                diff_kwargs=dict(cmap='coolwarm', vmin=-0.2, vmax=0.2))
+plot_difference(
+    truth_avg,
+    pred_avg,
+    "temperature_2m",
+    absolute_kwargs=dict(cmap="viridis", vmin=273, vmax=305),
+    diff_kwargs=dict(cmap="coolwarm", vmin=-0.2, vmax=0.2),
+)
 plt.savefig(os.path.join("time_means", "temperature_2m.png"))
 # %%
-plot_difference(truth_avg, pred_avg, "eastward_wind_10m",
-                absolute_kwargs=dict(cmap='coolwarm', vmin=-5, vmax=5), 
-                diff_kwargs=dict(cmap='coolwarm', vmin=-0.2, vmax=0.2))
+plot_difference(
+    truth_avg,
+    pred_avg,
+    "eastward_wind_10m",
+    absolute_kwargs=dict(cmap="coolwarm", vmin=-5, vmax=5),
+    diff_kwargs=dict(cmap="coolwarm", vmin=-0.2, vmax=0.2),
+)
 plt.savefig(os.path.join("time_means", "eastward_wind_10m.png"))
 # %%
-plot_difference(truth_avg, pred_avg, "northward_wind_10m",
-                absolute_kwargs=dict(cmap='coolwarm', vmin=-5, vmax=5), 
-                diff_kwargs=dict(cmap='coolwarm', vmin=-0.2, vmax=0.2))
+plot_difference(
+    truth_avg,
+    pred_avg,
+    "northward_wind_10m",
+    absolute_kwargs=dict(cmap="coolwarm", vmin=-5, vmax=5),
+    diff_kwargs=dict(cmap="coolwarm", vmin=-0.2, vmax=0.2),
+)
 plt.savefig(os.path.join("time_means", "northward_wind_10m.png"))

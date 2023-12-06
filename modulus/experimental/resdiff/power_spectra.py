@@ -12,25 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import xarray
-import numpy as np
-from scipy.signal import periodogram
-from scipy.fft import dctn, irfft
-import matplotlib.pyplot as plt
-import typer
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import typer
+import xarray
+from scipy.fft import irfft
+from scipy.signal import periodogram
 
 
 def open_data(file, group=False):
 
     root = xarray.open_dataset(file)
-    root = root.set_coords(['lat', 'lon'])
+    root = root.set_coords(["lat", "lon"])
     ds = xarray.open_dataset(file, group=group)
     ds.coords.update(root.coords)
     ds.attrs.update(root.attrs)
 
     return ds
-
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -48,7 +48,10 @@ def haversine(lat1, lon1, lat2, lon2):
     dlon_rad = lon2_rad - lon1_rad
 
     # Haversine formula
-    a = np.sin(dlat_rad / 2) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon_rad / 2) ** 2
+    a = (
+        np.sin(dlat_rad / 2) ** 2
+        + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon_rad / 2) ** 2
+    )
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     distance_meters = earth_radius * c
 
@@ -58,14 +61,14 @@ def haversine(lat1, lon1, lat2, lon2):
 def compute_power_spectrum(data, d):
     # Compute the 2D FFT along the second dimension
     fft_data = np.fft.fft(data, axis=-2)
-    
+
     # Compute the power spectrum by taking the absolute value and squaring
-    power_spectrum = np.abs(fft_data)**2
-    
+    power_spectrum = np.abs(fft_data) ** 2
+
     # Scale the power spectrum based on the sampling interval 'd'
-    power_spectrum /= (data.shape[-1] * d)
+    power_spectrum /= data.shape[-1] * d
     freqs = np.fft.fftfreq(data.shape[-1], d)
-    
+
     return freqs, power_spectrum
 
 
@@ -77,7 +80,7 @@ def power_spectra_to_acf(f, pw):
         pw: power spectral density (V ** 2 / Hz)
 
     Returns:
-        
+
     """
     pw = pw.copy()
     pw[0] = 0
@@ -91,17 +94,16 @@ def power_spectra_to_acf(f, pw):
 
 def average_power_spectrum(data, d):
     # Compute the power spectrum along the second dimension for each row
-    freqs, power_spectra = periodogram(data, fs=1/d, axis=-1)
-    
+    freqs, power_spectra = periodogram(data, fs=1 / d, axis=-1)
+
     # Average along the first dimension
     while power_spectra.ndim > 1:
         power_spectra = power_spectra.mean(axis=0)
-    
+
     return freqs, power_spectra
 
 
 def main(file, output):
-
     def savefig(name):
         path = os.path.join(output, name + ".png")
         plt.savefig(path)
@@ -124,28 +126,26 @@ def main(file, output):
     # in km
     d = 2
 
-
     # Plot the power spectrum
     for name, data in samples.items():
         freqs, spec_x = average_power_spectrum(data.eastward_wind_10m, d=d)
         _, spec_y = average_power_spectrum(data.northward_wind_10m, d=d)
         spec = spec_x + spec_y
         plt.loglog(freqs, spec, label=name)
-        plt.xlabel('Frequency (1/km)')
-        plt.ylabel('Power Spectrum')
+        plt.xlabel("Frequency (1/km)")
+        plt.ylabel("Power Spectrum")
         plt.ylim(bottom=1e-1)
     plt.title("Kinetic Energy power spectra")
     plt.grid()
     plt.legend()
     savefig("ke-spectra")
 
-
     plt.figure()
     for name, data in samples.items():
         freqs, spec = average_power_spectrum(data.temperature_2m, d=d)
         plt.loglog(freqs, spec, label=name)
-        plt.xlabel('Frequency (1/km)')
-        plt.ylabel('Power Spectrum')
+        plt.xlabel("Frequency (1/km)")
+        plt.ylabel("Power Spectrum")
         plt.ylim(bottom=1e-1)
     plt.title("T2M Power spectra")
     plt.grid()
@@ -159,8 +159,8 @@ def main(file, output):
         except AttributeError:
             continue
         plt.loglog(freqs, spec, label=name)
-        plt.xlabel('Frequency (1/km)')
-        plt.ylabel('Power Spectrum')
+        plt.xlabel("Frequency (1/km)")
+        plt.ylabel("Power Spectrum")
         plt.ylim(bottom=1e-1)
     plt.title("Reflectivity Power spectra")
     plt.grid()
