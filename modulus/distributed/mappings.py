@@ -68,7 +68,7 @@ class _ScatterToParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
         return (
-            _gather(grad_output, ctx.dim, shapes_=ctx.split_shapes, group=DistributedManager().group(ctx.group_)),
+            _gather(grad_output, ctx.dim, shapes_=ctx.split_shapes, group=DistributedManager().group(ctx.group)),
             None,
             None,
         )
