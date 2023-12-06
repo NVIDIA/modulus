@@ -514,7 +514,7 @@ def main(cfg: DictConfig) -> None:
         all_times=True,
     )
 
-    with nc.Dataset(image_outdir.format(rank=dist.rank), "w") as f:
+    with nc.Dataset(f'{image_outdir}_{dist.rank}.nc', "w") as f:
         # add attributes
         f.cfg = str(cfg)
 
