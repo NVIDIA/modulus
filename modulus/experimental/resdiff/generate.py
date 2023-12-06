@@ -43,10 +43,15 @@ def unet_regression(
     latents,
     img_lr,
     class_labels=None,
+    randn_like=torch.randn_like,
     num_steps=2,
     sigma_min=0.0,
     sigma_max=0.0,
     rho=7,
+    S_churn=0,
+    S_min=0,
+    S_max=float("inf"),
+    S_noise=0.0,
 ):
     # Adjust noise levels based on what's supported by the network.
     sigma_min = max(sigma_min, net.sigma_min)
