@@ -78,9 +78,6 @@ def main(cfg: DictConfig) -> None:
     resume = getattr(cfg, "resume")
     dry_run = getattr(cfg, "dry_run", False)
 
-    # Parse regression options
-    reg_checkpoint_filename = getattr(cfg, "reg_checkpoint_filename")
-
     # Parse weather data options
     c = dnnlib.EasyDict()
     c.train_data_path = getattr(cfg, "train_data_path")
@@ -312,8 +309,8 @@ def main(cfg: DictConfig) -> None:
     # Transfer learning and resume.
     if transfer is not None:
         if resume is not None:
-            raise click.ClickException(
-                "--transfer and --resume cannot be specified at the same time"
+            raise ValueError(
+                "transfer and resume cannot be specified at the same time"
             )
         c.resume_pkl = transfer
         c.ema_rampup_ratio = None
@@ -334,7 +331,7 @@ def main(cfg: DictConfig) -> None:
     # Description string.
     cond_str = "cond" if c.dataset_kwargs.use_labels else "uncond"
     dtype_str = "fp16" if c.network_kwargs.use_fp16 else "fp32"
-    desc = f"{dataset_name:s}-{cond_str:s}-{arch:s}-{precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}"
+    desc = f"{cond_str:s}-{arch:s}-{precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}"
     if desc is not None:
         desc += f"-{desc}"
 
