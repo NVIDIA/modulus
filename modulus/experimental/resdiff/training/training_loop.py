@@ -109,17 +109,10 @@ def training_loop(
             "batch_size must be equal to batch_gpu * num_accumulation_rounds * dist.world_size"
         )
 
-    """
-    # Load dataset: cifar10
-    dist.print0('Loading dataset...')
-    dataset_obj = dnnlib.util.construct_class_by_name(**dataset_kwargs) # subclass of training.dataset.Dataset
-    dataset_sampler = misc.InfiniteSampler(dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed)
-    dataset_iterator = iter(torch.utils.data.DataLoader(dataset=dataset_obj, sampler=dataset_sampler, batch_size=batch_gpu, **data_loader_kwargs))
-    """
-
     # Load dataset: weather
     logger0.info("Loading dataset...")
-    dataset_obj = ZarrDataset(path=path,
+    dataset_obj = ZarrDataset(
+        path=path,
         n_history=n_history,
         in_channels=in_channels,
         out_channels=out_channels,
@@ -138,7 +131,8 @@ def training_loop(
         gridtype=gridtype,
         N_grid_channels=N_grid_channels,
         normalization=normalization,
-        all_times=all_times,)
+        all_times=all_times,
+    )
     worker_init_fn = None
 
     dataset_sampler = misc.InfiniteSampler(

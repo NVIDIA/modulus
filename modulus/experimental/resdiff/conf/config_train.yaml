@@ -80,10 +80,8 @@ dry-run: false
 reg_ckpt_filename: "./checkpoints/regression.pkl"
   # Checkpoint for the UNet to predict the mean
 
-## Data options
-train_data_path: "s3://sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"
-
 ## Weather data options
+train_data_path: "s3://sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"
 crop_size_x: 448
 crop_size_y: 448
 n_history: 0

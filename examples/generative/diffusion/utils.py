@@ -15,32 +15,7 @@
 
 """Miscellaneous utility classes and functions."""
 
-
-import contextlib
-import ctypes
-import fnmatch
-import glob
-import hashlib
-import html
-import importlib
-import inspect
-import io
-import os
-import pickle
 import re
-import shutil
-import sys
-import tempfile
-import types
-import urllib
-import urllib.request
-import uuid
-import warnings
-from typing import Any, List, Tuple, Union
-
-import numpy as np
-import requests
-import torch
 
 
 class EasyDict(dict):

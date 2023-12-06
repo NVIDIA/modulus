@@ -40,6 +40,7 @@ import numpy as np
 import requests
 import torch
 
+
 def parse_int_list(s):
     """
     Parse a comma separated list of numbers or ranges and return a list of ints.

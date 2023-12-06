@@ -56,7 +56,7 @@ def main(cfg: DictConfig) -> None:
     batch = getattr(cfg, "batch", 512)
     batch_gpu = getattr(cfg, "batch_gpu", 4)
     cbase = getattr(cfg, "cbase", 1)
-    cres = getattr(cfg, "cres")
+    cres = parse_int_list(getattr(cfg, "cres"))
     lr = getattr(cfg, "lr", 0.0001)
     ema = getattr(cfg, "ema", 0.5)
     dropout = getattr(cfg, "dropout", 0.13)
@@ -78,11 +78,31 @@ def main(cfg: DictConfig) -> None:
     resume = getattr(cfg, "resume")
     dry_run = getattr(cfg, "dry_run", False)
 
-    # Parse weather data options
-
     # Parse regression options
     reg_checkpoint_filename = getattr(cfg, "reg_checkpoint_filename")
-        
+
+    # Parse weather data options
+    c = dnnlib.EasyDict()
+    c.train_data_path = getattr(cfg, "train_data_path")
+    c.crop_size_x = getattr(cfg, "crop_size_x", 448)
+    c.crop_size_y = getattr(cfg, "crop_size_y", 448)
+    c.n_history = getattr(cfg, "n_history", 0)
+    c.in_channels = getattr(
+        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+    )
+    c.out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
+    c.img_shape_x = getattr(cfg, "img_shape_x", 448)
+    c.img_shape_y = getattr(cfg, "img_shape_y", 448)
+    c.roll = getattr(cfg, "roll", False)
+    c.add_grid = getattr(cfg, "add_grid", True)
+    c.ds_factor = getattr(cfg, "ds_factor", 4)
+    c.min_path = getattr(cfg, "min_path", None)
+    c.max_path = getattr(cfg, "max_path", None)
+    c.global_means_path = getattr(cfg, "global_means_path", None)
+    c.global_stds_path = getattr(cfg, "global_stds_path", None)
+    c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
+    c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
+    c.normalization = getattr(cfg, "normalization", "v1")
 
     # Initialize distributed manager.
     DistributedManager.initialize()
@@ -94,7 +114,6 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name="train.log")
 
     # Initialize config dict.
-    c = dnnlib.EasyDict()
     c.dataset_kwargs = dnnlib.EasyDict(
         path=data, xflip=False, cache=True, use_labels=False
     )
@@ -119,8 +138,7 @@ def main(cfg: DictConfig) -> None:
     }
     if arch not in valid_archs:
         raise ValueError(
-            f"Invalid network architecture {arch}; "
-            f"valid choices are {valid_archs}"
+            f"Invalid network architecture {arch}; " f"valid choices are {valid_archs}"
         )
 
     if arch == "ddpmpp-cwb-v2":
@@ -271,9 +289,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size=batch, batch_gpu=batch_gpu)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(
-        kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump
-    )
+    c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
 
     # Random seed.
     if seed is not None:
