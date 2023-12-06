@@ -18,33 +18,33 @@ hydra:
 
 
 ## Main options
-outdir: "./outdir"   
+outdir: "./output"   
   # Where to save the results
 data: "./data"
   # Path to the dataset
-arch: ddpmpp
-  # Network architecture  # TODO list options
-precond: edm
-  # Preconditioning & loss function  # TODO list options
+arch: 'ddpmpp-cwb-v0-regression'
+  # Network architecture
+precond: unetregression
+  # Preconditioning & loss function
 
 ## Hyperparameters
 duration: 200
   # Training duration
-batch: 512
+batch: 256
   # Total batch size
-batch_gpu: 4
+batch_gpu: 2
   # Limit batch size per GPU
 cbase: 1  # TODO check
   # Channel multiplier
 cres: null  # TODO check
   # Channels per resolution
-lr: 1e-4
+lr: 0.0002
   # Learning rate
 ema: 0.5
   # EMA half-life
 dropout: 0.13
   # Dropout probability
-augment: 0.12
+augment: 0.0
   # Augment probability
 
 ## Performance options
@@ -54,16 +54,16 @@ ls: 1
   # Loss scaling
 bench: true  # TODO should default to false
   # Enable cuDNN benchmarking
-workers: 1
+workers: 4
   # DataLoader worker processes
 
 
 ## I/O-related options
 desc: ''
   # String to include in result dir name
-tick: 50
+tick: 1
   # How often to print progress
-snap: 50
+snap: 1
   # How often to save snapshots
 dump: 500
   # How often to dump state

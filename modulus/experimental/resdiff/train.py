@@ -46,32 +46,32 @@ def main(cfg: DictConfig) -> None:
     """
 
     # Parse options
-    outdir = getattr(cfg, "outdir", "./outdir")
+    outdir = getattr(cfg, "outdir", "./output")
     data = getattr(cfg, "data", "./data")
-    arch = getattr(cfg, "arch", "ddpmpp")
-    precond = getattr(cfg, "precond", "edm")
+    arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
+    precond = getattr(cfg, "precond", "unetregression")
 
     # parse hyperparameters
     duration = getattr(cfg, "duration", 200)
-    batch = getattr(cfg, "batch", 512)
-    batch_gpu = getattr(cfg, "batch_gpu", 4)
+    batch = getattr(cfg, "batch", 256)
+    batch_gpu = getattr(cfg, "batch_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
-    cres = parse_int_list(getattr(cfg, "cres"))
-    lr = getattr(cfg, "lr", 0.0001)
+    cres = parse_int_list(getattr(cfg, "cres", None))
+    lr = getattr(cfg, "lr", 0.0002)
     ema = getattr(cfg, "ema", 0.5)
     dropout = getattr(cfg, "dropout", 0.13)
-    augment = getattr(cfg, "augment", 0.12)
+    augment = getattr(cfg, "augment", 0.0)
 
     # Parse performance options
     fp16 = getattr(cfg, "fp16", False)
     ls = getattr(cfg, "ls", 1)
     bench = getattr(cfg, "bench", True)
-    workers = getattr(cfg, "workers", 1)
+    workers = getattr(cfg, "workers", 4)
 
     # Parse I/O-related options
     desc = getattr(cfg, "desc")
-    tick = getattr(cfg, "tick", 50)
-    snap = getattr(cfg, "snap", 50)
+    tick = getattr(cfg, "tick", 1)
+    snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")

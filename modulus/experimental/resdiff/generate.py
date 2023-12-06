@@ -16,7 +16,6 @@
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import pickle
-import re
 
 import cftime
 import datetime
