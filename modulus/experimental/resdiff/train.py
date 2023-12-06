@@ -27,7 +27,7 @@ import warnings
 import hydra
 import dnnlib
 import torch
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig, ListConfig
 from training import training_loop
 
 from modulus.distributed import DistributedManager
@@ -338,6 +338,10 @@ def main(cfg: DictConfig) -> None:
     c.run_dir = outdir
 
     # Print options.
+    for key in list(c.keys()):
+        val = c[key]
+        if isinstance(val, (ListConfig, DictConfig)):
+            c[key] = OmegaConf.to_container(val, resolve=True)
     logger0.info("Training options:")
     logger0.info(json.dumps(c, indent=2))
     logger0.info(f"Output directory:        {c.run_dir}")
