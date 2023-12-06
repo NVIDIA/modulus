@@ -95,14 +95,14 @@ def main(cfg: DictConfig) -> None:
     c.img_shape_y = getattr(cfg, "img_shape_y", 448)
     c.roll = getattr(cfg, "roll", False)
     c.add_grid = getattr(cfg, "add_grid", True)
-    c.ds_factor = getattr(cfg, "ds_factor", 4)
+    c.ds_factor = getattr(cfg, "ds_factor", 1)
     c.min_path = getattr(cfg, "min_path", None)
     c.max_path = getattr(cfg, "max_path", None)
     c.global_means_path = getattr(cfg, "global_means_path", None)
     c.global_stds_path = getattr(cfg, "global_stds_path", None)
     c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
     c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
-    c.normalization = getattr(cfg, "normalization", "v1")
+    c.normalization = getattr(cfg, "normalization", "v2")
 
     # Initialize distributed manager.
     DistributedManager.initialize()
