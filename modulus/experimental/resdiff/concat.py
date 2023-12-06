@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import xarray
-
 import sys
+
 import dask.diagnostics
+import xarray
 
 base = sys.argv[1:-1]
 out = sys.argv[-1]

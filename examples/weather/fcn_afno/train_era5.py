@@ -142,10 +142,10 @@ def main(cfg: DictConfig) -> None:
         logger.success(f"Loaded validaton datapipe of size {len(validation_datapipe)}")
 
     fcn_model = AFNO(
-        img_size=(720, 1440),
+        inp_shape=[720, 1440],
         in_channels=20,
         out_channels=20,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=768,
         depth=12,
         num_blocks=8,

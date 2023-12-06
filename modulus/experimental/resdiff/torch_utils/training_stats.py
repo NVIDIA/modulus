@@ -18,9 +18,10 @@ synchronization overhead as well as the amount of boilerplate in user
 code."""
 
 import re
+
+import dnnlib
 import numpy as np
 import torch
-import dnnlib
 
 from . import misc
 
@@ -59,7 +60,8 @@ def init_multiprocessing(rank, sync_device):
                         collection. Typically `torch.device('cuda', rank)`.
     """
     global _rank, _sync_device
-    assert not _sync_called
+    if _sync_called:
+        raise RuntimeError("_sync_called should be False before init_multiprocessing()")
     _rank = rank
     _sync_device = sync_device
 
@@ -106,7 +108,8 @@ def report(name, value):
             elems.square().sum(),
         ]
     )
-    assert moments.ndim == 1 and moments.shape[0] == _num_moments
+    if not (moments.ndim == 1 and moments.shape[0] == _num_moments):
+        raise ValueError("shape mismatch for moments")
     moments = moments.to(_counter_dtype)
 
     device = moments.device
@@ -196,7 +199,9 @@ class Collector:
         statistic between the last two calls to `update()`, or zero if
         no scalars were collected.
         """
-        assert self._regex.fullmatch(name)
+        if not self._regex.fullmatch(name):
+            raise ValueError(f"The name '{name}' does not match the required pattern.")
+
         if name not in self._moments:
             self._moments[name] = torch.zeros([_num_moments], dtype=_counter_dtype)
         return self._moments[name]

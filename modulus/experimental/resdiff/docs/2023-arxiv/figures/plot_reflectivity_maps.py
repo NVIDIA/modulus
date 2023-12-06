@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import math
-import netCDF4 as nc
-import pylab as plt
 import datetime
-import xarray
-import matplotlib as mpl
+import math
 import pickle
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pylab as plt
+import xarray
 from matplotlib.colors import TwoSlopeNorm
 
 time = ["2021-09-12T00", "2021-04-02T06", "2021-02-02T12"]

@@ -54,17 +54,16 @@ dev = [
 
 all = [
     "h5py>=3.7.0",
-    "mpi4py>=3.1.4",
     "netcdf4>=1.6.3",
     "ruamel.yaml>=0.17.22",
     "scikit-learn>=1.0.2",
     "warp-lang>=0.6.0",
-    "tensorly>=0.8.1",
-    "tensorly-torch>=0.4.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
-    "torch-harmonics>=0.6.2",
     "onnx>=1.14.0",
+    "cftime>=1.6.2",
+    "einops>=0.7.0",
+    "pyspng>=0.1.0",
     "nvidia-modulus[launch]",
     "nvidia-modulus[dev]"
 ]

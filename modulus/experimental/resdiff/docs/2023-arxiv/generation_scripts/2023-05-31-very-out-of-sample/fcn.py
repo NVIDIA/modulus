@@ -33,12 +33,13 @@
 # %pip install git+ssh://git@gitlab-master.nvidia.com:12051/earth-2/fcn-mip.git@main
 
 # %%
-from fcn_mip.initial_conditions.cds import get
-from fcn_mip.schema import ChannelSet
+import datetime
 import os
+
 from fcn_mip import schema, weather_events
 from fcn_mip.initial_conditions import get
-import datetime
+from fcn_mip.initial_conditions.cds import get
+from fcn_mip.schema import ChannelSet
 
 time = datetime.datetime(2021, 9, 10, 0)
 
@@ -159,8 +160,9 @@ dataset.to_netcdf("fcn_outputs.nc")
 # convert -delay 25 -loop 0 generations/netcdf/fcn/singlke/*.sample.png generations/netcdf/sample.gif
 
 # %%
-from IPython.display import display, HTML
 import base64
+
+from IPython.display import HTML, display
 
 
 def embed_gif(path):

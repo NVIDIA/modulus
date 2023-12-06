@@ -28,18 +28,8 @@ RUN apt-get update && \
 ENV _CUDA_COMPAT_TIMEOUT=90
 
 # Install other dependencies
-RUN wget https://github.com/mpi4py/mpi4py/releases/download/3.1.5/mpi4py-3.1.5.tar.gz && \
-    tar -zxf mpi4py-3.1.5.tar.gz && cd mpi4py-3.1.5/ && \
-    python3 setup.py build && python3 setup.py install && \
-    cd ../ && rm -r mpi4py*
-RUN pip install --no-cache-dir "h5py>=3.7.0" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" 
+RUN pip install --no-cache-dir "h5py>=3.7.0" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" "cftime>=1.6.2" "einops>=0.7.0" "pyspng>=0.1.0"
 RUN pip install --no-cache-dir "hydra-core>=1.2.0" "termcolor>=2.1.1" "wandb>=0.13.7" "mlflow>=2.1.1" "pydantic>=1.10.2" "imageio>=2.28.1" "moviepy>=1.0.3" "tqdm>=4.60.0"
-
-# TODO remove benchy dependency
-RUN pip install --no-cache-dir git+https://github.com/romerojosh/benchy.git
-# TODO use torch-harmonics pip package after the upgrade
-RUN pip install --no-cache-dir https://github.com/NVIDIA/torch-harmonics/archive/8826246cacf6c37b600cdd63fde210815ba238fd.tar.gz
-RUN pip install --no-cache-dir "tensorly>=0.8.1" https://github.com/tensorly/torch/archive/715a0daa7ae0cbdb443d06780a785ae223108903.tar.gz
 
 # copy modulus source
 COPY . /modulus/
@@ -125,7 +115,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
 	echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
-RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3" "mpi4py>=3.1.4"
+RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
 
 # Deployment image
 FROM builder as deploy
