@@ -575,7 +575,7 @@ def main(cfg: DictConfig) -> None:
                     pretext="gen",
                     class_idx=class_idx,
                     num_steps=num_steps,
-                    sampler_kwargs=sampler_kwargs,
+                    **sampler_kwargs,
                 )
             else:
                 image_out = generate(
@@ -587,7 +587,7 @@ def main(cfg: DictConfig) -> None:
                     pretext=pretext,
                     class_idx=class_idx,
                     num_steps=num_steps,
-                    sampler_kwargs=sampler_kwargs,
+                    **sampler_kwargs,
                 )
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
