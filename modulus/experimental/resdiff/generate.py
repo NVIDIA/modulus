@@ -403,7 +403,7 @@ def main(cfg: DictConfig) -> None:
     res_ckpt_filename = getattr(cfg, "res_ckpt_filename")
     reg_ckpt_filename = getattr(cfg, "reg_ckpt_filename")
     image_outdir = getattr(cfg, "image_outdir")
-    seeds = getattr(cfg, "seeds", "0-63")
+    seeds = parse_int_list(getattr(cfg, "seeds", "0-63"))
     class_idx = getattr(cfg, "class_idx", None)  # TODO: is this needed?
     num_steps = getattr(cfg, "num_steps", 18)
     sample_res = getattr(cfg, "sample_res", "full")
