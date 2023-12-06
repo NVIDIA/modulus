@@ -24,13 +24,26 @@ def reshape_fields(
     crop_size_y,
     rnd_x,
     rnd_y,
-    params,
     y_roll,
     train,
+    n_history,
+    in_channels,
+    out_channels,
+    min_path,
+    max_path,
+    global_means_path,
+    global_stds_path,
+    normalization,
+    gridtype,
+    N_grid_channels,
+    roll,
     normalize=True,
     grid=False,
 ):
-    # Takes in np array of size (n_history+1, c, h, w) and returns torch tensor of size ((n_channels*(n_history+1), crop_size_x, crop_size_y)
+    """
+    Takes in np array of size (n_history+1, c, h, w) and returns torch tensor of
+    size ((n_channels*(n_history+1), crop_size_x, crop_size_y)
+    """
 
     if len(np.shape(img)) == 3:
         img = np.expand_dims(img, 0)
@@ -38,25 +51,18 @@ def reshape_fields(
     if img.shape[3] > 720:
         img = img[:, :, 0:720]  # remove last pixel for era5 data
 
-    # print('img', img.shape)
-
-    # n_history = np.shape(img)[0] - 1   #for era5
-    n_history = params.n_history
+    n_history = n_history
 
     img_shape_x = np.shape(img)[-2]
     img_shape_y = np.shape(img)[-1]
     n_channels = np.shape(img)[1]  # this will either be N_in_channels or N_out_channels
-    channels = params.in_channels if inp_or_tar == "inp" else params.out_channels
-    # print('channels', channels)
-
-    # dist.print0('normalize', normalize)
-    # dist.print0('train', train)
+    channels = in_channels if inp_or_tar == "inp" else out_channels
 
     if normalize and train:
-        mins = np.load(params.min_path)[:, channels]
-        maxs = np.load(params.max_path)[:, channels]
-        means = np.load(params.global_means_path)[:, channels]
-        stds = np.load(params.global_stds_path)[:, channels]
+        mins = np.load(min_path)[:, channels]
+        maxs = np.load(max_path)[:, channels]
+        means = np.load(global_means_path)[:, channels]
+        stds = np.load(global_stds_path)[:, channels]
 
     if crop_size_x is None:
         crop_size_x = img_shape_x
@@ -64,18 +70,17 @@ def reshape_fields(
         crop_size_y = img_shape_y
 
     if normalize and train:
-        if params.normalization == "minmax":
+        if normalization == "minmax":
             img -= mins
             img /= maxs - mins
-        elif params.normalization == "zscore":
-            # print('params.normalization == zscore')
+        elif normalization == "zscore":
             img -= means
             img /= stds
 
     if grid:
         if inp_or_tar == "inp":
-            if params.gridtype == "linear":
-                if params.N_grid_channels != 2:
+            if gridtype == "linear":
+                if N_grid_channels != 2:
                     raise ValueError(
                         "N_grid_channels must be set to 2 for gridtype linear"
                     )
@@ -83,13 +88,13 @@ def reshape_fields(
                 y = np.meshgrid(np.linspace(-1, 1, img_shape_y))
                 grid_x, grid_y = np.meshgrid(y, x)
                 grid = np.stack((grid_x, grid_y), axis=0)
-            elif params.gridtype == "sinusoidal":
+            elif gridtype == "sinusoidal":
                 # print('sinusuidal grid added ......')
-                if params.N_grid_channels != 4:
+                if N_grid_channels != 4:
                     raise ValueError(
                         "N_grid_channels must be set to 4 for gridtype sinusoidal"
                     )
-                n_channels = n_channels + params.N_grid_channels
+                n_channels = n_channels + N_grid_channels
                 x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_x)))
                 x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, img_shape_x)))
                 y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_y)))
@@ -101,11 +106,8 @@ def reshape_fields(
                 )
             img = np.concatenate((img, grid), axis=1)
 
-    if params.roll:
+    if roll:
         img = np.roll(img, y_roll, axis=-1)
-
-    # if train and (crop_size_x or crop_size_y):
-    #     img = img[:,:,rnd_x:rnd_x+crop_size_x, rnd_y:rnd_y+crop_size_y]
 
     if crop_size_x or crop_size_y:
         img = img[:, :, rnd_x : rnd_x + crop_size_x, rnd_y : rnd_y + crop_size_y]
