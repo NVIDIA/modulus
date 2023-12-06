@@ -19,13 +19,14 @@ during unpickling. This way, any previously exported pickles will remain
 usable even if the original code is no longer available, or if the current
 version of the code is not consistent with what was originally pickled."""
 
-import sys
-import pickle
-import io
-import inspect
 import copy
-import uuid
+import inspect
+import io
+import pickle
+import sys
 import types
+import uuid
+
 import dnnlib
 
 # ----------------------------------------------------------------------------

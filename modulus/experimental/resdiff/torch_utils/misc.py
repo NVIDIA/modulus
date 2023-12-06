@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
 import contextlib
+import re
+import warnings
+
+import dnnlib
 import numpy as np
 import torch
-import warnings
-import dnnlib
 
 # ----------------------------------------------------------------------------
 # Cached construction of constant tensors. Avoids CPU=>GPU copy when the
@@ -66,12 +67,14 @@ except AttributeError:
     def nan_to_num(
         input, nan=0.0, posinf=None, neginf=None, *, out=None
     ):  # pylint: disable=redefined-builtin
-        assert isinstance(input, torch.Tensor)
+        if not isinstance(input, torch.Tensor):
+            raise TypeError("input should be a Tensor")
         if posinf is None:
             posinf = torch.finfo(input.dtype).max
         if neginf is None:
             neginf = torch.finfo(input.dtype).min
-        assert nan == 0
+        if nan != 0:
+            raise ValueError("nan_to_num only supports nan=0")
         return torch.clamp(
             input.unsqueeze(0).nansum(0), min=neginf, max=posinf, out=out
         )
@@ -152,10 +155,14 @@ class InfiniteSampler(torch.utils.data.Sampler):
     def __init__(
         self, dataset, rank=0, num_replicas=1, shuffle=True, seed=0, window_size=0.5
     ):
-        assert len(dataset) > 0
-        assert num_replicas > 0
-        assert 0 <= rank < num_replicas
-        assert 0 <= window_size <= 1
+        if not len(dataset) > 0:
+            raise ValueError("Dataset must contain at least one item")
+        if not num_replicas > 0:
+            raise ValueError("num_replicas must be positive")
+        if not 0 <= rank < num_replicas:
+            raise ValueError("rank must be non-negative and less than num_replicas")
+        if not 0 <= window_size <= 1:
+            raise ValueError("window_size must be between 0 and 1")
         super().__init__(dataset)
         self.dataset = dataset
         self.rank = rank
@@ -189,22 +196,27 @@ class InfiniteSampler(torch.utils.data.Sampler):
 
 
 def params_and_buffers(module):
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     return list(module.parameters()) + list(module.buffers())
 
 
 def named_params_and_buffers(module):
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     return list(module.named_parameters()) + list(module.named_buffers())
 
 
 @torch.no_grad()
 def copy_params_and_buffers(src_module, dst_module, require_all=False):
-    assert isinstance(src_module, torch.nn.Module)
-    assert isinstance(dst_module, torch.nn.Module)
+    if not isinstance(src_module, torch.nn.Module):
+        raise TypeError("src_module must be a torch.nn.Module instance")
+    if not isinstance(dst_module, torch.nn.Module):
+        raise TypeError("dst_module must be a torch.nn.Module instance")
     src_tensors = dict(named_params_and_buffers(src_module))
     for name, tensor in named_params_and_buffers(dst_module):
-        assert (name in src_tensors) or (not require_all)
+        if not ((name in src_tensors) or (not require_all)):
+            raise ValueError(f"Missing source tensor for {name}")
         if name in src_tensors:
             tensor.copy_(src_tensors[name])
 
@@ -216,7 +228,8 @@ def copy_params_and_buffers(src_module, dst_module, require_all=False):
 
 @contextlib.contextmanager
 def ddp_sync(module, sync):
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     if sync or not isinstance(module, torch.nn.parallel.DistributedDataParallel):
         yield
     else:
@@ -229,7 +242,8 @@ def ddp_sync(module, sync):
 
 
 def check_ddp_consistency(module, ignore_regex=None):
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     for name, tensor in named_params_and_buffers(module):
         fullname = type(module).__name__ + "." + name
         if ignore_regex is not None and re.fullmatch(ignore_regex, fullname):
@@ -239,7 +253,8 @@ def check_ddp_consistency(module, ignore_regex=None):
             tensor = nan_to_num(tensor)
         other = tensor.clone()
         torch.distributed.broadcast(tensor=other, src=0)
-        assert (tensor == other).all(), fullname
+        if not (tensor == other).all():
+            raise RuntimeError(f"DDP consistency check failed for {fullname}")
 
 
 # ----------------------------------------------------------------------------
@@ -247,9 +262,12 @@ def check_ddp_consistency(module, ignore_regex=None):
 
 
 def print_module_summary(module, inputs, max_nesting=3, skip_redundant=True):
-    assert isinstance(module, torch.nn.Module)
-    assert not isinstance(module, torch.jit.ScriptModule)
-    assert isinstance(inputs, (tuple, list))
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
+    if isinstance(module, torch.jit.ScriptModule):
+        raise TypeError("module must not be a torch.jit.ScriptModule instance")
+    if not isinstance(inputs, (tuple, list)):
+        raise TypeError("inputs must be a tuple or list")
 
     # Register hooks.
     entries = []

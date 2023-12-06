@@ -16,41 +16,31 @@
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import os
-from typing import Optional, List
-import pandas
-import re
-import click
-import tqdm
 import pickle
+import re
+import sys
+from typing import List, Optional
+
+import cftime
+import click
+import dnnlib
+import netCDF4 as nc
 import numpy as np
 import torch
-import PIL.Image
-import cftime
-import dnnlib
-import cftime
-import sys
-import netCDF4 as nc
-
+import tqdm
+import training.dataset
+import training.time
+from einops import rearrange
 from torch_utils import misc
-
 from training.dataset import (
-    Era5Dataset,
     CWBDataset,
     CWBERA5DatasetV2,
     ZarrDataset,
-    _ZarrDataset,
     denormalize,
 )
-import training.dataset
 
 # from training.dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-
 from training.YParams import YParams
-import training.time
-
-from einops import rearrange, reduce, repeat
-import math
-import matplotlib.pyplot as plt
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
@@ -132,10 +122,14 @@ def ablation_sampler(
     # conditioning
     x_lr = img_lr
 
-    assert solver in ["euler", "heun"]
-    assert discretization in ["vp", "ve", "iddpm", "edm"]
-    assert schedule in ["vp", "ve", "linear"]
-    assert scaling in ["vp", "none"]
+    if solver not in ["euler", "heun"]:
+        raise ValueError(f"Unknown solver {solver}")
+    if discretization not in ["vp", "ve", "iddpm", "edm"]:
+        raise ValueError(f"Unknown discretization {discretization}")
+    if schedule not in ["vp", "ve", "linear"]:
+        raise ValueError(f"Unknown schedule {schedule}")
+    if scaling not in ["vp", "none"]:
+        raise ValueError(f"Unknown scaling {scaling}")
 
     # Helper functions for VP & VE noise level schedules.
     vp_sigma = (
@@ -205,7 +199,6 @@ def ablation_sampler(
             .to(torch.int64)
         ]
     else:
-        assert discretization == "edm"
         sigma_steps = (
             sigma_max ** (1 / rho)
             + step_indices
@@ -223,7 +216,6 @@ def ablation_sampler(
         sigma_deriv = ve_sigma_deriv
         sigma_inv = ve_sigma_inv
     else:
-        assert schedule == "linear"
         sigma = lambda t: t
         sigma_deriv = lambda t: 1
         sigma_inv = lambda sigma: sigma
@@ -233,7 +225,6 @@ def ablation_sampler(
         s = lambda t: 1 / (1 + sigma(t) ** 2).sqrt()
         s_deriv = lambda t: -sigma(t) * sigma_deriv(t) * (s(t) ** 3)
     else:
-        assert scaling == "none"
         s = lambda t: 1
         s_deriv = lambda t: 0
 
@@ -273,7 +264,6 @@ def ablation_sampler(
         if solver == "euler" or i == num_steps - 1:
             x_next = x_hat + h * d_cur
         else:
-            assert solver == "heun"
             denoised = net(
                 x_prime / s(t_prime), x_lr / s(t_prime), sigma(t_prime), class_labels
             ).to(torch.float64)
@@ -300,7 +290,8 @@ class StackedRandomGenerator:
         ]
 
     def randn(self, size, **kwargs):
-        assert size[0] == len(self.generators)
+        if size[0] != len(self.generators):
+            raise ValueError(f"Expected first dimension of size {len(self.generators)}")
         return torch.stack(
             [torch.randn(size[1:], generator=gen, **kwargs) for gen in self.generators]
         )
@@ -311,7 +302,8 @@ class StackedRandomGenerator:
         )
 
     def randint(self, *args, size, **kwargs):
-        assert size[0] == len(self.generators)
+        if size[0] != len(self.generators):
+            raise ValueError(f"Expected first dimension of size {len(self.generators)}")
         return torch.stack(
             [
                 torch.randint(*args, size=size[1:], generator=gen, **kwargs)
@@ -603,7 +595,10 @@ def main(max_times: Optional[int], seeds: List[int], **kwargs):
         gen_batch = 1  # max(4096 // net.img_resolution, 1)
     if det_batch is None:
         det_batch = 1  # max(gen_batch, 64)
-    assert det_batch % gen_batch == 0
+    if det_batch % gen_batch != 0:
+        raise ValueError(
+            f"det_batch ({det_batch}) must be divisible by gen_batch ({gen_batch})"
+        )
 
     logger0.info(f"opts.data_config: {opts.data_config}")
 
@@ -737,7 +732,8 @@ class NetCDFWriter:
         f.createDimension("time")
         f.createDimension("ensemble")
 
-        assert lat.shape == lon.shape
+        if lat.shape != lon.shape:
+            raise ValueError("lat and lon must have the same shape")
         ny, nx = lat.shape
 
         # create lat/lon grid
@@ -837,7 +833,8 @@ def generate_and_save(
 
         # add zeros for grid embeddings
         padding = image_lr2.shape[1] - len(mx)
-        assert padding >= 0
+        if not padding >= 0:
+            raise ValueError("padding must be non-negative")
 
         mx = np.concatenate([mx, np.zeros(padding)])
         # add zeros for grid embeddings
@@ -854,18 +851,21 @@ def generate_and_save(
         image_tar2 = denormalize(image_tar2, my, sy)
 
         # some runtime assertions
-        assert image_tar2.ndim == 4
+        if image_tar2.ndim != 4:
+            raise ValueError("image_tar2 must be 4-dimensional")
 
         for idx in range(image_out.shape[0]):
             image_out2 = image_out[idx].unsqueeze(0)
-            assert image_out2.ndim == 4
+            if image_out2.ndim != 4:
+                raise ValueError("image_out2 must be 4-dimensional")
 
             # Denormalize the input and outputs
             image_out2 = image_out2.cpu().numpy()
             image_out2 = denormalize(image_out2, my, sy)
 
             t_index = index[0]
-            assert len(index) == 1
+            if len(index) != 1:
+                raise ValueError("len(index) must be 1")
             time = dataset.time()[t_index]
             writer.write_time(time_index, time)
             for channel_idx in range(image_out2.shape[1]):

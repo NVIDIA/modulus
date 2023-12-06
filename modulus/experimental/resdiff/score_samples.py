@@ -39,13 +39,13 @@ variables:
 
 """
 # %%
-import xskillscore
+import sys
+
+import dask.diagnostics
 
 # TODO install skillscore
 import xarray as xr
-import sys
-import pandas as pd
-import dask.diagnostics
+import xskillscore
 
 
 def open_samples(f):

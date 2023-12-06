@@ -29,19 +29,21 @@
 # %%
 
 # %%
-import xarray as xr
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import fsspec
 import sys
 
+import fsspec
+import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
+
 sys.path.insert(0, "../../../")
+import os
+
+import analysis_untils
+import config
 import power_spectra
 from scipy.fft import fftshift, irfft
-import os
-import config
-import analysis_untils
 
 url = os.path.join(config.root, "generations/era5-cwb-v3/validation_big/samples.zarr")
 output = os.path.splitext(__file__)[0]

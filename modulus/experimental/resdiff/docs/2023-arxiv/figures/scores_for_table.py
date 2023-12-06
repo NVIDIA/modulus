@@ -42,10 +42,9 @@ scores[
 ] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/era5/era5-cwb-v3/validation_big/scores.nc"
 
 # %%
-import xarray
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import xarray
 
 arrs = [xarray.open_dataset(path) for path in scores.values()]
 ds = xarray.concat(arrs, dim=xarray.Variable(["model"], list(scores)))

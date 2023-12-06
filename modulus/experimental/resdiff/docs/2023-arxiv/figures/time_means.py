@@ -26,17 +26,19 @@
 #     name: python3
 # ---
 import os
+
 import config
 
 # %%
 url = os.path.join(config.root, "generations/era5-cwb-v3/validation_big/samples.zarr")
 
 # %%
-import xarray as xr
 import os
-import numpy as np
-import cartopy.crs
+
 import analysis_untils
+import cartopy.crs
+import numpy as np
+import xarray as xr
 
 # %%
 coords = xr.open_zarr(url)
@@ -63,9 +65,9 @@ pred_avg = pred.mean(["time"]).load()
 truth_avg = truth.mean(["time"]).load()
 
 # %%
-import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
 
 plt.style.use("dark_background")
 

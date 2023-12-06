@@ -13,13 +13,14 @@
 # limitations under the License.
 
 # coding: utf-8
-import training.YParams
-import training.dataset
-from training.time import convert_datetime_to_cftime
 import datetime
-import yaml
 import random
 import sys
+
+import training.dataset
+import training.YParams
+import yaml
+from training.time import convert_datetime_to_cftime
 
 p = training.YParams.YParams("era5-cwb-v3.yaml", "validation_small")
 ds = training.dataset.get_zarr_dataset(p, train=False)

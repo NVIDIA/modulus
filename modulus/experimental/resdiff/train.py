@@ -17,27 +17,20 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import os
 
+# ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
-import os
-import re
 import json
+import re
+import warnings
+
 import click
-import torch
 import dnnlib
+import torch
 from training import training_loop
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-
-try:
-    from apex.optimizers import FusedAdam
-
-    apex_imported = True
-except ImportError:
-    apex_imported = False
-
-import warnings
 
 warnings.filterwarnings(
     "ignore", "Grad strides do not match bucket view strides"
@@ -352,6 +345,21 @@ def main(**kwargs):
     #     raise click.ClickException(f'--data: {err}')
 
     # Network architecture.
+    valid_archs = {
+        "ddpmpp-cwb-v2",
+        "ddpmpp-cwb-v1",
+        "ddpmpp-cwb-v0-regression",
+        "ddpmpp-cwb-v0",
+        "ddpmpp-cifar",
+        "ncsnpp",
+        "adm",
+    }
+    if opts.arch not in valid_archs:
+        raise ValueError(
+            f"Invalid network architecture {opts.arch}; "
+            f"valid choices are {valid_archs}"
+        )
+
     if opts.arch == "ddpmpp-cwb-v2":
         c.network_kwargs.update(
             model_type="SongUNet",
@@ -441,7 +449,6 @@ def main(**kwargs):
         )
 
     else:
-        assert opts.arch == "adm"
         c.network_kwargs.update(
             model_type="DhariwalUNet", model_channels=192, channel_mult=[1, 2, 3, 4]
         )
