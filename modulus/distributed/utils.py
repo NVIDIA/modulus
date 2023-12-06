@@ -92,7 +92,7 @@ def truncate_helper(tensor, dim, new_size):
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
     assert dim < tensor.dim(), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    assert (tensor.shape[dim] > num_chunks), f"Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
+    assert (tensor.shape[dim] >= num_chunks), f"Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
                                               {num_chunks} chunks. Empty slices are currently not supported."
     
     # get split
