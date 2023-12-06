@@ -59,7 +59,7 @@ def training_loop(
     resume_state_dump=None,  # Start from the given training state, None = reset training state.
     resume_kimg=0,  # Start from the given training progress.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
-    device=torch.device("cuda"),
+    train_data_path=None,
     crop_size_x=448,
     crop_size_y=448,
     n_history=0,
@@ -81,6 +81,7 @@ def training_loop(
 
     # Instantiate distributed manager.
     dist = DistributedManager()
+    device = dist.device
 
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
@@ -90,7 +91,6 @@ def training_loop(
     # Initialize.
     start_time = time.time()
 
-    device = dist.device
     np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
     torch.backends.cudnn.benchmark = cudnn_benchmark
@@ -112,7 +112,7 @@ def training_loop(
     # Load dataset: weather
     logger0.info("Loading dataset...")
     dataset_obj = ZarrDataset(
-        path=path,
+        path=train_data_path,
         n_history=n_history,
         in_channels=in_channels,
         out_channels=out_channels,
