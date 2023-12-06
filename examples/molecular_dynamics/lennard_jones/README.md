@@ -1,9 +1,9 @@
 # Molecular Dynamics using GNNs
 
-This example demonstrates the use of MeshGrapNet from Modulus applied to a Molecular
-Dynamics use case.
-The example is focused on a Lennard Jones System as described in the
-[paper here](https://arxiv.org/abs/2112.03383).
+This example demonstrates how to leverage the optimized model implementations in Modulus
+for different domains. This example showcases how you can leverage the MeshGraphNet
+model in Modulus for developing a DL model for predicting forces/potential for a Lennard
+Jones System as described in the [paper here](https://arxiv.org/abs/2112.03383).
 
 ## Problem overview
 
@@ -55,6 +55,12 @@ mpirun -np <num_GPUs> python lennard_jones_system.py
 
 If running in a docker container, you may need to include the `--allow-run-as-root` in
 the multi-GPU run command.
+
+While the current example trains a light-weight model that can be run on any GPU, on
+8 A100s, the training time per epoch is around 90 seconds. The validation error
+computation that's run every epoch on the test dataset takes around 65 seconds.
+Thus total time per epoch is ~155 seconds (Full training takes roughly 1.3 hrs
+(30 epochs)).
 
 ## References
 
