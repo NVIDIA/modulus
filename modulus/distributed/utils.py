@@ -237,11 +237,10 @@ def _gather(input_, dim_, shapes_=None, group=None):  # pragma: no cover
     
     if shapes_ is not None:
         shape = list(input_.shape)
-        gather_shapes = []
+        tensor_list = [None for _ in range(comm_size)]
         for i in range(comm_size):
             shape[dim_] = shapes_[i]
-            gather_shapes.append(shape)
-        tensor_list = [torch.empty(s, device=input_.device, dtype=input_.dtype) for s in gather_shapes]
+            tensor_list[i] = torch.empty(shape, device=input_.device, dtype=input_.dtype)
 
         print(f"rank {comm_rank}", [x.shape for x in tensor_list], input_.shape, shapes_)
     else:
