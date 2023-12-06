@@ -80,7 +80,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
     loss_fun = MSELoss(reduction="mean")
     optimizer = Adam(model.parameters(), lr=cfg.scheduler.initial_lr)
     scheduler = lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate ** step
+        optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate**step
     )
     norm_vars = cfg.normaliser
     normaliser = {
