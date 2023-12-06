@@ -131,7 +131,7 @@ def training_loop(
         gridtype=gridtype,
         N_grid_channels=N_grid_channels,
         normalization=normalization,
-        all_times=all_times,
+        all_times=False,  # TODO check if this should be False
     )
     worker_init_fn = None
 
