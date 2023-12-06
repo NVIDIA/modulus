@@ -112,8 +112,7 @@ def training_loop(
     # Load dataset: weather
     logger0.info("Loading dataset...")
     dataset_obj = ZarrDataset(
-        path=train_data_path,
-        n_history=n_history,
+        dataset=train_data_path,
         in_channels=in_channels,
         out_channels=out_channels,
         img_shape_x=img_shape_x,
@@ -122,16 +121,17 @@ def training_loop(
         crop_size_y=crop_size_y,
         roll=roll,
         add_grid=add_grid,
-        train=True,
         ds_factor=ds_factor,
+        train=True,
+        all_times=False,  # TODO check if this should be False
+        n_history=n_history,
         min_path=min_path,
         max_path=max_path,
         global_means_path=global_means_path,
         global_stds_path=global_stds_path,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
         normalization=normalization,
-        all_times=False,  # TODO check if this should be False
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,  
     )
     worker_init_fn = None
 
