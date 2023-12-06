@@ -93,6 +93,7 @@ class _GatherFromParallelRegion(torch.autograd.Function):
             _split(grad_output, ctx.dim, group=DistributedManager().group(ctx.group)),
             None,
             None,
+            None,
         )
 
 # -----------------
