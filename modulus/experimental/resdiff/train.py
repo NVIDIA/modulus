@@ -232,53 +232,23 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Preconditioning & loss function.
-    if precond == "vp":
-        c.network_kwargs.class_name = "training.networks.VPPrecond"
-        c.loss_kwargs.class_name = "training.loss.VPLoss"
-    elif precond == "ve":
-        c.network_kwargs.class_name = "training.networks.VEPrecond"
-        c.loss_kwargs.class_name = "training.loss.VELoss"
-    elif precond == "edm":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.EDMLoss"
+    if precond == "edm":
+        c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
-        c.network_kwargs.class_name = "training.networks.UNet"
-        c.loss_kwargs.class_name = "training.loss.RegressionLoss"
-    elif precond == "mixture":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLoss"
-    elif precond == "mixturev1":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV1"
-    elif precond == "mixturev2":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV2"
-    elif precond == "mixturev3":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV3"
-    elif precond == "mixturev4":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV4"
-    elif precond == "mixturev5":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV5"
-    elif precond == "reslossv1":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.ResLossv1"
+        c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.RegressionLoss"
+    elif precond == "resloss":
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.ResLoss"
 
     # Network options.
     if cbase is not None:
         c.network_kwargs.model_channels = cbase
     if cres is not None:
         c.network_kwargs.channel_mult = cres
-    if augment:
-        c.augment_kwargs = dnnlib.EasyDict(
-            class_name="training.augment.AugmentPipe", p=augment
-        )
-        c.augment_kwargs.update(
-            xflip=1e8, yflip=1, scale=1, rotate_frac=1, aniso=1, translate_frac=1
-        )
-        c.network_kwargs.augment_dim = 9
+    if augment > 0:
+        raise NotImplementedError("Augmentation is not implemented")
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
 
     # Training options.

@@ -187,52 +187,6 @@ class VELoss:
         return loss
 
 
-# class EDMLoss:
-#     """
-#     Loss function proposed in the EDM paper.
-
-#     Parameters
-#     ----------
-#     P_mean: float, optional
-#         Mean value for `sigma` computation, by default -1.2.
-#     P_std: float, optional:
-#         Standard deviation for `sigma` computation, by default 1.2.
-#     sigma_data: float, optional
-#         Standard deviation for data, by default 0.5.
-
-#     Note
-#     ----
-#     Reference: Karras, T., Aittala, M., Aila, T. and Laine, S., 2022. Elucidating the
-#     design space of diffusion-based generative models. Advances in Neural Information
-#     Processing Systems, 35, pp.26565-26577.
-#     """
-
-#     def __init__(
-#         self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5
-#     ):
-#         self.P_mean = P_mean
-#         self.P_std = P_std
-#         self.sigma_data = sigma_data
-
-#     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-#         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-#         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-#         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-#         # augment for conditional generaiton
-#         img_tot = torch.cat((img_clean, img_lr), dim=1)
-#         y_tot, augment_labels = (
-#             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-#         )
-#         y = y_tot[:, : img_clean.shape[1], :, :]
-#         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-#         n = torch.randn_like(y) * sigma
-#         D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
-#         loss = weight * ((D_yn - y) ** 2)
-#         return loss
-
-
 class EDMLoss:
     """
     Loss function proposed in the EDM paper.
@@ -299,6 +253,83 @@ class EDMLoss:
         )
         n = torch.randn_like(y) * sigma
         D_yn = net(y + n, sigma, labels, augment_labels=augment_labels)
+        loss = weight * ((D_yn - y) ** 2)
+        return loss
+
+
+class EDMLossSR:
+    """
+    Variation of the loss function proposed in the EDM paper for Super-Resolution.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default -1.2.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5
+    ):
+        self.P_mean = P_mean
+        self.P_std = P_std
+        self.sigma_data = sigma_data
+
+    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the EDM formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'P_mean' and 'P_std' random values. The calculated loss is weighted as a
+        function of 'sigma' and 'sigma_data'.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
+        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
+        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
+
+        # augment for conditional generaiton
+        img_tot = torch.cat((img_clean, img_lr), dim=1)
+        y_tot, augment_labels = (
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+        )
+        y = y_tot[:, : img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+
+        n = torch.randn_like(y) * sigma
+        D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
