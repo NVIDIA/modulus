@@ -123,7 +123,7 @@ def training_loop(
         add_grid=add_grid,
         ds_factor=ds_factor,
         train=True,
-        all_times=True,  # TODO check if this should be False
+        all_times=False,  # TODO check if this should be False
         n_history=n_history,
         min_path=min_path,
         max_path=max_path,

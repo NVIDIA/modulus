@@ -109,7 +109,7 @@ def reshape_fields(
     if roll:
         img = np.roll(img, y_roll, axis=-1)
 
-    if crop_size_x or crop_size_y:
+    if crop_size_x or crop_size_y:  # TODO check if this should be done only in training
         img = img[:, :, rnd_x : rnd_x + crop_size_x, rnd_y : rnd_y + crop_size_y]
 
     if inp_or_tar == "inp":
