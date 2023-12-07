@@ -51,14 +51,14 @@ img_shape_x: 448
 img_shape_y: 448
 roll: false
 add_grid: true
-ds_factor: 1
+ds_factor: 4
 min_path: null
 max_path: null
 global_means_path: null
 global_stds_path: null
 gridtype: "sinusoidal"
 N_grid_channels: 4
-normalization: "v2"
+normalization: "v1"
 times:
   - 2021-02-02T00:00:00
 
