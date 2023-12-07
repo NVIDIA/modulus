@@ -15,8 +15,6 @@
 """Generate random images using the techniques described in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import pickle
-
 import cftime
 import datetime
 import dnnlib
@@ -308,13 +306,6 @@ class StackedRandomGenerator:
             ]
         )
 
-
-def load_pickle(network_pkl, rank):
-    # Load network.
-    with dnnlib.util.open_url(network_pkl, verbose=(rank == 0)) as f:
-        return pickle.load(f)["ema"]
-
-
 def get_dataset_and_sampler(
     path,
     n_history,
@@ -505,9 +496,9 @@ def main(cfg: DictConfig) -> None:
         # Load network
         logger.info(f"torch.__version__: {torch.__version__}")
         logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
-        net_res = load_pickle(res_ckpt_filename, dist.rank)
+        net_res = torch.load(res_ckpt_filename)
         logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
-        net_reg = load_pickle(reg_ckpt_filename, dist.rank) if res_edm else None
+        net_reg = torch.load(reg_ckpt_filename) if res_edm else None
 
         # move to device
         torch.cuda.set_device(dist.rank)
@@ -780,18 +771,6 @@ def generate(
 ):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
-    
-    Examples:
-
-    \b
-    # Generate 64 images and save them as out/*.png
-    python generate.py --outdir=out --seeds=0-63 --batch=64 \\
-        --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
-
-    \b
-    # Generate 1024 images using 2 GPUs
-    torchrun --standalone --nproc_per_node=2 generate.py --outdir=out --seeds=0-999 --batch=64 \\
-        --network=https://nvlabs-fi-cdn.nvidia.com/edm/pretrained/edm-cifar10-32x32-cond-vp.pkl
     """
 
     if sampling_method == "stochastic":
@@ -832,7 +811,6 @@ def generate(
 
         # Pick latents and labels.
         rnd = StackedRandomGenerator(device, batch_seeds)
-        # latents = rnd.randn([batch_size, net.img_in_channels, net.img_resolution, net.img_resolution], device=device)
         latents = rnd.randn(
             [
                 max_batch_size,

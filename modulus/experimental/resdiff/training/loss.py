@@ -16,7 +16,6 @@
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import torch
-from torch_utils import persistence
 
 # ----------------------------------------------------------------------------
 # Loss function corresponding to the variance preserving (VP) formulation
@@ -24,7 +23,6 @@ from torch_utils import persistence
 # Differential Equations".
 
 
-@persistence.persistent_class
 class VPLoss:
     def __init__(self, beta_d=19.9, beta_min=0.1, epsilon_t=1e-5):
         self.beta_d = beta_d
@@ -53,8 +51,6 @@ class VPLoss:
 # from the paper "Score-Based Generative Modeling through Stochastic
 # Differential Equations".
 
-
-@persistence.persistent_class
 class VELoss:
     def __init__(self, sigma_min=0.02, sigma_max=100):
         self.sigma_min = sigma_min
@@ -101,7 +97,6 @@ class VELoss:
 # Improved loss function proposed in the paper "Elucidating the Design Space
 # of Diffusion-Based Generative Models" (EDM).
 # weather
-@persistence.persistent_class
 class EDMLoss:
     def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -134,7 +129,6 @@ class EDMLoss:
 
 # ----------------------------------------------------------------------------
 # UNet deterministic
-@persistence.persistent_class
 class RegressionLoss:
     def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -167,7 +161,6 @@ class RegressionLoss:
 
 # ----------------------------------------------------------------------------
 # Mixture loss: denoising score matching + regression
-@persistence.persistent_class
 class MixtureLoss:
     def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -216,7 +209,6 @@ class MixtureLoss:
 
 
 # P_mean=-1.2
-@persistence.persistent_class
 class ResLossv1:
     def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -283,7 +275,6 @@ class ResLossv1:
 
 
 # P_mean=2.0
-@persistence.persistent_class
 class MixtureLossV1:
     def __init__(self, P_mean=2.4, P_std=3.6, sigma_data=0.5):
         self.P_mean = P_mean
@@ -326,7 +317,6 @@ class MixtureLossV1:
 
 
 # P_mean=-1.2
-@persistence.persistent_class
 class MixtureLossV2:
     def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -369,7 +359,6 @@ class MixtureLossV2:
 
 
 # P_mean=-0.6
-@persistence.persistent_class
 class MixtureLossV3:
     def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -412,7 +401,6 @@ class MixtureLossV3:
 
 
 # P_mean=-0.2
-@persistence.persistent_class
 class MixtureLossV4:
     def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
@@ -458,7 +446,6 @@ class MixtureLossV4:
 
 
 # P_mean=-1.2
-@persistence.persistent_class
 class MixtureLossV5:
     def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
