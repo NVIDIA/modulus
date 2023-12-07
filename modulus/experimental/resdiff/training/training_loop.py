@@ -31,8 +31,7 @@ from torch_utils import misc, training_stats
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
-# from .dataset_old import Era5Dataset, CWBDataset, CWBERA5DatasetV2, ZarrDataset
-from .dataset import CWBDataset, CWBERA5DatasetV2, Era5Dataset, ZarrDataset
+from .dataset import CWBDataset, CWBERA5DatasetV2, Era5Dataset, ZarrDataset, get_zarr_dataset
 
 # weather related
 from .YParams import YParams
@@ -121,26 +120,8 @@ def training_loop(
             yparams, yparams.train_data_path, train=True, task=task
         )
         worker_init_fn = None
-    elif data_type == "era5-cwb-v1":
-        # filelist = os.listdir(path=yparams.cwb_data_dir + '/2018')
-        # filelist = [name for name in filelist if "2018" in name]
-        filelist = [
-            file
-            for root, dirs, files in os.walk(yparams.cwb_data_dir)
-            for file in files
-            if "2022" not in file
-        ]
-
-        dataset_obj = CWBERA5DatasetV2(
-            yparams, filelist=filelist, chans=list(range(20)), train=True, task=task
-        )
-        worker_init_fn = dataset_obj.worker_init_fn
-    elif data_type == "era5-cwb-v2":
-        dataset_obj = ZarrDataset(yparams, yparams.train_data_path, train=True)
-        worker_init_fn = None
     elif data_type == "era5-cwb-v3":
-        dataset_obj = ZarrDataset(yparams, yparams.train_data_path, train=True)
-        # worker_init_fn = dataset_obj.worker_init_fn
+        dataset_obj = get_zarr_dataset(yparams, train=True)
         worker_init_fn = None
 
     dataset_sampler = misc.InfiniteSampler(
