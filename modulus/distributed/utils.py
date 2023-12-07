@@ -23,18 +23,18 @@ from .manager import DistributedManager
 
 
 def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
-    
+
     # treat trivial case first
     if num_chunks == 1:
         return [size]
-    
-    # first, check if we can split using div-up to balance the load: 
+
+    # first, check if we can split using div-up to balance the load:
     chunk_size = (size + num_chunks - 1) // num_chunks
     last_chunk_size = max(0, size - chunk_size * (num_chunks - 1))
     if last_chunk_size == 0:
         # in this case, the last shard would be empty, split with floor instead:
         chunk_size = size // num_chunks
-        last_chunk_size = size - chunk_size * (num_chunks-1)
+        last_chunk_size = size - chunk_size * (num_chunks - 1)
 
     # generate sections list
     sections = [chunk_size for _ in range(num_chunks - 1)] + [last_chunk_size]
@@ -91,14 +91,20 @@ def truncate_helper(tensor, dim, new_size):
 
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
-    assert dim < tensor.dim(), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    assert (tensor.shape[dim] >= num_chunks), f"Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
-                                              {num_chunks} chunks. Empty slices are currently not supported."
-    
+    if dim >= tensor.dim():
+        raise ValueError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
+        )
+    if tensor.shape[dim] < num_chunks:
+        raise ValueError(
+            "Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
+        {num_chunks} chunks. Empty slices are currently not supported."
+        )
+
     # get split
     sections = compute_split_shapes(tensor.shape[dim], num_chunks)
     tensor_list = torch.split(tensor, sections, dim=dim)
-    
+
     return tensor_list
 
 
@@ -234,16 +240,18 @@ def _gather(input_, dim_, shapes_=None, group=None):  # pragma: no cover
 
     # make input contiguous
     input_ = input_.contiguous(memory_format=input_format)
-    
+
     if shapes_ is not None:
         shape = list(input_.shape)
         tensor_list = [None for _ in range(comm_size)]
         for i in range(comm_size):
             shape[dim_] = shapes_[i]
-            tensor_list[i] = torch.empty(shape, device=input_.device, dtype=input_.dtype)
+            tensor_list[i] = torch.empty(
+                shape, device=input_.device, dtype=input_.dtype
+            )
     else:
         tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
-        
+
     tensor_list[comm_rank] = input_
     dist.all_gather(tensor_list, input_, group=group)
 

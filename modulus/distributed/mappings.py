@@ -15,7 +15,7 @@
 import torch
 
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.utils import compute_split_shapes, _gather, _reduce, _split
+from modulus.distributed.utils import _gather, _reduce, _split, compute_split_shapes
 
 
 class _CopyToParallelRegion(torch.autograd.Function):
@@ -62,13 +62,20 @@ class _ScatterToParallelRegion(torch.autograd.Function):
     def forward(ctx, input_, dim_, group_):  # pragma: no cover
         ctx.dim = dim_
         ctx.group = group_
-        ctx.split_shapes = compute_split_shapes(input_.shape[dim_], DistributedManager().group_size(group_))
+        ctx.split_shapes = compute_split_shapes(
+            input_.shape[dim_], DistributedManager().group_size(group_)
+        )
         return _split(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
         return (
-            _gather(grad_output, ctx.dim, shapes_=ctx.split_shapes, group=DistributedManager().group(ctx.group)),
+            _gather(
+                grad_output,
+                ctx.dim,
+                shapes_=ctx.split_shapes,
+                group=DistributedManager().group(ctx.group),
+            ),
             None,
             None,
         )
@@ -85,7 +92,9 @@ class _GatherFromParallelRegion(torch.autograd.Function):
     def forward(ctx, input_, dim_, shapes_, group_):  # pragma: no cover
         ctx.dim = dim_
         ctx.group = group_
-        return _gather(input_, dim_, shapes_=shapes_, group=DistributedManager().group(group_))
+        return _gather(
+            input_, dim_, shapes_=shapes_, group=DistributedManager().group(group_)
+        )
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
@@ -95,6 +104,7 @@ class _GatherFromParallelRegion(torch.autograd.Function):
             None,
             None,
         )
+
 
 # -----------------
 # Helper functions.
