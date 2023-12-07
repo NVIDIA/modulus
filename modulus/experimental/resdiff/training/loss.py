@@ -72,31 +72,6 @@ class VELoss:
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
-
-# #----------------------------------------------------------------------------
-# # Improved loss function proposed in the paper "Elucidating the Design Space
-# # of Diffusion-Based Generative Models" (EDM).
-# # cifar10
-# @persistence.persistent_class
-# class EDMLoss:
-#     def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
-#         self.P_mean = P_mean
-#         self.P_std = P_std
-#         self.sigma_data = sigma_data
-
-#     def __call__(self, net, images, labels=None, augment_pipe=None):
-#         rnd_normal = torch.randn([images.shape[0], 1, 1, 1], device=images.device)
-#         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-#         weight = (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
-#         y, augment_labels = augment_pipe(images) if augment_pipe is not None else (images, None)
-#         n = torch.randn_like(y) * sigma
-#         D_yn = net(y + n, sigma, labels, augment_labels=augment_labels)
-#         loss = weight * ((D_yn - y) ** 2)
-#         return loss
-
-# #----------------------------------------------------------------------------
-
-
 # ----------------------------------------------------------------------------
 # Improved loss function proposed in the paper "Elucidating the Design Space
 # of Diffusion-Based Generative Models" (EDM).
@@ -142,77 +117,20 @@ class RegressionLoss:
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (
-            1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
-        )
-
+        sigma = 0.
+        
         img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        input = torch.zeros_like(y, device=img_clean.device)
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
+        _, augment_labels = augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+        
+        # Or we could even append Gaussian noise here to make it stochastic. Why waste it with zero vectors?
+        zeros = torch.zeros_like(img_clean, device=img_clean.device) 
+        img_pred = net(zeros, img_lr, sigma, labels, augment_labels=augment_labels)
+        loss = ((img_clean - img_pred) ** 2)
+        
         return loss
 
 
 # ----------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------
-# Mixture loss: denoising score matching + regression
-@persistence.persistent_class
-class MixtureLoss:
-    def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (
-            rnd_normal * self.P_std + self.P_mean
-        ).exp()  # in the range [0,2], but signal is in [-4, 7]
-        den_weight = (sigma**2 + self.sigma_data**2) / (
-            sigma * self.sigma_data
-        ) ** 2  # in the range [5,2000] with high prob. if randn in [-1,+1]
-
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        n = torch.randn_like(y) * sigma
-        latent = y + n
-        D_yn = net(latent, y_lr, sigma, labels, augment_labels=augment_labels)
-        R_yn = net(
-            latent * 0.0, y_lr, sigma, labels, augment_labels=augment_labels
-        )  # regression loss, zero stochasticity
-
-        reg_weight = torch.tensor(5.0).cuda()
-        loss = den_weight * ((D_yn - y) ** 2) + reg_weight * ((R_yn - y) ** 2)
-
-        # dist.print0('**********************************************')
-        # dist.print0('img-cleam-max', torch.max(img_clean))
-        # dist.print0('img-cleam-min', torch.min(img_clean))
-        # dist.print0('img-cleam-avg', torch.mean(img_clean))
-        # dist.print0('img-cleam-var', torch.var(img_clean))
-        # dist.print0('sigma', sigma)
-        # dist.print0('den_weight', den_weight)
-        # dist.print0('reg_weight', reg_weight)
-        # dist.print0('loss_den', ((D_yn - y) ** 2).mean())
-        # dist.print0('loss_reg', ((R_yn - y) ** 2).mean())
-        # dist.print0('mixture-loss', torch.mean(loss))
-
-        return loss
 
 
 # P_mean=-1.2
@@ -249,12 +167,6 @@ class ResLossv1:
         )
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dist.print0('before ....')
-        # dist.print0('y.max()', y.max())
-        # dist.print0('y.min()', y.min())
-        # dist.print0('y.mean()', y.mean())
-
         # form residual
         y_mean = self.unet(
             torch.zeros_like(y, device=img_clean.device),
@@ -265,236 +177,8 @@ class ResLossv1:
         )
         y = y - y_mean
 
-        # dist.print0('mean ....')
-        # dist.print0('ymean.max()', y_mean.max())
-        # dist.print0('ymean.min()', y_mean.min())
-        # dist.print0('ymean.mean()', y_mean.mean())
-
-        # dist.print0('after ....')
-        # dist.print0('y.max()', y.max())
-        # dist.print0('y.min()', y.min())
-        # dist.print0('y.mean()', y.mean())
-
         latent = y + torch.randn_like(y) * sigma
         D_yn = net(latent, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
-        return loss
-
-
-# P_mean=2.0
-@persistence.persistent_class
-class MixtureLossV1:
-    def __init__(self, P_mean=2.4, P_std=3.6, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-        self.p = 1.0
-        self.reg_weight = 5.0
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dropout loss: p*denoise_loss + (1-p)*regression_loss
-        probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
-        binary_random_variable = torch.bernoulli(probability_tensor).item()
-        # dist.print0('binary_random_variable', binary_random_variable)
-
-        if binary_random_variable == 0:
-            input = y + torch.randn_like(y) * sigma
-            weight = weight
-        else:
-            input = torch.zeros_like(y, device=img_clean.device)
-            weight = torch.full(
-                (img_clean.shape[0], 1, 1, 1), self.reg_weight, device=img_clean.device
-            )
-
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
-        return loss
-
-
-# P_mean=-1.2
-@persistence.persistent_class
-class MixtureLossV2:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-        self.p = 1.0
-        self.reg_weight = 5.0
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dropout loss: p*denoise_loss + (1-p)*regression_loss
-        probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
-        binary_random_variable = torch.bernoulli(probability_tensor).item()
-        # dist.print0('binary_random_variable', binary_random_variable)
-
-        if binary_random_variable == 0:
-            input = y + torch.randn_like(y) * sigma
-            weight = weight
-        else:
-            input = torch.zeros_like(y, device=img_clean.device)
-            weight = torch.full(
-                (img_clean.shape[0], 1, 1, 1), self.reg_weight, device=img_clean.device
-            )
-
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
-        return loss
-
-
-# P_mean=-0.6
-@persistence.persistent_class
-class MixtureLossV3:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-        self.p = 0.75
-        self.reg_weight = 5.0
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dropout loss: p*denoise_loss + (1-p)*regression_loss
-        probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
-        binary_random_variable = torch.bernoulli(probability_tensor).item()
-        # dist.print0('binary_random_variable', binary_random_variable)
-
-        if binary_random_variable == 0:
-            input = y + torch.randn_like(y) * sigma
-            weight = weight
-        else:
-            input = torch.zeros_like(y, device=img_clean.device)
-            weight = torch.full(
-                (img_clean.shape[0], 1, 1, 1), self.reg_weight, device=img_clean.device
-            )
-
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
-        return loss
-
-
-# P_mean=-0.2
-@persistence.persistent_class
-class MixtureLossV4:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-        self.p = 0.25
-        self.reg_weight = 5.0
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dropout loss: p*denoise_loss + (1-p)*regression_loss
-        probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
-        binary_random_variable = torch.bernoulli(probability_tensor).item()
-        # dist.print0('binary_random_variable', binary_random_variable)
-
-        if binary_random_variable == 0:
-            input = y + torch.randn_like(y) * sigma
-            weight = weight
-        else:
-            input = torch.zeros_like(y, device=img_clean.device)
-            weight = torch.full(
-                (img_clean.shape[0], 1, 1, 1), self.reg_weight, device=img_clean.device
-            )
-
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
-        loss = weight * ((D_yn - y) ** 2)
-
-        return loss
-
-
-# ----------------------------------------------------------------------------
-
-
-# P_mean=-1.2
-@persistence.persistent_class
-class MixtureLossV5:
-    def __init__(self, P_mean=0.0, P_std=1.2, sigma_data=0.5):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
-        self.p = 0.0
-        self.reg_weight = 5.0
-
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
-        img_tot = torch.cat((img_clean, img_lr), dim=1)
-        y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
-        )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
-
-        # dropout loss: p*denoise_loss + (1-p)*regression_loss
-        probability_tensor = torch.tensor([1 - self.p]).to(img_clean.device)
-        binary_random_variable = torch.bernoulli(probability_tensor).item()
-        # dist.print0('binary_random_variable', binary_random_variable)
-
-        if binary_random_variable == 0:
-            input = y + torch.randn_like(y) * sigma
-            weight = weight
-        else:
-            input = torch.zeros_like(y, device=img_clean.device)
-            weight = torch.full(
-                (img_clean.shape[0], 1, 1, 1), self.reg_weight, device=img_clean.device
-            )
-
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
 
         return loss

@@ -101,16 +101,8 @@ def parse_int_list(s):
     metavar="vp|ve|edm",
     type=click.Choice(
         [
-            "vp",
-            "ve",
             "edm",
             "unetregression",
-            "mixture",
-            "mixturev1",
-            "mixturev2",
-            "mixturev3",
-            "mixturev4",
-            "mixturev5",
             "reslossv1",
         ]
     ),
@@ -454,36 +446,12 @@ def main(**kwargs):
         )
 
     # Preconditioning & loss function.
-    if opts.precond == "vp":
-        c.network_kwargs.class_name = "training.networks.VPPrecond"
-        c.loss_kwargs.class_name = "training.loss.VPLoss"
-    elif opts.precond == "ve":
-        c.network_kwargs.class_name = "training.networks.VEPrecond"
-        c.loss_kwargs.class_name = "training.loss.VELoss"
-    elif opts.precond == "edm":
+    if opts.precond == "edm":
         c.network_kwargs.class_name = "training.networks.EDMPrecond"
         c.loss_kwargs.class_name = "training.loss.EDMLoss"
     elif opts.precond == "unetregression":
         c.network_kwargs.class_name = "training.networks.UNet"
         c.loss_kwargs.class_name = "training.loss.RegressionLoss"
-    elif opts.precond == "mixture":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLoss"
-    elif opts.precond == "mixturev1":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV1"
-    elif opts.precond == "mixturev2":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV2"
-    elif opts.precond == "mixturev3":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV3"
-    elif opts.precond == "mixturev4":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV4"
-    elif opts.precond == "mixturev5":
-        c.network_kwargs.class_name = "training.networks.EDMPrecond"
-        c.loss_kwargs.class_name = "training.loss.MixtureLossV5"
     elif opts.precond == "reslossv1":
         c.network_kwargs.class_name = "training.networks.EDMPrecond"
         c.loss_kwargs.class_name = "training.loss.ResLossv1"
