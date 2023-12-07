@@ -23,6 +23,16 @@ from scipy.signal import periodogram
 
 
 def open_data(file, group=False):
+    """
+    Opens a dataset from a NetCDF file.
+
+    Parameters:
+        file (str): Path to the NetCDF file.
+        group (bool, optional): Whether to open the file as a group. Default is False.
+
+    Returns:
+        xarray.Dataset: An xarray dataset containing the data from the NetCDF file.
+    """
     root = xarray.open_dataset(file)
     root = root.set_coords(["lat", "lon"])
     ds = xarray.open_dataset(file, group=group)
@@ -33,6 +43,22 @@ def open_data(file, group=False):
 
 
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    Calculate the Haversine distance between two sets of latitude and longitude coordinates.
+
+    The Haversine formula calculates the shortest distance between two points on the
+    surface of a sphere (in this case, the Earth) given their latitude and longitude
+    coordinates.
+
+    Parameters:
+        lat1 (float): Latitude of the first point in degrees.
+        lon1 (float): Longitude of the first point in degrees.
+        lat2 (float): Latitude of the second point in degrees.
+        lon2 (float): Longitude of the second point in degrees.
+
+    Returns:
+        float: The Haversine distance between the two points in meters.
+    """
     # Convert latitude and longitude from degrees to radians
     lat1_rad = np.radians(lat1)
     lon1_rad = np.radians(lon1)
@@ -58,6 +84,21 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def compute_power_spectrum(data, d):
+    """
+    Compute the power spectrum of a 2D data array using the Fast Fourier Transform (FFT).
+
+    The power spectrum represents the distribution of signal power as a function of frequency.
+
+    Parameters:
+        data (numpy.ndarray): 2D input data array.
+        d (float): Sampling interval (time between data points).
+
+    Returns:
+        tuple: A tuple containing the frequency values and the corresponding power spectrum.
+        - freqs (numpy.ndarray): Frequency values corresponding to the power spectrum.
+        - power_spectrum (numpy.ndarray): Power spectrum of the input data.
+    """
+
     # Compute the 2D FFT along the second dimension
     fft_data = np.fft.fft(data, axis=-2)
 
@@ -72,14 +113,15 @@ def compute_power_spectrum(data, d):
 
 
 def power_spectra_to_acf(f, pw):
-    """Convert one sided power spectrum to autocorrelation function
+    """
+    Convert a one-sided power spectrum to an autocorrelation function.
 
     Args:
-        f: frequencies
-        pw: power spectral density (V ** 2 / Hz)
+        f (numpy.ndarray): Frequencies.
+        pw (numpy.ndarray): Power spectral density in units of V^2/Hz.
 
     Returns:
-
+        numpy.ndarray: Autocorrelation function (ACF).
     """
     pw = pw.copy()
     pw[0] = 0
@@ -92,6 +134,22 @@ def power_spectra_to_acf(f, pw):
 
 
 def average_power_spectrum(data, d):
+    """
+    Compute the average power spectrum of a 2D data array.
+
+    This function calculates the power spectrum for each row of the input data and
+    then averages them to obtain the overall power spectrum.
+    The power spectrum represents the distribution of signal power as a function of frequency.
+
+    Parameters:
+        data (numpy.ndarray): 2D input data array.
+        d (float): Sampling interval (time between data points).
+
+    Returns:
+        tuple: A tuple containing the frequency values and the average power spectrum.
+        - freqs (numpy.ndarray): Frequency values corresponding to the power spectrum.
+        - power_spectra (numpy.ndarray): Average power spectrum of the input data.
+    """
     # Compute the power spectrum along the second dimension for each row
     freqs, power_spectra = periodogram(data, fs=1 / d, axis=-1)
 
@@ -103,6 +161,17 @@ def average_power_spectrum(data, d):
 
 
 def main(file, output):
+    """
+    Generate and save multiple power spectrum plots from input data.
+
+    Parameters:
+        file (str): Path to the input data file.
+        output (str): Directory where the generated plots will be saved.
+
+    This function loads and processes various datasets from the input file,
+    calculates their power spectra, and generates and saves multiple power spectrum plots.
+    The plots include kinetic energy, temperature, and reflectivity power spectra.
+    """
     def savefig(name):
         path = os.path.join(output, name + ".png")
         plt.savefig(path)
