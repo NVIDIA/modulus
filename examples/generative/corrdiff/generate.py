@@ -51,6 +51,28 @@ def unet_regression(
     S_max=float("inf"),
     S_noise=0.0,
 ):
+    """
+    Perform U-Net regression with temporal sampling.
+
+    Parameters:
+        net (torch.nn.Module): U-Net model for regression.
+        latents (torch.Tensor): Latent representation.
+        img_lr (torch.Tensor): Low-resolution input image.
+        class_labels (torch.Tensor, optional): Class labels for conditional generation.
+        randn_like (function, optional): Function for generating random noise.
+        num_steps (int, optional): Number of time steps for temporal sampling.
+        sigma_min (float, optional): Minimum noise level.
+        sigma_max (float, optional): Maximum noise level.
+        rho (int, optional): Exponent for noise level interpolation.
+        S_churn (float, optional): Churning parameter.
+        S_min (float, optional): Minimum churning value.
+        S_max (float, optional): Maximum churning value.
+        S_noise (float, optional): Noise level for churning.
+
+    Returns:
+        torch.Tensor: Predicted output at the next time step.
+    """
+
     # Adjust noise levels based on what's supported by the network.
     sigma_min = max(sigma_min, net.sigma_min)
     sigma_max = min(sigma_max, net.sigma_max)
@@ -77,12 +99,6 @@ def unet_regression(
     x_next = net(x_hat, x_lr, t_hat, class_labels).to(torch.float64)
 
     return x_next
-
-
-# ----------------------------------------------------------------------------
-# Generalized ablation sampler, representing the superset of all sampling
-# methods discussed in the paper.
-
 
 def ablation_sampler(
     net,
@@ -271,12 +287,11 @@ def ablation_sampler(
     return x_next
 
 
-# ----------------------------------------------------------------------------
-# Wrapper for torch.Generator that allows specifying a different random seed
-# for each sample in a minibatch.
-
-
 class StackedRandomGenerator:
+    """
+    Wrapper for torch.Generator that allows specifying a different random seed
+    for each sample in a minibatch.
+    """
     def __init__(self, device, seeds):
         super().__init__()
         self.generators = [
@@ -329,6 +344,9 @@ def get_dataset_and_sampler(
     normalization="v1",
     all_times=False,
 ):
+    """
+    Get a dataset and sampler for generation.
+    """
     dataset = training.dataset.get_zarr_dataset(
         path=path,
         n_history=n_history,
@@ -597,6 +615,7 @@ def _get_name(channel_info):
 
 
 class NetCDFWriter:
+    """ NetCDF Writer"""
     def __init__(self, f, lat, lon, input_channels, output_channels):
         self._f = f
 
@@ -649,15 +668,19 @@ class NetCDFWriter:
             self.input_group.createVariable(name, "f", dimensions=("time", "y", "x"))
 
     def write_input(self, channel_name, time_index, val):
+        """Write input data to NetCDF file."""
         self.input_group[channel_name][time_index] = val
 
     def write_truth(self, channel_name, time_index, val):
+        """Write ground truth data to NetCDF file."""
         self.truth_group[channel_name][time_index] = val
 
     def write_prediction(self, channel_name, time_index, ensemble_index, val):
+        """Write prediction data to NetCDF file."""
         self.prediction_group[channel_name][ensemble_index, time_index] = val
 
     def write_time(self, time_index, time):
+        """Write time information to NetCDF file."""
         time_v = self._f["time"]
         self._f["time"][time_index] = cftime.date2num(
             time, time_v.units, time_v.calendar
@@ -665,6 +688,7 @@ class NetCDFWriter:
 
 
 def writer_from_input_dataset(f, dataset):
+    """Create a NetCDFWriter object from an input dataset."""
     return NetCDFWriter(
         f,
         lat=dataset.latitude(),
@@ -677,6 +701,21 @@ def writer_from_input_dataset(f, dataset):
 def generate_and_save(
     dataset, sampler, f: nc.Dataset, generate_fn, device, batch_size, logger
 ):
+    """
+    This function generates model predictions from the input data using the specified
+    `generate_fn`, and saves the predictions to the provided NetCDF file. It iterates
+    through the dataset using a data loader, computes predictions, and saves them along
+    with associated metadata.  
+
+    Parameters:
+        dataset: Input dataset.
+        sampler: Sampler for selecting data samples.
+        f: NetCDF file for saving predictions.
+        generate_fn: Function for generating model predictions.
+        device: Device (e.g., GPU) for computation.
+        batch_size: Batch size for data loading.
+        logger: Logger for logging information.
+    """
     # Instantiate distributed manager.
     dist = DistributedManager()
     device = dist.device
