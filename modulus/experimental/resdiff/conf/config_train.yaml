@@ -77,7 +77,7 @@ dry-run: false
   # Print training options and exit
 
 ## Weather data options
-train_data_path: "s3://sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"
+train_data_path: "./train_data"
 crop_size_x: 448
 crop_size_y: 448
 n_history: 0
