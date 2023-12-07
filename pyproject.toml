@@ -61,6 +61,9 @@ all = [
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
     "onnx>=1.14.0",
+    "cftime>=1.6.2",
+    "einops>=0.7.0",
+    "pyspng>=0.1.0",
     "nvidia-modulus[launch]",
     "nvidia-modulus[dev]"
 ]

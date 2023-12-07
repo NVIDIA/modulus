@@ -15,7 +15,6 @@
 
 """Miscellaneous utility classes and functions."""
 
-
 import contextlib
 import ctypes
 import fnmatch

@@ -16,6 +16,7 @@ process group config.
 - Brain anomaly detection example.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
 stability.
+- Molecular Dynamics example.
 
 ### Changed
 
@@ -32,6 +33,7 @@ stability.
 ### Dependencies
 
 - Removed experimental SFNO dependencies
+- Added CorrDiff dependencies (cftime, einops, pyspng)
 
 ## [0.4.0] - 2023-11-20
 
