@@ -41,6 +41,8 @@ import numpy as np
 import requests
 import torch
 
+# ruff: noqa: E722 PERF203 S110 E713 S324
+
 
 class EasyDict(dict):  # pragma: no cover
     """
@@ -74,7 +76,10 @@ class StackedRandomGenerator:  # pragma: no cover
         ]
 
     def randn(self, size, **kwargs):
-        assert size[0] == len(self.generators)
+        if size[0] != len(self.generators):
+            raise ValueError(
+                f"Expected first dimension of size {len(self.generators)}, got {size[0]}"
+            )
         return torch.stack(
             [torch.randn(size[1:], generator=gen, **kwargs) for gen in self.generators]
         )
@@ -85,7 +90,10 @@ class StackedRandomGenerator:  # pragma: no cover
         )
 
     def randint(self, *args, size, **kwargs):
-        assert size[0] == len(self.generators)
+        if size[0] != len(self.generators):
+            raise ValueError(
+                f"Expected first dimension of size {len(self.generators)}, got {size[0]}"
+            )
         return torch.stack(
             [
                 torch.randint(*args, size=size[1:], generator=gen, **kwargs)
@@ -209,12 +217,16 @@ def get_dtype_and_ctype(type_obj: Any) -> Tuple[np.dtype, Any]:  # pragma: no co
     else:
         raise RuntimeError("Cannot infer type name from input")
 
-    assert type_str in _str_to_ctype.keys()
+    if type_str not in _str_to_ctype.keys():
+        raise ValueError("Unknown type name: " + type_str)
 
     my_dtype = np.dtype(type_str)
     my_ctype = _str_to_ctype[type_str]
 
-    assert my_dtype.itemsize == ctypes.sizeof(my_ctype)
+    if my_dtype.itemsize != ctypes.sizeof(my_ctype):
+        raise ValueError(
+            "Numpy and ctypes types for '{}' have different sizes!".format(type_str)
+        )
 
     return my_dtype, my_ctype
 
@@ -309,9 +321,11 @@ def call_func_by_name(
     """
     Finds the python object with the given name and calls it as a function.
     """
-    assert func_name is not None
+    if func_name is None:
+        raise ValueError("func_name must be specified")
     func_obj = get_obj_by_name(func_name)
-    assert callable(func_obj)
+    if not callable(func_obj):
+        raise ValueError(func_name + " is not callable")
     return func_obj(*args, **kwargs)
 
 
@@ -345,7 +359,8 @@ def get_top_level_function_name(obj: Any) -> str:  # pragma: no cover
     """
     Return the fully-qualified name of a top-level function.
     """
-    assert is_top_level_function(obj)
+    if not is_top_level_function(obj):
+        raise ValueError("Object is not a top-level function")
     module = obj.__module__
     if module == "__main__":
         module = os.path.splitext(os.path.basename(sys.modules[module].__file__))[0]
@@ -363,7 +378,8 @@ def list_dir_recursively_with_ignore(
     List all files recursively in a given directory while ignoring given file and
     directory names. Returns list of tuples containing both absolute and relative paths.
     """
-    assert os.path.isdir(dir_path)
+    if not os.path.isdir(dir_path):
+        raise RuntimeError(f"Directory does not exist: {dir_path}")
     base_name = os.path.basename(os.path.normpath(dir_path))
 
     if ignores is None:
@@ -387,7 +403,8 @@ def list_dir_recursively_with_ignore(
         if add_base_to_relative:
             relative_paths = [os.path.join(base_name, p) for p in relative_paths]
 
-        assert len(absolute_paths) == len(relative_paths)
+        if len(absolute_paths) != len(relative_paths):
+            raise ValueError("Number of absolute and relative paths do not match")
         result += zip(absolute_paths, relative_paths)
 
     return result
@@ -459,8 +476,10 @@ def open_url(
     but that converts forward slashes to backslashes and this causes
     its own set of problems.
     """
-    assert num_attempts >= 1
-    assert not (return_filename and (not cache))
+    if not num_attempts >= 1:
+        raise ValueError("num_attempts must be at least 1")
+    if return_filename and (not cache):
+        raise ValueError("return_filename requires cache=True")
 
     # Doesn't look like an URL scheme so interpret it as a local filename.
     if not re.match("^[a-z]+://", url):
@@ -472,7 +491,8 @@ def open_url(
             filename = filename[1:]
         return filename if return_filename else open(filename, "rb")
 
-    assert is_url(url)
+    if not is_url(url):
+        raise IOError("Not a URL: " + url)
 
     # Lookup from cache.
     if cache_dir is None:
@@ -549,7 +569,8 @@ def open_url(
             return cache_file
 
     # Return data as file object.
-    assert not return_filename
+    if return_filename:
+        raise ValueError("return_filename requires cache=True")
     return io.BytesIO(url_data)
 
 
@@ -604,12 +625,14 @@ except AttributeError:
         input, nan=0.0, posinf=None, neginf=None, *, out=None
     ):  # pylint: disable=redefined-builtin  # pragma: no cover
         """Replace NaN/Inf with specified numerical values"""
-        assert isinstance(input, torch.Tensor)
+        if not isinstance(input, torch.Tensor):
+            raise TypeError("input should be a Tensor")
         if posinf is None:
             posinf = torch.finfo(input.dtype).max
         if neginf is None:
             neginf = torch.finfo(input.dtype).min
-        assert nan == 0
+        if nan != 0:
+            raise ValueError("nan_to_num only supports nan=0")
         return torch.clamp(
             input.unsqueeze(0).nansum(0), min=neginf, max=posinf, out=out
         )
@@ -706,10 +729,14 @@ class InfiniteSampler(torch.utils.data.Sampler):  # pragma: no cover
     def __init__(
         self, dataset, rank=0, num_replicas=1, shuffle=True, seed=0, window_size=0.5
     ):
-        assert len(dataset) > 0
-        assert num_replicas > 0
-        assert 0 <= rank < num_replicas
-        assert 0 <= window_size <= 1
+        if not len(dataset) > 0:
+            raise ValueError("Dataset must contain at least one item")
+        if not num_replicas > 0:
+            raise ValueError("num_replicas must be positive")
+        if not 0 <= rank < num_replicas:
+            raise ValueError("rank must be non-negative and less than num_replicas")
+        if not 0 <= window_size <= 1:
+            raise ValueError("window_size must be between 0 and 1")
         super().__init__(dataset)
         self.dataset = dataset
         self.rank = rank
@@ -744,13 +771,15 @@ class InfiniteSampler(torch.utils.data.Sampler):  # pragma: no cover
 
 def params_and_buffers(module):  # pragma: no cover
     """Get parameters and buffers of a nn.Module"""
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     return list(module.parameters()) + list(module.buffers())
 
 
 def named_params_and_buffers(module):  # pragma: no cover
     """Get named parameters and buffers of a nn.Module"""
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     return list(module.named_parameters()) + list(module.named_buffers())
 
 
@@ -759,11 +788,14 @@ def copy_params_and_buffers(
     src_module, dst_module, require_all=False
 ):  # pragma: no cover
     """Copy parameters and buffers from a source module to target module"""
-    assert isinstance(src_module, torch.nn.Module)
-    assert isinstance(dst_module, torch.nn.Module)
+    if not isinstance(src_module, torch.nn.Module):
+        raise TypeError("src_module must be a torch.nn.Module instance")
+    if not isinstance(dst_module, torch.nn.Module):
+        raise TypeError("dst_module must be a torch.nn.Module instance")
     src_tensors = dict(named_params_and_buffers(src_module))
     for name, tensor in named_params_and_buffers(dst_module):
-        assert (name in src_tensors) or (not require_all)
+        if not ((name in src_tensors) or (not require_all)):
+            raise ValueError(f"Missing source tensor for {name}")
         if name in src_tensors:
             tensor.copy_(src_tensors[name])
 
@@ -779,7 +811,8 @@ def ddp_sync(module, sync):  # pragma: no cover
     Context manager for easily enabling/disabling DistributedDataParallel
     synchronization.
     """
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     if sync or not isinstance(module, torch.nn.parallel.DistributedDataParallel):
         yield
     else:
@@ -793,7 +826,8 @@ def ddp_sync(module, sync):  # pragma: no cover
 
 def check_ddp_consistency(module, ignore_regex=None):  # pragma: no cover
     """Check DistributedDataParallel consistency across processes."""
-    assert isinstance(module, torch.nn.Module)
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
     for name, tensor in named_params_and_buffers(module):
         fullname = type(module).__name__ + "." + name
         if ignore_regex is not None and re.fullmatch(ignore_regex, fullname):
@@ -803,7 +837,8 @@ def check_ddp_consistency(module, ignore_regex=None):  # pragma: no cover
             tensor = nan_to_num(tensor)
         other = tensor.clone()
         torch.distributed.broadcast(tensor=other, src=0)
-        assert (tensor == other).all(), fullname
+        if not (tensor == other).all():
+            raise RuntimeError(f"DDP consistency check failed for {fullname}")
 
 
 # ----------------------------------------------------------------------------
@@ -814,9 +849,12 @@ def print_module_summary(
     module, inputs, max_nesting=3, skip_redundant=True
 ):  # pragma: no cover
     """Print summary table of module hierarchy."""
-    assert isinstance(module, torch.nn.Module)
-    assert not isinstance(module, torch.jit.ScriptModule)
-    assert isinstance(inputs, (tuple, list))
+    if not isinstance(module, torch.nn.Module):
+        raise TypeError("module must be a torch.nn.Module instance")
+    if isinstance(module, torch.jit.ScriptModule):
+        raise TypeError("module must not be a torch.jit.ScriptModule instance")
+    if not isinstance(inputs, (tuple, list)):
+        raise TypeError("inputs must be a tuple or list")
 
     # Register hooks.
     entries = []
