@@ -29,6 +29,7 @@ logger = logging.getLogger(__file__)
 
 
 def normalize(x, center, scale):
+    """Normalize input data 'x' using center and scale values."""
     center = np.asarray(center)
     scale = np.asarray(scale)
     if not (center.ndim == 1 and scale.ndim == 1):
@@ -37,6 +38,7 @@ def normalize(x, center, scale):
 
 
 def denormalize(x, center, scale):
+    """Denormalize input data 'x' using center and scale values."""
     center = np.asarray(center)
     scale = np.asarray(scale)
     if not (center.ndim == 1 and scale.ndim == 1):
@@ -45,6 +47,7 @@ def denormalize(x, center, scale):
 
 
 def get_target_normalizations_v1(group):
+    """Get target normalizations using center and scale values from the 'group'."""
     return group["cwb_center"][:], group["cwb_scale"][:]
 
 
@@ -174,9 +177,11 @@ class FilterTime(torch.utils.data.Dataset):
         self._indices = [i for i, t in enumerate(self._dataset.time()) if filter_fn(t)]
 
     def longitude(self):
+        """Get longitude values from the dataset."""
         return self._dataset.longitude()
 
     def latitude(self):
+        """Get latitude values from the dataset."""
         return self._dataset.latitude()
 
     def input_channels(self):
@@ -188,10 +193,12 @@ class FilterTime(torch.utils.data.Dataset):
         return self._dataset.output_channels()
 
     def time(self):
+        """Get time values from the dataset."""
         time = self._dataset.time()
         return [time[i] for i in self._indices]
 
     def info(self):
+        """Get information about the dataset."""
         return self._dataset.info()
 
     def __getitem__(self, idx):
@@ -202,10 +209,12 @@ class FilterTime(torch.utils.data.Dataset):
 
 
 def is_2021(time):
+    """Check if the given time is in the year 2021."""
     return time.year == 2021
 
 
 def is_not_2021(time):
+    """Check if the given time is not in the year 2021."""
     return not is_2021(time)
 
 
@@ -337,6 +346,7 @@ class ZarrDataset(torch.utils.data.Dataset):
         self.N_grid_channels = N_grid_channels
 
     def info(self):
+        """Check if the given time is not in the year 2021."""
         return self._dataset.info()
 
     def __getitem__(self, idx):
@@ -426,12 +436,15 @@ class ZarrDataset(torch.utils.data.Dataset):
         return len(self._dataset)
 
     def longitude(self):
+        """Get longitude values from the dataset."""
         return self._dataset.longitude()
 
     def latitude(self):
+        """Get latitude values from the dataset."""
         return self._dataset.latitude()
 
     def time(self):
+        """Get time values from the dataset."""
         return self._dataset.time()
 
     def _create_highres_(self, x, shape):
@@ -478,6 +491,7 @@ def get_zarr_dataset(
     normalization="v1",
     all_times=False,
 ):
+    """Get a Zarr dataset for training or evaluation."""
     get_target_normalization = {
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,
