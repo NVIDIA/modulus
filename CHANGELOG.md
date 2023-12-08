@@ -17,6 +17,7 @@ process group config.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
 stability.
 - Molecular Dynamics example.
+- Physics-Informed Stokes Flow example.
 
 ### Changed
 
