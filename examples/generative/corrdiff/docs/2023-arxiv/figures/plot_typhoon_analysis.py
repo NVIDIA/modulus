@@ -32,6 +32,7 @@ dy = 4000.0
 
 
 def Nvidia_cmap():
+    """Create and return a custom NVIDIA color map."""
     cmap = mpl.colors.LinearSegmentedColormap.from_list("", ["white", "darkgreen"])
     return cmap
 

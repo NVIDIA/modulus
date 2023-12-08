@@ -48,6 +48,10 @@ from training.YParams import YParams
 
 # %%
 class opts:
+    """
+    Class containing configuration options.
+    """
+
     data_type = "era5-cwb-v3"
     checkpoint = "v2"
     data_config = "validation_small"
@@ -123,6 +127,9 @@ import matplotlib.pyplot as plt
 
 
 def plot(y):
+    """
+    Plot a 2D array as a pcolormesh.
+    """
     plt.pcolormesh((y).cpu().numpy()[0, 0])
 
 
@@ -136,6 +143,9 @@ import torch
 
 
 def benchmark_batch_size(x, n, net=net, reg=reg):
+    """
+    Benchmark the execution time for generating data with a specified batch size.
+    """
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     x = torch.tile(x, (n, 1, 1, 1))

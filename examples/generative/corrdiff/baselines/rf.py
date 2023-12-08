@@ -23,6 +23,8 @@ import typer
 
 
 class RF:
+    """RF"""
+
     def __init__(self, path):
         self._rf = joblib.load(path)
 
@@ -36,6 +38,7 @@ class RF:
 
 
 def main(rf_pkl: str, data_type: str, data_config: str, output: str):
+    """Generate using the RF transform."""
     dataset, sampler = generate.get_dataset_and_sampler(data_type, data_config)
 
     with netCDF4.Dataset(output, mode="w") as f:

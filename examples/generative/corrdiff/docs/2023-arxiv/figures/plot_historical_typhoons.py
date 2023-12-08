@@ -38,6 +38,9 @@ diffusion = nc.Dataset(
 
 
 def storm_distance(windspeed, lon, lat, i_center, j_center):
+    """
+    Calculate the distance from the storm center to the maximum windspeed point.
+    """
     i_max, j_max = np.unravel_index(np.argmax(windspeed), windspeed.shape)
     lat_max = lat[i_max, j_max]
     lon_max = lon[i_max, j_max]
@@ -50,6 +53,9 @@ def storm_distance(windspeed, lon, lat, i_center, j_center):
 
 
 def read_storm_data(file_path):
+    """
+    Read storm data from a text file and return relevant information as arrays.
+    """
     with open(file_path, "r") as file:
         lines = file.readlines()
 

@@ -166,6 +166,7 @@ from IPython.display import HTML, display
 
 
 def embed_gif(path):
+    """Embeds a GIF file into an HTML image tag."""
     b64 = base64.b64encode(open(path, "rb").read()).decode("ascii")
     return HTML(f'<img src="data:image/gif;base64,{b64}" />')
 

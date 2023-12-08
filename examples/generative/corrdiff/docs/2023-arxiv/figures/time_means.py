@@ -73,6 +73,7 @@ plt.style.use("dark_background")
 
 
 def plot_difference(truth_avg, pred_avg, field, diff_kwargs=None, absolute_kwargs=None):
+    """Plot the difference between two fields and their absolute values."""
     fig, (ax1, ax2, ax3) = plt.subplots(
         1, 3, figsize=(18, 6), subplot_kw=dict(projection=ccrs.PlateCarree())
     )
@@ -84,6 +85,7 @@ def plot_difference(truth_avg, pred_avg, field, diff_kwargs=None, absolute_kwarg
         absolute_kwargs = dict(cmap="magma", vmin=0, vmax=8)
 
     def plot(ax, data, title, vmin=0, vmax=8, cmap="magma"):
+        """Plot"""
         im = ax.pcolormesh(
             truth.lon,
             truth.lat,

@@ -36,6 +36,7 @@ baslines_dir = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/"
 
 
 def open_data(file, group=False):
+    """Open a NetCDF file and return a dataset, optionally from a group."""
     root = xarray.open_dataset(file)
     root = root.set_coords(["lat", "lon"])
     ds = xarray.open_dataset(file, group=group)
@@ -45,6 +46,10 @@ def open_data(file, group=False):
 
 
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    Calculate the Haversine distance between two sets of latitude and longitude
+    coordinates.
+    """
     lat1_rad = np.radians(lat1)
     lon1_rad = np.radians(lon1)
     lat2_rad = np.radians(lat2)
@@ -64,6 +69,7 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def compute_power_spectrum(data, d):
+    """Compute the power spectrum of 1D data using Fast Fourier Transform."""
     fft_data = np.fft.fft(data, axis=-2)
 
     power_spectrum = np.abs(fft_data) ** 2
@@ -73,6 +79,7 @@ def compute_power_spectrum(data, d):
 
 
 def average_power_spectrum(data, d):
+    """Compute the average power spectrum of 1D data."""
     freqs, power_spectra = periodogram(data, fs=1 / d, axis=-1)
 
     while power_spectra.ndim > 1:
@@ -82,6 +89,7 @@ def average_power_spectrum(data, d):
 
 
 def ke_spectra(data):
+    """Compute the kinetic energy spectra of wind components."""
     northward_wind_10m = data["northward_wind_10m"]
     eastward_wind_10m = data["eastward_wind_10m"]
     freqs, spec_x = average_power_spectrum(eastward_wind_10m, d=2)
@@ -91,6 +99,7 @@ def ke_spectra(data):
 
 
 def load_windspeed_dist(data):
+    """Load the wind speed distribution from wind components."""
     northward_wind_10m = data["northward_wind_10m"]
     eastward_wind_10m = data["eastward_wind_10m"]
     windspeed_10m = np.sqrt(
@@ -107,6 +116,7 @@ def load_windspeed_dist(data):
 
 
 def load_dist(var, bins):
+    """Load the distribution of a variable."""
     if isinstance(var, xarray.DataArray):
         flattened_var = var.values.flatten()
     else:

@@ -79,6 +79,9 @@ bottom = 1e-2
 
 
 def plot_spectra_and_acf(output, truth, reg, field, bottom):
+    """
+    Plot power spectra and spatial autocorrelation of a given field.
+    """
     y, x = xr.align(truth[field], reg[field].isel(ensemble=0), join="inner")
 
     f, pw_y = power_spectra.average_power_spectrum(y, d=2)

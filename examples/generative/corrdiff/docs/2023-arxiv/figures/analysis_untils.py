@@ -22,6 +22,9 @@ import xarray
 
 
 def load_regression_data():
+    """
+    Load regression data from a specified URL or S3 path and return it as an xarray dataset.
+    """
     url = os.path.join(
         config.root, "baselines/regression/era5-cwb-v3/validation_big/samples.nc"
     )
@@ -38,6 +41,9 @@ def load_regression_data():
 
 
 def load_windspeed(data):
+    """
+    Calculate and return the 10m windspeed from a given dataset.
+    """
     northward_wind_10m = data["northward_wind_10m"]
     eastward_wind_10m = data["eastward_wind_10m"]
     windspeed_10m = np.sqrt(
@@ -48,6 +54,9 @@ def load_windspeed(data):
 
 
 def compute_curl(data):
+    """
+    Calculate and return the curl of wind vectors from a given dataset.
+    """
     u = data["eastward_wind_10m"]
     v = data["northward_wind_10m"]
     du_dy, du_dx = np.gradient(u, axis=(-2, -1))
@@ -57,6 +66,9 @@ def compute_curl(data):
 
 
 def axis_symmetric_mean(x, y, data, i_center, j_center, radii):
+    """
+    Compute the axis-symmetric mean of data within specified radii from a central point.
+    """
     axis_sym_mean = np.zeros((len(radii) - 1, *data.shape[2:]))
     R = np.zeros((len(radii) - 1))
     distances = np.sqrt(
@@ -71,6 +83,9 @@ def axis_symmetric_mean(x, y, data, i_center, j_center, radii):
 
 
 def find_minimum_windspeed(windspeed, i_c, j_c, window_size):
+    """
+    Find the minimum windspeed within a specified window around a central point.
+    """
     i_start, i_end = max(0, i_c - window_size), min(
         windspeed.shape[0], i_c + window_size + 1
     )
@@ -88,6 +103,9 @@ def find_minimum_windspeed(windspeed, i_c, j_c, window_size):
 
 
 def find_maximum_vorticity(vorticity, i_c, j_c, window_size):
+    """
+    Find the maximum vorticity within a specified window around a central point.
+    """
     i_start, i_end = max(0, i_c - window_size), min(
         vorticity.shape[0], i_c + window_size + 1
     )
@@ -101,6 +119,9 @@ def find_maximum_vorticity(vorticity, i_c, j_c, window_size):
 
 
 def find_storm_center(vorticity, windspeed, window_size):
+    """
+    Find the storm center based on vorticity and windspeed within a specified window.
+    """
     i_c_guess, j_c_guess = np.unravel_index(
         np.argmax(vorticity, axis=None), vorticity.shape
     )
@@ -111,6 +132,9 @@ def find_storm_center(vorticity, windspeed, window_size):
 def find_storm_center_guess(
     vorticity, windspeed, window_size, lat, lon, true_lat, true_lon
 ):
+    """
+    Find the estimated storm center based on vorticity and windspeed, considering a guess point.
+    """
     distance = np.power(lat - true_lat, 2.0) + np.power(lon - true_lon, 2.0)
     i_c_guess, j_c_guess = np.unravel_index(
         np.argmin(distance, axis=None), distance.shape
@@ -123,6 +147,9 @@ def find_storm_center_guess(
 
 
 def add_windspeed(data, group):
+    """
+    Calculate and add 10m windspeed to a dataset.
+    """
     northward_wind_10m = data["northward_wind_10m"]
     eastward_wind_10m = data["eastward_wind_10m"]
     windspeed_10m = np.sqrt(

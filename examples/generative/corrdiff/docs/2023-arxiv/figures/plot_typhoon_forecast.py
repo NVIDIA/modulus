@@ -43,6 +43,7 @@ date_format = "%Y%m%d%H%M%S"
 
 
 def parse_channel(dms_key):
+    """Parse a DMS key to extract variable and height information."""
     variables = {
         "000": "geopotential_height",
         "100": "temperature",
@@ -71,6 +72,7 @@ def parse_channel(dms_key):
 
 
 def parse_file_name(name):
+    """Parse a file name to extract initial time, channel, and step information."""
     time_str, channel_code = name.split("/")
     initial_time_str, step_str = time_str[:-2], time_str[-2:]
     initial_time = datetime.datetime.strptime(initial_time_str, date_format)

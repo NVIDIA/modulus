@@ -17,6 +17,7 @@ import subprocess
 
 
 def score(sample_output_path, score_output_path):
+    """Scores samples using an external script."""
     subprocess.check_call(
         ["python3", "score_samples.py", sample_output_path, score_output_path]
     )

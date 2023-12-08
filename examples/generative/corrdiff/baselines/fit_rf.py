@@ -30,6 +30,21 @@ dataset = get_zarr_dataset(params, train=True)
 
 
 def dataset_to_xy(dataset, n, samples_per_index):
+    """
+    Converts a dataset into X and y arrays for machine learning models.
+
+    Randomly selects 'n' samples from the dataset and extracts corresponding X and y
+    data, sampling 'samples_per_index' points from each selected sample.
+
+    Args:
+        dataset: The dataset to process.
+        n: Number of samples to select from the dataset.
+        samples_per_index: Number of points to sample from each selected sample.
+
+    Returns:
+        X: Concatenated features from the selected samples.
+        y: Concatenated labels corresponding to the features.
+    """
     inds = list(range(len(dataset)))
     random.shuffle(inds)
 

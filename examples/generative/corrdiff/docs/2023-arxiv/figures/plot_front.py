@@ -66,11 +66,17 @@ customcmap = LinearSegmentedColormap.from_list(cmap_name, colors)
 
 
 def find_closest_idx(array2D, value):
+    """
+    Find the index of the closest value in a 2D array to a given value.
+    """
     distance = np.abs(array2D - value)
     return np.unravel_index(distance.argmin(), distance.shape)
 
 
 def rotated_winds(lat, lon, ds_):
+    """
+    Rotate wind components in a dataset based on latitude and longitude.
+    """
     temp = ds_["eastward_wind_10m"].values
     y1, x1 = find_closest_idx(lat, 23)
     y2, x2 = find_closest_idx(lat, lat.min())
@@ -100,6 +106,9 @@ def rotated_winds(lat, lon, ds_):
 
 
 def get_mean_cross_section(lat, lon, temp, shape):
+    """
+    Calculate the mean cross-section of temperature data along a specified path.
+    """
     y1, x1 = find_closest_idx(lat, 23)
     y2, x2 = find_closest_idx(lat, lat.min())
     x2 = find_closest_idx(lon, 124.9)[1]
@@ -137,6 +146,9 @@ def get_mean_cross_section(lat, lon, temp, shape):
 
 
 def get_mean_cross_section2(lat, lon, ds_, var):
+    """
+    Calculate the mean cross-section of a variable in a dataset along a specified path.
+    """
     temp = ds_[var].values
     y1, x1 = find_closest_idx(lat, 23)
     y2, x2 = find_closest_idx(lat, lat.min())
@@ -175,6 +187,9 @@ def get_mean_cross_section2(lat, lon, ds_, var):
 
 
 def get_cross_section(lat, lon, ds, var):
+    """
+    Extract a cross-section of a variable from a dataset based on latitude and longitude.
+    """
     temp = ds[var].values
     distance = find_closest_idx(array2D, value)
     y1, x1 = find_closest_idx(lat, 23)

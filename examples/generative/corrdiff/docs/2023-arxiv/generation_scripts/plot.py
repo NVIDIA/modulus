@@ -17,6 +17,7 @@ import xarray as xr
 
 
 def open_samples(f):
+    """Open and merge datasets from a file."""
     root = xr.open_dataset(f)
     pred = xr.open_dataset(f, group="prediction")
     truth = xr.open_dataset(f, group="truth")

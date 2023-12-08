@@ -20,6 +20,14 @@ import typer
 
 
 class Identity:
+    """
+    A class representing an identity transformation for a dataset.
+
+    The class is initialized with a dataset and creates lists of input and
+    output channels based on the dataset's channels. The `__call__` method
+    applies an identity transformation to a given input.
+    """
+
     def __init__(self, dataset):
         self.ic = [generate._get_name(c) for c in dataset.input_channels()]
         self.oc = [generate._get_name(c) for c in dataset.output_channels()]
@@ -37,6 +45,7 @@ class Identity:
 
 
 def main(data_type: str, data_config: str, output: str):
+    """Generate using the Identity transform."""
     dataset, sampler = generate.get_dataset_and_sampler(data_type, data_config)
 
     with netCDF4.Dataset(output, mode="w") as f:
