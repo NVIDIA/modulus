@@ -1,0 +1,97 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job:
+    chdir: False
+
+
+## Main options
+outdir: "./output"   
+  # Where to save the results
+data: "./data"
+  # Path to the dataset
+arch: 'ddpmpp-cwb-v0-regression'
+  # Network architecture
+precond: unetregression
+  # Preconditioning & loss function
+
+## Hyperparameters
+duration: 200
+  # Training duration
+batch: 256
+  # Total batch size
+batch_gpu: 2
+  # Limit batch size per GPU
+cbase: 1  # TODO check
+  # Channel multiplier
+cres: null  # TODO check
+  # Channels per resolution
+lr: 0.0002
+  # Learning rate
+ema: 0.5
+  # EMA half-life
+dropout: 0.13
+  # Dropout probability
+augment: 0.0
+  # Augment probability
+
+## Performance options
+fp16: false
+  # Enable mixed-precision training
+ls: 1
+  # Loss scaling
+bench: true  # TODO should default to false
+  # Enable cuDNN benchmarking
+workers: 4
+  # DataLoader worker processes
+
+
+## I/O-related options
+desc: ''
+  # String to include in result dir name
+tick: 1
+  # How often to print progress
+snap: 1
+  # How often to save snapshots
+dump: 500
+  # How often to dump state
+seed: null  # TODO check
+  # Random seed
+transfer: null  # TODO check
+  # Transfer learning from network pickle
+resume: null  # TODO check
+  # Resume from previous training state
+dry-run: false
+  # Print training options and exit
+
+## Weather data options
+train_data_path: "./train_data"
+crop_size_x: 448
+crop_size_y: 448
+n_history: 0
+in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+out_channels: [0, 17, 18, 19]
+img_shape_x: 448
+img_shape_y: 448
+roll: false
+add_grid: true
+ds_factor: 4
+min_path: null
+max_path: null
+global_means_path: null
+global_stds_path: null
+gridtype: "sinusoidal"
+N_grid_channels: 4
+normalization: "v1"

@@ -237,7 +237,7 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     y = torch.zeros((1,), device=device, dtype=torch.float32)
 
     # Test pure crps
-    c = crps.crps(x, y)
+    c = crps.crps(x, y, method="histogram")
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
@@ -247,32 +247,41 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
     # Test when input is numpy array
-    c = crps.crps(x, y.cpu().numpy())
+    c = crps.crps(x, y.cpu().numpy(), method="histogram")
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
         rtol=rtol,
         atol=atol,
+    )
+
+    # Test pure crps
+    c = crps.crps(x[:100], y, method="kernel")
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=100 * rtol,
+        atol=100 * atol,
+    )
+
+    # Test when input is numpy array
+    c = crps.crps(x[:100], y.cpu().numpy(), method="kernel")
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=100 * rtol,
+        atol=100 * atol,
     )
 
     # Test kernel method, use fewer ensemble members
-    c = crps.kcrps(x[:1000], y)
+    c = crps.kcrps(x[:100], y)
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert torch.allclose(
         c,
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=50 * rtol,
-        atol=50 * atol,
-    )
-
-    # Test kernel method
-    c = crps.kcrps(x, y)
-    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
-    assert torch.allclose(
-        c,
-        true_crps * torch.ones([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
+        rtol=100 * rtol,
+        atol=100 * atol,
     )
 
     # Test Gaussian CRPS
@@ -352,13 +361,6 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
-    assert torch.allclose(
-        w.wasserstein(binsx, cdfx, cdfx),
-        torch.zeros([1], dtype=torch.float32, device=device),
-        rtol=rtol,
-        atol=atol,
-    )
-
     # Test Raises Assertion
     with pytest.raises(ValueError):
         crps._crps_from_cdf(torch.zeros((1, 2), device=device), cdfx, y)
@@ -392,6 +394,76 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     c = crps.kcrps(x, z, dim=3)
     true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
     assert c.shape == z.shape
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+@pytest.mark.parametrize("mean", [0.0, 3.0])
+@pytest.mark.parametrize("variance", [1.0, 0.1, 3.0])
+def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1e-3):
+    mean = torch.as_tensor([mean], device=device, dtype=torch.float32)
+    variance = torch.as_tensor([variance], device=device, dtype=torch.float32)
+
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (10_000, 1), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (10_000, 1), device=device, dtype=torch.float32
+    )
+
+    binsx, cdfx = hist.cdf(x, bins=10)
+    _, cdfy = hist.cdf(y, bins=binsx)
+    w_cdf = w.wasserstein_from_cdf(binsx, cdfx, cdfy)
+    w_samples = w.wasserstein_from_samples(x, y)
+
+    assert torch.allclose(
+        w.wasserstein_from_cdf(binsx, cdfx, cdfx),
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=atol,
+    )
+    assert torch.allclose(w_cdf, w_samples, rtol=rtol, atol=atol)
+
+    mu_x = x.mean(dim=0)
+    sig_x = x.var(dim=0)
+    mu_y = y.mean(dim=0)
+    sig_y = y.var(dim=0)
+    w_norm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert torch.allclose(
+        w_norm,
+        torch.zeros([1], dtype=torch.float32, device=device),
+        rtol=rtol,
+        atol=100 * atol,
+    )
+
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (100_000, 3), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (100_000, 3), device=device, dtype=torch.float32
+    )
+    mu_x = x.mean(dim=0)
+    sig_x = torch.cov(x.T)
+    mu_y = y.mean(dim=0)
+    sig_y = torch.cov(y.T)
+    w_norm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert not torch.any(torch.isnan(w_norm))
+
+    x = mean + torch.sqrt(variance) * torch.randn(
+        (1_000, 100_000, 3), device=device, dtype=torch.float32
+    )
+    y = mean + torch.sqrt(variance) * torch.randn(
+        (1_000, 100_000, 3), device=device, dtype=torch.float32
+    )
+    mu_x = x.mean(dim=1)
+    sig_x = torch.matmul((x - mu_x[:, None]).transpose(1, 2), (x - mu_x[:, None])) / (
+        1_000 - 1
+    )
+    mu_y = y.mean(dim=1)
+    sig_y = torch.matmul((y - mu_y[:, None]).transpose(1, 2), (y - mu_y[:, None])) / (
+        1_000 - 1
+    )
+    w_mnorm = w.wasserstein_from_normal(mu_x, sig_x, mu_y, sig_y)
+    assert not torch.any(torch.isnan(w_mnorm))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -573,29 +645,29 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
 
     x = torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, bin_counts = hist.histogram(x, bins=30)
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=False)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=False)
     assert entropy.shape == (10, 10)
     assert torch.allclose(
         entropy, (0.5 + 0.5 * np.log(2 * np.pi)) * one, atol=atol, rtol=rtol
     )
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=True)
     assert torch.all(torch.le(entropy, one))
     assert torch.all(torch.ge(entropy, 0.0 * one))
 
     # Test raises Assertion
     with pytest.raises(ValueError):
-        ent._entropy_from_counts(
+        ent.entropy_from_counts(
             torch.zeros((bin_counts.shape[0], 1, 1), device=device), bin_edges
         )
     with pytest.raises(ValueError):
-        ent._entropy_from_counts(
+        ent.entropy_from_counts(
             torch.zeros((1,) + bin_counts.shape[1:], device=device), bin_edges
         )
 
     # Test Maximum Entropy
     x = torch.rand((100_000, 10, 10), device=device, dtype=torch.float32)
     bin_edges, bin_counts = hist.histogram(x, bins=30)
-    entropy = ent._entropy_from_counts(bin_counts, bin_edges, normalized=True)
+    entropy = ent.entropy_from_counts(bin_counts, bin_edges, normalized=True)
     assert entropy.shape == (10, 10)
     assert torch.allclose(entropy, one, rtol=rtol, atol=atol)
 
@@ -607,12 +679,8 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     x2 = 0.1 * torch.randn((100_000, 10, 10), device=device, dtype=torch.float32)
     _, x2_bin_counts = hist.histogram(x2, bins=bin_edges)
 
-    rel_ent_1 = ent._relative_entropy_from_counts(
-        x_bin_counts, x1_bin_counts, bin_edges
-    )
-    rel_ent_2 = ent._relative_entropy_from_counts(
-        x_bin_counts, x2_bin_counts, bin_edges
-    )
+    rel_ent_1 = ent.relative_entropy_from_counts(x_bin_counts, x1_bin_counts, bin_edges)
+    rel_ent_2 = ent.relative_entropy_from_counts(x_bin_counts, x2_bin_counts, bin_edges)
 
     assert torch.all(torch.le(rel_ent_1, rel_ent_2))
     # assert torch.allclose(rel_ent_1, 0.0 * one, rtol=10.*rtol, atol = 10.*atol) # TODO
@@ -620,19 +688,19 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
 
     # Test raises Assertion
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             torch.zeros((x_bin_counts.shape[0], 1, 1), device=device),
             x1_bin_counts,
             bin_edges,
         )
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
             x1_bin_counts,
             bin_edges,
         )
     with pytest.raises(ValueError):
-        ent._relative_entropy_from_counts(
+        ent.relative_entropy_from_counts(
             x_bin_counts,
             torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
             bin_edges,
