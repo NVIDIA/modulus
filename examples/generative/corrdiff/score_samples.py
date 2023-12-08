@@ -49,6 +49,15 @@ import xskillscore
 
 
 def open_samples(f):
+    """
+    Open prediction and truth samples from a dataset file.
+
+    Parameters:
+        f: Path to the dataset file.
+
+    Returns:
+        tuple: A tuple containing truth, prediction, and root datasets.
+    """
     root = xr.open_dataset(f)
     pred = xr.open_dataset(f, group="prediction")
     truth = xr.open_dataset(f, group="truth")

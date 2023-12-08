@@ -22,6 +22,7 @@ import numpy as np
 
 
 def pattern_correlation(x, y):
+    """Pattern correlation"""
     mx = np.mean(x)
     my = np.mean(y)
     vx = np.mean((x - mx) ** 2)
@@ -34,6 +35,7 @@ def pattern_correlation(x, y):
 
 
 def plot_channels(group, time_idx: int):
+    """Plot channels"""
     # weather sub-plot
     num_channels = len(group.variables)
     ncols = 4
@@ -56,6 +58,7 @@ def plot_channels(group, time_idx: int):
 
 
 def channel_eq(a, b):
+    """Check if two channels are equal in variable and pressure."""
     variable_equal = a["variable"] == b["variable"]
     pressure_is_nan = np.isnan(a["pressure"]) and np.isnan(b["pressure"])
     pressure_equal = a["pressure"] == b["pressure"]
@@ -63,12 +66,14 @@ def channel_eq(a, b):
 
 
 def channel_repr(channel):
+    """Return a string representation of a channel with variable and pressure."""
     v = channel["variable"]
     pressure = channel["pressure"]
     return f"{v}\n Pressure: {pressure}"
 
 
 def get_clim(output_channels, f):
+    """Get color limits (clim) for output channels based on prediction and truth data."""
     colorlimits = {}
     for ch in range(len(output_channels)):
         channel = output_channels[ch]
@@ -86,6 +91,7 @@ def get_clim(output_channels, f):
 @click.argument("output_dir")
 @click.option("--sample", help="sample to plot", default=0, type=int)
 def main(file, output_dir, sample):
+    """Plot single sample"""
     os.makedirs(output_dir, exist_ok=True)
 
     f = nc.Dataset(file, "r")

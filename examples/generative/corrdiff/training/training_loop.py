@@ -78,6 +78,8 @@ def training_loop(
     N_grid_channels=4,
     normalization="v1",
 ):
+    """CorrDiff training loop"""
+    
     # Instantiate distributed manager.
     dist = DistributedManager()
     device = dist.device

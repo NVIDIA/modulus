@@ -23,6 +23,7 @@ from training.time import convert_datetime_to_cftime
 
 
 def test_datetime_yaml():
+    """test parse time"""
     dt = datetime.datetime(2011, 1, 1)
     s = dt.isoformat()
     loaded = yaml.safe_load(s)
@@ -30,6 +31,7 @@ def test_datetime_yaml():
 
 
 def test_convert_to_cftime():
+    """test parse time"""
     dt = datetime.datetime(2011, 1, 1)
     expected = cftime.DatetimeGregorian(2011, 1, 1)
     assert convert_datetime_to_cftime(dt) == expected

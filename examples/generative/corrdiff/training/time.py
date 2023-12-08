@@ -20,4 +20,5 @@ import cftime
 def convert_datetime_to_cftime(
     time: datetime.datetime, cls=cftime.DatetimeGregorian
 ) -> cftime.DatetimeGregorian:
+    """Convert a Python datetime object to a cftime DatetimeGregorian object."""
     return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)

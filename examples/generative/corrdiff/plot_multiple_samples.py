@@ -23,6 +23,7 @@ import xarray
 @click.argument("output_dir")
 @click.option("--n-samples", help="number of samples", default=5, type=int)
 def main(netcdf_file, output_dir, n_samples):
+    """Plot multiple samples"""
     path = netcdf_file
     output = output_dir
 
