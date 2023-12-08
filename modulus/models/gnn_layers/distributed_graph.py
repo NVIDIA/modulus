@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import torch
@@ -29,47 +29,101 @@ from modulus.distributed import (
 
 
 @dataclass
-class GraphPartition:  # pragma: no cover
+class GraphPartition:
     """
-    Class acting as a struct to hold all relevant buffers and variables
-    to define a graph partition.
+    Class acting as an "utility" structure to hold all relevant buffers and variables
+    to define a graph partition and faciliate exchange of necessary buffers for
+    message passing on a distributed graph.
+
+    A global graph is assumed to be defined through a global CSC structure
+    defining edges between source nodes and destination nodes which are assumed
+    to be numbered indexed by contiguous IDs. Hence, features associated to both
+    nodes and edges can be represented through dense feature tables globally.
+    When partitioning graph and features, we distribute destination nodes and all
+    their incoming edges on all ranks within the partition group based on a specified
+    mapping. Based on this scheme, there will a be a difference between
+    partitioned source nodes (partitioned features) and local source node
+    IDs which refer to the node IDs within the local graph defined by the
+    destination nodes on each rank. To allow message passing, communication
+    primitives have to ensure to gather all corresponding features for all
+    local source nodes based on the applied partitioning scheme. This also
+    leads to the distinction of local source node IDs and remote source node
+    IDs on each rank where the latter simply refers to the local row ID within
+    the dense partitioning of node features and the former indicates the source
+    of a message for each edge within each local graph.
+
+    Parameters
+    ----------
+    partition_size : int
+        size of partition
+    partition_rank : int
+        local rank of this partition w.r.t. group of partitions
+    device : torch.device
+        device handle for buffers within this partition rank
     """
 
     partition_size: int
     partition_rank: int
     device: torch.device
-    # data structures for local graph
-    # of this current partition rank
+
+    # data structures defining partition
+    # set in after initialization or during execution
+    # of desired partition scheme
+
+    # local CSR offsets defining local graph on each `partition_rank`
     local_offsets: Optional[torch.Tensor] = None
+    # local CSR indices defining local graph on each `partition_rank`
     local_indices: Optional[torch.Tensor] = None
-    num_local_src_nodes: int = 0
-    num_local_dst_nodes: int = 0
-    num_local_indices: int = 0
-    # mapping from local to global ID space
-    # for this current partition rank
+    # number of source nodes in local graph on each `partition_rank`
+    num_local_src_nodes: int = -1
+    # number of destination nodes in local graph on each `partition_rank`
+    num_local_dst_nodes: int = -1
+    # number of edges in local graph on each `partition_rank`
+    num_local_indices: int = -1
+    # mapping from local to global ID space (source node IDs)
     partitioned_src_node_ids_to_global: Optional[torch.Tensor] = None
+    # mapping from local to global ID space (destination node IDs)
     partitioned_dst_node_ids_to_global: Optional[torch.Tensor] = None
+    # mapping from local to global ID space (edge IDs)
     partitioned_indices_to_global: Optional[torch.Tensor] = None
-    # buffers, sizes, and ID counts to support
-    # distributed communication primitives
+
+    # utility lists and sizes required for exchange of messages
+    # between graph partitions through distributed communication primitives
+
     # number of IDs each rank potentially sends to all other ranks
-    sizes: List[List[int]] = field(init=False)
+    sizes: Optional[List[List[int]]] = None
     # local indices of IDs current rank sends to all other ranks
-    scatter_indices: List[torch.Tensor] = field(init=False)
-    num_src_nodes_in_each_partition: List[int] = field(init=False)
-    num_dst_nodes_in_each_partition: List[int] = field(init=False)
-    num_indices_in_each_partition: List[int] = field(init=False)
+    scatter_indices: Optional[List[torch.Tensor]] = None
+    # number of global source nodes for each `partition_rank`
+    num_src_nodes_in_each_partition: Optional[List[int]] = None
+    # number of global destination nodes for each `partition_rank`
+    num_dst_nodes_in_each_partition: Optional[List[int]] = None
+    # number of global indices for each `partition_rank`
+    num_indices_in_each_partition: Optional[List[int]] = None
 
     def __post_init__(self):
         # after partition_size has been set in __init__
-        self.sizes = [
-            [None for _ in range(self.partition_size)]
-            for _ in range(self.partition_size)
-        ]
-        self.scatter_indices = [None] * self.partition_size
-        self.num_src_nodes_in_each_partition = [None] * self.partition_size
-        self.num_dst_nodes_in_each_partition = [None] * self.partition_size
-        self.num_indices_in_each_partition = [None] * self.partition_size
+        if self.partition_size <= 0:
+            raise ValueError(f"Expected partition_size > 0, got {self.partition_size}")
+        if not (0 <= self.partition_rank < self.partition_size):
+            raise ValueError(
+                f"Expected 0 <= partition_rank < {self.partition_size}, got {self.partiton_rank}"
+            )
+
+        if self.sizes is None:
+            self.sizes = [
+                [None for _ in range(self.partition_size)]
+                for _ in range(self.partition_size)
+            ]
+
+        if self.scatter_indices is None:
+            self.scatter_indices = [None] * self.partition_size
+        if self.num_src_nodes_in_each_partition is None:
+            self.num_src_nodes_in_each_partition = [None] * self.partition_size
+        if self.num_dst_nodes_in_each_partition is None:
+            self.num_dst_nodes_in_each_partition = [None] * self.partition_size
+        if self.num_indices_in_each_partition is None:
+            self.num_indices_in_each_partition = [None] * self.partition_size
 
 
 def partition_graph_with_id_mapping(
@@ -80,18 +134,12 @@ def partition_graph_with_id_mapping(
     partition_size: int,
     partition_rank: int,
     device: torch.device,
-) -> GraphPartition:  # pragma: no cover
+) -> GraphPartition:
     """
     Utility function which partitions a global graph given as CSC structure.
     It partitions both the global ID spaces for source nodes and destination nodes
     based on the corresponding mappings as well as the graph structure and edge IDs.
-    Each rank maintains both a partition of the global source and destination nodes.
-    In terms of graph structure, each rank manages its own local graph structure
-    based on its partition of destination node IDs and all edges which - from the
-    point of view of each destination node on a current rank - are incoming edges.
-    For GNN operations this means, that features from source nodes need to be exchanged
-    between ranks. The partitioning scheme computes necessary indices which facilitate
-    later communication primitives.
+    For more details on partitioning in general see `GraphPartition`.
     The function performs the partitioning based on a global graph in CPU
     memory for each rank independently. It could be rewritten to e.g. only
     do it one rank and exchange the partitions or to an algorithm that also
@@ -161,7 +209,7 @@ def partition_graph_with_id_mapping(
             )
 
         # create mapping of global IDs to local IDs
-        # as each rank is expected to operate on disting global IDs, this is expected
+        # as each rank is expected to operate on distint global IDs, this is expected
         # to not cause any data races
         ids = src_nodes_in_each_partition[rank]
         mapping_global_src_ids_to_local_ids[ids] = torch.arange(
@@ -260,14 +308,11 @@ def partition_graph_nodewise(
     partition_size: int,
     partition_rank: int,
     device: torch.device,
-) -> GraphPartition:  # pragma: no cover
+) -> GraphPartition:
     """
     Utility function which partitions a global graph given as CSC structure naively
     by splitting both the IDs of source and destination nodes into chunks of equal
-    size. Each partition rank then manages its according chunk of both source and
-    destination nodes. Indices are assigned to the rank such that each rank manages
-    all the incoming edges for all the destination nodes on the corresponding
-    partition rank.
+    size. For more details on partitioning in general see `GraphPartition`.
     The function performs the partitioning based on a global graph in CPU
     memory for each rank independently. It could be rewritten to e.g. only
     do it one rank and exchange the partitions or to an algorithm that also
@@ -331,33 +376,27 @@ def partition_graph_nodewise(
     )
 
 
-def partition_graph_coordinatewise(
+def partition_graph_by_coordinate_bbox(
     global_offsets: torch.Tensor,
     global_indices: torch.Tensor,
     src_coordinates: torch.Tensor,
     dst_coordinates: torch.Tensor,
-    coordinate_separators_min: List[List[float]],
-    coordinate_separators_max: List[List[float]],
+    coordinate_separators_min: List[List[Optional[float]]],
+    coordinate_separators_max: List[List[Optional[float]]],
     partition_size: int,
     partition_rank: int,
     device: torch.device,
-) -> GraphPartition:  # pragma: no cover
+) -> GraphPartition:
     """
     Utility function which partitions a global graph given as CSC structure.
     It partitions both the global ID spaces for source nodes and destination nodes
     based on their corresponding coordinates. Each partition will manage points which
     fulfill the boxconstraints specified by the specified coordinate separators. For each
     rank one is expected to specify the minimum and maximum coordinate value for each dimension.
-    A partition the will manage all points for which ``min_val <= coord[d] < max_val`` holds.
-    Specifying either of these separation values as `None` will result in this constraint not being
-    considered for the division. Each rank maintains both a partition of the global source and
+    A partition the will manage all points for which ``min_val <= coord[d] < max_val`` holds. If one
+    of the constraints is passed as `None`, it is assumed to be non-binding and the partition is defined
+    by the corresponding half-space. Each rank maintains both a partition of the global source and
     destination nodes resulting from this subspace division.
-    In terms of graph structure, each rank manages its own local graph structure
-    based on its partition of destination node IDs and all edges which - from the
-    point of view of each destination node on a current rank - are incoming edges.
-    For GNN operations this means, that features from source nodes need to be exchanged
-    between ranks. The partitioning scheme computes necessary indices which facilitate
-    later communication primitives.
     The function performs the partitioning based on a global graph in CPU
     memory for each rank independently. It could be rewritten to e.g. only
     do it one rank and exchange the partitions or to an algorithm that also
@@ -371,7 +410,7 @@ def partition_graph_coordinatewise(
     Examples
     --------
     >>> import torch
-    >>> from modulus.models.gnn_layers import partition_graph_coordinatewise
+    >>> from modulus.models.gnn_layers import partition_graph_by_coordinate_bbox
     >>>
     >>> # simple graph with a degree of 2 per node
     >>> num_src_nodes = 8
@@ -408,7 +447,7 @@ def partition_graph_coordinatewise(
     >>>     ]
     >>> )
     >>> # call partitioning routine
-    >>> pg = partition_graph_coordinatewise(
+    >>> pg = partition_graph_by_coordinate_bbox(
     >>>     offsets,
     >>>     indices,
     >>>     src_coordinates,
@@ -468,7 +507,7 @@ def partition_graph_coordinatewise(
     >>> partition_size = 4
     >>> partition_rank = 0
     >>> device = "cuda:0"
-    >>> pg = partition_graph_coordinatewise(
+    >>> pg = partition_graph_by_coordinate_bbox(
     >>>     offsets,
     >>>     indices,
     >>>     src_coordinates,
