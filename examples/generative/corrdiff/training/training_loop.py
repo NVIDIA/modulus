@@ -39,7 +39,7 @@ from modulus.utils.generative import (
     open_url,
 )
 
-from .dataset import ZarrDataset
+from .dataset import get_zarr_dataset
 
 # ----------------------------------------------------------------------------
 
@@ -87,7 +87,7 @@ def training_loop(
     normalization="v1",
 ):
     """CorrDiff training loop"""
-    
+
     # Instantiate distributed manager.
     dist = DistributedManager()
     device = dist.device
@@ -120,7 +120,7 @@ def training_loop(
 
     # Load dataset: weather
     logger0.info("Loading dataset...")
-    dataset_obj = ZarrDataset(
+    dataset_obj = get_zarr_dataset(
         dataset=train_data_path,
         in_channels=in_channels,
         out_channels=out_channels,
@@ -179,9 +179,7 @@ def training_loop(
 
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
-    loss_fn = construct_class_by_name(
-        **loss_kwargs
-    )  # training.loss.(VP|VE|EDM)Loss
+    loss_fn = construct_class_by_name(**loss_kwargs)  # training.loss.(VP|VE|EDM)Loss
     optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer

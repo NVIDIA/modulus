@@ -110,9 +110,7 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name="train.log")
 
     # Initialize config dict.
-    c.dataset_kwargs = EasyDict(
-        path=data, xflip=False, cache=True, use_labels=False
-    )
+    c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
     c.data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )

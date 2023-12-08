@@ -84,6 +84,7 @@ def get_clim(output_channels, f):
         colorlimits[channel] = (vmin, vmax)
     return colorlimits
 
+
 # Create the parser
 parser = argparse.ArgumentParser()
 
@@ -96,6 +97,7 @@ parser.add_argument("--sample", help="Sample to plot", default=0, type=int)
 
 # Parse the arguments
 args = parser.parse_args()
+
 
 def main(file, output_dir, sample):
     """Plot single sample"""

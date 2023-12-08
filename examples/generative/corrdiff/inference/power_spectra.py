@@ -172,6 +172,7 @@ def main(file, output):
     calculates their power spectra, and generates and saves multiple power spectrum plots.
     The plots include kinetic energy, temperature, and reflectivity power spectra.
     """
+
     def savefig(name):
         path = os.path.join(output, name + ".png")
         plt.savefig(path)

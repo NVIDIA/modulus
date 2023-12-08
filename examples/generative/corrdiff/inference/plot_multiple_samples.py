@@ -30,6 +30,7 @@ parser.add_argument("--n-samples", help="Number of samples", default=5, type=int
 # Parse the arguments
 args = parser.parse_args()
 
+
 def main(netcdf_file, output_dir, n_samples):
     """Plot multiple samples"""
     path = netcdf_file

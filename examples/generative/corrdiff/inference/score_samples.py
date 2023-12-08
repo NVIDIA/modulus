@@ -43,13 +43,13 @@ import sys
 
 import dask.diagnostics
 
-# TODO install skillscore
 import xarray as xr
 
 try:
     import xskillscore
 except ImportError:
-        print("xskillscore not installed. Try `pip install xskillscore`")
+    print("xskillscore not installed. Try `pip install xskillscore`")
+
 
 def open_samples(f):
     """

@@ -99,6 +99,7 @@ def unet_regression(
 
     return x_next
 
+
 def ablation_sampler(
     net,
     latents,
@@ -291,6 +292,7 @@ class StackedRandomGenerator:
     Wrapper for torch.Generator that allows specifying a different random seed
     for each sample in a minibatch.
     """
+
     def __init__(self, device, seeds):
         super().__init__()
         self.generators = [
@@ -614,7 +616,8 @@ def _get_name(channel_info):
 
 
 class NetCDFWriter:
-    """ NetCDF Writer"""
+    """NetCDF Writer"""
+
     def __init__(self, f, lat, lon, input_channels, output_channels):
         self._f = f
 
@@ -704,7 +707,7 @@ def generate_and_save(
     This function generates model predictions from the input data using the specified
     `generate_fn`, and saves the predictions to the provided NetCDF file. It iterates
     through the dataset using a data loader, computes predictions, and saves them along
-    with associated metadata.  
+    with associated metadata.
 
     Parameters:
         dataset: Input dataset.
