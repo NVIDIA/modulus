@@ -20,14 +20,14 @@ import torch.nn as nn
 
 from modulus.distributed import (
     DistributedManager,
-    gather_loss,
     mark_module_as_shared,
+    reduce_loss,
     unmark_module_as_shared,
 )
 from modulus.distributed.utils import _reduce
 
 
-def run_test_gather_loss(rank, world_size):
+def run_test_reduce_loss(rank, world_size):
     os.environ["RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
@@ -40,7 +40,7 @@ def run_test_gather_loss(rank, world_size):
     manager = DistributedManager()
     assert manager.is_initialized()
 
-    loss = gather_loss(1.0, dst_rank=0, mean=False)
+    loss = reduce_loss(1.0, dst_rank=0, mean=False)
     if manager.local_rank == 0:
         assert loss == 1.0 * world_size, str(loss)
     else:
@@ -94,16 +94,6 @@ def run_test_mark_shared(rank, world_size):
         group=manager.group("shared_parallel"),
         use_fp32=True,
     )
-    ref_lin_2_weight_grad = _reduce(
-        ref_module.lin_2.weight.grad.clone().detach(),
-        group=manager.group("shared_parallel"),
-        use_fp32=True,
-    )
-    ref_lin_2_bias_grad = _reduce(
-        ref_module.lin_2.bias.grad.clone().detach(),
-        group=manager.group("shared_parallel"),
-        use_fp32=True,
-    )
 
     # mark lin_1 as shared, lin_2 is not touched
     mark_module_as_shared(dist_module.lin_1, "shared_parallel")
@@ -116,13 +106,20 @@ def run_test_mark_shared(rank, world_size):
     assert torch.allclose(ref_lin_1_weight_grad, dist_module.lin_1.weight.grad)
     assert torch.allclose(ref_lin_1_bias_grad, dist_module.lin_1.bias.grad)
 
-    return
+    ref_lin_2_weight_grad = _reduce(
+        ref_module.lin_2.weight.grad.clone().detach(),
+        group=manager.group("shared_parallel"),
+        use_fp32=True,
+    )
+    ref_lin_2_bias_grad = _reduce(
+        ref_module.lin_2.bias.grad.clone().detach(),
+        group=manager.group("shared_parallel"),
+        use_fp32=True,
+    )
 
     # unmark lin_1 as shared (umarking lin_2 should throw an error)
-    try:
+    with pytest.raises(RuntimeError):
         unmark_module_as_shared(dist_module.lin_2)
-    except RuntimeError:
-        assert True
     unmark_module_as_shared(dist_module.lin_1)
     dist_module.zero_grad()
     dist_out = dist_module(x)
@@ -144,10 +141,9 @@ def run_test_mark_shared(rank, world_size):
     assert torch.allclose(ref_module.lin_1.bias.grad, dist_module.lin_1.bias.grad)
 
     # unmark lin_2 again (unmarking lin_1 should throw an error)
-    try:
+    with pytest.raises(RuntimeError):
         unmark_module_as_shared(dist_module.lin_1)
-    except RuntimeError:
-        assert True
+
     unmark_module_as_shared(dist_module.lin_2)
     dist_module.zero_grad()
     dist_out = dist_module(x)
@@ -172,10 +168,8 @@ def run_test_mark_shared(rank, world_size):
     assert torch.allclose(ref_module.lin_1.bias.grad, dist_module.lin_1.bias.grad)
 
     # test recurse in unmark and unmark whole model for final test
-    try:
+    with pytest.raises(RuntimeError):
         unmark_module_as_shared(dist_module, recurse=True)
-    except RuntimeError:
-        assert True
     unmark_module_as_shared(dist_module, recurse=False)
 
     # mark whole module as shared (both layers now should be shared)
@@ -196,13 +190,13 @@ def run_test_mark_shared(rank, world_size):
 
 
 @pytest.mark.multigpu
-def test_gather_loss():
+def test_reduce_loss():
     num_gpus = torch.cuda.device_count()
     assert num_gpus > 1
     world_size = num_gpus
 
     torch.multiprocessing.spawn(
-        run_test_gather_loss,
+        run_test_reduce_loss,
         args=(world_size,),
         nprocs=world_size,
         start_method="spawn",

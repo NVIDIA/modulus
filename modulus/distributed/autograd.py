@@ -19,8 +19,8 @@ import torch
 import torch.distributed as dist
 
 from .utils import (
+    all_gather_v_bwd_wrapper,
     all_gather_v_wrapper,
-    all_reduce_v_wrapper,
     gather_v_wrapper,
     indexed_all_to_all_v_wrapper,
     indexed_all_to_all_v_wrapper_bwd,
@@ -68,7 +68,7 @@ class AllGatherVAutograd(torch.autograd.Function):
         needs_grad = ctx.needs_input_grad[0]
 
         if needs_grad:
-            grad_tensor = all_reduce_v_wrapper(
+            grad_tensor = all_gather_v_bwd_wrapper(
                 grad_output,
                 ctx.sizes,
                 dim=ctx.dim,
