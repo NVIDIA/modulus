@@ -16,6 +16,7 @@ process group config.
 - Brain anomaly detection example.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
 stability.
+- Updating MLFLow logging such that only proc 0 logs to MLFlow.
 
 ### Changed
 

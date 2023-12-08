@@ -217,7 +217,7 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        LaunchLogger("valid").log_mlflow_figure(
+        LaunchLogger("valid").log_figure(
             figure=fig, artifact_file=f"validation_step_{step}.png"
         )
 

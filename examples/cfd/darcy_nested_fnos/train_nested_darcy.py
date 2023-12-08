@@ -140,21 +140,6 @@ class SetUpInfrastructure:
             drop_last=False,
         )
 
-        # # TODO: remove below before merging PR
-        # if True:
-        #     cfg.training.max_epochs = 2
-        #     cfg.validation.validation_epochs = 1
-
-        #     import random
-        #     total = cfg.training.batch_size*int(8/dist.world_size)
-        #     samples = list(range(len(self.training_set)))
-        #     random.shuffle(samples)
-        #     train_sampler = samples[:total]
-        #     samples = list(range(len(self.valid_set)))
-        #     random.shuffle(samples)
-        #     valid_sampler = samples[:total]
-        # # TODO remove above before merging PR
-
         self.train_loader = DataLoader(
             self.training_set,
             batch_size=cfg.training.batch_size,
@@ -168,12 +153,6 @@ class SetUpInfrastructure:
             sampler=valid_sampler,
         )
         self.validator = GridValidator(loss_fun=loss_fun, norm=norm)
-        # decoder = FullyConnected(
-        #     in_features=model_cfg.fno.latent_channels,
-        #     out_features=model_cfg.decoder.out_features,
-        #     num_layers=model_cfg.decoder.layers,
-        #     layer_size=model_cfg.decoder.layer_size,
-        # )
         self.model = FNO(
             in_channels=model_cfg.fno.in_channels,
             out_channels=model_cfg.decoder.out_features,
@@ -279,7 +258,7 @@ def TrainModel(cfg: DictConfig, base: SetUpInfrastructure, loaded_epoch: int) ->
                         epoch,
                     )
                     total_loss += loss * batch["darcy"].shape[0] / len(base.valid_set)
-                    log.log_minibatch({"Validation error": total_loss})
+                log.log_epoch({"Validation error": total_loss})
 
         # save checkpoint
         if (

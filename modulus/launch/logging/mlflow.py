@@ -81,16 +81,13 @@ def initialize_mlflow(
         Returns MLFlow logging client and active run object
     """
     dist = DistributedManager()
-    root = True
-    if dist.is_initialized():
-        root = dist.rank == 0
-
-    if not root:  # only one process should be logging to mlflow
+    if dist.rank != 0:  # only root process should be logging to mlflow
         return
-    else:
-        start_time = datetime.now().astimezone()
-        time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
-        group_name = f"{run_name}_{time_string}"
+
+    start_time = datetime.now().astimezone()
+    time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
+    group_name = f"{run_name}_{time_string}"
+
     # Set default value here for Hydra
     if tracking_location is None:
         tracking_location = str(Path("./mlruns").absolute())

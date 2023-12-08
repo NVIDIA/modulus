@@ -41,14 +41,6 @@ def darcy_trainer(cfg: DictConfig) -> None:
     (cfg.training.max_pseudo_epochs*cfg.training.pseudo_epoch_sample_size) unique samples.
     Pseudo_epochs were introduced to leverage the LaunchLogger and its MLFlow integration.
     """
-
-    # TODO: remove below before merging PR
-    if True:
-        cfg.training.max_pseudo_epochs = 2
-        cfg.training.pseudo_epoch_sample_size = 256
-        cfg.validation.validation_pseudo_epochs = 1
-    # TODO remove above before merging PR
-
     DistributedManager.initialize()  # Only call this once in the entire script!
     dist = DistributedManager()  # call if required elsewhere
 
