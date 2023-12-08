@@ -19,11 +19,10 @@ code."""
 
 import re
 
-import dnnlib
 import numpy as np
 import torch
 
-from . import misc
+from modulus.utils.generative import EasyDict, profiled_function
 
 # ----------------------------------------------------------------------------
 
@@ -69,7 +68,7 @@ def init_multiprocessing(rank, sync_device):
 # ----------------------------------------------------------------------------
 
 
-@misc.profiled_function
+@profiled_function
 def report(name, value):
     r"""Broadcasts the given set of scalars to all interested instances of
     `Collector`, across device and process boundaries.
@@ -240,16 +239,16 @@ class Collector:
 
     def as_dict(self):
         r"""Returns the averages accumulated between the last two calls to
-        `update()` as an `dnnlib.EasyDict`. The contents are as follows:
+        `update()` as an `EasyDict`. The contents are as follows:
 
-            dnnlib.EasyDict(
-                NAME = dnnlib.EasyDict(num=FLOAT, mean=FLOAT, std=FLOAT),
+            EasyDict(
+                NAME = EasyDict(num=FLOAT, mean=FLOAT, std=FLOAT),
                 ...
             )
         """
-        stats = dnnlib.EasyDict()
+        stats = EasyDict()
         for name in self.names():
-            stats[name] = dnnlib.EasyDict(
+            stats[name] = EasyDict(
                 num=self.num(name), mean=self.mean(name), std=self.std(name)
             )
         return stats

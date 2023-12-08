@@ -21,15 +21,23 @@ import pickle  # ruff: noqa: E402
 import sys
 import time
 
-import dnnlib
 import numpy as np
 import psutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
-from torch_utils import misc, training_stats
+from . import training_stats
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.utils.generative import (
+    InfiniteSampler,
+    check_ddp_consistency,
+    construct_class_by_name,
+    copy_params_and_buffers,
+    ddp_sync,
+    format_time,
+    open_url,
+)
 
 from .dataset import ZarrDataset
 
@@ -136,7 +144,7 @@ def training_loop(
     )
     worker_init_fn = None
 
-    dataset_sampler = misc.InfiniteSampler(
+    dataset_sampler = InfiniteSampler(
         dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed
     )
     dataset_iterator = iter(
@@ -164,21 +172,21 @@ def training_loop(
         img_out_channels=img_out_channels,
         label_dim=0,
     )  # weather
-    net = dnnlib.util.construct_class_by_name(
+    net = construct_class_by_name(
         **network_kwargs, **interface_kwargs
     )  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
 
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
-    loss_fn = dnnlib.util.construct_class_by_name(
+    loss_fn = construct_class_by_name(
         **loss_kwargs
     )  # training.loss.(VP|VE|EDM)Loss
-    optimizer = dnnlib.util.construct_class_by_name(
+    optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer
     augment_pipe = (
-        dnnlib.util.construct_class_by_name(**augment_kwargs)
+        construct_class_by_name(**augment_kwargs)
         if augment_kwargs is not None
         else None
     )  # training.augment.AugmentPipe
@@ -211,22 +219,22 @@ def training_loop(
         logger0.info(f'Loading network weights from "{resume_pkl}"...')
         if dist.rank != 0:
             torch.distributed.barrier()  # rank 0 goes first
-        with dnnlib.util.open_url(resume_pkl, verbose=(dist.rank == 0)) as f:
+        with open_url(resume_pkl, verbose=(dist.rank == 0)) as f:
             # ruff: noqa: S301  # TODO remove exception
             data = pickle.load(f)
         if dist.rank == 0:
             torch.distributed.barrier()  # other ranks follow
-        misc.copy_params_and_buffers(
+        copy_params_and_buffers(
             src_module=data["ema"], dst_module=net, require_all=False
         )
-        misc.copy_params_and_buffers(
+        copy_params_and_buffers(
             src_module=data["ema"], dst_module=ema, require_all=False
         )
         del data  # conserve memory
     if resume_state_dump:
         logger0.info(f'Loading training state from "{resume_state_dump}"...')
         data = torch.load(resume_state_dump, map_location=torch.device("cpu"))
-        misc.copy_params_and_buffers(
+        copy_params_and_buffers(
             src_module=data["net"], dst_module=net, require_all=True
         )
         optimizer.load_state_dict(data["optimizer_state"])
@@ -244,7 +252,7 @@ def training_loop(
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
         for round_idx in range(num_accumulation_rounds):
-            with misc.ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
+            with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
                 img_clean, img_lr, labels = next(dataset_iterator)
 
@@ -303,7 +311,7 @@ def training_loop(
             f"kimg {training_stats.report0('Progress/kimg', cur_nimg / 1e3):<9.1f}"
         ]
         fields += [
-            f"time {dnnlib.util.format_time(training_stats.report0('Timing/total_sec', tick_end_time - start_time)):<12s}"
+            f"time {format_time(training_stats.report0('Timing/total_sec', tick_end_time - start_time)):<12s}"
         ]
         fields += [
             f"sec/tick {training_stats.report0('Timing/sec_per_tick', tick_end_time - tick_start_time):<7.1f}"
@@ -362,7 +370,7 @@ def training_loop(
             for key, value in data.items():
                 if isinstance(value, torch.nn.Module):
                     value = copy.deepcopy(value).eval().requires_grad_(False)
-                    misc.check_ddp_consistency(value)
+                    check_ddp_consistency(value)
                     data[key] = value.cpu()
                 del value  # conserve memory
             if dist.rank == 0:

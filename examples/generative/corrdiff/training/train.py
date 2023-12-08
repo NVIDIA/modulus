@@ -25,14 +25,13 @@ import re
 import warnings
 
 import hydra
-import dnnlib
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 from training import training_loop
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.utils.generative import parse_int_list
+from modulus.utils.generative import EasyDict, parse_int_list
 
 warnings.filterwarnings(
     "ignore", "Grad strides do not match bucket view strides"
@@ -79,7 +78,7 @@ def main(cfg: DictConfig) -> None:
     dry_run = getattr(cfg, "dry_run", False)
 
     # Parse weather data options
-    c = dnnlib.EasyDict()
+    c = EasyDict()
     c.train_data_path = getattr(cfg, "train_data_path")
     c.crop_size_x = getattr(cfg, "crop_size_x", 448)
     c.crop_size_y = getattr(cfg, "crop_size_y", 448)
@@ -111,15 +110,15 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name="train.log")
 
     # Initialize config dict.
-    c.dataset_kwargs = dnnlib.EasyDict(
+    c.dataset_kwargs = EasyDict(
         path=data, xflip=False, cache=True, use_labels=False
     )
-    c.data_loader_kwargs = dnnlib.EasyDict(
+    c.data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
-    c.network_kwargs = dnnlib.EasyDict()
-    c.loss_kwargs = dnnlib.EasyDict()
-    c.optimizer_kwargs = dnnlib.EasyDict(
+    c.network_kwargs = EasyDict()
+    c.loss_kwargs = EasyDict()
+    c.optimizer_kwargs = EasyDict(
         class_name="torch.optim.Adam", lr=lr, betas=[0.9, 0.999], eps=1e-8
     )
 
@@ -332,11 +331,11 @@ def main(cfg: DictConfig) -> None:
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
-        dnnlib.util.Logger(
-            file_name=os.path.join(c.run_dir, "log.txt"),
-            file_mode="a",
-            should_flush=True,
-        )
+        # dnnlib.util.Logger(
+        #     file_name=os.path.join(c.run_dir, "log.txt"),
+        #     file_mode="a",
+        #     should_flush=True,
+        # )
 
     # Train.
     training_loop.training_loop(**c)

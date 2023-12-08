@@ -43,6 +43,7 @@ import sys
 
 import dask.diagnostics
 
+# TODO install skillscore
 import xarray as xr
 
 try:

@@ -12,16 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import click
+import argparse
 import joblib
 import matplotlib.pyplot as plt
 import xarray
 
+# Create the parser
+parser = argparse.ArgumentParser()
 
-@click.command()
-@click.argument("netcdf_file")
-@click.argument("output_dir")
-@click.option("--n-samples", help="number of samples", default=5, type=int)
+# Add the positional arguments
+parser.add_argument("netcdf_file", help="Path to the NetCDF file")
+parser.add_argument("output_dir", help="Path to the output directory")
+
+# Add the optional argument
+parser.add_argument("--n-samples", help="Number of samples", default=5, type=int)
+
+# Parse the arguments
+args = parser.parse_args()
+
 def main(netcdf_file, output_dir, n_samples):
     """Plot multiple samples"""
     path = netcdf_file
