@@ -147,7 +147,6 @@ class SongUNet(Module):
         decoder_type: str = "standard",
         resample_filter: List[int] = [1, 1],
     ):
-
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
             raise ValueError(
@@ -306,7 +305,6 @@ class SongUNet(Module):
                 )
 
     def forward(self, x, noise_labels, class_labels, augment_labels=None):
-
         if self.embedding_type != "zero":
             # Mapping.
             emb = self.map_noise(noise_labels)
