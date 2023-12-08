@@ -232,7 +232,9 @@ def is_pickleable(obj: Any) -> bool:  # TODO remove  # pragma: no cover
 # -------------------------------------------------------------------------------------
 
 
-def get_module_from_obj_name(obj_name: str) -> Tuple[types.ModuleType, str]:  # pragma: no cover
+def get_module_from_obj_name(
+    obj_name: str,
+) -> Tuple[types.ModuleType, str]:  # pragma: no cover
     """
     Searches for the underlying module behind the name to some python object.
     Returns the module and the object name (original name with module part removed).
@@ -279,7 +281,9 @@ def get_module_from_obj_name(obj_name: str) -> Tuple[types.ModuleType, str]:  # 
     raise ImportError(obj_name)
 
 
-def get_obj_from_module(module: types.ModuleType, obj_name: str) -> Any:  # pragma: no cover
+def get_obj_from_module(
+    module: types.ModuleType, obj_name: str
+) -> Any:  # pragma: no cover
     """
     Traverses the object name and returns the last (rightmost) python object.
     """
@@ -299,7 +303,9 @@ def get_obj_by_name(name: str) -> Any:  # pragma: no cover
     return get_obj_from_module(module, obj_name)
 
 
-def call_func_by_name(*args, func_name: str = None, **kwargs) -> Any:  # pragma: no cover
+def call_func_by_name(
+    *args, func_name: str = None, **kwargs
+) -> Any:  # pragma: no cover
     """
     Finds the python object with the given name and calls it as a function.
     """
@@ -309,7 +315,9 @@ def call_func_by_name(*args, func_name: str = None, **kwargs) -> Any:  # pragma:
     return func_obj(*args, **kwargs)
 
 
-def construct_class_by_name(*args, class_name: str = None, **kwargs) -> Any:  # pragma: no cover
+def construct_class_by_name(
+    *args, class_name: str = None, **kwargs
+) -> Any:  # pragma: no cover
     """
     Finds the python class with the given name and constructs it with the given
     arguments.
@@ -385,7 +393,9 @@ def list_dir_recursively_with_ignore(
     return result
 
 
-def copy_files_and_create_dirs(files: List[Tuple[str, str]]) -> None:  # pragma: no cover
+def copy_files_and_create_dirs(
+    files: List[Tuple[str, str]]
+) -> None:  # pragma: no cover
     """
     Takes in a list of tuples of (src, dst) paths and copies files.
     Will create all necessary directories.
@@ -550,7 +560,9 @@ def open_url(
 _constant_cache = dict()
 
 
-def constant(value, shape=None, dtype=None, device=None, memory_format=None):  # pragma: no cover
+def constant(
+    value, shape=None, dtype=None, device=None, memory_format=None
+):  # pragma: no cover
     """Cached construction of constant tensors"""
     value = np.asarray(value)
     if shape is not None:
@@ -743,7 +755,9 @@ def named_params_and_buffers(module):  # pragma: no cover
 
 
 @torch.no_grad()
-def copy_params_and_buffers(src_module, dst_module, require_all=False):  # pragma: no cover
+def copy_params_and_buffers(
+    src_module, dst_module, require_all=False
+):  # pragma: no cover
     """Copy parameters and buffers from a source module to target module"""
     assert isinstance(src_module, torch.nn.Module)
     assert isinstance(dst_module, torch.nn.Module)
@@ -796,7 +810,9 @@ def check_ddp_consistency(module, ignore_regex=None):  # pragma: no cover
 # Print summary table of module hierarchy.
 
 
-def print_module_summary(module, inputs, max_nesting=3, skip_redundant=True):  # pragma: no cover
+def print_module_summary(
+    module, inputs, max_nesting=3, skip_redundant=True
+):  # pragma: no cover
     """Print summary table of module hierarchy."""
     assert isinstance(module, torch.nn.Module)
     assert not isinstance(module, torch.jit.ScriptModule)
