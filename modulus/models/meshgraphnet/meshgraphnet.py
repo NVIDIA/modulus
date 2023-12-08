@@ -33,6 +33,7 @@ from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
+from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 
@@ -66,6 +67,8 @@ class MeshGraphNet(Module):
         Number of outputs
     processor_size : int, optional
         Number of message passing blocks, by default 15
+    mlp_activation_fn : Union[str, List[str]], optional
+        Activation function to use, by default 'relu'
     num_layers_node_processor : int, optional
         Number of MLP layers for processing nodes in each message passing block, by default 2
     num_layers_edge_processor : int, optional
@@ -74,16 +77,19 @@ class MeshGraphNet(Module):
         Hidden layer size for the message passing blocks, by default 128
     hidden_dim_node_encoder : int, optional
         Hidden layer size for the node feature encoder, by default 128
-    num_layers_node_encoder : int, optional
-        Number of MLP layers for the node feature encoder, by default 2
+    num_layers_node_encoder : Union[int, None], optional
+        Number of MLP layers for the node feature encoder, by default 2.
+        If None is provided, the MLP will collapse to a Identity function, i.e. no node encoder
     hidden_dim_edge_encoder : int, optional
         Hidden layer size for the edge feature encoder, by default 128
-    num_layers_edge_encoder : int, optional
-        Number of MLP layers for the edge feature encoder, by default 2
+    num_layers_edge_encoder : Union[int, None], optional
+        Number of MLP layers for the edge feature encoder, by default 2.
+        If None is provided, the MLP will collapse to a Identity function, i.e. no edge encoder
     hidden_dim_node_decoder : int, optional
         Hidden layer size for the node feature decoder, by default 128
-    num_layers_node_decoder : int, optional
-        Number of MLP layers for the node feature decoder, by default 2
+    num_layers_node_decoder : Union[int, None], optional
+        Number of MLP layers for the node feature decoder, by default 2.
+        If None is provided, the MLP will collapse to a Identity function, i.e. no decoder
     aggregation: str, optional
         Message aggregation type, by default "sum"
     do_conat_trick: : bool, default=False
@@ -117,45 +123,50 @@ class MeshGraphNet(Module):
         input_dim_edges: int,
         output_dim: int,
         processor_size: int = 15,
+        mlp_activation_fn: Union[str, List[str]] = "relu",
         num_layers_node_processor: int = 2,
         num_layers_edge_processor: int = 2,
         hidden_dim_processor: int = 128,
         hidden_dim_node_encoder: int = 128,
-        num_layers_node_encoder: int = 2,
+        num_layers_node_encoder: Union[int, None] = 2,
         hidden_dim_edge_encoder: int = 128,
-        num_layers_edge_encoder: int = 2,
+        num_layers_edge_encoder: Union[int, None] = 2,
         hidden_dim_node_decoder: int = 128,
-        num_layers_node_decoder: int = 2,
+        num_layers_node_decoder: Union[int, None] = 2,
         aggregation: str = "sum",
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
     ):
         super().__init__(meta=MetaData())
 
+        activation_fn = get_activation(mlp_activation_fn)
+
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
             output_dim=hidden_dim_processor,
             hidden_dim=hidden_dim_edge_encoder,
             hidden_layers=num_layers_edge_encoder,
-            activation_fn=nn.ReLU(),
+            activation_fn=activation_fn,
             norm_type="LayerNorm",
             recompute_activation=False,
         )
+
         self.node_encoder = MeshGraphMLP(
             input_dim_nodes,
             output_dim=hidden_dim_processor,
             hidden_dim=hidden_dim_node_encoder,
             hidden_layers=num_layers_node_encoder,
-            activation_fn=nn.ReLU(),
+            activation_fn=activation_fn,
             norm_type="LayerNorm",
             recompute_activation=False,
         )
+
         self.node_decoder = MeshGraphMLP(
             hidden_dim_processor,
             output_dim=output_dim,
             hidden_dim=hidden_dim_node_decoder,
             hidden_layers=num_layers_node_decoder,
-            activation_fn=nn.ReLU(),
+            activation_fn=activation_fn,
             norm_type=None,
             recompute_activation=False,
         )
@@ -167,7 +178,7 @@ class MeshGraphNet(Module):
             num_layers_edge=num_layers_edge_processor,
             aggregation=aggregation,
             norm_type="LayerNorm",
-            activation_fn=nn.ReLU(),
+            activation_fn=activation_fn,
             do_concat_trick=do_concat_trick,
             num_processor_checkpoint_segments=num_processor_checkpoint_segments,
         )

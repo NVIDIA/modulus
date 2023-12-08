@@ -17,4 +17,4 @@ from .datapipes.meta import DatapipeMetaData
 from .models.meta import ModelMetaData
 from .models.module import Module
 
-__version__ = "0.4.0a0"
+__version__ = "0.5.0a0"

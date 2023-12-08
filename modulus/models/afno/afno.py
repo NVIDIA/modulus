@@ -360,7 +360,6 @@ class PatchEmbed(nn.Module):
         patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
     ):
-
         super().__init__()
         if len(inp_shape) != 2:
             raise ValueError("inp_shape should be a list of length 2")
