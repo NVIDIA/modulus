@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
-
 import pytest
 import torch
+
 from modulus.models.gnn_layers import (
-    partition_graph_by_coordinate_bbox,
-    partition_graph_with_id_mapping,
-    partition_graph_nodewise,
     GraphPartition,
+    partition_graph_by_coordinate_bbox,
+    partition_graph_nodewise,
+    partition_graph_with_id_mapping,
 )
 
 
@@ -31,13 +30,11 @@ def global_graph():
     num_dst_nodes = 4
     offsets = torch.arange(num_dst_nodes + 1, dtype=torch.int64) * 2
     indices = torch.arange(num_src_nodes, dtype=torch.int64)
-    
+
     return (offsets, indices, num_src_nodes, num_dst_nodes)
 
 
 def assert_partitions_are_equal(a, b):
-    is_equal = True
-
     attributes = [
         "partition_size",
         "partition_rank",
@@ -48,7 +45,7 @@ def assert_partitions_are_equal(a, b):
         "sizes",
         "num_src_nodes_in_each_partition",
         "num_dst_nodes_in_each_partition",
-        "num_indices_in_each_partition"
+        "num_indices_in_each_partition",
     ]
     torch_attributes = [
         "local_offsets",
@@ -71,9 +68,9 @@ def assert_partitions_are_equal(a, b):
             assert isinstance(val_b, list), error_msg
             assert len(val_a) == len(val_b), error_msg
             for i in range(len(val_a)):
-                assert torch.allclose(val_a[i], val_b[i]), error_msg      
+                assert torch.allclose(val_a[i], val_b[i]), error_msg
         else:
-            assert torch.allclose(val_a, val_b), error_msg      
+            assert torch.allclose(val_a, val_b), error_msg
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -151,7 +148,7 @@ def test_gp_nodewise(global_graph, device):
         sizes=[[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]],
         scatter_indices=[
             torch.tensor([0, 1], device=device),
-            torch.tensor([], device=device,  dtype=torch.int64),
+            torch.tensor([], device=device, dtype=torch.int64),
             torch.tensor([], device=device, dtype=torch.int64),
             torch.tensor([], device=device, dtype=torch.int64),
         ],

@@ -250,4 +250,4 @@ def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
 
 
 if __name__ == "__main__":
-    py
+    pytest.main([__file__])
