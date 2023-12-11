@@ -110,8 +110,9 @@ class MeshGraphMLP(nn.Module):
         dimensionality of the output features, by default 512
     hidden_dim : int, optional
         number of neurons in each hidden layer, by default 512
-    hidden_layers : int, optional
+    hidden_layers : Union[int, None], optional
         number of hidden layers, by default 1
+        if None is provided, the MLP will collapse to a Identity function
     activation_fn : nn.Module, optional
         , by default nn.SiLU()
     norm_type : str, optional
@@ -126,36 +127,39 @@ class MeshGraphMLP(nn.Module):
         input_dim: int,
         output_dim: int = 512,
         hidden_dim: int = 512,
-        hidden_layers: int = 1,
+        hidden_layers: Union[int, None] = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         recompute_activation: bool = False,
     ):
         super().__init__()
 
-        layers = [nn.Linear(input_dim, hidden_dim), activation_fn]
-        self.hidden_layers = hidden_layers
-        for _ in range(hidden_layers - 1):
-            layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
-        layers.append(nn.Linear(hidden_dim, output_dim))
+        if hidden_layers is not None:
+            layers = [nn.Linear(input_dim, hidden_dim), activation_fn]
+            self.hidden_layers = hidden_layers
+            for _ in range(hidden_layers - 1):
+                layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
+            layers.append(nn.Linear(hidden_dim, output_dim))
 
-        self.norm_type = norm_type
-        if norm_type is not None:
-            if norm_type not in [
-                "LayerNorm",
-                "GraphNorm",
-                "InstanceNorm",
-                "BatchNorm",
-                "MessageNorm",
-            ]:
-                raise ValueError(norm_type)
-            if norm_type == "LayerNorm" and apex_imported:
-                norm_layer = FusedLayerNorm
-            else:
-                norm_layer = getattr(nn, norm_type)
-            layers.append(norm_layer(output_dim))
+            self.norm_type = norm_type
+            if norm_type is not None:
+                if norm_type not in [
+                    "LayerNorm",
+                    "GraphNorm",
+                    "InstanceNorm",
+                    "BatchNorm",
+                    "MessageNorm",
+                ]:
+                    raise ValueError(norm_type)
+                if norm_type == "LayerNorm" and apex_imported:
+                    norm_layer = FusedLayerNorm
+                else:
+                    norm_layer = getattr(nn, norm_type)
+                layers.append(norm_layer(output_dim))
 
-        self.model = nn.Sequential(*layers)
+            self.model = nn.Sequential(*layers)
+        else:
+            self.model = nn.Identity()
 
         if recompute_activation:
             if not isinstance(activation_fn, nn.SiLU):

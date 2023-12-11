@@ -642,7 +642,6 @@ class EDMPrecondSR(torch.nn.Module):
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
-
         # Concatenate input channels
         x = torch.cat((x, img_lr), dim=1)
 

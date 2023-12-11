@@ -96,7 +96,6 @@ class DistributedBlock(nn.Module):
         self.double_skip = double_skip
 
     def forward(self, x):
-
         if not self.input_is_matmul_parallel:
             x = scatter_to_parallel_region(x, dim=1, group="model_parallel")
 
@@ -245,7 +244,6 @@ class DistributedAFNONet(nn.Module):
         return x
 
     def forward(self, x):
-
         # fw pass on features
         x = self.forward_features(x)
 

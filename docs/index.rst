@@ -55,6 +55,13 @@ Welcome to Modulus Core's documentation!
    
    examples/healthcare/bloodflow_1d_mgn/README.rst
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples: Molecular Dynamics
+   :name: Examples: Molecular Dynamics
+   
+   examples/molecular_dynamics/lennard_jones/README.rst
+
 
 Indices and tables
 ==================

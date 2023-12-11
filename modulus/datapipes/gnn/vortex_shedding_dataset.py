@@ -83,7 +83,6 @@ class VortexSheddingDataset(DGLDataset):
         force_reload=False,
         verbose=False,
     ):
-
         super().__init__(
             name=name,
             force_reload=force_reload,
