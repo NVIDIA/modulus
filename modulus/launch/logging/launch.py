@@ -22,7 +22,6 @@ from typing import Dict, Tuple, Union
 import torch
 import torch.cuda.profiler as profiler
 import wandb
-from matplotlib.figure import Figure
 
 from modulus.distributed import DistributedManager, gather_loss
 
@@ -328,7 +327,7 @@ class LaunchLogger(object):
 
     def log_figure(
         self,
-        figure: Figure,
+        figure,
         artifact_file: str = "artifact",
         plot_dir: str = "./",
         log_to_file: bool = False,
