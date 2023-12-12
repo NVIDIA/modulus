@@ -337,7 +337,7 @@ class LaunchLogger(object):
         Parameters
         ----------
         figure : Figure
-            matplotlib figure to plot
+            matplotlib or plotly figure to plot
         artifact_file : str, optional
             File name. CAUTION overrides old files of same name
         plot_dir : str, optional

@@ -159,6 +159,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
                         batch["darcy"],
                         forward_eval(batch["permeability"]),
                         pseudo_epoch,
+                        logger,
                     )
                     total_loss += val_loss
                 logger.log_epoch({"Validation error": total_loss / validation_iters})

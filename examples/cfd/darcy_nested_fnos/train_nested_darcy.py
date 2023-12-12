@@ -256,6 +256,7 @@ def TrainModel(cfg: DictConfig, base: SetUpInfrastructure, loaded_epoch: int) ->
                         batch["darcy"],
                         base.forward_eval(batch["permeability"]),
                         epoch,
+                        log,
                     )
                     total_loss += loss * batch["darcy"].shape[0] / len(base.valid_set)
                 log.log_epoch({"Validation error": total_loss})

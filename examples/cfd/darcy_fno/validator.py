@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import matplotlib.pyplot as plt
 from torch import FloatTensor
 from modulus.launch.logging import LaunchLogger
@@ -51,6 +50,7 @@ class GridValidator:
         target: FloatTensor,
         prediction: FloatTensor,
         step: int,
+        logger: LaunchLogger,
     ) -> float:
         """compares model output, target and plots everything
 
@@ -64,6 +64,8 @@ class GridValidator:
             model output
         step : int
             iteration counter
+        logger : LaunchLogger
+            logger to which figure is passed
 
         Returns
         -------
@@ -94,8 +96,6 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        LaunchLogger("valid").log_figure(
-            figure=fig, artifact_file=f"validation_step_{step}.png"
-        )
+        logger.log_figure(figure=fig, artifact_file=f"validation_step_{step:03d}.png")
 
         return loss
