@@ -337,7 +337,6 @@ def _grid_knn_idx(
     stride: int,
     padding: bool = True,
 ) -> Tensor:
-
     # set k
     k = stride // 2
 
