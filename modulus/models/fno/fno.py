@@ -154,11 +154,36 @@ class FNO1DEncoder(nn.Module):
         return grid_x
 
     def grid_to_points(self, value: Tensor) -> Tuple[Tensor, List[int]]:
+        """converting from grid based (image) to point based representation
+
+        Parameters
+        ----------
+        value : Meshgrid tensor
+
+        Returns
+        -------
+        Tuple
+            Tensor, meshgrid shape
+        """
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
+        """converting from point based to grid based (image) representation
+
+        Parameters
+        ----------
+        value : Tensor
+            Tensor
+        shape : List[int]
+            meshgrid shape
+
+        Returns
+        -------
+        Tensor
+            Meshgrid tensor
+        """
         output = value.reshape(shape[0], shape[2], value.size(-1))
         return torch.permute(output, (0, 2, 1))
 
@@ -303,11 +328,36 @@ class FNO2DEncoder(nn.Module):
         return torch.cat((grid_x, grid_y), dim=1)
 
     def grid_to_points(self, value: Tensor) -> Tuple[Tensor, List[int]]:
+        """converting from grid based (image) to point based representation
+
+        Parameters
+        ----------
+        value : Meshgrid tensor
+
+        Returns
+        -------
+        Tuple
+            Tensor, meshgrid shape
+        """
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 3, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
+        """converting from point based to grid based (image) representation
+
+        Parameters
+        ----------
+        value : Tensor
+            Tensor
+        shape : List[int]
+            meshgrid shape
+
+        Returns
+        -------
+        Tensor
+            Meshgrid tensor
+        """
         output = value.reshape(shape[0], shape[2], shape[3], value.size(-1))
         return torch.permute(output, (0, 3, 1, 2))
 
@@ -456,11 +506,36 @@ class FNO3DEncoder(nn.Module):
         return torch.cat((grid_x, grid_y, grid_z), dim=1)
 
     def grid_to_points(self, value: Tensor) -> Tuple[Tensor, List[int]]:
+        """converting from grid based (image) to point based representation
+
+        Parameters
+        ----------
+        value : Meshgrid tensor
+
+        Returns
+        -------
+        Tuple
+            Tensor, meshgrid shape
+        """
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 3, 4, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
+        """converting from point based to grid based (image) representation
+
+        Parameters
+        ----------
+        value : Tensor
+            Tensor
+        shape : List[int]
+            meshgrid shape
+
+        Returns
+        -------
+        Tensor
+            Meshgrid tensor
+        """
         output = value.reshape(shape[0], shape[2], shape[3], shape[4], value.size(-1))
         return torch.permute(output, (0, 4, 1, 2, 3))
 
@@ -622,11 +697,36 @@ class FNO4DEncoder(nn.Module):
         return torch.cat((grid_x, grid_y, grid_z, grid_t), dim=1)
 
     def grid_to_points(self, value: Tensor) -> Tuple[Tensor, List[int]]:
+        """converting from grid based (image) to point based representation
+
+        Parameters
+        ----------
+        value : Meshgrid tensor
+
+        Returns
+        -------
+        Tuple
+            Tensor, meshgrid shape
+        """
         y_shape = list(value.size())
         output = torch.permute(value, (0, 2, 3, 4, 5, 1))
         return output.reshape(-1, output.size(-1)), y_shape
 
     def points_to_grid(self, value: Tensor, shape: List[int]) -> Tensor:
+        """converting from point based to grid based (image) representation
+
+        Parameters
+        ----------
+        value : Tensor
+            Tensor
+        shape : List[int]
+            meshgrid shape
+
+        Returns
+        -------
+        Tensor
+            Meshgrid tensor
+        """
         output = value.reshape(
             shape[0], shape[2], shape[3], shape[4], shape[5], value.size(-1)
         )
