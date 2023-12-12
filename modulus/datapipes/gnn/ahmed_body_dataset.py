@@ -560,7 +560,6 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         add_self_loop: bool = False,
         dtype: Union[torch.dtype, str] = torch.int32,
     ) -> dgl.DGLGraph:
-
         """
         Create a DGL graph from vtkPolyData.
 
