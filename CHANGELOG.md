@@ -17,9 +17,11 @@ process group config.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
 stability.
 - Molecular Dynamics example.
-- Updating MLFLow logging such that only proc 0 logs to MLFlow.
 
 ### Changed
+
+- MLFLow logging such that only proc 0 logs to MLFlow.
+- FNO given seperate methods for constructing lift and FNO encoder layers.
 
 ### Deprecated
 
