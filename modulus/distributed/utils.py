@@ -218,52 +218,9 @@ def _split(input_, dim_, group=None):  # pragma: no cover
     return output
 
 
-def _gather(input_, dim_, shapes_=None, group=None):  # pragma: no cover
-    """Gather tensors and concatenate along the specified dimension."""
-    # get input format
-    input_format = get_memory_format(input_)
-
-    comm_size = dist.get_world_size(group=group)
-    # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
-        return input_
-
-    # sanity checks
-    if not (dim_ < input_.dim()):
-        raise AssertionError(
-            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} "
-            "dimensions."
-        )
-
-    # Size and dimension.
-    comm_rank = dist.get_rank(group=group)
-
-    # make input contiguous
-    input_ = input_.contiguous(memory_format=input_format)
-
-    if shapes_ is not None:
-        shape = list(input_.shape)
-        tensor_list = [None for _ in range(comm_size)]
-        for i in range(comm_size):
-            shape[dim_] = shapes_[i]
-            tensor_list[i] = torch.empty(
-                shape, device=input_.device, dtype=input_.dtype
-            )
-    else:
-        tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
-
-    tensor_list[comm_rank] = input_
-    dist.all_gather(tensor_list, input_, group=group)
-
-    # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
-
-    return output
-
-
 def all_gather_v_wrapper(
     tensor: torch.Tensor,
-    sizes: List[int],
+    sizes: Optional[List[int]] = None,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:  # pragma: no cover
@@ -278,9 +235,9 @@ def all_gather_v_wrapper(
     ----------
     tensor : "torch.Tensor"
         local tensor on each rank
-    sizes : List[int]
+    sizes : List[int], optional
         list of the sizes of each chunk on each rank along distributed dimension,
-        valid and set on each rank
+        valid and set on each rank, by default None
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -293,7 +250,8 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    if len(sizes) != comm_size:
+
+    if (sizes is not None) and (len(sizes) != comm_size):
         raise ValueError()
     if dim >= tensor.dim():
         raise ValueError()
@@ -302,19 +260,25 @@ def all_gather_v_wrapper(
         return tensor
 
     tensor_shape = list(tensor.shape)
-    tensor_list = [None] * comm_size
+    tensor_format = get_memory_format(tensor)
 
-    for src in range(comm_size):
-        tensor_shape[dim] = sizes[src]
-        tensor_list[src] = torch.empty(
-            tensor_shape,
-            dtype=tensor.dtype,
-            device=tensor.device,
-        )
+    if sizes is not None:
+        tensor_list = [None] * comm_size
+
+        for src in range(comm_size):
+            tensor_shape[dim] = sizes[src]
+            tensor_list[src] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+    else:
+        # assume equal shape on all ranks
+        tensor_list = [torch.empty_like(tensor) for _ in range(comm_size)]
 
     dist.all_gather(tensor_list, tensor, group=group)
 
-    output = torch.cat(tensor_list, dim=dim)
+    output = torch.cat(tensor_list, dim=dim).contiguous(memory_format=tensor_format)
 
     return output
 
