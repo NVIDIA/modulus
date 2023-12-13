@@ -15,7 +15,12 @@
 import torch
 
 from modulus.distributed.manager import DistributedManager
-from modulus.distributed.utils import _gather, _reduce, _split
+from modulus.distributed.utils import (
+    _reduce,
+    _split,
+    all_gather_v_wrapper,
+    compute_split_shapes,
+)
 
 
 class _CopyToParallelRegion(torch.autograd.Function):
@@ -62,12 +67,20 @@ class _ScatterToParallelRegion(torch.autograd.Function):
     def forward(ctx, input_, dim_, group_):  # pragma: no cover
         ctx.dim = dim_
         ctx.group = group_
+        ctx.split_shapes = compute_split_shapes(
+            input_.shape[dim_], DistributedManager().group_size(group_)
+        )
         return _split(input_, dim_, group=DistributedManager().group(group_))
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
         return (
-            _gather(grad_output, ctx.dim, group=DistributedManager().group(ctx.group_)),
+            all_gather_v_wrapper(
+                grad_output,
+                ctx.split_shapes,
+                ctx.dim,
+                group=DistributedManager().group(ctx.group),
+            ),
             None,
             None,
         )
@@ -77,47 +90,24 @@ class _GatherFromParallelRegion(torch.autograd.Function):
     """Gather the input from parallel region and concatenate."""
 
     @staticmethod
-    def symbolic(graph, input_, dim_, group_):  # pragma: no cover
-        return _gather(input_, dim_, group=DistributedManager().group(group_))
+    def symbolic(graph, input_, dim_, group_, shapes_):  # pragma: no cover
+        return all_gather_v_wrapper(
+            input_, shapes_, dim_, group=DistributedManager().group(group_)
+        )
 
     @staticmethod
-    def forward(ctx, input_, dim_, group_):  # pragma: no cover
+    def forward(ctx, input_, dim_, shapes_, group_):  # pragma: no cover
         ctx.dim = dim_
         ctx.group = group_
-        return _gather(input_, dim_, group=DistributedManager().group(group_))
+        return all_gather_v_wrapper(
+            input_, shapes_, dim_, group=DistributedManager().group(group_)
+        )
 
     @staticmethod
     def backward(ctx, grad_output):  # pragma: no cover
         return (
             _split(grad_output, ctx.dim, group=DistributedManager().group(ctx.group)),
             None,
-            None,
-        )
-
-
-class _GatherWithinParallelRegion(torch.autograd.Function):
-    """
-    Gather the input within parallel region and concatenate.
-    The same forward method as _GatherFromParallelRegion, the difference is only in the
-    backward pass. This method performs a reduction of the gradients before the split in
-    the backward pass while the other version only performs a split
-    """
-
-    @staticmethod
-    def symbolic(graph, input_, dim_, group_):  # pragma: no cover
-        return _gather(input_, dim_, group=DistributedManager().group(group_))
-
-    @staticmethod
-    def forward(ctx, input_, dim_, group_):  # pragma: no cover
-        ctx.dim = dim_
-        ctx.group = group_
-        return _gather(input_, dim_, group=DistributedManager().group(group_))
-
-    @staticmethod
-    def backward(ctx, grad_output):  # pragma: no cover
-        red = _reduce(grad_output, group=DistributedManager().group(ctx.group_))
-        return (
-            _split(red, ctx.dim, group=DistributedManager().group(ctx.group)),
             None,
             None,
         )
@@ -141,16 +131,6 @@ def scatter_to_parallel_region(input, dim, group):  # pragma: no cover
     return _ScatterToParallelRegion.apply(input, dim, group)
 
 
-def gather_from_parallel_region(input, dim, group):  # pragma: no cover
+def gather_from_parallel_region(input, dim, shapes, group):  # pragma: no cover
     """Gather the input from matmul parallel region and concatenate."""
-    return _GatherFromParallelRegion.apply(input, dim, group)
-
-
-def gather_within_parallel_region(input, dim, group):  # pragma: no cover
-    """
-    Gather the input within parallel region and concatenate.
-    The same forward method as gather_from_parallel_region, the difference is only in
-    the backward pass. This method performs a reduction of the gradients before the
-    split in the backward pass while the other version only performs a split
-    """
-    return _GatherWithinParallelRegion.apply(input, dim, group)
+    return _GatherFromParallelRegion.apply(input, dim, shapes, group)
