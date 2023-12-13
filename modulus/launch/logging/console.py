@@ -42,14 +42,14 @@ class PythonLogger:
         """Log to file"""
         if os.path.exists(file_name):
             os.remove(file_name)
-            formatter = logging.Formatter(
-                "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
-                datefmt="%H:%M:%S",
-            )
-            filehandler = logging.FileHandler(file_name)
-            filehandler.setFormatter(formatter)
-            filehandler.setLevel(logging.DEBUG)
-            self.logger.addHandler(filehandler)
+        formatter = logging.Formatter(
+            "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        filehandler = logging.FileHandler(file_name)
+        filehandler.setFormatter(formatter)
+        filehandler.setLevel(logging.DEBUG)
+        self.logger.addHandler(filehandler)
 
     def log(self, message: str):
         """Log message"""

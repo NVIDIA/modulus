@@ -20,6 +20,9 @@ stability.
 
 ### Changed
 
+- MLFLow logging such that only proc 0 logs to MLFlow.
+- FNO given seperate methods for constructing lift and spectral encoder layers.
+
 ### Deprecated
 
 ### Removed

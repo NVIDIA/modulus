@@ -14,7 +14,6 @@
 
 import torch
 import os.path
-import mlflow
 import warp as wp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,7 +21,7 @@ from typing import Union, Tuple, Dict
 from torch import FloatTensor, Tensor
 from torch.nn import MSELoss
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import PythonLogger
+from modulus.launch.logging import PythonLogger, LaunchLogger
 from modulus.datapipes.benchmarks.darcy import Darcy2D
 from modulus.datapipes.benchmarks.kernels.initialization import init_uniform_random_4d
 from modulus.datapipes.benchmarks.kernels.utils import (
@@ -153,8 +152,6 @@ class GridValidator:
         loss function for assessing validation error
     norm : Dict, optional
         mean and standard deviation for each channel to normalise input and target
-    out_dir : str, optional
-        directory to which plots shall be stored
     font_size : float, optional
         font size used in figures
 
@@ -164,16 +161,12 @@ class GridValidator:
         self,
         loss_fun: MSELoss,
         norm: dict = {"permeability": (0.0, 1.0), "darcy": (0.0, 1.0)},
-        out_dir: str = "./outputs/validators",
         font_size: float = 28.0,
     ) -> None:
         self.norm = norm
         self.criterion = loss_fun
         self.font_size = font_size
         self.headers = ("invar", "truth", "prediction", "relative error")
-        self.out_dir = os.path.abspath(os.path.join(os.getcwd(), out_dir))
-        if not os.path.exists(self.out_dir):
-            os.makedirs(self.out_dir)
 
     def compare(
         self,
@@ -181,6 +174,7 @@ class GridValidator:
         target: FloatTensor,
         prediction: FloatTensor,
         step: int,
+        logger: LaunchLogger,
     ) -> float:
         """compares model output, target and plots everything
 
@@ -194,6 +188,8 @@ class GridValidator:
             model output
         step : int
             iteration counter
+        logger : LaunchLogger
+            logger to which figure is passed
 
         Returns
         -------
@@ -213,7 +209,7 @@ class GridValidator:
 
         plt.close("all")
         plt.rcParams.update({"font.size": self.font_size})
-        fig, ax = plt.subplots(1, 4, figsize=(15 * 4, 15), sharey=True)
+        fig, ax = plt.subplots(1, 4, figsize=(15 * 3.5, 15), sharey=True)
         im = []
         im.append(ax[0].imshow(invar))
         im.append(ax[1].imshow(target))
@@ -224,8 +220,7 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        mlflow.log_figure(fig, f"val_step_{step}.png")
-        fig.savefig(os.path.join(self.out_dir, f"validation_step_{step}.png"))
+        logger.log_figure(figure=fig, artifact_file=f"validation_step_{step:03d}.png")
 
         return loss
 

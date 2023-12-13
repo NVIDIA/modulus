@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import torch
 import matplotlib.pyplot as plt
 from torch import FloatTensor
-from torch.nn import MSELoss
-from mlflow import log_figure
+from modulus.launch.logging import LaunchLogger
 
 
 class GridValidator:
@@ -31,8 +28,6 @@ class GridValidator:
         loss function for assessing validation error
     norm : Dict, optional
         mean and standard deviation for each channel to normalise input and target
-    out_dir : str, optional
-        directory to which plots shall be stored
     font_size : float, optional
         font size used in figures
 
@@ -42,16 +37,12 @@ class GridValidator:
         self,
         loss_fun,
         norm: dict = {"permeability": (0.0, 1.0), "darcy": (0.0, 1.0)},
-        out_dir: str = "./outputs/validators",
         font_size: float = 28.0,
     ):
         self.norm = norm
         self.criterion = loss_fun
         self.font_size = font_size
         self.headers = ("invar", "truth", "prediction", "relative error")
-        self.out_dir = os.path.abspath(os.path.join(os.getcwd(), out_dir))
-        if not os.path.exists(self.out_dir):
-            os.makedirs(self.out_dir)
 
     def compare(
         self,
@@ -59,6 +50,7 @@ class GridValidator:
         target: FloatTensor,
         prediction: FloatTensor,
         step: int,
+        logger: LaunchLogger,
     ) -> float:
         """compares model output, target and plots everything
 
@@ -72,6 +64,8 @@ class GridValidator:
             model output
         step : int
             iteration counter
+        logger : LaunchLogger
+            logger to which figure is passed
 
         Returns
         -------
@@ -102,7 +96,6 @@ class GridValidator:
             fig.colorbar(im[ii], ax=ax[ii], location="bottom", fraction=0.046, pad=0.04)
             ax[ii].set_title(self.headers[ii])
 
-        log_figure(fig, f"val_step_{step}.png")
-        fig.savefig(os.path.join(self.out_dir, f"validation_step_{step}.png"))
+        logger.log_figure(figure=fig, artifact_file=f"validation_step_{step:03d}.png")
 
         return loss
