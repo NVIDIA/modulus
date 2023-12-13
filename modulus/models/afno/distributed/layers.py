@@ -26,6 +26,7 @@ from modulus.distributed.mappings import (
     reduce_from_parallel_region,
     scatter_to_parallel_region,
 )
+from modulus.distributed.utils import compute_split_shapes
 
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
@@ -163,6 +164,11 @@ class DistributedMLP(nn.Module):
         self.act = act_layer()
         self.drop = nn.Dropout(drop) if drop > 0.0 else nn.Identity()
 
+        if self.input_is_matmul_parallel:
+            self.gather_shapes = compute_split_shapes(
+                in_features, DistributedManager().group_size("model_parallel")
+            )
+
         # init weights
         self._init_weights()
 
@@ -175,7 +181,9 @@ class DistributedMLP(nn.Module):
     def forward(self, x):
         # gather if input is MP
         if self.input_is_matmul_parallel:
-            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
+            x = gather_from_parallel_region(
+                x, dim=1, shapes=self.gather_shapes, group="model_parallel"
+            )
 
         x = copy_to_parallel_region(x, group="model_parallel")
         x = F.conv2d(x, self.w1, bias=self.b1)
@@ -223,6 +231,9 @@ class DistributedPatchEmbed(nn.Module):
                 raise ValueError(
                     "Error, the in_chans needs to be divisible by matmul_parallel_size"
                 )
+            self.in_shapes = compute_split_shapes(
+                in_chans, DistributedManager().group_size("model_parallel")
+            )
 
         # get effective embedding size:
         if self.output_parallel:
@@ -245,7 +256,9 @@ class DistributedPatchEmbed(nn.Module):
 
     def forward(self, x):
         if self.input_parallel:
-            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
+            x = gather_from_parallel_region(
+                x, dim=1, shapes=self.in_shapes, group="model_parallel"
+            )
 
         if self.output_parallel:
             x = copy_to_parallel_region(x, group="model_parallel")
@@ -373,6 +386,7 @@ class DistributedAFNO2D(nn.Module):
     def forward(self, x):
         if not self.input_is_matmul_parallel:
             # distribute data
+            num_chans = x.shape[1]
             x = scatter_to_parallel_region(x, dim=1, group="model_parallel")
 
         # bias
@@ -418,6 +432,11 @@ class DistributedAFNO2D(nn.Module):
 
         # gather
         if not self.output_is_matmul_parallel:
-            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
+            gather_shapes = compute_split_shapes(
+                num_chans, DistributedManager().group_size("model_parallel")
+            )
+            x = gather_from_parallel_region(
+                x, dim=1, shapes=gather_shapes, group="model_parallel"
+            )
 
         return x
