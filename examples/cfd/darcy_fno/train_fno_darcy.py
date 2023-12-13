@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import hydra
 from omegaconf import DictConfig
 from math import ceil
@@ -20,7 +19,6 @@ from math import ceil
 from torch.nn import MSELoss
 from torch.optim import Adam, lr_scheduler
 
-from modulus.models.mlp import FullyConnected
 from modulus.models.fno import FNO
 from modulus.datapipes.benchmarks.darcy import Darcy2D
 from modulus.distributed import DistributedManager
@@ -43,13 +41,12 @@ def darcy_trainer(cfg: DictConfig) -> None:
     (cfg.training.max_pseudo_epochs*cfg.training.pseudo_epoch_sample_size) unique samples.
     Pseudo_epochs were introduced to leverage the LaunchLogger and its MLFlow integration.
     """
-
     DistributedManager.initialize()  # Only call this once in the entire script!
     dist = DistributedManager()  # call if required elsewhere
 
     # initialize monitoring
     log = PythonLogger(name="darcy_fno")
-    # initialize monitoring
+    log.file_logging()
     initialize_mlflow(
         experiment_name=f"Darcy_FNO",
         experiment_desc=f"training an FNO model for the Darcy problem",
@@ -162,6 +159,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
                         batch["darcy"],
                         forward_eval(batch["permeability"]),
                         pseudo_epoch,
+                        logger,
                     )
                     total_loss += val_loss
                 logger.log_epoch({"Validation error": total_loss / validation_iters})
