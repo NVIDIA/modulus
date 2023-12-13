@@ -22,6 +22,26 @@ import torch.nn.functional as F
 from .manager import DistributedManager
 
 
+def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
+
+    # treat trivial case first
+    if num_chunks == 1:
+        return [size]
+
+    # first, check if we can split using div-up to balance the load:
+    chunk_size = (size + num_chunks - 1) // num_chunks
+    last_chunk_size = max(0, size - chunk_size * (num_chunks - 1))
+    if last_chunk_size == 0:
+        # in this case, the last shard would be empty, split with floor instead:
+        chunk_size = size // num_chunks
+        last_chunk_size = size - chunk_size * (num_chunks - 1)
+
+    # generate sections list
+    sections = [chunk_size for _ in range(num_chunks - 1)] + [last_chunk_size]
+
+    return sections
+
+
 def get_memory_format(tensor):
     """Gets format for tensor"""
     if tensor.is_contiguous(memory_format=torch.channels_last):
@@ -71,19 +91,19 @@ def truncate_helper(tensor, dim, new_size):
 
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
-    """splits tensor along specific dim"""
-    if not (dim < tensor.dim()):
-        raise AssertionError(
-            f"Error, tensor dimension is {tensor.dim()} which cannot be"
-            f"split along {dim}"
+    if dim >= tensor.dim():
+        raise ValueError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
         )
-    if not (tensor.shape[dim] % num_chunks == 0):
-        raise AssertionError(
-            f"Error, cannot split dim {dim} evenly. Dim size is \
-        {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+    if tensor.shape[dim] < num_chunks:
+        raise ValueError(
+            "Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
+        {num_chunks} chunks. Empty slices are currently not supported."
         )
-    chunk_size = tensor.shape[dim] // num_chunks
-    tensor_list = torch.split(tensor, chunk_size, dim=dim)
+
+    # get split
+    sections = compute_split_shapes(tensor.shape[dim], num_chunks)
+    tensor_list = torch.split(tensor, sections, dim=dim)
 
     return tensor_list
 
@@ -198,39 +218,9 @@ def _split(input_, dim_, group=None):  # pragma: no cover
     return output
 
 
-def _gather(input_, dim_, group=None):  # pragma: no cover
-    """Gather tensors and concatenate along the specified dimension."""
-    # get input format
-    input_format = get_memory_format(input_)
-
-    comm_size = dist.get_world_size(group=group)
-    # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
-        return input_
-
-    # sanity checks
-    if not (dim_ < input_.dim()):
-        raise AssertionError(
-            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} "
-            "dimensions."
-        )
-
-    # Size and dimension.
-    comm_rank = dist.get_rank(group=group)
-
-    tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
-    tensor_list[comm_rank] = input_
-    dist.all_gather(tensor_list, input_, group=group)
-
-    # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
-
-    return output
-
-
 def all_gather_v_wrapper(
     tensor: torch.Tensor,
-    sizes: List[int],
+    sizes: Optional[List[int]] = None,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:  # pragma: no cover
@@ -245,9 +235,9 @@ def all_gather_v_wrapper(
     ----------
     tensor : "torch.Tensor"
         local tensor on each rank
-    sizes : List[int]
+    sizes : List[int], optional
         list of the sizes of each chunk on each rank along distributed dimension,
-        valid and set on each rank
+        valid and set on each rank, by default None
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -260,7 +250,8 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    if len(sizes) != comm_size:
+
+    if (sizes is not None) and (len(sizes) != comm_size):
         raise ValueError()
     if dim >= tensor.dim():
         raise ValueError()
@@ -269,19 +260,25 @@ def all_gather_v_wrapper(
         return tensor
 
     tensor_shape = list(tensor.shape)
-    tensor_list = [None] * comm_size
+    tensor_format = get_memory_format(tensor)
 
-    for src in range(comm_size):
-        tensor_shape[dim] = sizes[src]
-        tensor_list[src] = torch.empty(
-            tensor_shape,
-            dtype=tensor.dtype,
-            device=tensor.device,
-        )
+    if sizes is not None:
+        tensor_list = [None] * comm_size
+
+        for src in range(comm_size):
+            tensor_shape[dim] = sizes[src]
+            tensor_list[src] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+    else:
+        # assume equal shape on all ranks
+        tensor_list = [torch.empty_like(tensor) for _ in range(comm_size)]
 
     dist.all_gather(tensor_list, tensor, group=group)
 
-    output = torch.cat(tensor_list, dim=dim)
+    output = torch.cat(tensor_list, dim=dim).contiguous(memory_format=tensor_format)
 
     return output
 
