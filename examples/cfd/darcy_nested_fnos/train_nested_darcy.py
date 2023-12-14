@@ -20,13 +20,19 @@ from omegaconf import DictConfig
 from torch.nn import MSELoss
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data.distributed import DistributedSampler
 
-from modulus.models.mlp import FullyConnected
 from modulus.models.fno import FNO
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.launch.logging import PythonLogger, LaunchLogger, initialize_mlflow
+from modulus.launch.logging import (
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    LaunchLogger,
+    initialize_mlflow,
+)
 
 from utils import NestedDarcyDataset, GridValidator
 
@@ -65,7 +71,7 @@ def InitializeLoggers(cfg: DictConfig) -> Tuple[DistributedManager, PythonLogger
     )
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
 
-    return dist, logger
+    return dist, RankZeroLoggingWrapper(logger, dist)
 
 
 class SetUpInfrastructure:
@@ -118,19 +124,35 @@ class SetUpInfrastructure:
             + f"validation set contains {len(self.valid_set)} samples."
         )
 
+        train_sampler = DistributedSampler(
+            self.training_set,
+            num_replicas=dist.world_size,
+            rank=dist.local_rank,
+            shuffle=True,
+            drop_last=False,
+        )
+
+        valid_sampler = DistributedSampler(
+            self.valid_set,
+            num_replicas=dist.world_size,
+            rank=dist.local_rank,
+            shuffle=True,
+            drop_last=False,
+        )
+
         self.train_loader = DataLoader(
-            self.training_set, batch_size=cfg.training.batch_size, shuffle=True
+            self.training_set,
+            batch_size=cfg.training.batch_size,
+            shuffle=False,
+            sampler=train_sampler,
         )
         self.valid_loader = DataLoader(
-            self.valid_set, batch_size=cfg.validation.batch_size, shuffle=False
+            self.valid_set,
+            batch_size=cfg.validation.batch_size,
+            shuffle=False,
+            sampler=valid_sampler,
         )
         self.validator = GridValidator(loss_fun=loss_fun, norm=norm)
-        decoder = FullyConnected(
-            in_features=model_cfg.fno.latent_channels,
-            out_features=model_cfg.decoder.out_features,
-            num_layers=model_cfg.decoder.layers,
-            layer_size=model_cfg.decoder.layer_size,
-        )
         self.model = FNO(
             in_channels=model_cfg.fno.in_channels,
             out_channels=model_cfg.decoder.out_features,
@@ -142,6 +164,17 @@ class SetUpInfrastructure:
             num_fno_modes=model_cfg.fno.fno_modes,
             padding=model_cfg.fno.padding,
         ).to(dist.device)
+
+        # distributed data parallel for multi-node training
+        if dist.world_size > 1:
+            self.model = DistributedDataParallel(
+                self.model,
+                device_ids=[dist.local_rank],
+                output_device=dist.device,
+                broadcast_buffers=dist.broadcast_buffers,
+                find_unused_parameters=dist.find_unused_parameters,
+            )
+
         self.optimizer = Adam(self.model.parameters(), lr=cfg.scheduler.initial_lr)
         self.scheduler = lr_scheduler.LambdaLR(
             self.optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate**step
@@ -223,6 +256,7 @@ def TrainModel(cfg: DictConfig, base: SetUpInfrastructure, loaded_epoch: int) ->
                         batch["darcy"],
                         base.forward_eval(batch["permeability"]),
                         epoch,
+                        log,
                     )
                     total_loss += loss * batch["darcy"].shape[0] / len(base.valid_set)
                 log.log_epoch({"Validation error": total_loss})
