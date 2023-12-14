@@ -268,7 +268,7 @@ def run_process_groups_from_config(rank, model_parallel_size, verbose):
 @pytest.mark.multigpu
 def test_process_groups_from_config():
     num_gpus = torch.cuda.device_count()
-    assert num_gpus == 2, "Not enough GPUs available for test"
+    assert num_gpus >= 2, "Not enough GPUs available for test"
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
