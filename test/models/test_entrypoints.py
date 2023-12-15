@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from importlib.metadata import entry_points
+
 import pytest
 from pytest_utils import _import_or_fail
 

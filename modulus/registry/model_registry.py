@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from importlib.metadata import EntryPoint, entry_points
 from typing import List, Union
-
-from importlib.metadata import entry_points, EntryPoint
 
 import modulus
 
