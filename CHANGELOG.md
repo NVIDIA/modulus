@@ -17,6 +17,7 @@ process group config.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
 stability.
 - Molecular Dynamics example.
+- Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
 
 ### Changed
