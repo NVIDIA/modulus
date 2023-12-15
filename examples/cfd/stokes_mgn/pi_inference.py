@@ -56,6 +56,8 @@ from modulus.sym.models.fully_connected import FullyConnectedArch
 from modulus.sym.models.fourier_net import FourierNetArch
 from modulus.sym.models.arch import Arch
 from modulus.sym.key import Key
+from modulus.sym.manager import GraphManager
+
 from typing import Optional, Dict
 
 
@@ -235,15 +237,17 @@ class PhysicsInformedInferencer:
             fourier_features=64,
         ).to(self.device)
 
-        # print(self.model, self.nu)
         self.node_pde = Stokes(nu=self.nu, dim=2)
 
         self.nodes = self.node_pde.make_nodes() + [
             self.model.make_node(name="flow_network", jit=False)
         ]
-        print(self.nodes)
-        from modulus.sym.manager import GraphManager
 
+        # note: this example uses the Graph class from Modulus Sym to construct the
+        # computational graph. This allows you to leverage Modulus Sym's optimized
+        # derivative backend to compute the derivatives, along with other benefits like
+        # symbolic definition of PDEs and leveraging the PDEs from Modulus Sym's PDE
+        # module.
         self.graph = Graph(
             self.nodes,
             [Key("x"), Key("y")],
