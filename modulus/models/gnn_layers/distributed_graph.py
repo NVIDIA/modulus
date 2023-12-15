@@ -411,13 +411,11 @@ def partition_graph_by_coordinate_bbox(
     --------
     >>> import torch
     >>> from modulus.models.gnn_layers import partition_graph_by_coordinate_bbox
-    >>>
     >>> # simple graph with a degree of 2 per node
     >>> num_src_nodes = 8
     >>> num_dst_nodes = 4
     >>> offsets = torch.arange(num_dst_nodes + 1, dtype=torch.int64) * 2
     >>> indices = torch.arange(num_src_nodes, dtype=torch.int64)
-    >>>
     >>> # example with 2D coordinates
     >>> # assuming partitioning a 2D problem into the 4 quadrants
     >>> partition_size = 4
@@ -427,60 +425,43 @@ def partition_graph_by_coordinate_bbox(
     >>> device = "cuda:0"
     >>> # dummy coordinates
     >>> src_coordinates = torch.FloatTensor(
-    >>>     [
-    >>>         [-1.0, 1.0],
-    >>>         [1.0, 1.0],
-    >>>         [-1.0, -1.0],
-    >>>         [1.0, -1.0],
-    >>>         [-2.0, 2.0],
-    >>>         [2.0, 2.0],
-    >>>         [-2.0, -2.0],
-    >>>         [2.0, -2.0],
-    >>>     ]
-    >>> )
+    ...     [
+    ...         [-1.0, 1.0],
+    ...         [1.0, 1.0],
+    ...         [-1.0, -1.0],
+    ...         [1.0, -1.0],
+    ...         [-2.0, 2.0],
+    ...         [2.0, 2.0],
+    ...         [-2.0, -2.0],
+    ...         [2.0, -2.0],
+    ...     ]
+    ... )
     >>> dst_coordinates = torch.FloatTensor(
-    >>>     [
-    >>>         [-1.0, 1.0],
-    >>>         [1.0, 1.0],
-    >>>         [-1.0, -1.0],
-    >>>         [1.0, -1.0],
-    >>>     ]
-    >>> )
+    ...     [
+    ...         [-1.0, 1.0],
+    ...         [1.0, 1.0],
+    ...         [-1.0, -1.0],
+    ...         [1.0, -1.0],
+    ...     ]
+    ... )
     >>> # call partitioning routine
     >>> pg = partition_graph_by_coordinate_bbox(
-    >>>     offsets,
-    >>>     indices,
-    >>>     src_coordinates,
-    >>>     dst_coordinates,
-    >>>     coordinate_separators_min,
-    >>>     coordinate_separators_max,
-    >>>     partition_size,
-    >>>     partition_rank,
-    >>>     device,
-    >>> )
-    GraphPartition(
-        partition_size=4,
-        partition_rank=0,
-        device="cuda:0",
-        local_offsets=tensor([0, 2], device="cuda:0"),
-        local_indices=tensor([0, 1], device="cuda:0"),
-        num_local_src_nodes=2,
-        num_local_dst_nodes=1,
-        num_local_indices=2,
-        partitioned_src_node_ids_to_global=tensor([1, 5]),
-        partitioned_dst_node_ids_to_global=tensor([1]),
-        partitioned_indices_to_global=tensor([2, 3]),
-        sizes=[[0, 1, 1, 0], [0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 0, 1]],
-        scatter_indices=[
-            tensor([], device="cuda:0", dtype=torch.int64),
-            tensor([0], device="cuda:0"),
-            tensor([1], device="cuda:0"),
-            tensor([], device="cuda:0", dtype=torch.int64),
-        ],
-        num_src_nodes_in_each_partition=[2, 2, 2, 2],
-        num_dst_nodes_in_each_partition=[1, 1, 1, 1],
-        num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ...     offsets,
+    ...     indices,
+    ...     src_coordinates,
+    ...     dst_coordinates,
+    ...     coordinate_separators_min,
+    ...     coordinate_separators_max,
+    ...     partition_size,
+    ...     partition_rank,
+    ...     device,
+    ... )
+    >>> pg.local_offsets
+    tensor([0, 2], device='cuda:0')
+    >>> pg.local_indices
+    tensor([0, 1], device='cuda:0')
+    >>> pg.sizes
+    [[0, 1, 1, 0], [0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 0, 1]]
     >>>
     >>> # example with lat-long coordinates
     >>> # dummy coordinates
@@ -492,55 +473,38 @@ def partition_graph_by_coordinate_bbox(
     >>> dst_coordinates = torch.cat([dst_lat, dst_long], dim=1)
     >>> # separate sphere at equator and 0 degree longitude into 4 parts
     >>> coordinate_separators_min = [
-    >>>     [-90, -180],
-    >>>     [-90, 0],
-    >>>     [0, -180],
-    >>>     [0, 0],
-    >>> ]
+    ...     [-90, -180],
+    ...     [-90, 0],
+    ...     [0, -180],
+    ...     [0, 0],
+    ... ]
     >>> coordinate_separators_max = [
-    >>>     [0, 0],
-    >>>     [0, 180],
-    >>>     [90, 0],
-    >>>     [90, 180],
-    >>> ]
+    ...     [0, 0],
+    ...     [0, 180],
+    ...     [90, 0],
+    ...     [90, 180],
+    ... ]
     >>> # call partitioning routine
     >>> partition_size = 4
     >>> partition_rank = 0
     >>> device = "cuda:0"
     >>> pg = partition_graph_by_coordinate_bbox(
-    >>>     offsets,
-    >>>     indices,
-    >>>     src_coordinates,
-    >>>     dst_coordinates,
-    >>>     coordinate_separators_min,
-    >>>     coordinate_separators_max,
-    >>>     partition_size,
-    >>>     partition_rank,
-    >>>     device,
-    >>> )
-    GraphPartition(
-        partition_size=4,
-        partition_rank=0,
-        device="cuda:0",
-        local_offsets=tensor([0, 2], device="cuda:0"),
-        local_indices=tensor([0, 1], device="cuda:0"),
-        num_local_src_nodes=2,
-        num_local_dst_nodes=1,
-        num_local_indices=2,
-        partitioned_src_node_ids_to_global=tensor([0, 1]),
-        partitioned_dst_node_ids_to_global=tensor([0]),
-        partitioned_indices_to_global=tensor([0, 1]),
-        sizes=[[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]],
-        scatter_indices=[
-            tensor([0, 1], device="cuda:0"),
-            tensor([], device="cuda:0", dtype=torch.int64),
-            tensor([], device="cuda:0", dtype=torch.int64),
-            tensor([], device="cuda:0", dtype=torch.int64),
-        ],
-        num_src_nodes_in_each_partition=[2, 2, 2, 2],
-        num_dst_nodes_in_each_partition=[1, 1, 1, 1],
-        num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ...     offsets,
+    ...     indices,
+    ...     src_coordinates,
+    ...     dst_coordinates,
+    ...     coordinate_separators_min,
+    ...     coordinate_separators_max,
+    ...     partition_size,
+    ...     partition_rank,
+    ...     device,
+    ... )
+    >>> pg.local_offsets
+    tensor([0, 2], device='cuda:0')
+    >>> pg.local_indices
+    tensor([0, 1], device='cuda:0')
+    >>> pg.sizes
+    [[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]]
 
     Parameters
     ----------
