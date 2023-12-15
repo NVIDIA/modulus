@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import torch
@@ -29,46 +29,277 @@ from modulus.distributed import (
 
 
 @dataclass
-class GraphPartition:  # pragma: no cover
-    """Class acting as a struct to hold all relevant buffers and variables
-    to define a graph partition.
+class GraphPartition:
+    """
+    Class acting as an "utility" structure to hold all relevant buffers and variables
+    to define a graph partition and faciliate exchange of necessary buffers for
+    message passing on a distributed graph.
+
+    A global graph is assumed to be defined through a global CSC structure
+    defining edges between source nodes and destination nodes which are assumed
+    to be numbered indexed by contiguous IDs. Hence, features associated to both
+    nodes and edges can be represented through dense feature tables globally.
+    When partitioning graph and features, we distribute destination nodes and all
+    their incoming edges on all ranks within the partition group based on a specified
+    mapping. Based on this scheme, there will a be a difference between
+    partitioned source nodes (partitioned features) and local source node
+    IDs which refer to the node IDs within the local graph defined by the
+    destination nodes on each rank. To allow message passing, communication
+    primitives have to ensure to gather all corresponding features for all
+    local source nodes based on the applied partitioning scheme. This also
+    leads to the distinction of local source node IDs and remote source node
+    IDs on each rank where the latter simply refers to the local row ID within
+    the dense partitioning of node features and the former indicates the source
+    of a message for each edge within each local graph.
+
+    Parameters
+    ----------
+    partition_size : int
+        size of partition
+    partition_rank : int
+        local rank of this partition w.r.t. group of partitions
+    device : torch.device
+        device handle for buffers within this partition rank
     """
 
     partition_size: int
     partition_rank: int
     device: torch.device
-    # data structures for local graph
-    # of this current partition rank
-    local_offsets: torch.Tensor = field(init=False)
-    local_indices: torch.Tensor = field(init=False)
-    num_local_src_nodes: int = 0
-    num_local_dst_nodes: int = 0
-    num_local_indices: int = 0
-    # mapping from local to global ID space
-    # for this current partition rank
-    partitioned_src_node_ids_to_global: torch.Tensor = field(init=False)
-    partitioned_dst_node_ids_to_global: torch.Tensor = field(init=False)
-    partitioned_indices_to_global: torch.Tensor = field(init=False)
-    # buffers, sizes, and ID counts to support
-    # distributed communication primitives
+
+    # data structures defining partition
+    # set in after initialization or during execution
+    # of desired partition scheme
+
+    # local CSR offsets defining local graph on each `partition_rank`
+    local_offsets: Optional[torch.Tensor] = None
+    # local CSR indices defining local graph on each `partition_rank`
+    local_indices: Optional[torch.Tensor] = None
+    # number of source nodes in local graph on each `partition_rank`
+    num_local_src_nodes: int = -1
+    # number of destination nodes in local graph on each `partition_rank`
+    num_local_dst_nodes: int = -1
+    # number of edges in local graph on each `partition_rank`
+    num_local_indices: int = -1
+    # mapping from local to global ID space (source node IDs)
+    partitioned_src_node_ids_to_global: Optional[torch.Tensor] = None
+    # mapping from local to global ID space (destination node IDs)
+    partitioned_dst_node_ids_to_global: Optional[torch.Tensor] = None
+    # mapping from local to global ID space (edge IDs)
+    partitioned_indices_to_global: Optional[torch.Tensor] = None
+
+    # utility lists and sizes required for exchange of messages
+    # between graph partitions through distributed communication primitives
+
     # number of IDs each rank potentially sends to all other ranks
-    sizes: List[List[int]] = field(init=False)
+    sizes: Optional[List[List[int]]] = None
     # local indices of IDs current rank sends to all other ranks
-    scatter_indices: List[torch.Tensor] = field(init=False)
-    num_src_nodes_in_each_partition: List[int] = field(init=False)
-    num_dst_nodes_in_each_partition: List[int] = field(init=False)
-    num_indices_in_each_partition: List[int] = field(init=False)
+    scatter_indices: Optional[List[torch.Tensor]] = None
+    # number of global source nodes for each `partition_rank`
+    num_src_nodes_in_each_partition: Optional[List[int]] = None
+    # number of global destination nodes for each `partition_rank`
+    num_dst_nodes_in_each_partition: Optional[List[int]] = None
+    # number of global indices for each `partition_rank`
+    num_indices_in_each_partition: Optional[List[int]] = None
 
     def __post_init__(self):
         # after partition_size has been set in __init__
-        self.sizes = [
-            [None for _ in range(self.partition_size)]
-            for _ in range(self.partition_size)
+        if self.partition_size <= 0:
+            raise ValueError(f"Expected partition_size > 0, got {self.partition_size}")
+        if not (0 <= self.partition_rank < self.partition_size):
+            raise ValueError(
+                f"Expected 0 <= partition_rank < {self.partition_size}, got {self.partiton_rank}"
+            )
+
+        if self.sizes is None:
+            self.sizes = [
+                [None for _ in range(self.partition_size)]
+                for _ in range(self.partition_size)
+            ]
+
+        if self.scatter_indices is None:
+            self.scatter_indices = [None] * self.partition_size
+        if self.num_src_nodes_in_each_partition is None:
+            self.num_src_nodes_in_each_partition = [None] * self.partition_size
+        if self.num_dst_nodes_in_each_partition is None:
+            self.num_dst_nodes_in_each_partition = [None] * self.partition_size
+        if self.num_indices_in_each_partition is None:
+            self.num_indices_in_each_partition = [None] * self.partition_size
+
+
+def partition_graph_with_id_mapping(
+    global_offsets: torch.Tensor,
+    global_indices: torch.Tensor,
+    mapping_src_ids_to_ranks: torch.Tensor,
+    mapping_dst_ids_to_ranks: torch.Tensor,
+    partition_size: int,
+    partition_rank: int,
+    device: torch.device,
+) -> GraphPartition:
+    """
+    Utility function which partitions a global graph given as CSC structure.
+    It partitions both the global ID spaces for source nodes and destination nodes
+    based on the corresponding mappings as well as the graph structure and edge IDs.
+    For more details on partitioning in general see `GraphPartition`.
+    The function performs the partitioning based on a global graph in CPU
+    memory for each rank independently. It could be rewritten to e.g. only
+    do it one rank and exchange the partitions or to an algorithm that also
+    assumes an already distributed global graph, however, we expect global
+    graphs to fit in CPU memory. After the partitioning, we can get rid off
+    the larger one in CPU memory, only keep the local graphs on each GPU, and
+    avoid tedious gather/scatter routines for exchanging partitions in the process.
+    Note: It is up to the user to ensure that the provided mapping is valid. In particular,
+    we expect each rank to receive a non-empty partition of node IDs.
+
+    Parameters
+    ----------
+    global_offsets : torch.Tensor
+        CSC offsets, can live on the CPU
+    global_indices : torch.Tensor
+        CSC indices, can live on the CPU
+    mapping_src_ids_to_ranks: torch.Tensor
+        maps each global ID from every source node to its partition rank
+    mapping_dst_ids_to_ranks: torch.Tensor
+        maps each global ID from every destination node to its partition rank
+    partition_size : int
+        number of process groups across which graph is partitioned,
+        i.e. the number of graph partitions
+    partition_rank : int
+        rank within process group managing the distributed graph, i.e.
+        the rank determining which partition the corresponding local rank
+        will manage
+    device : torch.device
+        device connected to the passed partition rank, i.e. the device
+        on which the local graph and related buffers will live on
+    """
+
+    # initialize graph partition
+    graph_partition = GraphPartition(
+        partition_size=partition_size, partition_rank=partition_rank, device=device
+    )
+
+    # --------------------------------------------------------------
+    # initialize temporary variables used in computing the partition
+
+    # global IDs of in each partition
+    dst_nodes_in_each_partition = [None] * partition_size
+    src_nodes_in_each_partition = [None] * partition_size
+    num_dst_nodes_in_each_partition = [None] * partition_size
+    num_src_nodes_in_each_partition = [None] * partition_size
+    mapping_global_src_ids_to_local_ids = torch.zeros_like(mapping_src_ids_to_ranks)
+
+    for rank in range(partition_size):
+        dst_nodes_in_each_partition[rank] = torch.nonzero(
+            mapping_dst_ids_to_ranks == rank
+        ).view(-1)
+        src_nodes_in_each_partition[rank] = torch.nonzero(
+            mapping_src_ids_to_ranks == partition_rank
+        ).view(-1)
+        num_nodes = dst_nodes_in_each_partition[rank].numel()
+        if num_nodes == 0:
+            raise RuntimeError(
+                f"Aborting partitioning, rank {rank} has 0 destination nodes to work on."
+            )
+        num_dst_nodes_in_each_partition[rank] = num_nodes
+
+        num_nodes = src_nodes_in_each_partition[rank].numel()
+        num_src_nodes_in_each_partition[rank] = num_nodes
+        if num_nodes == 0:
+            raise RuntimeError(
+                f"Aborting partitioning, rank {rank} has 0 source nodes to work on."
+            )
+
+        # create mapping of global IDs to local IDs
+        # as each rank is expected to operate on distint global IDs, this is expected
+        # to not cause any data races
+        ids = src_nodes_in_each_partition[rank]
+        mapping_global_src_ids_to_local_ids[ids] = torch.arange(
+            ids.numel(),
+            dtype=mapping_global_src_ids_to_local_ids.dtype,
+            device=mapping_global_src_ids_to_local_ids.device,
+        )
+
+    graph_partition.num_src_nodes_in_each_partition = num_src_nodes_in_each_partition
+    graph_partition.num_dst_nodes_in_each_partition = num_dst_nodes_in_each_partition
+
+    # create local graph structures
+    for rank in range(partition_size):
+        offset_start = global_offsets[dst_nodes_in_each_partition[rank]].view(-1, 1)
+        offset_end = global_offsets[dst_nodes_in_each_partition[rank] + 1].view(-1, 1)
+        degree = offset_end - offset_start
+        local_offsets = degree.view(-1).cumsum(dim=0)
+        local_offsets = torch.cat(
+            [
+                torch.Tensor([0]).to(
+                    dtype=local_offsets.dtype, device=local_offsets.device
+                ),
+                local_offsets,
+            ]
+        )
+
+        # create boolean mask to find contigouus sections of global_indices
+        # which are taken care of current rank without using loops
+        tmp = torch.arange(
+            global_indices.numel(),
+            dtype=global_indices.dtype,
+            device=global_indices.device,
+        )
+        mask = (offset_start <= tmp) & (tmp < offset_end)
+        mask = torch.any(mask, dim=0)
+
+        partition_indices = global_indices[mask].detach().clone()
+        global_src_ids_on_rank, inverse_mapping = partition_indices.unique(
+            sorted=True, return_inverse=True
+        )
+        local_src_ids_on_rank = torch.arange(
+            0,
+            global_src_ids_on_rank.size(0),
+            dtype=local_offsets.dtype,
+            device=local_offsets.device,
+        )
+        remote_src_ids_on_rank = mapping_global_src_ids_to_local_ids[
+            global_src_ids_on_rank
         ]
-        self.scatter_indices = [None] * self.partition_size
-        self.num_src_nodes_in_each_partition = [None] * self.partition_size
-        self.num_dst_nodes_in_each_partition = [None] * self.partition_size
-        self.num_indices_in_each_partition = [None] * self.partition_size
+
+        indices = local_src_ids_on_rank[inverse_mapping]
+        graph_partition.num_indices_in_each_partition[rank] = indices.size(0)
+
+        if rank == partition_rank:
+            graph_partition.num_local_indices = indices.size(0)
+            graph_partition.num_local_dst_nodes = num_dst_nodes_in_each_partition[rank]
+            graph_partition.num_local_src_nodes = local_src_ids_on_rank.size(0)
+            graph_partition.partitioned_src_node_ids_to_global = (
+                src_nodes_in_each_partition[rank]
+            )
+            graph_partition.partitioned_dst_node_ids_to_global = (
+                dst_nodes_in_each_partition[rank]
+            )
+            graph_partition.partitioned_indices_to_global = partition_indices
+            graph_partition.local_offsets = local_offsets.to(device=device)
+            graph_partition.local_indices = indices.to(device=device)
+
+        for rank_offset in range(partition_size):
+            mask = mapping_src_ids_to_ranks[global_src_ids_on_rank] == rank_offset
+
+            if partition_rank == rank_offset:
+                # indices to send to this rank from this rank
+                graph_partition.scatter_indices[rank] = (
+                    remote_src_ids_on_rank[mask]
+                    .detach()
+                    .clone()
+                    .to(device=device, dtype=torch.int64)
+                )
+
+            graph_partition.sizes[rank_offset][rank] = mask.sum().item()
+
+    for r in range(graph_partition.partition_size):
+        err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
+        if (
+            graph_partition.sizes[graph_partition.partition_rank][r]
+            != graph_partition.scatter_indices[r].numel()
+        ):
+            raise AssertionError(err_msg)
+
+    return graph_partition
 
 
 def partition_graph_nodewise(
@@ -77,13 +308,11 @@ def partition_graph_nodewise(
     partition_size: int,
     partition_rank: int,
     device: torch.device,
-):  # pragma: no cover
-    """Utility function which partitions a global graph given as CSC structure naively
+) -> GraphPartition:
+    """
+    Utility function which partitions a global graph given as CSC structure naively
     by splitting both the IDs of source and destination nodes into chunks of equal
-    size. Each partition rank then manages its according chunk of both source and
-    destination nodes. Indices are assigned to the rank such that each rank manages
-    all the incoming edges for all the destination nodes on the corresponding
-    partition rank.
+    size. For more details on partitioning in general see `GraphPartition`.
     The function performs the partitioning based on a global graph in CPU
     memory for each rank independently. It could be rewritten to e.g. only
     do it one rank and exchange the partitions or to an algorithm that also
@@ -110,117 +339,257 @@ def partition_graph_nodewise(
         on which the local graph and related buffers will live on
     """
 
-    # initialize graph partition
-    graph_partition = GraphPartition(
-        partition_size=partition_size, partition_rank=partition_rank, device=device
+    num_global_src_nodes = global_indices.max().item() + 1
+    num_global_dst_nodes = global_offsets.size(0) - 1
+    num_dst_nodes_per_partition = (
+        num_global_dst_nodes + partition_size - 1
+    ) // partition_size
+    num_src_nodes_per_partition = (
+        num_global_src_nodes + partition_size - 1
+    ) // partition_size
+
+    mapping_dst_ids_to_ranks = (
+        torch.arange(
+            num_global_dst_nodes,
+            dtype=global_offsets.dtype,
+            device=global_offsets.device,
+        )
+        // num_dst_nodes_per_partition
+    )
+    mapping_src_ids_to_ranks = (
+        torch.arange(
+            num_global_src_nodes,
+            dtype=global_offsets.dtype,
+            device=global_offsets.device,
+        )
+        // num_src_nodes_per_partition
     )
 
-    # --------------------------------------------------------------
-    # initialize temporary variables used in computing the partition
-    # global information about node ids and edge ids
+    return partition_graph_with_id_mapping(
+        global_offsets,
+        global_indices,
+        mapping_src_ids_to_ranks,
+        mapping_dst_ids_to_ranks,
+        partition_size,
+        partition_rank,
+        device,
+    )
+
+
+def partition_graph_by_coordinate_bbox(
+    global_offsets: torch.Tensor,
+    global_indices: torch.Tensor,
+    src_coordinates: torch.Tensor,
+    dst_coordinates: torch.Tensor,
+    coordinate_separators_min: List[List[Optional[float]]],
+    coordinate_separators_max: List[List[Optional[float]]],
+    partition_size: int,
+    partition_rank: int,
+    device: torch.device,
+) -> GraphPartition:
+    """
+    Utility function which partitions a global graph given as CSC structure.
+    It partitions both the global ID spaces for source nodes and destination nodes
+    based on their corresponding coordinates. Each partition will manage points which
+    fulfill the boxconstraints specified by the specified coordinate separators. For each
+    rank one is expected to specify the minimum and maximum coordinate value for each dimension.
+    A partition the will manage all points for which ``min_val <= coord[d] < max_val`` holds. If one
+    of the constraints is passed as `None`, it is assumed to be non-binding and the partition is defined
+    by the corresponding half-space. Each rank maintains both a partition of the global source and
+    destination nodes resulting from this subspace division.
+    The function performs the partitioning based on a global graph in CPU
+    memory for each rank independently. It could be rewritten to e.g. only
+    do it one rank and exchange the partitions or to an algorithm that also
+    assumes an already distributed global graph, however, we expect global
+    graphs to fit in CPU memory. After the partitioning, we can get rid off
+    the larger one in CPU memory, only keep the local graphs on each GPU, and
+    avoid tedious gather/scatter routines for exchanging partitions in the process.
+    Note: It is up to the user to ensure that the provided partition is valid.
+    In particular, we expect each rank to receive a non-empty partition of node IDs.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from modulus.models.gnn_layers import partition_graph_by_coordinate_bbox
+    >>> # simple graph with a degree of 2 per node
+    >>> num_src_nodes = 8
+    >>> num_dst_nodes = 4
+    >>> offsets = torch.arange(num_dst_nodes + 1, dtype=torch.int64) * 2
+    >>> indices = torch.arange(num_src_nodes, dtype=torch.int64)
+    >>> # example with 2D coordinates
+    >>> # assuming partitioning a 2D problem into the 4 quadrants
+    >>> partition_size = 4
+    >>> partition_rank = 0
+    >>> coordinate_separators_min = [[0, 0], [None, 0], [None, None], [0, None]]
+    >>> coordinate_separators_max = [[None, None], [0, None], [0, 0], [None, 0]]
+    >>> device = "cuda:0"
+    >>> # dummy coordinates
+    >>> src_coordinates = torch.FloatTensor(
+    ...     [
+    ...         [-1.0, 1.0],
+    ...         [1.0, 1.0],
+    ...         [-1.0, -1.0],
+    ...         [1.0, -1.0],
+    ...         [-2.0, 2.0],
+    ...         [2.0, 2.0],
+    ...         [-2.0, -2.0],
+    ...         [2.0, -2.0],
+    ...     ]
+    ... )
+    >>> dst_coordinates = torch.FloatTensor(
+    ...     [
+    ...         [-1.0, 1.0],
+    ...         [1.0, 1.0],
+    ...         [-1.0, -1.0],
+    ...         [1.0, -1.0],
+    ...     ]
+    ... )
+    >>> # call partitioning routine
+    >>> pg = partition_graph_by_coordinate_bbox(
+    ...     offsets,
+    ...     indices,
+    ...     src_coordinates,
+    ...     dst_coordinates,
+    ...     coordinate_separators_min,
+    ...     coordinate_separators_max,
+    ...     partition_size,
+    ...     partition_rank,
+    ...     device,
+    ... )
+    >>> pg.local_offsets
+    tensor([0, 2], device='cuda:0')
+    >>> pg.local_indices
+    tensor([0, 1], device='cuda:0')
+    >>> pg.sizes
+    [[0, 1, 1, 0], [0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 0, 1]]
+    >>>
+    >>> # example with lat-long coordinates
+    >>> # dummy coordinates
+    >>> src_lat = torch.FloatTensor([-75, -60, -45, -30, 30, 45, 60, 75]).view(-1, 1)
+    >>> dst_lat = torch.FloatTensor([-60, -30, 30, 30]).view(-1, 1)
+    >>> src_long = torch.FloatTensor([-135, -135, 135, 135, -45, -45, 45, 45]).view(-1, 1)
+    >>> dst_long = torch.FloatTensor([-135, 135, -45, 45]).view(-1, 1)
+    >>> src_coordinates = torch.cat([src_lat, src_long], dim=1)
+    >>> dst_coordinates = torch.cat([dst_lat, dst_long], dim=1)
+    >>> # separate sphere at equator and 0 degree longitude into 4 parts
+    >>> coordinate_separators_min = [
+    ...     [-90, -180],
+    ...     [-90, 0],
+    ...     [0, -180],
+    ...     [0, 0],
+    ... ]
+    >>> coordinate_separators_max = [
+    ...     [0, 0],
+    ...     [0, 180],
+    ...     [90, 0],
+    ...     [90, 180],
+    ... ]
+    >>> # call partitioning routine
+    >>> partition_size = 4
+    >>> partition_rank = 0
+    >>> device = "cuda:0"
+    >>> pg = partition_graph_by_coordinate_bbox(
+    ...     offsets,
+    ...     indices,
+    ...     src_coordinates,
+    ...     dst_coordinates,
+    ...     coordinate_separators_min,
+    ...     coordinate_separators_max,
+    ...     partition_size,
+    ...     partition_rank,
+    ...     device,
+    ... )
+    >>> pg.local_offsets
+    tensor([0, 2], device='cuda:0')
+    >>> pg.local_indices
+    tensor([0, 1], device='cuda:0')
+    >>> pg.sizes
+    [[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]]
+
+    Parameters
+    ----------
+    global_offsets : torch.Tensor
+        CSC offsets, can live on the CPU
+    global_indices : torch.Tensor
+        CSC indices, can live on the CPU
+    src_coordinates : torch.Tensor
+        coordinates of each source node
+    dst_coordinates : torch.Tensor
+        coordinates of each destination node
+    partition_size : int
+        number of process groups across which graph is partitioned,
+        i.e. the number of graph partitions
+    partition_rank : int
+        rank within process group managing the distributed graph, i.e.
+        the rank determining which partition the corresponding local rank
+        will manage
+    device : torch.device
+        device connected to the passed partition rank, i.e. the device
+        on which the local graph and related buffers will live on
+    """
+
+    dim = src_coordinates.size(-1)
+    if dst_coordinates.size(-1) != dim:
+        raise ValueError()
+    if len(coordinate_separators_min) != partition_size:
+        a, b = len(coordinate_separators_min), partition_size
+        error_msg = "Expected len(coordinate_separators_min) == partition_size"
+        error_msg += f", but got {a} and {b} respectively"
+        raise ValueError(error_msg)
+    if len(coordinate_separators_max) != partition_size:
+        a, b = len(coordinate_separators_max), partition_size
+        error_msg = "Expected len(coordinate_separators_max) == partition_size"
+        error_msg += f", but got {a} and {b} respectively"
+        raise ValueError(error_msg)
+
+    for rank in range(partition_size):
+        if len(coordinate_separators_min[rank]) != dim:
+            a, b = len(coordinate_separators_min[rank]), dim
+            error_msg = f"Expected len(coordinate_separators_min[{rank}]) == dim"
+            error_msg += f", but got {a} and {b} respectively"
+        if len(coordinate_separators_max[rank]) != dim:
+            a, b = len(coordinate_separators_max[rank]), dim
+            error_msg = f"Expected len(coordinate_separators_max[{rank}]) == dim"
+            error_msg += f", but got {a} and {b} respectively"
+
     num_global_src_nodes = global_indices.max().item() + 1
     num_global_dst_nodes = global_offsets.size(0) - 1
 
-    # global IDs of destination nodes in this partition
-    dst_nodes_in_partition = None
-    # global IDs of source nodes in this partition
-    src_nodes_in_partition = None
-
-    # get distribution of destination IDs: simply divide them into equal chunks
-    dst_nodes_in_partition = (
-        num_global_dst_nodes + partition_size - 1
-    ) // partition_size
-    dst_offsets_in_partition = [
-        rank * dst_nodes_in_partition for rank in range(partition_size + 1)
-    ]
-    dst_offsets_in_partition[-1] = min(
-        num_global_dst_nodes, dst_offsets_in_partition[-1]
+    mapping_dst_ids_to_ranks = torch.zeros(
+        num_global_dst_nodes, dtype=global_offsets.dtype, device=global_offsets.device
+    )
+    mapping_src_ids_to_ranks = torch.zeros(
+        num_global_src_nodes,
+        dtype=global_offsets.dtype,
+        device=global_offsets.device,
     )
 
-    # get distribution of source IDs: again simply divide them into equal chunks
-    src_nodes_in_partition = (
-        num_global_src_nodes + partition_size - 1
-    ) // partition_size
-    src_offsets_in_partition = [
-        rank * src_nodes_in_partition for rank in range(partition_size + 1)
-    ]
-    src_offsets_in_partition[-1] = min(
-        num_global_src_nodes, src_offsets_in_partition[-1]
-    )
-
-    for rank in range(partition_size):
-        offset_start = dst_offsets_in_partition[rank]
-        offset_end = dst_offsets_in_partition[rank + 1]
-        offsets = global_offsets[offset_start : offset_end + 1].detach().clone()
-        partition_indices = global_indices[offsets[0] : offsets[-1]].detach().clone()
-        offsets -= offsets[0].item()
-
-        global_src_ids_per_rank, inverse_mapping = partition_indices.unique(
-            sorted=True, return_inverse=True
-        )
-        local_src_ids_per_rank = torch.arange(
-            0,
-            global_src_ids_per_rank.size(0),
-            dtype=offsets.dtype,
-            device=offsets.device,
-        )
-        global_src_ids_to_gpu = global_src_ids_per_rank // src_nodes_in_partition
-        remote_src_ids_per_rank = (
-            global_src_ids_per_rank - global_src_ids_to_gpu * src_nodes_in_partition
-        )
-
-        indices = local_src_ids_per_rank[inverse_mapping]
-        graph_partition.num_indices_in_each_partition[rank] = indices.size(0)
-
-        if rank == partition_rank:
-            graph_partition.num_local_indices = indices.size(0)
-            graph_partition.num_local_dst_nodes = offsets.size(0) - 1
-            graph_partition.num_dst_nodes_in_each_partition = [
-                dst_offsets_in_partition[rank + 1] - dst_offsets_in_partition[rank]
-                for rank in range(partition_size)
-            ]
-            graph_partition.num_local_src_nodes = global_src_ids_per_rank.size(0)
-            graph_partition.num_src_nodes_in_each_partition = [
-                src_offsets_in_partition[rank + 1] - src_offsets_in_partition[rank]
-                for rank in range(partition_size)
-            ]
-
-            graph_partition.partitioned_src_node_ids_to_global = range(
-                src_offsets_in_partition[rank], src_offsets_in_partition[rank + 1]
-            )
-            graph_partition.partitioned_dst_node_ids_to_global = range(
-                dst_offsets_in_partition[rank], dst_offsets_in_partition[rank + 1]
-            )
-            graph_partition.partitioned_indices_to_global = range(
-                global_offsets[offset_start], global_offsets[offset_end]
-            )
-
-            graph_partition.local_offsets = offsets.to(device=device)
-            graph_partition.local_indices = indices.to(device=device)
-
-        for rank_offset in range(partition_size):
-            mask = global_src_ids_to_gpu == rank_offset
-
-            if partition_rank == rank_offset:
-                # indices to send to this rank from this rank
-                graph_partition.scatter_indices[rank] = (
-                    remote_src_ids_per_rank[mask]
-                    .detach()
-                    .clone()
-                    .to(device=device, dtype=torch.int64)
+    def _assign_ranks(mapping, coordinates):
+        for p in range(partition_size):
+            mask = torch.ones_like(mapping).to(dtype=torch.bool)
+            for d in range(dim):
+                min_val, max_val = (
+                    coordinate_separators_min[p][d],
+                    coordinate_separators_max[p][d],
                 )
+                if min_val is not None:
+                    mask = mask & (coordinates[:, d] >= min_val)
+                if max_val is not None:
+                    mask = mask & (coordinates[:, d] < max_val)
+            mapping[mask] = p
 
-            graph_partition.sizes[rank_offset][rank] = mask.sum().item()
+    _assign_ranks(mapping_src_ids_to_ranks, src_coordinates)
+    _assign_ranks(mapping_dst_ids_to_ranks, dst_coordinates)
 
-    for r in range(graph_partition.partition_size):
-        err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
-        if (
-            graph_partition.sizes[graph_partition.partition_rank][r]
-            != graph_partition.scatter_indices[r].numel()
-        ):
-            raise AssertionError(err_msg)
-
-    return graph_partition
+    return partition_graph_with_id_mapping(
+        global_offsets,
+        global_indices,
+        mapping_src_ids_to_ranks,
+        mapping_dst_ids_to_ranks,
+        partition_size,
+        partition_rank,
+        device,
+    )
 
 
 class DistributedGraph:
@@ -232,7 +601,8 @@ class DistributedGraph:
         graph_partition_group_name: str = None,
         graph_partition: Optional[GraphPartition] = None,
     ):  # pragma: no cover
-        """Utility Class representing a distributed graph based on a given
+        """
+        Utility Class representing a distributed graph based on a given
         partitioning of a CSC graph structure. By default, a naive node-wise
         partitioning scheme is applied, see ``partition_graph_nodewise`` for
         details on that. This class then wraps necessary communication primitives

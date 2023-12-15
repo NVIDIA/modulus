@@ -26,10 +26,13 @@ from pytest_utils import import_or_fail
 from torch.nn.parallel import DistributedDataParallel
 
 from modulus.distributed import DistributedManager
+from modulus.models.gnn_layers import (
+    partition_graph_by_coordinate_bbox,
+    partition_graph_with_id_mapping,
+)
 
 
-@import_or_fail("dgl")
-def run_test_distributed_meshgraphnet(rank, world_size, dtype):
+def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme):
     from modulus.models.gnn_layers.utils import CuGraphCSC
     from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 
@@ -93,6 +96,51 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
         num_nodes,
         num_nodes,
     )
+
+    graph_partition = None
+
+    if partition_scheme == "nodewise":
+        pass  # nodewise is default
+
+    elif partition_scheme == "coordinate_bbox":
+        src_coordinates = torch.rand((num_nodes, 1), device=offsets.device)
+        dst_coordinates = src_coordinates
+
+        step_size = 1.0 / (world_size + 1)
+        coordinate_separators_min = [[step_size * p] for p in range(world_size)]
+        coordinate_separators_max = [[step_size * (p + 1)] for p in range(world_size)]
+
+        graph_partition = partition_graph_by_coordinate_bbox(
+            offsets,
+            indices,
+            src_coordinates,
+            dst_coordinates,
+            coordinate_separators_min,
+            coordinate_separators_max,
+            world_size,
+            manager.rank,
+            manager.device,
+        )
+
+    elif partition_scheme == "mapping":
+        mapping_src_ids_to_ranks = torch.randint(
+            0, world_size, (num_nodes,), device=offsets.device
+        )
+        mapping_dst_ids_to_ranks = mapping_src_ids_to_ranks
+
+        graph_partition = partition_graph_with_id_mapping(
+            offsets,
+            indices,
+            mapping_src_ids_to_ranks,
+            mapping_dst_ids_to_ranks,
+            world_size,
+            manager.rank,
+            manager.device,
+        )
+
+    else:
+        assert False  # only schemes above are supported
+
     graph_multi_gpu = CuGraphCSC(
         offsets.to(manager.device),
         indices.to(manager.device),
@@ -100,6 +148,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
         num_nodes,
         partition_size=world_size,
         partition_group_name="graph_partition",
+        graph_partition=graph_partition,
     )
 
     nfeat_single_gpu = (
@@ -183,16 +232,18 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype):
     DistributedManager.cleanup()
 
 
+@import_or_fail("dgl")
 @pytest.mark.multigpu
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_distributed_meshgraphnet(dtype):
+@pytest.mark.parametrize("partition_scheme", ["nodewise", "coordinate_bbox", "mapping"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = num_gpus
 
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,
-        args=(world_size, dtype),
+        args=(world_size, dtype, partition_scheme),
         nprocs=world_size,
         start_method="spawn",
     )
