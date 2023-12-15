@@ -248,6 +248,7 @@ class PhysicsInformedInferencer:
         # derivative backend to compute the derivatives, along with other benefits like
         # symbolic definition of PDEs and leveraging the PDEs from Modulus Sym's PDE
         # module.
+        # For more details, refer: https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.graph
         self.graph = Graph(
             self.nodes,
             [Key("x"), Key("y")],
