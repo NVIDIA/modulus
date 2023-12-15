@@ -98,34 +98,34 @@ def main(cfg: DictConfig):
     validation_dataloader = DataLoader(validation_dataset, batch_size=1, shuffle=False)
 
     model_branch = FNO(
-        in_channels=1,
-        out_channels=1,
-        decoder_layers=1,
-        decoder_layer_size=32,
-        dimension=2,
-        latent_channels=32,
-        num_fno_layers=4,
-        num_fno_modes=12,
-        padding=9,
+        in_channels=cfg.model.fno.in_channels,
+        out_channels=cfg.model.fno.out_channels,
+        decoder_layers=cfg.model.fno.decoder_layers,
+        decoder_layer_size=cfg.model.fno.decoder_layer_size,
+        dimension=cfg.model.fno.dimension,
+        latent_channels=cfg.model.fno.latent_channels,
+        num_fno_layers=cfg.model.fno.num_fno_layers,
+        num_fno_modes=cfg.model.fno.num_fno_modes,
+        padding=cfg.model.fno.padding,
     ).to("cuda")
 
     model_trunk = FullyConnected(
-        in_features=2,
-        out_features=1,
-        layer_size=128,
-        num_layers=3,
+        in_features=cfg.model.fc.in_features,
+        out_features=cfg.model.fc.out_features,
+        layer_size=cfg.model.fc.layer_size,
+        num_layers=cfg.model.fc.num_layers,
     ).to("cuda")
 
     optimizer = torch.optim.Adam(
         chain(model_branch.parameters(), model_trunk.parameters()),
         betas=(0.9, 0.999),
-        lr=0.001,
+        lr=cfg.start_lr,
         weight_decay=0.0,
     )
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99948708)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg.gamma)
 
-    for epoch in range(50):
+    for epoch in range(cfg.max_epochs):
         # wrap epoch in launch logger for console logs
         with LaunchLogger(
             "train",
@@ -151,8 +151,7 @@ def main(cfg: DictConfig):
                 # Compute physics loss
                 # note: the derivative computation can be done using Modulus-Sym
                 # utilities. However, for the purposes of this example, we show it using
-                # torch.autograd. This example will soon be updated to use the graph and
-                # autograd computation from Modulus Sym.
+                # torch.autograd.
                 grad_sol = torch.autograd.grad(
                     deepo_out.sum(),
                     [x_invar, y_invar],

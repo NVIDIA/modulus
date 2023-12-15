@@ -43,7 +43,6 @@ def dx(inpt, dx, channel, dim, order=1, padding="zeros"):
             ]
         ).to(inpt.device)
     ddx3D = torch.reshape(ddx1D, shape=[1, 1] + dim * [1] + [-1] + (1 - dim) * [1])
-    print([1, 1] + dim * [1] + [-1] + (1 - dim) * [1], dim)
     # apply convolution
     if padding == "zeros":
         var = F.pad(var, 4 * [(ddx1D.shape[0] - 1) // 2], "constant", 0)
