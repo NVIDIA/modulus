@@ -73,10 +73,10 @@ all = [
 version = {attr = "modulus.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["modulus", "modulus.*"] 
+include = ["modulus", "modulus.*"]
 
 [tool.ruff]
-# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`), 
+# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`),
 # isort (`I`), and performance 'PERF' rules.
 select = ["E", "F", "S", "I", "PERF"]
 fixable = ["I"]
@@ -85,7 +85,7 @@ fixable = ["I"]
 # and `S311` (random number generators)
 ignore = ["E501", "S311"]
 
-# Exclude the examples and experimental folders 
+# Exclude the examples and experimental folders
 exclude = ["examples", "modulus/experimental"]
 
 [tool.ruff.per-file-ignores]
@@ -96,3 +96,13 @@ exclude = ["examples", "modulus/experimental"]
 # Ignore `S101` (assertions) in all `test` files.
 "test/*.py" = ["S101"]
 
+[project.entry-points."modulus.models"]
+AFNO = "modulus.models.afno:AFNO"
+DLWP = "modulus.models.dlwp:DLWP"
+FNO = "modulus.models.fno:FNO"
+GraphCastNet = "modulus.models.graphcast:GraphCastNet"
+MeshGraphNet = "modulus.models.meshgraphnet:MeshGraphNet"
+FullyConnected = "modulus.models.mlp:FullyConnected"
+Pix2Pix = "modulus.models.pix2pix:Pix2Pix"
+One2ManyRNN = "modulus.models.rnn:One2ManyRNN"
+SRResNet = "modulus.models.srrn:SRResNet"
