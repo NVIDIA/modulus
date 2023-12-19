@@ -17,12 +17,15 @@ Preconditioning schemes used in the paper"Elucidating the Design Space of
 Diffusion-Based Generative Models".
 """
 
+import importlib
 from typing import List, Union
 
 import numpy as np
 import torch
 
 from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
+
+network_module = importlib.import_module("modulus.models.diffusion")
 
 
 class VPPrecond(torch.nn.Module):
@@ -83,7 +86,8 @@ class VPPrecond(torch.nn.Module):
         self.epsilon_t = epsilon_t
         self.sigma_min = float(self.sigma(epsilon_t))
         self.sigma_max = float(self.sigma(1))
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_channels,
             out_channels=img_channels,
@@ -235,7 +239,8 @@ class VEPrecond(torch.nn.Module):
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_channels,
             out_channels=img_channels,
@@ -347,7 +352,8 @@ class iDDPMPrecond(torch.nn.Module):
         self.C_1 = C_1
         self.C_2 = C_2
         self.M = M
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_channels,
             out_channels=img_channels * 2,
@@ -503,7 +509,8 @@ class EDMPrecond(torch.nn.Module):
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
 
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_channels,
             out_channels=img_channels,
@@ -609,6 +616,7 @@ class EDMPrecondSR(torch.nn.Module):
     def __init__(
         self,
         img_resolution,
+        img_channels,
         img_in_channels,
         img_out_channels,
         label_dim=0,
@@ -621,17 +629,17 @@ class EDMPrecondSR(torch.nn.Module):
     ):
         super().__init__()
         self.img_resolution = img_resolution
-
+        self.img_channels = img_channels
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
-
         self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
 
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
