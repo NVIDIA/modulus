@@ -13,8 +13,6 @@
 # limitations under the License.
 
 
-import pytest
-
 from modulus.utils.generative import format_time, format_time_brief
 
 

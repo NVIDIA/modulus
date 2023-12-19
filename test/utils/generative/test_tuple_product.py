@@ -13,8 +13,6 @@
 # limitations under the License.
 
 
-import pytest
-
 from modulus.utils.generative import tuple_product
 
 
