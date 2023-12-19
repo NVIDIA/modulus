@@ -12,4 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fno import FNO
+import datetime
+
+import cftime
+import yaml
+
+from modulus.utils.generative import convert_datetime_to_cftime
+
+# ruff: noqa: S101  # TODo remove exception
+
+
+def test_datetime_yaml():
+    """test parse time"""
+    dt = datetime.datetime(2011, 1, 1)
+    s = dt.isoformat()
+    loaded = yaml.safe_load(s)
+    assert dt == loaded
+
+
+def test_convert_to_cftime():
+    """test parse time"""
+    dt = datetime.datetime(2011, 1, 1)
+    expected = cftime.DatetimeGregorian(2011, 1, 1)
+    assert convert_datetime_to_cftime(dt) == expected

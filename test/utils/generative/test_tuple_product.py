@@ -12,4 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fno import FNO
+
+from modulus.utils.generative import tuple_product
+
+
+# Test tuple_product function
+def test_tuple_product():
+    # Test with an empty tuple
+    assert tuple_product(()) == 1
+
+    # Test with a tuple containing one element
+    assert tuple_product((5,)) == 5
+
+    # Test with a tuple containing multiple elements
+    assert tuple_product((2, 3, 4)) == 24
+    assert tuple_product((1, 2, 3, 4, 5)) == 120
+    assert tuple_product((10, 20, 30, 40)) == 240000

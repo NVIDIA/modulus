@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from importlib.metadata import entry_points
-
+import pkg_resources
 import pytest
 from pytest_utils import _import_or_fail
 
@@ -29,6 +28,7 @@ from pytest_utils import _import_or_fail
         "FullyConnected",
         "Pix2Pix",
         "One2ManyRNN",
+        #'SphericalFourierNeuralOperatorNet',
         "SRResNet",
     ],
 )
@@ -41,7 +41,7 @@ def test_model_entry_points(model_name, pytestconfig):
     # Get all the models exposed by the package
     models = {
         entry_point.name: entry_point
-        for entry_point in entry_points(group="modulus.models")
+        for entry_point in pkg_resources.iter_entry_points("modulus.models")
     }
 
     # Assert that the model is among them
