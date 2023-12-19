@@ -11,24 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ruff: noqa
-from .utils import weight_init
-from .layers import (
-    AttentionOp,
-    Conv2d,
-    FourierEmbedding,
-    GroupNorm,
-    Linear,
-    PositionalEmbedding,
-    UNetBlock,
-)
-from .song_unet import SongUNet
-from .dhariwal_unet import DhariwalUNet
-from .unet import UNet
-from .preconditioning import (
-    EDMPrecond,
-    EDMPrecondSR,
-    VEPrecond,
-    VPPrecond,
-    iDDPMPrecond,
-)
+
+import datetime
+
+import cftime
+import yaml
+
+from modulus.utils.generative import convert_datetime_to_cftime
+
+# ruff: noqa: S101  # TODo remove exception
+
+
+def test_datetime_yaml():
+    """test parse time"""
+    dt = datetime.datetime(2011, 1, 1)
+    s = dt.isoformat()
+    loaded = yaml.safe_load(s)
+    assert dt == loaded
+
+
+def test_convert_to_cftime():
+    """test parse time"""
+    dt = datetime.datetime(2011, 1, 1)
+    expected = cftime.DatetimeGregorian(2011, 1, 1)
+    assert convert_datetime_to_cftime(dt) == expected

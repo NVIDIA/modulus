@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 from dataclasses import dataclass
 
 import torch
 
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+
+network_module = importlib.import_module("modulus.models.diffusion")
 
 
 @dataclass
@@ -38,7 +41,7 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class UNet(Module):
+class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
     U-Net architecture.
 
@@ -102,7 +105,8 @@ class UNet(Module):
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,

@@ -11,24 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ruff: noqa
-from .utils import weight_init
-from .layers import (
-    AttentionOp,
-    Conv2d,
-    FourierEmbedding,
-    GroupNorm,
-    Linear,
-    PositionalEmbedding,
-    UNetBlock,
-)
-from .song_unet import SongUNet
-from .dhariwal_unet import DhariwalUNet
-from .unet import UNet
-from .preconditioning import (
-    EDMPrecond,
-    EDMPrecondSR,
-    VEPrecond,
-    VPPrecond,
-    iDDPMPrecond,
-)
+
+
+from modulus.utils.generative import tuple_product
+
+
+# Test tuple_product function
+def test_tuple_product():
+    # Test with an empty tuple
+    assert tuple_product(()) == 1
+
+    # Test with a tuple containing one element
+    assert tuple_product((5,)) == 5
+
+    # Test with a tuple containing multiple elements
+    assert tuple_product((2, 3, 4)) == 24
+    assert tuple_product((1, 2, 3, 4, 5)) == 120
+    assert tuple_product((10, 20, 30, 40)) == 240000
