@@ -18,8 +18,9 @@ Diffusion-Based Generative Models".
 """
 
 import importlib
-from typing import List, Union
 from dataclasses import dataclass
+from typing import List, Union
+
 import numpy as np
 import torch
 
@@ -28,6 +29,7 @@ from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 
 network_module = importlib.import_module("modulus.models.diffusion")
+
 
 @dataclass
 class VPPrecondMetaData(ModelMetaData):

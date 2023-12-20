@@ -330,8 +330,8 @@ class Module(torch.nn.Module):
             # Load model arguments and instantiate the model
             with open(local_path.joinpath("args.json"), "r") as f:
                 args = json.load(f)
-                model_kwargs = args['__args__'].pop('model_kwargs')
-                args['__args__'].update(**model_kwargs)
+                model_kwargs = args["__args__"].pop("model_kwargs")
+                args["__args__"].update(**model_kwargs)
             model = cls.instantiate(args)
 
             # Load the model weights

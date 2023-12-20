@@ -37,8 +37,10 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import (
     ablation_sampler,
     parse_int_list,
-    StackedRandomGenerator)
+    StackedRandomGenerator,
+)
 from module import Module  # TODO import from Core once the kwargs issue is fixed
+
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
 def main(cfg: DictConfig) -> None:
