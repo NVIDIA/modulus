@@ -37,10 +37,8 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import (
     ablation_sampler,
     parse_int_list,
-    StackedRandomGenerator,
-    construct_class_by_name,
-)
-
+    StackedRandomGenerator)
+from module import Module  # TODO import from Core once the kwargs issue is fixed
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
 def main(cfg: DictConfig) -> None:
@@ -155,20 +153,12 @@ def main(cfg: DictConfig) -> None:
 
     # Load diffusion network
     logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
-    net_res_state_dict = torch.load(res_ckpt_filename)
-    with open("checkpoints/args_diffusion.json", "r") as json_file:
-        args_diffusion = json.load(json_file)
-    net_res = construct_class_by_name(**args_diffusion)
-    net_res.load_state_dict(net_res_state_dict, strict=False)
+    net_res = Module.from_checkpoint(res_ckpt_filename)
 
     # load regression network
-    logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
-    net_reg_state_dict = torch.load(reg_ckpt_filename) if res_edm else None
     if res_edm:
-        with open("checkpoints/args_regression.json", "r") as json_file:
-            args_regression = json.load(json_file)
-        net_reg = construct_class_by_name(**args_regression)
-        net_reg.load_state_dict(net_reg_state_dict, strict=False)
+        logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
+        net_reg = Module.from_checkpoint(reg_ckpt_filename)
     else:
         net_reg = None
 

@@ -18,9 +18,9 @@ hydra:
 
 
 ## Main options
-res_ckpt_filename: "./checkpoints/diffusion.pt"   
+res_ckpt_filename: "./checkpoints/diffusion.mdlus"   
   # Checkpoint filename for the generative model  
-reg_ckpt_filename: "./checkpoints/regression.pt"
+reg_ckpt_filename: "./checkpoints/regression.mdlus"
   # Checkpoint filename for the mean predictor model
 image_outdir: "image_outdir"
   # Where to save the output images
