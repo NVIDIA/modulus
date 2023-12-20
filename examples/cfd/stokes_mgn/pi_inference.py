@@ -158,6 +158,21 @@ class DNN(torch.nn.Module):
 class MdlsSymDNN(Arch):
     """
     Wrapper model to convert PyTorch model to Modulus-Sym model.
+
+    Modulus Sym relies on the inputs/outputs of the model being dictionary of tensors.
+    This wrapper converts the input dictionary of tensors to a single tensor by
+    concatenating them along appropriate dimension before passing them as an input to
+    the pytorch model. During the output, the process is reversed,
+    the output tensor from pytorch model is split across appropriate dimensions and then
+    converted to a dictionary with appropriate keys to produce the final output.
+
+    The model arguments thus become a list of `Key` objects that informs the model
+    about the input and output dimensionality of the pytorch model.
+
+    For more details on Modulus Sym models, refer:
+    https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-custom-models-in-modulus
+    For more details on Key class, refer:
+    https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.key
     """
 
     def __init__(
@@ -175,6 +190,8 @@ class MdlsSymDNN(Arch):
         self.mdls_model = DNN(layers, fourier_features)
 
     def forward(self, dict_tensor: Dict[str, torch.Tensor]):
+        # Use concat_input method of the Arch class to convert dict of tensors to
+        # a single multi-dimensional tensor. Ref: https://github.com/NVIDIA/modulus-sym/blob/main/modulus/sym/models/arch.py#L251
         x = self.concat_input(
             dict_tensor,
             self.input_key_dict,
@@ -182,11 +199,16 @@ class MdlsSymDNN(Arch):
             dim=-1,
         )
         out = self.mdls_model(x)
+        # Use split_output method of the Arch class to convert a single muli-dimensional
+        # tensor to a dict of tensors. Ref: https://github.com/NVIDIA/modulus-sym/blob/main/modulus/sym/models/arch.py#L381
         return self.split_output(out, self.output_key_dict, dim=1)
 
 
 class PhysicsInformedInferencer:
-    """Class to define all the inference utils."""
+    """
+    Class to define all the inference utils. This also includes the utils for
+    physics informed fine-tuning.
+    """
 
     def __init__(
         self,
@@ -331,6 +353,7 @@ class PhysicsInformedInferencer:
         )
 
     def train(self):
+        """PINN based fine-tuning"""
         (
             loss_u,
             loss_v,
@@ -343,6 +366,10 @@ class PhysicsInformedInferencer:
             loss_mom_v,
             loss_cont,
         ) = self.loss()
+
+        # Add custom weights to the different losses. The weights are chosen after
+        # investigating the relative magnitudes of individual losses and their
+        # convergence behavior.
         loss = (
             1 * loss_u
             + 1 * loss_v
@@ -373,6 +400,7 @@ class PhysicsInformedInferencer:
         )
 
     def validation(self):
+        """Validation during the PINN fine-tuning step"""
         self.model.eval()
         with torch.no_grad():
             x_int, y_int = self.coords[:, 0:1], self.coords[:, 1:2]
@@ -420,6 +448,8 @@ if __name__ == "__main__":
     # Get dataset
     path = os.path.join(C.results_dir, C.graph_path)
 
+    # get_dataset() function here provides the true values (ref_*) and the gnn
+    # predictions (gnn_*) along with other data required for the PINN training.
     (
         ref_u,
         ref_v,
@@ -452,7 +482,7 @@ if __name__ == "__main__":
         ref_p,
     )
 
-    logger.info("Physics-informed inference started...")
+    logger.info("Inference (with physics-informed training for fine-tuning) started...")
     for iters in range(C.pi_iters):
         # Start timing the iteration
         start_iter_time = time.time()
@@ -498,9 +528,10 @@ if __name__ == "__main__":
             )
             logger.info("-" * 50)  # Add a separator for clarity
 
-    logger.info("Training completed!")
+    logger.info("Physics-informed fine-tuning training completed!")
 
     # Save results
+    # Final inference call after fine-tuning predictions using the PINN model
     with torch.no_grad():
         x_int_inf, y_int_inf = (
             pi_inferencer.coords[:, 0:1],
@@ -523,3 +554,5 @@ if __name__ == "__main__":
         polydata["filtered_p"] = pred_p_inf
         print(path)
         polydata.save(path)
+
+    logger.info("Inference completed!")

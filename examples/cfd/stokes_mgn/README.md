@@ -19,14 +19,14 @@ $$\begin{aligned}
 where $\mathbf{u} = (u, v)$ defines the velocity and $p$ the pressure, and $\nu$ is the
 kinematic viscosity.
 The underlying geometry is a pipe without a polygon. On the inlet
-$\Gamma_3=0 \times[0,0.41]$, a parabolic inflow profile is prescribed,
+$\Gamma_3=0 \times[0,0.4]$, a parabolic inflow profile is prescribed,
 
 $$\begin{aligned}
     \mathbf{u}(0, y)= \mathbf{u}_{\mathrm{in}} =
-    \left(\frac{4 U y(0.41-y)}{0.41^2}, 0\right)
+    \left(\frac{4 U y(0.4-y)}{0.4^2}, 0\right)
 \end{aligned}$$
 
-with a maximum velocity $U=0.3$. On the outlet $\Gamma_4=2.2 \times[0,0.41]$, we
+with a maximum velocity $U=0.3$. On the outlet $\Gamma_4=2.2 \times[0,0.4]$, we
 define the outflow condition
 
 $$\begin{aligned}
@@ -39,7 +39,9 @@ Our goal is to train a MeshGraphNet to learn the map from the polygon geometry t
 velocity and pressure field.
 However, sometimes data-driven models may not be able to yield reasonable predictive
 accuracy due to network capacity or limited dataset. We can fine-tune our results
-using PINNs when the PDE is available.
+using PINNs when the PDE is available. The fine-tuning during inference is much faster
+than training the PINN model from the scratch as the model has a better initialization
+from the data-driven training.
 
 ## Dataset
 
@@ -142,6 +144,9 @@ To further fine-tune the model using physics-informed learning, run
 ```bash
 python pi_inference.py
 ```
+
+Note: The fine-tuning step involves training of a PINN model to first refine the
+predictions of the MeshGraphNet model followed by an inference of the PINN model.
 
 This will save the predictions for the test dataset in `.vtp` format in the `results`
 directory. Use Paraview to open and explore the results.
