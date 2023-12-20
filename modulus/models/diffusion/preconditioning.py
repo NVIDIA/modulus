@@ -33,6 +33,8 @@ network_module = importlib.import_module("modulus.models.diffusion")
 
 @dataclass
 class VPPrecondMetaData(ModelMetaData):
+    """VPPrecond meta data"""
+
     name: str = "VPPrecond"
     # Optimization
     jit: bool = False
@@ -214,6 +216,8 @@ class VPPrecond(Module):
 
 @dataclass
 class VEPrecondMetaData(ModelMetaData):
+    """VEPrecond meta data"""
+
     name: str = "VEPrecond"
     # Optimization
     jit: bool = False
@@ -341,6 +345,8 @@ class VEPrecond(Module):
 
 @dataclass
 class iDDPMPrecondMetaData(ModelMetaData):
+    """iDDPMPrecond meta data"""
+
     name: str = "iDDPMPrecond"
     # Optimization
     jit: bool = False
@@ -513,6 +519,8 @@ class iDDPMPrecond(Module):
 
 @dataclass
 class EDMPrecondMetaData(ModelMetaData):
+    """EDMPrecond meta data"""
+
     name: str = "EDMPrecond"
     # Optimization
     jit: bool = False
@@ -648,6 +656,8 @@ class EDMPrecond(Module):
 
 @dataclass
 class EDMPrecondSRMetaData(ModelMetaData):
+    """EDMPrecondSR meta data"""
+
     name: str = "EDMPrecondSR"
     # Optimization
     jit: bool = False
