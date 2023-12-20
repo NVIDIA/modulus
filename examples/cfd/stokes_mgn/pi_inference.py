@@ -231,9 +231,9 @@ class PhysicsInformedInferencer:
         self.device = device
         self.nu = nu
 
-        self.ref_u = ref_u
-        self.ref_v = ref_v
-        self.ref_p = ref_p
+        self.ref_u = torch.tensor(ref_u).float().to(self.device)
+        self.ref_v = torch.tensor(ref_v).float().to(self.device)
+        self.ref_p = torch.tensor(ref_p).float().to(self.device)
 
         self.gnn_u = torch.tensor(gnn_u).float().to(self.device)
         self.gnn_v = torch.tensor(gnn_v).float().to(self.device)
@@ -410,17 +410,20 @@ class PhysicsInformedInferencer:
                 results_int["v"],
                 results_int["p"],
             )
-            pred_u = pred_u.detach().cpu().numpy()
-            pred_v = pred_v.detach().cpu().numpy()
-            pred_p = pred_p.detach().cpu().numpy()
-            error_u = np.linalg.norm(self.ref_u - pred_u) / np.linalg.norm(self.ref_u)
-            error_v = np.linalg.norm(self.ref_v - pred_v) / np.linalg.norm(self.ref_v)
-            error_p = np.linalg.norm(self.ref_p - pred_p) / np.linalg.norm(self.ref_p)
+            error_u = torch.linalg.norm(self.ref_u - pred_u) / torch.linalg.norm(
+                self.ref_u
+            )
+            error_v = torch.linalg.norm(self.ref_v - pred_v) / torch.linalg.norm(
+                self.ref_v
+            )
+            error_p = torch.linalg.norm(self.ref_p - pred_p) / torch.linalg.norm(
+                self.ref_p
+            )
             self.wb.log(
                 {
-                    "test_u_error (%)": error_u,
-                    "test_v_error (%)": error_v,
-                    "test_p_error (%)": error_p,
+                    "test_u_error (%)": error_u.detach().cpu().numpy(),
+                    "test_v_error (%)": error_v.detach().cpu().numpy(),
+                    "test_p_error (%)": error_p.detach().cpu().numpy(),
                 }
             )
             return error_u, error_v, error_p
