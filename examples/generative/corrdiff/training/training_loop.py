@@ -172,10 +172,13 @@ def training_loop(
         img_out_channels=img_out_channels,
         label_dim=0,
     )  # weather
-    net = construct_class_by_name(
-        **network_kwargs, **interface_kwargs
-    )  # subclass of torch.nn.Module
+    merged_args = {**network_kwargs, **interface_kwargs}
+    net = construct_class_by_name(merged_args)  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
+
+    # save network args
+    with open("network_args.json", "w") as json_file:
+        json.dump(merged_args, json_file)
 
     # Setup optimizer.
     logger0.info("Setting up optimizer...")

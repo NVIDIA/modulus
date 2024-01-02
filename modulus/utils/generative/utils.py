@@ -17,6 +17,7 @@
 
 import contextlib
 import ctypes
+import datetime
 import fnmatch
 import glob
 import hashlib
@@ -37,6 +38,7 @@ import uuid
 import warnings
 from typing import Any, List, Tuple, Union
 
+import cftime
 import numpy as np
 import requests
 import torch
@@ -145,6 +147,11 @@ def make_cache_dir_path(*paths: str) -> str:  # pragma: no cover
 
 # Small util functions
 # -------------------------------------------------------------------------------------
+def convert_datetime_to_cftime(
+    time: datetime.datetime, cls=cftime.DatetimeGregorian
+) -> cftime.DatetimeGregorian:
+    """Convert a Python datetime object to a cftime DatetimeGregorian object."""
+    return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
 
 
 def format_time(seconds: Union[int, float]) -> str:  # pragma: no cover

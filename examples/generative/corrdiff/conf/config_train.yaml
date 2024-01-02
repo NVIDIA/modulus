@@ -34,9 +34,9 @@ batch: 256
   # Total batch size
 batch_gpu: 2
   # Limit batch size per GPU
-cbase: 1  # TODO check
+cbase: null  # TODO check
   # Channel multiplier
-cres: null  # TODO check
+cres: 1  # TODO check
   # Channels per resolution
 lr: 0.0002
   # Learning rate

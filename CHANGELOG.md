@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Brain anomaly detection example.
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved stability.
 - Molecular Dynamics example.
+- Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 
 ### Changed
 
