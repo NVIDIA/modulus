@@ -250,7 +250,7 @@ class PhysicsInformedInferencer:
         self.model = DNN(
             layers=[2, 128, 128, 128, 128, 3],
             fourier_features=64,
-        ).to("cuda")
+        ).to(self.device)
 
         self.model = MdlsSymDNN(
             input_keys=[Key("x"), Key("y")],
@@ -293,7 +293,11 @@ class PhysicsInformedInferencer:
             func_arch=False,
         ).to(self.device)
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=0.001,
+            fused=True if torch.cuda.is_available() else False,
+        )
 
     def parabolic_inflow(self, y, U_max=0.3):
         u = 4 * U_max * y * (0.4 - y) / (0.4**2)
