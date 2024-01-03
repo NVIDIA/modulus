@@ -56,10 +56,10 @@ class LatentDataset(DGLDataset):
 			listCatALL.append(re/re.max())
 			listCatALL.append(nu/nu.max())
 		if self.split == "train":
-			#index = [i for i in range(50) if i % 2 == 0]
-			index = [0]
+			index = [i for i in range(101) if i % 2 == 0]
+			#index = [0]
 		else:
-			index = [i for i in range(50) if i % 2 == 1]
+			index = [i for i in range(101) if i % 2 == 1]
 		index_interest = [i for i in range(101) if i % 2 == 0]
 
 
@@ -123,8 +123,8 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
 
         #select training and testing set
 		if self.split == "train":
-			#self.sequence_ids = [i for i in range(101) if i%2 == 0]
-			self.sequence_ids = [0]
+			self.sequence_ids = [i for i in range(101) if i%2 == 0]
+			#self.sequence_ids = [0]
 		if self.split == "test":
 			self.sequence_ids = [i for i in range(101) if i%2 == 1]
 
