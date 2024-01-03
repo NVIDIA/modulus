@@ -93,7 +93,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         model_type="DhariwalUNet",
         **model_kwargs,
     ):
-        super().__init__()
+        super().__init__(meta=MetaData)
         self.img_resolution = img_resolution
         self.img_channels = img_channels
 
