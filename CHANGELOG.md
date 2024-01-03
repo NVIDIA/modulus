@@ -38,6 +38,7 @@ stability.
 
 - Removed experimental SFNO dependencies
 - Added CorrDiff dependencies (cftime, einops, pyspng)
+- Made tqdm a required dependency
 
 ## [0.4.0] - 2023-11-20
 
