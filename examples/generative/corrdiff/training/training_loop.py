@@ -121,7 +121,7 @@ def training_loop(
     # Load dataset: weather
     logger0.info("Loading dataset...")
     dataset_obj = get_zarr_dataset(
-        dataset=train_data_path,
+        path=train_data_path,
         in_channels=in_channels,
         out_channels=out_channels,
         img_shape_x=img_shape_x,
@@ -173,7 +173,7 @@ def training_loop(
         label_dim=0,
     )  # weather
     merged_args = {**network_kwargs, **interface_kwargs}
-    net = construct_class_by_name(merged_args)  # subclass of torch.nn.Module
+    net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
 
     # save network args
@@ -337,27 +337,30 @@ def training_loop(
 
         ckpt_dir = run_dir
 
-        logger0.info(
-            f"AutoResume.termination_requested(): {AutoResume.termination_requested()}"
-        )
-        logger0.info(f"AutoResume: {AutoResume}")
+        if AutoResume:
+            logger0.info(
+                f"AutoResume.termination_requested(): {AutoResume.termination_requested()}"
+            )
+            logger0.info(f"AutoResume: {AutoResume}")
 
-        if AutoResume.termination_requested():
-            AutoResume.request_resume()
-            logger0.info("Training terminated. Returning")
-            done = True
-            with open(os.path.join(ckpt_dir, "resume.txt"), "w") as f:
-                f.write(
-                    os.path.join(ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt")
-                )
-                logger0.info(
-                    os.path.join(ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt")
-                )
-                f.close()
-                # return 0
+            if AutoResume.termination_requested():
+                AutoResume.request_resume()
+                logger0.info("Training terminated. Returning")
+                done = True
+                with open(os.path.join(ckpt_dir, "resume.txt"), "w") as f:
+                    f.write(
+                        os.path.join(
+                            ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt"
+                        )
+                    )
+                    logger0.info(
+                        os.path.join(
+                            ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt"
+                        )
+                    )
+                    f.close()
 
         # Check for abort.
-        logger0.info(f"dist.should_stop(): {dist.should_stop()}")
         logger0.info(f"done: {done}")
 
         # Save network snapshot.
@@ -371,7 +374,8 @@ def training_loop(
             for key, value in data.items():
                 if isinstance(value, torch.nn.Module):
                     value = copy.deepcopy(value).eval().requires_grad_(False)
-                    check_ddp_consistency(value)
+                    if dist.world_size > 1:
+                        check_ddp_consistency(value)
                     data[key] = value.cpu()
                 del value  # conserve memory
             if dist.rank == 0:

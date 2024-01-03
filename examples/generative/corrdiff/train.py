@@ -55,7 +55,7 @@ def main(cfg: DictConfig) -> None:
     batch = getattr(cfg, "batch", 256)
     batch_gpu = getattr(cfg, "batch_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
-    cres = parse_int_list(getattr(cfg, "cres", None))
+    # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
     ema = getattr(cfg, "ema", 0.5)
     dropout = getattr(cfg, "dropout", 0.13)
@@ -123,10 +123,7 @@ def main(cfg: DictConfig) -> None:
     # Network architecture.
     valid_archs = {
         "ddpmpp-cwb-v2",
-        "ddpmpp-cwb-v1",
         "ddpmpp-cwb-v0-regression",
-        "ddpmpp-cwb-v0",
-        "ddpmpp-cifar",
         "ncsnpp",
         "adm",
     }
@@ -150,21 +147,6 @@ def main(cfg: DictConfig) -> None:
             attn_resolutions=[14],
         )  # era5-cwb, larger run, 448x448
 
-    elif arch == "ddpmpp-cwb-v1":
-        c.network_kwargs.update(
-            model_type="SongUNet",
-            embedding_type="positional",
-            encoder_type="standard",
-            decoder_type="standard",
-        )  # , attn_resolutions=[28]
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 4, 4],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(
             model_type="SongUNet",
@@ -179,35 +161,6 @@ def main(cfg: DictConfig) -> None:
             channel_mult=[1, 2, 2, 2, 2],
             attn_resolutions=[28],
         )  # era5-cwb, 448x448
-
-    elif arch == "ddpmpp-cwb-v0":
-        c.network_kwargs.update(
-            model_type="SongUNet",
-            embedding_type="positional",
-            encoder_type="standard",
-            decoder_type="standard",
-        )  # , attn_resolutions=[28]
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
-    elif arch == "ddpmpp-cifar":
-        c.network_kwargs.update(
-            model_type="SongUNet",
-            embedding_type="positional",
-            encoder_type="standard",
-            decoder_type="standard",
-        )  # , attn_resolutions=[28]
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[2, 2, 2],
-        )  # cifar-10, 32x32
 
     elif arch == "ncsnpp":
         c.network_kwargs.update(
@@ -242,8 +195,8 @@ def main(cfg: DictConfig) -> None:
     # Network options.
     if cbase is not None:
         c.network_kwargs.model_channels = cbase
-    if cres is not None:
-        c.network_kwargs.channel_mult = cres
+    # if cres is not None:
+    #    c.network_kwargs.channel_mult = cres
     if augment > 0:
         raise NotImplementedError("Augmentation is not implemented")
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
