@@ -123,8 +123,8 @@ class DNN(torch.nn.Module):
 
         # Fourier features
         self.fourier_features = fourier_features
-        self.B = 10 * torch.randn((layers[0], fourier_features)).to(
-            "cuda"
+        self.register_buffer(
+            "B", 10 * torch.randn((layers[0], fourier_features))
         )  # Random matrix
 
         # set up layer order dict
