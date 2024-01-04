@@ -21,6 +21,7 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 import pytest
 import torch
 from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
+from pytest_utils import import_or_fail
 from torch.nn.parallel import DistributedDataParallel
 
 from modulus.distributed import DistributedManager
@@ -171,11 +172,12 @@ def run_test_distributed_graphcast(
     DistributedManager.cleanup()
 
 
+@import_or_fail("dgl")
 @pytest.mark.multigpu
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("do_concat_trick", [False, True])
 @pytest.mark.parametrize("do_checkpointing", [False, True])
-def test_distributed_graphcast(dtype, do_concat_trick, do_checkpointing):
+def test_distributed_graphcast(dtype, do_concat_trick, do_checkpointing, pytestconfig):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = min(
