@@ -16,11 +16,11 @@ import numpy as np
 import pytest
 import torch
 
-from modulus.
 from modulus.metrics.climate.loss import MSE, SSIM
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_SSIM(device):
+    """Test SSIM loss in loss"""
     ssim_loss = SSIM()
     
     shape = [1, 1, 720, 720]
