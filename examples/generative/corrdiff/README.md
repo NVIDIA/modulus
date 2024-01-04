@@ -16,6 +16,7 @@ reminiscent of learnt physics: the collocation of intense rainfall and sharp gra
 in fronts and extreme winds and rainfall bands near the eyewall of typhoons.
 Downscaling global forecasts successfully retains many of these benefits, foreshadowing
 the potential of end-to-end, global-to- km-scales machine learning weather predictions.
+
 Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more details.
 
 <p align="center">
@@ -28,6 +29,13 @@ Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more deta
 The input (conditioning) dataset is taken from
 [ERA5 reanalysis](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5),
 a global dataset at spatial resolution of about 25km and a temporal resolution of 1h.
+The target dataset used in this
+study is a subset of the proprietary RWRF model data (Radar Data
+Assimilation with WRFDA 1). The RWRF model is one of the operational regional Numerical
+Weather Prediction (NWP) models developed by CWA, which focuses on radar Data
+Assimilation (DA) in the vicinity of Taiwan. The WRF - CWA system uses a nested 2km
+domain in a 10km that is driven by a global model (GFS) as boundary conditions.
+
 To facilitate training, we interpolate the input data onto the curvirectangular grid of
 CWA with bilinear interpolation (with a rate of 4x), which results in 36 × 36 pixels
 over the region of Taiwan. Each sample in the input dataset consists of 20 channels. 
@@ -35,12 +43,7 @@ This includes four pressure levels (500 hPa, 700 hPa,
 850 hPa, and 925 hPa) with four corresponding variables: temperature, eastward and
 northward components horizontal wind vector, and Geopotential Height. Additionally,
 the dataset includes single level variables such as 2 meter Temperature,
-10 meter wind vector, and the total column water vapor. The target dataset used in this
-study is a subset of the proprietary RWRF model data (Radar Data
-Assimilation with WRFDA 1). The RWRF model is one of the operational regional Numerical
-Weather Prediction (NWP) models developed by CWA, which focuses on radar Data
-Assimilation (DA) in the vicinity of Taiwan. The WRF - CWA system uses a nested 2km
-domain in a 10km that is driven by a global model (GFS) as boundary conditions.
+10 meter wind vector, and the total column water vapor. 
 
 The target dataset covers a duration of 52 months, specifically from January 2018 to
 April 2022. It has a temporal frequency of one hour and a spatial resolution of 2km.
@@ -65,7 +68,7 @@ and can be downloaded from TBD.
 
 ## Model overview and architecture
 
-The CorrDiff method has two step learning approach. To ensure compatibility and
+The CorrDiff model has a two-step learning approach. To ensure compatibility and
 consistency, we employ the same UNet architecture used in
 [EDM (Elucidated Diffusion Models)](https://github.com/NVlabs/edm)
 for both the regression and diffusion networks. See
@@ -78,26 +81,26 @@ embedding. However, in the regression network, time embedding is disabled.
 No data augmentation techniques are employed during
 training. Overall, the UNet architecture comprises 80 million parameters.
 Additionally, we introduce 4 channels for sinusoidal positional embedding.
-During the training phase, we use the Adam optimizer with a learning rate of 2 × 10−4,
-β1 = 0.9, and β2 = 0.99. Exponential moving averages (EMA) with a rate of η = 0.5 are
-applied, and dropout with a rate of 0.13 is utilized. The regression network solely
+During the training phase, we use the Adam optimizer with a learning rate of
+$2 \times 10−4$, $\beta_1 = 0.9$, and $\beta_2 = 0.99$.
+Exponential moving averages (EMA) with a rate of $\nu = 0.5$ are
+applied, and dropout with a rate of $0.13$ is utilized. The regression network solely
 receives the input conditioning channels. On the other hand,
 the diffusion training incorporates the 20 input conditioning channels from the
 coarse-resolution ERA5 data, which are concatenated with 4 noise channels to generate
 the output for each denoiser. For diffusion training,
 we adopt the Elucidated Diffusion Model (EDM), a continuous-time diffusion model. 
-During training, EDM
-randomly selects the noise variance such that ln(σ(t)) ∼ N (0, 1.22) and aims to
-denoise the samples per
+During training, EDM randomly selects the noise variance such that
+$log(\sigma(t))) \prop \N (0, 1.22)$ and aims to denoise the samples per
 mini-batch. EDM is trained for 100 million steps, while the regression network is
 trained for 30 million steps.
 The training process is distributed across 16 DGX nodes, each equipped with 8 A100 GPUs,
 utilizing data parallelism and a total batch size of 512. The total training time for
-regression and diffusion models was 7 days that amounts to approximately 21,
-504 GPU-hours. For sampling purposes, we employ the second-order stochastic sampler
+regression and diffusion models was 7 days that amounts to approximately 21,504
+GPU-hours. For sampling purposes, we employ the second-order stochastic sampler
 provided by EDM. This sampler performs 18 steps, starting from a maximum noise variance
-of σmax = 800 and gradually decreasing it to a minimum noise variance of σmin = 0.002.
-We adopt the rest of hyperparamaters from EDM as listed in [28].
+of $\sigma_{max} = 800$ and gradually decreasing it to a minimum noise variance of
+$\sigma_{min} = 0.002$. We adopt the rest of hyperparamaters from [EDM](https://github.com/NVlabs/edm).
 
 <p align="center">
 <img src="../../../docs/img/corrdiff_illustration.png" />
@@ -166,3 +169,5 @@ python score_samples.py samples.nc
 ## References
 
 - [Residual Diffusion Modeling for Km-scale Atmospheric Downscaling](https://arxiv.org/pdf/2309.15214.pdf)
+- [Elucidating the design space of diffusion-based generative models](https://openreview.net/pdf?id=k7FuTOWMOc7)
+- [Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/pdf/2011.13456.pdf)

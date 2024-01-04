@@ -28,17 +28,17 @@ seeds: "0-63"
   # Random seeds used for generation
 class_idx: null  
   # Class label. Null is random
-num_steps: 18
+num_steps: 8
   # Number of sampling steps
 sample_res: "full"
   # Sampling resolution
 res_edm: true
   # If residual-based edm is used
-sampling_method: "stochastic"
+sampling_method: deterministic
   # Sampling method ["stochastic", "deterministic"]
-seed_batch_size: 4
+seed_batch_size: 32
   # batch size across the seed dimension
-force_fp16: false
+force_fp16: true
   # Whether to force fp16 precision for the model. If false, it'll use the precision
   # specified upon training.
 
@@ -64,9 +64,9 @@ N_grid_channels: 4
 normalization: "v1"
 times:
   - 2021-02-02T00:00:00
-#  - 2021-02-07T07:00:00
-#  - 2021-02-08T16:00:00
-#  - 2021-02-09T20:00:00
+  - 2021-02-07T07:00:00
+  - 2021-02-08T16:00:00
+  - 2021-02-09T20:00:00
 
 ## Deterministic sampler options
 sigma_min: null
@@ -75,7 +75,7 @@ sigma_max: null
   # Highest noise level
 rho: 7
   # Time step exponent
-solver: "heun"
+solver: euler
   # ODE solver [euler, heun]
 discretization: "edm"
   # Time step discretization [vp, ve, iddpm, edm]

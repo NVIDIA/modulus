@@ -48,7 +48,7 @@ import xarray as xr
 try:
     import xskillscore
 except ImportError:
-    print("xskillscore not installed. Try `pip install xskillscore`")
+    raise ImportError("xskillscore not installed. Try `pip install xskillscore`")
 
 
 def open_samples(f):
