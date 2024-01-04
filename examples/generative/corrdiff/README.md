@@ -16,12 +16,16 @@ reminiscent of learnt physics: the collocation of intense rainfall and sharp gra
 in fronts and extreme winds and rainfall bands near the eyewall of typhoons.
 Downscaling global forecasts successfully retains many of these benefits, foreshadowing
 the potential of end-to-end, global-to- km-scales machine learning weather predictions.
-Refer to the [CorrDiff preprint] (https://arxiv.org/abs/2309.15214) for more details.
+Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more details.
+
+<p align="center">
+<img src="../../../docs/img/corrdiff_demo.gif" width="560" />
+</p>
 
 ## Dataset
 
 The input (conditioning) dataset is taken from
-[ERA5 reanalysis] (https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5),
+[ERA5 reanalysis](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5),
 a global dataset at spatial resolution of about 25km and a temporal resolution of 1h.
 To facilitate training, we interpolate the input data onto the curvirectangular grid of
 CWA with bilinear interpolation (with a rate of 4x), which results in 36 × 36 pixels
@@ -55,16 +59,16 @@ data 2018-2020 are used for training (2,4154 samples total). For testing we use 
 full fourth year, 2021, as well as the first four months (January to April) of 2022.
 
 The Zarr dataset used for training and testing the CorrDiff model is available for
-non-commercial use under the [CC BY-NC-ND 4.0 license] (https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
+non-commercial use under the [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
 and can be downloaded from TBD.
 
 ## Model overview and architecture
 
 The CorrDiff method has two step learning approach. To ensure compatibility and
 consistency, we employ the same UNet architecture used in
-[EDM (Elucidated Diffusion Models)] (https://github.com/NVlabs/edm)
+[EDM (Elucidated Diffusion Models)](https://github.com/NVlabs/edm)
 for both the regression and diffusion networks. See
-[this tutorial] (https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion)
+[this tutorial](https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion)
 to learn about the EDM diffusion models. This architecture is based on the UNet model
 proposed in [this paper](https://proceedings.neurips.cc/paper_files/paper/2019/file/3001ef257407d5a371a96dcd947c7d93-Paper.pdf).
 We enhance the UNet by increasing its size to include 6 encoder layers and 6 decoder
