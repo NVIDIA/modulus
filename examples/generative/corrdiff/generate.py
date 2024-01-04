@@ -59,6 +59,7 @@ def main(cfg: DictConfig) -> None:
     res_edm = getattr(cfg, "res_edm", True)
     sampling_method = getattr(cfg, "sampling_method", "stochastic")
     seed_batch_size = getattr(cfg, "seed_batch_size", 1)
+    force_fp16 = getattr(cfg, "force_fp16", False)
 
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
@@ -169,6 +170,11 @@ def main(cfg: DictConfig) -> None:
     device = dist.device
     net_res = net_res.eval()
     net_reg = net_reg.eval() if net_reg else None
+
+    # change precision if needed
+    if force_fp16:
+        net_reg.use_fp16 = True
+        net_res.use_fp16 = True
 
     def generate_fn(image_lr):
         """Function to generate an image
