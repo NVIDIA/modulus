@@ -23,7 +23,7 @@ import torch
 import torch.cuda.profiler as profiler
 import wandb
 
-from modulus.distributed import DistributedManager, gather_loss
+from modulus.distributed import DistributedManager, reduce_loss
 
 from .console import PythonLogger
 from .wandb import alert
@@ -217,13 +217,13 @@ class LaunchLogger(object):
                     self.mlflow_run.info.run_id, status="KILLED"
                 )
             return
-        # Gather mini-batch losses
+        # Reduce mini-batch losses
         for name, value in self.minibatch_losses.items():
             process_loss = value / self.mini_batch_index
             self.epoch_losses[name] = process_loss
             # Compute global loss
             if DistributedManager.is_initialized() and DistributedManager().distributed:
-                self.epoch_losses[name] = gather_loss(process_loss)
+                self.epoch_losses[name] = reduce_loss(process_loss)
 
         if self.root:
             # Console printing

@@ -239,7 +239,9 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    world_size = num_gpus
+    world_size = min(
+        4, num_gpus
+    )  # test-graph is otherwise too small for distribution across more GPUs
 
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,
