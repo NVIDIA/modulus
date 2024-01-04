@@ -19,8 +19,9 @@ the potential of end-to-end, global-to- km-scales machine learning weather predi
 Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more details.
 
 <p align="center">
-<img src="../../../docs/img/corrdiff_demo.gif" width="560" />
+<img src="../../../docs/img/corrdiff_demo.gif" />
 </p>
+
 
 ## Dataset
 
@@ -97,6 +98,10 @@ regression and diffusion models was 7 days that amounts to approximately 21,
 provided by EDM. This sampler performs 18 steps, starting from a maximum noise variance
 of σmax = 800 and gradually decreasing it to a minimum noise variance of σmin = 0.002.
 We adopt the rest of hyperparamaters from EDM as listed in [28].
+
+<p align="center">
+<img src="../../../docs/img/corrdiff_illustration.png" />
+</p>
 
 ## Getting Started
 
