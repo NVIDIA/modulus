@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import torch
 
-from modulus.metrics.climate.loss import MSE, SSIM
+from modulus.metrics.climate.loss import MSE_SSIM, SSIM
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_SSIM(device):
@@ -34,6 +34,7 @@ def test_SSIM(device):
     ones = torch.ones(shape)
     zeros = torch.zeros(shape)
     
+    # testing to make sure this runs
     assert ssim_loss(ones, zeros) < 1.0e-4
 
     # Test window
@@ -52,6 +53,7 @@ def test_SSIM(device):
         assert False, "Failed to error for insufficient number of dimensions"
     except IndexError:
         pass
+
 
 
 
