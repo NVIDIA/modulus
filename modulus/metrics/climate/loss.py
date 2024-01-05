@@ -45,7 +45,7 @@ class MSE_SSIM(torch.nn.Module):
         param weights: list, optional
             variables identified as requireing SSIM-loss calculation
             will have their loss calculated by a weighted average od the DSSIM metric and MSE.
-            The weights of this weighted average are identified here. [MSE_weight, DSSIM_weight]
+            The weights of this weighted average are  [MSE_weight, DSSIM_weight]
         """
 
         super(MSE_SSIM, self).__init__()
@@ -83,25 +83,19 @@ class MSE_SSIM(torch.nn.Module):
         """
 
         # check tensor shapes to ensure proper computation of loss
-        try:
-            if prediction.shape[-1] != prediction.shape[-2]:
-                raise AssertionError
-            if prediction.shape[3] != 12:
-                raise AssertionError
-            if prediction.shape[2] != model.output_channels:
-                raise AssertionError
-            if not (
-                (prediction.shape[1] == model.output_time_dim)
-                or (
-                    prediction.shape[1] == model.output_time_dim // model.input_time_dim
-                )
-            ):
-                raise AssertionError
-        except AssertionError:
-            print(
-                f"losses.MSE_SSIM: expected output shape [batchsize, {model.output_time_dim}, {model.output_channels}, [spatial dims]] got {prediction.shape}"
+        if prediction.shape[-1] != prediction.shape[-2]:
+            raise AssertionError(f"Spatial dims H and W must match, got {prediction.shape[-2]} {prediction.shape[-1]} ")
+        if prediction.shape[3] != 12:
+            raise AssertionError(f"Spatial dim F must be 12, go {prediction.shape[3]}")
+        if prediction.shape[2] != model.output_channels:
+            raise AssertionError(f"model output channels and prediction output channels don't match: {model.output_channels} {prediction.shape[2]}")
+        if not (
+            (prediction.shape[1] == model.output_time_dim)
+            or (
+                prediction.shape[1] == model.output_time_dim // model.input_time_dim
             )
-            exit()
+        ):
+            raise AssertionError
 
         # store the location of output and target tensors
         device = prediction.get_device()
@@ -111,39 +105,24 @@ class MSE_SSIM(torch.nn.Module):
         weights = torch.tensor(self.mse_dssim_weights, device=f"cuda:{device}")
         # calculate variable wise loss
         for i, v in enumerate(model.output_variables):
-            # for logging purposes calculated DSIM and MSE for each variable
             var_mse = self.mse(
                 prediction[:, :, i : i + 1, :, :, :], targets[:, :, i : i + 1, :, :, :]
             )  # the slice operation here ensures the singleton dimension is not squashed
-            var_dssim = torch.min(torch.tensor([1.0, float(var_mse)])) * (
-                1
-                - self.ssim(
-                    prediction[:, :, i : i + 1, :, :, :],
-                    targets[:, :, i : i + 1, :, :, :],
-                )
-            )
+
             if v in self.ssim_variables:
                 # compute weighted average between mse and dssim
+                var_dssim = torch.min(torch.tensor([1.0, float(var_mse)])) * (
+                    1
+                    - self.ssim(
+                        prediction[:, :, i : i + 1, :, :, :],
+                        targets[:, :, i : i + 1, :, :, :],
+                    )
+                )
                 loss_by_var[i] = torch.sum(weights * torch.stack([var_mse, var_dssim]))
             else:
                 loss_by_var[i] = var_mse
-            model.log(
-                f"MSEs_train/{model.output_variables[i]}",
-                var_mse,
-                batch_size=model.batch_size,
-            )
-            model.log(
-                f"DSIMs_train/{model.output_variables[i]}",
-                var_dssim,
-                batch_size=model.batch_size,
-            )
-            model.log(
-                f"losses_train/{model.output_variables[i]}",
-                loss_by_var[i],
-                batch_size=model.batch_size,
-            )
         loss = loss_by_var.mean()
-        model.log("losses_train/all_vars", loss, batch_size=model.batch_size)
+
         return loss
 
 
