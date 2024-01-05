@@ -36,7 +36,7 @@ def test_MSE_SSIM(device):
     mse_ssim_loss = MSE_SSIM(ssim_params=ssim_params)
 
     # test for fail case of invalid dims (h != w)
-    shape = [1, 12, 1, 720, 360]
+    shape = [1, 1, 1, 12, 128, 64]
 
     ones = torch.ones(shape).to(device)
     try:
@@ -45,16 +45,17 @@ def test_MSE_SSIM(device):
     except AssertionError:
         pass
 
-    shape = [1, 12, 2, 720, 720]
+    shape = [1, 1, 2, 12, 128, 128]
+    print(device)
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
 
     assert mse_ssim_loss(ones,ones,model) == 0
     assert mse_ssim_loss(ones,zeros,model) == 1
 
-    invar = torch.ones(shape).to("cuda:0")
-    invar = [0,0,1,...] = zeros[0,0,0,...]
-    assert mse_ssim_loss(ones,zeros,model) == 0.5        
+    invar = torch.ones(shape).to(device)
+    invar[0,0,1,...] = zeros[0,0,0,...]
+    assert mse_ssim_loss(invar,zeros,model) == 0.5        
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
