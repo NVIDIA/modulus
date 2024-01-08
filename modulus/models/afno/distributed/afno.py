@@ -31,6 +31,7 @@ from modulus.distributed.mappings import (
     gather_from_parallel_region,
     scatter_to_parallel_region,
 )
+from modulus.distributed.utils import compute_split_shapes
 from modulus.models.afno.distributed.layers import (
     DistributedAFNO2D,
     DistributedMLP,
@@ -96,8 +97,10 @@ class DistributedBlock(nn.Module):
         self.double_skip = double_skip
 
     def forward(self, x):
-
         if not self.input_is_matmul_parallel:
+            scatter_shapes = compute_split_shapes(
+                x.shape[1], DistributedManager().group_size("model_parallel")
+            )
             x = scatter_to_parallel_region(x, dim=1, group="model_parallel")
 
         residual = x
@@ -114,7 +117,9 @@ class DistributedBlock(nn.Module):
         x = x + residual
 
         if not self.output_is_matmul_parallel:
-            x = gather_from_parallel_region(x, dim=1, group="model_parallel")
+            x = gather_from_parallel_region(
+                x, dim=1, shapes=scatter_shapes, group="model_parallel"
+            )
 
         return x
 
@@ -245,7 +250,6 @@ class DistributedAFNONet(nn.Module):
         return x
 
     def forward(self, x):
-
         # fw pass on features
         x = self.forward_features(x)
 

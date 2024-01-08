@@ -17,9 +17,30 @@ from typing import List, Optional
 
 import torch
 import torch.distributed as dist
+import torch.nn as nn
 import torch.nn.functional as F
 
 from .manager import DistributedManager
+
+
+def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
+
+    # treat trivial case first
+    if num_chunks == 1:
+        return [size]
+
+    # first, check if we can split using div-up to balance the load:
+    chunk_size = (size + num_chunks - 1) // num_chunks
+    last_chunk_size = max(0, size - chunk_size * (num_chunks - 1))
+    if last_chunk_size == 0:
+        # in this case, the last shard would be empty, split with floor instead:
+        chunk_size = size // num_chunks
+        last_chunk_size = size - chunk_size * (num_chunks - 1)
+
+    # generate sections list
+    sections = [chunk_size for _ in range(num_chunks - 1)] + [last_chunk_size]
+
+    return sections
 
 
 def get_memory_format(tensor):
@@ -71,35 +92,35 @@ def truncate_helper(tensor, dim, new_size):
 
 
 def split_tensor_along_dim(tensor, dim, num_chunks):
-    """splits tensor along specific dim"""
-    if not (dim < tensor.dim()):
-        raise AssertionError(
-            f"Error, tensor dimension is {tensor.dim()} which cannot be"
-            f"split along {dim}"
+    if dim >= tensor.dim():
+        raise ValueError(
+            f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
         )
-    if not (tensor.shape[dim] % num_chunks == 0):
-        raise AssertionError(
-            f"Error, cannot split dim {dim} evenly. Dim size is \
-        {tensor.shape[dim]} and requested numnber of splits is {num_chunks}"
+    if tensor.shape[dim] < num_chunks:
+        raise ValueError(
+            "Error, cannot split dim {dim} of size {tensor.shape[dim]} into \
+        {num_chunks} chunks. Empty slices are currently not supported."
         )
-    chunk_size = tensor.shape[dim] // num_chunks
-    tensor_list = torch.split(tensor, chunk_size, dim=dim)
+
+    # get split
+    sections = compute_split_shapes(tensor.shape[dim], num_chunks)
+    tensor_list = torch.split(tensor, sections, dim=dim)
 
     return tensor_list
 
 
 @torch.no_grad()
-def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):  # pragma: no cover
-    """Gathers loss from all processes to one for logging
+def reduce_loss(loss: float, dst_rank: int = 0, mean: bool = True):  # pragma: no cover
+    """Reduces loss from all processes to destination rank for logging.
 
     Parameters
     ----------
     loss : float
         loss value
     dst_rank : int, Optional
-        destination rank to gather to, by default 0
+        destination rank to redce to, by default 0.
     mean : bool, Optional
-        Calculate the mean of the losses gathered, by default True
+        Calculate the mean of the losses gathered, by default True.
 
     Raises
     ------
@@ -108,29 +129,21 @@ def gather_loss(loss: float, dst_rank: int = 0, mean: bool = True):  # pragma: n
     """
     if not DistributedManager.is_initialized():
         raise Exception(
-            "Distributed manager should be initialized when using gather_loss"
+            "Distributed manager should be initialized when using reduce_loss"
         )
 
     distmng = DistributedManager()
-    loss = torch.Tensor([loss])
+    loss = torch.Tensor([loss]).to(distmng.device)
 
     # For serial runs, just return the current loss!
     if distmng.world_size == 1:
         return float(loss)
 
-    # Gather using PyTorch distributed function
-    gather_list = None
-    if distmng.rank == dst_rank:
-        gather_list = [
-            torch.zeros(1).to(distmng.device) for i in range(distmng.world_size)
-        ]
-    dist.gather(loss.to(distmng.device), gather_list, dst_rank)
+    op = torch.distributed.ReduceOp.SUM if not mean else torch.distributed.ReduceOp.AVG
+    torch.distributed.reduce(loss, dst_rank, op, group=None)
 
     # Return loss if dst_rank, None otherwise
     if distmng.rank == dst_rank:
-        loss = torch.sum(torch.cat(gather_list))
-        if mean:
-            loss = loss / distmng.world_size
         return float(loss.cpu())
     else:
         return None
@@ -198,39 +211,9 @@ def _split(input_, dim_, group=None):  # pragma: no cover
     return output
 
 
-def _gather(input_, dim_, group=None):  # pragma: no cover
-    """Gather tensors and concatenate along the specified dimension."""
-    # get input format
-    input_format = get_memory_format(input_)
-
-    comm_size = dist.get_world_size(group=group)
-    # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
-        return input_
-
-    # sanity checks
-    if not (dim_ < input_.dim()):
-        raise AssertionError(
-            f"Error, cannot gather along {dim_} for tensor with {input_.dim()} "
-            "dimensions."
-        )
-
-    # Size and dimension.
-    comm_rank = dist.get_rank(group=group)
-
-    tensor_list = [torch.empty_like(input_) for _ in range(comm_size)]
-    tensor_list[comm_rank] = input_
-    dist.all_gather(tensor_list, input_, group=group)
-
-    # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
-
-    return output
-
-
 def all_gather_v_wrapper(
     tensor: torch.Tensor,
-    sizes: List[int],
+    sizes: Optional[List[int]] = None,
     dim: int = 0,
     group: Optional[dist.ProcessGroup] = None,
 ) -> torch.Tensor:  # pragma: no cover
@@ -245,9 +228,9 @@ def all_gather_v_wrapper(
     ----------
     tensor : "torch.Tensor"
         local tensor on each rank
-    sizes : List[int]
+    sizes : List[int], optional
         list of the sizes of each chunk on each rank along distributed dimension,
-        valid and set on each rank
+        valid and set on each rank, by default None
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -260,7 +243,8 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-    if len(sizes) != comm_size:
+
+    if (sizes is not None) and (len(sizes) != comm_size):
         raise ValueError()
     if dim >= tensor.dim():
         raise ValueError()
@@ -269,24 +253,30 @@ def all_gather_v_wrapper(
         return tensor
 
     tensor_shape = list(tensor.shape)
-    tensor_list = [None] * comm_size
+    tensor_format = get_memory_format(tensor)
 
-    for src in range(comm_size):
-        tensor_shape[dim] = sizes[src]
-        tensor_list[src] = torch.empty(
-            tensor_shape,
-            dtype=tensor.dtype,
-            device=tensor.device,
-        )
+    if sizes is not None:
+        tensor_list = [None] * comm_size
+
+        for src in range(comm_size):
+            tensor_shape[dim] = sizes[src]
+            tensor_list[src] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+    else:
+        # assume equal shape on all ranks
+        tensor_list = [torch.empty_like(tensor) for _ in range(comm_size)]
 
     dist.all_gather(tensor_list, tensor, group=group)
 
-    output = torch.cat(tensor_list, dim=dim)
+    output = torch.cat(tensor_list, dim=dim).contiguous(memory_format=tensor_format)
 
     return output
 
 
-def all_reduce_v_wrapper(
+def all_gather_v_bwd_wrapper(
     tensor: torch.Tensor,
     sizes: List[int],
     dim: int = 0,
@@ -670,3 +660,92 @@ def indexed_all_to_all_v_wrapper_bwd(
         out = out.to(tensor.dtype)
 
     return out
+
+
+def mark_module_as_shared(
+    module: nn.Module,
+    process_group: Optional[str],
+    recurse: bool = True,
+    use_fp32_reduction: bool = True,
+) -> nn.Module:
+    """
+    Helper function to mark parameters of a module as being shared
+    across ranks by attaching gradient hooks to the corresponding tensors.
+
+    Parameters
+    ----------
+    module : nn.Module
+        PyTorch module which is to be marked as having shared parameters.
+    process_group : str | None
+        str indicating process_group which contains ranks across which
+        the module's parameters are shared. If passed as None, will default
+        to the world group.
+    recurse : bool, default=True
+        Flag indicating whether the module's parameters are traversed in
+        a recursive fashion, i.e. whether sub-modules are also considered
+        as having shared parameters.
+    use_fp32_reduction : bool, default=True
+        Flag indicating whether the reduction for accumulating gradients
+        will be done in FP32 or the native datatype.
+    """
+
+    group = DistributedManager().group(process_group)
+    handle_key = "_shared_weight_dist_hook"
+
+    def hook(grad: torch.Tensor) -> torch.Tensor:
+        # the documentation states that
+        # "The hook should not modify its argument, but it can optionally return a new gradient
+        #  which will be used in place of grad."
+        # as all_reduce is an in-place operation, need to copy gradient
+        grad = _reduce(grad.clone(), group=group, use_fp32=use_fp32_reduction)
+        return grad
+
+    def hook_post_accum(param: torch.Tensor) -> None:
+        # the documentation states that
+        # "Note that, unlike other autograd hooks, this hook operates on the tensor that requires grad
+        #  and not the grad itself. The hook can in-place modify and access its Tensor argument,
+        # including its .grad field."
+        param.grad = _reduce(param.grad, group=group, use_fp32=use_fp32_reduction)
+
+    for name, param in module.named_parameters(recurse=recurse):
+        error_msg = f"Parameter {name} already marked as having shared weights, can't mark it again!"
+        if hasattr(param, handle_key):
+            raise RuntimeError(error_msg)
+        if torch.__version__ < (2, 1):
+            handle = param.register_hook(hook)
+        else:
+            handle = param.register_post_accumulate_grad_hook(hook_post_accum)
+        setattr(param, handle_key, handle)
+
+    return module
+
+
+def unmark_module_as_shared(
+    module: nn.Module,
+    recurse: bool = True,
+) -> nn.Module:
+    """
+    Helper function to unmark parameters of a module as being shared
+    across ranks by removing attached gradient hooks.
+
+    Parameters
+    ----------
+    module : nn.Module
+        PyTorch module which is to be unmarked as having shared parameters.
+    recurse : bool, default=True
+        Flag indicating whether the module's parameters are traversed in
+        a recursive fashion, i.e. whether sub-modules are also considered
+        as having shared parameters.
+    """
+    handle_key = "_shared_weight_dist_hook"
+    for name, param in module.named_parameters(recurse=recurse):
+        error_msg = (
+            f"Parameter {name} NOT marked as having shared weights, can't unmark it!"
+        )
+        if not hasattr(param, handle_key):
+            raise RuntimeError(error_msg)
+        handle = getattr(param, handle_key)
+        handle.remove()
+        delattr(param, handle_key)
+
+    return module
