@@ -14,8 +14,9 @@
 
 # Get defaults
 defaults:
-  - filesystem/local
   - dataset/7_var
-  - datapipe/7_var
+  - transform/trim_lat720
+  - filesystem/local
   - model/afno
-  - training/graphcastnet
+  - training/afno
+  - validation/afno

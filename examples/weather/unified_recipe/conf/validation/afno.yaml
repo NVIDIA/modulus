@@ -13,22 +13,4 @@
 # limitations under the License.
 
 batch_size: 1
-nr_input_steps: 1
-max_epochs: 80
-
-optimizer:
-  name: FusedAdam
-  args:
-    lr: 0.0005
-    betas: [0.9, 0.999]
-
-schedulers:
-  - name: CosineAnnealingLR
-    num_iterations: inf
-    args:
-      T_max: 150
-
-
-validation:
-  batch_size: 1
-
+num_steps: 8

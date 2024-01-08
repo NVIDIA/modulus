@@ -12,42 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_path: "ERA5_zarr_TESTING_2"
+train_dataset_filename: "./train_34var_era5"
+val_dataset_filename: "./val_34var_era5"
+
 dt: 6
-start_year: 1940
-end_year: 1940
-variables:
+
+train_years: ["1979-01-01", "2015-12-31"]
+val_years: ["2016-01-01", "2017-12-31"]
+
+nr_predicted_variables: ${eval:'len(${dataset.unpredicted_variables})'}
+nr_unpredicted_variables: ${eval:'len(${dataset.predicted_variables})'}
+
+unpredicted_variables:
+  - "land_sea_mask"
+  - "toa_incident_solar_radiation"
+
+predicted_variables:
   - "10m_u_component_of_wind"
   - "10m_v_component_of_wind"
   - "2m_temperature"
   - "surface_pressure"
   - "mean_sea_level_pressure"
-  - ["t", 850]
-  - ["u", 1000]
-  - ["v", 1000]
-  - ["z", 1000]
-  - ["u", 850]
-  - ["v", 850]
-  - ["z", 850]
-  - ["u", 500]
-  - ["v", 500]
-  - ["z", 500]
-  - ["t", 500]
-  - ["z", 50]
-  - ["r", 500]
-  - ["r", 850]
+  - ["temperature", [850, 500, 250, 100]]
+  - ["u_component_of_wind", 1000]
+  - ["v_component_of_wind", 1000]
+  - ["geopotential", 1000]
+  - ["u_component_of_wind", 850]
+  - ["v_component_of_wind", 850]
+  - ["geopotential", 850]
+  - ["u_component_of_wind", 500]
+  - ["v_component_of_wind", 500]
+  - ["geopotential", 500]
+  - ["temperature", 500]
+  - ["geopotential", 50]
   - "total_column_water_vapour"
   - "100m_u_component_of_wind"
   - "100m_v_component_of_wind"
-  - ["u", 250]
-  - ["v", 250]
-  - ["z", 250]
-  - ["t", 250]
-  - ["u", 100]
-  - ["v", 100]
-  - ["z", 100]
-  - ["t", 100]
-  - ["u", 900]
-  - ["v", 900]
-  - ["z", 900]
-  - ["t", 900]
+  - ["u_component_of_wind", 250]
+  - ["v_component_of_wind", 250]
+  - ["geopotential", 250]
+  - ["temperature", 250]
+  - ["u_component_of_wind", 100]

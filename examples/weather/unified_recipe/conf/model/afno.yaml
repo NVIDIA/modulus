@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+nr_input_channels: ${eval:'(${training.nr_input_steps} * (${dataset.nr_predicted_variables} + ${dataset.nr_unpredicted_variables}))'}
+nr_output_channels: ${dataset.nr_predicted_variables}
+input_shape: [720, 1440]
+
 name: AFNO
 args:
-  inp_shape: [720, 1440]
-  in_channels: ${eval:'(${training.nr_input_steps} * (${datapipe.nr_static_variables} + ${datapipe.nr_input_variables}))'}
-  out_channels: ${datapipe.nr_input_variables}
+  inp_shape: ${model.input_shape}
+  in_channels: ${model.nr_input_channels}
+  out_channels: ${model.nr_output_channels}
   patch_size: [8, 8]
   embed_dim: 128
   depth: 12

@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-batch_size: 2
+batch_size: 1
 
 nr_input_steps: 1 # Number of input steps to model
+
+max_epochs: 300
 
 optimizer:
   name: FusedAdam

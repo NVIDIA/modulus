@@ -12,15 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_path: "ERA5_ZARR_7VAR"
+train_dataset_filename: "./train_7var_era5.zarr"
+val_dataset_filename: "./val_7var_era5.zarr"
+
 dt: 6
-start_year: 1940
-end_year: 1943
-variables:
+
+#train_years: ["1979-01-01", "2015-12-31"]
+train_years: ["1979-01-01", "1979-02-20"]
+#val_years: ["2016-01-01", "2017-12-31"]
+val_years: ["2016-01-01", "2016-02-20"]
+
+nr_predicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${dataset.predicted_variables}])'}
+nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${dataset.unpredicted_variables}])'}
+
+unpredicted_variables:
   - "land_sea_mask"
   - "toa_incident_solar_radiation"
+
+predicted_variables:
   - "2m_temperature"
   - "total_column_water_vapour"
   - "100m_u_component_of_wind"
   - "100m_v_component_of_wind"
-  - ["t", 850]
+  - "10m_u_component_of_wind"
+  - "10m_v_component_of_wind"
+  - "mean_sea_level_pressure"
+  - ["temperature", [850, 500, 250, 100]]
