@@ -23,20 +23,20 @@ import time
 
 import numpy as np
 import psutil
+import shutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
+sys.path.append("../")
+from module import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import (
     InfiniteSampler,
-    check_ddp_consistency,
     construct_class_by_name,
-    copy_params_and_buffers,
     ddp_sync,
     format_time,
-    open_url,
 )
 
 from .dataset import get_zarr_dataset
@@ -176,7 +176,14 @@ def training_loop(
 
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
-    loss_fn = construct_class_by_name(**loss_kwargs)  # training.loss.(VP|VE|EDM)Loss
+    if task == "diffusion":
+        net_reg = Module.from_checkpoint("checkpoints/regression.mdlus")
+        net_reg.eval().requires_grad_(False).to(device)
+        interface_kwargs = dict(regression_net=net_reg)
+        logger0.success("Loaded the pre-trained regression network")
+    else:
+        interface_kwargs = {}
+    loss_fn = construct_class_by_name(**loss_kwargs, **interface_kwargs)
     optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer
