@@ -17,13 +17,11 @@
 import copy
 import json
 import os
-import pickle  # ruff: noqa: E402
 import sys
 import time
 
 import numpy as np
 import psutil
-import shutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
