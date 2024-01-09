@@ -106,7 +106,7 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(".logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
