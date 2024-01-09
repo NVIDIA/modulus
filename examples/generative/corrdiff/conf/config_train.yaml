@@ -71,8 +71,6 @@ seed: null  # TODO check
   # Random seed
 transfer: null  # TODO check
   # Transfer learning from network pickle
-resume: null  # TODO check
-  # Resume from previous training state
 dry-run: false
   # Print training options and exit
 

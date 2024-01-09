@@ -45,7 +45,7 @@ def main(cfg: DictConfig) -> None:
     """
 
     # Parse options
-    task =  getattr(cfg, "task")
+    task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     data = getattr(cfg, "data", "./data")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
@@ -106,7 +106,7 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs('logs', exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
@@ -141,7 +141,13 @@ def main(cfg: DictConfig) -> None:
             encoder_type="standard",
             decoder_type="standard",
         )  # , attn_resolutions=[28]
-        c.network_kwargs.update(channel_mult_noise=1, resample_filter=[1,1], model_channels=128, channel_mult=[1,2,2,2,2], attn_resolutions=[28])   #era5-cwb, 448x448
+        c.network_kwargs.update(
+            channel_mult_noise=1,
+            resample_filter=[1, 1],
+            model_channels=128,
+            channel_mult=[1, 2, 2, 2, 2],
+            attn_resolutions=[28],
+        )  # era5-cwb, 448x448
 
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(

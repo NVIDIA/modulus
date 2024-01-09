@@ -23,7 +23,6 @@ import time
 
 import numpy as np
 import psutil
-import shutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
@@ -200,28 +199,32 @@ def training_loop(
 
     # Resume training from previous snapshot.
     max_index = -1
-    max_index_file = ' '
+    max_index_file = " "
     for filename in os.listdir(run_dir):
-        if filename.startswith(f"training-state-{task}-") and filename.endswith(".mdlus"):
+        if filename.startswith(f"training-state-{task}-") and filename.endswith(
+            ".mdlus"
+        ):
             index_str = filename.split("-")[-1].split(".")[0]
             try:
                 index = int(index_str)
                 if index > max_index:
                     max_index = index
                     max_index_file = filename
-                    max_index_file_optimizer =  f"optimizer-state-{task}-{index_str}.pt"
+                    max_index_file_optimizer = f"optimizer-state-{task}-{index_str}.pt"
             except ValueError:
                 continue
 
     try:
         net.load(os.path.join(run_dir, max_index_file))
-        optimizer_state_dict = torch.load(os.path.join(run_dir, max_index_file_optimizer))
-        optimizer.load_state_dict(optimizer_state_dict['optimizer_state_dict'])
+        optimizer_state_dict = torch.load(
+            os.path.join(run_dir, max_index_file_optimizer)
+        )
+        optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
-        logger0.success(f'Loaded network and optimizer states with index {max_index}')
+        logger0.success(f"Loaded network and optimizer states with index {max_index}")
     except FileNotFoundError:
         cur_nimg = 0
-        logger0.warning('Could not load network and optimizer states')
+        logger0.warning("Could not load network and optimizer states")
 
     # Train.
     logger0.info(f"Training for {total_kimg} kimg...")
@@ -280,7 +283,7 @@ def training_loop(
         done = cur_nimg >= total_kimg * 1000
         if (
             (not done)
-            #and (cur_tick != 0)
+            # and (cur_tick != 0)
             and (cur_nimg < tick_start_nimg + kimg_per_tick * 1000)
         ):
             continue
@@ -326,11 +329,14 @@ def training_loop(
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
             net.save(os.path.join(run_dir, filename))
-            logger0.info(f'Saved model in the {run_dir} directory')
+            logger0.info(f"Saved model in the {run_dir} directory")
 
             filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"
-            torch.save({'optimizer_state_dict': optimizer.state_dict()}, os.path.join(run_dir, filename))
-            logger0.info(f'Saved optimizer state in the {run_dir} directory')
+            torch.save(
+                {"optimizer_state_dict": optimizer.state_dict()},
+                os.path.join(run_dir, filename),
+            )
+            logger0.info(f"Saved optimizer state in the {run_dir} directory")
 
         # Update logs.
         training_stats.default_collector.update()
