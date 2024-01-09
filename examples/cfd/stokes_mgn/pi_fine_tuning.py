@@ -204,10 +204,9 @@ class MdlsSymDNN(Arch):
         return self.split_output(out, self.output_key_dict, dim=1)
 
 
-class PhysicsInformedInferencer:
+class PhysicsInformedFineTuner:
     """
-    Class to define all the inference utils. This also includes the utils for
-    physics informed fine-tuning.
+    Class to define all the physics informed utils and inference.
     """
 
     def __init__(
@@ -225,7 +224,7 @@ class PhysicsInformedInferencer:
         ref_v,
         ref_p,
     ):
-        super(PhysicsInformedInferencer, self).__init__()
+        super(PhysicsInformedFineTuner, self).__init__()
 
         self.wb = wb
         self.device = device
@@ -444,7 +443,7 @@ if __name__ == "__main__":
     initialize_wandb(
         project="Modulus-Launch",
         entity="Modulus",
-        name="Stokes-Physics-Informed-Inference",
+        name="Stokes-Physics-Informed-Fine-Tuning",
         group="Stokes-DDP-Group",
         mode=C.wandb_mode,
     )
@@ -474,7 +473,7 @@ if __name__ == "__main__":
     coords_noslip = np.concatenate([coords_wall, coords_polygon], axis=0)
 
     # Initialize model
-    pi_inferencer = PhysicsInformedInferencer(
+    pi_fine_tuner = PhysicsInformedFineTuner(
         wb,
         device,
         gnn_u,
@@ -505,10 +504,10 @@ if __name__ == "__main__":
             loss_mom_u,
             loss_mom_v,
             loss_cont,
-        ) = pi_inferencer.train()
+        ) = pi_fine_tuner.train()
 
         if iters % 100 == 0:
-            error_u, error_v, error_p = pi_inferencer.validation()
+            error_u, error_v, error_p = pi_fine_tuner.validation()
 
             # Print losses
             logger.info(f"Iteration: {iters}")
@@ -541,10 +540,10 @@ if __name__ == "__main__":
     # Final inference call after fine-tuning predictions using the PINN model
     with torch.no_grad():
         x_int_inf, y_int_inf = (
-            pi_inferencer.coords[:, 0:1],
-            pi_inferencer.coords[:, 1:2],
+            pi_fine_tuner.coords[:, 0:1],
+            pi_fine_tuner.coords[:, 1:2],
         )
-        results_int_inf = pi_inferencer.graph.forward({"x": x_int_inf, "y": y_int_inf})
+        results_int_inf = pi_fine_tuner.graph.forward({"x": x_int_inf, "y": y_int_inf})
         pred_u_inf, pred_v_inf, pred_p_inf = (
             results_int_inf["u"],
             results_int_inf["v"],

@@ -142,7 +142,7 @@ python inference.py
 To further fine-tune the model using physics-informed learning, run
 
 ```bash
-python pi_inference.py
+python pi_fine_tuning.py
 ```
 
 Note: The fine-tuning step involves training of a PINN model to first refine the
