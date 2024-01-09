@@ -52,7 +52,7 @@ fp16: false
   # Enable mixed-precision training
 ls: 1
   # Loss scaling
-bench: true  # TODO should default to false
+bench: false
   # Enable cuDNN benchmarking
 workers: 4
   # DataLoader worker processes
