@@ -516,17 +516,16 @@ class ResLoss:
     """
 
     def __init__(
-        self, P_mean: float = 0.0, P_std: float = 1.2, sigma_data: float = 0.5
+        self,
+        regression_net,
+        P_mean: float = 0.0,
+        P_std: float = 1.2,
+        sigma_data: float = 0.5,
     ):
+        self.unet = regression_net
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
-
-        with torch.no_grad():
-            resume_state_dump = "/training-state-042650.pt"
-            data = torch.load(resume_state_dump, map_location=torch.device("cpu"))
-            self.unet = data["net"].cuda()  # TODO better handling of device
-            # misc.copy_params_and_buffers(src_module=data['net'], dst_module=net, require_all=True)
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
