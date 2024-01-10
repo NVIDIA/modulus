@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import time
 import fsspec
 import zarr
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, ListConfig
 from torch.nn.parallel import DistributedDataParallel
 from torch.cuda.amp import GradScaler
 from torch.optim.lr_scheduler import SequentialLR
@@ -78,10 +78,11 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
     # Initialize model
+    print(cfg.model.name)
     model = Module.instantiate(
         {
             "__name__": cfg.model.name,
-            "__args__": cfg.model.args,
+            "__args__": {k: tuple(v) if isinstance(v, ListConfig) else v for k, v in cfg.model.args.items()}, # TODO: maybe mobe this conversion to resolver?
         }
     )
     model = model.to(dist.device)
@@ -303,9 +304,9 @@ def main(cfg: DictConfig) -> None:
                                 3, net_predicted_variables.shape[1], figsize=(15, net_predicted_variables.shape[0] * 5)
                             )
                             for t in range(net_predicted_variables.shape[1]):
-                                ax[0, t].set_title("Network prediction")
-                                ax[1, t].set_title("Ground truth")
-                                ax[2, t].set_title("Difference")
+                                ax[0, t].set_title("Network prediction, Step {}".format(t))
+                                ax[1, t].set_title("Ground truth, Step {}".format(t))
+                                ax[2, t].set_title("Difference, Step {}".format(t))
                                 ax[0, t].imshow(net_predicted_variables[0, t, chan])
                                 ax[1, t].imshow(predicted_variables[0, t, chan])
                                 ax[2, t].imshow(net_predicted_variables[0, t, chan] - predicted_variables[0, t, chan])
