@@ -102,7 +102,6 @@ class ARCOERA5ETL:
         self.arco_era5_subset["predicted"] = xr.concat(xarray_predicted_variables, dim="predicted_channel")
         self.arco_era5_subset["unpredicted"] = xr.concat(xarray_unpredicted_variables, dim="unpredicted_channel")
         self.arco_era5_subset['time'] = self.arco_era5['time']
-        self.arco_era5_subset.drop_vars(['latitude', 'longitude']) # Maybe keep these?
         self.arco_era5_subset = self.arco_era5_subset.chunk({"time": 1, "predicted_channel": self.arco_era5_subset.predicted_channel.size, "unpredicted_channel": self.arco_era5_subset.unpredicted_channel.size})
 
     def __call__(self):

@@ -28,7 +28,6 @@ schedulers:
     args:
       T_max: 150
 
-
 validation:
   batch_size: 1
 

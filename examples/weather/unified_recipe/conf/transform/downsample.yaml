@@ -14,3 +14,6 @@
 
 name: "downsample"
 downsample_factor: 4
+transformed_shape:
+  - ${eval:'720 // ${transform.downsample_factor}'}
+  - ${eval:'1440 // ${transform.downsample_factor}'}

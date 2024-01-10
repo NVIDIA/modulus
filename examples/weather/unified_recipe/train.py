@@ -271,10 +271,7 @@ def main(cfg: DictConfig) -> None:
             with LaunchLogger("valid", epoch=epoch) as log:
 
                 # Switch to eval mode
-                if hasattr(model, "module"):
-                    model.module.eval()
-                else:
-                    model.eval()
+                model.eval()
 
                 # Validation loop
                 loss_epoch = 0.0
@@ -293,7 +290,7 @@ def main(cfg: DictConfig) -> None:
                     loss, net_predicted_variables, predicted_variables = eval_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
                     loss_epoch += loss.detach().cpu().numpy()
                     num_examples += predicted_variables.shape[0]
-            
+
                     # Plot validation on first batch
                     if i == 0:
                         net_predicted_variables = net_predicted_variables.cpu().numpy()
@@ -317,10 +314,7 @@ def main(cfg: DictConfig) -> None:
                 log.log_epoch({"Validation error": loss_epoch / num_examples})
 
                 # Switch back to train mode
-                if hasattr(model, "module"):
-                    model.module.train()
-                else:
-                    model.train()
+                model.train()
 
         # Sync after each epoch
         if dist.world_size > 1:

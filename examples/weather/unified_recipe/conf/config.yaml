@@ -15,8 +15,10 @@
 # Get defaults
 defaults:
   - dataset/7_var
-  - transform/trim_lat720
+    #- transform/trim_lat720
+  - transform/downsample
   - filesystem/local
-  - model/afno
+    #- model/afno
+  - model/graphcastnet
   - training/afno
   - validation/afno

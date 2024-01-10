@@ -61,3 +61,32 @@ def rmse(pred: Tensor, target: Tensor, dim: int = None) -> Union[Tensor, float]:
         Root mean squared error value(s)
     """
     return torch.sqrt(mse(pred, target, dim=dim))
+
+
+def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+    """Calculates batch-wise normalized mse error between two tensors.
+
+    This function computes the mean of the ratio of the mse of the difference
+    between the prediction and target tensors to the mse of the target tensor,
+    applied over each example in a batch.
+
+    Parameters
+    ----------
+    pred : Tensor
+        Input prediction tensor.
+    target : Tensor
+        Target tensor.
+
+    Returns
+    -------
+    Union[Tensor, float]
+        Batch-wise normalized mse error value(s).
+    """
+    pred_flat = pred.reshape(pred.size(0), -1)
+    target_flat = target.reshape(target.size(0), -1)
+
+    diff_norms = torch.linalg.norm(pred_flat - target_flat, ord=2.0, dim=1)
+    target_norms = torch.linalg.norm(target_flat, ord=2.0, dim=1)
+
+    error = diff_norms / target_norms
+    return torch.mean(error)
