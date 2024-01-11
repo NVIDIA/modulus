@@ -98,11 +98,11 @@ class MSE_SSIM(torch.nn.Module):
             raise AssertionError
 
         # store the location of output and target tensors
-        device = prediction.get_device()
+        device = prediction.device
         # initialize losses by var tensor that will store the variable wise loss
-        loss_by_var = torch.empty([prediction.shape[2]], device=f"cuda:{device}")
+        loss_by_var = torch.empty([prediction.shape[2]], device=device)
         # initialize weights tensor that will allow for a weighted average of MSE and SSIM
-        weights = torch.tensor(self.mse_dssim_weights, device=f"cuda:{device}")
+        weights = torch.tensor(self.mse_dssim_weights, device=device)
         # calculate variable wise loss
         for i, v in enumerate(model.output_variables):
             var_mse = self.mse(
