@@ -107,9 +107,9 @@ class Mesh_ReducedTrainer:
             x = self.model.decode(z, graph.edata["x"], graph,  position_mesh, position_pivotal)
             loss = self.criterion(x,graph.ndata["x"]) 
                
-            relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,0], ground_trueth[i+1:i+2,:,0]*0.0).detach()
-            loss_record_u.append(relative_error)
-        return loss
+            relative_error = loss/self.criterion(graph.ndata["x"], graph.ndata["x"]*0.0).detach()
+        
+        return loss, relative_error
         
     def backward(self, loss):
         # backward pass

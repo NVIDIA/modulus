@@ -42,12 +42,17 @@ if __name__ == "__main__":
     position_mesh = torch.from_numpy(np.loadtxt(C.mesh_dir)).to(dist.device)
     position_pivotal = torch.from_numpy(np.loadtxt(C.pivotal_dir)).to(dist.device)
     loss_total = 0
+    relative_error_total = 0
   
-    for graph in tqdm(trainer.dataloader_test):
-        loss = trainer.train(graph,position_mesh,position_pivotal)
+    for graph in trainer.dataloader_test:
+        loss, relative_error = trainer.test(graph,position_mesh,position_pivotal)
         loss_total = loss_total + loss
+        relative_error_total = relative_error_total + relative_error
+    n = len(trainer.dataloader_test)
+    avg_relative_error = relative_error_total/n
+    avg_loss = loss_total/n
     rank_zero_logger.info(
-            f"loss: {loss:10.3e}, time per epoch: {(time.time()-start):10.3e}"
+            f"avg_loss: {avg_loss:10.3e}, avg_relative_error: {avg_relative_error:10.3e},time per epoch: {(time.time()-start):10.3e}"
         )
         
 
