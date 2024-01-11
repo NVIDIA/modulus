@@ -6,6 +6,7 @@ import torch
 import dgl
 import pdb
 from .utils import read_vtp_file, save_json, load_json
+from tqdm import tqdm
 
 class LatentDataset(DGLDataset):
 	def __init__(
@@ -60,10 +61,10 @@ class LatentDataset(DGLDataset):
 			#index = [0]
 		else:
 			index = [i for i in range(101) if i % 2 == 1]
-		index_interest = [i for i in range(101) if i % 2 == 0]
+		#index_interest = [i for i in range(101) if i % 2 == 0]
 
 
-		self.re = torch.cat(listCatALL,dim=1)[index_interest,:][index,:]
+		self.re = torch.cat(listCatALL,dim=1)[index,:]
 
 	@torch.no_grad()
 	def save_latents(self, Encoder, position_mesh, position_pivotal, dist):
@@ -88,7 +89,7 @@ class LatentDataset(DGLDataset):
             pin_memory=True
         )
 		record_z = []
-		for graph in dataloader:
+		for graph in tqdm(dataloader):
 			graph = graph.to(dist.device)
 			z = Encoder.encode(graph.ndata["x"], graph.edata["x"], graph,  position_mesh, position_pivotal)
 			z = z.reshape(1,-1)
