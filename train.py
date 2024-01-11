@@ -108,8 +108,13 @@ class Mesh_ReducedTrainer:
             loss = self.criterion(x,graph.ndata["x"]) 
                
             relative_error = loss/self.criterion(graph.ndata["x"], graph.ndata["x"]*0.0).detach()
+            relative_error_s_record = []
+            for i in range(C.num_input_features):
+                loss_s = self.criterion(x[:,i],graph.ndata["x"][:,i])
+                relative_error_s =  loss_s/self.criterion(graph.ndata["x"][:,i], graph.ndata["x"][:,i]*0.0).detach()
+                relative_error_s_record.append(relative_error_s)
         
-        return loss, relative_error
+        return loss, relative_error, relative_error_s_record        
         
     def backward(self, loss):
         # backward pass
