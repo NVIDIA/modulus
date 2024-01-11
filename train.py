@@ -45,7 +45,7 @@ class Mesh_ReducedTrainer:
             dataset_test,
             batch_size=C.batch_size,
             shuffle=False,
-            drop_last=True,
+            drop_last=False,
             pin_memory=True,
             use_ddp=dist.world_size > 1,
         )
@@ -102,8 +102,13 @@ class Mesh_ReducedTrainer:
     @torch.no_grad()
     def test(self, graph, position_mesh, position_pivotal):
         graph = graph.to(self.dist.device)
-        self.optimizer.zero_grad()
-        loss = self.forward(graph, position_mesh, position_pivotal)
+        with autocast(enabled=C.amp):
+            z  = self.model.encode(graph.ndata["x"], graph.edata["x"], graph,  position_mesh, position_pivotal)
+            x = self.model.decode(z, graph.edata["x"], graph,  position_mesh, position_pivotal)
+            loss = self.criterion(x,graph.ndata["x"]) 
+               
+            relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,0], ground_trueth[i+1:i+2,:,0]*0.0).detach()
+            loss_record_u.append(relative_error)
         return loss
         
     def backward(self, loss):
