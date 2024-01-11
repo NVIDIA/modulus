@@ -25,7 +25,7 @@ import psutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from training_stats import default_collector, report, report0
-from utils import (
+from modulus.utils.generative.utils import (
     InfiniteSampler,
     check_ddp_consistency,
     construct_class_by_name,
