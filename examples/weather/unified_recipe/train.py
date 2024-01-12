@@ -78,7 +78,6 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
     # Initialize model
-    print(cfg.model.name)
     model = Module.instantiate(
         {
             "__name__": cfg.model.name,
@@ -105,23 +104,6 @@ def main(cfg: DictConfig) -> None:
     OptimizerClass = getattr(optimizers, cfg.training.optimizer.name)
     optimizer = OptimizerClass(model.parameters(), **cfg.training.optimizer.args)
 
-    # Initialize scheduler
-    schedulers = []
-    milestones = []
-    for scheduler_cfg in cfg.training.schedulers:
-        SchedulerClass = getattr(torch.optim.lr_scheduler, scheduler_cfg.name)
-        schedulers.append(SchedulerClass(optimizer, **scheduler_cfg.args))
-        if not milestones:
-            milestones.append(scheduler_cfg.num_iterations)
-        else:
-            milestones.append(milestones[-1] + scheduler_cfg.num_iterations)
-    milestones.pop(-1)
-    scheduler = SequentialLR(
-        optimizer,
-        schedulers=schedulers,
-        milestones=milestones,
-    )
-
     # Attempt to load latest checkpoint if one exists
     if dist.world_size > 1:
         torch.distributed.barrier()
@@ -129,7 +111,7 @@ def main(cfg: DictConfig) -> None:
         "./checkpoints",
         models=model,
         optimizer=optimizer,
-        scheduler=scheduler,
+        scheduler=None,
         device=dist.device,
     )
 
@@ -145,21 +127,11 @@ def main(cfg: DictConfig) -> None:
     else:
         raise NotImplementedError(f'Filesystem type {cfg.filesystem.type} not implemented')
 
-    # Initialize train datapipes
+    # Get filesystem mapper for datasets
     train_dataset_mapper = fs.get_mapper(cfg.dataset.train_dataset_filename)
-    train_datapipe = SeqZarrDatapipe(
-        zarr_dataset=zarr.open(train_dataset_mapper, mode='r'),
-        variables=['time', 'predicted', 'unpredicted'],
-        batch_size=cfg.training.batch_size,
-        num_steps=2,
-        shuffle=True,
-        device=dist.device,
-        process_rank=dist.rank,
-        world_size=dist.world_size,
-    )
-
-    # Initialize validation datapipes
     val_dataset_mapper = fs.get_mapper(cfg.dataset.val_dataset_filename)
+
+    # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
         zarr_dataset=zarr.open(val_dataset_mapper, mode='r'),
         variables=['time', 'predicted', 'unpredicted'],
@@ -230,53 +202,60 @@ def main(cfg: DictConfig) -> None:
         return loss
 
     # Main training loop
-    for epoch in range(max(1, loaded_epoch + 1), cfg.training.max_epochs + 1):
-        # Wrap epoch in launch logger for console / WandB logs
-        with LaunchLogger(
-            "train", epoch=epoch, num_mini_batch=len(train_datapipe), epoch_alert_freq=10
-        ) as log:
+    global_epoch = 0
+    print(loaded_epoch)
+    for stage in cfg.training.stages:
 
-            # Track memory throughput
-            tic = time.time()
-            nr_bytes = 0
+        # Skip if loaded epoch is greater than current stage
+        if loaded_epoch > global_epoch:
+            # Check if current stage needs to be run
+            if loaded_epoch >= global_epoch + stage.num_epochs:
+                # Skip stage
+                global_epoch += stage.num_epochs
+                continue
+            # Otherwise, run stage for remaining epochs
+            else:
+                num_epochs = stage.num_epochs - (loaded_epoch - global_epoch)
+        else:
+            num_epochs = stage.num_epochs
 
-            # Training loop
-            for j, data in tqdm(enumerate(train_datapipe)):
-                # Get predicted and unpredicted variables
-                predicted_variables = data[0]["predicted"]
-                unpredicted_variables = data[0]["unpredicted"]
+        # Create new datapipe
+        train_datapipe = SeqZarrDatapipe(
+            zarr_dataset=zarr.open(train_dataset_mapper, mode='r'),
+            variables=['time', 'predicted', 'unpredicted'],
+            batch_size=stage.batch_size,
+            num_steps=stage.unroll_steps + cfg.training.nr_input_steps,
+            shuffle=True,
+            device=dist.device,
+            process_rank=dist.rank,
+            world_size=dist.world_size,
+        )
 
-                # Normalize variables
-                predicted_variables = normalize_variables(predicted_variables, predicted_batch_norm)
-                unpredicted_variables = normalize_variables(unpredicted_variables, unpredicted_batch_norm)
+        # Initialize scheduler
+        SchedulerClass = getattr(torch.optim.lr_scheduler, stage.lr_scheduler_name)
+        scheduler = SchedulerClass(optimizer, **stage.args)
 
-                # Log memory throughput
-                nr_bytes += predicted_variables.element_size() * predicted_variables.nelement()
-                nr_bytes += unpredicted_variables.element_size() * unpredicted_variables.nelement()
+        # Set scheduler to current step
+        current_step = len(train_datapipe) * (stage.num_epochs - num_epochs)
+        scheduler.step(current_step)
+ 
+        # Run number of epochs
+        for epoch in range(num_epochs):
 
-                # Perform training step
-                loss = train_step_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
-                log.log_minibatch({"loss": loss.detach()})
+            # Wrap epoch in launch logger for console / WandB logs
+            with LaunchLogger(
+                "train", epoch=epoch, num_mini_batch=len(train_datapipe), epoch_alert_freq=10
+            ) as log:
 
-            # Log learning rate
-            log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
+                # Track memory throughput
+                tic = time.time()
+                nr_bytes = 0
 
-            # Log memory throughput
-            log.log_epoch({"GB/s": nr_bytes / (time.time() - tic) / 1e9})
-
-        # Perform validation
-        if dist.rank == 0:
-
-            # Wrap validation in launch logger for console / WandB logs
-            with LaunchLogger("valid", epoch=epoch) as log:
-
-                # Switch to eval mode
-                model.eval()
-
-                # Validation loop
-                loss_epoch = 0.0
-                num_examples = 0
-                for i, data in enumerate(val_datapipe):
+                # Training loop
+                for j, data in tqdm(enumerate(train_datapipe)):
+                    # Check if ran max iterations for stage
+                    if current_step >= stage.max_iterations:
+                        break
 
                     # Get predicted and unpredicted variables
                     predicted_variables = data[0]["predicted"]
@@ -286,57 +265,93 @@ def main(cfg: DictConfig) -> None:
                     predicted_variables = normalize_variables(predicted_variables, predicted_batch_norm)
                     unpredicted_variables = normalize_variables(unpredicted_variables, unpredicted_batch_norm)
 
-                    # Perform validation step and compute loss
-                    loss, net_predicted_variables, predicted_variables = eval_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
-                    loss_epoch += loss.detach().cpu().numpy()
-                    num_examples += predicted_variables.shape[0]
+                    # Log memory throughput
+                    nr_bytes += predicted_variables.element_size() * predicted_variables.nelement()
+                    nr_bytes += unpredicted_variables.element_size() * unpredicted_variables.nelement()
 
-                    # Plot validation on first batch
-                    if i == 0:
-                        net_predicted_variables = net_predicted_variables.cpu().numpy()
-                        predicted_variables = predicted_variables.cpu().numpy()
-                        for chan in range(net_predicted_variables.shape[2]):
-                            plt.close("all")
-                            fig, ax = plt.subplots(
-                                3, net_predicted_variables.shape[1], figsize=(15, net_predicted_variables.shape[0] * 5)
-                            )
-                            for t in range(net_predicted_variables.shape[1]):
-                                ax[0, t].set_title("Network prediction, Step {}".format(t))
-                                ax[1, t].set_title("Ground truth, Step {}".format(t))
-                                ax[2, t].set_title("Difference, Step {}".format(t))
-                                ax[0, t].imshow(net_predicted_variables[0, t, chan])
-                                ax[1, t].imshow(predicted_variables[0, t, chan])
-                                ax[2, t].imshow(net_predicted_variables[0, t, chan] - predicted_variables[0, t, chan])
-            
-                            fig.savefig(f"forcast_validation_channel{chan}_epoch{epoch}.png")
+                    # Perform training step
+                    loss = train_step_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
+                    log.log_minibatch({"loss": loss.detach()})
 
-                # Log validation loss
-                log.log_epoch({"Validation error": loss_epoch / num_examples})
+                    # Step scheduler
+                    scheduler.step()
 
-                # Switch back to train mode
-                model.train()
+                # Log learning rate
+                log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
 
-        # Sync after each epoch
-        if dist.world_size > 1:
-            torch.distributed.barrier()
+                # Log memory throughput
+                log.log_epoch({"GB/s": nr_bytes / (time.time() - tic) / 1e9})
 
-        # Step scheduler
-        scheduler.step()
+            # Perform validation
+            if dist.rank == 0:
 
-        # Save checkpoint
-        if (epoch % 5 == 0 or epoch == 1) and dist.rank == 0:
-            # Use Modulus Launch checkpoint
-            save_checkpoint(
-                "./checkpoints",
-                models=model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                epoch=epoch,
-            )
+                # Wrap validation in launch logger for console / WandB logs
+                with LaunchLogger("valid", epoch=epoch) as log:
 
-    # Finish training
-    if dist.rank == 0:
-        logger.info("Finished training!")
+                    # Switch to eval mode
+                    model.eval()
+
+                    # Validation loop
+                    loss_epoch = 0.0
+                    num_examples = 0
+                    for i, data in enumerate(val_datapipe):
+
+                        # Get predicted and unpredicted variables
+                        predicted_variables = data[0]["predicted"]
+                        unpredicted_variables = data[0]["unpredicted"]
+
+                        # Normalize variables
+                        predicted_variables = normalize_variables(predicted_variables, predicted_batch_norm)
+                        unpredicted_variables = normalize_variables(unpredicted_variables, unpredicted_batch_norm)
+
+                        # Perform validation step and compute loss
+                        loss, net_predicted_variables, predicted_variables = eval_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
+                        loss_epoch += loss.detach().cpu().numpy()
+                        num_examples += predicted_variables.shape[0]
+
+                        # Plot validation on first batch
+                        if i == 0:
+                            net_predicted_variables = net_predicted_variables.cpu().numpy()
+                            predicted_variables = predicted_variables.cpu().numpy()
+                            for chan in range(net_predicted_variables.shape[2]):
+                                plt.close("all")
+                                fig, ax = plt.subplots(
+                                    3, net_predicted_variables.shape[1], figsize=(15, net_predicted_variables.shape[0] * 5)
+                                )
+                                for t in range(net_predicted_variables.shape[1]):
+                                    ax[0, t].set_title("Network prediction, Step {}".format(t))
+                                    ax[1, t].set_title("Ground truth, Step {}".format(t))
+                                    ax[2, t].set_title("Difference, Step {}".format(t))
+                                    ax[0, t].imshow(net_predicted_variables[0, t, chan])
+                                    ax[1, t].imshow(predicted_variables[0, t, chan])
+                                    ax[2, t].imshow(net_predicted_variables[0, t, chan] - predicted_variables[0, t, chan])
+                
+                                fig.savefig(f"forcast_validation_channel{chan}_epoch{epoch}.png")
+
+                    # Log validation loss
+                    log.log_epoch({"Validation error": loss_epoch / num_examples})
+
+                    # Switch back to train mode
+                    model.train()
+
+            # Sync after each epoch
+            if dist.world_size > 1:
+                torch.distributed.barrier()
+
+            # Save checkpoint
+            if (epoch % 5 == 0 or epoch == 1) and dist.rank == 0:
+                # Use Modulus Launch checkpoint
+                save_checkpoint(
+                    "./checkpoints",
+                    models=model,
+                    optimizer=optimizer,
+                    scheduler=None,
+                    epoch=epoch,
+                )
+
+        # Finish training
+        if dist.rank == 0:
+            logger.info("Finished training!")
 
 
 if __name__ == "__main__":

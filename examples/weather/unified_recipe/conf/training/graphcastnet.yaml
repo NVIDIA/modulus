@@ -12,33 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-batch_size: 1
-
 nr_input_steps: 1 # Number of input steps to model
-
-max_epochs: 300
 
 optimizer:
   name: FusedAdam
   args:
     betas: [0.9, 0.999]
 
-schedulers:
-  - name: LinearLR
-    num_iterations: 1000
+stages:
+  - name: "Learning Rate Warmup"
+    max_iterations: 1000
+    num_epochs: 1
+    unroll_steps: 1
+    batch_size: 1
+    lr_scheduler_name: LinearLR
     args:
       start_factor: 0.001
       end_factor: 1.0
-      total_iters: ${training.schedulers.0.num_iterations}
-  - name: CosineAnnealingLR
-    num_iterations: 299000
+      total_iters: ${training.stages.0.max_iterations}
+
+  - name: "Cosine Annealing LR"
+    max_iterations: 299000
+    num_epochs: 2
+    unroll_steps: 2
+    batch_size: 1
+    lr_scheduler_name: CosineAnnealingLR
     args:
-      T_max: ${training.schedulers.1.num_iterations}
+      T_max: ${training.stages.1.max_iterations}
       eta_min: 0.0
-  - name: ConstantLR # TODO: Fix this
-    num_iterations: 11000
-    args:
-      factor: 1.0
 
 validation:
   batch_size: 1
