@@ -65,7 +65,7 @@ class Module(torch.nn.Module):
         out._args = {
             "__name__": cls.__name__,
             "__module__": cls.__module__,
-            "__args__": {k: v for k, v in bound_args.arguments.items()},
+            "__args__": {k: v for k, v in bound_args.kwargs.items()},
         }
         return out
 
