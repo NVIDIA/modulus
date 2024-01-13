@@ -69,8 +69,8 @@ torch.Size([128, 64])
 
 Modulus has many optional dependencies that are used in specific components.
 When using pip, all dependencies used in Modulus can be installed with
-`pip install modulus[all]`. If you are developing Modulus, developer dependencies
-can be installed using `pip install modulus[dev]`. Otherwise, additional dependencies
+`pip install nvidia-modulus[all]`. If you are developing Modulus, developer dependencies
+can be installed using `pip install nvidia-modulus[dev]`. Otherwise, additional dependencies
 can be installed on a case by case basis. A detailed information on installing the
 optional dependencies can be found in the
 [Getting Started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html).
