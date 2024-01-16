@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fno import FNO
+from .fno import FNO, FNO1DEncoder, FNO2DEncoder, FNO3DEncoder, FNO4DEncoder, MetaData

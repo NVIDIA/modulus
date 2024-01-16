@@ -602,7 +602,6 @@ class Histogram(EnsembleMetrics):
         tol: float = 1e-2,
         **kwargs,
     ):
-
         super().__init__(input_shape, **kwargs)
         if isinstance(bins, int):
             self.number_of_bins = bins
