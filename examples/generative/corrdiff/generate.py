@@ -41,6 +41,7 @@ from modulus.utils.generative import (
 )
 from module import Module  # TODO import from Core once the kwargs issue is fixed
 
+from concurrent.futures import ThreadPoolExecutor
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
 def main(cfg: DictConfig) -> None:
@@ -378,6 +379,17 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logg
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
 
+    # Initialize threadpool for writers
+    writer_executor = ThreadPoolExecutor(max_workers=2)
+    writer_threads = []
+
+    input_channel_info = dataset.input_channels()
+    output_channel_info = dataset.output_channels()
+    times = dataset.time()
+    input_norm = dataset.info()["input_normalization"]
+    target_norm = dataset.info()["target_normalization"]
+
+
     for image_tar, image_lr, index in iter(data_loader):
         time_index += 1
         if dist.rank == 0:
@@ -391,69 +403,32 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logg
         # input; 1x3x450x450 --> (1*9*9)x3x50x50
 
         if dist.rank == 0:
-            # weather sub-plot
-            mx, sx = dataset.info()["input_normalization"]
-            mx = mx[dataset.in_channels]
-            image_lr2 = image_lr[0].unsqueeze(0)
 
-            # add zeros for grid embeddings
-            padding = image_lr2.shape[1] - len(mx)
-            if not padding >= 0:
-                raise ValueError("padding must be non-negative")
+            # write out data in a seperate thread so we don't hold up inferencing
+            writer_threads.append(
+                writer_executor.submit(
+                    save_images,
+                    writer,
+                    list(dataset.in_channels),
+                    input_channel_info,
+                    list(dataset.out_channels),
+                    output_channel_info,
+                    input_norm,
+                    target_norm,
+                    list(times),
+                    image_out.cpu(),
+                    image_tar.cpu(),
+                    image_lr.cpu(),
+                    time_index,
+                    index[0],
+                )
+            )
 
-            mx = np.concatenate([mx, np.zeros(padding)])
-            # add zeros for grid embeddings
-            sx = sx[dataset.in_channels]
-            sx = np.concatenate([sx, np.ones(padding)])
-            image_lr2 = image_lr2.cpu().numpy()
-            image_lr2 = denormalize(image_lr2, mx, sx)
-
-            my, sy = dataset.info()["target_normalization"]
-            my = my[dataset.out_channels]
-            sy = sy[dataset.out_channels]
-            image_tar2 = image_tar[0].unsqueeze(0)
-            image_tar2 = image_tar2.cpu().numpy()
-            image_tar2 = denormalize(image_tar2, my, sy)
-
-            # some runtime assertions
-            if image_tar2.ndim != 4:
-                raise ValueError("image_tar2 must be 4-dimensional")
-
-            for idx in range(image_out.shape[0]):
-                image_out2 = image_out[idx].unsqueeze(0)
-                if image_out2.ndim != 4:
-                    raise ValueError("image_out2 must be 4-dimensional")
-
-                # Denormalize the input and outputs
-                image_out2 = image_out2.cpu().numpy()
-                image_out2 = denormalize(image_out2, my, sy)
-
-                t_index = index[0]
-                if len(index) != 1:
-                    raise ValueError(
-                        "len(index) must be 1"
-                    )  # TODO allow len(index) > 1
-                time = dataset.time()[t_index]
-                writer.write_time(time_index, time)
-                for channel_idx in range(image_out2.shape[1]):
-                    output_channels = dataset.output_channels()
-                    info = output_channels[channel_idx]
-                    channel_name = _get_name(info)
-                    truth = image_tar2[0, channel_idx]
-
-                    writer.write_truth(channel_name, time_index, truth)
-                    writer.write_prediction(
-                        channel_name, time_index, idx, image_out2[0, channel_idx]
-                    )
-
-                input_channels = dataset.input_channels()
-                for channel_idx in range(len(input_channels)):
-                    info = input_channels[channel_idx]
-                    channel_name = _get_name(info)
-                    writer.write_input(
-                        channel_name, time_index, image_lr2[0, channel_idx]
-                    )
-
+    # make sure all the workers are done writing
+    for thread in list(writer_threads):
+        thread.result()
+        writer_threads.remove(thread)
+    writer_executor.shutdown()
 
 def generate(
     net,
@@ -619,6 +594,95 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
 
     return x_next
 
+def save_images(
+    writer,
+    in_channels,
+    input_channel_info,
+    out_channels,
+    output_channel_info,
+    input_norm,
+    target_norm,
+    times,
+    image_out,
+    image_tar,
+    image_lr,
+    time_index,
+    t_index,
+    ):
+    """
+    Saves inferencing result along with the baseline
+
+    Parameters
+    ----------
+
+    writer (NetCDFWriter): Where the data is being written
+    in_channels (List): List of the input channels being used
+    input_channel_info (Dict): Description of the input channels
+    out_channels (List): List of the output channels being used
+    output_channel_info (Dict): Description of the output channels
+    input_norm (Tuple): Normalization data for input
+    target_norm (Tuple): Normalization data for the target
+    image_out (torch.Tensor): Generated output data
+    image_tar (torch.Tensor): Ground truth data
+    image_lr (torch.Tensor): Low resolution input data
+    time_index (int): Epoch number
+    t_index (int): index where times are located 
+    """
+    # weather sub-plot
+    mx, sx = input_norm
+    mx = mx[in_channels]
+    image_lr2 = image_lr[0].unsqueeze(0)
+
+    # add zeros for grid embeddings
+    padding = image_lr2.shape[1] - len(mx)
+    if not padding >= 0:
+        raise ValueError("padding must be non-negative")
+
+    mx = np.concatenate([mx, np.zeros(padding)])
+    # add zeros for grid embeddings
+    sx = sx[in_channels]
+    sx = np.concatenate([sx, np.ones(padding)])
+    image_lr2 = image_lr2.cpu().numpy()
+    image_lr2 = denormalize(image_lr2, mx, sx)
+
+    my, sy = target_norm
+    my = my[out_channels]
+    sy = sy[out_channels]
+    image_tar2 = image_tar[0].unsqueeze(0)
+    image_tar2 = image_tar2.cpu().numpy()
+    image_tar2 = denormalize(image_tar2, my, sy)
+
+    # some runtime assertions
+    if image_tar2.ndim != 4:
+        raise ValueError("image_tar2 must be 4-dimensional")
+
+    for idx in range(image_out.shape[0]):
+        image_out2 = image_out[idx].unsqueeze(0)
+        if image_out2.ndim != 4:
+            raise ValueError("image_out2 must be 4-dimensional")
+
+        # Denormalize the input and outputs
+        image_out2 = image_out2.cpu().numpy()
+        image_out2 = denormalize(image_out2, my, sy)
+
+        time = times[t_index]
+        writer.write_time(time_index, time)
+        for channel_idx in range(image_out2.shape[1]):
+            info = output_channel_info[channel_idx]
+            channel_name = _get_name(info)
+            truth = image_tar2[0, channel_idx]
+
+            writer.write_truth(channel_name, time_index, truth)
+            writer.write_prediction(
+                channel_name, time_index, idx, image_out2[0, channel_idx]
+            )
+
+        for channel_idx in range(len(input_channel_info)):
+            info = input_channel_info[channel_idx]
+            channel_name = _get_name(info)
+            writer.write_input(
+                channel_name, time_index, image_lr2[0, channel_idx]
+            )
 
 class NetCDFWriter:
     """NetCDF Writer"""
