@@ -27,7 +27,7 @@ import hydra
 import torch
 from omegaconf import DictConfig
 from training_loop import training_loop
-from utils import EasyDict, construct_class_by_name
+from modulus.utils.generative.utils import EasyDict, construct_class_by_name
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
