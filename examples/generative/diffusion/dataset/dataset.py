@@ -21,7 +21,7 @@ import zipfile
 import numpy as np
 import PIL.Image
 import torch
-from utils import EasyDict
+from modulus.utils.generative import EasyDict
 
 try:
     import pyspng
