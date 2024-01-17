@@ -30,9 +30,9 @@ class Constants(BaseModel):
     input_dim_edges: int = 4
     output_dim: int = 4
     aggregation: int = "sum"
-    hidden_dim_node_encoder = 256
-    hidden_dim_edge_encoder = 256
-    hidden_dim_node_decoder = 256
+    hidden_dim_node_encoder: int = 256
+    hidden_dim_edge_encoder: int = 256
+    hidden_dim_node_decoder: int = 256
 
     batch_size: int = 1
     epochs: int = 500
@@ -46,4 +46,4 @@ class Constants(BaseModel):
     amp: bool = False
     jit: bool = False
 
-    wandb_mode = "disabled"
+    wandb_mode: str = "disabled"
