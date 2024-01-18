@@ -496,7 +496,7 @@ def get_zarr_dataset(
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,
     }[normalization]
-    logging.info(f"Normalization: {get_target_normalization}")
+    logger.info(f"Normalization: {normalization}")
     zdataset = _ZarrDataset(path, get_target_normalization=get_target_normalization)
     return ZarrDataset(
         dataset=zdataset,
