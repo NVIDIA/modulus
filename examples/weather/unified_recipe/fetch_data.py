@@ -20,21 +20,7 @@ from omegaconf import DictConfig, OmegaConf
 OmegaConf.register_new_resolver("eval", eval)
 
 from arco_era5_etl import ARCOERA5ETL
-
-###########################
-# Transormation functions #
-###########################
-# TODO: look into better ways to organize these functions
-
-# Downsample transform
-def downsample_transform(zarr_array, downsample_factor=4):
-    zarr_array = zarr_array.coarsen({"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim").mean()
-    return zarr_array
-
-# Trim lat from 721 to 720
-def trim_lat720_transform(zarr_array):
-    zarr_array = zarr_array.isel(latitude=slice(0, -1))
-    return zarr_array
+from transform.transform import transform_registry
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
@@ -44,12 +30,11 @@ def main(cfg: DictConfig) -> None:
     OmegaConf.resolve(cfg)
 
     # Get transform function
-    if cfg.transform.name == "downsample":
-        transform = lambda x: downsample_transform(x, downsample_factor=cfg.transform.downsample_factor)
-    elif cfg.transform.name == "trim_lat720":
-        transform = trim_lat720_transform
-    else:
-        raise NotImplementedError("Transform not implemented")
+    try:
+        transform = transform_registry[cfg.transform.name]
+    except KeyError:
+        raise NotImplementedError(f'Transform {cfg.transform.name} not implemented')
+    transform = lambda x: transform(x, **cfg.transform.kwargs) if cfg.transform.kwargs else transform(x)
 
     # Initialize filesytem
     if cfg.filesystem.type == 'file':

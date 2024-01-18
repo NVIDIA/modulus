@@ -1,0 +1,90 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import numpy as np
+import healpy as hp
+import reproject as rp
+import astropy as ap
+
+# Downsample transform
+def downsample_transform(dataset, downsample_factor=4):
+    dataset = dataset.coarsen({"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim").mean()
+    returndataset 
+
+# Trim lat from 721 to 720
+def trim_lat720_transform(dataset):
+    dataset = dataset.isel(latitude=slice(0, -1))
+    returndataset 
+
+# Helpix transform
+# Reference:
+# https://github.com/nathanielcresswellclay/zephyr/blob/main/data_processing/remap/healpix.py
+def helpix_transform(dataset, nside=32, order="bilinear"):
+
+    # Get the lat/lon coordinates
+    lon = len(dataset.longitude.values)
+    lat = len(dataset.latitude.values)
+    res = 360.0 / lon
+
+    # Create the healpix grid
+    wcs_input_dict = {
+        'CTYPE1': 'RA---CAR',  # can be further specified with, e.g., RA---MOL, GLON-MOL, ELON-MOL
+        'CUNIT1': 'deg',
+        'CDELT1': -res,  # -r produces for some reason less NaNs
+        'CRPIX1': lon/2.0,
+        'CRVAL1': 180.0,
+        'NAXIS1': lon,  # does not seem to have an effect
+        'CTYPE2': 'DEC--CAR',  # can be further specified with, e.g., DEC--MOL, GLAT-MOL, ELAT-MOL 
+        'CUNIT2': 'deg',
+        'CDELT2': -res,
+        'CRPIX2': (lat + 1)/2.0,
+        'CRVAL2': 0.0,
+        'NAXIS2': lat
+    }
+    wcs_ll2hpx = ap.wcs.WCS(wcs_input_dict)
+
+    # Create healpix to 1d to 3d index mapping
+    index_mapping_1d_to_3d = np.zeros((hp.nside2npix(nside), 3), dtype=np.int64)
+    for i in range(hp.nside2npix(nside)):
+        f = i // (nside * nside)
+        hpxidx = format(i % (nside * nside), 'b').zfill(nside)
+        bits_even = hpxidx[::2]
+        bits_odd = hpxidx[1::2]
+        y = int(bits_even, 2)
+        x = int(bits_odd, 2)
+        index_mapping_1d_to_3d[i, :] = [f, x, y]
+
+    # Create numpy remapping function
+    def remap_func(x):
+        x = np.flip(x, axis=1)
+        hpx1d, _ = rp.reproject_from_healpix(
+            (x, wcs_ll2hpx), 
+            coord_system_in='icrs',
+            nside=nside,
+            order=order,
+            nested=True,
+        )
+        hpx3d = np.zeros((12, nside, nside), dtype=x.dtype)
+        hpx3d[index_mapping_1d_to_3d[:, 0], index_mapping_1d_to_3d[:, 1], index_mapping_1d_to_3d[:, 2]] = hpx1d
+
+    # Apply the remapping function
+    dataset = dataset.groupby("time").map(lambda x: remap_func(x))
+
+    return dataset
+
+transform_registry = {
+    "downsample": downsample_transform,
+    "trim_lat720": trim_lat720_transform,
+    "helpix": helpix_transform,
+}
