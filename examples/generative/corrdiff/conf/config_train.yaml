@@ -27,6 +27,7 @@ arch: ddpmpp-cwb-v0-regression
 precond: unetregression
   # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
 task: regression
+  # Which model to train [regression, diffusion]
 
 ## Hyperparameters
 duration: 200
