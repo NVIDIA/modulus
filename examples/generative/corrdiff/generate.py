@@ -99,6 +99,9 @@ def main(cfg: DictConfig) -> None:
     normalization = getattr(cfg, "normalization", "v2")
     times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
 
+    # writer options
+    num_writer_workers = getattr(cfg, "num_writer_workers", 1)
+
     # Sampler kwargs
     if sampling_method == "stochastic":
         sampler_kwargs = {}
@@ -279,7 +282,7 @@ def main(cfg: DictConfig) -> None:
     with nc.Dataset(f"{image_outdir}_{dist.rank}.nc", "w") as f:
         # add attributes
         f.cfg = str(cfg)
-        generate_and_save(dataset, sampler, f, generate_fn, device, logger0)
+        generate_and_save(dataset, sampler, f, generate_fn, device, num_writer_workers, logger0)
 
     logger0.info("Done.")
 
@@ -354,7 +357,7 @@ def get_dataset_and_sampler(
     return dataset, sampler
 
 
-def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logger):
+def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, num_writer_workers, logger):
     """
     This function generates model predictions from the input data using the specified
     `generate_fn`, and saves the predictions to the provided NetCDF file. It iterates
@@ -380,7 +383,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logg
     writer = writer_from_input_dataset(f, dataset)
 
     # Initialize threadpool for writers
-    writer_executor = ThreadPoolExecutor(max_workers=2)
+    writer_executor = ThreadPoolExecutor(max_workers=num_writer_workers)
     writer_threads = []
 
     input_channel_info = dataset.input_channels()
