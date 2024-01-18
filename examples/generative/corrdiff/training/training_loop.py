@@ -91,7 +91,7 @@ def training_loop(
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
+    logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
 
     # Initialize.
     start_time = time.time()
