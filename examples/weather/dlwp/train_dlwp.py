@@ -32,7 +32,7 @@ from modulus.models.dlwp import DLWP
 from cube_sphere_plotter_no_subplots import cube_sphere_plotter
 from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_mlflow
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-import modulus.utils.sfno.zenith_angle as zenith_angle
+import modulus.utils.zenith_angle as zenith_angle
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from hydra.utils import to_absolute_path
 
