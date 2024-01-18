@@ -45,6 +45,7 @@ def main(cfg: DictConfig) -> None:
     """
 
     # Parse options
+    task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     data = getattr(cfg, "data", "./data")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
@@ -74,11 +75,11 @@ def main(cfg: DictConfig) -> None:
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
-    resume = getattr(cfg, "resume")
     dry_run = getattr(cfg, "dry_run", False)
 
     # Parse weather data options
     c = EasyDict()
+    c.task = task
     c.train_data_path = getattr(cfg, "train_data_path")
     c.crop_size_x = getattr(cfg, "crop_size_x", 448)
     c.crop_size_y = getattr(cfg, "crop_size_y", 448)
@@ -105,9 +106,10 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
+    os.makedirs(".logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name="train.log")
+    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
 
     # Initialize config dict.
     c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
@@ -122,7 +124,7 @@ def main(cfg: DictConfig) -> None:
 
     # Network architecture.
     valid_archs = {
-        "ddpmpp-cwb-v2",
+        "ddpmpp-cwb",
         "ddpmpp-cwb-v0-regression",
         "ncsnpp",
         "adm",
@@ -132,7 +134,7 @@ def main(cfg: DictConfig) -> None:
             f"Invalid network architecture {arch}; " f"valid choices are {valid_archs}"
         )
 
-    if arch == "ddpmpp-cwb-v2":
+    if arch == "ddpmpp-cwb":
         c.network_kwargs.update(
             model_type="SongUNet",
             embedding_type="positional",
@@ -143,9 +145,9 @@ def main(cfg: DictConfig) -> None:
             channel_mult_noise=1,
             resample_filter=[1, 1],
             model_channels=128,
-            channel_mult=[1, 2, 2, 4, 4, 8],
-            attn_resolutions=[14],
-        )  # era5-cwb, larger run, 448x448
+            channel_mult=[1, 2, 2, 2, 2],
+            attn_resolutions=[28],
+        )  # era5-cwb, 448x448
 
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(
@@ -217,34 +219,10 @@ def main(cfg: DictConfig) -> None:
             torch.distributed.broadcast(seed, src=0)
         c.seed = int(seed)
 
-    # check if resume.txt exists
-    resume_path = os.path.join(outdir, "resume.txt")
-    if os.path.exists(resume_path):
-        with open(resume_path, "r") as f:
-            resume = f.read()
-            f.close()
-
-    logger0.info(f"resume: { resume}")
-
     # Transfer learning and resume.
     if transfer is not None:
-        if resume is not None:
-            raise ValueError("transfer and resume cannot be specified at the same time")
         c.resume_pkl = transfer
         c.ema_rampup_ratio = None
-    elif resume is not None:
-        logger.info("gets into elif resume is not None ...")
-        match = re.fullmatch(r"training-state-(\d+).pt", os.path.basename(resume))
-        logger.info("match", match)
-        logger.info("match.group(1)", match.group(1))
-        c.resume_pkl = os.path.join(
-            os.path.dirname(resume), f"network-snapshot-{match.group(1)}.pkl"
-        )
-        c.resume_kimg = int(match.group(1))
-        c.resume_state_dump = resume
-        logger0.info(f"c.resume_pkl: {c.resume_pkl}")
-        logger0.info(f"c.resume_kimg: {c.resume_kimg}")
-        logger0.info(f"c.resume_state_dump: {c.resume_state_dump}")
 
     # Description string.
     cond_str = "cond" if c.dataset_kwargs.use_labels else "uncond"
@@ -296,5 +274,3 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
-
-# ----------------------------------------------------------------------------

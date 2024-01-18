@@ -26,6 +26,7 @@ arch: ddpmpp-cwb-v0-regression
   # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
 precond: unetregression
   # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
+task: regression
 
 ## Hyperparameters
 duration: 200
@@ -52,7 +53,7 @@ fp16: false
   # Enable mixed-precision training
 ls: 1
   # Loss scaling
-bench: true  # TODO should default to false
+bench: false
   # Enable cuDNN benchmarking
 workers: 4
   # DataLoader worker processes
@@ -71,8 +72,6 @@ seed: null  # TODO check
   # Random seed
 transfer: null  # TODO check
   # Transfer learning from network pickle
-resume: null  # TODO check
-  # Resume from previous training state
 dry-run: false
   # Print training options and exit
 
