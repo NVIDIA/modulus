@@ -110,7 +110,7 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
-
+    
     # Initialize config dict.
     c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
     c.data_loader_kwargs = EasyDict(

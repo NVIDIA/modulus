@@ -21,7 +21,7 @@ import re
 
 import numpy as np
 import torch
-from utils import EasyDict, profiled_function
+from modulus.utils.generative.utils import EasyDict, profiled_function
 
 # ----------------------------------------------------------------------------
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# ignore_header_test
+# Copyright 2023 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+"""
+Download Stokes flow dataset
+"""
 
-__version__ = "0.5.0"
+wget --content-disposition 'https://api.ngc.nvidia.com/v2/resources/org/nvidia/team/modulus/modulus_datasets-stokes-flow/0.0/files?redirect=true&path=results_polygon.zip' -O results_polygon.zip
+unzip results_polygon.zip
+mv results ../
+rm results_polygon.zip
