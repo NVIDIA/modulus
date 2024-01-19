@@ -111,8 +111,8 @@ class Sequence_Trainer:
             x_sample = encoder.decode(z_sample, graph.edata["x"], graph,  position_mesh, position_pivotal)
             x_samples.append(x_sample.unsqueeze(0))
         x_samples = torch.cat(x_samples)
-        # x_samples = self.denormalize(x_samples)
-        # ground_trueth = self.denormalize(ground_trueth)
+        x_samples = self.denormalize(x_samples)
+        ground_trueth = self.denormalize(ground_trueth)
         
         loss_record_u = []
         loss_record_v = []
@@ -132,9 +132,6 @@ class Sequence_Trainer:
             loss = self.criterion(ground_trueth[i+1:i+2,:,2], x_samples[i+1:i+2,:,2])          
             relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,2], ground_trueth[i+1:i+2,:,2]*0.0).detach()
             loss_record_p.append(relative_error)
-        
-        
-        
         
         return x_samples, relative_error
 
@@ -206,7 +203,7 @@ if __name__ == "__main__":
 
 
 
-    trainer = Sequence_Trainer(wb, dist, produce_latents=False, Encoder = Encoder, 
+    trainer = Sequence_Trainer(wb, dist, produce_latents=True, Encoder = Encoder, 
 		         position_mesh = position_mesh, 
 		         position_pivotal = position_pivotal,
                  rank_zero_logger = rank_zero_logger)
@@ -220,9 +217,9 @@ if __name__ == "__main__":
 
 
     
-    i =0
-    for lc in trainer.dataloader:
-        ground = ground_trueth[0].to(dist.device)
+    i = 0
+    for lc in trainer.dataloader_test:
+        ground = ground_trueth[i].to(dist.device)
        
         graph.ndata["x"]
         samples,relative_error = trainer.sample(lc[0][:,0:2], lc[1], ground, lc[0], Encoder, g, position_mesh, position_pivotal)

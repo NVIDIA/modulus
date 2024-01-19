@@ -15,7 +15,7 @@ class Sequence_Model(torch.nn.Module):
                 dist,
                 context_length: int = 1,
                 hidden_dim: int = 1024,
-                dropout_rate: float = 0.1,
+                dropout_rate: float = 0.0000,#0.1,
                 n_blocks: int = 3,
                 num_layers_decoder: int = 3,
                 num_heads: int = 8,
@@ -64,7 +64,6 @@ class Sequence_Model(torch.nn.Module):
             x = torch.cat([context,x], dim=1)
         x= self.input_encoder(x)
         tgt_mask = self.generate_square_subsequent_mask(x.size()[1], device=self.dist.device)
-        
         output = self.decoder(
 			x,
 			tgt_mask = tgt_mask
@@ -83,7 +82,6 @@ class Sequence_Model(torch.nn.Module):
 
         for i in range(step_size):
             prediction = self.forward(z, context)[:, -1].unsqueeze(1)
-          
             z = torch.concat([z, prediction], dim=1)
         return z
 

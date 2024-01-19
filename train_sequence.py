@@ -5,6 +5,7 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel
 import time, os
 import wandb as wb
+from tqdm import tqdm
 
 from modulus.models.mesh_reduced.temporal_model import Sequence_Model
 from modulus.models.mesh_reduced.mesh_reduced import Mesh_Reduced
@@ -144,7 +145,7 @@ if __name__ == "__main__":
 
 
 
-    trainer = Sequence_Trainer(wb, dist, produce_latents=True, Encoder = Encoder, 
+    trainer = Sequence_Trainer(wb, dist, produce_latents=False, Encoder = Encoder, 
 		         position_mesh = position_mesh, 
 		         position_pivotal = position_pivotal,
                  rank_zero_logger = rank_zero_logger)
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     for epoch in range(trainer.epoch_init, C.epochs):
         n_batch = 0.0
         loss_total = 0.0
-        for lc in trainer.dataloader:
+        for lc in tqdm(trainer.dataloader):
             loss,relative_error = trainer.train(lc[0], lc[1])
             loss_total = loss_total + loss
             n_batch = n_batch + 1
