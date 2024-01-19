@@ -29,6 +29,15 @@ class Sequence_Trainer:
         self.dist = dist
         dataset_train = LatentDataset(
             split="train",
+            produce_latents = False,
+		    Encoder = Encoder, 
+		    position_mesh = position_mesh, 
+		    position_pivotal = position_pivotal,
+            dist = dist
+        )
+
+        dataset_test = LatentDataset(
+            split="test",
             produce_latents = produce_latents,
 		    Encoder = Encoder, 
 		    position_mesh = position_mesh, 
@@ -45,15 +54,38 @@ class Sequence_Trainer:
             use_ddp=dist.world_size > 1,
         )
 
+        self.dataloader_test = GraphDataLoader(
+            dataset_test,
+            batch_size=1,
+            shuffle=False,
+            drop_last=False,
+            pin_memory=True,
+            use_ddp=dist.world_size > 1,
+        )
+
         self.dataset_graph_train = VortexSheddingRe300To1000Dataset(
             name="vortex_shedding_train",
             split="train"
         )
 
+        self.dataset_graph_test = VortexSheddingRe300To1000Dataset(
+            name="vortex_shedding_train",
+            split="test"
+        )
+
       
         self.dataloader_graph = GraphDataLoader(
             self.dataset_graph_train,
-            batch_size=C.batch_size,
+            batch_size=1,
+            shuffle=False,
+            drop_last=False,
+            pin_memory=True,
+            use_ddp=dist.world_size > 1,
+        )
+
+        self.dataloader_graph_test = GraphDataLoader(
+            self.dataset_graph_test,
+            batch_size=1,
             shuffle=False,
             drop_last=False,
             pin_memory=True,
@@ -124,16 +156,19 @@ class Sequence_Trainer:
             loss = self.criterion(ground_trueth[i+1:i+2,:,0], x_samples[i+1:i+2,:,0])          
             relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,0], ground_trueth[i+1:i+2,:,0]*0.0).detach()
             loss_record_u.append(relative_error)
+        relative_error_u = torch.mean(torch.tensor(loss_record_u))
         for i in range(400):
             loss = self.criterion(ground_trueth[i+1:i+2,:,1], x_samples[i+1:i+2,:,1])          
             relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,1], ground_trueth[i+1:i+2,:,1]*0.0).detach()
             loss_record_v.append(relative_error)
+        relative_error_v = torch.mean(torch.tensor(loss_record_v))
         for i in range(400):
             loss = self.criterion(ground_trueth[i+1:i+2,:,2], x_samples[i+1:i+2,:,2])          
             relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,2], ground_trueth[i+1:i+2,:,2]*0.0).detach()
             loss_record_p.append(relative_error)
+        relative_error_p = torch.mean(torch.tensor(loss_record_p))
         
-        return x_samples, relative_error
+        return x_samples, relative_error_u, relative_error_v, relative_error_p
 
     def forward(self, z, context = None):
         with autocast(enabled=C.amp):
@@ -203,32 +238,43 @@ if __name__ == "__main__":
 
 
 
-    trainer = Sequence_Trainer(wb, dist, produce_latents=True, Encoder = Encoder, 
+    trainer = Sequence_Trainer(wb, dist, produce_latents=False, Encoder = Encoder, 
 		         position_mesh = position_mesh, 
 		         position_pivotal = position_pivotal,
                  rank_zero_logger = rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Testing started...")
-    for graph in trainer.dataloader_graph:
+    for graph in trainer.dataloader_graph_test:
         g = graph.to(dist.device)
         
         break
-    ground_trueth = trainer.dataset_graph_train.solution_states
+    ground_trueth = trainer.dataset_graph_test.solution_states
 
 
     
     i = 0
+    relative_error_sum_u = 0
+    relative_error_sum_v = 0
+    relative_error_sum_p = 0
+    
     for lc in trainer.dataloader_test:
         ground = ground_trueth[i].to(dist.device)
        
         graph.ndata["x"]
-        samples,relative_error = trainer.sample(lc[0][:,0:2], lc[1], ground, lc[0], Encoder, g, position_mesh, position_pivotal)
+        samples,relative_error_u, relative_error_v, relative_error_p  = trainer.sample(lc[0][:,0:2], lc[1], ground, lc[0], Encoder, g, position_mesh, position_pivotal)
+        relative_error_sum_u = relative_error_sum_u + relative_error_u
+        relative_error_sum_v = relative_error_sum_v + relative_error_v
+        relative_error_sum_p = relative_error_sum_p + relative_error_p
         i = i+1
+    relative_error_mean_u = relative_error_sum_u/i
+    relative_error_mean_v = relative_error_sum_v/i
+    relative_error_mean_p = relative_error_sum_p/i
      
     #avg_loss = loss_total/n_batch
-    # rank_zero_logger.info(
-    #         f"epoch: {epoch}, loss: {avg_loss:10.3e}, relative_error: {relative_error:10.3e},time per epoch: {(time.time()-start):10.3e}"
-    #     )
+    rank_zero_logger.info(
+            f"relative_error_mean_u: {relative_error_mean_u:10.3e},relative_error_mean_v: {relative_error_mean_v:10.3e},relative_error_mean_p: {relative_error_mean_p:10.3e},\\\
+            time cost: {(time.time()-start):10.3e}"
+        )
     # wb.log({"loss": loss.detach().cpu()})
 
      
