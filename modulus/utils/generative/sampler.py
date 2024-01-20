@@ -14,11 +14,13 @@
 
 
 import numpy as np
+import nvtx
 import torch
 
 # ruff: noqa: E731
 
 
+@nvtx.annotate(message="ablation_sampler", color="red")
 def ablation_sampler(
     net,
     latents,

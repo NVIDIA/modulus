@@ -138,18 +138,18 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             else torch.float32
         )
 
-        c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        c_skip = 0.0 * c_skip
-        c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        c_out = torch.ones_like(c_out)
-        c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        c_in = torch.ones_like(c_in)
-        c_noise = sigma.log() / 4
-        c_noise = 0.0 * c_noise
+        # c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
+        # c_skip = 0.0 * c_skip
+        # c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
+        # c_out = torch.ones_like(c_out)
+        # c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
+        # c_in = torch.ones_like(c_in)
+        # c_noise = sigma.log() / 4
+        # c_noise = 0.0 * c_noise
 
         F_x = self.model(
-            (c_in * x).to(dtype),
-            c_noise.flatten(),
+            x.to(dtype), # (c_in * x).to(dtype),
+            torch.zeros(sigma.numel(), dtype=sigma.dtype, device=sigma.device), # c_noise.flatten()
             class_labels=class_labels,
             **model_kwargs,
         )
@@ -160,8 +160,9 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             )
 
         # skip connection - for SR there's size mismatch bwtween input and output
-        x = x[:, 0 : self.img_out_channels, :, :]
-        D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        # x = x[:, 0 : self.img_out_channels, :, :]
+        # D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        D_x = F_x.to(torch.float32)
         return D_x
 
     def round_sigma(self, sigma):

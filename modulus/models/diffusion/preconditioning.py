@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import List, Union
 
 import numpy as np
+import nvtx
 import torch
 
 from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
@@ -750,6 +751,7 @@ class EDMPrecondSR(Module):
             **model_kwargs,
         )  # TODO needs better handling
 
+    @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
