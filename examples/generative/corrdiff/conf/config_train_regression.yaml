@@ -18,7 +18,7 @@ hydra:
 
 
 ## Main options
-outdir: "./output"   
+outdir: "./output_regression"   
   # Where to save the results
 data: 2023-01-24-cwb-4years.zarr
   # Path to the dataset
