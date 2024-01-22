@@ -111,29 +111,31 @@ $\sigma_{min} = 0.002$. We adopt the rest of hyperparamaters from [EDM](https://
 To train the regression model on a single GPU, run
 
 ```bash
-python train.py config_name='conf_train_regression'
+python train.py --config-name=config_train_regression.yaml
+
 ```
 
 Once the regression model is trained, put the checkpoints in the `checkpoints/regression.mdlus` directory.
 Next, to train the diffusion mode on a single GPU, run
+
 ```bash
-python train.py config_name='conf_train_diffusion'
+python train.py --config-name=config_train_diffusion.yaml
 ```
 
 This will launch a CorrDiff training using the base configs specified in
-the `conf/config_train.yaml` file. Configs can be changed directly in the YAML file,
+the config files. Configs can be changed directly in the YAML file,
 or can be overwritten in the command line. For example, to run the training with a 
 total batch size of 64, run
 
 ```bash
-python train.py batch=64
+python train.py --config-name=config_train_regression.yaml batch=64
 ```
 
 Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training,
 run
 
 ```bash
-mpirun -np <num_GPUs> python train.py config_name=<conf_train_diffusion or conf_train_regression>
+mpirun -np <num_GPUs> python train.py --config-name=<config_train_diffusion or config_train_regression>
 ```
 
 If running in a docker container, you may need to include the `--allow-run-as-root` in
