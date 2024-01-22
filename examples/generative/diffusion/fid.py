@@ -25,7 +25,7 @@ import torch
 import tqdm
 from dataset import ImageFolderDataset
 from omegaconf import DictConfig
-from utils import open_url
+from modulus.utils.generative import open_url
 
 from modulus.metrics.diffusion import calculate_fid_from_inception_stats
 from modulus.distributed import DistributedManager

@@ -21,7 +21,7 @@ import PIL.Image
 import torch
 import tqdm
 from omegaconf import DictConfig
-from utils import StackedRandomGenerator, open_url
+from modulus.utils.generative.utils import StackedRandomGenerator, open_url
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
