@@ -43,6 +43,7 @@ from module import Module  # TODO import from Core once the kwargs issue is fixe
 
 from concurrent.futures import ThreadPoolExecutor
 
+
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
 def main(cfg: DictConfig) -> None:
     """Generate random images using the techniques described in the paper
@@ -282,7 +283,9 @@ def main(cfg: DictConfig) -> None:
     with nc.Dataset(f"{image_outdir}_{dist.rank}.nc", "w") as f:
         # add attributes
         f.cfg = str(cfg)
-        generate_and_save(dataset, sampler, f, generate_fn, device, num_writer_workers, logger0)
+        generate_and_save(
+            dataset, sampler, f, generate_fn, device, num_writer_workers, logger0
+        )
 
     logger0.info("Done.")
 
@@ -357,7 +360,9 @@ def get_dataset_and_sampler(
     return dataset, sampler
 
 
-def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, num_writer_workers, logger):
+def generate_and_save(
+    dataset, sampler, f: nc.Dataset, generate_fn, device, num_writer_workers, logger
+):
     """
     This function generates model predictions from the input data using the specified
     `generate_fn`, and saves the predictions to the provided NetCDF file. It iterates
@@ -391,7 +396,6 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, num_
     times = dataset.time()
     input_norm = dataset.info()["input_normalization"]
     target_norm = dataset.info()["target_normalization"]
-
 
     for image_tar, image_lr, index in iter(data_loader):
         time_index += 1
@@ -432,6 +436,7 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, num_
         thread.result()
         writer_threads.remove(thread)
     writer_executor.shutdown()
+
 
 def generate(
     net,
@@ -597,6 +602,7 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
 
     return x_next
 
+
 def save_images(
     writer,
     in_channels,
@@ -611,7 +617,7 @@ def save_images(
     image_lr,
     time_index,
     t_index,
-    ):
+):
     """
     Saves inferencing result along with the baseline
 
@@ -629,7 +635,7 @@ def save_images(
     image_tar (torch.Tensor): Ground truth data
     image_lr (torch.Tensor): Low resolution input data
     time_index (int): Epoch number
-    t_index (int): index where times are located 
+    t_index (int): index where times are located
     """
     # weather sub-plot
     mx, sx = input_norm
@@ -683,9 +689,8 @@ def save_images(
         for channel_idx in range(len(input_channel_info)):
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
-            writer.write_input(
-                channel_name, time_index, image_lr2[0, channel_idx]
-            )
+            writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
+
 
 class NetCDFWriter:
     """NetCDF Writer"""
