@@ -446,6 +446,7 @@ class UNetBlock(torch.nn.Module):
             )
 
     def forward(self, x, emb):
+        torch.cuda.nvtx.range_push("UNetBlock")
         orig = x
         x = self.conv0(silu(self.norm0(x)))
 
@@ -474,6 +475,7 @@ class UNetBlock(torch.nn.Module):
             a = torch.einsum("nqk,nck->ncq", w, v)
             x = self.proj(a.reshape(*x.shape)).add_(x)
             x = x * self.skip_scale
+        torch.cuda.nvtx.range_pop()
         return x
 
 
