@@ -1,0 +1,10 @@
+defaults:
+  - /model/modules/activations@activation: capped_gelu
+
+_target_: training.dlwp.model.modules.blocks.BasicConvBlock
+_recursive_: true
+in_channels: 3
+out_channels: 1
+kernel_size: 3
+dilation: 1
+n_layers: 1

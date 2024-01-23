@@ -1,0 +1,2 @@
+_target_: training.dlwp.model.modules.activations.CappedGELU
+cap_value: 10
