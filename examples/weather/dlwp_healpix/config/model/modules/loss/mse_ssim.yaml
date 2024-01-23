@@ -1,0 +1,14 @@
+_target_: training.dlwp.model.modules.losses.MSE_SSIM
+
+mse_params:
+ssim_params:
+  window_size: 11
+  time_series_forecasting: True
+# variables over which to calculate SSIM-MSE weighted average loss
+ssim_variables:
+  - ttr1h
+  - tcwv0
+# used to calculated the weighted average between MSE and DSSIM
+weights:
+  - 0.
+  - 1.

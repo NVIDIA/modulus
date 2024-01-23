@@ -1,0 +1,3 @@
+progress_bar:
+  _target_: training.dlwp.utils.CustomProgressBar
+  refresh_rate: 1

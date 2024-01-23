@@ -1,0 +1,3 @@
+stochastic_weight_avg:
+  _target_: pytorch_lightning.callbacks.StochasticWeightAveraging
+  swa_epoch_start: 5

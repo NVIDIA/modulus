@@ -1,0 +1,5 @@
+_target_: training.dlwp.model.modules.blocks.ConvGRUBlock
+_recursive_: false
+in_channels: 3
+kernel_size: 1
+downscale_factor: 4

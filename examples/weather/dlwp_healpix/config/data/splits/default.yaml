@@ -1,0 +1,6 @@
+train_date_start: 1979-01-01
+train_date_end: 2012-12-31T18:00
+val_date_start: 2013-01-01
+val_date_end: 2016-12-31T18:00
+test_date_start: 2017-01-01
+test_date_end: 2018-12-31T18:00

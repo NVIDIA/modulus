@@ -1,0 +1,2 @@
+_target_: training.dlwp.model.modules.blocks.AvgPool
+pooling: 2

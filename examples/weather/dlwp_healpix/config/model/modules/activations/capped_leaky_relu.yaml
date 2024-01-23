@@ -1,0 +1,2 @@
+_target_: training.dlwp.model.modules.activations.CappedLeakyReLU
+cap_value: 10

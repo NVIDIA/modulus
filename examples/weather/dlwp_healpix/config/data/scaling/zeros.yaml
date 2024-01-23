@@ -1,0 +1,25 @@
+z500:
+  mean: 0.
+  std: 1.
+z1000:
+  mean: 0.
+  std: 1.
+tau300-700:
+  mean: 0.
+  std: 1.
+t2m0:
+  mean: 0.
+  std: 1.
+tcwv0:
+  mean: 0.
+  std: 1.
+t850:
+  mean: 0.
+  std: 1.
+z250:
+  mean: 0.
+  std: 1.
+tp6:
+  mean: 0.
+  std: 1.
+  log_epsilon: 1e-6
