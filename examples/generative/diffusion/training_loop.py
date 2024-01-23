@@ -32,9 +32,9 @@ from modulus.utils.generative.utils import (
     copy_params_and_buffers,
     ddp_sync,
     format_time,
-    open_url,
     print_module_summary,
 )
+from misc import open_url
 
 # # weather related
 # from .YParams import YParams
