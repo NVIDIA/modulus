@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Molecular Dynamics example.
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
+- Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
 
 ### Changed
 
@@ -53,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Dependencies
 
 - Removed experimental SFNO dependencies
-- Added CorrDiff dependencies (cftime, einops, pyspng)
+- Added CorrDiff dependencies (cftime, einops, pyspng, nvtx)
 - Made tqdm a required dependency
 
 ## [0.4.0] - 2023-11-20
