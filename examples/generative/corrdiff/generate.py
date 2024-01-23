@@ -181,7 +181,6 @@ def main(cfg: DictConfig) -> None:
         net_reg.use_fp16 = True
         net_res.use_fp16 = True
 
-    # @nvtx.annotate(color="green")
     def generate_fn(image_lr):
         """Function to generate an image
 
