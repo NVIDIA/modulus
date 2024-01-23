@@ -148,8 +148,10 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         # c_noise = 0.0 * c_noise
 
         F_x = self.model(
-            x.to(dtype), # (c_in * x).to(dtype),
-            torch.zeros(sigma.numel(), dtype=sigma.dtype, device=sigma.device), # c_noise.flatten()
+            x.to(dtype),  # (c_in * x).to(dtype),
+            torch.zeros(
+                sigma.numel(), dtype=sigma.dtype, device=sigma.device
+            ),  # c_noise.flatten()
             class_labels=class_labels,
             **model_kwargs,
         )

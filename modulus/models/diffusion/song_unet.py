@@ -326,7 +326,9 @@ class SongUNet(Module):
             emb = silu(self.map_layer0(emb))
             emb = silu(self.map_layer1(emb))
         else:
-            emb = torch.zeros((noise_labels.shape[0], self.emb_channels), device=x.device)
+            emb = torch.zeros(
+                (noise_labels.shape[0], self.emb_channels), device=x.device
+            )
 
         # Encoder.
         skips = []
