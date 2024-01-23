@@ -17,10 +17,10 @@
 
 import cftime
 import datetime
-import json
 import hydra
 import netCDF4 as nc
 import numpy as np
+import nvtx
 import torch
 import tqdm
 import training.dataset
@@ -190,102 +190,119 @@ def main(cfg: DictConfig) -> None:
         Return
             image_hr: high resolution output: shape (b, c, h, w)
         """
-        if sample_res == "full":
-            image_lr_patch = image_lr
-        else:
-            image_lr_patch = rearrange(
-                image_lr,
-                "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                h1=crop_size_x // patch_size,
-                w1=crop_size_y // patch_size,
-            )
+        with nvtx.annotate("generate_fn", color="green"):
+            if sample_res == "full":
+                image_lr_patch = image_lr
+            else:
+                torch.cuda.nvtx.range_push("rearrange")
+                image_lr_patch = rearrange(
+                    image_lr,
+                    "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
+                    h1=crop_size_x // patch_size,
+                    w1=crop_size_y // patch_size,
+                )
+                torch.cuda.nvtx.range_pop()
 
-        sample_seeds = seeds
+            sample_seeds = seeds
 
-        logger0.info(f"seeds: {sample_seeds}")
-        if net_reg:
-            net_reg.to(device)
-            image_mean = generate(
-                net=net_reg,
-                img_lr=image_lr_patch,
-                seed_batch_size=1,
-                seeds=sample_seeds,
-                pretext="reg",
-                class_idx=class_idx,
-            )
-            net_reg.cpu()
-
-            net_res.to(device)
-            image_out = image_mean + generate(
-                net=net_res,
-                img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
-                seed_batch_size=seed_batch_size,
-                sampling_method=sampling_method,
-                seeds=sample_seeds,
-                pretext="gen",
-                class_idx=class_idx,
-                num_steps=num_steps,
-                **sampler_kwargs,
-            )
-            net_res.cpu()
-
-        else:
-            net_reg.to(device)
-            image_out = generate(
-                net=net_res,
-                img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
-                seed_batch_size=seed_batch_size,
-                sampling_method=sampling_method,
-                seeds=sample_seeds,
-                pretext="gen",
-                class_idx=class_idx,
-                num_steps=num_steps,
-                **sampler_kwargs,
-            )
-
-        # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
-        if sample_res != "full":
-            image_out = rearrange(
-                image_out,
-                "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                h1=crop_size_x // patch_size,
-                w1=crop_size_y // patch_size,
-            )
-
-        # Gather tensors on rank 0
-        if dist.world_size > 1:
-            if dist.rank == 0:
-                gathered_tensors = [
-                    torch.zeros_like(
-                        image_out, dtype=image_out.dtype, device=image_out.device
+            logger0.info(f"seeds: {sample_seeds}")
+            if net_reg:
+                with nvtx.annotate("regression_model", color="yellow"):
+                    net_reg.to(device)
+                    image_mean = generate(
+                        net=net_reg,
+                        img_lr=image_lr_patch,
+                        seed_batch_size=1,
+                        seeds=[
+                            0,
+                        ],  # Only run regression model once
+                        pretext="reg",
+                        class_idx=class_idx,
                     )
-                    for _ in range(dist.world_size)
-                ]
-            else:
-                gathered_tensors = None
+                    net_reg.cpu()
 
-            torch.distributed.barrier()
-            gather(
-                image_out,
-                gather_list=gathered_tensors if dist.rank == 0 else None,
-                dst=0,
-            )
+                with nvtx.annotate("diffusion model", color="purple"):
+                    net_res.to(device)
+                    image_out = image_mean + generate(
+                        net=net_res,
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        seed_batch_size=seed_batch_size,
+                        sampling_method=sampling_method,
+                        seeds=sample_seeds,
+                        pretext="gen",
+                        class_idx=class_idx,
+                        num_steps=num_steps,
+                        **sampler_kwargs,
+                    )
+                    net_res.cpu()
 
-            if dist.rank == 0:
-                return torch.cat(gathered_tensors)
             else:
-                return None
-        else:
-            return image_out
+                with nvtx.annotate("diffusion model", color="purple"):
+                    net_res.to(device)
+                    image_out = generate(
+                        net=net_res,
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        seed_batch_size=seed_batch_size,
+                        sampling_method=sampling_method,
+                        seeds=sample_seeds,
+                        pretext="gen",
+                        class_idx=class_idx,
+                        num_steps=num_steps,
+                        **sampler_kwargs,
+                    )
+
+            # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
+            if sample_res != "full":
+                image_out = rearrange(
+                    image_out,
+                    "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
+                    h1=crop_size_x // patch_size,
+                    w1=crop_size_y // patch_size,
+                )
+
+            # Gather tensors on rank 0
+            if dist.world_size > 1:
+                if dist.rank == 0:
+                    gathered_tensors = [
+                        torch.zeros_like(
+                            image_out, dtype=image_out.dtype, device=image_out.device
+                        )
+                        for _ in range(dist.world_size)
+                    ]
+                else:
+                    gathered_tensors = None
+
+                torch.distributed.barrier()
+                gather(
+                    image_out,
+                    gather_list=gathered_tensors if dist.rank == 0 else None,
+                    dst=0,
+                )
+
+                if dist.rank == 0:
+                    return torch.cat(gathered_tensors)
+                else:
+                    return None
+            else:
+                return image_out
 
     # generate images
     logger0.info("Generating images...")
+
     with nc.Dataset(f"{image_outdir}_{dist.rank}.nc", "w") as f:
         # add attributes
         f.cfg = str(cfg)
-        generate_and_save(
-            dataset, sampler, f, generate_fn, device, num_writer_workers, logger0
-        )
+        with torch.cuda.profiler.profile():
+            with torch.autograd.profiler.emit_nvtx():
+                generate_and_save(
+                    dataset,
+                    sampler,
+                    f,
+                    generate_fn,
+                    device,
+                    num_writer_workers,
+                    logger0,
+                )
 
     logger0.info("Done.")
 
@@ -386,6 +403,11 @@ def generate_and_save(
     )
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
+    warmup_steps = 1
+
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    batch_size = 1
 
     # Initialize threadpool for writers
     writer_executor = ThreadPoolExecutor(max_workers=num_writer_workers)
@@ -401,16 +423,21 @@ def generate_and_save(
         time_index += 1
         if dist.rank == 0:
             logger.info(f"starting index: {time_index}")  # TODO print on rank zero
+
+        if time_index == warmup_steps:
+            start.record()
+
         # continue
-        input_data = image_lr = image_lr.to(device=device).to(torch.float32)
+        image_lr = image_lr.to(device=device).to(torch.float32)
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
+
+        batch_size = image_out.shape[0]
 
         # for validation - make 3x450x450 to an ordered sequence of 50x50 patches
         # input; 1x3x450x450 --> (1*9*9)x3x50x50
 
         if dist.rank == 0:
-
             # write out data in a seperate thread so we don't hold up inferencing
             writer_threads.append(
                 writer_executor.submit(
@@ -430,6 +457,18 @@ def generate_and_save(
                     index[0],
                 )
             )
+    end.record()
+    end.synchronize()
+    elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
+    timed_steps = time_index + 1 - warmup_steps
+    average_time_per_batch_element = elapsed_time / timed_steps / batch_size
+    if dist.rank == 0:
+        logger.info(
+            f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
+        )
+        logger.info(
+            f"Average time per batch element = {average_time_per_batch_element} s"
+        )
 
     # make sure all the workers are done writing
     for thread in list(writer_threads):
@@ -478,63 +517,64 @@ def generate(
     # Loop over batches.
     all_images = []
     for batch_seeds in tqdm.tqdm(rank_batches, unit="batch", disable=(dist.rank != 0)):
-        batch_size = len(batch_seeds)
-        if batch_size == 0:
-            continue
+        with nvtx.annotate(f"generate {len(all_images)}", color="rapids"):
+            batch_size = len(batch_seeds)
+            if batch_size == 0:
+                continue
 
-        # Pick latents and labels.
-        rnd = StackedRandomGenerator(device, batch_seeds)
-        latents = rnd.randn(
-            [
-                seed_batch_size,
-                net.img_out_channels,
-                net.img_resolution,
-                net.img_resolution,
-            ],
-            device=device,
-        )
+            # Pick latents and labels.
+            rnd = StackedRandomGenerator(device, batch_seeds)
+            latents = rnd.randn(
+                [
+                    seed_batch_size,
+                    net.img_out_channels,
+                    net.img_resolution,
+                    net.img_resolution,
+                ],
+                device=device,
+            )
 
-        class_labels = None
-        if net.label_dim:
-            class_labels = torch.eye(net.label_dim, device=device)[
-                rnd.randint(net.label_dim, size=[seed_batch_size], device=device)
-            ]
-        if class_idx is not None:
-            class_labels[:, :] = 0
-            class_labels[:, class_idx] = 1
+            class_labels = None
+            if net.label_dim:
+                class_labels = torch.eye(net.label_dim, device=device)[
+                    rnd.randint(net.label_dim, size=[seed_batch_size], device=device)
+                ]
+            if class_idx is not None:
+                class_labels[:, :] = 0
+                class_labels[:, class_idx] = 1
 
-        # Generate images.
-        sampler_kwargs = {
-            key: value for key, value in sampler_kwargs.items() if value is not None
-        }
+            # Generate images.
+            sampler_kwargs = {
+                key: value for key, value in sampler_kwargs.items() if value is not None
+            }
 
-        if pretext == "gen":
-            if sampling_method == "deterministic":
-                sampler_fn = ablation_sampler
-            elif sampling_method == "stochastic":
-                sampler_fn = edm_sampler
+            if pretext == "gen":
+                if sampling_method == "deterministic":
+                    sampler_fn = ablation_sampler
+                elif sampling_method == "stochastic":
+                    sampler_fn = edm_sampler
+                else:
+                    raise ValueError(
+                        f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
+                    )
+            elif pretext == "reg":
+                latents = torch.zeros_like(latents)
+                sampler_fn = unet_regression
             else:
                 raise ValueError(
-                    f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
+                    f"Unknown pretext {pretext}. Should be either 'gen' or 'reg'."
                 )
-        elif pretext == "reg":
-            latents = torch.zeros_like(latents)
-            sampler_fn = unet_regression
-        else:
-            raise ValueError(
-                f"Unknown pretext {pretext}. Should be either 'gen' or 'reg'."
-            )
 
-        with torch.inference_mode():
-            images = sampler_fn(
-                net.to(device),
-                latents,
-                img_lr,
-                class_labels,
-                randn_like=rnd.randn_like,
-                **sampler_kwargs,
-            )
-        all_images.append(images)
+            with torch.inference_mode():
+                images = sampler_fn(
+                    net.to(device),
+                    latents,
+                    img_lr,
+                    class_labels,
+                    randn_like=rnd.randn_like,
+                    **sampler_kwargs,
+                )
+            all_images.append(images)
     return torch.cat(all_images)
 
 
@@ -598,7 +638,10 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
     x_hat = latents.to(torch.float64) * t_steps[0]
     t_hat = torch.tensor(1.0).to(torch.float64).cuda()
 
-    x_next = net(x_hat, x_lr, t_hat, class_labels).to(torch.float64)
+    # Run regression on just a single batch element and then repeat
+    x_next = net(x_hat[0:1], x_lr, t_hat, class_labels).to(torch.float64)
+    if x_hat.shape[0] > 1:
+        x_next = x_next.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
 
     return x_next
 
