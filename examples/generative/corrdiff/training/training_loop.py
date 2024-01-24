@@ -30,7 +30,11 @@ from . import training_stats
 sys.path.append("../")
 from module import Module
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper, initialize_wandb
+from modulus.launch.logging import (
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    initialize_wandb,
+)
 from modulus.utils.generative import (
     InfiniteSampler,
     construct_class_by_name,
