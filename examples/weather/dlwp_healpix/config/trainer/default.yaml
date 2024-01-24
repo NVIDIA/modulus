@@ -3,7 +3,7 @@ defaults:
   - optimizer: adam
   - lr_scheduler: cosine
 
-_target_: training.dlwp.trainer.trainer.Trainer
+_target_: trainer.Trainer
 _recursive_: true
 max_epochs: 50
 min_epochs: 1

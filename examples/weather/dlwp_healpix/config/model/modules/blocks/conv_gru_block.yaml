@@ -1,4 +1,4 @@
-_target_: training.dlwp.model.modules.blocks.ConvGRUBlock
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.ConvGRUBlock
 _recursive_: false
 in_channels: 3
 kernel_size: 1

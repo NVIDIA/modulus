@@ -42,7 +42,7 @@ class MetaData(ModelMetaData):
     func_torch: bool = False
     auto_grad: bool = False
 
-class DWLP_HEALPixRec(Module):
+class HEALPixRecUNet(Module):
     def __init__(
             self,
             encoder: DictConfig,

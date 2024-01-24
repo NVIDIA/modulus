@@ -1,1 +1,1 @@
-_target_: training.dlwp.trainer.criterion.BaseMSE 
+_target_: modulus.metrics.climate.dlwp_loss.BaseMSE 

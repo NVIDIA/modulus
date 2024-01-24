@@ -1,7 +1,7 @@
 defaults:
   - /model/modules/activations@activation: capped_gelu
 
-_target_: training.dlwp.model.modules.blocks.TransposedConvUpsample
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.TransposedConvUpsample
 in_channels: 3
 out_channels: 1
 upsampling: 2
