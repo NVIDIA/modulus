@@ -1,2 +1,2 @@
-_target_: training.dlwp.model.modules.activations.CappedLeakyReLU
+_target_: modulus.models.layers.activations.CappedLeakyReLU
 cap_value: 10

@@ -1,4 +1,4 @@
-_target_: training.dlwp.data.modules.TimeSeriesDataModule
+_target_: data_modules.TimeSeriesDataModule
 src_directory: ${data.src_directory}
 dst_directory: ${data.dst_directory}
 dataset_name: ${data.dataset_name}

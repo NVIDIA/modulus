@@ -4,7 +4,7 @@ defaults:
   - /model/modules/blocks@recurrent_block: conv_gru_block
   - /model/modules/blocks@output_layer: output_layer
 
-_target_: training.dlwp.model.modules.decoder.UNetDecoder
+_target_: modulus.models.dlwp_healpix_layers.healpix_decoder.UNetDecoder
 _recursive_: false
 n_channels:
   - 256

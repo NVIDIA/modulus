@@ -1,4 +1,4 @@
-_target_: training.dlwp.model.modules.losses.MSE_SSIM
+_target_: modulus.metrics.climate.loss.MSE_SSIM
 
 mse_params:
 ssim_params:

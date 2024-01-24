@@ -1,2 +1,2 @@
-_target_: training.dlwp.model.modules.blocks.AvgPool
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.AvgPool
 pooling: 2
