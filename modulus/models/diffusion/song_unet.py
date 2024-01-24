@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import List
 
 import numpy as np
+import nvtx
 import torch
 from torch.nn.functional import silu
 
@@ -304,6 +305,7 @@ class SongUNet(Module):
                     in_channels=cout, out_channels=out_channels, kernel=3, **init_zero
                 )
 
+    @nvtx.annotate(message="SongUNet", color="blue")
     def forward(self, x, noise_labels, class_labels, augment_labels=None):
         if self.embedding_type != "zero":
             # Mapping.
@@ -324,35 +326,39 @@ class SongUNet(Module):
             emb = silu(self.map_layer0(emb))
             emb = silu(self.map_layer1(emb))
         else:
-            emb = torch.zeros((noise_labels.shape[0], self.emb_channels)).cuda()
+            emb = torch.zeros(
+                (noise_labels.shape[0], self.emb_channels), device=x.device
+            )
 
         # Encoder.
         skips = []
         aux = x
         for name, block in self.enc.items():
-            if "aux_down" in name:
-                aux = block(aux)
-            elif "aux_skip" in name:
-                x = skips[-1] = x + block(aux)
-            elif "aux_residual" in name:
-                x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
-            else:
-                x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
-                skips.append(x)
+            with nvtx.annotate(f"SongUNet encoder: {name}", color="blue"):
+                if "aux_down" in name:
+                    aux = block(aux)
+                elif "aux_skip" in name:
+                    x = skips[-1] = x + block(aux)
+                elif "aux_residual" in name:
+                    x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
+                else:
+                    x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
+                    skips.append(x)
 
         # Decoder.
         aux = None
         tmp = None
         for name, block in self.dec.items():
-            if "aux_up" in name:
-                aux = block(aux)
-            elif "aux_norm" in name:
-                tmp = block(x)
-            elif "aux_conv" in name:
-                tmp = block(silu(tmp))
-                aux = tmp if aux is None else tmp + aux
-            else:
-                if x.shape[1] != block.in_channels:
-                    x = torch.cat([x, skips.pop()], dim=1)
-                x = block(x, emb)
+            with nvtx.annotate(f"SongUNet decoder: {name}", color="blue"):
+                if "aux_up" in name:
+                    aux = block(aux)
+                elif "aux_norm" in name:
+                    tmp = block(x)
+                elif "aux_conv" in name:
+                    tmp = block(silu(tmp))
+                    aux = tmp if aux is None else tmp + aux
+                else:
+                    if x.shape[1] != block.in_channels:
+                        x = torch.cat([x, skips.pop()], dim=1)
+                    x = block(x, emb)
         return aux

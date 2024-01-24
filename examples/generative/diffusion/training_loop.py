@@ -25,16 +25,16 @@ import psutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from training_stats import default_collector, report, report0
-from utils import (
+from modulus.utils.generative.utils import (
     InfiniteSampler,
     check_ddp_consistency,
     construct_class_by_name,
     copy_params_and_buffers,
     ddp_sync,
     format_time,
-    open_url,
     print_module_summary,
 )
+from misc import open_url
 
 # # weather related
 # from .YParams import YParams
