@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - data: era5_hpx64_7var_6h_24h
-  - model: hpx_unet
+  - model: hpx_rec_unet
   - trainer: default
 
 experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
