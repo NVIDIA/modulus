@@ -32,6 +32,8 @@ class Constants(BaseModel):
     ckpt_sequence_path: str = "checkpoints/new_sequence"
     ckpt_sequence_name: str = "sequence_model.pt"
     sequence_batch_size: int = 1
+    produce_latents = True   #Set it as True when first produce latent representations from the encoder 
+
 
     # performance configs
     amp: bool = False

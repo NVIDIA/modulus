@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
 
 
-    trainer = Sequence_Trainer(wb, dist, produce_latents=False, Encoder = Encoder, 
+    trainer = Sequence_Trainer(wb, dist, produce_latents=C.produce_latents, Encoder = Encoder, 
 		         position_mesh = position_mesh, 
 		         position_pivotal = position_pivotal,
                  rank_zero_logger = rank_zero_logger)

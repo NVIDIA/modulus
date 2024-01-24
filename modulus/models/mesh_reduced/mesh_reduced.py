@@ -23,6 +23,47 @@ import torch_scatter
 
 
 class Mesh_Reduced(torch.nn.Module):
+    """ PbGMR-GMUS architecture
+    Parameters
+    ----------
+    input_dim_nodes : int
+        Number of node features
+    input_dim_edges : int
+        Number of edge features
+    output_decode_dim: int
+        Number of decoding outputs (per node)
+    output_encode_dim: int, optional
+        Number of encoding outputs (per pivotal postion),  by default 3
+    processor_size : int, optional
+        Number of message passing blocks, by default 15
+    num_layers_node_processor : int, optional
+        Number of MLP layers for processing nodes in each message passing block, by default 2
+    num_layers_edge_processor : int, optional
+        Number of MLP layers for processing edge features in each message passing block, by default 2
+    hidden_dim_processor : int, optional
+        Hidden layer size for the message passing blocks, by default 128
+    hidden_dim_node_encoder : int, optional
+        Hidden layer size for the node feature encoder, by default 128
+    num_layers_node_encoder : int, optional
+        Number of MLP layers for the node feature encoder, by default 2
+    hidden_dim_edge_encoder : int, optional
+        Hidden layer size for the edge feature encoder, by default 128
+    num_layers_edge_encoder : int, optional
+        Number of MLP layers for the edge feature encoder, by default 2
+    hidden_dim_node_decoder : int, optional
+        Hidden layer size for the node feature decoder, by default 128
+    num_layers_node_decoder : int, optional
+        Number of MLP layers for the node feature decoder, by default 2
+    k: int, optional
+        Number of nodes considered for per pivotal postion, by default 3
+    aggregation: str, optional
+        Message aggregation type, by default "mean"
+    Note
+    ----
+    Reference: Han, Xu, et al. "Predicting physics in mesh-reduced space with temporal attention."
+    arXiv preprint arXiv:2201.09113 (2022).
+    
+    """
     def __init__(
 			    self, 
 				input_dim_nodes: int, 

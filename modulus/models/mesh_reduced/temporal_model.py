@@ -14,7 +14,6 @@ class Sequence_Model(torch.nn.Module):
                 input_content_dim: int,
                 dist,
                 context_length: int = 1,
-                hidden_dim: int = 1024,
                 dropout_rate: float = 0.0000,#0.1,
                 n_blocks: int = 3,
                 num_layers_decoder: int = 3,
