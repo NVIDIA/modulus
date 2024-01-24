@@ -21,7 +21,6 @@ from hydra.utils import instantiate
 import numpy as np
 import torch as th
 import torch.distributed as dist
-from torchinfo import summary
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -95,9 +94,9 @@ def train(cfg):
 
     if dist.is_initialized():
         if dist.get_rank() == 0:
-            summary(model)
+            logger.info("Model initialized")
     else:
-        summary(model)
+        logger.info("Model initialized")
 
     # Instantiate PyTorch modules (with state dictionaries from checkpoint if given)
     criterion = instantiate(cfg.trainer.criterion)
