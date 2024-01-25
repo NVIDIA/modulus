@@ -28,7 +28,7 @@ class Constants(BaseModel):
 
     # training configs for sequence model
     sequence_dim: int = 768
-    sequence_content_dim: int = 6
+    sequence_context_dim: int = 6
     ckpt_sequence_path: str = "checkpoints/new_sequence"
     ckpt_sequence_name: str = "sequence_model.pt"
     sequence_batch_size: int = 1

@@ -45,7 +45,7 @@ class Sequence_Trainer:
             pin_memory=True,
             use_ddp=dist.world_size > 1,
         )
-        self.model = Sequence_Model(C.sequence_dim, C.sequence_content_dim, dist)
+        self.model = Sequence_Model(C.sequence_dim, C.sequence_context_dim, dist)
 
         if C.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
