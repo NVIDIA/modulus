@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pytest_utils import import_or_fail
 import datetime
-
-import cftime
 import yaml
 
 from modulus.utils.generative import convert_datetime_to_cftime
+
+cftime = pytest.importorskip("cftime")
 
 # ruff: noqa: S101  # TODo remove exception
 
@@ -30,6 +31,7 @@ def test_datetime_yaml():
     assert dt == loaded
 
 
+@import_or_fail("cftime")
 def test_convert_to_cftime():
     """test parse time"""
     dt = datetime.datetime(2011, 1, 1)
