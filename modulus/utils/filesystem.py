@@ -98,7 +98,7 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
         file_url = f"https://api.ngc.nvidia.com/v2/org/{org}/team/{team}/models/{model}/versions/{version}/files/{filename}"
     else:
         file_url = f"https://api.ngc.nvidia.com/v2/models/{org}/{team}/{model}/versions/{version}/files/{filename}"
-    local_url = f"{LOCAL_CACHE}/{filename}"
+    local_url = f"{out_path}/{filename}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     # Streaming here for larger files
     with requests.get(file_url, headers=headers, stream=True, timeout=timeout) as r:
