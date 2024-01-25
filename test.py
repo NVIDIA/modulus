@@ -21,9 +21,6 @@ from train import Mesh_ReducedTrainer
 
 C = Constants()
 
-
-
-
 if __name__ == "__main__":
     # initialize distributed manager
     DistributedManager.initialize()
