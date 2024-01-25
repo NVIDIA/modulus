@@ -86,6 +86,7 @@ def training_loop(
     gridtype="sinusoidal",
     N_grid_channels=4,
     normalization="v1",
+    wandb_mode="disabled",
 ):
     """CorrDiff training loop"""
 
@@ -104,6 +105,7 @@ def training_loop(
         entity="Modulus",
         name="CorrDiff",
         group="CorrDiff-DDP-Group",
+        mode=wandb_mode,
     )
 
     # Initialize.
