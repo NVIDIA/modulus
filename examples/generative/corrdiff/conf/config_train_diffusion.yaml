@@ -61,6 +61,8 @@ workers: 4
 
 
 ## I/O-related options
+wandb_mode: offline
+  # Wights & biases mode [online, ofline, disabled]
 desc: ''
   # String to include in result dir name
 tick: 1
