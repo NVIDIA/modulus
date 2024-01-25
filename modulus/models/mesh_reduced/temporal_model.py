@@ -8,19 +8,46 @@ from torch import Tensor
 
 
 class Sequence_Model(torch.nn.Module):
+    """ Decoder-only multi-head attention architecture
+    Parameters
+    ----------
+    input_dim : int
+        Number of latent features for the graph (#povital_position x output_decode_dim)
+    input_context_dim: int
+        Number of physical context features
+    dropout_rate: float
+        Dropout value for attention decoder, by default 2
+    num_layers_decoder: int
+        Number of sub-decoder-layers in the attention decoderm by default 3
+    num_heads: int
+        Number of heads in the attention decoder, by default 8
+    dim_feedforward_scale: int
+        The ration between the dimension of the feedforward network model and input_dim
+    num_layers_context_encoder: int
+        Number of MLP layers for the physical context feature encoder, by default 2
+    num_layers_input_encoder: int
+        Number of MLP layers for the input feature encoder, by default 2
+    num_layers_output_encoder: int
+        Number of MLP layers for the output feature encoder, by default 2
+    activation: str
+        Activation function of the attention decoder, can be 'relu' or 'gelu', by default 'gelu'
+    Note
+    ----
+    Reference: Han, Xu, et al. "Predicting physics in mesh-reduced space with temporal attention."
+    arXiv preprint arXiv:2201.09113 (2022).
+    """
     def __init__(
 			    self, 
 				input_dim: int,
-                input_content_dim: int,
+                input_context_dim: int,
                 dist,
-                context_length: int = 1,
-                dropout_rate: float = 0.0000,#0.1,
-                n_blocks: int = 3,
+                dropout_rate: float = 0.0000,
                 num_layers_decoder: int = 3,
                 num_heads: int = 8,
-                mask_length: int = 400,
                 dim_feedforward_scale: int = 4,
-                num_layers_content_encoder: int = 2,
+                num_layers_context_encoder: int = 2,
+                num_layers_input_encoder: int =2,
+                num_layers_output_encoder: int =2,
                 activation: str = 'gelu'):
         super().__init__()
         self.dist = dist
@@ -33,7 +60,7 @@ class Sequence_Model(torch.nn.Module):
             input_dim,
             output_dim=input_dim,
             hidden_dim=input_dim*2,
-            hidden_layers=num_layers_content_encoder,
+            hidden_layers=num_layers_input_encoder,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
@@ -42,16 +69,16 @@ class Sequence_Model(torch.nn.Module):
             input_dim,
             output_dim=input_dim,
             hidden_dim=input_dim*2,
-            hidden_layers=num_layers_content_encoder,
+            hidden_layers=num_layers_output_encoder,
             activation_fn=nn.ReLU(),
             norm_type=None,
             recompute_activation=False,
         )
         self.context_encoder = MeshGraphMLP(
-            input_content_dim,
+            input_context_dim,
             output_dim=input_dim,
             hidden_dim=input_dim*2,
-            hidden_layers=num_layers_content_encoder,
+            hidden_layers=num_layers_context_encoder,
             activation_fn=nn.ReLU(),
             norm_type="LayerNorm",
             recompute_activation=False,
