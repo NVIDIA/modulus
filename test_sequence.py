@@ -91,7 +91,7 @@ class Sequence_Trainer:
             pin_memory=True,
             use_ddp=dist.world_size > 1,
         )
-        self.model = Sequence_Model(C.sequence_dim, C.sequence_content_dim, dist)
+        self.model = Sequence_Model(C.sequence_dim, C.sequence_context_dim, dist)
 
         if C.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
@@ -144,6 +144,7 @@ class Sequence_Trainer:
             x_samples.append(x_sample.unsqueeze(0))
         x_samples = torch.cat(x_samples)
         x_samples = self.denormalize(x_samples)
+        
         ground_trueth = self.denormalize(ground_trueth)
         
         loss_record_u = []
@@ -238,7 +239,7 @@ if __name__ == "__main__":
 
 
 
-    trainer = Sequence_Trainer(wb, dist, produce_latents=C.produce_latents, Encoder = Encoder, 
+    trainer = Sequence_Trainer(wb, dist, produce_latents=False, Encoder = Encoder, 
 		         position_mesh = position_mesh, 
 		         position_pivotal = position_pivotal,
                  rank_zero_logger = rank_zero_logger)
