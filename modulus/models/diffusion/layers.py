@@ -21,6 +21,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from einops import rearrange
 from torch.nn.functional import silu
 
 from modulus.models.diffusion import weight_init
@@ -267,13 +268,28 @@ class GroupNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(num_channels))
 
     def forward(self, x):
-        x = torch.nn.functional.group_norm(
-            x,
-            num_groups=self.num_groups,
-            weight=self.weight.to(x.dtype),
-            bias=self.bias.to(x.dtype),
-            eps=self.eps,
-        )
+        # x = torch.nn.functional.group_norm(
+        #     x,
+        #     num_groups=self.num_groups,
+        #     weight=self.weight.to(x.dtype),
+        #     bias=self.bias.to(x.dtype),
+        #     eps=self.eps,
+        # )
+        dtype = x.dtype
+        x = x.float()
+        x = rearrange(x, "b (g c) h w -> b g c h w", g=self.num_groups)
+
+        mean = x.mean(dim=[2, 3, 4], keepdim=True)
+        var = x.var(dim=[2, 3, 4], keepdim=True)
+
+        x = (x - mean) * (var + self.eps).rsqrt()
+        x = rearrange(x, "b g c h w -> b (g c) h w")
+
+        weight = rearrange(self.weight, "c -> 1 c 1 1")
+        bias = rearrange(self.bias, "c -> 1 c 1 1")
+        x = x * weight + bias
+
+        x = x.type(dtype)
         return x
 
 
