@@ -22,6 +22,7 @@ import netCDF4 as nc
 import numpy as np
 import nvtx
 import torch
+import torch._dynamo
 import tqdm
 import training.dataset
 import training.time
@@ -173,12 +174,23 @@ def main(cfg: DictConfig) -> None:
     # move to device
     device = dist.device
     net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
-    net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last) if net_reg else None
+    net_reg = (
+        net_reg.eval().to(device).to(memory_format=torch.channels_last)
+        if net_reg
+        else None
+    )
 
     # change precision if needed
     if force_fp16:
         net_reg.use_fp16 = True
         net_res.use_fp16 = True
+
+    # Reset since we are using a different mode.
+    torch._dynamo.reset()
+    compile_mode = "reduce-overhead"
+    # Only compile residual network
+    # Overhead of compiling regression network outweights any benefits
+    net_res = torch.compile(net_res, mode=compile_mode)
 
     def generate_fn(image_lr):
         """Function to generate an image
@@ -225,7 +237,9 @@ def main(cfg: DictConfig) -> None:
                     # net_res.to(device)
                     image_out = image_mean + generate(
                         net=net_res,
-                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(memory_format=torch.channels_last),
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
+                            memory_format=torch.channels_last
+                        ),
                         seed_batch_size=seed_batch_size,
                         sampling_method=sampling_method,
                         seeds=sample_seeds,
@@ -403,7 +417,7 @@ def generate_and_save(
     )
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
-    warmup_steps = 1
+    warmup_steps = 2
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
