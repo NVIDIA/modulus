@@ -17,7 +17,7 @@ from typing import Sequence, Tuple, Union
 import torch
 import torch as th
 
-from modulus.models.dlwp_healpix_layers import HEALPixLayer
+from .healpix_layers import HEALPixLayer
 
 #
 # RECURRENT BLOCKS
@@ -575,7 +575,7 @@ class MaxPool(th.nn.Module):
         """
 
         self.maxpool = geometry_layer(
-            layer="torch.nn.MaxPool2d",
+            layer=torch.nn.MaxPool2d,
             kernel_size=pooling,
             enable_nhwc=enable_nhwc,
             enable_healpixpad=enable_healpixpad
@@ -612,7 +612,7 @@ class AvgPool(th.nn.Module):
         """
         super().__init__()
         self.avgpool = geometry_layer(
-            layer="torch.nn.AvgPool2d",
+            layer=torch.nn.AvgPool2d,
             kernel_size=pooling,
             enable_nhwc=enable_nhwc,
             enable_healpixpad=enable_healpixpad
@@ -705,7 +705,7 @@ class TransposedConvUpsample(th.nn.Module):
         upsampler = []
         # Upsample transpose conv
         upsampler.append(geometry_layer(
-            layer='torch.nn.ConvTranspose2d',
+            layer=torch.nn.ConvTranspose2d,
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=upsampling,
