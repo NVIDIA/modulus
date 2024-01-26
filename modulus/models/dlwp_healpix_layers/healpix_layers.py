@@ -194,22 +194,22 @@ class HEALPixPadding(th.nn.Module):
         f00, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11 = [torch.squeeze(x, dim=1) for x in th.split(tensor=data, split_size_or_sections=1, dim=1)]
         
         # Assemble the four padded faces on the northern hemisphere
-        p00 = self.pn(c=f00, t=f01, tl=f02, l=f03, bl=f03, b=f04, br=f08, r=f05, tr=f01)
-        p01 = self.pn(c=f01, t=f02, tl=f03, l=f00, bl=f00, b=f05, br=f09, r=f06, tr=f02)
-        p02 = self.pn(c=f02, t=f03, tl=f00, l=f01, bl=f01, b=f06, br=f10, r=f07, tr=f03)
-        p03 = self.pn(c=f03, t=f00, tl=f01, l=f02, bl=f02, b=f07, br=f11, r=f04, tr=f00)
+        p00 = self.pn(c=f00, t=f01, tl=f02, lft=f03, bl=f03, b=f04, br=f08, rgt=f05, tr=f01)
+        p01 = self.pn(c=f01, t=f02, tl=f03, lft=f00, bl=f00, b=f05, br=f09, rgt=f06, tr=f02)
+        p02 = self.pn(c=f02, t=f03, tl=f00, lft=f01, bl=f01, b=f06, br=f10, rgt=f07, tr=f03)
+        p03 = self.pn(c=f03, t=f00, tl=f01, lft=f02, bl=f02, b=f07, br=f11, rgt=f04, tr=f00)
         
         # Assemble the four padded faces on the equator
-        p04 = self.pe(c=f04, t=f00, tl=self.tl(f00, f03), l=f03, bl=f07, b=f11, br=self.br(f11, f08), r=f08, tr=f05)
-        p05 = self.pe(c=f05, t=f01, tl=self.tl(f01, f00), l=f00, bl=f04, b=f08, br=self.br(f08, f09), r=f09, tr=f06)
-        p06 = self.pe(c=f06, t=f02, tl=self.tl(f02, f01), l=f01, bl=f05, b=f09, br=self.br(f09, f10), r=f10, tr=f07)
-        p07 = self.pe(c=f07, t=f03, tl=self.tl(f03, f02), l=f02, bl=f06, b=f10, br=self.br(f10, f11), r=f11, tr=f04)
+        p04 = self.pe(c=f04, t=f00, tl=self.tl(f00, f03), lft=f03, bl=f07, b=f11, br=self.br(f11, f08), rgt=f08, tr=f05)
+        p05 = self.pe(c=f05, t=f01, tl=self.tl(f01, f00), lft=f00, bl=f04, b=f08, br=self.br(f08, f09), rgt=f09, tr=f06)
+        p06 = self.pe(c=f06, t=f02, tl=self.tl(f02, f01), lft=f01, bl=f05, b=f09, br=self.br(f09, f10), rgt=f10, tr=f07)
+        p07 = self.pe(c=f07, t=f03, tl=self.tl(f03, f02), lft=f02, bl=f06, b=f10, br=self.br(f10, f11), rgt=f11, tr=f04)
         
         # Assemble the four padded faces on the southern hemisphere
-        p08 = self.ps(c=f08, t=f05, tl=f00, l=f04, bl=f11, b=f11, br=f10, r=f09, tr=f09)
-        p09 = self.ps(c=f09, t=f06, tl=f01, l=f05, bl=f08, b=f08, br=f11, r=f10, tr=f10)
-        p10 = self.ps(c=f10, t=f07, tl=f02, l=f06, bl=f09, b=f09, br=f08, r=f11, tr=f11)
-        p11 = self.ps(c=f11, t=f04, tl=f03, l=f07, bl=f10, b=f10, br=f09, r=f08, tr=f08)
+        p08 = self.ps(c=f08, t=f05, tl=f00, lft=f04, bl=f11, b=f11, br=f10, rgt=f09, tr=f09)
+        p09 = self.ps(c=f09, t=f06, tl=f01, lft=f05, bl=f08, b=f08, br=f11, rgt=f10, tr=f10)
+        p10 = self.ps(c=f10, t=f07, tl=f02, lft=f06, bl=f09, b=f09, br=f08, rgt=f11, tr=f11)
+        p11 = self.ps(c=f11, t=f04, tl=f03, lft=f07, bl=f10, b=f10, br=f09, rgt=f08, tr=f08)
 
         res = th.stack((p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11), dim=1)
 
