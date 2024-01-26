@@ -91,7 +91,7 @@ coarse-resolution ERA5 data, which are concatenated with 4 noise channels to gen
 the output for each denoiser. For diffusion training,
 we adopt the Elucidated Diffusion Model (EDM), a continuous-time diffusion model. 
 During training, EDM randomly selects the noise variance such that
-$log(\sigma(t))) \prop \N (0, 1.22)$ and aims to denoise the samples per
+$log(\sigma(t))) ~ N(0, 1.22)$ and aims to denoise the samples per
 mini-batch. EDM is trained for 100 million steps, while the regression network is
 trained for 30 million steps.
 The training process is distributed across 16 DGX nodes, each equipped with 8 A100 GPUs,
@@ -108,26 +108,34 @@ $\sigma_{min} = 0.002$. We adopt the rest of hyperparamaters from [EDM](https://
 
 ## Getting Started
 
-To train the model on a single GPU, run
+To train the regression model on a single GPU, run
 
 ```bash
-python train.py
+python train.py --config-name=config_train_regression.yaml
+
+```
+
+Once the regression model is trained, put the checkpoints in the `checkpoints/regression.mdlus` directory.
+Next, to train the diffusion mode on a single GPU, run
+
+```bash
+python train.py --config-name=config_train_diffusion.yaml
 ```
 
 This will launch a CorrDiff training using the base configs specified in
-the `conf/config_train.yaml` file. Configs can be changed directly in the YAML file,
+the config files. Configs can be changed directly in the YAML file,
 or can be overwritten in the command line. For example, to run the training with a 
 total batch size of 64, run
 
 ```bash
-python train.py batch=64
+python train.py --config-name=config_train_regression.yaml batch=64
 ```
 
 Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training,
 run
 
 ```bash
-mpirun -np <num_GPUs> python train.py
+mpirun -np <num_GPUs> python train.py --config-name=<config_train_diffusion or config_train_regression>
 ```
 
 If running in a docker container, you may need to include the `--allow-run-as-root` in

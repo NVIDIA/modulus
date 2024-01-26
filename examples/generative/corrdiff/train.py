@@ -69,6 +69,7 @@ def main(cfg: DictConfig) -> None:
     workers = getattr(cfg, "workers", 4)
 
     # Parse I/O-related options
+    wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     desc = getattr(cfg, "desc")
     tick = getattr(cfg, "tick", 1)
     snap = getattr(cfg, "snap", 1)
@@ -80,6 +81,7 @@ def main(cfg: DictConfig) -> None:
     # Parse weather data options
     c = EasyDict()
     c.task = task
+    c.wandb_mode = wandb_mode
     c.train_data_path = getattr(cfg, "train_data_path")
     c.crop_size_x = getattr(cfg, "crop_size_x", 448)
     c.crop_size_y = getattr(cfg, "crop_size_y", 448)
@@ -109,7 +111,7 @@ def main(cfg: DictConfig) -> None:
     os.makedirs(".logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
+    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
 
     # Initialize config dict.
     c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
