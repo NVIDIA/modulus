@@ -123,7 +123,7 @@ class HEALPixRecUNet(Module):
 
     @property
     def integration_steps(self):
-        return max(self.output_time_dim // self.input_time_dim, 1)# + self.presteps
+        return max(self.output_time_dim // self.input_time_dim, 1)
  
     def _compute_input_channels(self) -> int:
         return self.input_time_dim * (self.input_channels + self.decoder_input_channels) \

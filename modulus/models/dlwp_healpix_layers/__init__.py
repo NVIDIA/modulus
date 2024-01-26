@@ -12,5 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from healpix_blocks import 
-from healpix_layers import
+from .healpix_blocks import *
+from .healpix_layers import *
+from .healpix_encoder import *
+from .healpix_decoder import *
