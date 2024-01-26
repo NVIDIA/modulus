@@ -35,7 +35,7 @@ The edge features for each sample are time-independent and include (3 in total):
 - L2 norm of the relative distance vector
 
 The output of the model is the velocity components for the following steps, i.e.,
-$\{\ldots, (u_{t}$, $v_{t}), (u_{t+1}$, $v_{t+1}), \ldots\}$, as well as the pressure $\{\ldots,p_{t},p_{t+1}\,\ldots}$.
+$[\ldots, (u_{t}$, $v_{t}), (u_{t+1}$, $v_{t+1}), \ldots]$, as well as the pressure $[\ldots,p_{t},p_{t+1}\,\ldots]$.
 
 
 For the PbGMR-GMUS, a hidden dimensionality of 128 is used in the encoder, and decoder. 
