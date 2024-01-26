@@ -30,7 +30,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP  
 
 # custom
-from .utils import write_checkpoint
+from utils import write_checkpoint
 
 
 class Trainer():

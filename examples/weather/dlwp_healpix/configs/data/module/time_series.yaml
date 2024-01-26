@@ -6,7 +6,7 @@ prefix: ${data.prefix}
 suffix: ${data.suffix}
 data_format: ${data.data_format}
 batch_size: ${batch_size}
-drop_last: false
+drop_last: true
 input_variables: ${data.input_variables}
 output_variables: ${data.output_variables}
 constants: ${data.constants}
