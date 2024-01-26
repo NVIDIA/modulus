@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pytest_utils import import_or_fail
 import datetime
+
+import pytest
 import yaml
+from pytest_utils import import_or_fail
 
 from modulus.utils.generative import convert_datetime_to_cftime
 
