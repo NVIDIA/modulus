@@ -44,7 +44,11 @@ Mean aggregation is used in the processor for message aggregation. A learning ra
 exponentially with a rate of 0.9999991. Traing epochs is set as 300.
 
 For the multi-head attention temporal model, the dimension for each token is $3 \times 256 = 768$. The hidden dimension usded in
+<<<<<<< HEAD
 the temporal model is $4 \times 768 = 4072$. The number of head is 8. Batch size per GPU is set to 10 for the sequence model training. Traing epochs is set as 200000.
+=======
+the temporal model is $4 \times 768 = 4072$.
+>>>>>>> 4ce71613df08f3f75321e50e76f2abae5bda3c65
 
 ## Getting Started
 
@@ -54,15 +58,23 @@ To download the data , run
 
 ```bash
 cd dataset
+<<<<<<< HEAD
 sh TODO: need a shell to download the raw dataset from a cloud storage.
 ```
 
 To train the encoding-decoding model, run
+=======
+sh TODO: need a shell to download the raw dataset
+```
+
+To train the model, run
+>>>>>>> 4ce71613df08f3f75321e50e76f2abae5bda3c65
 
 ```bash
 python train.py
 ```
 
+<<<<<<< HEAD
 To test the reconstruction error, run 
 
 ```bash
@@ -77,10 +89,34 @@ python train_sequence.py
 
 
 
+=======
+Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training,
+run
+
+```bash
+mpirun -np <num_GPUs> python train.py
+```
+
+If running in a docker container, you may need to include the `--allow-run-as-root` in
+the multi-GPU run command.
+
+Progress and loss logs can be monitored using Weights & Biases. To activate that,
+set `wandb_mode` to `online` in the `constants.py`. This requires to have an active
+Weights & Biases account. You also need to provide your API key. There are multiple ways
+for providing the API key but you can simply export it as an environment variable
+
+```bash
+export WANDB_API_KEY=<your_api_key>
+```
+
+The URL to the dashboard will be displayed in the terminal after the run is launched.
+Alternatively, the logging utility in `train.py` can be switched to MLFlow.
+>>>>>>> 4ce71613df08f3f75321e50e76f2abae5bda3c65
 
 Once the model is trained, run
 
 ```bash
+<<<<<<< HEAD
 python test_sequence.py
 ```
 
@@ -88,3 +124,14 @@ python test_sequence.py
 ## References
 
 - [Predicting Physics in Mesh-reduced Space with Temporal Attention](https://arxiv.org/abs/2201.09113)
+=======
+python inference.py
+```
+
+This will save the predictions for the test dataset in `.gif` format in the `animations`
+directory.
+
+## References
+
+- [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/abs/2010.03409)
+>>>>>>> 4ce71613df08f3f75321e50e76f2abae5bda3c65
