@@ -40,14 +40,16 @@ import sys
 import torch
 import torch as th
 
-sys.path.append('/home/disk/quicksilver/nacc/dlesm/HealPixPad')
+sys.path.append("/home/disk/quicksilver/nacc/dlesm/HealPixPad")
 have_healpixpad = False
 try:
     from healpixpad import HEALPixPad
+
     have_healpixpad = True
 except ImportError:
     print("Warning, cannot find healpixpad module")
     have_healpixpad = False
+
 
 class HEALPixFoldFaces(th.nn.Module):
     """
@@ -83,19 +85,20 @@ class HEALPixFoldFaces(th.nn.Module):
 
         """
         N, F, C, H, W = tensor.shape
-        tensor = torch.reshape(tensor, shape=(N*F, C, H, W))
+        tensor = torch.reshape(tensor, shape=(N * F, C, H, W))
 
         if self.enable_nhwc:
             tensor = tensor.to(memory_format=torch.channels_last)
-    
+
         return tensor
+
 
 class HEALPixUnfoldFaces(th.nn.Module):
     """
     Class that folds the faces of a HealPIX tensor
     """
-    def __init__(self, num_faces=12, enable_nhwc = False):
-        
+
+    def __init__(self, num_faces=12, enable_nhwc=False):
         super().__init__()
         self.num_faces = num_faces
         self.enable_nhwc = enable_nhwc
@@ -115,11 +118,12 @@ class HEALPixUnfoldFaces(th.nn.Module):
         torch.Tensor
             The unfolded tensor
 
-        """        
+        """
         NF, C, H, W = tensor.shape
         tensor = torch.reshape(tensor, shape=(-1, self.num_faces, C, H, W))
-    
+
         return tensor
+
 
 class HEALPixPaddingv2(th.nn.Module):
     def __init__(self, padding: int):
@@ -130,14 +134,15 @@ class HEALPixPaddingv2(th.nn.Module):
 
     def forward(self, x):
         torch.cuda.nvtx.range_push("HEALPixPaddingv2:forward")
-        
+
         x = self.unfold(x)
         xp = self.padding(x)
         xp = self.fold(xp)
-        
+
         torch.cuda.nvtx.range_pop()
 
         return xp
+
 
 class HEALPixPadding(th.nn.Module):
     """
@@ -166,10 +171,12 @@ class HEALPixPadding(th.nn.Module):
         self.d = [-2, -1]
         self.enable_nhwc = enable_nhwc
         if not isinstance(padding, int) or padding < 1:
-            raise ValueError(f"invalid value for 'padding', expected int > 0 but got {padding}")
+            raise ValueError(
+                f"invalid value for 'padding', expected int > 0 but got {padding}"
+            )
 
-        self.fold = HEALPixFoldFaces(enable_nhwc = self.enable_nhwc)
-        self.unfold = HEALPixUnfoldFaces(num_faces = 12, enable_nhwc = self.enable_nhwc)
+        self.fold = HEALPixFoldFaces(enable_nhwc=self.enable_nhwc)
+        self.unfold = HEALPixUnfoldFaces(num_faces=12, enable_nhwc=self.enable_nhwc)
 
     def forward(self, data: th.Tensor) -> th.Tensor:
         """
@@ -186,42 +193,113 @@ class HEALPixPadding(th.nn.Module):
             The padded tensor where each face's height and width are increased by 2*p
         """
         torch.cuda.nvtx.range_push("HEALPixPadding:forward")
-        
+
         # unfold faces from batch dim
         data = self.unfold(data)
-        
-        # Extract the twelve faces (as views of the original tensors)
-        f00, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11 = [torch.squeeze(x, dim=1) for x in th.split(tensor=data, split_size_or_sections=1, dim=1)]
-        
-        # Assemble the four padded faces on the northern hemisphere
-        p00 = self.pn(c=f00, t=f01, tl=f02, lft=f03, bl=f03, b=f04, br=f08, rgt=f05, tr=f01)
-        p01 = self.pn(c=f01, t=f02, tl=f03, lft=f00, bl=f00, b=f05, br=f09, rgt=f06, tr=f02)
-        p02 = self.pn(c=f02, t=f03, tl=f00, lft=f01, bl=f01, b=f06, br=f10, rgt=f07, tr=f03)
-        p03 = self.pn(c=f03, t=f00, tl=f01, lft=f02, bl=f02, b=f07, br=f11, rgt=f04, tr=f00)
-        
-        # Assemble the four padded faces on the equator
-        p04 = self.pe(c=f04, t=f00, tl=self.tl(f00, f03), lft=f03, bl=f07, b=f11, br=self.br(f11, f08), rgt=f08, tr=f05)
-        p05 = self.pe(c=f05, t=f01, tl=self.tl(f01, f00), lft=f00, bl=f04, b=f08, br=self.br(f08, f09), rgt=f09, tr=f06)
-        p06 = self.pe(c=f06, t=f02, tl=self.tl(f02, f01), lft=f01, bl=f05, b=f09, br=self.br(f09, f10), rgt=f10, tr=f07)
-        p07 = self.pe(c=f07, t=f03, tl=self.tl(f03, f02), lft=f02, bl=f06, b=f10, br=self.br(f10, f11), rgt=f11, tr=f04)
-        
-        # Assemble the four padded faces on the southern hemisphere
-        p08 = self.ps(c=f08, t=f05, tl=f00, lft=f04, bl=f11, b=f11, br=f10, rgt=f09, tr=f09)
-        p09 = self.ps(c=f09, t=f06, tl=f01, lft=f05, bl=f08, b=f08, br=f11, rgt=f10, tr=f10)
-        p10 = self.ps(c=f10, t=f07, tl=f02, lft=f06, bl=f09, b=f09, br=f08, rgt=f11, tr=f11)
-        p11 = self.ps(c=f11, t=f04, tl=f03, lft=f07, bl=f10, b=f10, br=f09, rgt=f08, tr=f08)
 
-        res = th.stack((p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11), dim=1)
+        # Extract the twelve faces (as views of the original tensors)
+        f00, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11 = [
+            torch.squeeze(x, dim=1)
+            for x in th.split(tensor=data, split_size_or_sections=1, dim=1)
+        ]
+
+        # Assemble the four padded faces on the northern hemisphere
+        p00 = self.pn(
+            c=f00, t=f01, tl=f02, lft=f03, bl=f03, b=f04, br=f08, rgt=f05, tr=f01
+        )
+        p01 = self.pn(
+            c=f01, t=f02, tl=f03, lft=f00, bl=f00, b=f05, br=f09, rgt=f06, tr=f02
+        )
+        p02 = self.pn(
+            c=f02, t=f03, tl=f00, lft=f01, bl=f01, b=f06, br=f10, rgt=f07, tr=f03
+        )
+        p03 = self.pn(
+            c=f03, t=f00, tl=f01, lft=f02, bl=f02, b=f07, br=f11, rgt=f04, tr=f00
+        )
+
+        # Assemble the four padded faces on the equator
+        p04 = self.pe(
+            c=f04,
+            t=f00,
+            tl=self.tl(f00, f03),
+            lft=f03,
+            bl=f07,
+            b=f11,
+            br=self.br(f11, f08),
+            rgt=f08,
+            tr=f05,
+        )
+        p05 = self.pe(
+            c=f05,
+            t=f01,
+            tl=self.tl(f01, f00),
+            lft=f00,
+            bl=f04,
+            b=f08,
+            br=self.br(f08, f09),
+            rgt=f09,
+            tr=f06,
+        )
+        p06 = self.pe(
+            c=f06,
+            t=f02,
+            tl=self.tl(f02, f01),
+            lft=f01,
+            bl=f05,
+            b=f09,
+            br=self.br(f09, f10),
+            rgt=f10,
+            tr=f07,
+        )
+        p07 = self.pe(
+            c=f07,
+            t=f03,
+            tl=self.tl(f03, f02),
+            lft=f02,
+            bl=f06,
+            b=f10,
+            br=self.br(f10, f11),
+            rgt=f11,
+            tr=f04,
+        )
+
+        # Assemble the four padded faces on the southern hemisphere
+        p08 = self.ps(
+            c=f08, t=f05, tl=f00, lft=f04, bl=f11, b=f11, br=f10, rgt=f09, tr=f09
+        )
+        p09 = self.ps(
+            c=f09, t=f06, tl=f01, lft=f05, bl=f08, b=f08, br=f11, rgt=f10, tr=f10
+        )
+        p10 = self.ps(
+            c=f10, t=f07, tl=f02, lft=f06, bl=f09, b=f09, br=f08, rgt=f11, tr=f11
+        )
+        p11 = self.ps(
+            c=f11, t=f04, tl=f03, lft=f07, bl=f10, b=f10, br=f09, rgt=f08, tr=f08
+        )
+
+        res = th.stack(
+            (p00, p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11), dim=1
+        )
 
         # fold faces into batch dim
         res = self.fold(res)
-            
+
         torch.cuda.nvtx.range_pop()
-                
+
         return res
 
-    def pn(self, c: th.Tensor, t: th.Tensor, tl: th.Tensor, lft: th.Tensor, bl: th.Tensor, b: th.Tensor, br: th.Tensor,
-           rgt: th.Tensor, tr: th.Tensor) -> th.Tensor:
+    def pn(
+        self,
+        c: th.Tensor,
+        t: th.Tensor,
+        tl: th.Tensor,
+        lft: th.Tensor,
+        bl: th.Tensor,
+        b: th.Tensor,
+        br: th.Tensor,
+        rgt: th.Tensor,
+        tr: th.Tensor,
+    ) -> th.Tensor:
         """
         Applies padding to a northern hemisphere face c under consideration of its given neighbors.
 
@@ -245,7 +323,7 @@ class HEALPixPadding(th.nn.Module):
             The right neighboring face tensor
         tr: torch.Tensor
             The top right neighboring face  tensor
-        
+
         Returns
         -------
         torch.Tensor:
@@ -258,13 +336,30 @@ class HEALPixPadding(th.nn.Module):
         c = th.cat((t.rot90(1, d)[..., -p:, :], c, b[..., :p, :]), dim=-2)
 
         # Construct the left and right pads including the corner faces
-        left = th.cat((tl.rot90(2, d)[..., -p:, -p:], lft.rot90(-1, d)[..., -p:], bl[..., :p, -p:]), dim=-2)
+        left = th.cat(
+            (
+                tl.rot90(2, d)[..., -p:, -p:],
+                lft.rot90(-1, d)[..., -p:],
+                bl[..., :p, -p:],
+            ),
+            dim=-2,
+        )
         right = th.cat((tr[..., -p:, :p], rgt[..., :p], br[..., :p, :p]), dim=-2)
 
         return th.cat((left, c, right), dim=-1)
 
-    def pe(self, c: th.Tensor, t: th.Tensor, tl: th.Tensor, lft: th.Tensor, bl: th.Tensor, b: th.Tensor, br: th.Tensor,
-           rgt: th.Tensor, tr: th.Tensor) -> th.Tensor:
+    def pe(
+        self,
+        c: th.Tensor,
+        t: th.Tensor,
+        tl: th.Tensor,
+        lft: th.Tensor,
+        bl: th.Tensor,
+        b: th.Tensor,
+        br: th.Tensor,
+        rgt: th.Tensor,
+        tr: th.Tensor,
+    ) -> th.Tensor:
         """
         Applies padding to an equatorial face c under consideration of its given neighbors.
 
@@ -288,7 +383,7 @@ class HEALPixPadding(th.nn.Module):
             The right neighboring face tensor
         tr: torch.Tensor
             The top right neighboring face  tensor
-        
+
         Returns
         -------
         torch.Tensor:
@@ -305,8 +400,18 @@ class HEALPixPadding(th.nn.Module):
 
         return th.cat((left, c, right), dim=-1)
 
-    def ps(self, c: th.Tensor, t: th.Tensor, tl: th.Tensor, lft: th.Tensor, bl: th.Tensor, b: th.Tensor, br: th.Tensor,
-           rgt: th.Tensor, tr: th.Tensor) -> th.Tensor:
+    def ps(
+        self,
+        c: th.Tensor,
+        t: th.Tensor,
+        tl: th.Tensor,
+        lft: th.Tensor,
+        bl: th.Tensor,
+        b: th.Tensor,
+        br: th.Tensor,
+        rgt: th.Tensor,
+        tr: th.Tensor,
+    ) -> th.Tensor:
         """
         Applies padding to a southern hemisphere face c under consideration of its given neighbors.
 
@@ -330,7 +435,7 @@ class HEALPixPadding(th.nn.Module):
             The right neighboring face tensor
         tr: torch.Tensor
             The top right neighboring face  tensor
-        
+
         Returns
         -------
         torch.Tensor:
@@ -344,10 +449,13 @@ class HEALPixPadding(th.nn.Module):
 
         # Construct the left and right pads including the corner faces
         left = th.cat((tl[..., -p:, -p:], lft[..., -p:], bl[..., :p, -p:]), dim=-2)
-        right = th.cat((tr[..., -p:, :p], rgt.rot90(-1, d)[..., :p], br.rot90(2, d)[..., :p, :p]), dim=-2)
-        
+        right = th.cat(
+            (tr[..., -p:, :p], rgt.rot90(-1, d)[..., :p], br.rot90(2, d)[..., :p, :p]),
+            dim=-2,
+        )
+
         return th.cat((left, c, right), dim=-1)
-        
+
     def tl(self, top: th.Tensor, lft: th.Tensor) -> th.Tensor:
         """
         Assembles the top left corner of a center face in the cases where no according top left face is defined on the
@@ -359,21 +467,27 @@ class HEALPixPadding(th.nn.Module):
             The face above the center face
         lft: torch.Tensor
             The face left of the center face
-        
+
         Returns
         -------
             The assembled top left corner (only the sub-part that is required for padding)
         """
-        ret = th.zeros_like(top)[..., :self.p, :self.p]  # super ugly but super fast
+        ret = th.zeros_like(top)[..., : self.p, : self.p]  # super ugly but super fast
 
         # Bottom left point
-        ret[..., -1, -1] = 0.5*top[..., -1, 0] + 0.5*lft[..., 0, -1]
-    
+        ret[..., -1, -1] = 0.5 * top[..., -1, 0] + 0.5 * lft[..., 0, -1]
+
         # Remaining points
         for i in range(1, self.p):
-            ret[..., -i-1, -i:] = top[..., -i-1, :i]  # Filling top right above main diagonal
-            ret[..., -i:, -i-1] = lft[..., :i, -i-1]  # Filling bottom left below main diagonal
-            ret[..., -i-1, -i-1] = 0.5*top[..., -i-1, 0] + 0.5*lft[..., 0, -i-1]  # Diagonal
+            ret[..., -i - 1, -i:] = top[
+                ..., -i - 1, :i
+            ]  # Filling top right above main diagonal
+            ret[..., -i:, -i - 1] = lft[
+                ..., :i, -i - 1
+            ]  # Filling bottom left below main diagonal
+            ret[..., -i - 1, -i - 1] = (
+                0.5 * top[..., -i - 1, 0] + 0.5 * lft[..., 0, -i - 1]
+            )  # Diagonal
 
         return ret
 
@@ -388,30 +502,32 @@ class HEALPixPadding(th.nn.Module):
             The face below the center face
         r: torch.Tensor
             The face right of the center face
-        
+
         Returns
         -------
         torch.Tensor
             The assembled bottom right corner (only the sub-part that is required for padding)
         """
-        ret = th.zeros_like(b)[..., :self.p, :self.p]
+        ret = th.zeros_like(b)[..., : self.p, : self.p]
 
         # Top left point
-        ret[..., 0, 0] = 0.5*b[..., 0, -1] + 0.5*r[..., -1, 0]
+        ret[..., 0, 0] = 0.5 * b[..., 0, -1] + 0.5 * r[..., -1, 0]
 
         # Remaining points
         for i in range(1, self.p):
             ret[..., :i, i] = r[..., -i:, i]  # Filling top right above main diagonal
             ret[..., i, :i] = b[..., i, -i:]  # Filling bottom left below main diagonal
-            ret[..., i, i] = 0.5*b[..., i, -1] + 0.5*r[..., -1, i]  # Diagonal
+            ret[..., i, i] = 0.5 * b[..., i, -1] + 0.5 * r[..., -1, i]  # Diagonal
 
         return ret
+
 
 class HEALPixLayer(th.nn.Module):
     """
     Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
     shape [..., 12, H, W], where 12 is the dimension of the faces.
     """
+
     def __init__(self, layer, **kwargs):
         """
         Constructor for the HEALPix base layer.
@@ -430,23 +546,37 @@ class HEALPixLayer(th.nn.Module):
         del kwargs["enable_nhwc"]
 
         enable_healpixpad = kwargs["enable_healpixpad"]
-        del kwargs["enable_healpixpad"] 
-        
+        del kwargs["enable_healpixpad"]
+
         # Define a HEALPixPadding layer if the given layer is a convolution layer
         try:
-            if layer.__bases__[0] is th.nn.modules.conv._ConvNd and kwargs["kernel_size"] > 1:
+            if (
+                layer.__bases__[0] is th.nn.modules.conv._ConvNd
+                and kwargs["kernel_size"] > 1
+            ):
                 kwargs["padding"] = 0  # Disable native padding
-                kernel_size = 3 if "kernel_size" not in kwargs else kwargs["kernel_size"]
+                kernel_size = (
+                    3 if "kernel_size" not in kwargs else kwargs["kernel_size"]
+                )
                 dilation = 1 if "dilation" not in kwargs else kwargs["dilation"]
-                padding = ((kernel_size - 1)//2)*dilation
-                if enable_healpixpad and have_healpixpad and th.cuda.is_available() and not enable_nhwc:
+                padding = ((kernel_size - 1) // 2) * dilation
+                if (
+                    enable_healpixpad
+                    and have_healpixpad
+                    and th.cuda.is_available()
+                    and not enable_nhwc
+                ):
                     layers.append(HEALPixPaddingv2(padding=padding))
                 else:
-                    layers.append(HEALPixPadding(padding=padding, enable_nhwc=enable_nhwc))
+                    layers.append(
+                        HEALPixPadding(padding=padding, enable_nhwc=enable_nhwc)
+                    )
         except AttributeError:
-            print(f"Could not determine the base class of the given layer '{layer}'. No padding layer was added, "
-                   "which may not be an issue if the specified layer does not require a previous padding.")
-            
+            print(
+                f"Could not determine the base class of the given layer '{layer}'. No padding layer was added, "
+                "which may not be an issue if the specified layer does not require a previous padding."
+            )
+
         layers.append(layer(**kwargs))
         self.layers = th.nn.Sequential(*layers)
 
