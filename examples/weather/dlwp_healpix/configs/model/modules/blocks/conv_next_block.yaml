@@ -1,0 +1,10 @@
+defaults:
+  - /model/modules/activations@activation: capped_gelu
+
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.ConvNeXtBlock
+_recursive_: true
+in_channels: 3
+out_channels: 1
+kernel_size: 3
+dilation: 1
+upscale_factor: 4

@@ -3,8 +3,8 @@ defaults:
   - scaling: classic
   - splits: default
 
-src_directory: /home/quicksilver2/karlbam/Data/DLWP/HPX64
-dst_directory: /home/quicksilver2/karlbam/Data/DLWP/HPX64
+src_directory: /datasets/healpix/HPX64
+dst_directory: /datasets/healpix/HPX64
 dataset_name: era5_hpx64_7var_6h_24h
 prefix: era5_0.25deg_3h_HPX64_1979-2021_
 suffix: ''

@@ -1,14 +1,14 @@
 defaults:
-  - /model/modules/blocks@conv_block: basic_conv_block
+  - /model/modules/blocks@conv_block: conv_next_block
   - /model/modules/blocks@down_sampling_block: avg_pool
   - /model/modules/blocks@recurrent_block: conv_gru_block
 
 _target_: modulus.models.dlwp_healpix_layers.healpix_encoder.UNetEncoder
 _recursive_: false
 n_channels:
-  - 64
-  - 128
-  - 256
+ - 136
+ - 68
+ - 34
 dilations:
   - 1
   - 2
