@@ -182,6 +182,7 @@ class ConvNeXtBlock(th.nn.Module):
             out_channels: int = 1,
             kernel_size: int = 3,
             dilation: int = 1,
+            n_layers: int = 1,  # not used, but required for hydra instantiation
             upscale_factor: int = 4,
             activation: th.nn.Module = None,
             enable_nhwc: bool = False,

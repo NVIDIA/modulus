@@ -5,8 +5,7 @@ defaults:
 
 _target_: trainer.Trainer
 _recursive_: true
-max_epochs: 50
-min_epochs: 1
+max_epochs: 300
 early_stopping_patience: null
 amp_mode: "fp16"
 graph_mode: "train_eval"

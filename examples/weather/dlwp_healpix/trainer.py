@@ -45,7 +45,6 @@ class Trainer():
             criterion: torch.nn.Module,  # Specify... (import)
             optimizer: torch.nn.Module,  # Specify... (import)
             lr_scheduler: torch.nn.Module,  # Specify... (import)
-            min_epochs: int = 100,
             max_epochs: int = 500,
             early_stopping_patience: int = None,
             amp_mode: str = "none",
@@ -57,11 +56,30 @@ class Trainer():
         """
         Constructor.
 
-        :param model: 
-
-        :param criterion: A PyTorch loss module
-        :param optimizer: A PyTorch optimizer module
-        :param lr_scheduler: A PyTorch learning rate scheduler module
+        Parameters:
+        model: torch.nn.Module
+            The model to train
+        data_module: torch.nn.Module
+            The Pytorch module used for dataloading
+        criterion: torch.nn.Module
+            The PyTorch loss module to use
+        optimizer: torch.nn.Module
+            The PyTorch optimizer module to use
+        lr_scheduler: torch.nn.Module
+            The PyTorch learning rate scheduler module to use
+        max_epochs: int, optional
+            The maximum number of epochs to train for
+        early_stopping_patience: int, optional
+        amp_mode: str, optional
+            amp mode to use, valid options ["fp16", "bfloat16"]
+        graph_mode: str, optional
+            Where to use cudagraphs for training, valid options ["train", "train_eval"]
+        device: torch.device, optional
+            Device on which to run training on, can be any available torch.device
+        output_dir: str, optional
+            Where to store results
+        max_norm: float, optional
+            Maximum norm to use for training
         """
         self.device = device
         self.amp_enable = False if (amp_mode == "none") else True
@@ -89,13 +107,14 @@ class Trainer():
         try:
             self.criterion.setup(self)
         except AttributeError:
-            raise NotImplementedError('Attribute error encountered in call to criterio.setup(). \
-Could be that criterion is not compatable with custom loss dlwp training. See \
-"training/dlwp/trainer/criterion.py" for proper criterion implementation examples.')
+            raise NotImplementedError(
+                'Attribute error encountered in call to criterio.setup(). \
+                Could be that criterion is not compatable with custom loss dlwp training. See \
+                "modulus/metrics/climate/dlwp_loss.py" for proper criterion implementation examples.'
+            )
 
         # opportunity for custom loss classes to get everything in order 
         self.lr_scheduler = lr_scheduler
-        self.min_epochs = min_epochs
         self.max_epochs = max_epochs
 
         # add gradient scaler
@@ -126,7 +145,7 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
                     print(f"Capturing model for training ...")
                 # get the shapes
                 inp, tar = next(iter(self.dataloader_train))
-                #print(inp, tar)
+
                 self._train_capture(capture_stream, [x.shape for x in inp], tar.shape)
 
                 if graph_mode == "train_eval":
@@ -154,7 +173,6 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
 
                 # FW
                 with amp.autocast(enabled = self.amp_enable, dtype = self.amp_dtype):
-                    #self.static_gen_train = self.model(self.static_inp)
                     self.static_gen_train = self.model.forward(self.static_inp)
 
 
@@ -247,16 +265,22 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
             iteration: int = 0,
             epochs_since_improved: int = 0
             ):
+        """
+        Perform training by iterating over all epochs
 
-        # Perform training by iterating over all epochs
+        Parameters
+        epoch: int, optional
+            Current epoch number
+        validation_error: torch.Tensor, optional
+            Current best validation error
+        iteration: int, optional
+            Current iteration number
+        epochs_since_improved: int, optional
+            Number of epochs that have seen improvement in validaiton error
+        """
         best_validation_error = validation_error
         for epoch in range(epoch, self.max_epochs):
             torch.cuda.nvtx.range_push(f"training epoch {epoch}")
-            
-            # Track epoch and learning rate in tensorboard
-            #writer.add_scalar(tag="Epoch", scalar_value=epoch, global_step=iteration)
-            #writer.add_scalar(tag="Learning Rate", scalar_value=optimizer.state_dict()["param_groups"][0]["lr"],
-            #                  global_step=iteration)
             
             if self.sampler_train is not None:
                 self.sampler_train.set_epoch(epoch)
@@ -264,11 +288,10 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
             # Train: iterate over all training samples
             training_step = 0
             self.model.train()
-            #for inputs, target in tqdm(self.dataloader_train, disable=(not self.print_to_screen)):
             for inputs, target in (pbar := tqdm(self.dataloader_train, disable=(not self.print_to_screen))):
-                #for inputs, target in self.dataloader_train:
                 pbar.set_description(f"Training   epoch {epoch+1}/{self.max_epochs}")
 
+                # Trach epoch in tensorboard
                 if (dist.is_initialized() and dist.get_rank() == 0) or not dist.is_initialized():
                     self.writer.add_scalar(tag="epoch", scalar_value=epoch, global_step=iteration)
 
@@ -280,25 +303,13 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
                 # do optimizer step
                 if self.train_graph is not None:
                     # copy data into entry nodes
-                    #self.static_inp = [x.copy_(y) for x,y in zip(self.static_inp, inputs)]
                     for idx, inp in enumerate(inputs):
                         self.static_inp[idx].copy_(inp)
-                    #for idx,tensor in enumerate(inputs):
-                    #    self.static_inp[idx].copy_(tensor)
+
                     self.static_tar.copy_(target)
 
                     # replay
                     self.train_graph.replay()
-
-                    #with torch.no_grad():
-                    #    outpu = self.model(self.static_inp)
-                    #    targ = self.static_tar
-                    #    erro = self.criterion(outpu, targ)
-                    #    train_loss = erro
-
-                    #print("\ninp", self.static_inp[0].mean())
-                    #print("out", self.static_gen.mean(), outpu.mean())
-                    #print("tar", self.static_tar.mean())
 
                     # extract loss
                     output = self.static_gen_train
@@ -317,7 +328,6 @@ Could be that criterion is not compatable with custom loss dlwp training. See \
                         train_loss = self.criterion(output, target)
                 
                     self.gscaler.scale(train_loss).backward()
-                    #self.gscaler.scale(train_loss).backward(create_graph=True)
 
                 # Gradient clipping                
                 self.gscaler.unscale_(self.optimizer)
