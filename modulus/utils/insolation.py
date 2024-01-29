@@ -15,7 +15,10 @@
 import numpy as np
 import pandas as pd
 
-def insolation(dates, lat, lon, S=1., daily=False, enforce_2d=False, clip_zero=True):  # pylint: disable=invalid-name
+
+def insolation(
+    dates, lat, lon, S=1.0, daily=False, enforce_2d=False, clip_zero=True
+):  # pylint: disable=invalid-name
     """
     Calculate the approximate solar insolation for given dates.
 
@@ -35,48 +38,59 @@ def insolation(dates, lat, lon, S=1., daily=False, enforce_2d=False, clip_zero=T
     if len(lat.shape) != len(lon.shape):
         raise ValueError("'lat' and 'lon' must have the same number of dimensions")
     if len(lat.shape) >= 2 and lat.shape != lon.shape:
-        raise ValueError(f"shape mismatch between lat ({lat.shape} and lon ({lon.shape})")
+        raise ValueError(
+            f"shape mismatch between lat ({lat.shape} and lon ({lon.shape})"
+        )
     if len(lat.shape) == 1 and enforce_2d:
         lon, lat = np.meshgrid(lon, lat)
     n_dim = len(lat.shape)
 
     # Constants for year 1995 (standard in climate modeling community)
     # Obliquity of Earth
-    eps = 23.4441 * np.pi / 180.
+    eps = 23.4441 * np.pi / 180.0
     # Eccentricity of Earth's orbit
     ecc = 0.016715
     # Longitude of the orbit's perihelion (when Earth is closest to the sun)
-    om = 282.7 * np.pi / 180.
-    beta = np.sqrt(1 - ecc ** 2.)
+    om = 282.7 * np.pi / 180.0
+    beta = np.sqrt(1 - ecc**2.0)
 
     # Get the day of year as a float.
-    start_years = np.array([pd.Timestamp(pd.Timestamp(d).year, 1, 1) for d in dates], dtype='datetime64')
-    days_arr = (np.array(dates, dtype='datetime64') - start_years) / np.timedelta64(1, 'D')
+    start_years = np.array(
+        [pd.Timestamp(pd.Timestamp(d).year, 1, 1) for d in dates], dtype="datetime64"
+    )
+    days_arr = (np.array(dates, dtype="datetime64") - start_years) / np.timedelta64(
+        1, "D"
+    )
     for d in range(n_dim):
         days_arr = np.expand_dims(days_arr, -1)
     # For daily max values, set the day to 0.5 and the longitude everywhere to 0 (this is approx noon)
     if daily:
         days_arr = 0.5 + np.round(days_arr)
         new_lon = lon.copy().astype(np.float32)
-        new_lon[:] = 0.
+        new_lon[:] = 0.0
     else:
         new_lon = lon.astype(np.float32)
     # Longitude of the earth relative to the orbit, 1st order approximation
-    lambda_m0 = ecc * (1. + beta) * np.sin(om)
-    lambda_m = lambda_m0 + 2. * np.pi * (days_arr - 80.5) / 365.
-    lambda_ = lambda_m + 2. * ecc * np.sin(lambda_m - om)
+    lambda_m0 = ecc * (1.0 + beta) * np.sin(om)
+    lambda_m = lambda_m0 + 2.0 * np.pi * (days_arr - 80.5) / 365.0
+    lambda_ = lambda_m + 2.0 * ecc * np.sin(lambda_m - om)
     # Solar declination
     dec = np.arcsin(np.sin(eps) * np.sin(lambda_))
     # Hour angle
-    h = 2 * np.pi * (days_arr + new_lon / 360.)
+    h = 2 * np.pi * (days_arr + new_lon / 360.0)
     # Distance
-    rho = (1. - ecc ** 2.) / (1. + ecc * np.cos(lambda_ - om))
+    rho = (1.0 - ecc**2.0) / (1.0 + ecc * np.cos(lambda_ - om))
 
     # Insolation
-    sol = S * (np.sin(np.pi / 180. * lat[None, ...]) * np.sin(dec) -
-               np.cos(np.pi / 180. * lat[None, ...]) * np.cos(dec) *
-               np.cos(h)) * rho ** -2.
+    sol = (
+        S
+        * (
+            np.sin(np.pi / 180.0 * lat[None, ...]) * np.sin(dec)
+            - np.cos(np.pi / 180.0 * lat[None, ...]) * np.cos(dec) * np.cos(h)
+        )
+        * rho**-2.0
+    )
     if clip_zero:
-        sol[sol < 0.] = 0.
+        sol[sol < 0.0] = 0.0
 
     return sol.astype(np.float32)

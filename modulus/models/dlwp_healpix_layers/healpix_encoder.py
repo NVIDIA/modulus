@@ -4,26 +4,29 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 import torch as th
 
+
 class UNetEncoder(th.nn.Module):
     """
     Generic UNetEncoder that can be applied to arbitrary meshes.
     """
+
     def __init__(
-            self,
-            conv_block: DictConfig,
-            down_sampling_block: DictConfig,
-            recurrent_block: DictConfig = None,
-            input_channels: int = 3,
-            n_channels: Sequence = (16, 32, 64),
-            n_layers: Sequence = (2, 2, 1),
-            dilations: list = None,
-            enable_nhwc: bool = False,
-            enable_healpixpad: bool = False
+        self,
+        conv_block: DictConfig,
+        down_sampling_block: DictConfig,
+        recurrent_block: DictConfig = None,
+        input_channels: int = 3,
+        n_channels: Sequence = (16, 32, 64),
+        n_layers: Sequence = (2, 2, 1),
+        dilations: list = None,
+        enable_nhwc: bool = False,
+        enable_healpixpad: bool = False,
     ):
         super().__init__()
         self.n_channels = n_channels
 
         import copy
+
         cblock = copy.deepcopy(conv_block)
 
         if dilations is None:
@@ -36,24 +39,28 @@ class UNetEncoder(th.nn.Module):
         for n, curr_channel in enumerate(n_channels):
             modules = list()
             if n > 0:
-                modules.append(instantiate(
-                    config=down_sampling_block,
-                    enable_nhwc=enable_nhwc,
-                    enable_healpixpad=enable_healpixpad
-                    ))
+                modules.append(
+                    instantiate(
+                        config=down_sampling_block,
+                        enable_nhwc=enable_nhwc,
+                        enable_healpixpad=enable_healpixpad,
+                    )
+                )
             else:
                 down_pool_module = None
 
-            modules.append(instantiate(
-                config=conv_block,
-                in_channels=old_channels,
-                latent_channels=curr_channel,
-                out_channels=curr_channel,
-                dilation=dilations[n],
-                n_layers=n_layers[n],
-                enable_nhwc=enable_nhwc,
-                enable_healpixpad=enable_healpixpad
-                ))
+            modules.append(
+                instantiate(
+                    config=conv_block,
+                    in_channels=old_channels,
+                    latent_channels=curr_channel,
+                    out_channels=curr_channel,
+                    dilation=dilations[n],
+                    n_layers=n_layers[n],
+                    enable_nhwc=enable_nhwc,
+                    enable_healpixpad=enable_healpixpad,
+                )
+            )
             old_channels = curr_channel
 
             self.encoder.append(th.nn.Sequential(*modules))

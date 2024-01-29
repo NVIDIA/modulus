@@ -84,16 +84,18 @@ class MSE_SSIM(torch.nn.Module):
 
         # check tensor shapes to ensure proper computation of loss
         if prediction.shape[-1] != prediction.shape[-2]:
-            raise AssertionError(f"Spatial dims H and W must match, got {prediction.shape[-2]} {prediction.shape[-1]} ")
+            raise AssertionError(
+                f"Spatial dims H and W must match, got {prediction.shape[-2]} {prediction.shape[-1]} "
+            )
         if prediction.shape[3] != 12:
             raise AssertionError(f"Spatial dim F must be 12, go {prediction.shape[3]}")
         if prediction.shape[2] != model.output_channels:
-            raise AssertionError(f"model output channels and prediction output channels don't match: {model.output_channels} {prediction.shape[2]}")
+            raise AssertionError(
+                f"model output channels and prediction output channels don't match: {model.output_channels} {prediction.shape[2]}"
+            )
         if not (
             (prediction.shape[1] == model.output_time_dim)
-            or (
-                prediction.shape[1] == model.output_time_dim // model.input_time_dim
-            )
+            or (prediction.shape[1] == model.output_time_dim // model.input_time_dim)
         ):
             raise AssertionError
 

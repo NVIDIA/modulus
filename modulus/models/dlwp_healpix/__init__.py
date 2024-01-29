@@ -14,4 +14,4 @@
 
 from .HEALPixRecUNet import HEALPixRecUNet
 
-__all__ = ['HEALPixRecUNet']
+__all__ = ["HEALPixRecUNet"]
