@@ -14,19 +14,6 @@
 
 import glob
 import re
-<<<<<<< HEAD
-import torch
-import modulus
-
-from typing import Union, List, NewType, Dict
-from pathlib import Path
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.cuda.amp import GradScaler
-
-from modulus.distributed import DistributedManager
-from modulus.utils.capture import _StaticCapture
-from modulus.launch.logging import PythonLogger
-=======
 from pathlib import Path
 from typing import Dict, List, NewType, Union
 
@@ -38,7 +25,6 @@ import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger
 from modulus.utils.capture import _StaticCapture
->>>>>>> upstream/main
 
 optimizer = NewType("optimizer", torch.optim)
 scheduler = NewType("scheduler", _LRScheduler)
@@ -105,20 +91,12 @@ def _get_checkpoint_filename(
         checkpoint_filename += file_extension
     # Otherwise try loading the latest epoch or rolling checkpoint
     else:
-<<<<<<< HEAD
-        file_names = []
-        for fname in glob.glob(
-            checkpoint_filename + "*" + file_extension, recursive=False
-        ):
-            file_names.append(Path(fname).name)
-=======
         file_names = [
             Path(fname).name
             for fname in glob.glob(
                 checkpoint_filename + "*" + file_extension, recursive=False
             )
         ]
->>>>>>> upstream/main
 
         if len(file_names) > 0:
             # If checkpoint from a null index save exists load that
@@ -380,11 +358,7 @@ def load_checkpoint(
         checkpoint_logging.success("Loaded scheduler state dictionary")
 
     # Scaler state dict
-<<<<<<< HEAD
-    if "scaler_state_dict" in checkpoint_dict:
-=======
     if scaler and "scaler_state_dict" in checkpoint_dict:
->>>>>>> upstream/main
         scaler.load_state_dict(checkpoint_dict["scaler_state_dict"])
         checkpoint_logging.success("Loaded grad scaler state dictionary")
 

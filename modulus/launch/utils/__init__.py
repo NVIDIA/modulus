@@ -12,8 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-<<<<<<< HEAD
-from .checkpoint import save_checkpoint, load_checkpoint
-=======
 from .checkpoint import load_checkpoint, save_checkpoint
->>>>>>> upstream/main

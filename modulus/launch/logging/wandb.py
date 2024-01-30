@@ -16,14 +16,6 @@
 
 import logging
 import os
-<<<<<<< HEAD
-import wandb
-from typing import Literal
-from pathlib import Path
-from datetime import datetime
-from wandb import AlertLevel
-from modulus.distributed import DistributedManager
-=======
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -33,7 +25,6 @@ from wandb import AlertLevel
 
 from modulus.distributed import DistributedManager
 
->>>>>>> upstream/main
 from .utils import create_ddp_group_tag
 
 DEFAULT_WANDB_CONFIG = "~/.netrc"

@@ -14,10 +14,6 @@
 
 import logging
 import os
-<<<<<<< HEAD
-=======
-
->>>>>>> upstream/main
 from termcolor import colored
 
 
@@ -45,12 +41,6 @@ class PythonLogger:
         """Log to file"""
         if os.path.exists(file_name):
             os.remove(file_name)
-<<<<<<< HEAD
-            filehandler = logging.FileHandler(file_name)
-            filehandler.setFormatter(formatter)
-            filehandler.setLevel(logging.DEBUG)
-            self.logger.addHandler(filehandler)
-=======
         formatter = logging.Formatter(
             "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
             datefmt="%H:%M:%S",
@@ -59,7 +49,6 @@ class PythonLogger:
         filehandler.setFormatter(formatter)
         filehandler.setLevel(logging.DEBUG)
         self.logger.addHandler(filehandler)
->>>>>>> upstream/main
 
     def log(self, message: str):
         """Log message"""
