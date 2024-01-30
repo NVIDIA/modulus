@@ -157,9 +157,9 @@ class TimeSeriesDataset(Dataset, Datapipe):
         ]
 
         self.spatial_dims = (
-            self.ds.dims["face"],
-            self.ds.dims["height"],
-            self.ds.dims["width"],
+            self.ds.sizes["face"],
+            self.ds.sizes["height"],
+            self.ds.sizes["width"],
         )
 
         self.input_scaling = None
@@ -224,7 +224,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
     def __len__(self):
         if self.forecast_mode:
             return len(self._forecast_init_indices)
-        length = (self.ds.dims["time"] - self._window_length + 1) / self.batch_size
+        length = (self.ds.sizes["time"] - self._window_length + 1) / self.batch_size
         if self.drop_last:
             return int(np.floor(length))
         return int(np.ceil(length))
@@ -307,13 +307,13 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         # Get buffers for the batches, which we'll fill in iteratively.
         inputs = np.empty(
-            (this_batch, self.input_time_dim, self.ds.dims["channel_in"])
+            (this_batch, self.input_time_dim, self.ds.sizes["channel_in"])
             + self.spatial_dims,
             dtype="float32",
         )
         if not self.forecast_mode:
             targets = np.empty(
-                (this_batch, self.output_time_dim, self.ds.dims["channel_out"])
+                (this_batch, self.output_time_dim, self.ds.sizes["channel_out"])
                 + self.spatial_dims,
                 dtype="float32",
             )

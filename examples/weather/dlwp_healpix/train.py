@@ -22,21 +22,21 @@ import torch as th
 import torch.distributed as dist
 from hydra.utils import instantiate
 
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-logger = logging.getLogger(__name__)
-logging.getLogger('cfgrib').setLevel(logging.ERROR)
-logging.getLogger('matplotlib').setLevel(logging.ERROR)
-
 
 @hydra.main(config_path='./configs', config_name='config', version_base=None)
 def train(cfg):
-    logger.info("experiment working directory: %s", os.getcwd())
+    logger = PythonLogger("train")  # General python logger
+    logger.file_logging("train.log")
 
+    logger.info(f"experiment working directory: {os.getcwd()}")
 
     # Initialize torch distributed
-    world_size = th.cuda.device_count()
-    world_rank = int(os.getenv('WORLD_RANK', 0))
+    world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', 1))
+    world_rank = int(os.getenv('OMPI_COMM_WORLD_RANK', 0))
+
     port = cfg.port
     master_address = cfg.master_address
 
