@@ -83,10 +83,10 @@ class Mesh_Reduced(torch.nn.Module):
                 k: int = 3,
 				aggregation='mean'):
         super(Mesh_Reduced, self).__init__()
-        self.encoder_processor = MeshGraphNet(input_dim_nodes, input_dim_edges, output_encode_dim, processor_size, num_layers_node_processor, num_layers_edge_processor,
+        self.encoder_processor = MeshGraphNet(input_dim_nodes, input_dim_edges, output_encode_dim, processor_size, "relu", num_layers_node_processor, num_layers_edge_processor,
 										hidden_dim_processor, hidden_dim_node_encoder, num_layers_node_encoder, hidden_dim_edge_encoder,
 										num_layers_edge_encoder, hidden_dim_node_decoder,num_layers_node_decoder,aggregation)
-        self.decoder_processor = MeshGraphNet(output_encode_dim, input_dim_edges, output_decode_dim, processor_size, num_layers_node_processor, num_layers_edge_processor,
+        self.decoder_processor = MeshGraphNet(output_encode_dim, input_dim_edges, output_decode_dim, processor_size, "relu", num_layers_node_processor, num_layers_edge_processor,
 										hidden_dim_processor, hidden_dim_node_encoder, num_layers_node_encoder, hidden_dim_edge_encoder,
 										num_layers_edge_encoder, hidden_dim_node_decoder,num_layers_node_decoder,aggregation)
         self.k = k

@@ -30,7 +30,7 @@ class Sequence_Trainer:
         self.dist = dist
         dataset_train = LatentDataset(
             split="train",
-            produce_latents = False,
+            produce_latents = produce_latents,
 		    Encoder = Encoder, 
 		    position_mesh = position_mesh, 
 		    position_pivotal = position_pivotal,
@@ -54,8 +54,6 @@ class Sequence_Trainer:
             pin_memory=True,
             use_ddp=dist.world_size > 1,
         )
-<<<<<<< HEAD
-=======
 
         self.dataloader_test = GraphDataLoader(
             dataset_test,
@@ -94,7 +92,6 @@ class Sequence_Trainer:
             pin_memory=True,
             use_ddp=dist.world_size > 1,
         )
->>>>>>> 907095fd0f77f909f44cf61e72178a3550755fff
         self.model = Sequence_Model(C.sequence_dim, C.sequence_context_dim, dist)
 
         if C.jit:
