@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Sequence
 
+import torch as th
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-import torch as th
 
 
 class UNetDecoder(th.nn.Module):
@@ -39,9 +39,6 @@ class UNetDecoder(th.nn.Module):
     ):
         super().__init__()
         self.channel_dim = 1  # 1 in previous layout
-
-        if enable_nhwc and activation is not None:
-            activation = activation.to(memory_format=th.channels_last)
 
         if dilations is None:
             # Defaults to [1, 1, 1...] in accordance with the number of unet levels
