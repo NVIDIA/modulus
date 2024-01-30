@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Sequence
 
+import torch as th
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-import torch as th
 
 
 class UNetEncoder(th.nn.Module):
@@ -39,10 +39,6 @@ class UNetEncoder(th.nn.Module):
         super().__init__()
         self.n_channels = n_channels
 
-        import copy
-
-        cblock = copy.deepcopy(conv_block)
-
         if dilations is None:
             # Defaults to [1, 1, 1...] in accordance with the number of unet levels
             dilations = [1 for _ in range(len(n_channels))]
@@ -60,8 +56,6 @@ class UNetEncoder(th.nn.Module):
                         enable_healpixpad=enable_healpixpad,
                     )
                 )
-            else:
-                down_pool_module = None
 
             modules.append(
                 instantiate(

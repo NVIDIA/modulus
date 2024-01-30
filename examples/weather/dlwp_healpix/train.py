@@ -14,15 +14,14 @@
 
 import logging
 import os
+import sys
 
 import hydra
-from hydra.utils import instantiate
-
 import numpy as np
 import torch as th
 import torch.distributed as dist
+from hydra.utils import instantiate
 
-import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger(__name__)
@@ -46,7 +45,7 @@ def train(cfg):
         device = th.device("cpu")
     elif world_size == 1:
         # set device
-        device = th.device(f"cuda:0")
+        device = th.device("cuda:0")
 
         # some other settings
         th.backends.cudnn.benchmark = True
@@ -71,7 +70,8 @@ def train(cfg):
     # Seed
     if cfg.seed is not None:
         th.manual_seed(cfg.seed)
-        if world_size > 0: th.cuda.manual_seed(cfg.seed)
+        if world_size > 0:
+            th.cuda.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
     # Data module
@@ -108,8 +108,6 @@ def train(cfg):
     if cfg.get("checkpoint_name", None) is not None:
         checkpoint_path = os.path.join(cfg.get("output_dir"), "tensorboard", "checkpoints", cfg.get("checkpoint_name"))
         checkpoint = th.load(checkpoint_path, map_location=device)
-        #model_state_dict = {key.replace("module.", ""): checkpoint["model_state_dict"][key] \
-        #                    for key in checkpoint["model_state_dict"].keys()}
         model.load_state_dict(checkpoint["model_state_dict"])
         if not cfg.get("load_weights_only"):
             # Load optimizer
@@ -121,7 +119,8 @@ def train(cfg):
                     if th.is_tensor(v):
                         state[k] = v.to(device=device)
             # Optionally load scheduler
-            if lr_scheduler is not None: lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            if lr_scheduler is not None:
+                lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         epoch = checkpoint["epoch"]
         val_error = checkpoint["val_error"]
         iteration = checkpoint["iteration"]

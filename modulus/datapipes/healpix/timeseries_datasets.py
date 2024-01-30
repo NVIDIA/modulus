@@ -13,29 +13,21 @@
 # limitations under the License.
 
 import logging
-import os
-import shutil
 import time
-from typing import DefaultDict, Optional, Sequence, Union
-
 from dataclasses import dataclass
+from typing import Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
-import xarray as xr
-from torch.utils.data import Dataset
-from dask.diagnostics import ProgressBar
-from omegaconf import DictConfig, OmegaConf
-
 import torch
-import torch.nn.functional as F
-import torch.distributed as dist
+import xarray as xr
+from omegaconf import DictConfig, OmegaConf
+from torch.utils.data import Dataset
 
+import modulus.datapipes.healpix.couplers as couplers
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
-
 from modulus.utils.insolation import insolation
-import modulus.datapipes.healpix.couplers as couplers
 
 logger = logging.getLogger(__name__)
 

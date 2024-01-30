@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch as th
+from typing import Sequence
+
 import numpy as np
+import torch as th
 import xarray as xr
-from typing import Any, Dict, Optional, Sequence, Union
 
 """
 Custom dlwp compatible loss classes that allow for more sophisticated training optimization.
@@ -93,9 +94,7 @@ class WeightedMSE(th.nn.MSELoss):
         pushes weights to cuda device
         """
 
-        try:
-            assert len(trainer.output_variables) == len(self.loss_weights)
-        except AssertionError:
+        if len(trainer.output_variables) != len(self.loss_weights):
             raise ValueError("Length of outputs and loss_weights is not the same!")
 
         self.loss_weights = self.loss_weights.to(device=trainer.device)

@@ -15,24 +15,26 @@
 # System modules
 import logging
 import os
+import shutil
 import time
-from typing import DefaultDict, Optional, Union, Sequence
-
-# External modules
-from omegaconf import DictConfig
-from torch.utils.data import DataLoader
-import xarray as xr
-
-# distributed stuff
-import torch
-import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
+from typing import DefaultDict, Optional, Sequence, Union
 
 # numpy
 import numpy as np
 
+# distributed stuff
+import torch
+import torch.distributed as dist
+import xarray as xr
+from dask.diagnostics import ProgressBar
+
+# External modules
+from omegaconf import DictConfig
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
 # Internal modules
-from .timeseries_datasets import TimeSeriesDataset, CoupledTimeSeriesDataset
+from .timeseries_datasets import CoupledTimeSeriesDataset, TimeSeriesDataset
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +76,15 @@ def open_time_series_dataset_classic_on_the_fly(
         except ValueError:
             pass
 
+        # remove unused
         for attr in remove_attrs:
-            try:
+            if attr in ds.indexes or attr in ds.variables:
                 ds = ds.drop(attr)
-            except ValueError:
-                pass
+
         # Rename variable
-        try:
+        if "sample" in ds.variables or "sample" in ds.dims:
             ds = ds.rename({"sample": "time"})
-        except (ValueError, KeyError):
-            pass
+
         ds = ds.chunk({"time": batch_size})
 
         # Change lat/lon to coordinates
@@ -137,7 +138,6 @@ def open_time_series_dataset_classic_prebuilt(
     result = xr.open_zarr(
         os.path.join(directory, dataset_name + ".zarr"), chunks={"time": batch_size}
     )
-    # result = xr.open_zarr(os.path.join(directory, dataset_name + ".zarr"))
     return result
 
 
@@ -192,10 +192,9 @@ def create_time_series_dataset_classic(
             ds = ds.isel(varlev=0)
 
         for attr in remove_attrs:
-            try:
+            if attr in ds.indexes or attr in ds.variables:
                 ds = ds.drop(attr)
-            except ValueError:
-                pass
+
         # Rename variable
         if "predictors" in list(ds.keys()):
             ds = ds.rename({"predictors": variable})
@@ -307,8 +306,6 @@ class TimeSeriesDataModule:
         :param data_format: str indicating data schema.
             'classic': use classic DLWP file types. Loads .nc files, assuming dimensions [sample, varlev, face, height,
                 width] and data variables 'predictors', 'lat', and 'lon'.
-            'zarr': use updated zarr file type. Assumes dimensions [time, face, height, width] and variable names
-                corresponding to the variables.
         :param batch_size: size of batches to draw from data
         :param drop_last: whether to drop the last batch if it is smaller than batch_size
         :param input_variables: list of input variable names, to be found in data file name
@@ -375,14 +372,6 @@ class TimeSeriesDataModule:
 
         self.setup()
 
-    def _batch_collate(self, batch):
-        sample = CustomBatch(batch, target_batch_size=self.dataloader_batch_size)
-
-        if sample.target is not None:
-            return [sample.input_1, sample.input_2, sample.input_3], sample.target
-        else:
-            return [sample.input_1, sample.input_2, sample.input_3]
-
     def get_constants(self) -> Optional[np.ndarray]:
         if self.constants is None:
             return None
@@ -401,11 +390,8 @@ class TimeSeriesDataModule:
                 if self.prebuilt_dataset
                 else open_time_series_dataset_classic_on_the_fly
             )
-        elif self.data_format == "zarr":
-            create_fn = create_time_series_dataset_zarr
-            open_fn = open_time_series_dataset_zarr
         else:
-            raise ValueError("'data_format' must be one of ['classic', 'zarr']")
+            raise ValueError("'data_format' must be one of ['classic']")
 
         if dist.is_initialized():
             if self.prebuilt_dataset:
@@ -570,8 +556,6 @@ class TimeSeriesDataModule:
 
     def val_dataloader(self, num_shards=1, shard_id=0) -> DataLoader:
         sampler = None
-        shuffle = False
-        drop_last = False
         if num_shards > 1:
             sampler = DistributedSampler(
                 self.val_dataset,
@@ -596,8 +580,6 @@ class TimeSeriesDataModule:
 
     def test_dataloader(self, num_shards=1, shard_id=0) -> DataLoader:
         sampler = None
-        shuffle = False
-        drop_last = False
         if num_shards > 1:
             sampler = DistributedSampler(
                 self.val_dataset,
@@ -664,8 +646,6 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         :param data_format: str indicating data schema.
             'classic': use classic DLWP file types. Loads .nc files, assuming dimensions [sample, varlev, face, height,
                 width] and data variables 'predictors', 'lat', and 'lon'.
-            'zarr': use updated zarr file type. Assumes dimensions [time, face, height, width] and variable names
-                corresponding to the variables.
         :param batch_size: size of batches to draw from data
         :param drop_last: whether to drop the last batch if it is smaller than batch_size
         :param input_variables: list of input variable names, to be found in data file name
@@ -741,11 +721,8 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                 if self.prebuilt_dataset
                 else open_time_series_dataset_classic_on_the_fly
             )
-        elif self.data_format == "zarr":
-            create_fn = create_time_series_dataset_zarr
-            open_fn = open_time_series_dataset_zarr
         else:
-            raise ValueError("'data_format' must be one of ['classic', 'zarr']")
+            raise ValueError("'data_format' must be one of ['classic']")
 
         coupled_variables = self._get_coupled_vars()
         if dist.is_initialized():

@@ -12,20 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
+from dataclasses import dataclass
+
 import pytest
 import torch
-from dataclasses import dataclass
 
 from modulus.metrics.climate.loss import MSE_SSIM, SSIM
 
+
 @dataclass
 class Model(torch.nn.Module):
-    """ Minimal torch.nn.Module to test MSE_SSIM """
+    """Minimal torch.nn.Module to test MSE_SSIM"""
+
     output_channels = 2
     output_time_dim = 1
     input_time_dim = 1
-    output_variables = ['tcwv', 't2m']
+    output_variables = ["tcwv", "t2m"]
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_MSE_SSIM(device):
@@ -40,7 +43,7 @@ def test_MSE_SSIM(device):
 
     ones = torch.ones(shape).to(device)
     try:
-        mse_ssim_loss(ones,ones,model)
+        mse_ssim_loss(ones, ones, model)
         assert False, "Failed to error for incorrect number of dimensions"
     except AssertionError:
         pass
@@ -50,53 +53,46 @@ def test_MSE_SSIM(device):
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
 
-    assert mse_ssim_loss(ones,ones,model) == 0
-    assert mse_ssim_loss(ones,zeros,model) == 1
+    assert mse_ssim_loss(ones, ones, model) == 0
+    assert mse_ssim_loss(ones, zeros, model) == 1
 
     invar = torch.ones(shape).to(device)
-    invar[0,0,1,...] = zeros[0,0,0,...]
-    assert mse_ssim_loss(invar,zeros,model) == 0.5        
+    invar[0, 0, 1, ...] = zeros[0, 0, 0, ...]
+    assert mse_ssim_loss(invar, zeros, model) == 0.5
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_SSIM(device):
     """Test SSIM loss in loss"""
     ssim_loss = SSIM()
-    
+
     shape = [1, 1, 720, 720]
-    
+
     # Test for exact match
     rand = torch.randn(shape).to(device)
 
-    assert ssim_loss(rand,rand) == 1.0
+    assert ssim_loss(rand, rand) == 1.0
 
     # Test for differences
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
-    
+
     # testing to make sure this runs
     assert ssim_loss(ones, zeros) < 1.0e-4
 
     # Test window
     # Since SSIM looks over a window rolling will only cause a small dropoff
     eye = torch.eye(720).to(device)
-    eye = eye[None,None,...]
+    eye = eye[None, None, ...]
 
-    loss = ssim_loss(eye, torch.roll(eye, 1, -1)) # ~0.9729
-    assert 0.97 < loss < 0.98 
+    loss = ssim_loss(eye, torch.roll(eye, 1, -1))  # ~0.9729
+    assert 0.97 < loss < 0.98
 
     # Test fail case for too few dimensions
     var = torch.randn([32])
 
     try:
-        loss = ssim_loss(var,var)
+        loss = ssim_loss(var, var)
         assert False, "Failed to error for insufficient number of dimensions"
     except IndexError:
         pass
-
-
-
-
-
-
-

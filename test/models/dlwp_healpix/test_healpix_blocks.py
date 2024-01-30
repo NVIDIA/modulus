@@ -12,21 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ruff: noqa: E402
-from modulus.model.dlwp_healpix_layers import *
+import math
+
+import numpy as np
 import pytest
 import torch
-import math
-import numpy as np
+
+from modulus.model.dlwp_healpix_layers import (
+    HEALPixFoldFaces,
+    HEALPixLayer,
+    HEALPixPadding,
+    HEALPixUnfoldFaces,
+)
+
 from . import common
 
+
 class MulX(torch.nn.Module):
-    """ Helper class that just multiplies the values of an input tensor """
-    def __init__(self, mulitplier: int = 1):
+    """Helper class that just multiplies the values of an input tensor"""
+
+    def __init__(self, multiplier: int = 1):
         super(MulX, self).__init__()
         self.multiplier = multiplier
 
     def forward(self, x):
-        return x * multiplier
+        return x * self.multiplier
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -37,47 +47,47 @@ def test_HEALPixFoldFaces(device):
     output_size = (tensor_size[0] * tensor_size[1], *tensor_size[2:])
     invar = torch.ones(*tensor_size, device=device)
 
-    
     outvar = fold_func(invar)
     assert outvar.shape == output_size
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces(device):
+def test_HEALPixUnfoldFaces(device):
     unfold_func = HEALPixUnfoldFaces()
 
     tensor_size = torch.randint(low=1, high=4, size=(4,)).tolist()
     output_size = (tensor_size[0], tensor_size[1], 12, *tensor_size[2:])
     invar = torch.ones(*tensor_size, device=device)
 
-    
     outvar = unfold_func(invar)
     assert outvar.shape == output_size
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "padding", [2,3,4])
-def test_HEALPixPadding(device, padding):
 
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "padding", [2, 3, 4])
+def test_HEALPixPadding(device, padding):
     pad_func = HEALPixPadding(padding)
-    
+
     hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
     hw_size = np.asarray(hw_size + hw_size)
     # dimes are F, H, W
     # F = 12, and H = W
-    tensor_size = (2,12, *hw_size)
-    invar = torch.rand(tesnor_size, device=device)
+    tensor_size = (2, 12, *hw_size)
+    invar = torch.rand(tensor_size, device=device)
 
     # Healpix scales as ~N^1/2
     scale = math.ceil(padding**0.5)
-    out_size = (2,12, *(hw_size*scale))
+    out_size = (2, 12, *(hw_size * scale))
 
     outvar = pad_func(invar)
     assert outvar.size == out_size
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "multiplier", [2,3,4])
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "multiplier", [2, 3, 4])
 def test_HEALPixLayer(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 
     tensor_size = torch.randint(low=1, high=4, size=(2,)).tolist()
-    tensor_size = [2,12,*tensor_size]
-    invar = torch.rand(tesnor_size, device=device)
+    tensor_size = [2, 12, *tensor_size]
+    invar = torch.rand(tensor_size, device=device)
 
     assert common.compare_output(layer(invar), invar * multiplier)

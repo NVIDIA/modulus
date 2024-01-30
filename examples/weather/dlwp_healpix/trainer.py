@@ -17,17 +17,14 @@ import gc
 import os
 import threading
 
-import numpy as np
 import torch
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-
-# amp
-from torch.cuda import amp
 
 # distributed stuff
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP  
+from torch.cuda import amp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 # custom
 from utils import write_checkpoint
@@ -142,7 +139,7 @@ class Trainer():
             # capture graph if requested
             if graph_mode in ["train", "train_eval"]:
                 if self.print_to_screen:
-                    print(f"Capturing model for training ...")
+                    print("Capturing model for training ...")
                 # get the shapes
                 inp, tar = next(iter(self.dataloader_train))
 
@@ -150,7 +147,7 @@ class Trainer():
 
                 if graph_mode == "train_eval":
                     if self.print_to_screen:
-                        print(f"Capturing model for validation ...")
+                        print("Capturing model for validation ...")
                     self._eval_capture(capture_stream)
 
 
@@ -456,9 +453,11 @@ class Trainer():
 
             # Update learning rate
             try: 
-                if self.lr_scheduler is not None: self.lr_scheduler.step()
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
             except TypeError: # Plateau Learning rate requires val loss 
-                if self.lr_scheduler is not None: self.lr_scheduler.step(validation_error)
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step(validation_error)
                  
 
             # Check early stopping criterium
