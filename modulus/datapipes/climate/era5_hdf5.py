@@ -27,9 +27,9 @@ except ImportError:
     )
 
 from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple
 from pathlib import Path
-from torch.utils.data import Dataset
+from typing import Iterable, List, Tuple, Union
+
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
 
@@ -104,7 +104,7 @@ class ERA5HDF5Datapipe(Datapipe):
         self.num_workers = num_workers
         self.shuffle = shuffle
         self.data_dir = Path(data_dir)
-        self.stats_dir = Path(stats_dir) if not stats_dir is None else None
+        self.stats_dir = Path(stats_dir) if stats_dir is not None else None
         self.channels = channels
         self.stride = stride
         self.num_steps = num_steps
@@ -120,14 +120,14 @@ class ERA5HDF5Datapipe(Datapipe):
         if isinstance(device, str):
             device = torch.device(device)
         # Need a index id if cuda
-        if device.type == "cuda" and device.index == None:
+        if device.type == "cuda" and device.index is None:
             device = torch.device("cuda:0")
         self.device = device
 
         # check root directory exists
         if not self.data_dir.is_dir():
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
-        if not self.stats_dir is None and not self.stats_dir.is_dir():
+        if self.stats_dir is not None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
 
         self.parse_dataset_files()
@@ -277,7 +277,7 @@ class ERA5HDF5Datapipe(Datapipe):
             invar = invar[:, :h, :w]
             outvar = outvar[:, :, :h, :w]
             # Standardize.
-            if not self.stats_dir is None:
+            if self.stats_dir is not None:
                 invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
                 outvar = dali.fn.normalize(outvar, mean=self.mu, stddev=self.sd)
 

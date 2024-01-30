@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import pytest
 import random
 from dataclasses import dataclass
 
-from modulus.models.module import Module, ModelMetaData
+import pytest
+import torch
+
+from modulus.models.module import ModelMetaData, Module
 from modulus.registry import ModelRegistry
+
 from . import common
 
 registry = ModelRegistry()

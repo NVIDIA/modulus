@@ -24,6 +24,7 @@ pip install warp-lang
     )
     raise SystemExit(1)
 
+
 # TODO bug in warp mod function
 @wp.func
 def _mod_int(x: int, length: int):  # pragma: no cover

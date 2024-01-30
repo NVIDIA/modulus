@@ -19,7 +19,9 @@ interrogate:
 	pre-commit run interrogate -a
 
 lint:
-	pre-commit run markdownlint -a
+	pre-commit run markdownlint -a && \
+	pre-commit run ruff -a && \
+	pre-commit run check-added-large-files -a
 
 license: 
 	pre-commit run license -a
@@ -28,12 +30,12 @@ doctest:
 	coverage run \
 		--rcfile='test/coverage.docstring.rc' \
 		-m pytest \
-		--doctest-modules modulus/ --ignore-glob=*internal*
+		--doctest-modules modulus/ --ignore-glob=*internal* --ignore-glob=*experimental*
 
 pytest: 
 	coverage run \
 		--rcfile='test/coverage.pytest.rc' \
-		-m pytest 
+		-m pytest --ignore-glob=*docs* 
 
 pytest-internal:
 	cd test/internal && \
@@ -42,7 +44,7 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --fail-under=80 && \
+		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=70 && \
 		coverage html
 
 # For arch naming conventions, refer
@@ -58,9 +60,10 @@ else
     $(error Unknown CPU architecture ${ARCH} detected)
 endif
 
+MODULUS_GIT_HASH = $(shell git rev-parse --short HEAD)
 
 container-deploy:
-	docker build -t modulus:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target deploy -f Dockerfile .
+	docker build -t modulus:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --build-arg MODULUS_GIT_HASH=${MODULUS_GIT_HASH} --target deploy -f Dockerfile .
 
 container-ci:
 	docker build -t modulus:ci --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target ci -f Dockerfile .

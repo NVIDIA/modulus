@@ -12,186 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from torch import Tensor
-from dgl import DGLGraph
+from typing import Any, Callable, Dict, Tuple, Union
+
 import dgl.function as fn
-from typing import Any, Callable, Dict, Optional, Union, Tuple
+import torch
+from dgl import DGLGraph
+from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
+from modulus.models.gnn_layers import CuGraphCSC
 
 try:
-    from pylibcugraphops.pytorch import StaticCSC, BipartiteCSC
     from pylibcugraphops.pytorch.operators import (
+        agg_concat_e2n,
         update_efeat_bipartite_e2e,
         update_efeat_static_e2e,
-        agg_concat_e2n,
     )
-except:
+
+    USE_CUGRAPHOPS = True
+
+except ImportError:
     update_efeat_bipartite_e2e = None
     update_efeat_static_e2e = None
     agg_concat_e2n = None
-
-
-class CuGraphCSC:
-    """Constructs a CuGraphCSC object.
-
-    Parameters
-    ----------
-    offsets : Tensor
-        The offsets tensor.
-    indices : Tensor
-        The indices tensor.
-    num_src_nodes : int
-        The number of source nodes.
-    num_dst_nodes : int
-        The number of destination nodes.
-    ef_indices : Optional[Tensor], optional
-        The edge feature indices tensor, by default None
-    reverse_graph_bwd : bool, optional
-        Whether to reverse the graph for the backward pass, by default True
-    cache_graph : bool, optional
-        Whether to cache graph structures when wrapping offsets and indices
-        to the corresponding cugraph-ops graph types. If graph change in each
-        iteration, set to False, by default True.
-    """
-
-    def __init__(
-        self,
-        offsets: Tensor,
-        indices: Tensor,
-        num_src_nodes: int,
-        num_dst_nodes: int,
-        ef_indices: Optional[Tensor] = None,
-        reverse_graph_bwd: bool = True,
-        cache_graph: bool = True,
-    ) -> None:
-        self.offsets = offsets
-        self.indices = indices
-        self.num_src_nodes = num_src_nodes
-        self.num_dst_nodes = num_dst_nodes
-        self.ef_indices = ef_indices
-        self.reverse_graph_bwd = reverse_graph_bwd
-        self.cache_graph = cache_graph
-
-        self.bipartite_csc = None
-        self.static_csc = None
-
-    def to(self, *args: Any, **kwargs: Any) -> "CuGraphCSC":
-        """Moves the object to the specified device, dtype, or format and returns the
-        updated object.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to be passed to the `torch._C._nn._parse_to` function.
-        **kwargs : Any
-            Keyword arguments to be passed to the `torch._C._nn._parse_to` function.
-
-        Returns
-        -------
-        NodeBlockCUGO
-            The updated object after moving to the specified device, dtype, or format.
-        """
-        device, dtype, _, _ = torch._C._nn._parse_to(*args, **kwargs)
-        assert dtype in (
-            None,
-            torch.int32,
-            torch.int64,
-        ), f"Invalid dtype, expected torch.int32 or torch.int64, got {dtype}."
-        self.offsets = self.offsets.to(device=device, dtype=dtype)
-        self.indices = self.indices.to(device=device, dtype=dtype)
-        if self.ef_indices is not None:
-            self.ef_indices = self.ef_indices.to(device=device, dtype=dtype)
-
-        return self
-
-    def to_bipartite_csc(self, dtype=None):
-        """Converts the graph to a bipartite CSC graph.
-
-        Parameters
-        ----------
-        dtype : torch.dtype, optional
-            The dtype of the graph, by default None
-
-        Returns
-        -------
-        BipartiteCSC
-            The bipartite CSC graph.
-        """
-
-        assert self.offsets.is_cuda, "Expected the graph structures to reside on GPU."
-        if self.bipartite_csc is None or not self.cache_graph:
-            # Occassionally, we have to watch out for the IdxT type
-            # of offsets and indices. Technically, they are only relevant
-            # for storing node and edge indices. However, they are also used
-            # to index pointers in the underlying kernels (for now). This means
-            # that depending on the data dimension, one has to rely on int64
-            # for the indices despite int32 technically being enough to store the
-            # graph. This will be improved in cugraph-ops-23.06. Until then, allow
-            # the change of dtype.
-            graph_offsets = self.offsets
-            graph_indices = self.indices
-            graph_ef_indices = self.ef_indices
-
-            if dtype is not None:
-                graph_offsets = self.offsets.to(dtype=dtype)
-                graph_indices = self.indices.to(dtype=dtype)
-                if self.ef_indices is not None:
-                    graph_ef_indices = self.ef_indices.to(dtype=dtype)
-
-            graph = BipartiteCSC(
-                graph_offsets,
-                graph_indices,
-                self.num_src_nodes,
-                graph_ef_indices,
-                reverse_graph_bwd=self.reverse_graph_bwd,
-            )
-            self.bipartite_csc = graph
-
-        return self.bipartite_csc
-
-    def to_static_csc(self, dtype=None):
-        """Converts the graph to a static CSC graph.
-
-        Parameters
-        ----------
-        dtype : torch.dtype, optional
-            The dtype of the graph, by default None
-
-        Returns
-        -------
-        StaticCSC
-            The static CSC graph.
-        """
-
-        if self.static_csc is None or not self.cache_graph:
-            # Occassionally, we have to watch out for the IdxT type
-            # of offsets and indices. Technically, they are only relevant
-            # for storing node and edge indices. However, they are also used
-            # to index pointers in the underlying kernels (for now). This means
-            # that depending on the data dimension, one has to rely on int64
-            # for the indices despite int32 technically being enough to store the
-            # graph. This will be improved in cugraph-ops-23.06. Until then, allow
-            # the change of dtype.
-            graph_offsets = self.offsets
-            graph_indices = self.indices
-            graph_ef_indices = self.ef_indices
-
-            if dtype is not None:
-                graph_offsets = self.offsets.to(dtype=dtype)
-                graph_indices = self.indices.to(dtype=dtype)
-                if self.ef_indices is not None:
-                    graph_ef_indices = self.ef_indices.to(dtype=dtype)
-
-            graph = StaticCSC(
-                graph_offsets,
-                graph_indices,
-                graph_ef_indices,
-            )
-            self.static_csc = graph
-
-        return self.static_csc
+    USE_CUGRAPHOPS = False
 
 
 def checkpoint_identity(layer: Callable, *args: Any, **kwargs: Any) -> Any:
@@ -326,15 +170,34 @@ def concat_efeat(
     """
     if isinstance(nfeat, Tensor):
         if isinstance(graph, CuGraphCSC):
-            static_graph = graph.to_static_csc()
-            efeat = update_efeat_static_e2e(
-                efeat,
-                nfeat,
-                static_graph,
-                mode="concat",
-                use_source_emb=True,
-                use_target_emb=True,
-            )
+            if graph.dgl_graph is not None or not USE_CUGRAPHOPS:
+                src_feat, dst_feat = nfeat, nfeat
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(nfeat)
+                efeat = concat_efeat_dgl(
+                    efeat, (src_feat, dst_feat), graph.to_dgl_graph()
+                )
+
+            else:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(nfeat)
+                    # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
+                    bipartite_graph = graph.to_bipartite_csc(dtype=torch.int64)
+                    dst_feat = nfeat
+                    efeat = update_efeat_bipartite_e2e(
+                        efeat, src_feat, dst_feat, bipartite_graph, "concat"
+                    )
+
+                else:
+                    static_graph = graph.to_static_csc()
+                    efeat = update_efeat_static_e2e(
+                        efeat,
+                        nfeat,
+                        static_graph,
+                        mode="concat",
+                        use_source_emb=True,
+                        use_target_emb=True,
+                    )
 
         else:
             efeat = concat_efeat_dgl(efeat, nfeat, graph)
@@ -343,11 +206,21 @@ def concat_efeat(
         src_feat, dst_feat = nfeat
         # update edge features through concatenating edge and node features
         if isinstance(graph, CuGraphCSC):
-            # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
-            bipartite_graph = graph.to_bipartite_csc(dtype=torch.int64)
-            efeat = update_efeat_bipartite_e2e(
-                efeat, src_feat, dst_feat, bipartite_graph, "concat"
-            )
+            if graph.dgl_graph is not None or not USE_CUGRAPHOPS:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+                efeat = concat_efeat_dgl(
+                    efeat, (src_feat, dst_feat), graph.to_dgl_graph()
+                )
+
+            else:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+                # torch.int64 to avoid indexing overflows due tu current behavior of cugraph-ops
+                bipartite_graph = graph.to_bipartite_csc(dtype=torch.int64)
+                efeat = update_efeat_bipartite_e2e(
+                    efeat, src_feat, dst_feat, bipartite_graph, "concat"
+                )
         else:
             efeat = concat_efeat_dgl(efeat, (src_feat, dst_feat), graph)
 
@@ -406,10 +279,28 @@ def sum_efeat(
     """
     if isinstance(nfeat, Tensor):
         if isinstance(graph, CuGraphCSC):
-            static_graph = graph.to_static_csc()
-            sum_efeat = update_efeat_bipartite_e2e(
-                efeat, nfeat, static_graph, mode="sum"
-            )
+            if graph.dgl_graph is not None or not USE_CUGRAPHOPS:
+                src_feat, dst_feat = nfeat, nfeat
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+
+                src, dst = (item.long() for item in graph.to_dgl_graph().edges())
+                sum_efeat = sum_efeat_dgl(efeat, src_feat, dst_feat, src, dst)
+
+            else:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(nfeat)
+                    dst_feat = nfeat
+                    bipartite_graph = graph.to_bipartite_csc()
+                    sum_efeat = update_efeat_bipartite_e2e(
+                        efeat, src_feat, dst_feat, bipartite_graph, mode="sum"
+                    )
+
+                else:
+                    static_graph = graph.to_static_csc()
+                    sum_efeat = update_efeat_bipartite_e2e(
+                        efeat, nfeat, static_graph, mode="sum"
+                    )
 
         else:
             src_feat, dst_feat = nfeat, nfeat
@@ -419,10 +310,21 @@ def sum_efeat(
     else:
         src_feat, dst_feat = nfeat
         if isinstance(graph, CuGraphCSC):
-            bipartite_graph = graph.to_bipartite_csc()
-            sum_efeat = update_efeat_bipartite_e2e(
-                efeat, src_feat, dst_feat, bipartite_graph, mode="sum"
-            )
+            if graph.dgl_graph is not None or not USE_CUGRAPHOPS:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+
+                src, dst = (item.long() for item in graph.to_dgl_graph().edges())
+                sum_efeat = sum_efeat_dgl(efeat, src_feat, dst_feat, src, dst)
+
+            else:
+                if graph.is_distributed:
+                    src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+
+                bipartite_graph = graph.to_bipartite_csc()
+                sum_efeat = update_efeat_bipartite_e2e(
+                    efeat, src_feat, dst_feat, bipartite_graph, mode="sum"
+                )
         else:
             src, dst = (item.long() for item in graph.edges())
             sum_efeat = sum_efeat_dgl(efeat, src_feat, dst_feat, src, dst)
@@ -506,8 +408,17 @@ def aggregate_and_concat(
     """
 
     if isinstance(graph, CuGraphCSC):
-        static_graph = graph.to_static_csc()
-        cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, aggregation)
+        # in this case, we don't have to distinguish a distributed setting
+        # or the defalt setting as both efeat and nfeat are already
+        # gurantueed to be on the same rank on both cases due to our
+        # partitioning scheme
+
+        if graph.dgl_graph is not None or not USE_CUGRAPHOPS:
+            cat_feat = agg_concat_dgl(efeat, nfeat, graph.to_dgl_graph(), aggregation)
+
+        else:
+            static_graph = graph.to_static_csc()
+            cat_feat = agg_concat_e2n(nfeat, efeat, static_graph, aggregation)
     else:
         cat_feat = agg_concat_dgl(efeat, nfeat, graph, aggregation)
 

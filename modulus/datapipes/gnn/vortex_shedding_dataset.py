@@ -12,12 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+import functools
+import json
+import os
+
+import numpy as np
 import torch
-import os, json, functools, numpy as np
 
 try:
     import tensorflow.compat.v1 as tf
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net Datapipe requires the Tensorflow library. Install the "
         + "package at: https://www.tensorflow.org/install"
@@ -26,14 +31,14 @@ except:
 try:
     import dgl
     from dgl.data import DGLDataset
-except:
+except ImportError:
     raise ImportError(
         "Mesh Graph Net Datapipe requires the DGL library. Install the "
         + "desired CUDA version at: https://www.dgl.ai/pages/start.html"
     )
 from torch.nn import functional as F
 
-from .utils import read_vtp_file, save_json, load_json
+from .utils import load_json, save_json
 
 # Hide GPU from visible devices for TF
 tf.config.set_visible_devices([], "GPU")
@@ -78,7 +83,6 @@ class VortexSheddingDataset(DGLDataset):
         force_reload=False,
         verbose=False,
     ):
-
         super().__init__(
             name=name,
             force_reload=force_reload,
@@ -328,22 +332,23 @@ class VortexSheddingDataset(DGLDataset):
     @staticmethod
     def normalize_node(invar, mu, std):
         """normalizes a tensor"""
-        assert invar.size()[-1] == mu.size()[-1]
-        assert invar.size()[-1] == std.size()[-1]
+        if (invar.size()[-1] != mu.size()[-1]) or (invar.size()[-1] != std.size()[-1]):
+            raise AssertionError("input and stats must have the same size")
         return (invar - mu.expand(invar.size())) / std.expand(invar.size())
 
     @staticmethod
     def normalize_edge(graph, mu, std):
         """normalizes a tensor"""
-        assert graph.edata["x"].size()[-1] == mu.size()[-1]
-        assert graph.edata["x"].size()[-1] == std.size()[-1]
+        if (
+            graph.edata["x"].size()[-1] != mu.size()[-1]
+            or graph.edata["x"].size()[-1] != std.size()[-1]
+        ):
+            raise AssertionError("Graph edge data must be same size as stats.")
         return (graph.edata["x"] - mu) / std
 
     @staticmethod
     def denormalize(invar, mu, std):
         """denormalizes a tensor"""
-        # assert invar.size()[-1] == mu.size()[-1]
-        # assert invar.size()[-1] == std.size()[-1]
         denormalized_invar = invar * std + mu
         return denormalized_invar
 

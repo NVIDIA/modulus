@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import logging
-import torch
-
 from typing import Tuple, Union
+
+import torch
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
@@ -94,3 +94,12 @@ def compare_output(
         return False
 
     return True
+
+
+def is_fusion_available(cls_name: str):
+    """Check if certain APIs are available in nvfuser package."""
+
+    try:
+        return hasattr(__import__("nvfuser", fromlist=[cls_name]), cls_name)
+    except ImportError:
+        return False

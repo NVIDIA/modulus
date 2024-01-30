@@ -12,23 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import json
-import torch
-import logging
-import inspect
 import importlib
-import tempfile
+import inspect
+import json
+import logging
+import os
 import tarfile
-import pkg_resources
-from typing import Union, List, Dict, Any
+import tempfile
 from pathlib import Path
-import torch.nn as nn
+from typing import Any, Dict, Union
+
+import torch
 
 import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.registry import ModelRegistry
-from modulus.utils.filesystem import _get_fs, _download_cached
+from modulus.utils.filesystem import _download_cached, _get_fs
 
 
 class Module(torch.nn.Module):
@@ -80,7 +79,7 @@ class Module(torch.nn.Module):
         self.logger = logging.getLogger("core.module")
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
-            f"[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
+            "[%(asctime)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
         )
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
@@ -140,14 +139,20 @@ class Module(torch.nn.Module):
         )
         """
 
-        # Add a check if the class is one in the model registry
         _cls_name = arg_dict["__name__"]
         registry = ModelRegistry()
-        if _cls_name in registry.list_models():
+        if cls.__name__ == arg_dict["__name__"]:  # If cls is the class
+            _cls = cls
+        elif _cls_name in registry.list_models():  # Built in registry
             _cls = registry.factory(_cls_name)
-        else:  # Otherwise, try to import the class
-            _mod = importlib.import_module(arg_dict["__module__"])
-            _cls = getattr(_mod, arg_dict["__name__"])
+        else:
+            try:
+                # Otherwise, try to import the class
+                _mod = importlib.import_module(arg_dict["__module__"])
+                _cls = getattr(_mod, arg_dict["__name__"])
+            except AttributeError:
+                # Cross fingers and hope for the best (maybe the class name changed)
+                _cls = cls
         return _cls(**arg_dict["__args__"])
 
     def debug(self):
@@ -227,13 +232,13 @@ class Module(torch.nn.Module):
     @staticmethod
     def _check_checkpoint(local_path: str) -> bool:
         if not local_path.joinpath("args.json").exists():
-            raise IOError(f"File 'args.json' not found in checkpoint")
+            raise IOError("File 'args.json' not found in checkpoint")
 
         if not local_path.joinpath("metadata.json").exists():
-            raise IOError(f"File 'metadata.json' not found in checkpoint")
+            raise IOError("File 'metadata.json' not found in checkpoint")
 
         if not local_path.joinpath("model.pt").exists():
-            raise IOError(f"Model weights 'model.pt' not found in checkpoint")
+            raise IOError("Model weights 'model.pt' not found in checkpoint")
 
         # Check if the checkpoint version is compatible with the current version
         with open(local_path.joinpath("metadata.json"), "r") as f:

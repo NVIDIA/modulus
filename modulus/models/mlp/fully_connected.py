@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import List, Optional, Union
+
 import torch
 import torch.nn as nn
-import modulus
+from torch import Tensor
+
+import modulus  # noqa: F401 for docs
 from modulus.models.layers import FCLayer, get_activation
 
-from torch import Tensor
-from dataclasses import dataclass
-from typing import Optional, Union, List
 from ..meta import ModelMetaData
 from ..module import Module
 
@@ -61,6 +63,8 @@ class FullyConnected(Module):
         Use an adaptive activation function, by default False
     weight_norm : bool, optional
         Use weight norm on fully connected layers, by default False
+    weight_fact : bool, optional
+        Use weight factorization on fully connected layers, by default False
 
     Example
     -------
@@ -81,6 +85,7 @@ class FullyConnected(Module):
         skip_connections: bool = False,
         adaptive_activations: bool = False,
         weight_norm: bool = False,
+        weight_fact: bool = False,
     ) -> None:
         super().__init__(meta=MetaData())
 
@@ -109,6 +114,7 @@ class FullyConnected(Module):
                     layer_size,
                     activation_fn[i],
                     weight_norm,
+                    weight_fact,
                     activation_par,
                 )
             )
@@ -119,6 +125,7 @@ class FullyConnected(Module):
             out_features=out_features,
             activation_fn=None,
             weight_norm=False,
+            weight_fact=False,
             activation_par=None,
         )
 

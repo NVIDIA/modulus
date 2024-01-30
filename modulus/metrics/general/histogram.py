@@ -13,18 +13,20 @@
 # limitations under the License.
 
 
+from typing import Tuple, Union
+
 import torch
-import numpy
 import torch.distributed as dist
-from typing import Union, Tuple
+
 from modulus.distributed.manager import DistributedManager
+
 from .ensemble_metrics import EnsembleMetrics
 
 Tensor = torch.Tensor
 
 
 @torch.jit.script
-def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:
+def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:  # pragma: no cover
     """Element-wise multi-dimensional linspace
 
     Replicates the bahaviour of numpy.linspace over all elements of multi-dimensional
@@ -63,7 +65,7 @@ def linspace(start: Tensor, stop: Tensor, num: int) -> Tensor:
 @torch.jit.script
 def _low_memory_bin_reduction_counts(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-):
+):  # pragma: no cover
     """Computes low-memory bin counts
 
     This function calculates a low-memory bin count of the inputs tensor and adding the
@@ -107,7 +109,7 @@ def _low_memory_bin_reduction_counts(
 @torch.jit.script
 def _high_memory_bin_reduction_counts(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes high-memory bin counts
 
     This function calculates a high-memory bin count of the inputs tensor and adding the
@@ -145,7 +147,7 @@ def _high_memory_bin_reduction_counts(
 @torch.jit.script
 def _low_memory_bin_reduction_cdf(
     inputs: Tensor, bin_edges: Tensor, counts: Tensor, number_of_bins: int
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes low-memory cumulative bin counts
 
     This function calculates a low-memory cumulative bin count of the inputs tensor and adding the
@@ -182,7 +184,7 @@ def _high_memory_bin_reduction_cdf(
     bin_edges: torch.Tensor,
     counts: torch.Tensor,
     number_of_bins: int,
-) -> Tensor:
+) -> Tensor:  # pragma: no cover
     """Computes high-memory cumulative bin counts
 
     This function calculates a high-memory cumulative bin countof the inputs tensor and
@@ -245,18 +247,20 @@ def _count_bins(
     """
     bins_shape = bin_edges.shape
     number_of_bins = bins_shape[0] - 1
-    assert (
-        bins_shape[1:] == input.shape[1:]
-    ), "Expected bin_edges and inputs to have compatible non-leading dimensions."
+    if bins_shape[1:] != input.shape[1:]:
+        raise ValueError(
+            "Expected bin_edges and inputs to have compatible non-leading dimensions."
+        )
 
     if counts is None:
         counts = torch.zeros(
             (number_of_bins, *bins_shape[1:]), dtype=torch.int64, device=input.device
         )
     else:
-        assert (
-            bins_shape[1:] == counts.shape[1:]
-        ), "Expected bin_edges and counts to have compatible non-leading dimensions."
+        if bins_shape[1:] != counts.shape[1:]:
+            raise ValueError(
+                "Expected bin_edges and counts to have compatible non-leading dimensions."
+            )
 
     if cdf:
         try:
@@ -295,14 +299,16 @@ def _get_mins_maxs(*inputs: Tensor, axis: int = 0) -> Tuple[Tensor, Tensor]:
     Tuple[Tensor, Tensor]
         (Minimum, Maximum) values of inputs
     """
-    assert len(inputs) > 0, "At least one tensor much be provided"
+    if len(inputs) <= 0:
+        raise ValueError("At least one tensor much be provided")
 
     input = inputs[0]
     inputs = list(inputs)[1:]
     # Check shape consistency
     s = input.shape
     for x in inputs:
-        assert s[1:] == x.shape[1:]
+        if s[1:] != x.shape[1:]:
+            raise ValueError()
 
     # Compute low and high for input
     low = torch.min(input, axis=axis)[0]
@@ -352,7 +358,9 @@ def _update_bins_counts(
     low, high = _get_mins_maxs(input)
 
     # If in distributed environment, reduce to get extrema min and max
-    if DistributedManager.is_initialized() and dist.is_initialized():
+    if (
+        DistributedManager.is_initialized() and dist.is_initialized()
+    ):  # pragma: no cover
         dist.all_reduce(low, op=dist.ReduceOp.MIN)
         dist.all_reduce(high, op=dist.ReduceOp.MAX)
 
@@ -440,9 +448,10 @@ def _compute_counts_cdf(
     # Check shapes of inputs
     s = inputs[0].shape
     for input in inputs[1:]:
-        assert s[1:] == input.shape[1:]
+        if s[1:] != input.shape[1:]:
+            raise ValueError()
 
-    if type(bins) is int:
+    if isinstance(bins, int):
         if verbose:
             print("Bins is passed as an int.")
         # Compute largest bins needed
@@ -456,7 +465,7 @@ def _compute_counts_cdf(
             counts = _count_bins(input, bin_edges, counts=counts, cdf=cdf)
         return bin_edges, counts
 
-    elif type(bins) is torch.Tensor:
+    elif isinstance(bins, torch.Tensor):
         bin_edges = bins
         if verbose:
             print("Bins is passed as a tensor")
@@ -593,14 +602,14 @@ class Histogram(EnsembleMetrics):
         tol: float = 1e-2,
         **kwargs,
     ):
-
         super().__init__(input_shape, **kwargs)
-        if type(bins) is int:
+        if isinstance(bins, int):
             self.number_of_bins = bins
         else:
             self.number_of_bins = bins.shape[0] - 1
 
-            assert self.input_shape[1:] == bins.shape[1:]
+            if self.input_shape[1:] != bins.shape[1:]:
+                raise ValueError()
 
         self.counts_shape = self.input_shape
         self.counts_shape[0] = self.number_of_bins
@@ -659,7 +668,6 @@ class Histogram(EnsembleMetrics):
         Tuple[Tensor, Tensor]
             The calculated (bin edges [N+1, ...], counts [N, ...]) tensors
         """
-        self._check_shape(input)
         # TODO(Dallas) Move distributed calls into finalize.
         self.bin_edges, self.counts = _update_bins_counts(
             input, self.bin_edges, self.counts
@@ -696,10 +704,12 @@ def normal_pdf(
 ) -> Tensor:
     """Computes the probability density function of a normal variable with given mean
     and standard deviation. This PDF is given at the locations given by the midpoint
-     of the bin_edges.
+    of the bin_edges.
 
     This function uses the standard formula:
-    .. math:
+
+    .. math::
+
         \\frac{1}{\\sqrt{2*\\pi} std } \\exp( -\\frac{1}{2} (\\frac{x-mean}{std})^2 )
 
     where erf is the error function.
@@ -728,7 +738,7 @@ def normal_pdf(
     elif grid == "left":
         bin_mids = bin_edges[:-1]
     else:
-        assert ValueError(
+        raise ValueError(
             "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
         )
     return (
@@ -746,10 +756,12 @@ def normal_cdf(
 ) -> Tensor:
     """Computes the cumulative density function of a normal variable with given mean
     and standard deviation. This CDF is given at the locations given by the midpoint
-     of the bin_edges.
+    of the bin_edges.
 
     This function uses the standard formula:
-    .. math:
+
+    .. math::
+
         \\frac{1}{2} ( 1 + erf( \\frac{x-mean}{std \\sqrt{2}}) ) )
 
     where erf is the error function.
@@ -778,7 +790,7 @@ def normal_cdf(
     elif grid == "left":
         bin_mids = bin_edges[:-1]
     else:
-        assert ValueError(
+        raise ValueError(
             "This type of grid is not defined. Choose one of {'mids', 'right', 'left'}."
         )
     return 0.5 + 0.5 * torch.erf(

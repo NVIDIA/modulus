@@ -13,6 +13,6 @@
 # limitations under the License.
 
 from .capture import (
-    StaticCaptureTraining,
     StaticCaptureEvaluateNoGrad,
+    StaticCaptureTraining,
 )

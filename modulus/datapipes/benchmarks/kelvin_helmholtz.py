@@ -13,25 +13,24 @@
 # limitations under the License.
 
 import sys
+from dataclasses import dataclass
+from typing import Dict, Tuple, Union
+
 import numpy as np
 import torch
 import warp as wp
 
-from dataclasses import dataclass
-from typing import Iterable, List, Union, Tuple, Dict
-from pathlib import Path
-from torch.utils.data import Dataset
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
-from .kernels.initialization import init_uniform_random_2d
 from .kernels.finite_volume import (
-    euler_primitive_to_conserved_batched_2d,
+    euler_apply_flux_batched_2d,
     euler_conserved_to_primitive_batched_2d,
     euler_extrapolation_batched_2d,
     euler_get_flux_batched_2d,
-    euler_apply_flux_batched_2d,
+    euler_primitive_to_conserved_batched_2d,
     initialize_kelvin_helmoltz_batched_2d,
 )
+from .kernels.initialization import init_uniform_random_2d
 
 Tensor = torch.Tensor
 # TODO unsure if better to remove this
@@ -244,7 +243,6 @@ class KelvinHelmholtz2D(Datapipe):
 
         # run solver
         for s in range(self.nr_snapshots):
-
             # save arrays for
             wp.copy(self.seq_rho[s], self.rho)
             wp.copy(self.seq_vel[s], self.vel)
@@ -252,7 +250,6 @@ class KelvinHelmholtz2D(Datapipe):
 
             # iterations
             for i in range(self.iteration_per_snapshot):
-
                 # compute primitives
                 wp.launch(
                     euler_conserved_to_primitive_batched_2d,
@@ -374,13 +371,11 @@ class KelvinHelmholtz2D(Datapipe):
             for b_ind in batch_ind:
                 np.random.shuffle(b_ind)
             for bb in range(self.nr_snapshots - self.seq_length):
-
                 # run over batch to gather samples
                 batched_seq_rho = []
                 batched_seq_vel = []
                 batched_seq_p = []
                 for b in range(self.batch_size):
-
                     # gather seq from each batch
                     seq_rho = []
                     seq_vel = []

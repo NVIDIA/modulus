@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0a0] - 2023-11-xx
+## [0.6.0a0] - 2024-03-XX
 
 ### Added
 
@@ -22,13 +22,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+## [0.5.0] - 2024-01-25
+
+### Added
+
+- Distributed process group configuration mechanism.
+- DistributedManager utility to instantiate process groups based on a process group config.
+- Helper functions to faciliate distributed training with shared parameters.
+- Brain anomaly detection example.
+- Updated Frechet Inception Distance to use Wasserstein 2-norm with improved stability.
+- Molecular Dynamics example.
+- Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
+- Physics-Informed Stokes Flow example.
+- Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+
+### Changed
+
+- MLFLow logging such that only proc 0 logs to MLFlow.
+- FNO given seperate methods for constructing lift and spectral encoder layers.
+
+### Deprecated
+
+### Removed
+
+- The experimental SFNO
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+- Removed experimental SFNO dependencies
+- Added CorrDiff dependencies (cftime, einops, pyspng, nvtx)
+- Made tqdm a required dependency
+
+## [0.4.0] - 2023-11-20
+
+### Added
+
+- Added Stokes flow dataset
+- An experimental version of SFNO to be used in unified training recipe for
+weather models
+- Added distributed FFT utility.
+- Added ruff as a linting tool.
+- Ported utilities from Modulus Launch to main package.
+- EDM diffusion models and recipes for training and sampling.
+- NGC model registry download integration into package/filesystem.
+- Denoising diffusion tutorial.
+
+### Changed
+
+- The AFNO input argument `img_size` to `inp_shape`
+- Integrated the network architecture layers from Modulus-Sym.
+- Updated the SFNO model, and the training and inference recipes.
+
+### Fixed
+
+- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+
+### Dependencies
+
+- Updated the base container to PyTorch 23.10.
+- Updated examples to use Pydantic v2.
+
 ## [0.3.0] - 2023-09-21
 
 ### Added
 
+- Added ability to compute CRPS(..., dim: int = 0).
+- Added EFI for arbitrary climatological CDF.
+- Added Kernel CRPS implementation (kcrps)
 - Added distributed utilities to create process groups and orthogonal process groups.
 - Added distributed AFNO model implementation.
 - Added distributed utilities for communication of buffers of varying size per rank.
+- Added distributed utilities for message passing across multiple GPUs.
 - Added instructions for docker build on ARM architecture.
 - Added batching support and fix the input time step for the DLWP wrapper.
 

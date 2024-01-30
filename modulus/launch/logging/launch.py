@@ -14,6 +14,7 @@
 
 import re
 import sys
+<<<<<<< HEAD
 import wandb
 import mlflow
 import time
@@ -24,6 +25,21 @@ from typing import Union, Dict, Tuple
 from modulus.distributed import DistributedManager, gather_loss
 from .wandb import alert
 from .console import PythonLogger
+=======
+import time
+from os import getcwd, makedirs
+from os.path import abspath, exists, join
+from typing import Dict, Tuple, Union
+
+import torch
+import torch.cuda.profiler as profiler
+import wandb
+
+from modulus.distributed import DistributedManager, reduce_loss
+
+from .console import PythonLogger
+from .wandb import alert
+>>>>>>> upstream/main
 
 
 class LaunchLogger(object):
@@ -162,7 +178,11 @@ class LaunchLogger(object):
 
             # Console
             if self.root:
+<<<<<<< HEAD
                 message = f"Mini-Batch Losses:"
+=======
+                message = "Mini-Batch Losses:"
+>>>>>>> upstream/main
                 for name, value in losses.items():
                     message += f" {name} = {value:10.3e},"
                 message = message[:-1]
@@ -214,13 +234,21 @@ class LaunchLogger(object):
                     self.mlflow_run.info.run_id, status="KILLED"
                 )
             return
+<<<<<<< HEAD
         # Gather mini-batch losses
+=======
+        # Reduce mini-batch losses
+>>>>>>> upstream/main
         for name, value in self.minibatch_losses.items():
             process_loss = value / self.mini_batch_index
             self.epoch_losses[name] = process_loss
             # Compute global loss
             if DistributedManager.is_initialized() and DistributedManager().distributed:
+<<<<<<< HEAD
                 self.epoch_losses[f"Global {name}"] = gather_loss(process_loss)
+=======
+                self.epoch_losses[name] = reduce_loss(process_loss)
+>>>>>>> upstream/main
 
         if self.root:
             # Console printing
@@ -289,7 +317,10 @@ class LaunchLogger(object):
         self,
         metric_dict: Dict[str, float],
         step: Tuple[str, int] = None,
+<<<<<<< HEAD
         print: bool = False,
+=======
+>>>>>>> upstream/main
     ):
         """Logs a dictionary of metrics to different supported backends
 
@@ -323,6 +354,54 @@ class LaunchLogger(object):
             metric_dict[step[0]] = step[1]
             wandb.log(metric_dict)
 
+<<<<<<< HEAD
+=======
+    def log_figure(
+        self,
+        figure,
+        artifact_file: str = "artifact",
+        plot_dir: str = "./",
+        log_to_file: bool = False,
+    ):
+        """Logs figures on root process to wand or mlflow. Will store it to file in case neither are selected.
+
+        Parameters
+        ----------
+        figure : Figure
+            matplotlib or plotly figure to plot
+        artifact_file : str, optional
+            File name. CAUTION overrides old files of same name
+        plot_dir : str, optional
+            output directory for plot
+        log_to_file : bool, optional
+            set to true in case figure shall be stored to file in addition to logging it to mlflow/wandb
+        """
+        dist = DistributedManager()
+        if dist.rank != 0:
+            return
+
+        if self.wandb_backend:
+            wandb.log({artifact_file: figure})
+
+        if self.mlflow_backend:
+            self.mlflow_client.log_figure(
+                figure=figure,
+                artifact_file=artifact_file,
+                run_id=self.mlflow_run.info.run_id,
+            )
+
+        if (not self.wandb_backend) and (not self.mlflow_backend):
+            log_to_file = True
+
+        if log_to_file:
+            plot_dir = abspath(join(getcwd(), plot_dir))
+            if not exists(plot_dir):
+                makedirs(plot_dir)
+            if not artifact_file.endswith(".png"):
+                artifact_file += ".png"
+            figure.savefig(join(plot_dir, artifact_file))
+
+>>>>>>> upstream/main
     @classmethod
     def toggle_wandb(cls, value: bool):
         """Toggle WandB logging
@@ -360,14 +439,29 @@ class LaunchLogger(object):
             PythonLogger().warning("WandB not initialized, turning off")
             use_wandb = False
 
+<<<<<<< HEAD
         if LaunchLogger.mlflow_run is None and use_mlflow:
             PythonLogger().warning("MLFlow not initialized, turning off")
             use_mlflow = False
 
+=======
+>>>>>>> upstream/main
         if use_wandb:
             LaunchLogger.toggle_wandb(True)
             wandb.define_metric("epoch")
             wandb.define_metric("iter")
 
+<<<<<<< HEAD
+=======
+        # let only root process log to mlflow
+        if DistributedManager.is_initialized():
+            if DistributedManager().rank != 0:
+                return
+
+        if LaunchLogger.mlflow_run is None and use_mlflow:
+            PythonLogger().warning("MLFlow not initialized, turning off")
+            use_mlflow = False
+
+>>>>>>> upstream/main
         if use_mlflow:
             LaunchLogger.toggle_mlflow(True)

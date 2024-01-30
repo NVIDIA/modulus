@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import pytest
 import torch
-
-from typing import Tuple
-from . import common
 from pytest_utils import import_or_fail, nfsdata_or_fail
+
+from . import common
 
 Tensor = torch.Tensor
 
@@ -43,6 +41,7 @@ def lsm_filename():
 
 @pytest.fixture
 def geopotential_filename():
+    """Geopotential file."""
     path = "/data/nfs/modulus-data/datasets/hdf5/static/geopotential.nc"
     return path
 
@@ -409,9 +408,7 @@ def test_era5_hdf5_shuffle(
 
     # get all samples
     # TODO generalize this
-    tensors = []
-    for data in datapipe:
-        tensors.append(data[0]["state_seq"])
+    tensors = [data[0]["state_seq"] for data in datapipe]
 
     # check sample order
     assert common.check_shuffle(tensors, shuffle, stride, 8)

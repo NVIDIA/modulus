@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+<<<<<<< HEAD
 import torch
 import mlflow
 
@@ -26,6 +27,21 @@ from .utils import create_ddp_group_tag
 from .launch import LaunchLogger
 from .console import PythonLogger
 
+=======
+from datetime import datetime
+from pathlib import Path
+from typing import Literal, Tuple
+
+import mlflow
+import torch
+from mlflow.entities.run import Run
+from mlflow.tracking import MlflowClient
+
+from modulus.distributed import DistributedManager
+
+from .console import PythonLogger
+from .launch import LaunchLogger
+>>>>>>> upstream/main
 
 logger = PythonLogger("mlflow")
 
@@ -81,6 +97,7 @@ def initialize_mlflow(
         Returns MLFlow logging client and active run object
     """
     dist = DistributedManager()
+<<<<<<< HEAD
     if DistributedManager.is_initialized() and dist.distributed:
         group_name = create_ddp_group_tag(run_name)
         run_name = f"{run_name}-Process_{dist.rank}"
@@ -88,6 +105,15 @@ def initialize_mlflow(
         start_time = datetime.now().astimezone()
         time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
         group_name = f"{run_name}_{time_string}"
+=======
+    if dist.rank != 0:  # only root process should be logging to mlflow
+        return
+
+    start_time = datetime.now().astimezone()
+    time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
+    group_name = f"{run_name}_{time_string}"
+
+>>>>>>> upstream/main
     # Set default value here for Hydra
     if tracking_location is None:
         tracking_location = str(Path("./mlruns").absolute())

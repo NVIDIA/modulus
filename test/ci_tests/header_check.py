@@ -15,11 +15,9 @@
 
 """A script to check that copyright headers exists"""
 
-import argparse
 import itertools
-import re
-import sys
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -43,9 +41,7 @@ def get_top_comments(_data):
         elif "from" in line:
             break
 
-    comments = []
-    for line in lines_to_extract:
-        comments.append(_data[line])
+    comments = [_data[line] for line in lines_to_extract]
 
     return comments
 
@@ -54,7 +50,7 @@ def main():
 
     with open(Path(__file__).parent.resolve() / Path("config.json")) as f:
         config = json.loads(f.read())
-    print(f"License check config:")
+    print("License check config:")
     print(json.dumps(config, sort_keys=True, indent=4))
 
     current_year = int(datetime.today().year)

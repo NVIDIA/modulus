@@ -28,6 +28,8 @@ class ModelMetaData:
     amp_cpu: bool = None
     amp_gpu: bool = None
     torch_fx: bool = False
+    # Data type
+    bf16: bool = False
     # Inference
     onnx: bool = False
     onnx_gpu: bool = None

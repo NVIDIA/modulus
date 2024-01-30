@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pkg_resources
+from importlib.metadata import EntryPoint, entry_points
 from typing import List, Union
 
+# This import is required for compatibility with doctests.
+import importlib_metadata
+
 import modulus
+
 
 # This model registry follows conventions similar to fsspec,
 # https://github.com/fsspec/filesystem_spec/blob/master/fsspec/registry.py#L62C2-L62C2
@@ -34,8 +38,7 @@ class ModelRegistry:
     @staticmethod
     def _construct_registry() -> dict:
         registry = {}
-        group = "modulus.models"
-        entrypoints = pkg_resources.iter_entry_points(group)
+        entrypoints = entry_points(group="modulus.models")
         for entry_point in entrypoints:
             registry[entry_point.name] = entry_point
         return registry
@@ -97,13 +100,13 @@ class ModelRegistry:
             If no model is registered under the provided name.
         """
 
-        if name in self._model_registry:
-            model = self._model_registry[name]
-            if isinstance(model, pkg_resources.EntryPoint):
+        model = self._model_registry.get(name)
+        if model is not None:
+            if isinstance(model, (EntryPoint, importlib_metadata.EntryPoint)):
                 model = model.load()
             return model
-        else:
-            raise KeyError(f"No model is registered under the name {name}")
+
+        raise KeyError(f"No model is registered under the name {name}")
 
     def list_models(self) -> List[str]:
         """

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple, Optional, Union
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -21,14 +21,13 @@ from dgl import DGLGraph
 from torch import Tensor
 from torch.autograd.function import once_differentiable
 
-from .utils import concat_efeat, sum_efeat, CuGraphCSC
-from modulus.models.layers.fused_silu import silu_backward_for
+from .utils import CuGraphCSC, concat_efeat, sum_efeat
 
 try:
     from apex.normalization import FusedLayerNorm
 
     apex_imported = True
-except:
+except ImportError:
     apex_imported = False
 
 
@@ -56,6 +55,11 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
         ctx, grad_output: torch.Tensor
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor],]:
         """backward pass of the SiLU + Linear function"""
+
+        from nvfuser import FusionDefinition
+
+        from modulus.models.layers.fused_silu import silu_backward_for
+
         (
             need_dgrad,
             need_wgrad,
@@ -76,8 +80,17 @@ class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
 
         if need_dgrad:
             grad_features = grad_output @ weight
-            silu_backward = silu_backward_for(features.dtype, features.dim())
-            grad_silu = silu_backward.execute([features])[0]
+
+            with FusionDefinition() as fd:
+                silu_backward_for(
+                    fd,
+                    features.dtype,
+                    features.dim(),
+                    features.size(),
+                    features.stride(),
+                )
+
+            grad_silu = fd.execute([features])[0]
             grad_features = grad_features * grad_silu
 
         return grad_features, grad_weight, grad_bias
@@ -97,8 +110,9 @@ class MeshGraphMLP(nn.Module):
         dimensionality of the output features, by default 512
     hidden_dim : int, optional
         number of neurons in each hidden layer, by default 512
-    hidden_layers : int, optional
+    hidden_layers : Union[int, None], optional
         number of hidden layers, by default 1
+        if None is provided, the MLP will collapse to a Identity function
     activation_fn : nn.Module, optional
         , by default nn.SiLU()
     norm_type : str, optional
@@ -113,38 +127,43 @@ class MeshGraphMLP(nn.Module):
         input_dim: int,
         output_dim: int = 512,
         hidden_dim: int = 512,
-        hidden_layers: int = 1,
+        hidden_layers: Union[int, None] = 1,
         activation_fn: nn.Module = nn.SiLU(),
         norm_type: str = "LayerNorm",
         recompute_activation: bool = False,
     ):
         super().__init__()
 
-        layers = [nn.Linear(input_dim, hidden_dim), activation_fn]
-        self.hidden_layers = hidden_layers
-        for _ in range(hidden_layers - 1):
-            layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
-        layers.append(nn.Linear(hidden_dim, output_dim))
+        if hidden_layers is not None:
+            layers = [nn.Linear(input_dim, hidden_dim), activation_fn]
+            self.hidden_layers = hidden_layers
+            for _ in range(hidden_layers - 1):
+                layers += [nn.Linear(hidden_dim, hidden_dim), activation_fn]
+            layers.append(nn.Linear(hidden_dim, output_dim))
 
-        self.norm_type = norm_type
-        if norm_type is not None:
-            assert norm_type in [
-                "LayerNorm",
-                "GraphNorm",
-                "InstanceNorm",
-                "BatchNorm",
-                "MessageNorm",
-            ]
-            if norm_type == "LayerNorm" and apex_imported:
-                norm_layer = FusedLayerNorm
-            else:
-                norm_layer = getattr(nn, norm_type)
-            layers.append(norm_layer(output_dim))
+            self.norm_type = norm_type
+            if norm_type is not None:
+                if norm_type not in [
+                    "LayerNorm",
+                    "GraphNorm",
+                    "InstanceNorm",
+                    "BatchNorm",
+                    "MessageNorm",
+                ]:
+                    raise ValueError(norm_type)
+                if norm_type == "LayerNorm" and apex_imported:
+                    norm_layer = FusedLayerNorm
+                else:
+                    norm_layer = getattr(nn, norm_type)
+                layers.append(norm_layer(output_dim))
 
-        self.model = nn.Sequential(*layers)
+            self.model = nn.Sequential(*layers)
+        else:
+            self.model = nn.Identity()
 
         if recompute_activation:
-            assert isinstance(activation_fn, nn.SiLU)
+            if not isinstance(activation_fn, nn.SiLU):
+                raise ValueError(activation_fn)
             self.recompute_activation = True
         else:
             self.recompute_activation = False
@@ -326,13 +345,14 @@ class MeshGraphEdgeMLPSum(nn.Module):
 
         self.norm_type = norm_type
         if norm_type is not None:
-            assert norm_type in [
+            if norm_type not in [
                 "LayerNorm",
                 "GraphNorm",
                 "InstanceNorm",
                 "BatchNorm",
                 "MessageNorm",
-            ]
+            ]:
+                raise ValueError(norm_type)
             if norm_type == "LayerNorm" and apex_imported:
                 norm_layer = FusedLayerNorm
             else:
@@ -342,7 +362,8 @@ class MeshGraphEdgeMLPSum(nn.Module):
         self.model = nn.Sequential(*layers)
 
         if recompute_activation:
-            assert isinstance(activation_fn, nn.SiLU)
+            if not isinstance(activation_fn, nn.SiLU):
+                raise ValueError(activation_fn)
             self.recompute_activation = True
         else:
             self.recompute_activation = False

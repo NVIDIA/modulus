@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-
 from typing import Union
-from torch import Tensor
-from dgl import DGLGraph
 
-from modulus.models.gnn_layers.utils import set_checkpoint_fn, CuGraphCSC
-from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
+import torch.nn as nn
+from dgl import DGLGraph
+from torch import Tensor
+
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
+from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
+from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 
 
 class GraphCastProcessor(nn.Module):
