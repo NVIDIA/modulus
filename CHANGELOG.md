@@ -6,7 +6,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0a0] - 2024-01-XX
+## [0.6.0a0] - 2024-03-XX
+
+### Added
+
+- The citation file.
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.5.0] - 2024-01-25
 
 ### Added
 
@@ -17,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Frechet Inception Distance to use Wasserstein 2-norm with improved stability.
 - Molecular Dynamics example.
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
+- Physics-Informed Stokes Flow example.
+- Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
 
 ### Changed
 
@@ -36,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Dependencies
 
 - Removed experimental SFNO dependencies
-- Added CorrDiff dependencies (cftime, einops, pyspng)
+- Added CorrDiff dependencies (cftime, einops, pyspng, nvtx)
 - Made tqdm a required dependency
 
 ## [0.4.0] - 2023-11-20

@@ -17,9 +17,9 @@
 import copy
 import json
 import os
-import pickle  # ruff: noqa: E402
 import sys
 import time
+import wandb as wb
 
 import numpy as np
 import psutil
@@ -27,16 +27,19 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
+sys.path.append("../")
+from module import Module
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.logging import (
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    initialize_wandb,
+)
 from modulus.utils.generative import (
     InfiniteSampler,
-    check_ddp_consistency,
     construct_class_by_name,
-    copy_params_and_buffers,
     ddp_sync,
     format_time,
-    open_url,
 )
 
 from .dataset import get_zarr_dataset
@@ -45,6 +48,7 @@ from .dataset import get_zarr_dataset
 
 
 def training_loop(
+    task,
     run_dir=".",  # Output directory.
     dataset_kwargs={},  # Options for training set.
     data_loader_kwargs={},  # Options for torch.utils.data.DataLoader.
@@ -63,9 +67,6 @@ def training_loop(
     kimg_per_tick=50,  # Interval of progress prints.
     snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
-    resume_pkl=None,  # Start from the given network snapshot, None = random initialization.
-    resume_state_dump=None,  # Start from the given training state, None = reset training state.
-    resume_kimg=0,  # Start from the given training progress.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     train_data_path=None,
     crop_size_x=448,
@@ -85,6 +86,7 @@ def training_loop(
     gridtype="sinusoidal",
     N_grid_channels=4,
     normalization="v1",
+    wandb_mode="disabled",
 ):
     """CorrDiff training loop"""
 
@@ -95,7 +97,16 @@ def training_loop(
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name="training_loop.log")
+    logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
+
+    # wandb logger
+    initialize_wandb(
+        project="Modulus-Generative",
+        entity="Modulus",
+        name="CorrDiff",
+        group="CorrDiff-DDP-Group",
+        mode=wandb_mode,
+    )
 
     # Initialize.
     start_time = time.time()
@@ -176,13 +187,16 @@ def training_loop(
     net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
     net.train().requires_grad_(True).to(device)
 
-    # save network args
-    with open("network_args.json", "w") as json_file:
-        json.dump(merged_args, json_file)
-
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
-    loss_fn = construct_class_by_name(**loss_kwargs)  # training.loss.(VP|VE|EDM)Loss
+    if task == "diffusion":
+        net_reg = Module.from_checkpoint("checkpoints/regression.mdlus")
+        net_reg.eval().requires_grad_(False).to(device)
+        interface_kwargs = dict(regression_net=net_reg)
+        logger0.success("Loaded the pre-trained regression network")
+    else:
+        interface_kwargs = {}
+    loss_fn = construct_class_by_name(**loss_kwargs, **interface_kwargs)
     optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer
@@ -203,47 +217,37 @@ def training_loop(
         ddp = net
     ema = copy.deepcopy(net).eval().requires_grad_(False)
 
-    # Import autoresume module
-    SUBMIT_SCRIPTS = "/lustre/fsw/adlr/adlr-others/gpeled/adlr-utils/release/cluster-interface/latest"
-    sys.path.append(SUBMIT_SCRIPTS)
-    # sync autoresums across gpus ...
-    AutoResume = None
-    try:
-        from userlib.auto_resume import AutoResume
-
-        AutoResume.init()
-    except ImportError:
-        logger0.warning("AutoResume not imported")
-
     # Resume training from previous snapshot.
-    if resume_pkl is not None:
-        logger0.info(f'Loading network weights from "{resume_pkl}"...')
-        if dist.rank != 0:
-            torch.distributed.barrier()  # rank 0 goes first
-        with open_url(resume_pkl, verbose=(dist.rank == 0)) as f:
-            # ruff: noqa: S301  # TODO remove exception
-            data = pickle.load(f)
-        if dist.rank == 0:
-            torch.distributed.barrier()  # other ranks follow
-        copy_params_and_buffers(
-            src_module=data["ema"], dst_module=net, require_all=False
+    max_index = -1
+    max_index_file = " "
+    for filename in os.listdir(run_dir):
+        if filename.startswith(f"training-state-{task}-") and filename.endswith(
+            ".mdlus"
+        ):
+            index_str = filename.split("-")[-1].split(".")[0]
+            try:
+                index = int(index_str)
+                if index > max_index:
+                    max_index = index
+                    max_index_file = filename
+                    max_index_file_optimizer = f"optimizer-state-{task}-{index_str}.pt"
+            except ValueError:
+                continue
+
+    try:
+        net.load(os.path.join(run_dir, max_index_file))
+        optimizer_state_dict = torch.load(
+            os.path.join(run_dir, max_index_file_optimizer)
         )
-        copy_params_and_buffers(
-            src_module=data["ema"], dst_module=ema, require_all=False
-        )
-        del data  # conserve memory
-    if resume_state_dump:
-        logger0.info(f'Loading training state from "{resume_state_dump}"...')
-        data = torch.load(resume_state_dump, map_location=torch.device("cpu"))
-        copy_params_and_buffers(
-            src_module=data["net"], dst_module=net, require_all=True
-        )
-        optimizer.load_state_dict(data["optimizer_state"])
-        del data  # conserve memory
+        optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
+        cur_nimg = max_index * 1000
+        logger0.success(f"Loaded network and optimizer states with index {max_index}")
+    except FileNotFoundError:
+        cur_nimg = 0
+        logger0.warning("Could not load network and optimizer states")
 
     # Train.
     logger0.info(f"Training for {total_kimg} kimg...")
-    cur_nimg = resume_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
@@ -252,6 +256,7 @@ def training_loop(
     while True:
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
+        loss_accum = 0
         for round_idx in range(num_accumulation_rounds):
             with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
@@ -272,13 +277,17 @@ def training_loop(
                     augment_pipe=augment_pipe,
                 )
                 training_stats.report("Loss/loss", loss)
-                loss.sum().mul(loss_scaling / batch_gpu_total).backward()
+                loss = loss.sum().mul(loss_scaling / batch_gpu_total)
+                loss_accum += loss
+                loss.backward()
+        wb.log({"loss": loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
-            )
+            )  # TODO better handling (potential bug)
+            wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
@@ -299,7 +308,7 @@ def training_loop(
         done = cur_nimg >= total_kimg * 1000
         if (
             (not done)
-            and (cur_tick != 0)
+            # and (cur_tick != 0)
             and (cur_nimg < tick_start_nimg + kimg_per_tick * 1000)
         ):
             continue
@@ -335,67 +344,22 @@ def training_loop(
         torch.cuda.reset_peak_memory_stats()
         logger0.info(" ".join(fields))
 
-        ckpt_dir = run_dir
-
-        if AutoResume:
-            logger0.info(
-                f"AutoResume.termination_requested(): {AutoResume.termination_requested()}"
-            )
-            logger0.info(f"AutoResume: {AutoResume}")
-
-            if AutoResume.termination_requested():
-                AutoResume.request_resume()
-                logger0.info("Training terminated. Returning")
-                done = True
-                with open(os.path.join(ckpt_dir, "resume.txt"), "w") as f:
-                    f.write(
-                        os.path.join(
-                            ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt"
-                        )
-                    )
-                    logger0.info(
-                        os.path.join(
-                            ckpt_dir, f"training-state-{cur_nimg//1000:06d}.pt"
-                        )
-                    )
-                    f.close()
-
-        # Check for abort.
-        logger0.info(f"done: {done}")
-
-        # Save network snapshot.
-        if (snapshot_ticks is not None) and (done or cur_tick % snapshot_ticks == 0):
-            data = dict(
-                ema=ema,
-                loss_fn=loss_fn,
-                augment_pipe=augment_pipe,
-                dataset_kwargs=dict(dataset_kwargs),
-            )
-            for key, value in data.items():
-                if isinstance(value, torch.nn.Module):
-                    value = copy.deepcopy(value).eval().requires_grad_(False)
-                    if dist.world_size > 1:
-                        check_ddp_consistency(value)
-                    data[key] = value.cpu()
-                del value  # conserve memory
-            if dist.rank == 0:
-                with open(
-                    os.path.join(run_dir, f"network-snapshot-{cur_nimg//1000:06d}.pkl"),
-                    "wb",
-                ) as f:
-                    pickle.dump(data, f)
-            del data  # conserve memory
-
         # Save full dump of the training state.
         if (
             (state_dump_ticks is not None)
             and (done or cur_tick % state_dump_ticks == 0)
             and dist.rank == 0
         ):
+            filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
+            net.save(os.path.join(run_dir, filename))
+            logger0.info(f"Saved model in the {run_dir} directory")
+
+            filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"
             torch.save(
-                dict(net=net, optimizer_state=optimizer.state_dict()),
-                os.path.join(run_dir, f"training-state-{cur_nimg//1000:06d}.pt"),
+                {"optimizer_state_dict": optimizer.state_dict()},
+                os.path.join(run_dir, filename),
             )
+            logger0.info(f"Saved optimizer state in the {run_dir} directory")
 
         # Update logs.
         training_stats.default_collector.update()
@@ -423,6 +387,3 @@ def training_loop(
 
     # Done.
     logger0.info("Exiting...")
-
-
-# ----------------------------------------------------------------------------

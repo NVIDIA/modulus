@@ -17,10 +17,10 @@
 
 import cftime
 import datetime
-import json
 import hydra
 import netCDF4 as nc
 import numpy as np
+import nvtx
 import torch
 import tqdm
 import training.dataset
@@ -41,6 +41,8 @@ from modulus.utils.generative import (
 )
 from module import Module  # TODO import from Core once the kwargs issue is fixed
 
+from concurrent.futures import ThreadPoolExecutor
+
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
 def main(cfg: DictConfig) -> None:
@@ -59,6 +61,7 @@ def main(cfg: DictConfig) -> None:
     res_edm = getattr(cfg, "res_edm", True)
     sampling_method = getattr(cfg, "sampling_method", "stochastic")
     seed_batch_size = getattr(cfg, "seed_batch_size", 1)
+    force_fp16 = getattr(cfg, "force_fp16", False)
 
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
@@ -96,6 +99,9 @@ def main(cfg: DictConfig) -> None:
     N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     normalization = getattr(cfg, "normalization", "v2")
     times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
+
+    # writer options
+    num_writer_workers = getattr(cfg, "num_writer_workers", 1)
 
     # Sampler kwargs
     if sampling_method == "stochastic":
@@ -170,6 +176,11 @@ def main(cfg: DictConfig) -> None:
     net_res = net_res.eval()
     net_reg = net_reg.eval() if net_reg else None
 
+    # change precision if needed
+    if force_fp16:
+        net_reg.use_fp16 = True
+        net_res.use_fp16 = True
+
     def generate_fn(image_lr):
         """Function to generate an image
 
@@ -179,100 +190,119 @@ def main(cfg: DictConfig) -> None:
         Return
             image_hr: high resolution output: shape (b, c, h, w)
         """
-        if sample_res == "full":
-            image_lr_patch = image_lr
-        else:
-            image_lr_patch = rearrange(
-                image_lr,
-                "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                h1=crop_size_x // patch_size,
-                w1=crop_size_y // patch_size,
-            )
+        with nvtx.annotate("generate_fn", color="green"):
+            if sample_res == "full":
+                image_lr_patch = image_lr
+            else:
+                torch.cuda.nvtx.range_push("rearrange")
+                image_lr_patch = rearrange(
+                    image_lr,
+                    "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
+                    h1=crop_size_x // patch_size,
+                    w1=crop_size_y // patch_size,
+                )
+                torch.cuda.nvtx.range_pop()
 
-        sample_seeds = seeds
+            sample_seeds = seeds
 
-        logger0.info(f"seeds: {sample_seeds}")
-        if net_reg:
-            net_reg.to(device)
-            image_mean = generate(
-                net=net_reg,
-                img_lr=image_lr_patch,
-                seed_batch_size=1,
-                seeds=sample_seeds,
-                pretext="reg",
-                class_idx=class_idx,
-            )
-            net_reg.cpu()
-
-            net_res.to(device)
-            image_out = image_mean + generate(
-                net=net_res,
-                img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
-                seed_batch_size=seed_batch_size,
-                sampling_method=sampling_method,
-                seeds=sample_seeds,
-                pretext="gen",
-                class_idx=class_idx,
-                num_steps=num_steps,
-                **sampler_kwargs,
-            )
-            net_res.cpu()
-
-        else:
-            net_reg.to(device)
-            image_out = generate(
-                net=net_res,
-                img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
-                seed_batch_size=seed_batch_size,
-                sampling_method=sampling_method,
-                seeds=sample_seeds,
-                pretext="gen",
-                class_idx=class_idx,
-                num_steps=num_steps,
-                **sampler_kwargs,
-            )
-
-        # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
-        if sample_res != "full":
-            image_out = rearrange(
-                image_out,
-                "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                h1=crop_size_x // patch_size,
-                w1=crop_size_y // patch_size,
-            )
-
-        # Gather tensors on rank 0
-        if dist.world_size > 1:
-            if dist.rank == 0:
-                gathered_tensors = [
-                    torch.zeros_like(
-                        image_out, dtype=image_out.dtype, device=image_out.device
+            logger0.info(f"seeds: {sample_seeds}")
+            if net_reg:
+                with nvtx.annotate("regression_model", color="yellow"):
+                    net_reg.to(device)
+                    image_mean = generate(
+                        net=net_reg,
+                        img_lr=image_lr_patch,
+                        seed_batch_size=1,
+                        seeds=[
+                            0,
+                        ],  # Only run regression model once
+                        pretext="reg",
+                        class_idx=class_idx,
                     )
-                    for _ in range(dist.world_size)
-                ]
-            else:
-                gathered_tensors = None
+                    net_reg.cpu()
 
-            torch.distributed.barrier()
-            gather(
-                image_out,
-                gather_list=gathered_tensors if dist.rank == 0 else None,
-                dst=0,
-            )
+                with nvtx.annotate("diffusion model", color="purple"):
+                    net_res.to(device)
+                    image_out = image_mean + generate(
+                        net=net_res,
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        seed_batch_size=seed_batch_size,
+                        sampling_method=sampling_method,
+                        seeds=sample_seeds,
+                        pretext="gen",
+                        class_idx=class_idx,
+                        num_steps=num_steps,
+                        **sampler_kwargs,
+                    )
+                    net_res.cpu()
 
-            if dist.rank == 0:
-                return torch.cat(gathered_tensors)
             else:
-                return None
-        else:
-            return image_out
+                with nvtx.annotate("diffusion model", color="purple"):
+                    net_res.to(device)
+                    image_out = generate(
+                        net=net_res,
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        seed_batch_size=seed_batch_size,
+                        sampling_method=sampling_method,
+                        seeds=sample_seeds,
+                        pretext="gen",
+                        class_idx=class_idx,
+                        num_steps=num_steps,
+                        **sampler_kwargs,
+                    )
+
+            # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
+            if sample_res != "full":
+                image_out = rearrange(
+                    image_out,
+                    "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
+                    h1=crop_size_x // patch_size,
+                    w1=crop_size_y // patch_size,
+                )
+
+            # Gather tensors on rank 0
+            if dist.world_size > 1:
+                if dist.rank == 0:
+                    gathered_tensors = [
+                        torch.zeros_like(
+                            image_out, dtype=image_out.dtype, device=image_out.device
+                        )
+                        for _ in range(dist.world_size)
+                    ]
+                else:
+                    gathered_tensors = None
+
+                torch.distributed.barrier()
+                gather(
+                    image_out,
+                    gather_list=gathered_tensors if dist.rank == 0 else None,
+                    dst=0,
+                )
+
+                if dist.rank == 0:
+                    return torch.cat(gathered_tensors)
+                else:
+                    return None
+            else:
+                return image_out
 
     # generate images
     logger0.info("Generating images...")
+
     with nc.Dataset(f"{image_outdir}_{dist.rank}.nc", "w") as f:
         # add attributes
         f.cfg = str(cfg)
-        generate_and_save(dataset, sampler, f, generate_fn, device, logger0)
+        with torch.cuda.profiler.profile():
+            with torch.autograd.profiler.emit_nvtx():
+                generate_and_save(
+                    dataset,
+                    sampler,
+                    f,
+                    generate_fn,
+                    device,
+                    num_writer_workers,
+                    logger0,
+                )
 
     logger0.info("Done.")
 
@@ -347,7 +377,9 @@ def get_dataset_and_sampler(
     return dataset, sampler
 
 
-def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logger):
+def generate_and_save(
+    dataset, sampler, f: nc.Dataset, generate_fn, device, num_writer_workers, logger
+):
     """
     This function generates model predictions from the input data using the specified
     `generate_fn`, and saves the predictions to the provided NetCDF file. It iterates
@@ -371,82 +403,78 @@ def generate_and_save(dataset, sampler, f: nc.Dataset, generate_fn, device, logg
     )
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
+    warmup_steps = 1
+
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    batch_size = 1
+
+    # Initialize threadpool for writers
+    writer_executor = ThreadPoolExecutor(max_workers=num_writer_workers)
+    writer_threads = []
+
+    input_channel_info = dataset.input_channels()
+    output_channel_info = dataset.output_channels()
+    times = dataset.time()
+    input_norm = dataset.info()["input_normalization"]
+    target_norm = dataset.info()["target_normalization"]
 
     for image_tar, image_lr, index in iter(data_loader):
         time_index += 1
         if dist.rank == 0:
             logger.info(f"starting index: {time_index}")  # TODO print on rank zero
+
+        if time_index == warmup_steps:
+            start.record()
+
         # continue
-        input_data = image_lr = image_lr.to(device=device).to(torch.float32)
+        image_lr = image_lr.to(device=device).to(torch.float32)
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
+
+        batch_size = image_out.shape[0]
 
         # for validation - make 3x450x450 to an ordered sequence of 50x50 patches
         # input; 1x3x450x450 --> (1*9*9)x3x50x50
 
         if dist.rank == 0:
-            # weather sub-plot
-            mx, sx = dataset.info()["input_normalization"]
-            mx = mx[dataset.in_channels]
-            image_lr2 = image_lr[0].unsqueeze(0)
+            # write out data in a seperate thread so we don't hold up inferencing
+            writer_threads.append(
+                writer_executor.submit(
+                    save_images,
+                    writer,
+                    list(dataset.in_channels),
+                    input_channel_info,
+                    list(dataset.out_channels),
+                    output_channel_info,
+                    input_norm,
+                    target_norm,
+                    list(times),
+                    image_out.cpu(),
+                    image_tar.cpu(),
+                    image_lr.cpu(),
+                    time_index,
+                    index[0],
+                )
+            )
+    end.record()
+    end.synchronize()
+    elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
+    timed_steps = time_index + 1 - warmup_steps
+    average_time_per_batch_element = elapsed_time / timed_steps / batch_size
+    if dist.rank == 0:
+        logger.info(
+            f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
+        )
+        logger.info(
+            f"Average time per batch element = {average_time_per_batch_element} s"
+        )
 
-            # add zeros for grid embeddings
-            padding = image_lr2.shape[1] - len(mx)
-            if not padding >= 0:
-                raise ValueError("padding must be non-negative")
-
-            mx = np.concatenate([mx, np.zeros(padding)])
-            # add zeros for grid embeddings
-            sx = sx[dataset.in_channels]
-            sx = np.concatenate([sx, np.ones(padding)])
-            image_lr2 = image_lr2.cpu().numpy()
-            image_lr2 = denormalize(image_lr2, mx, sx)
-
-            my, sy = dataset.info()["target_normalization"]
-            my = my[dataset.out_channels]
-            sy = sy[dataset.out_channels]
-            image_tar2 = image_tar[0].unsqueeze(0)
-            image_tar2 = image_tar2.cpu().numpy()
-            image_tar2 = denormalize(image_tar2, my, sy)
-
-            # some runtime assertions
-            if image_tar2.ndim != 4:
-                raise ValueError("image_tar2 must be 4-dimensional")
-
-            for idx in range(image_out.shape[0]):
-                image_out2 = image_out[idx].unsqueeze(0)
-                if image_out2.ndim != 4:
-                    raise ValueError("image_out2 must be 4-dimensional")
-
-                # Denormalize the input and outputs
-                image_out2 = image_out2.cpu().numpy()
-                image_out2 = denormalize(image_out2, my, sy)
-
-                t_index = index[0]
-                if len(index) != 1:
-                    raise ValueError(
-                        "len(index) must be 1"
-                    )  # TODO allow len(index) > 1
-                time = dataset.time()[t_index]
-                writer.write_time(time_index, time)
-                for channel_idx in range(image_out2.shape[1]):
-                    output_channels = dataset.output_channels()
-                    info = output_channels[channel_idx]
-                    channel_name = _get_name(info)
-                    truth = image_tar2[0, channel_idx]
-
-                    writer.write_truth(channel_name, time_index, truth)
-                    writer.write_prediction(
-                        channel_name, time_index, idx, image_out2[0, channel_idx]
-                    )
-
-                input_channels = dataset.input_channels()
-                for channel_idx in range(len(input_channels)):
-                    info = input_channels[channel_idx]
-                    channel_name = _get_name(info)
-                    writer.write_input(
-                        channel_name, time_index, image_lr2[0, channel_idx]
-                    )
+    # make sure all the workers are done writing
+    for thread in list(writer_threads):
+        thread.result()
+        writer_threads.remove(thread)
+    writer_executor.shutdown()
 
 
 def generate(
@@ -489,63 +517,64 @@ def generate(
     # Loop over batches.
     all_images = []
     for batch_seeds in tqdm.tqdm(rank_batches, unit="batch", disable=(dist.rank != 0)):
-        batch_size = len(batch_seeds)
-        if batch_size == 0:
-            continue
+        with nvtx.annotate(f"generate {len(all_images)}", color="rapids"):
+            batch_size = len(batch_seeds)
+            if batch_size == 0:
+                continue
 
-        # Pick latents and labels.
-        rnd = StackedRandomGenerator(device, batch_seeds)
-        latents = rnd.randn(
-            [
-                seed_batch_size,
-                net.img_out_channels,
-                net.img_resolution,
-                net.img_resolution,
-            ],
-            device=device,
-        )
+            # Pick latents and labels.
+            rnd = StackedRandomGenerator(device, batch_seeds)
+            latents = rnd.randn(
+                [
+                    seed_batch_size,
+                    net.img_out_channels,
+                    net.img_resolution,
+                    net.img_resolution,
+                ],
+                device=device,
+            )
 
-        class_labels = None
-        if net.label_dim:
-            class_labels = torch.eye(net.label_dim, device=device)[
-                rnd.randint(net.label_dim, size=[seed_batch_size], device=device)
-            ]
-        if class_idx is not None:
-            class_labels[:, :] = 0
-            class_labels[:, class_idx] = 1
+            class_labels = None
+            if net.label_dim:
+                class_labels = torch.eye(net.label_dim, device=device)[
+                    rnd.randint(net.label_dim, size=[seed_batch_size], device=device)
+                ]
+            if class_idx is not None:
+                class_labels[:, :] = 0
+                class_labels[:, class_idx] = 1
 
-        # Generate images.
-        sampler_kwargs = {
-            key: value for key, value in sampler_kwargs.items() if value is not None
-        }
+            # Generate images.
+            sampler_kwargs = {
+                key: value for key, value in sampler_kwargs.items() if value is not None
+            }
 
-        if pretext == "gen":
-            if sampling_method == "deterministic":
-                sampler_fn = ablation_sampler
-            elif sampling_method == "stochastic":
-                sampler_fn = edm_sampler
+            if pretext == "gen":
+                if sampling_method == "deterministic":
+                    sampler_fn = ablation_sampler
+                elif sampling_method == "stochastic":
+                    sampler_fn = edm_sampler
+                else:
+                    raise ValueError(
+                        f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
+                    )
+            elif pretext == "reg":
+                latents = torch.zeros_like(latents)
+                sampler_fn = unet_regression
             else:
                 raise ValueError(
-                    f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
+                    f"Unknown pretext {pretext}. Should be either 'gen' or 'reg'."
                 )
-        elif pretext == "reg":
-            latents = torch.zeros_like(latents)
-            sampler_fn = unet_regression
-        else:
-            raise ValueError(
-                f"Unknown pretext {pretext}. Should be either 'gen' or 'reg'."
-            )
 
-        with torch.inference_mode():
-            images = sampler_fn(
-                net.to(device),
-                latents,
-                img_lr,
-                class_labels,
-                randn_like=rnd.randn_like,
-                **sampler_kwargs,
-            )
-        all_images.append(images)
+            with torch.inference_mode():
+                images = sampler_fn(
+                    net.to(device),
+                    latents,
+                    img_lr,
+                    class_labels,
+                    randn_like=rnd.randn_like,
+                    **sampler_kwargs,
+                )
+            all_images.append(images)
     return torch.cat(all_images)
 
 
@@ -609,9 +638,101 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
     x_hat = latents.to(torch.float64) * t_steps[0]
     t_hat = torch.tensor(1.0).to(torch.float64).cuda()
 
-    x_next = net(x_hat, x_lr, t_hat, class_labels).to(torch.float64)
+    # Run regression on just a single batch element and then repeat
+    x_next = net(x_hat[0:1], x_lr, t_hat, class_labels).to(torch.float64)
+    if x_hat.shape[0] > 1:
+        x_next = x_next.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
 
     return x_next
+
+
+def save_images(
+    writer,
+    in_channels,
+    input_channel_info,
+    out_channels,
+    output_channel_info,
+    input_norm,
+    target_norm,
+    times,
+    image_out,
+    image_tar,
+    image_lr,
+    time_index,
+    t_index,
+):
+    """
+    Saves inferencing result along with the baseline
+
+    Parameters
+    ----------
+
+    writer (NetCDFWriter): Where the data is being written
+    in_channels (List): List of the input channels being used
+    input_channel_info (Dict): Description of the input channels
+    out_channels (List): List of the output channels being used
+    output_channel_info (Dict): Description of the output channels
+    input_norm (Tuple): Normalization data for input
+    target_norm (Tuple): Normalization data for the target
+    image_out (torch.Tensor): Generated output data
+    image_tar (torch.Tensor): Ground truth data
+    image_lr (torch.Tensor): Low resolution input data
+    time_index (int): Epoch number
+    t_index (int): index where times are located
+    """
+    # weather sub-plot
+    mx, sx = input_norm
+    mx = mx[in_channels]
+    image_lr2 = image_lr[0].unsqueeze(0)
+
+    # add zeros for grid embeddings
+    padding = image_lr2.shape[1] - len(mx)
+    if not padding >= 0:
+        raise ValueError("padding must be non-negative")
+
+    mx = np.concatenate([mx, np.zeros(padding)])
+    # add zeros for grid embeddings
+    sx = sx[in_channels]
+    sx = np.concatenate([sx, np.ones(padding)])
+    image_lr2 = image_lr2.cpu().numpy()
+    image_lr2 = denormalize(image_lr2, mx, sx)
+
+    my, sy = target_norm
+    my = my[out_channels]
+    sy = sy[out_channels]
+    image_tar2 = image_tar[0].unsqueeze(0)
+    image_tar2 = image_tar2.cpu().numpy()
+    image_tar2 = denormalize(image_tar2, my, sy)
+
+    # some runtime assertions
+    if image_tar2.ndim != 4:
+        raise ValueError("image_tar2 must be 4-dimensional")
+
+    for idx in range(image_out.shape[0]):
+        image_out2 = image_out[idx].unsqueeze(0)
+        if image_out2.ndim != 4:
+            raise ValueError("image_out2 must be 4-dimensional")
+
+        # Denormalize the input and outputs
+        image_out2 = image_out2.cpu().numpy()
+        image_out2 = denormalize(image_out2, my, sy)
+
+        time = times[t_index]
+        writer.write_time(time_index, time)
+        for channel_idx in range(image_out2.shape[1]):
+            info = output_channel_info[channel_idx]
+            channel_name = _get_name(info)
+            truth = image_tar2[0, channel_idx]
+
+            writer.write_truth(channel_name, time_index, truth)
+            writer.write_prediction(
+                channel_name, time_index, idx, image_out2[0, channel_idx]
+            )
+
+        for channel_idx in range(len(input_channel_info)):
+            info = input_channel_info[channel_idx]
+            channel_name = _get_name(info)
+            writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
 
 
 class NetCDFWriter:

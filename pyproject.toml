@@ -24,6 +24,7 @@ dependencies = [
     "pytz>=2023.3",
     "treelib>=1.2.5",
     "tqdm>=4.60.0",
+    "nvtx>=0.2.8"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
