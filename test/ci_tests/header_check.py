@@ -37,15 +37,26 @@ def read_gitignore(gitignore_path):
     return ignore_patterns
 
 
-def is_ignored(path, ignore_patterns):
+def is_ignored(path, working_path, ignore_patterns):
     """
     Check if the path needs to be ignored
     """
+    # Get the git root path to stop the search
+    git_root_path = Path(__file__) / Path(working_path)
+    git_root_path = git_root_path.resolve()
+
     for pattern in ignore_patterns:
         normalized_pattern = pattern.rstrip("/")
 
+        # Filter paths that are outside git root
+        relevant_children = [
+            part
+            for part in [path] + list(path.parents)
+            if git_root_path in part.parents or part == git_root_path
+        ]
+
         # Check the directory itself and each parent directory
-        for part in [path] + list(path.parents):
+        for part in relevant_children:
             # Match directories (patterns ending with '/')
             if pattern.endswith("/") and part.is_dir():
                 if fnmatch.fnmatch(part.name, normalized_pattern):
@@ -122,7 +133,7 @@ def main():
     ignore_patterns = read_gitignore(working_path / Path(".gitignore"))
 
     for filename in filenames:
-        if not is_ignored(filename, ignore_patterns):
+        if not is_ignored(filename, working_path, ignore_patterns):
             with open(str(filename), "r", encoding="utf-8") as original:
                 data = original.readlines()
 
