@@ -133,6 +133,8 @@ def main():
     ignore_patterns = read_gitignore(working_path / Path(".gitignore"))
 
     for filename in filenames:
+        # Check if the file is ignored in gitignore. # NOTE this can be removed if
+        # the files don't need to be tested against gitignore patters.
         if not is_ignored(filename, working_path, ignore_patterns):
             with open(str(filename), "r", encoding="utf-8") as original:
                 data = original.readlines()
