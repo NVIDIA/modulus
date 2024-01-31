@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,10 +56,10 @@ class Constants(BaseModel):
     watch_model: bool = False
     lr: float = 1e-3
     lr_step3: float = 3e-7
-    num_iters_step1 = 1000
-    num_iters_step2 = 299000
-    num_iters_step3 = 11000
-    step_change_freq = 1000
+    num_iters_step1: int = 1000
+    num_iters_step2: int = 299000
+    num_iters_step3: int = 11000
+    step_change_freq: int = 1000
     save_freq: int = 1  # 500
     val_freq: int = 1  # 1000
     ckpt_path: str = "checkpoints_34var"

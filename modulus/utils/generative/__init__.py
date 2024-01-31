@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,16 +38,12 @@ from .utils import (
     get_top_level_function_name,
     is_pickleable,
     is_top_level_function,
-    is_url,
     list_dir_recursively_with_ignore,
-    make_cache_dir_path,
     named_params_and_buffers,
-    open_url,
     params_and_buffers,
     parse_int_list,
     print_module_summary,
     profiled_function,
-    set_cache_dir,
     suppress_tracer_warnings,
     tuple_product,
 )
