@@ -9,16 +9,16 @@ such models can help solve real world problems.
 
 ## CFD
 
-|Use case|Model|Transient|Parameterized|
-| --- | --- |  --- | --- |
-|Vortex Shedding|MeshGraphNet|YES|YES|
-|Ahmed Body Drag prediction|MeshGraphNet|NO|YES|
-|Navier-Stokes Flow|RNN|YES|NO|
-|Gray-Scott System|RNN|YES|NO|
-|Darcy Flow|FNO|NO|YES|
-|Darcy Flow|Nested-FNO|NO|YES|
-|Darcy Flow (Data + Physics Driven)|FNO and MLP|NO|YES|
-|Stokes Flow (Physics Informed Fine-Tuning)|MeshGraphNet and MLP|NO|YES|
+|Use case|Model|Transient|
+| --- | --- |  --- |
+|Vortex Shedding|MeshGraphNet|YES|
+|Ahmed Body Drag prediction|MeshGraphNet|NO|
+|Navier-Stokes Flow|RNN|YES|
+|Gray-Scott System|RNN|YES|
+|Darcy Flow|FNO|NO|
+|Darcy Flow|Nested-FNO|NO|
+|Darcy Flow (Data + Physics Driven)|FNO and MLP|NO|
+|Stokes Flow (Physics Informed Fine-Tuning)|MeshGraphNet and MLP|NO|
 
 ## Weather
 
@@ -31,16 +31,16 @@ such models can help solve real world problems.
 
 ## Healthcare
 
-|Use case|Model|Transient|Parameterized|
-| --- | --- |  --- | --- |
-|Cardiovascular Simulations|MeshGraphNet|YES|YES|
-|Brain Anomaly Detection|FNO|YES|YES|
+|Use case|Model|Transient|
+| --- | --- |  --- |
+|Cardiovascular Simulations|MeshGraphNet|YES|
+|Brain Anomaly Detection|FNO|YES|
 
 # Molecular Dymanics
 
-|Use case|Model|Transient|Parameterized|
-| --- | --- |  --- | --- |
-|Force Prediciton for Lennard Jones system|MeshGraphNet|NO|YES|
+|Use case|Model|Transient|
+| --- | --- |  --- |
+|Force Prediciton for Lennard Jones system|MeshGraphNet|NO|
 
 ## NVIDIA support
 
