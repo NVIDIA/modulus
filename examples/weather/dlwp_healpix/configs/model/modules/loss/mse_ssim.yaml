@@ -1,4 +1,4 @@
-# Copyright (c) {CURRENT_YEAR}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+_target_: modulus.metrics.climate.loss.MSE_SSIM
+
+mse_params:
+ssim_params:
+  window_size: 11
+  time_series_forecasting: True
+# variables over which to calculate SSIM-MSE weighted average loss
+ssim_variables:
+  - ttr1h
+  - tcwv0
+# used to calculated the weighted average between MSE and DSSIM
+weights:
+  - 0.
+  - 1.

@@ -1,4 +1,4 @@
-# Copyright (c) {CURRENT_YEAR}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+defaults:
+  - _self_
+  - data: era5_hpx64_7var_6h_24h
+  - model: hpx_rec_unet
+  - trainer: default
+
+experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
+output_dir: outputs/${experiment_name}
+checkpoint_name: null
+load_weights_only: false
+seed: 0
+
+# Training specifications
+batch_size: 8
+learning_rate: 2e-4
+num_workers: 8
+
+# Distributed setup (multi GPU)
+port: 29450
+master_address: localhost
+
+hydra:
+  verbose: true
+  run:
+    dir: ${output_dir}

@@ -1,4 +1,4 @@
-# Copyright (c) {CURRENT_YEAR}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  filename: '{epoch:03d}-{val_loss:.4E}'
+  monitor: 'val_loss'
+  mode: 'min'
+  save_top_k: 10
+  save_last: True

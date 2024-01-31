@@ -1,4 +1,4 @@
-# Copyright (c) {CURRENT_YEAR}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+defaults:
+  - /model/modules/blocks@conv_block: conv_next_block
+  - /model/modules/blocks@down_sampling_block: avg_pool
+  - /model/modules/blocks@recurrent_block: conv_gru_block
+
+_target_: modulus.models.dlwp_healpix_layers.healpix_encoder.UNetEncoder
+_recursive_: false
+n_channels:
+ - 136
+ - 68
+ - 34
+dilations:
+  - 1
+  - 2
+  - 4

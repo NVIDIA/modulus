@@ -1,4 +1,4 @@
-# Copyright (c) {CURRENT_YEAR}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+defaults:
+  - /model/modules/activations@activation: capped_gelu
+
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.ConvNeXtBlock
+_recursive_: true
+in_channels: 3
+out_channels: 1
+kernel_size: 3
+dilation: 1
+upscale_factor: 4
