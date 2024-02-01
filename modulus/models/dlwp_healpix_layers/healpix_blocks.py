@@ -778,7 +778,9 @@ class TransposedConvUpsample(th.nn.Module):
 
 
 class Interpolate(th.nn.Module):
-    """Helper class that handles interpolation"""
+    """Helper class that handles interpolation
+       This is done as a class so that scale and mode can be stored
+    """
 
     def __init__(self, scale_factor: Union[int, Tuple], mode: str = "nearest"):
         """

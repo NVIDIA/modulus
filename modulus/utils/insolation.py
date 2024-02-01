@@ -17,7 +17,7 @@ import pandas as pd
 
 
 def insolation(
-    dates, lat, lon, S=1.0, daily=False, enforce_2d=False, clip_zero=True
+    dates, lat, lon, scale=1.0, daily=False, enforce_2d=False, clip_zero=True
 ):  # pylint: disable=invalid-name
     """
     Calculate the approximate solar insolation for given dates.
@@ -25,14 +25,26 @@ def insolation(
     For an example reference, see:
     https://brian-rose.github.io/ClimateLaboratoryBook/courseware/insolation.html
 
-    :param dates: 1d array: datetime or Timestamp
-    :param lat: 1d or 2d array of latitudes
-    :param lon: 1d or 2d array of longitudes (0-360deg). If 2d, must match the shape of lat.
-    :param S: float: scaling factor (solar constant)
-    :param daily: bool: if True, return the daily max solar radiation (lat and day of year dependent only)
-    :param enforce_2d: bool: if True and lat/lon are 1-d arrays, turns them into 2d meshes.
-    :param clip_zero: bool: if True, set values below 0 to 0
-    :return: 3d array: insolation (date, lat, lon)
+    Parameters
+    ----------
+    dates: 
+    dates: np.ndarray
+        1d array: datetime or Timestamp
+    lat: np.ndarray
+        1d or 2d array of latitudes
+    lon: np.ndarray
+        1d or 2d array of longitudes (0-360deg). If 2d, must match the shape of lat.
+    scale: float, optional
+        scaling factor (solar constant)
+    daily: bool, optional
+        if True, return the daily max solar radiation (lat and day of year dependent only)
+    enforce_2d: bool, optional
+        if True and lat/lon are 1-d arrays, turns them into 2d meshes.
+    clip_zero: bool, optional
+        if True, set values below 0 to 0
+    Returns
+    -------
+    np.ndarray: insolation (date, lat, lon)
     """
     # pylint: disable=invalid-name
     if len(lat.shape) != len(lon.shape):
@@ -83,7 +95,7 @@ def insolation(
 
     # Insolation
     sol = (
-        S
+        scale
         * (
             np.sin(np.pi / 180.0 * lat[None, ...]) * np.sin(dec)
             - np.cos(np.pi / 180.0 * lat[None, ...]) * np.cos(dec) * np.cos(h)

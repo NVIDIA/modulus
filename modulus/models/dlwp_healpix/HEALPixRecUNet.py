@@ -45,6 +45,7 @@ class MetaData(ModelMetaData):
 
 
 class HEALPixRecUNet(Module):
+    """ Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh. """
     def __init__(
         self,
         encoder: DictConfig,
@@ -63,26 +64,41 @@ class HEALPixRecUNet(Module):
         couplings: list = [],
     ):
         """
-        Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh.
-
-        :param encoder: dictionary of instantiable parameters for the U-net encoder
-        :param decoder: dictionary of instantiable parameters for the U-net decoder
-        :param input_channels: number of input channels expected in the input array schema. Note this should be the
+        Parameters
+        ----------
+        encoder: DictConfig
+            dictionary of instantiable parameters for the U-net encoder
+        decoder: DictConfig
+            dictionary of instantiable parameters for the U-net decoder
+        input_channels: int
+            number of input channels expected in the input array schema. Note this should be the
             number of input variables in the data, NOT including data reshaping for the encoder part.
-        :param output_channels: number of output channels expected in the output array schema, or output variables
-        :param n_constants: number of optional constants expected in the input arrays. If this is zero, no constants
+        output_channels: int
+            number of output channels expected in the output array schema, or output variables
+        n_constants: int
+            number of optional constants expected in the input arrays. If this is zero, no constants
             should be provided as inputs to `forward`.
-        :param decoder_input_channels: number of optional prescribed variables expected in the decoder input array
+        decoder_input_channels: int
+            number of optional prescribed variables expected in the decoder input array
             for both inputs and outputs. If this is zero, no decoder inputs should be provided as inputs to `forward`.
-        :param input_time_dim: number of time steps in the input array
-        :param output_time_dim: number of time steps in the output array
-        :param delta_time: hours between two consecutive data points
-        :param reset_cycle: hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
+        input_time_dim: int
+            number of time steps in the input array
+        output_time_dim: int
+            number of time steps in the output array
+        delta_time: str, optional
+            hours between two consecutive data points
+        reset_cycle: str, optional
+            hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
             to never reset the hidden states.
-        :param presteps: number of model steps to initialize recurrent states.
-        :param enable_nhwc: Model with [N, H, W, C] instead of [N, C, H, W]
-        :param enable_healpixpad: Enable CUDA HEALPixPadding if installed
-        :param coupings: sequence of dictionaries that describe coupling mechanisms
+        presteps: int, optional
+            number of model steps to initialize recurrent states.
+        enable_nhwc: bool, optional
+            Model with [N, H, W, C] instead of [N, C, H, W]
+        enable_healpixpad: bool, optional
+            Enable CUDA HEALPixPadding if installed
+        couplings: list, optional
+            sequence of dictionaries that describe coupling mechanisms
+
         """
 
         super().__init__()
@@ -155,9 +171,17 @@ class HEALPixRecUNet(Module):
         """
         Returns a single tensor to pass into the model encoder/decoder. Squashes the time/channel dimension and
         concatenates in constants and decoder inputs.
-        :param inputs: list of expected input tensors (inputs, decoder_inputs, constants)
-        :param step: step number in the sequence of integration_steps
-        :return: reshaped Tensor in expected shape for model encoder
+
+        Parameters
+        ----------
+        inputs: Sequence
+            list of expected input tensors (inputs, decoder_inputs, constants)
+        step: int, optional
+            step number in the sequence of integration_steps
+        
+        Returns
+        -------
+        torch.Tensor: reshaped Tensor in expected shape for model encoder
         """
 
         if len(self.couplings) > 0:
@@ -326,6 +350,20 @@ is not available at this time."
             self.decoder(self.encoder(input_tensor))
 
     def forward(self, inputs: Sequence, output_only_last=False) -> th.Tensor:
+        """
+        Forward pass of the 
+
+        Parameters
+        ----------
+        inputs: Sequence
+            Inputs to the model
+        output_only_last: bool, optional
+            If only the last dimension of the outputs should be returned
+
+        Returns
+        -------
+        th.Tensor: Predicted outputs
+        """
         self.reset()
         outputs = []
         for step in range(self.integration_steps):
@@ -391,5 +429,6 @@ is not available at this time."
         return th.cat(outputs, dim=self.channel_dim)
 
     def reset(self):
+        """ Resets the state of the network """
         self.encoder.reset()
         self.decoder.reset()
