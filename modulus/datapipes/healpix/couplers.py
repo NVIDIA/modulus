@@ -17,6 +17,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 import xarray as xr
+from Typing import Union
 
 
 class TrailingAverageCoupler:
@@ -38,15 +39,21 @@ class TrailingAverageCoupler:
         Trailing average coupler uses coupled input times as the right side of
         an averag that is taken over an "averaging_window" window size.
 
-        :param dataset: xr.Dataset that holds coupled data
-        :param batch_size: int that indicated the batch size during training.
-               forecasting batch size should be 1
-        :param variables: sequence of strings that indicate the coupled variable
-               names in the dataset
-        :param presteps: int the number of model steps used to initialize the
-               hidden state. If not using a GRU, prestep is 0
-        :param input_time_dim: int number of input times into the model
-        :param output_time_dim: int number of output times for each model step
+        Parameters
+        ----------
+        dataset: xr.Dataset 
+            Dataset that holds coupled data
+        batch_size: int 
+            Batch sized use for training, forecasting batch size should be 1
+        variables: Sequence 
+            Strings that indicate the coupled variable names in the dataset
+        presteps: int
+            The number of model steps used to initialize the
+            hidden state. If not using a GRU, prestep is 0
+        input_time_dim: int
+            number of input times into the model
+        output_time_dim: int
+            Number of output times for each model step
         :param averaging_window: period over which coupled data is averaged before
                sent back to model
         :param input_times: sequence of pandas Timedelta objects that indicate
@@ -77,23 +84,25 @@ class TrailingAverageCoupler:
 
         if not prepared_coupled_data:
             print(
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in\
- TrailingAverageCoupler. See docs for specifics."
+                "Assuming coupled data is not preprocessed, averaging fields in as designed in TrailingAverageCoupler. See docs for specifics."
             )
             self._prepare_coupled_data()
         else:
             print(
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from\
- dataset "as-is"**'
+                '**Assuming coupled data has been prepared properly, using coupled field[s] from dataset "as-is"**'
             )
 
-    def compute_coupled_indices(self, interval, data_time_step):
+    def compute_coupled_indices(self, interval: int, data_time_step: Union[int, str]):
         """
         Called by CoupledDataset to compute static indices for training
         samples
 
-        :param interval: int ratio of dataset timestep to model dt
-        :param data_time_step: dataset timestep
+        Parameters
+        ----------
+        interval: int
+            Ratio of dataset timestep to model dt
+        data_time_step: 
+            Dataset timestep in hours, can be integer or pandas interpretable string
         """
 
         # create array of static coupled offstes that accompany each batch
@@ -131,8 +140,7 @@ class TrailingAverageCoupler:
         # assert that the time increments are divisible by the dt of the dataset
         if np.any([t.total_seconds() % dt != 0 for t in self.input_times]):
             raise ValueError(
-                f"Coupled input times {self.input_times} \
-({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
+                f"Coupled input times {self.input_times} ({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
             )
         self.time_increments = [t.total_seconds() / dt for t in self.input_times]
 
@@ -145,20 +153,21 @@ class TrailingAverageCoupler:
     def construct_integrated_couplings(
         self,
         batch,
-        bsize,
+        batch_size,
     ):
         """
         Construct array of coupled inputs that includes values required for
         model integration steps.
 
-        :param batch: indices of dataset sample dimension associated with
-               current batch
-        :param bsize: int batch size
+        batch: 
+            indices of dataset sample dimension associated with current batch
+        batch_size: int 
+            batch size
         """
 
         # reset integrated couplings
         self.integrated_couplings = np.empty(
-            (bsize, self.coupled_integration_dim, self.timevar_dim) + self.spatial_dims
+            (batch_size, self.coupled_integration_dim, self.timevar_dim) + self.spatial_dims
         )
 
         # extract coupled variables and scale lazily
@@ -167,7 +176,7 @@ class TrailingAverageCoupler:
         ) / self.coupled_scaling["std"]
 
         # use static offsets to create integrated coupling array
-        for b in range(bsize):
+        for b in range(batch_size):
             for i in range(self.coupled_integration_dim):
                 coupling_temp = ds.isel(
                     time=batch["time"].start + self._coupled_offsets[b, i, :]
@@ -179,6 +188,4 @@ class TrailingAverageCoupler:
                 )
         return self.integrated_couplings.transpose((1, 0, 2, 3, 4, 5)).astype(
             "float32"
-        )  # cast to
-        # float32 for
-        # pytroch compatibility.
+        )  # cast to float32 for pytroch compatibility.

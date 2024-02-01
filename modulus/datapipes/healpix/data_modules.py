@@ -49,6 +49,34 @@ def open_time_series_dataset_classic_on_the_fly(
     batch_size: int = 32,
     scaling: Optional[DictConfig] = None,
 ) -> xr.Dataset:
+    """
+    Opens and merges multiple datasets that that contain individual variables
+    into a single dataset
+
+    Parameters
+    ----------
+    directory: str
+        The directory that contains the input datasets
+    input_variables: Sequence
+        The input variables to be merged into the new dataset
+    output_variables: Sequence, optional
+        The output variables to be merged into the new dataset
+        If no output variables are provided the input set is used
+    constants: DefaultDict, optional
+        A set of constants to add to the merged dataset
+    prefix: str, optional
+        The prefix of the input datasets
+    suffix: str, optional
+        The suffix of the input datasets
+    batch_size: str, optional
+        The chunk size to use for the input datasets
+    scaling: DictConfig, optional
+        Not used for open_time_series_dataset_classic_on_the_fly
+    
+    Returns
+    -------
+    xr.Dataset: The merged dataset
+    """"
     output_variables = output_variables or input_variables
     all_variables = np.union1d(input_variables, output_variables)
     prefix = prefix or ""
@@ -135,6 +163,24 @@ def open_time_series_dataset_classic_on_the_fly(
 def open_time_series_dataset_classic_prebuilt(
     directory: str, dataset_name: str, constants: bool = False, batch_size: int = 32
 ) -> xr.Dataset:
+    """
+    Opens an existing dataset
+
+    Parameters
+    ----------
+    directory: str
+        The directory that contains the dataset
+    dataset_name: str
+        The name of the dataset to open
+    constants: DefaultDict, optional
+        Not used for open_time_series_dataset_classic_prebuilt
+    batch_size: str, optional
+        The chunk size to use for the input datasets
+    
+    Returns
+    -------
+    xr.Dataset: The opened dataset
+    """"
     result = xr.open_zarr(
         os.path.join(directory, dataset_name + ".zarr"), chunks={"time": batch_size}
     )
@@ -154,6 +200,36 @@ def create_time_series_dataset_classic(
     scaling: Optional[DictConfig] = None,
     overwrite: bool = False,
 ) -> xr.Dataset:
+    """
+    Opens and merges multiple datasets that that contain individual variables
+    into a single dataset
+
+    Parameters
+    ----------
+    src_directory: str
+        The directory that contains the input datasets
+    dst_directory: str
+    dataset_name: str
+    input_variables: Sequence
+        The input variables to be merged into the new dataset
+    output_variables: Sequence, optional
+        The output variables to be merged into the new dataset
+        If no output variables are provided the input set is used
+    constants: DefaultDict, optional
+        A set of constants to add to the merged dataset
+    prefix: str, optional
+        The prefix of the input datasets
+    suffix: str, optional
+        The suffix of the input datasets
+    batch_size: str, optional
+        The chunk size to use for the input datasets
+    scaling: DictConfig, optional
+        Scale factors applied to the listed variables
+    
+    Returns
+    -------
+    xr.Dataset: The merged dataset
+    """"
     file_exists = os.path.exists(os.path.join(dst_directory, dataset_name + ".zarr"))
 
     if file_exists and not overwrite:

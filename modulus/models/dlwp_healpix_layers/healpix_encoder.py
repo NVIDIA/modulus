@@ -36,6 +36,29 @@ class UNetEncoder(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
+        """
+        Parameters
+        ----------
+        conv_block: DictConfig
+            dictionary of instantiable parameters for the convolutional block
+        down_sampling_block: DictConfig
+            dictionary of instantiable parameters for the downsample block
+        recurrent_block: DictConfig, optional
+            dictionary of instantiable parameters for the recurrent block
+            recurrent blocks are not used if this is None
+        input_channels: int, optional
+            Number of input channels
+        n_channels: Sequence, optional
+            The number of channels in each encoder layer
+        n_layers:, Sequence, optional
+            Number of layers to use for the convolutional blocks
+        dilations: list, optional
+            List of dialtions to use for the the convolutional blocks
+        enable_nhwc: bool, optional
+            If channel last format should be used
+        enable_healpixpad, bool, optional
+            If th
+        """
         super().__init__()
         self.n_channels = n_channels
 
@@ -76,6 +99,18 @@ class UNetEncoder(th.nn.Module):
         self.encoder = th.nn.ModuleList(self.encoder)
 
     def forward(self, inputs: Sequence) -> Sequence:
+        """
+        Forward pass of the HEALPix Unet encoder
+
+        Parameters
+        ----------
+        inputs: Sequence
+            The inputs to enccode
+
+        Returns
+        -------
+        Sequence: The encoded values
+        """
         outputs = []
         for layer in self.encoder:
             outputs.append(layer(inputs))
@@ -83,4 +118,5 @@ class UNetEncoder(th.nn.Module):
         return outputs
 
     def reset(self):
+        """ Resets the state of the decoder layers """
         pass
