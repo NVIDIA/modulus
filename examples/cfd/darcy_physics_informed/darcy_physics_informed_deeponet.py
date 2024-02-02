@@ -196,6 +196,9 @@ def main(cfg: DictConfig):
         num_layers=cfg.model.fc.num_layers,
     )
 
+    # Define k-prime as an auxiliary variable that is a copy of k.
+    # Having k as the output of the model will allow gradients of k (for pde loss)
+    # to be computed using Sym's gradient backend
     model = MdlsSymWrapper(
         input_keys=[Key("k_prime"), Key("x"), Key("y")],
         output_keys=[Key("k"), Key("u")],
