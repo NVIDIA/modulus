@@ -28,10 +28,10 @@ import torch.nn.functional as F
 from modulus.models.fno import FNO
 from modulus.launch.logging import LaunchLogger
 from modulus.launch.utils.checkpoint import save_checkpoint
+from modulus.sym.eq.pdes.diffusion import Diffusion
 
 from utils import HDF5MapStyleDataset
 from ops import dx, ddx
-from darcy_pde import Darcy
 
 
 def validation_step(model, dataloader, epoch):
@@ -75,16 +75,23 @@ def validation_step(model, dataloader, epoch):
 @hydra.main(version_base="1.3", config_path="conf", config_name="config_pino.yaml")
 def main(cfg: DictConfig):
 
+    # CUDA support
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
     LaunchLogger.initialize()
 
-    darcy = Darcy()
+    # Use Diffusion equation for the Darcy PDE
+    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0)
     darcy_node = darcy.make_nodes()
 
     dataset = HDF5MapStyleDataset(
-        to_absolute_path("./datasets/Darcy_241/train.hdf5"), device="cuda"
+        to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device
     )
     validation_dataset = HDF5MapStyleDataset(
-        to_absolute_path("./datasets/Darcy_241/validation.hdf5"), device="cuda"
+        to_absolute_path("./datasets/Darcy_241/validation.hdf5"), device=device
     )
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
@@ -101,7 +108,7 @@ def main(cfg: DictConfig):
         num_fno_layers=cfg.model.fno.num_fno_layers,
         num_fno_modes=cfg.model.fno.num_fno_modes,
         padding=cfg.model.fno.padding,
-    ).to("cuda")
+    ).to(device)
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -125,12 +132,13 @@ def main(cfg: DictConfig):
                 invar = data[0]
                 outvar = data[1]
 
-                # compute forward pass
+                # Compute forward pass
                 out = model(invar[:, 0].unsqueeze(dim=1))
 
                 dxf = 1.0 / out.shape[-2]
                 dyf = 1.0 / out.shape[-1]
 
+                # Compute gradients using finite difference
                 sol_x = dx(out, dx=dxf, channel=0, dim=1, order=1, padding="zeros")
                 sol_y = dx(out, dx=dyf, channel=0, dim=0, order=1, padding="zeros")
                 sol_x_x = ddx(out, dx=dxf, channel=0, dim=1, order=1, padding="zeros")
@@ -147,17 +155,17 @@ def main(cfg: DictConfig):
 
                 pde_out = darcy_node[0].evaluate(
                     {
-                        "sol__x": sol_x,
-                        "sol__y": sol_y,
-                        "sol__x__x": sol_x_x,
-                        "sol__y__y": sol_y_y,
-                        "K": k,
-                        "K__x": k_x,
-                        "K__y": k_y,
+                        "u__x": sol_x,
+                        "u__y": sol_y,
+                        "u__x__x": sol_x_x,
+                        "u__y__y": sol_y_y,
+                        "k": k,
+                        "k__x": k_x,
+                        "k__y": k_y,
                     }
                 )
 
-                pde_out_arr = pde_out["darcy"]
+                pde_out_arr = pde_out["diffusion_u"]
                 pde_out_arr = F.pad(
                     pde_out_arr[:, :, 2:-2, 2:-2], [2, 2, 2, 2], "constant", 0
                 )

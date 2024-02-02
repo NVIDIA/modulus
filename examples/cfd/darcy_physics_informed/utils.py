@@ -235,8 +235,12 @@ class HDF5MapStyleDataset(Dataset):
         y = np.linspace(0, 1, 240)
 
         xx, yy = np.meshgrid(x, y)
-        x_invar = torch.from_numpy(xx.astype(np.float32)).reshape(-1, 1)
-        y_invar = torch.from_numpy(yy.astype(np.float32)).reshape(-1, 1)
+        x_invar = torch.from_numpy(xx.astype(np.float32)).view(
+            1, 240, 240
+        )  # add channel dimension
+        y_invar = torch.from_numpy(yy.astype(np.float32)).view(
+            1, 240, 240
+        )  # add channel dimension
 
         if self.device.type == "cuda":
             # Move tensors to GPU
