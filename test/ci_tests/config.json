@@ -4,7 +4,6 @@
   "dir": "../../",
   "exclude-dir": [
       "../../modulus/internal",
-      "../../build/",
       "../../docs/"
     ],
   "include-ext": [
