@@ -220,16 +220,12 @@ class HDF5MapStyleDataset(Dataset):
 
         invar = torch.cat(
             [
-                torch.from_numpy(
-                    (data["Kcoeff"][:, :240, :240] - 7.48360e00) / 4.49996e00
-                ),
-                torch.from_numpy(data["Kcoeff_x"][:, :240, :240]),
-                torch.from_numpy(data["Kcoeff_y"][:, :240, :240]),
+                torch.from_numpy((data["Kcoeff"][:, :240, :240]) / 4.49996e00),
+                torch.from_numpy(data["Kcoeff_x"][:, :240, :240]) / 4.49996e00,
+                torch.from_numpy(data["Kcoeff_y"][:, :240, :240]) / 4.49996e00,
             ]
         )
-        outvar = torch.from_numpy(
-            (data["sol"][:, :240, :240] - 5.74634e-03) / 3.88433e-03
-        )
+        outvar = torch.from_numpy((data["sol"][:, :240, :240]) / 3.88433e-03)
 
         x = np.linspace(0, 1, 240)
         y = np.linspace(0, 1, 240)

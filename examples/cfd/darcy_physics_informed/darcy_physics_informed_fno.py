@@ -84,7 +84,7 @@ def main(cfg: DictConfig):
     LaunchLogger.initialize()
 
     # Use Diffusion equation for the Darcy PDE
-    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0)
+    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0 * 4.49996e00 * 3.88433e-03)
     darcy_node = darcy.make_nodes()
 
     dataset = HDF5MapStyleDataset(
