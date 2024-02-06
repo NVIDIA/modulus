@@ -52,19 +52,15 @@ except ImportError:
 
 
 class HEALPixFoldFaces(th.nn.Module):
-    """
-    Class that folds the faces of a HealPIX tensor
+    """ Class that folds the faces of a HealPIX tensor
+
+    Parameters
+    ----------
+    enable_nhwc: bool, optional
+        Use nhwc format instead of nchw format
     """
 
     def __init__(self, enable_nhwc: bool = False):
-        """
-        Constructor method.
-
-        Parameters
-        ----------
-        enable_nhwc: bool, optional
-            Use nhwc format instead of nchw format
-        """
         super().__init__()
         self.enable_nhwc = enable_nhwc
 
@@ -94,8 +90,14 @@ class HEALPixFoldFaces(th.nn.Module):
 
 
 class HEALPixUnfoldFaces(th.nn.Module):
-    """
-    Class that folds the faces of a HealPIX tensor
+    """ Class that unfolds the faces of a HealPIX tensor
+
+    Parameters
+    ----------
+    num_faces: int, optional
+        The number of faces on the grid, default 12
+    enable_nhwc: bool, optional
+        If nhwc format is being used, default False
     """
 
     def __init__(self, num_faces=12, enable_nhwc=False):
@@ -126,6 +128,21 @@ class HEALPixUnfoldFaces(th.nn.Module):
 
 
 class HEALPixPaddingv2(th.nn.Module):
+    """
+    Padding layer for data on a HEALPix sphere. This version uses a faster method to calculate the padding.
+    The requirements for using this layer are as follows:
+    - The last three dimensions are (face=12, height, width)
+    - The first four indices in the faces dimension [0, 1, 2, 3] are the faces on the northern hemisphere
+    - The second four indices in the faces dimension [4, 5, 6, 7] are the faces on the equator
+    - The last four indices in the faces dimension [8, 9, 10, 11] are the faces on the southern hemisphere
+
+    Orientation and arrangement of the HEALPix faces are outlined above.
+
+    Parameters
+    ----------
+    padding: int
+        The padding size
+    """
     def __init__(self, padding: int):
         super().__init__()
         self.unfold = HEALPixUnfoldFaces(num_faces=12)
@@ -153,19 +170,15 @@ class HEALPixPadding(th.nn.Module):
     - The last four indices in the faces dimension [8, 9, 10, 11] are the faces on the southern hemisphere
 
     Orientation and arrangement of the HEALPix faces are outlined above.
+
+    Parameters
+    ----------
+    padding: int
+        The padding size
+    enable_nhwc: bool, optional
+        If nhwc format is being used, default False
     """
-
     def __init__(self, padding: int, enable_nhwc: bool = False):
-        """
-        Constructor for a HEALPix padding layer.
-
-        Parameters
-        ----------
-        padding: int
-            The padding size
-        enable_nhwc: bool, optional
-            If nhwc format is being used
-        """
         super().__init__()
         self.p = padding
         self.d = [-2, -1]
@@ -523,22 +536,17 @@ class HEALPixPadding(th.nn.Module):
 
 
 class HEALPixLayer(th.nn.Module):
-    """
-    Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
+    """ Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
     shape [..., 12, H, W], where 12 is the dimension of the faces.
+
+    Parameters
+    ----------
+    layer: torch.nn.Module
+        Any torch layer function, e.g., th.nn.Conv2d
+    kwargs:
+        The arguments that are passed to the torch layer function, e.g., kernel_size
     """
-
     def __init__(self, layer, **kwargs):
-        """
-        Constructor for the HEALPix base layer.
-
-        Parameters
-        ----------
-        layer: torch.nn.Module
-            Any torch layer function, e.g., th.nn.Conv2d
-        kwargs:
-            The arguments that are passed to the torch layer function, e.g., kernel_size
-        """
         super().__init__()
         layers = []
 
