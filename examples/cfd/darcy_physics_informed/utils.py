@@ -220,23 +220,23 @@ class HDF5MapStyleDataset(Dataset):
 
         invar = torch.cat(
             [
-                torch.from_numpy(
-                    (data["Kcoeff"][:, :240, :240] - 7.48360e00) / 4.49996e00
-                ),
-                torch.from_numpy(data["Kcoeff_x"][:, :240, :240]),
-                torch.from_numpy(data["Kcoeff_y"][:, :240, :240]),
+                torch.from_numpy((data["Kcoeff"][:, :240, :240]) / 4.49996e00),
+                torch.from_numpy(data["Kcoeff_x"][:, :240, :240]) / 4.49996e00,
+                torch.from_numpy(data["Kcoeff_y"][:, :240, :240]) / 4.49996e00,
             ]
         )
-        outvar = torch.from_numpy(
-            (data["sol"][:, :240, :240] - 5.74634e-03) / 3.88433e-03
-        )
+        outvar = torch.from_numpy((data["sol"][:, :240, :240]) / 3.88433e-03)
 
         x = np.linspace(0, 1, 240)
         y = np.linspace(0, 1, 240)
 
         xx, yy = np.meshgrid(x, y)
-        x_invar = torch.from_numpy(xx.astype(np.float32)).reshape(-1, 1)
-        y_invar = torch.from_numpy(yy.astype(np.float32)).reshape(-1, 1)
+        x_invar = torch.from_numpy(xx.astype(np.float32)).view(
+            1, 240, 240
+        )  # add channel dimension
+        y_invar = torch.from_numpy(yy.astype(np.float32)).view(
+            1, 240, 240
+        )  # add channel dimension
 
         if self.device.type == "cuda":
             # Move tensors to GPU
