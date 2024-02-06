@@ -372,18 +372,18 @@ class DistributedManager(object):
         Parameters
         ----------
         name : str
-        Name of the process subgroup to be created.
+            Name of the process subgroup to be created.
 
         size : int
-        Size of the process subgroup to be created. This must be an integer factor of
-        the parent group's size.
+            Size of the process subgroup to be created. This must be an integer factor of
+            the parent group's size.
 
         group_name : Optional[str]
-        Name of the parent process group, optional. If None, the default process group
-        will be used. Default None.
+            Name of the parent process group, optional. If None, the default process group
+            will be used. Default None.
 
         verbose : bool
-        Print out ranks of each created process group, default False.
+            Print out ranks of each created process group, default False.
 
         """
         manager = DistributedManager()
