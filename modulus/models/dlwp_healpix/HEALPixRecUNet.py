@@ -45,7 +45,43 @@ class MetaData(ModelMetaData):
 
 
 class HEALPixRecUNet(Module):
-    """ Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh. """
+    """ Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh.
+    
+    Parameters
+    ----------
+    encoder: DictConfig
+        dictionary of instantiable parameters for the U-net encoder
+    decoder: DictConfig
+        dictionary of instantiable parameters for the U-net decoder
+    input_channels: int
+        number of input channels expected in the input array schema. Note this should be the
+        number of input variables in the data, NOT including data reshaping for the encoder part.
+    output_channels: int
+        number of output channels expected in the output array schema, or output variables
+    n_constants: int
+        number of optional constants expected in the input arrays. If this is zero, no constants
+        should be provided as inputs to `forward`.
+    decoder_input_channels: int
+        number of optional prescribed variables expected in the decoder input array
+        for both inputs and outputs. If this is zero, no decoder inputs should be provided as inputs to `forward`.
+    input_time_dim: int
+        number of time steps in the input array
+    output_time_dim: int
+        number of time steps in the output array
+    delta_time: str, optional
+        hours between two consecutive data points
+    reset_cycle: str, optional
+        hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
+        to never reset the hidden states.
+    presteps: int, optional
+        number of model steps to initialize recurrent states.
+    enable_nhwc: bool, optional
+        Model with [N, H, W, C] instead of [N, C, H, W]
+    enable_healpixpad: bool, optional
+        Enable CUDA HEALPixPadding if installed
+    couplings: list, optional
+        sequence of dictionaries that describe coupling mechanisms
+    """
     def __init__(
         self,
         encoder: DictConfig,
@@ -63,44 +99,6 @@ class HEALPixRecUNet(Module):
         enable_healpixpad: bool = False,
         couplings: list = [],
     ):
-        """
-        Parameters
-        ----------
-        encoder: DictConfig
-            dictionary of instantiable parameters for the U-net encoder
-        decoder: DictConfig
-            dictionary of instantiable parameters for the U-net decoder
-        input_channels: int
-            number of input channels expected in the input array schema. Note this should be the
-            number of input variables in the data, NOT including data reshaping for the encoder part.
-        output_channels: int
-            number of output channels expected in the output array schema, or output variables
-        n_constants: int
-            number of optional constants expected in the input arrays. If this is zero, no constants
-            should be provided as inputs to `forward`.
-        decoder_input_channels: int
-            number of optional prescribed variables expected in the decoder input array
-            for both inputs and outputs. If this is zero, no decoder inputs should be provided as inputs to `forward`.
-        input_time_dim: int
-            number of time steps in the input array
-        output_time_dim: int
-            number of time steps in the output array
-        delta_time: str, optional
-            hours between two consecutive data points
-        reset_cycle: str, optional
-            hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
-            to never reset the hidden states.
-        presteps: int, optional
-            number of model steps to initialize recurrent states.
-        enable_nhwc: bool, optional
-            Model with [N, H, W, C] instead of [N, C, H, W]
-        enable_healpixpad: bool, optional
-            Enable CUDA HEALPixPadding if installed
-        couplings: list, optional
-            sequence of dictionaries that describe coupling mechanisms
-
-        """
-
         super().__init__()
         self.channel_dim = 2  # Now 2 with [B, F, T*C, H, W]. Was 1 in old data format with [B, T*C, F, H, W]
 

@@ -12,15 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Sequence
+from typing import Sequence, Union
 
 import numpy as np
 import pandas as pd
 import xarray as xr
-from Typing import Union
 
 
 class TrailingAverageCoupler:
+    """ Coupler used to inferface two components of the earth system
+    
+    Trailing average coupler uses coupled input times as the right side of
+    an averag that is taken over an "averaging_window" window size.
+
+    Parameters
+    ----------
+    dataset: xr.Dataset 
+        Dataset that holds coupled data
+    batch_size: int 
+        Batch sized use for training, forecasting batch size should be 1
+    variables: Sequence 
+        Strings that indicate the coupled variable names in the dataset
+    presteps: int
+        The number of model steps used to initialize the
+        hidden state. If not using a GRU, prestep is 0
+    input_time_dim: int
+        number of input times into the model
+    output_time_dim: int
+        Number of output times for each model step
+    averaging_window: str, optional
+        period over which coupled data is averaged before sent back to model
+    input_times: int, optional
+        sequence of pandas Timedelta objects that indicate which times are to be coupled
+    prepared_coupled_data: boolean, optional 
+        If True assumes data in dataset has been prepared approiately for
+        training: averages have already been calculated so that each time
+        step denotes the right side of a averaging_window window.
+        This is highly recommended for training, default True
+    """
     def __init__(
         self,
         dataset: xr.Dataset,
@@ -33,36 +62,6 @@ class TrailingAverageCoupler:
         input_times: Sequence = [pd.Timedelta("24h"), pd.Timedelta("48H")],
         prepared_coupled_data=True,
     ):
-        """
-        coupler used to inferface two components of the earth system
-
-        Trailing average coupler uses coupled input times as the right side of
-        an averag that is taken over an "averaging_window" window size.
-
-        Parameters
-        ----------
-        dataset: xr.Dataset 
-            Dataset that holds coupled data
-        batch_size: int 
-            Batch sized use for training, forecasting batch size should be 1
-        variables: Sequence 
-            Strings that indicate the coupled variable names in the dataset
-        presteps: int
-            The number of model steps used to initialize the
-            hidden state. If not using a GRU, prestep is 0
-        input_time_dim: int
-            number of input times into the model
-        output_time_dim: int
-            Number of output times for each model step
-        :param averaging_window: period over which coupled data is averaged before
-               sent back to model
-        :param input_times: sequence of pandas Timedelta objects that indicate
-               which times are to be coupled
-        :param prepared_coupled_data: boolean. If True assumes data in dataset has
-               been prepared approiately for training: averages have already been
-               calculated so that each time step denotes the right side of a
-               averaging_window window. This is highly remcommended for training
-        """
         # extract important meta data from ds
         self.ds = dataset
         self.batch_size = batch_size

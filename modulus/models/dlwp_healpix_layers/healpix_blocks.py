@@ -25,11 +25,23 @@ from .healpix_layers import HEALPixLayer
 
 
 class ConvGRUBlock(th.nn.Module):
-    """
-    Class that implements a Convolutional GRU
+    """ Class that implements a Convolutional GRU
     Code modified from
     https://github.com/happyjin/ConvGRU-pytorch/blob/master/convGRU.py
-    """
+
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry layer
+    in_channels: int, optional
+        The number of input channels
+    kernel_size: int, optional
+        Size of the convolutioonal kernel
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+        """
 
     def __init__(
         self,
@@ -39,22 +51,6 @@ class ConvGRUBlock(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry layer
-        in_channels: int, optional
-            The number of input channels
-        kernel_size: int, optional
-            Size of the convolutioonal kernel
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
 
         self.channels = in_channels
@@ -107,11 +103,31 @@ class ConvGRUBlock(th.nn.Module):
 
 
 class BasicConvBlock(th.nn.Module):
-    """
-    Convolution block consisting of n subsequent convolutions and activations
+    """ Convolution block consisting of n subsequent convolutions and activations
 
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry layer
+    in_channels: int, optional
+        The number of input channels
+    out_channels: int, optional
+        The number of output channels
+    kernel_size: int, optional
+        Size of the convolutioonal kernel
+    dilation: int, optional
+        Spacing between kernel points, passed to torch.nn.Conv2d
+    n_layers:
+        Number of convolutional layers
+    latent_channels:
+        Number of latent channels
+    activation: torch.nn.Module, optional
+        Activation function to use
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
     """
-
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -125,32 +141,6 @@ class BasicConvBlock(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry layer
-        in_channels: int, optional
-            The number of input channels
-        out_channels: int, optional
-            The number of output channels
-        kernel_size: int, optional
-            Size of the convolutioonal kernel
-        dilation: int, optional
-            Spacing between kernel points, passed to torch.nn.Conv2d
-        n_layers:
-            Number of convolutional layers
-        latent_channels:
-            Number of latent channels
-        activation: torch.nn.Module, optional
-            Activation function to use
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
         if latent_channels is None:
             latent_channels = max(in_channels, out_channels)
@@ -176,11 +166,32 @@ class BasicConvBlock(th.nn.Module):
 
 
 class ConvNeXtBlock(th.nn.Module):
-    """
-    Class implementing a modified ConvNeXt network as described in https://arxiv.org/pdf/2201.03545.pdf
+    """ Class implementing a modified ConvNeXt network as described in https://arxiv.org/pdf/2201.03545.pdf
     and shown in figure 4
-    """
 
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry layer
+    in_channels: int, optional
+        The number of input channels
+    out_channels: int, optional
+        The number of output channels
+    kernel_size: int, optional
+        Size of the convolutioonal kernels
+    dilation: int, optional
+        Spacing between kernel points, passed to torch.nn.Conv2d
+    upscale_factor: int, optional
+        Upscale factor to apply on the number of latent channels
+    latent_channels: int, optional
+        Number of latent channels
+    activation: torch.nn.Module, optional
+        Activation function to use between layers
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+    """
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -195,32 +206,6 @@ class ConvNeXtBlock(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry layer
-        in_channels: int, optional
-            The number of input channels
-        out_channels: int, optional
-            The number of output channels
-        kernel_size: int, optional
-            Size of the convolutioonal kernels
-        dilation: int, optional
-            Spacing between kernel points, passed to torch.nn.Conv2d
-        upscale_factor: int, optional
-            Upscale factor to apply on the number of latent channels
-        latent_channels: int, optional
-            Number of latent channels
-        activation: torch.nn.Module, optional
-            Activation function to use between layers
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
 
         # Instantiate 1x1 conv to increase/decrease channel depth if necessary
@@ -283,12 +268,33 @@ class ConvNeXtBlock(th.nn.Module):
 
 
 class DoubleConvNeXtBlock(th.nn.Module):
-    """
-    Modification of ConvNeXtBlock block this time putting two sequentially
+    """ Modification of ConvNeXtBlock block this time putting two sequentially
     in a single block with the number of channels in the middle being the
     number of latent channels
-    """
 
+    Parameters:
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry layer
+    in_channels: int, optional
+        The number of input channels
+    latent_channels: int, optional
+        Number of latent channels
+    out_channels: int, optional
+        The number of output channels
+    kernel_size: int, optional
+        Size of the convolutioonal kernels
+    dilation: int, optional
+        Spacing between kernel points, passed to torch.nn.Conv2d
+    upscale_factor: int, optional
+        Upscale factor to apply on the number of latent channels
+    activation: torch.nn.Module, optional
+        Activation function to use between layers
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+    """
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -302,32 +308,6 @@ class DoubleConvNeXtBlock(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry layer
-        in_channels: int, optional
-            The number of input channels
-        latent_channels: int, optional
-            Number of latent channels
-        out_channels: int, optional
-            The number of output channels
-        kernel_size: int, optional
-            Size of the convolutioonal kernels
-        dilation: int, optional
-            Spacing between kernel points, passed to torch.nn.Conv2d
-        upscale_factor: int, optional
-            Upscale factor to apply on the number of latent channels
-        activation: torch.nn.Module, optional
-            Activation function to use between layers
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
 
         if in_channels == int(latent_channels):
@@ -457,12 +437,33 @@ class DoubleConvNeXtBlock(th.nn.Module):
 
 
 class SymmetricConvNeXtBlock(th.nn.Module):
-    """
-    Another modification of ConvNeXtBlock block this time using 4 layers and adding
+    """ Another modification of ConvNeXtBlock block this time using 4 layers and adding
     a layer that instead of going from in_channels to latent*upscale channesl goes to
     latent channels first
+    
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry layer
+    in_channels: int, optional
+        The number of input channels
+    latent_channels: int, optional
+        Number of latent channels
+    out_channels: int, optional
+        The number of output channels
+    kernel_size: int, optional
+        Size of the convolutioonal kernels
+    dilation: int, optional
+        Spacing between kernel points, passed to torch.nn.Conv2d
+    upscale_factor: int, optional
+        Upscale factor to apply on the number of latent channels
+    activation: torch.nn.Module, optional
+        Activation function to use between layers
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
     """
-
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -476,32 +477,6 @@ class SymmetricConvNeXtBlock(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry layer
-        in_channels: int, optional
-            The number of input channels
-        latent_channels: int, optional
-            Number of latent channels
-        out_channels: int, optional
-            The number of output channels
-        kernel_size: int, optional
-            Size of the convolutioonal kernels
-        dilation: int, optional
-            Spacing between kernel points, passed to torch.nn.Conv2d
-        upscale_factor: int, optional
-            Upscale factor to apply on the number of latent channels
-        activation: torch.nn.Module, optional
-            Activation function to use between layers
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
 
         if in_channels == int(latent_channels):
@@ -587,11 +562,20 @@ class SymmetricConvNeXtBlock(th.nn.Module):
 
 
 class MaxPool(th.nn.Module):
-    """
-    This class provides a wrapper for a HEALPix (or other) tensor data
+    """ This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.MaxPool2d class.
-    """
 
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry of the tensor being bassed to MaxPool2d
+    pooling: int, optional
+        Pooling kernel size passed to geometry layer
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+    """
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -600,21 +584,6 @@ class MaxPool(th.nn.Module):
         enable_healpixpad: bool = False,
     ):
         super().__init__()
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry of the tensor being bassed to MaxPool2d
-        pooling: int, optional
-            Pooling kernel size passed to geometry layer
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
-
         self.maxpool = geometry_layer(
             layer=torch.nn.MaxPool2d,
             kernel_size=pooling,
@@ -627,11 +596,20 @@ class MaxPool(th.nn.Module):
 
 
 class AvgPool(th.nn.Module):
-    """
-    This class provides a wrapper for a HEALPix (or other) tensor data
+    """ This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.AvgPool2d class.
-    """
 
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry of the tensor being bassed to MaxPool2d
+    pooling: int, optional
+        Pooling kernel size passed to geometry layer
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+    """
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -639,20 +617,6 @@ class AvgPool(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry of the tensor being bassed to MaxPool2d
-        pooling: int, optional
-            Pooling kernel size passed to geometry layer
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
         self.avgpool = geometry_layer(
             layer=torch.nn.AvgPool2d,
@@ -671,11 +635,22 @@ class AvgPool(th.nn.Module):
 
 
 class InterpolationUpsample(th.nn.Module):
-    """
-    This class provides a wrapper for a HEALPix (or other) tensor data
+    """ This class provides a wrapper for a HEALPix (or other) tensor data
     around Interpolation
-    """
 
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry of the tensor being passed to MaxPool2d
+    mode: str, optional
+        The mode used for interpolation upsampling, passed to MaxPool2d
+    upsampling: int, optional
+        Size used for upsampling
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
+    """
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -684,22 +659,6 @@ class InterpolationUpsample(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry of the tensor being passed to MaxPool2d
-        mode: str, optional
-            The mode used for interpolation upsampling, passed to MaxPool2d
-        upsampling: int, optional
-            Size used for upsampling
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
         self.upsampler = geometry_layer(
             layer=Interpolate,
@@ -714,11 +673,26 @@ class InterpolationUpsample(th.nn.Module):
 
 
 class TransposedConvUpsample(th.nn.Module):
-    """
-    This class provides a wrapper for a HEALPix (or other) tensor data
+    """ This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.ConvTranspose2d class.
+    
+    Parameters
+    ----------
+    geometry_layer: torch.nn.Module, optional
+        The wrapper for the geometry of the tensor being bassed to MaxPool2d
+    in_channels: int, optional
+        The number of input channels
+    out_channels: int, optional
+        The number of output channels
+    upsampling: int, optional
+        Size used for upsampling
+    activation: torch.nn.Module, optional
+        Activation function used in upsampling
+    enable_nhwc: bool, optional
+        Enable nhwc format, passed to wrapper
+    enable_healpixpad: bool, optional
+        If HEALPixPadding should be enabled, passed to wrapper
     """
-
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -729,26 +703,6 @@ class TransposedConvUpsample(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        geometry_layer: torch.nn.Module, optional
-            The wrapper for the geometry of the tensor being bassed to MaxPool2d
-        in_channels: int, optional
-            The number of input channels
-        out_channels: int, optional
-            The number of output channels
-        upsampling: int, optional
-            Size used for upsampling
-        activation: torch.nn.Module, optional
-            Activation function used in upsampling
-        enable_nhwc: bool, optional
-            Enable nhwc format, passed to wrapper
-        enable_healpixpad: bool, optional
-            If HEALPixPadding should be enabled, passed to wrapper
-        """
         super().__init__()
         upsampler = []
         # Upsample transpose conv
@@ -778,21 +732,18 @@ class TransposedConvUpsample(th.nn.Module):
 
 
 class Interpolate(th.nn.Module):
-    """Helper class that handles interpolation
-       This is done as a class so that scale and mode can be stored
+    """ Helper class that handles interpolation
+    This is done as a class so that scale and mode can be stored
+
+    Parameters:
+    ----------
+    scale_factor: Union[int , Tuple]
+        Multiplier for spatial size, passed to torch.nn.functional.interpolate
+    mode: str, optional
+        Interpolation mode used for upsampling, passed to torch.nn.functional.interpolate
     """
 
     def __init__(self, scale_factor: Union[int, Tuple], mode: str = "nearest"):
-        """
-        Constructor method.
-
-        Parameters:
-        ----------
-        scale_factor: Union[int , Tuple]
-            Multiplier for spatial size, passed to torch.nn.functional.interpolate
-        mode: str, optional
-            Interpolation mode used for upsampling, passed to torch.nn.functional.interpolate
-        """
         super().__init__()
         self.interp = th.nn.functional.interpolate
         self.scale_factor = scale_factor
