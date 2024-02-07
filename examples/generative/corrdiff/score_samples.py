@@ -73,23 +73,27 @@ def open_samples(f):
     return truth, pred, root
 
 
-path = sys.argv[1]
+if __name__ == "__main__":
+    path = sys.argv[1]
 
-truth, pred, root = open_samples(path)
-pred = pred.chunk(time=1)
-truth = truth.chunk(time=1)
+    truth, pred, root = open_samples(path)
+    pred = pred.chunk(time=1)
+    truth = truth.chunk(time=1)
 
-dim = ["x", "y"]
+    dim = ["x", "y"]
 
-a = xskillscore.rmse(truth, pred.mean("ensemble"), dim=dim)
-b = xskillscore.crps_ensemble(truth, pred, member_dim="ensemble", dim=dim)
-c = pred.std("ensemble").mean(dim)
-crps_mean = xskillscore.crps_ensemble(
-    truth, pred.mean("ensemble").expand_dims("ensemble"), member_dim="ensemble", dim=dim
-)
+    a = xskillscore.rmse(truth, pred.mean("ensemble"), dim=dim)
+    b = xskillscore.crps_ensemble(truth, pred, member_dim="ensemble", dim=dim)
+    c = pred.std("ensemble").mean(dim)
+    crps_mean = xskillscore.crps_ensemble(
+        truth,
+        pred.mean("ensemble").expand_dims("ensemble"),
+        member_dim="ensemble",
+        dim=dim,
+    )
 
-metrics = xr.concat([a, b, c, crps_mean], dim="metric").assign_coords(
-    metric=["rmse", "crps", "std_dev", "mae"]
-)
-with dask.diagnostics.ProgressBar():
-    metrics.to_netcdf(sys.argv[2], mode="w")
+    metrics = xr.concat([a, b, c, crps_mean], dim="metric").assign_coords(
+        metric=["rmse", "crps", "std_dev", "mae"]
+    )
+    with dask.diagnostics.ProgressBar():
+        metrics.to_netcdf(sys.argv[2], mode="w")
