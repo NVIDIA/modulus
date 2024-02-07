@@ -32,8 +32,6 @@ def test_manager():
     os.environ["MASTER_PORT"] = "12345"
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
-    # Reset class state
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
     print(DistributedManager())
 
@@ -60,8 +58,6 @@ def test_manager_slurm():
     os.environ["SLURM_NPROCS"] = "1"
     os.environ["SLURM_LOCALID"] = "0"
     os.environ["SLURM_LAUNCH_NODE_IPADDR"] = "localhost"
-    # Reset class state
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
 
     manager = DistributedManager()
@@ -84,8 +80,6 @@ def test_manager_ompi():
     os.environ["OMPI_COMM_WORLD_RANK"] = "0"
     os.environ["OMPI_COMM_WORLD_SIZE"] = "1"
     os.environ["OMPI_COMM_WORLD_LOCAL_RANK"] = "0"
-    # Reset class state
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
 
     manager = DistributedManager()
@@ -121,7 +115,6 @@ def test_manager_specified_initialization():
 
     # Test SLURM initialization
     os.environ["MODULUS_DISTRIBUTED_INITIALIZATION_METHOD"] = "SLURM"
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
     manager = DistributedManager()
     assert manager.is_initialized()
@@ -158,8 +151,6 @@ def test_manager_singleton():
     os.environ["MASTER_PORT"] = "45678"
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
-    # Reset class state
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
 
     manager_1 = DistributedManager()
@@ -193,8 +184,6 @@ def test_manager_single_process_subgroups():
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
 
-    # Reset class state
-    DistributedManager._shared_state = {}
     DistributedManager.initialize()
 
     verbose = False
@@ -224,7 +213,6 @@ def run_process_groups(rank, model_parallel_size, verbose):
     os.environ["WORLD_SIZE"] = f"{model_parallel_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
-    DistributedManager._shared_state = {}
 
     DistributedManager.initialize()
 
@@ -265,7 +253,6 @@ def run_process_groups_from_config(rank, model_parallel_size, verbose):
     os.environ["WORLD_SIZE"] = f"{model_parallel_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
-    DistributedManager._shared_state = {}
 
     DistributedManager.initialize()
 
