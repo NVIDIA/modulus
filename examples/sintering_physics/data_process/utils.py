@@ -18,7 +18,7 @@ import csv
 
 import tensorflow as tf
 
-from constants import Constants
+from ..constants import Constants
 
 C = Constants()
 

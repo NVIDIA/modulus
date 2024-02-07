@@ -25,7 +25,7 @@ from absl import flags
 
 from utils import read_raw_folder, get_solution_id, time_diff, get_data_position
 
-from constants import Constants
+from ..constants import Constants
 
 C = Constants()
 def main():

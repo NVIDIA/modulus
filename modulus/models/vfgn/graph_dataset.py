@@ -36,9 +36,9 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
-from modulus.modulus.utils.vfgn import reading_utils
-from modulus.modulus.utils.vfgn.utils import _read_metadata
-from modulus.modulus.utils.vfgn import utils
+from modulus.utils.vfgn import reading_utils
+from modulus.utils.vfgn.utils import _read_metadata
+from modulus.utils.vfgn import utils
 
 
 INPUT_SEQUENCE_LENGTH = 5 # calculate the last 5 velocities. [options: 5, 10]

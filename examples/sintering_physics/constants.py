@@ -1,4 +1,7 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import os
 from pathlib import Path
 from pydantic import BaseModel
@@ -23,7 +27,8 @@ class Constants(BaseModel):
     # Train model, one step evaluation or rollout evaluation.
     # exec mode options: ['train', 'eval', 'eval_rollout']
     mode: str = "train"
-    # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
+    # eval_split is Split to use when running evaluation,
+    # options: ['train', 'valid', 'test']
     eval_split: str = "test"
 
     # data configs
@@ -46,13 +51,15 @@ class Constants(BaseModel):
 
     # devices settings
     device: str = 'cuda:0'
-    # flags.DEFINE_string('message_passing_devices',"['cuda:0', 'cuda:1]",help="The devices for message passing")
+    # flags.DEFINE_string('message_passing_devices', 'cuda:0', or "['cuda:0', 'cuda:1]",help="The devices for message passing")
 
     # performance configs
     fp16: bool = False
 
     # test & visualization configs
     rollout_refine: bool = False
+    meta1: str = "step100_s1"
+    meta2: str = "step100_s2"
 
     # Rollout settings
     # "Path to rollout pickle file"

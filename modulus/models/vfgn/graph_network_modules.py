@@ -36,6 +36,7 @@ from torch_scatter import scatter
 from torch.utils.checkpoint import checkpoint
 
 from dataclasses import dataclass
+
 from ..meta import ModelMetaData
 from ..module import Module
 

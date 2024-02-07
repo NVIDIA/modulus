@@ -1,4 +1,8 @@
 # © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -35,7 +39,7 @@ from sklearn import neighbors
 import utils
 from utils import get_solution_id, time_diff
 
-from constants import Constants
+from ..constants import Constants
 
 C = Constants()
 # Create a description of the features.

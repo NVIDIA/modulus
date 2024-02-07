@@ -1,4 +1,8 @@
 # © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,72 +16,39 @@
 # limitations under the License.
 
 
-import collections
 import functools
 import json
 import os
 import tree
-from absl import app
-from absl import flags
-# import reading_utils
-import reading_utils as reading_utils
-
-import tensorflow as tf
-import random
-import time
-
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-# from graph_network_v2 import LearnedSimulator
-from graph_network import LearnedSimulator
-
+from absl import app, flags
 import numpy as np
 import math
 import pickle
-from apex import amp
-import ast
 
-flags.DEFINE_enum(
-    'mode', 'train', ['train', 'eval', 'eval_rollout'],
-    help='Train model, one step evaluation or rollout evaluation.')
-flags.DEFINE_enum('eval_split', 'test', ['train', 'valid', 'test'],
-                  help='Split to use when running evaluation.')
-flags.DEFINE_string('data_path', '../../../../data/large-time-step/step_100', help='The dataset directory.')
-flags.DEFINE_string('meta1', 'step100_s1', help='The dataset directory.')    # recalculated meta: meta1, meta2, meta3
-flags.DEFINE_string('meta2', 'step100_s2', help='The dataset directory.')
+import torch
 
-flags.DEFINE_integer('batch_size', 2, help='The batch size.')
-flags.DEFINE_integer('num_steps', int(2e7), help='Number of steps of training.')
-flags.DEFINE_integer('eval_steps', 1, help='Number of steps of evaluation.')
-flags.DEFINE_float('noise_std', 6.7e-4, help='The std deviation of the noise.')
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "Mesh Graph Net Datapipe requires the Tensorflow library. Install the "
+        + "package at: https://www.tensorflow.org/install"
+    )
+
+from tqdm import tqdm
+from modulus.models.vfgn.graph_network_modules import LearnedSimulator
+from modulus.utils.vfgn import reading_utils
+
+from ..constants import Constants
+
+C = Constants()
+
 
 flags.DEFINE_string('model_path_s1', 'models/step100_s1_weighted/model_loss-1.95E-06_step-154700.pt',
                     help=('The path for saving checkpoints of the model. '
                           'Defaults to a temporary directory.'))
 flags.DEFINE_string('model_path_s2', 'models/step100_s2_lr5_weighted/model_loss-7.16E-05_step-135850.pt',
                     help='path to stage-2 model')
-
-flags.DEFINE_string('output_path', None,
-                    help='The path for saving outputs (e.g. rollouts).')
-
-flags.DEFINE_enum('loss', 'standard', ['standard', 'anchor', 'me', 'correlation', 'anchor_me'],
-                  help='loss type.')
-
-flags.DEFINE_float('l_plane', 10, help='The scale factor of anchor plane loss.')
-flags.DEFINE_float('l_me', 1, help='The scale factor of me loss.')
-
-flags.DEFINE_integer('prefetch_buffer_size', 100, help="")
-flags.DEFINE_string('device', 'cuda:0',
-                    help='The device to training.')
-
-flags.DEFINE_string('message_passing_devices',"['cuda:0']",help="The devices for message passing")
-flags.DEFINE_bool('fp16',False,help='Training with mixed precision.')
-flags.DEFINE_bool('rollout_refine',True, help='Use ground truth value as input in every steps')
-
-FLAGS = flags.FLAGS
-
 
 class Stats:
     def __init__(self, mean, std):
