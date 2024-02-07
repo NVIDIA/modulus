@@ -20,6 +20,7 @@ import torch
 import pytest
 import random
 
-from modulus.modulus.models.vfgn.graph_dataset import MLPNet
+# Dependency Issue - need to add for the test code  - NO MLPNet! 
+from modulus.models.vfgn.graph_dataset import MLPNet
 from . import common
 
