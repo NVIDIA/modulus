@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,6 +71,7 @@ def main(cfg: DictConfig) -> None:
     workers = getattr(cfg, "workers", 4)
 
     # Parse I/O-related options
+    wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     desc = getattr(cfg, "desc")
     tick = getattr(cfg, "tick", 1)
     snap = getattr(cfg, "snap", 1)
@@ -80,6 +83,7 @@ def main(cfg: DictConfig) -> None:
     # Parse weather data options
     c = EasyDict()
     c.task = task
+    c.wandb_mode = wandb_mode
     c.train_data_path = getattr(cfg, "train_data_path")
     c.crop_size_x = getattr(cfg, "crop_size_x", 448)
     c.crop_size_y = getattr(cfg, "crop_size_y", 448)

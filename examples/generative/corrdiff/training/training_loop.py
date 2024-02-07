@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +21,7 @@ import json
 import os
 import sys
 import time
+import wandb as wb
 
 import numpy as np
 import psutil
@@ -29,7 +32,11 @@ from . import training_stats
 sys.path.append("../")
 from module import Module
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.logging import (
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    initialize_wandb,
+)
 from modulus.utils.generative import (
     InfiniteSampler,
     construct_class_by_name,
@@ -81,6 +88,7 @@ def training_loop(
     gridtype="sinusoidal",
     N_grid_channels=4,
     normalization="v1",
+    wandb_mode="disabled",
 ):
     """CorrDiff training loop"""
 
@@ -92,6 +100,15 @@ def training_loop(
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
+
+    # wandb logger
+    initialize_wandb(
+        project="Modulus-Generative",
+        entity="Modulus",
+        name="CorrDiff",
+        group="CorrDiff-DDP-Group",
+        mode=wandb_mode,
+    )
 
     # Initialize.
     start_time = time.time()
@@ -241,6 +258,7 @@ def training_loop(
     while True:
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
+        loss_accum = 0
         for round_idx in range(num_accumulation_rounds):
             with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
@@ -261,13 +279,17 @@ def training_loop(
                     augment_pipe=augment_pipe,
                 )
                 training_stats.report("Loss/loss", loss)
-                loss.sum().mul(loss_scaling / batch_gpu_total).backward()
+                loss = loss.sum().mul(loss_scaling / batch_gpu_total)
+                loss_accum += loss
+                loss.backward()
+        wb.log({"loss": loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
+            wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
@@ -323,8 +345,6 @@ def training_loop(
         ]
         torch.cuda.reset_peak_memory_stats()
         logger0.info(" ".join(fields))
-
-        ckpt_dir = run_dir
 
         # Save full dump of the training state.
         if (

@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.10-py3
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.12-py3
 FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
@@ -65,25 +67,14 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.de
     fi
 RUN pip install --no-cache-dir "pyvista>=0.40.1"
 
-# Install DGL from source
+# Install DGL, below instructions only work for containers with CUDA >= 12.1 
+# (https://www.dgl.ai/pages/start.html)
 ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp310-cp310-linux_x86_64.whl" ]; then \
-        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/dgl-1.1.2-cp310-cp310-linux_x86_64.whl; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-1.1.2-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/dgl-1.1.2-cp310-cp310-linux_aarch64.whl; \
-    else \
-        echo "No DGL wheel present, building from source" && \
-	git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/1.1.2 && git submodule update --init --recursive && \
-	DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
-	cd python && \
-	python setup.py install && \
-	python setup.py build_ext --inplace; \
-    fi
-RUN rm -rf /workspace/dgl
+
+RUN pip install --no-cache-dir --no-deps dgl -f https://data.dgl.ai/wheels/cu121/repo.html
+RUN pip install --no-cache-dir --no-deps dglgo -f https://data.dgl.ai/wheels-test/repo.html
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build

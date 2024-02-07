@@ -64,7 +64,7 @@ full fourth year, 2021, as well as the first four months (January to April) of 2
 
 The Zarr dataset used for training and testing the CorrDiff model is available for
 non-commercial use under the [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
-and can be downloaded from TBD.
+and can be downloaded from https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset.
 
 ## Model overview and architecture
 

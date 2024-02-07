@@ -24,7 +24,8 @@ dependencies = [
     "pytz>=2023.3",
     "treelib>=1.2.5",
     "tqdm>=4.60.0",
-    "nvtx>=0.2.8"
+    "nvtx>=0.2.8",
+    "onnx>=1.14.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -61,7 +62,6 @@ all = [
     "warp-lang>=0.6.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
-    "onnx>=1.14.0",
     "cftime>=1.6.2",
     "einops>=0.7.0",
     "pyspng>=0.1.0",
