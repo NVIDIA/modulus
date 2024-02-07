@@ -195,7 +195,7 @@ class Mean(EnsembleMetrics):
             DistributedManager.is_initialized() and dist.is_initialized()
         ):  # pragma: no cover
             # Collect local sums, n
-            sums = torch.sum(inputs, batch_dim=dim)
+            sums = torch.sum(inputs, dim=dim)
             n = torch.as_tensor([inputs.shape[dim]], device=self.device)
 
             # Reduce
