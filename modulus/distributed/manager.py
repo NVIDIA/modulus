@@ -545,6 +545,11 @@ class DistributedManager(object):
         """Clean up distributed group and singleton"""
         # Destroying group.WORLD is enough for all process groups to get destroyed
         if DistributedManager().distributed:
-            dist.barrier()  # just make sure that no process hangs
+            if torch.cuda.is_available():
+                dist.barrier(
+                    device_ids=[DistributedManager().local_rank]
+                )  # just make sure that no process hangs
+            else:
+                dist.barrier()  # just make sure that no process hangs
             dist.destroy_process_group()
         DistributedManager._shared_state = {}
