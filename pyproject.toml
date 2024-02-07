@@ -55,8 +55,9 @@ dev = [
 ]
 
 makani = [
-    "makani @ git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0",
-    "torch_harmonics @ git+https://github.com/NVIDIA/torch-harmonics.git@v0.6.5",
+    # TODO(akamenev): PyPI does not allow direct URL deps, update once Makani is in PyPI
+    # "makani @ git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0",
+    "torch-harmonics>=0.6.5",
     "tensorly>=0.8.1",
     "tensorly-torch>=0.4.0",
 ]

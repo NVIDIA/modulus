@@ -108,6 +108,9 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     fi
 RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
 
+# TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
+RUN pip install --no-cache-dir -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
+
 # Deployment image
 FROM builder as deploy
 COPY . /modulus/
