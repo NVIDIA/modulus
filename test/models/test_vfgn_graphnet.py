@@ -44,10 +44,14 @@ def test_mlpnet_forward(device):
     ).to(device)
 
     bsize = 2
-    node_size = random.randint(10, 10000)
-    feat_size = random.randint(10, 100)
+    node_size = 1000
+    feat_size = 3
     invar = torch.randn(bsize, node_size, feat_size).to(device)
-    assert common.validate_forward_accuracy(model, (invar,))
+    assert common.validate_forward_accuracy(model, 
+                                            (invar,),
+                                            file_name=f"vfgn_output.pth",
+        atol=1e-4,
+        )
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_mlpnet_optims(device):
