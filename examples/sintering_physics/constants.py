@@ -1,0 +1,74 @@
+# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+from pathlib import Path
+from pydantic import BaseModel
+from typing import Tuple, Optional
+
+
+class Constants(BaseModel):
+    """Virtual Foundry (Digital Sintering) Graphnet constants"""
+    # Train model, one step evaluation or rollout evaluation.
+    # exec mode options: ['train', 'eval', 'eval_rollout']
+    mode: str = "train"
+    # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
+    eval_split: str = "test"
+
+    # data configs
+    data_path: str = "./data/test_validation"
+
+    # training configs
+    batch_size: int = 1
+    num_steps: int = int(2e7)
+    eval_steps: int = 1
+    noise_std: float = 6.7e-4
+    # loss type options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
+    loss: str = "standard"
+    l_plane: float = 30
+    l_me: float = 3
+    # The path for saving checkpoints of the model.
+    model_path: str = "models"
+    # The path for saving outputs (e.g. rollouts).
+    output_path: str = "rollouts"
+    prefetch_buffer_size: int = 100
+
+    # devices settings
+    device: str = 'cuda:0'
+    # flags.DEFINE_string('message_passing_devices',"['cuda:0', 'cuda:1]",help="The devices for message passing")
+
+    # performance configs
+    fp16: bool = False
+
+    # test & visualization configs
+    rollout_refine: bool = False
+
+    # Rollout settings
+    # "Path to rollout pickle file"
+    # todo: change to json
+    rollout_path: str = "rollouts/rollout_test_0.pkl"
+    metadata_path: str = "data"
+    step_stride: int = 3
+    block_on_show: bool = True
+    # test data type: ['standard', 'train', 'test']
+    ds_type: str = "standard"
+    #Test build name
+    test_build: str = "test0"
+    plot_tolerance_range: bool = True
+    plot_3d: bool = False
+
+    # Data preprocessing settings
+    ADD_ANCHOR: bool = True
+    raw_data_dir: str = None
+    process_step: int = 1
