@@ -22,6 +22,7 @@ import netCDF4 as nc
 import numpy as np
 import nvtx
 import torch
+import torch._dynamo
 import tqdm
 import training.dataset
 import training.time
@@ -171,15 +172,25 @@ def main(cfg: DictConfig) -> None:
         net_reg = None
 
     # move to device
-    torch.cuda.set_device(dist.rank)  # TODO is this needed?
     device = dist.device
-    net_res = net_res.eval()
-    net_reg = net_reg.eval() if net_reg else None
+    net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
+    net_reg = (
+        net_reg.eval().to(device).to(memory_format=torch.channels_last)
+        if net_reg
+        else None
+    )
 
     # change precision if needed
     if force_fp16:
         net_reg.use_fp16 = True
         net_res.use_fp16 = True
+
+    # Reset since we are using a different mode.
+    torch._dynamo.reset()
+    compile_mode = "reduce-overhead"
+    # Only compile residual network
+    # Overhead of compiling regression network outweights any benefits
+    net_res = torch.compile(net_res, mode=compile_mode)
 
     def generate_fn(image_lr):
         """Function to generate an image
@@ -202,13 +213,14 @@ def main(cfg: DictConfig) -> None:
                     w1=crop_size_y // patch_size,
                 )
                 torch.cuda.nvtx.range_pop()
+            image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
 
             sample_seeds = seeds
 
             logger0.info(f"seeds: {sample_seeds}")
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    net_reg.to(device)
+                    # net_reg.to(device)
                     image_mean = generate(
                         net=net_reg,
                         img_lr=image_lr_patch,
@@ -219,13 +231,15 @@ def main(cfg: DictConfig) -> None:
                         pretext="reg",
                         class_idx=class_idx,
                     )
-                    net_reg.cpu()
+                    # net_reg.cpu()
 
                 with nvtx.annotate("diffusion model", color="purple"):
-                    net_res.to(device)
+                    # net_res.to(device)
                     image_out = image_mean + generate(
                         net=net_res,
-                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
+                            memory_format=torch.channels_last
+                        ),
                         seed_batch_size=seed_batch_size,
                         sampling_method=sampling_method,
                         seeds=sample_seeds,
@@ -234,11 +248,11 @@ def main(cfg: DictConfig) -> None:
                         num_steps=num_steps,
                         **sampler_kwargs,
                     )
-                    net_res.cpu()
+                    # net_res.cpu()
 
             else:
                 with nvtx.annotate("diffusion model", color="purple"):
-                    net_res.to(device)
+                    # net_res.to(device)
                     image_out = generate(
                         net=net_res,
                         img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
@@ -403,7 +417,7 @@ def generate_and_save(
     )
     time_index = -1
     writer = writer_from_input_dataset(f, dataset)
-    warmup_steps = 1
+    warmup_steps = 2
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -428,7 +442,11 @@ def generate_and_save(
             start.record()
 
         # continue
-        image_lr = image_lr.to(device=device).to(torch.float32)
+        image_lr = (
+            image_lr.to(device=device)
+            .to(torch.float32)
+            .to(memory_format=torch.channels_last)
+        )
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
 
@@ -514,6 +532,8 @@ def generate(
     if dist.world_size > 1:
         torch.distributed.barrier()
 
+    img_lr = img_lr.to(memory_format=torch.channels_last)
+
     # Loop over batches.
     all_images = []
     for batch_seeds in tqdm.tqdm(rank_batches, unit="batch", disable=(dist.rank != 0)):
@@ -532,7 +552,7 @@ def generate(
                     net.img_resolution,
                 ],
                 device=device,
-            )
+            ).to(memory_format=torch.channels_last)
 
             class_labels = None
             if net.label_dim:
@@ -558,7 +578,7 @@ def generate(
                         f"Unknown sampling method {sampling_method}. Should be either 'stochastic' or 'deterministic'."
                     )
             elif pretext == "reg":
-                latents = torch.zeros_like(latents)
+                latents = torch.zeros_like(latents, memory_format=torch.channels_last)
                 sampler_fn = unet_regression
             else:
                 raise ValueError(
@@ -567,7 +587,8 @@ def generate(
 
             with torch.inference_mode():
                 images = sampler_fn(
-                    net.to(device),
+                    # net.to(device),
+                    net,
                     latents,
                     img_lr,
                     class_labels,

@@ -306,7 +306,7 @@ class AttentionOp(torch.autograd.Function):
             torch.einsum(
                 "ncq,nck->nqk",
                 q.to(torch.float32),
-                (k / np.sqrt(k.shape[1])).to(torch.float32),
+                (k / torch.sqrt(torch.tensor(k.shape[1]))).to(torch.float32),
             )
             .softmax(dim=2)
             .to(q.dtype)
