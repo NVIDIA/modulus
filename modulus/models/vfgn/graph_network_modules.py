@@ -32,7 +32,14 @@ import numpy as np
 import torch
 from torch.nn import Sequential, Linear, LayerNorm, ReLU, Embedding
 import torch.nn.functional as F
-from torch_scatter import scatter
+try:
+    from torch_scatter import scatter
+except ImportError:
+    raise ImportError(
+        "VFGN pipeline requires the PyTorch_Geometric library. Install the "
+        + "package at: https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html"
+    )
+
 from torch.utils.checkpoint import checkpoint
 
 from dataclasses import dataclass
