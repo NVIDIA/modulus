@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The citation file.
 - Link to the CWA dataset.
+- Performance optimizations to CorrDiff.
 
 ### Changed
 
@@ -25,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-## [0.5.0] - 2024-01-XX
 - Updated DGL build in Dockerfile
 - Updated default base image
 - Moved Onnx from optional to required dependencies

@@ -222,7 +222,6 @@ def main(cfg: DictConfig) -> None:
             logger0.info(f"seeds: {sample_seeds}")
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    # net_reg.to(device)
                     image_mean = generate(
                         net=net_reg,
                         img_lr=image_lr_patch,
@@ -233,10 +232,8 @@ def main(cfg: DictConfig) -> None:
                         pretext="reg",
                         class_idx=class_idx,
                     )
-                    # net_reg.cpu()
 
                 with nvtx.annotate("diffusion model", color="purple"):
-                    # net_res.to(device)
                     image_out = image_mean + generate(
                         net=net_res,
                         img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
@@ -250,11 +247,9 @@ def main(cfg: DictConfig) -> None:
                         num_steps=num_steps,
                         **sampler_kwargs,
                     )
-                    # net_res.cpu()
 
             else:
                 with nvtx.annotate("diffusion model", color="purple"):
-                    # net_res.to(device)
                     image_out = generate(
                         net=net_res,
                         img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
@@ -589,7 +584,6 @@ def generate(
 
             with torch.inference_mode():
                 images = sampler_fn(
-                    # net.to(device),
                     net,
                     latents,
                     img_lr,
