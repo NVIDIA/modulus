@@ -18,14 +18,14 @@ import numpy as np
 import pytest
 import torch
 
-from modulus.model.dlwp_healpix_layers import (
+from modulus.models.dlwp_healpix_layers import (
     HEALPixFoldFaces,
     HEALPixLayer,
     HEALPixPadding,
     HEALPixUnfoldFaces,
 )
 
-from . import common
+import common
 
 
 class MulX(torch.nn.Module):
@@ -53,36 +53,62 @@ def test_HEALPixFoldFaces(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUnfoldFaces(device):
+    num_faces = 12
     unfold_func = HEALPixUnfoldFaces()
 
     tensor_size = torch.randint(low=1, high=4, size=(4,)).tolist()
-    output_size = (tensor_size[0], tensor_size[1], 12, *tensor_size[2:])
+    output_size = (tensor_size[0], num_faces, *tensor_size[1:])
+    # first dim is B * num_faces
+    tensor_size[0] *= num_faces
     invar = torch.ones(*tensor_size, device=device)
+    print(f'tensor size {tensor_size} output size {output_size} invar shape {invar.shape}')
 
     outvar = unfold_func(invar)
     assert outvar.shape == output_size
 
+HEALPixPadding_testdata = [
+    ("cuda:0",2),
+    ("cuda:0",3),
+    ("cuda:0",4),
+    ("cpu",2),
+    ("cpu",3),
+    ("cpu",4),
+]
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "padding", [2, 3, 4])
+@pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
 def test_HEALPixPadding(device, padding):
+    print(f"TESTING padding {padding}")
+    num_faces = 12 # standard for healpix
+    batch_size = 2 
     pad_func = HEALPixPadding(padding)
 
     hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
+    c_size = torch.randint(low=3, high=7, size=(1,)).tolist()
     hw_size = np.asarray(hw_size + hw_size)
-    # dimes are F, H, W
-    # F = 12, and H = W
-    tensor_size = (2, 12, *hw_size)
+
+    # dims are B * F, C, H, W
+    # F = 12, and H == W
+    # HEALPixPadding expects a folded tensor so fold dims here
+    tensor_size = (batch_size * num_faces, *c_size, *hw_size)
     invar = torch.rand(tensor_size, device=device)
 
-    # Healpix scales as ~N^1/2
-    scale = math.ceil(padding**0.5)
-    out_size = (2, 12, *(hw_size * scale))
+    # Healpix adds the padding size to each side
+    hw_padded_size = hw_size + (2 * padding)
+    out_size = (batch_size * num_faces, *c_size, *hw_padded_size)
 
     outvar = pad_func(invar)
-    assert outvar.size == out_size
+    assert outvar.shape == out_size
 
+HEALPixLayer_testdata = [
+    ("cuda:0",2),
+    ("cuda:0",3),
+    ("cuda:0",4),
+    ("cpu",2),
+    ("cpu",3),
+    ("cpu",4),
+]
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"], "multiplier", [2, 3, 4])
+@pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
 def test_HEALPixLayer(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 

@@ -51,6 +51,7 @@ class BaseMSE(th.nn.MSELoss):
     def forward(self, prediction, target, average_channels=True):
         """
         Forward pass of the base MSE class
+        Tensors are expected to be in the shape [N, B, F, C, H, W]
 
         Parameters
         ----------
@@ -61,6 +62,9 @@ class BaseMSE(th.nn.MSELoss):
         average_channels: bool, optional
             whether the mean of the channels should be taken
         """
+        if not (prediction.ndim == 6 and target.ndim == 6):
+            raise AssertionError("Expected predictions to have 6 dimensions")
+
         d = ((target - prediction) ** 2).mean(dim=(0, 1, 2, 4, 5))
         if average_channels:
             return th.mean(d)
@@ -102,6 +106,7 @@ class WeightedMSE(th.nn.MSELoss):
     def forward(self, prediction, target, average_channels=True):
         """
         Forward pass of the WeightedMSE pass
+        Tensors are expected to be in the shape [N, B, F, C, H, W]
 
         Parameters
         ----------
@@ -112,6 +117,8 @@ class WeightedMSE(th.nn.MSELoss):
         average_channels: bool, optional
             whether the mean of the channels should be taken
         """
+        if not (prediction.ndim == 6 and target.ndim == 6):
+            raise AssertionError("Expected predictions to have 6 dimensions")
 
         d = ((target - prediction) ** 2).mean(dim=(0, 1, 2, 4, 5)) * self.loss_weights
         if average_channels:

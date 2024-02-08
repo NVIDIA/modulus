@@ -12,4 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: modulus.metrics.climate.healpix_loss.BaseMSE 
+_target_: modulus.metrics.climate.healpix_loss.OceanMSE
+
+lsm_file: /invariants/hpx32_1950-2022_3h_sst-only.zarr
+

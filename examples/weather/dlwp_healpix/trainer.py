@@ -107,7 +107,7 @@ class Trainer():
             raise NotImplementedError(
                 'Attribute error encountered in call to criterio.setup(). \
                 Could be that criterion is not compatable with custom loss dlwp training. See \
-                "modulus/metrics/climate/dlwp_loss.py" for proper criterion implementation examples.'
+                "modulus/metrics/climate/healpix_loss.py" for proper criterion implementation examples.'
             )
 
         # opportunity for custom loss classes to get everything in order 
