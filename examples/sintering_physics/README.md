@@ -1,4 +1,19 @@
 
+## Setup with Modulus package 
+
+- Download Modulus, make or install 
+
+- Find the matching torch-scatter version with torch: pip install torch-scatter -f https://data.pyg.org/whl/torch-2.2.0%2Bcu121/torch_scatter-2.1.2%2Bpt22cu121-cp311-cp311-linux_x86_64.whl
+- pip install tensorflow
+
+  - test version: tensorflow-2.15.0.post1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+
+
+- Dev: 
+
+  - install pytest 
+  - pip install importlib-metadata
+
 ## Setup
 download torch_scatter from https://data.pyg.org/whl/. 
 In a conda env with pytorch / cuda available, run:

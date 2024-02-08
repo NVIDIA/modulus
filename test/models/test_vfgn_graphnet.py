@@ -22,12 +22,15 @@ import random
 import numpy as np
 
 # can be commented out when test in Modulus installation
-import sys
-sys.path.append("/home/chenle/codes/sintering/modulus/")
-
+# import sys
+# sys.path.append("/home/chenle/codes/sintering/modulus24/")
 from modulus.models.vfgn.graph_network_modules import MLPNet
 from modulus.models.vfgn.graph_network_modules import EncodeProcessDecode
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
+
+# from modulus.models.vfgn.graph_network_modules import MLPNet
+# from modulus.models.vfgn.graph_network_modules import EncodeProcessDecode
+# from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 from . import common
 
 
