@@ -194,6 +194,7 @@ class HEALPixPadding(th.nn.Module):
     def forward(self, data: th.Tensor) -> th.Tensor:
         """
         Pad each face consistently with its according neighbors in the HEALPix (see ordering and neighborhoods above).
+        Assumes the Tensor is folded
 
         Parmaters
         ---------
@@ -550,11 +551,17 @@ class HEALPixLayer(th.nn.Module):
         super().__init__()
         layers = []
 
-        enable_nhwc = kwargs["enable_nhwc"]
-        del kwargs["enable_nhwc"]
+        if "enable_nhwc" in kwargs:
+            enable_nhwc = kwargs["enable_nhwc"]
+            del kwargs["enable_nhwc"]
+        else:
+            enable_nhwc = False
 
-        enable_healpixpad = kwargs["enable_healpixpad"]
-        del kwargs["enable_healpixpad"]
+        if "enable_healpixpad" in kwargs:
+            enable_healpixpad = kwargs["enable_healpixpad"]
+            del kwargs["enable_healpixpad"]
+        else:
+            enable_healpixpad = False
 
         # Define a HEALPixPadding layer if the given layer is a convolution layer
         try:
