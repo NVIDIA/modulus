@@ -157,7 +157,9 @@ class ERA5HDF5Datapipe(Datapipe):
         self.logger.info(f"Getting file stats from {self.data_paths[0]}")
         with h5py.File(self.data_paths[0], "r") as f:
             # truncate the dataset to avoid out-of-range sampling
-            data_samples_per_year = f["fields"].shape[0] - self.num_steps * self.stride
+            data_samples_per_year = (
+                (f["fields"].shape[0] - self.num_steps * self.stride) // self.world_size
+            ) * self.world_size
             self.img_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them
