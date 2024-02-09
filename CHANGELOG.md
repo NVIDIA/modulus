@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Consistent handling of single GPU runs in DistributedManager
+
 ### Security
 
 ### Dependencies
