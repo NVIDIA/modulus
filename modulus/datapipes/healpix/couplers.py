@@ -58,8 +58,8 @@ class TrailingAverageCoupler:
         presteps: int = 0,
         input_time_dim: int = 2,
         output_time_dim: int = 2,
-        averaging_window: str = "24H",
-        input_times: Sequence = [pd.Timedelta("24h"), pd.Timedelta("48H")],
+        averaging_window: str = "24h",
+        input_times: Sequence = [pd.Timedelta("24h"), pd.Timedelta("48h")],
         prepared_coupled_data=True,
     ):
         # extract important meta data from ds

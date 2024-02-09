@@ -22,7 +22,7 @@ import pandas as pd
 import torch
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf
-from timeseries_dataset import TimeSeriesDataset
+from .timeseries_dataset import TimeSeriesDataset
 
 import modulus.datapipes.healpix.couplers as couplers
 from modulus.datapipes.datapipe import Datapipe
@@ -64,10 +64,10 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset, Datapipe):
         Number of time steps in the output array, default 1
     data_time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3H"
+        original data time series, default "3h"
     time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6H"
+        time steps, default "6h"
     gap: Union[int, str], optional
         either integer hours or a str interpretable by pandas: time step between the last input time and
         the first output time. Defaults to `time_step`.
@@ -96,8 +96,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset, Datapipe):
         input_time_dim: int = 1,
         presteps: int = 0,
         output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3H",
-        time_step: Union[int, str] = "6H",
+        data_time_step: Union[int, str] = "3h",
+        time_step: Union[int, str] = "6h",
         gap: Union[int, str, None] = None,
         batch_size: int = 32,
         drop_last: bool = False,
