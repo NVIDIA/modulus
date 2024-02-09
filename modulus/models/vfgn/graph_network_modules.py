@@ -41,6 +41,7 @@ except ImportError:
     )
 
 from torch.utils.checkpoint import checkpoint
+from torch import Tensor
 
 from dataclasses import dataclass
 
@@ -517,11 +518,11 @@ class EncodeProcessDecode(Module):
         receivers/ senders:
             Torch tensor, list of node indexes, shape: (batch_size,  edge_list_size:[list of node indexes])
         """
-        print("test_encodeProcessDecode_forward shape node/edge_attr:", x.shape, edge_attr.shape)
-        print(x)
-        print("receivers: ", receivers.shape, senders.shape)
-        print("receivers: ", receivers)
-        print("senders: ", senders)
+        # print("test_encodeProcessDecode_forward shape node/edge_attr:", x.shape, edge_attr.shape)
+        # print(x)
+        # print("receivers: ", receivers.shape, senders.shape)
+        # print("receivers: ", receivers)
+        # print("senders: ", senders)
 
         x, edge_attr = self._encoder_network(x, edge_attr)
 
@@ -544,9 +545,9 @@ class EncodeProcessDecode(Module):
             receivers = receivers.to(p_device)
             senders = senders.to(p_device)
 
-            print("checkpoint input shape: ", )
-            print("\n processor_network_k ...  x/ edge_attr: ", pre_x.shape, pre_edge_attr.shape)
-            print(" shape of receivers, senders: ", receivers.shape, senders.shape)
+            # print("checkpoint input shape: ", )
+            # print("\n processor_network_k ...  x/ edge_attr: ", pre_x.shape, pre_edge_attr.shape)
+            # print(" shape of receivers, senders: ", receivers.shape, senders.shape)
             diff_x, diff_edge_attr, receivers, senders = checkpoint(processor_network_k, pre_x, pre_edge_attr,
                                                                     receivers, senders)
 
@@ -556,17 +557,67 @@ class EncodeProcessDecode(Module):
             if i % n_inter == 0:
                 j += 1
 
-        print("output pre_x : ", pre_x.shape)
+        # print("output pre_x : ", pre_x.shape)
         x = self._decoder_network(pre_x.to(origin_device))
-        print("output size x : ", x.shape)
+        # print("output size x : ", x.shape)
 
         return x
 
 
-class LearnedSimulator(torch.nn.Module):
-    def __init__(self, num_dimensions, num_seq, boundaries, num_particle_types, particle_type_embedding_size,
-                 normalization_stats, graph_mode='radius', connectivity_param=0.015):
-        super(LearnedSimulator, self).__init__()
+class LearnedSimulator(Module):
+    """
+    Construct the Simulator model architecture
+
+    Parameters
+    ----------
+    num_dimensions : int
+        Number of dimensions to make the prediction
+    num_seq : int
+        Number of sintering steps
+    boundaries : list[list[float]]
+        boundary value that the object is placed/ normalized in,
+        i.e.[[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]
+    num_particle_types : int
+        Number of types to differentiate the different nodes, i.e. fixed/ moving nodes
+    particle_type_embedding_size: int
+        positional embedding dimension with different particle types,
+        in torch.nn.Embedding()
+    normalization_stats: dict{list[float]}
+        Stored in metadata.json
+        {'acceleration': acceleration_stats, 'velocity': velocity_stats, 'context': context_stats}
+    graph_mode : str, optional
+    connectivity_param: float
+        Distance to normalize the displacement between nodes
+
+    Example
+    -------
+    >>> model = modulus.models.graph_network.LearnedSimulator(
+    ... num_dimensions=3*5, # metadata['dim'] * PREDICT_LENGTH
+    ... num_seq=2,
+    ... boundaries=128)
+
+    >>> input = torch.randn([5193, 128]) #(N, C)
+    >>> output = model(input)
+    >>> output.size()
+    torch.Size([5193, 128])
+    ----
+    """
+
+    def __init__(self,
+                 num_dimensions : int = 3,
+                 num_seq : int = 5,
+                 boundaries : list[list[float]] = None,
+                 num_particle_types : int = 3,
+                 particle_type_embedding_size : int = 16,
+                 normalization_stats : map = None,
+                 graph_mode : str = 'radius',
+                 connectivity_param : float = 0.015,
+                 ):
+        assert (
+                num_dimensions >= 0 and num_seq >= 3
+        ), "Invalid arch params - LearnedSimulator"
+        super().__init__(meta=MetaData(name="vfgn_simulator"))
+
         # network parameters
         self._latent_size = 128
         self._mlp_hidden_size = 128
@@ -720,9 +771,9 @@ class LearnedSimulator(torch.nn.Module):
         # 2. Edge features
         edge_features = []
         # Relative displacement and distances normalized to radius
-        normalized_relative_displacements = (most_recent_position.index_select(0,
-                                                                               senders) - most_recent_position.index_select(
-            0, receivers)) / self._connectivity_param
+        print()
+        normalized_relative_displacements = (most_recent_position.index_select(0, senders) -
+                                             most_recent_position.index_select(0, receivers)) / self._connectivity_param
         edge_features.append(normalized_relative_displacements)
         normalized_relative_distances = torch.norm(normalized_relative_displacements, dim=-1, keepdim=True)
         edge_features.append(normalized_relative_distances)
@@ -801,12 +852,44 @@ class LearnedSimulator(torch.nn.Module):
         normalized_accelerations = normalized_accelerations.float()
         return normalized_accelerations
 
-    def inference(self, position_sequence, n_particles_per_example, n_edges_per_example, senders, receivers,
-                  predict_length,
-                  global_context=None, particle_types=None):
+    def inference(
+            self,
+            position_sequence: Tensor,
+            n_particles_per_example,
+            n_edges_per_example,
+            senders,
+            receivers,
+            predict_length,
+            global_context=None,
+            particle_types=None
+    ) -> Tensor:
         """
-        Encoder & Decoder processes with graph neural network
+        Inference with the LearnedSimulator network
+
+        Args:
+        position_sequence: Model inference input tensor
+            torch.Tensor([node_cnt, input_step, pred_dim] ,)
+            i.e. torch.Size([1394, 5, 3])
+
+        n_particles_per_example: torch.Size([1]), [tf.shape(pos)[0]]
+            torch.Tensor([node_cnt], dtype=torch.int32)
+            i.e. tensor([1394])
+        n_edges_per_example: torch.Size([1]), [tf.shape(context['senders'])[0]]
+            torch.Tensor([edge_cnt], dtype=torch.int32)
+            i.e. tensor([8656])
+
+        senders: torch.Size([edge_cnt], dtype=torch.int32)
+            contains node index
+        receivers: torch.Size([edge_cnt], dtype=torch.int32)
+            contains node index
+        predict_length: prediction steps, int
+            i.e. 1
+        particle_types: torch.Tensor([node_cnt], dtype=torch.int32)
+            torch.Size([1394])
+        global_context: torch.Tensor([sim_step, feat_dim], dtype=torch.float)
+            i.e. torch.Size([34, 1])
         """
+
         input_graph = self.EncodingFeature(position_sequence, n_particles_per_example, n_edges_per_example,
                                            senders, receivers, global_context,
                                            particle_types)
@@ -817,25 +900,51 @@ class LearnedSimulator(torch.nn.Module):
 
         return next_position
 
-    def forward(self, next_positions, position_sequence_noise, position_sequence,
-                n_particles_per_example, n_edges_per_example, senders, receivers, predict_length,
-                global_context=None, particle_types=None):
+    def forward(
+            self,
+            next_positions: Tensor,
+            position_sequence_noise: Tensor,
+            position_sequence: Tensor,
+            n_particles_per_example,
+            n_edges_per_example,
+            senders: Tensor,
+            receivers: Tensor,
+            predict_length,
+            global_context=None,
+            particle_types=None,
+    ) -> Tensor:
         """
-        # PyTorch version main training module
-
-        Original TF implementation explanation
-        Produces normalized and predicted acceleration targets.
+        Training step with the LearnedSimulator network,
+        Produces normalized and predicted nodal acceleration.
 
         Args:
-        next_position: Tensor of shape [num_particles_in_batch, num_dimensions]
-            with the positions the model should output given the inputs.
+        next_position: Model prediction target tensor
+            torch.Tensor([node_cnt, pred_dim] ,)
+            i.e. torch.Size([1394, 3])
         position_sequence_noise: Tensor of the same shape as `position_sequence`
             with the noise to apply to each particle.
-        position_sequence, n_node, global_context, particle_types: Inputs to the
-            model as defined by `_build`.
+            torch.Tensor([node_cnt, input_step, pred_dim] ,)
+        position_sequence: Model inference input tensor
+            torch.Tensor([node_cnt, input_step, pred_dim] ,)
+            i.e. torch.Size([1394, 5, 3])
 
+        n_particles_per_example: torch.Size([1]), [tf.shape(pos)[0]]
+            i.e. tensor([1394])
+        n_edges_per_example: torch.Size([1]), [tf.shape(context['senders'])[0]]
+            i.e. tensor([8656])
+        senders: torch.Size([edge_cnt], dtype=torch.int32)
+            contains node index
+        receivers: torch.Size([edge_cnt], dtype=torch.int32)
+            contains node index
+        predict_length: prediction steps, int
+            i.e. 1
+        particle_types: torch.Tensor([node_cnt], dtype=torch.int32)
+            torch.Size([1394])
+        global_context: torch.Tensor([sim_step, feat_dim], dtype=torch.float)
+            i.e. torch.Size([34, 1])
+            
         Returns:
-        Tensors of shape [num_particles_in_batch, num_dimensions] with the
+            Tensors of shape [num_particles_in_batch, num_dimensions] with the
             predicted and target normalized accelerations.
         """
 
@@ -843,8 +952,10 @@ class LearnedSimulator(torch.nn.Module):
         noisy_position_sequence = position_sequence + position_sequence_noise
 
         # Perform the forward pass with the noisy position sequence.
-        input_graph = self.EncodingFeature(noisy_position_sequence, n_particles_per_example, n_edges_per_example,
-                                           senders, receivers, global_context,
+        input_graph = self.EncodingFeature(noisy_position_sequence,
+                                           n_particles_per_example, n_edges_per_example,
+                                           senders, receivers,
+                                           global_context,
                                            particle_types)
 
         predicted_normalized_accelerations = self._graph_network(*input_graph)

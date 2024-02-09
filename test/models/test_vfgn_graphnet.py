@@ -136,7 +136,7 @@ def test_mlpnet_deploy(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_encodeProcessDecode_forward(device):
-    """Test EncodeProcessDecode forward pass"""
+    """Test EncodeProcessDecode forward pass, model load, save"""
 
     torch.manual_seed(0)
     # Construct EncodeProcessDecode model
@@ -149,9 +149,7 @@ def test_encodeProcessDecode_forward(device):
         output_size=3,
     ).to(device)
 
-    # todo: add batch test case
     # random init node attribute tensor, edge attribute tensor
-    # shape: (batch_size, node/edge_number, feature_size)
     # node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
     # edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
     node_cnt, node_feat_size = 5000, 61
@@ -161,7 +159,6 @@ def test_encodeProcessDecode_forward(device):
     invar_edge_attr = torch.randn(edge_cnt, edge_feat_size).to(device)
 
     # random init sender, receiver index list: int
-    # shape: (batch_size, index_list_size:[list of node indexes])
     invar_receivers = torch.randint(node_cnt, (edge_cnt,)).to(device)
     invar_senders = torch.randint(node_cnt, (edge_cnt,)).to(device)
 
@@ -174,7 +171,7 @@ def test_encodeProcessDecode_forward(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_encodeProcessDecode_constructor(device):
-    """Test EncodeProcessDecode constructor options"""
+    """Test EncodeProcessDecode constructor options - in/out dimensions match"""
 
     # Define dictionary of constructor args
     arg_list = []
@@ -183,7 +180,6 @@ def test_encodeProcessDecode_constructor(device):
             "latent_size": 128,
             "mlp_hidden_size": 128,
             "mlp_num_hidden_layers": 2,
-            "num_fno_layers": 2,
             "num_message_passing_steps": random.randint(1, 11),
             "output_size": 3,
         }
@@ -192,19 +188,19 @@ def test_encodeProcessDecode_constructor(device):
     for kw_args in arg_list:
         # Construct FC model
         model = EncodeProcessDecode(**kw_args).to(device)
-        bsize = random.randint(1, 4)
 
-        x_size = random.randint(1, 10000)
-        invar_x = torch.randn(bsize, x_size, 128).to(device)
-        invar_edge_attr = torch.randn(random.randint(1, 10000), 128).to(device)
-        sender_size = random.randint(1, 10000)
-        invar_receivers = torch.randn(bsize, sender_size).to(device)
-        invar_senders = torch.randn(bsize, sender_size).to(device)
+        node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
+        edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
+        invar_node_attr = torch.randn(node_cnt, node_feat_size).to(device)
+        invar_edge_attr = torch.randn(edge_cnt, edge_feat_size).to(device)
 
-        invar = (invar_x, invar_edge_attr, invar_receivers, invar_senders)
+        invar_receivers = torch.randint(node_cnt, (edge_cnt,)).to(device)
+        invar_senders = torch.randint(node_cnt, (edge_cnt,)).to(device)
+
+        invar = (invar_node_attr, invar_edge_attr, invar_receivers, invar_senders)
 
         outvar = model(*invar)
-        assert outvar.shape == (bsize, x_size, 3)
+        assert outvar.shape == (node_cnt, 3)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -219,29 +215,31 @@ def test_encodeProcessDecode_optims(device):
             output_size=3,
         ).to(device)
 
-        bsize = random.randint(1, 4)
-        invar_x = torch.randn(bsize, random.randint(1, 10000), 128).to(device)
-        invar_edge_attr = torch.randn(random.randint(1, 10000), 128).to(device)
-        sender_size = random.randint(1, 10000)
-        invar_receivers = torch.randn(bsize, sender_size).to(device)
-        invar_senders = torch.randn(bsize, sender_size).to(device)
-        invar = (invar_x, invar_edge_attr, invar_receivers, invar_senders)
+        node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
+        edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
+
+        invar_node_attr = torch.randn(node_cnt, node_feat_size).to(device)
+        invar_edge_attr = torch.randn(edge_cnt, edge_feat_size).to(device)
+        invar_receivers = torch.randint(node_cnt, (edge_cnt,)).to(device)
+        invar_senders = torch.randint(node_cnt, (edge_cnt,)).to(device)
+
+        invar = (invar_node_attr, invar_edge_attr, invar_receivers, invar_senders)
 
         return model, invar
 
     # Ideally always check graphs first
     model, invar = setup_model()
-    assert common.validate_cuda_graphs(model, (invar,))
+    assert common.validate_cuda_graphs(model, (*invar,))
 
     # Check JIT
     model, invar = setup_model()
-    assert common.validate_jit(model, (invar,))
+    assert common.validate_jit(model, (*invar,))
     # Check AMP
     model, invar = setup_model()
-    assert common.validate_amp(model, (invar,))
+    assert common.validate_amp(model, (*invar,))
     # Check Combo
     model, invar = setup_model()
-    assert common.validate_combo_optims(model, (invar,))
+    assert common.validate_combo_optims(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -264,15 +262,17 @@ def test_encodeProcessDecode_checkpoint(device):
         output_size=3,
     ).to(device)
 
-    bsize = random.randint(1, 2)
-    invar_x = torch.randn(bsize, random.randint(1, 10000), 128).to(device)
-    invar_edge_attr = torch.randn(random.randint(1, 10000), 128).to(device)
-    sender_size = random.randint(1, 10000)
-    invar_receivers = torch.randn(bsize, sender_size).to(device)
-    invar_senders = torch.randn(bsize, sender_size).to(device)
-    invar = (invar_x, invar_edge_attr, invar_receivers, invar_senders)
+    node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
+    edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
+    invar_node_attr = torch.randn(node_cnt, node_feat_size).to(device)
+    invar_edge_attr = torch.randn(edge_cnt, edge_feat_size).to(device)
 
-    assert common.validate_checkpoint(model_1, model_2, (invar,))
+    invar_receivers = torch.randint(node_cnt, (edge_cnt,)).to(device)
+    invar_senders = torch.randint(node_cnt, (edge_cnt,)).to(device)
+
+    invar = (invar_node_attr, invar_edge_attr, invar_receivers, invar_senders)
+
+    assert common.validate_checkpoint(model_1, model_2, (*invar,))
 
 
 @common.check_ort_version()
@@ -287,16 +287,17 @@ def test_encodeProcessDecode_deploy(device):
         output_size=3,
     ).to(device)
 
-    bsize = random.randint(1, 2)
-    invar_x = torch.randn(bsize, random.randint(1, 10000), 128).to(device)
-    invar_edge_attr = torch.randn(random.randint(1, 10000), 128).to(device)
-    sender_size = random.randint(1, 10000)
-    invar_receivers = torch.randn(bsize, sender_size).to(device)
-    invar_senders = torch.randn(bsize, sender_size).to(device)
-    invar = (invar_x, invar_edge_attr, invar_receivers, invar_senders)
+    node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
+    edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
+    invar_node_attr = torch.randn(node_cnt, node_feat_size).to(device)
+    invar_edge_attr = torch.randn(edge_cnt, edge_feat_size).to(device)
 
-    assert common.validate_onnx_export(model, (invar,))
-    assert common.validate_onnx_runtime(model, (invar,))
+    invar_receivers = torch.randint(node_cnt, (edge_cnt,)).to(device)
+    invar_senders = torch.randint(node_cnt, (edge_cnt,)).to(device)
+
+    invar = (invar_node_attr, invar_edge_attr, invar_receivers, invar_senders)
+
+    assert common.validate_onnx_runtime(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -323,36 +324,38 @@ def test_simulator_forward(device):
     normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
     model = LearnedSimulator(
         num_dimensions=3,
-        num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
+        num_seq=5,  # the default implementation on INPUT_SEQUENCE_LENGTH >= 3
         boundaries=torch.DoubleTensor([[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]), # torch.DoubleTensor(metadata['bounds'])
         num_particle_types=3,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
     ).to(device)
 
+    # initialize node number, simulation steps s
     bsize = 2
-    particle_num = random.randint(1, 10000)
+    node_cnt = random.randint(1, 10000)
+    edge_cnt = random.randint(1, 10000)
     sim_steps = random.randint(1, 100)
 
-    invar_next_positions = torch.randn(bsize, particle_num, 3).to(device)
-    invar_position_sequence_noise = torch.randn(bsize, particle_num, sim_steps, 3).to(device)
-    invar_position_sequence = torch.randn(bsize, particle_num, sim_steps, 3).to(device)
-    invar_n_particles = torch.tensor([random.randint(1, 10000)]).to(device)
-    invar_n_edges = torch.tensor([random.randint(1, 10000)]).to(device)
-    invar_senders = torch.randn(bsize, particle_num*8).to(device)
-    invar_receivers = torch.randn(bsize, particle_num*8).to(device)
+    invar_next_positions = torch.randn(bsize, node_cnt, 3).to(device)
+    invar_position_sequence_noise = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
+    invar_position_sequence = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
+
+    invar_n_particles = torch.tensor([node_cnt]).to(device)
+    invar_n_edges = torch.tensor([edge_cnt]).to(device)
+
+    invar_receivers = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
+    invar_senders = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
+
     invar_predict_length = random.randint(1, 5)
     invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-    invar_particle_types = torch.randn(bsize, particle_num).to(device)
+    invar_particle_types = torch.randint(3, (bsize, node_cnt)).to(device)
 
-    # def forward(self, next_positions, position_sequence_noise, position_sequence,
-    #                 n_particles_per_example, n_edges_per_example, senders, receivers, predict_length,
-    #                 global_context=None, particle_types=None)
     invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
              invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
              invar_global_context, invar_particle_types)
 
-    assert common.validate_forward_accuracy(model, (invar,))
+    assert common.validate_forward_accuracy(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
