@@ -51,7 +51,7 @@ class Mesh_ReducedTrainer:
         )
 
         self.model = Mesh_Reduced(
-            C.num_input_features, C.num_edge_features, C.num_output_features
+            C.num_input_features, C.num_edge_features, C.num_output_features, knn_every_step = C.knn_every_step
         )
 
         if C.jit:

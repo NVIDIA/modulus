@@ -81,8 +81,12 @@ class Mesh_Reduced(torch.nn.Module):
                 hidden_dim_node_decoder: int = 128,
                 num_layers_node_decoder: int = 2,
                 k: int = 3,
-				aggregation='mean'):
+                knn_every_step: bool = False,
+				aggregation:str ='mean'):
         super(Mesh_Reduced, self).__init__()
+        self.knn_every_step = knn_every_step
+        self.knn_encoder_already = False
+        self.knn_decoder_already = False
         self.encoder_processor = MeshGraphNet(input_dim_nodes, input_dim_edges, output_encode_dim, processor_size, "relu", num_layers_node_processor, num_layers_edge_processor,
 										hidden_dim_processor, hidden_dim_node_encoder, num_layers_node_encoder, hidden_dim_edge_encoder,
 										num_layers_edge_encoder, hidden_dim_node_decoder,num_layers_node_decoder,aggregation)
@@ -106,6 +110,14 @@ class Mesh_Reduced(torch.nn.Module):
         y = torch_scatter.scatter(x[x_idx] * weights, y_idx, 0, dim_size=pos_y.size(0), reduce='sum')
         y = y / torch_scatter.scatter(weights, y_idx, 0, dim_size = pos_y.size(0), reduce='sum')
 
+        return y.float(), x_idx, y_idx, weights
+    
+    def knn_interpolate_fast(self, x: torch.Tensor, pos_x: torch.Tensor, pos_y:torch.Tensor, 
+                        weights: torch.Tensor, x_idx: torch.Tensor, y_idx: torch.Tensor):
+
+        y = torch_scatter.scatter(x[x_idx] * weights, y_idx, 0, dim_size=pos_y.size(0), reduce='sum')
+        y = y / torch_scatter.scatter(weights, y_idx, 0, dim_size = pos_y.size(0), reduce='sum')
+
         return y.float()
 	
 	
@@ -113,16 +125,41 @@ class Mesh_Reduced(torch.nn.Module):
     def encode(self, x,  edge_features, graph, position_mesh, position_pivotal):
         x = self.encoder_processor(x, edge_features, graph)
         x = self.PivotalNorm(x)
+        nodes_index = torch.arange(graph.batch_size).to(x.device)
+        batch_mesh = nodes_index.repeat_interleave(graph.batch_num_nodes())
+        position_mesh_batch = position_mesh.repeat(graph.batch_size,1)
+        position_pivotal_batch =  position_pivotal.repeat(graph.batch_size,1)
+        batch_pivotal = nodes_index.repeat_interleave(torch.tensor([len(position_pivotal)]*graph.batch_size).to(x.device))
         
-        
-        x = self.knn_interpolate(x=x,pos_x=position_mesh,pos_y=position_pivotal)
+        if self.knn_every_step == True:
+            #x, _, _, _ = self.knn_interpolate(x=x,pos_x=position_mesh,pos_y=position_pivotal)
+            x, _, _, _ = self.knn_interpolate(x=x,pos_x=position_mesh_batch,pos_y=position_pivotal_batch,batch_x=batch_mesh,batch_y=batch_pivotal)
+        elif self.knn_every_step == False and self.knn_encoder_already == False:
+            x, self.x_idx_encode, self.y_idx_encode, self.weights_encode = self.knn_interpolate(x=x,pos_x=position_mesh_batch,pos_y=position_pivotal_batch)
+            self.knn_encoder_already = True
+        elif self.knn_every_step == False and self.knn_encoder_already == True:
+            x = self.knn_interpolate_fast(x=x,pos_x=position_mesh_batch,pos_y=position_pivotal_batch,weights=self.weights_encode,x_idx=self.x_idx_encode,y_idx=self.y_idx_encode)
+
         
 		
         return x
 
     def decode(self, x, edge_features, graph, position_mesh, position_pivotal):
+
+        nodes_index = torch.arange(graph.batch_size).to(x.device)
+        batch_mesh = nodes_index.repeat_interleave(graph.batch_num_nodes())
+        position_mesh_batch = position_mesh.repeat(graph.batch_size,1)
+        position_pivotal_batch =  position_pivotal.repeat(graph.batch_size,1)
+        batch_pivotal = nodes_index.repeat_interleave(torch.tensor([len(position_pivotal)]*graph.batch_size).to(x.device))
         
-        x = self.knn_interpolate(x=x,pos_x=position_pivotal,pos_y=position_mesh)
+        if self.knn_every_step == True:
+           x, _, _, _ = self.knn_interpolate(x=x,pos_x=position_pivotal_batch,pos_y=position_mesh_batch,batch_x=batch_pivotal,batch_y=batch_mesh)
+        elif self.knn_every_step == False and self.knn_decoder_already == False:
+            x, self.x_idx_decode, self.y_idx_decode, self.weights_decode = self.knn_interpolate(x=x,pos_x=position_pivotal_batch,pos_y=position_mesh_batch)
+            self.knn_decoder_already = True
+        elif self.knn_every_step == False and self.knn_decoder_already == True:
+            x = self.knn_interpolate_fast(x=x,pos_x=position_pivotal_batch,pos_y=position_mesh_batch,weights=self.weights_decode,x_idx=self.x_idx_decode,y_idx=self.y_idx_decode)
+
 
      
         x = self.decoder_processor(x, edge_features, graph)

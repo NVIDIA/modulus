@@ -14,8 +14,8 @@ class Constants(BaseModel):
     mesh_dir: str = "dataset/meshPosition_all.txt"
 
     # training configs for encoder-decoder model
-    batch_size: int = 1 # GNN training batch
-    epochs: int = 200001
+    batch_size: int = 10 # GNN training batch
+    epochs: int = 301
     num_training_samples: int = 400
     num_training_time_steps: int = 300
     lr: float = 0.0001
@@ -23,10 +23,12 @@ class Constants(BaseModel):
     num_input_features: int = 3
     num_output_features: int = 3
     num_edge_features: int = 3
+    knn_every_step: bool = False
     ckpt_path: str = "checkpoints/new_encoding"
     ckpt_name: str = "model.pt"
 
     # training configs for sequence model
+    epochs_sequence: int = 200001
     sequence_dim: int = 768
     sequence_context_dim: int = 6
     ckpt_sequence_path: str = "checkpoints/new_sequence"

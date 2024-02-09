@@ -25,7 +25,7 @@ class Sequence_Trainer:
                  produce_latents = True,  
                  Encoder = None, 
 		         position_mesh = None, 
-		         position_pivotal = None, 
+		         position_pivotal = None,
                  rank_zero_logger = None):
         self.dist = dist
         dataset_train = LatentDataset(
@@ -248,7 +248,7 @@ if __name__ == "__main__":
     rank_zero_logger.info("Training started...")
     
     
-    for epoch in range(trainer.epoch_init, C.epochs):
+    for epoch in range(trainer.epoch_init, C.epochs_sequence):
         n_batch = 0.0
         loss_total = 0.0
         for lc in tqdm(trainer.dataloader):
