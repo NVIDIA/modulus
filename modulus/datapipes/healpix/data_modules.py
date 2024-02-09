@@ -28,12 +28,12 @@ import torch.distributed as dist
 import xarray as xr
 
 # Internal modules
-from coupled_timeseries_dataset import CoupledTimeSeriesDataset
+from .coupled_timeseries_dataset import CoupledTimeSeriesDataset
 from dask.diagnostics import ProgressBar
 
 # External modules
 from omegaconf import DictConfig
-from timeseries_dataset import TimeSeriesDataset
+from .timeseries_dataset import TimeSeriesDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -390,10 +390,10 @@ class TimeSeriesDataModule:
         Number of time steps in the output array, default 1
     data_time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3H"
+        original data time series, default "3h"
     time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6H"
+        time steps, default "6h"
     gap: Union[int, str], optional
         either integer hours or a str interpretable by pandas: time step between the last input time and
         the first output time. Defaults to `time_step`.
@@ -436,8 +436,8 @@ class TimeSeriesDataModule:
         presteps: int = 0,
         input_time_dim: int = 1,
         output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3H",
-        time_step: Union[int, str] = "6H",
+        data_time_step: Union[int, str] = "3h",
+        time_step: Union[int, str] = "6h",
         gap: Union[int, str, None] = None,
         shuffle: bool = True,
         add_insolation: bool = False,
@@ -811,10 +811,10 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         Number of time steps in the output array, default 1
     data_time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3H"
+        original data time series, default "3h"
     time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6H"
+        time steps, default "6h"
     gap: Union[int, str], optional
         either integer hours or a str interpretable by pandas: time step between the last input time and
         the first output time. Defaults to `time_step`.
@@ -860,8 +860,8 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         presteps: int = 0,
         input_time_dim: int = 1,
         output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3H",
-        time_step: Union[int, str] = "6H",
+        data_time_step: Union[int, str] = "3h",
+        time_step: Union[int, str] = "6h",
         gap: Union[int, str, None] = None,
         shuffle: bool = True,
         add_insolation: bool = False,

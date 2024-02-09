@@ -37,9 +37,9 @@ constants:
   topography: z
 input_time_dim: 2
 output_time_dim: 4
-data_time_step: 3H
-time_step: 6H
-gap: 6H
+data_time_step: 3h
+time_step: 6h
+gap: 6h
 add_insolation: true
 nside: 64
 cube_dim: ${data.nside}
