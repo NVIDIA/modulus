@@ -109,8 +109,9 @@ class MLPNet(Module):
         assert (
                 mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
         ), "Invalid arch params"
-        super().__init__(meta=MetaData())
+        super().__init__(meta=MetaData(name="vfgn_mlpnet"))
 
+        # create cnt = hidden_layer layers
         self.mlp_hidden_size = mlp_hidden_size
         self.lins = []
         if mlp_num_hidden_layers > 1:
@@ -118,20 +119,21 @@ class MLPNet(Module):
                 self.lins.append(Linear(mlp_hidden_size, mlp_hidden_size))
         self.lins = torch.nn.ModuleList(self.lins)
 
+        # create output layer
         self.lin_e = Linear(mlp_hidden_size, output_size)
         self.layer_norm = layer_norm
         self.relu = ReLU()
 
     def dynamic(self, name: str, module_class, *args, **kwargs):
+        """ Use dynamic layer to create 1st layer according to the input node number """
         if not hasattr(self, name):
-            print("call dynamic, MLPnet")
             self.add_module(name, module_class(*args, **kwargs))
         return getattr(self, name)
 
     def forward(self, x):
         origin_device=x.device
-
         lin_s = self.dynamic('lin_s', Linear, x.shape[-1], self.mlp_hidden_size)
+        print("\n")
         lin_s = lin_s.to(origin_device)
 
         x = lin_s(x)
@@ -170,7 +172,7 @@ class EncoderNet(Module):
         assert (
                 mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0
         ), "Invalid arch params - EncoderNet"
-        super().__init__(meta=MetaData())
+        super().__init__(meta=MetaData(name="vfgn_encoder"))
 
         self._mlp_hidden_size = mlp_hidden_size
         self._mlp_num_hidden_layers = mlp_num_hidden_layers
@@ -228,7 +230,7 @@ class EdgeBlock(Module):
             use_receiver_nodes=True,
             use_sender_nodes=True
     ):
-        super().__init__(meta=MetaData())
+        super().__init__(meta=MetaData(name="vfgn_edgeblock"))
         self.node_dim = node_dim
         self._edge_model = MLPNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size)
 
@@ -298,7 +300,7 @@ class NodeBlock(Module):
             use_received_edges=True,
             use_sent_edges=False
     ):
-        super().__init__(meta=MetaData())
+        super().__init__(meta=MetaData(name="vfgn_nodeblock"))
         self.aggr = aggr
         self.node_dim = node_dim
 
@@ -426,7 +428,7 @@ class DecoderNet(Module):
         assert (
                 mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
         ), "Invalid arch params - DecoderNet"
-        super().__init__(meta=MetaData())
+        super().__init__(meta=MetaData(name="vfgn_decoder"))
         self.mlp = MLPNet(mlp_hidden_size, mlp_num_hidden_layers, output_size, layer_norm=False)
 
     def forward(self, x):
@@ -435,7 +437,7 @@ class DecoderNet(Module):
         return x
 
 
-class EncodeProcessDecode(torch.nn.Module):
+class EncodeProcessDecode(Module):
     """
     Construct the network architecture that consists of Encoder - Processor - Decoder modules
 
@@ -453,6 +455,25 @@ class EncodeProcessDecode(torch.nn.Module):
         Number of output channels
     device_list : list[str], optional
         device to execute the computation
+
+    Example
+    -------
+    >>> #Use EncodeProcessDecode to update the node, edge features
+    >>> model = modulus.models.graph_network.EncodeProcessDecode(
+    ... latent_size=128,
+    ... mlp_hidden_size=128,
+    ... mlp_num_hidden_layers=2,
+    ... num_message_passing_steps=10,
+    ... output_size=3)
+    >>> node_attr = torch.randn([1394, 61]) #(node_cnt, node_feat_sizes)
+    >>> edge_attr = torch.randn([5193, 4]) #(edge_cnt, edge_feat_sizes)
+    >>> invar_receivers = torch.Size([5193]) : int # node index list
+    >>> invar_senders = torch.Size([5193]) : int # node index list
+    >>> invar = (node_attr, edge_attr, invar_receivers, invar_senders)
+    >>> output = model(*invar, )
+    >>> output.size()
+    torch.Size([1394, 3])    #(node_cnt, output_size)
+
     """
 
     def __init__(
@@ -462,8 +483,14 @@ class EncodeProcessDecode(torch.nn.Module):
             mlp_num_hidden_layers,
             num_message_passing_steps,
             output_size,
-            device_list=None):
-        super(EncodeProcessDecode, self).__init__()
+            device_list=None
+    ):
+        if not (latent_size > 0 and mlp_hidden_size > 0 and mlp_num_hidden_layers > 0):
+            raise ValueError("Invalid arch params - EncodeProcessDecode")
+        if not (num_message_passing_steps > 0):
+            raise ValueError("Invalid arch params - EncodeProcessDecode")
+        super().__init__(meta=MetaData(name="vfgn_encoderprocess_decode"))
+
         if device_list is None:
             self.device_list = ['cpu']
         else:
@@ -482,8 +509,21 @@ class EncodeProcessDecode(torch.nn.Module):
         self.device_list=device_list
 
     def forward(self, x, edge_attr, receivers, senders):
+        """
+        x:
+            Torch tensor of node attributes, shape: (batch_size, node_number, feature_size)
+        edge_attr:
+            Torch tensor of edge_attr attributes, shape: (batch_size, edge_number, feature_size)
+        receivers/ senders:
+            Torch tensor, list of node indexes, shape: (batch_size,  edge_list_size:[list of node indexes])
+        """
+        print("test_encodeProcessDecode_forward shape node/edge_attr:", x.shape, edge_attr.shape)
+        print(x)
+        print("receivers: ", receivers.shape, senders.shape)
+        print("receivers: ", receivers)
+        print("senders: ", senders)
+
         x, edge_attr = self._encoder_network(x, edge_attr)
-        print("Check shape of EncodeProcessDecode, x/ edge_attr: ", x.shape, edge_attr.shape)
 
         pre_x = x
         pre_edge_attr = edge_attr
@@ -504,6 +544,9 @@ class EncodeProcessDecode(torch.nn.Module):
             receivers = receivers.to(p_device)
             senders = senders.to(p_device)
 
+            print("checkpoint input shape: ", )
+            print("\n processor_network_k ...  x/ edge_attr: ", pre_x.shape, pre_edge_attr.shape)
+            print(" shape of receivers, senders: ", receivers.shape, senders.shape)
             diff_x, diff_edge_attr, receivers, senders = checkpoint(processor_network_k, pre_x, pre_edge_attr,
                                                                     receivers, senders)
 
@@ -513,7 +556,9 @@ class EncodeProcessDecode(torch.nn.Module):
             if i % n_inter == 0:
                 j += 1
 
+        print("output pre_x : ", pre_x.shape)
         x = self._decoder_network(pre_x.to(origin_device))
+        print("output size x : ", x.shape)
 
         return x
 
