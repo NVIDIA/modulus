@@ -22,7 +22,6 @@ import netCDF4 as nc
 import numpy as np
 import scipy
 import torch
-import xarray as xr
 
 try:
     import nvidia.dali as dali
@@ -36,9 +35,10 @@ except ImportError:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Mapping, Tuple, Union
+from typing import Callable, Iterable, List, Mapping, Tuple, Union
 
 from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
+from modulus.datapipes.climate.utils.invariant import latlon_grid
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
 from modulus.launch.logging import PythonLogger
@@ -98,6 +98,10 @@ class ClimateDataSourceSpec:
     use_cos_zenith: bool, optional
         If True, the cosine zenith angles corresponding to the coordinates of this
         data source will be produced, default False
+    aux_variables : Union[Mapping[str, Callable], None], optional
+        A dictionary mapping strings to callables that accept arguments
+        (timestamps: numpy.ndarray, latlon: numpy.ndarray). These define any auxiliary
+        variables returned from this source.
     num_steps : int, optional
         Number of timesteps to return, by default 1
     stride : int, optional
@@ -116,6 +120,7 @@ class ClimateDataSourceSpec:
         channels: Union[List[int], None] = None,
         variables: Union[List[str], None] = None,
         use_cos_zenith: bool = False,
+        aux_variables: Union[Mapping[str, Callable], None] = None,
         num_steps: int = 1,
         stride: int = 1,
     ):
@@ -131,6 +136,7 @@ class ClimateDataSourceSpec:
         self.channels = channels
         self.variables = variables
         self.use_cos_zenith = use_cos_zenith
+        self.aux_variables = aux_variables if aux_variables is not None else {}
         self.num_steps = num_steps
         self.stride = stride
         self.logger = PythonLogger()
@@ -237,6 +243,7 @@ class ClimateDataSourceSpec:
         self.total_length = self.n_years * self.num_samples_per_year
 
         # Sanity checks
+        print(self.channels, dataset_shape)
         if max(self.channels) >= dataset_shape[1]:
             raise ValueError(
                 f"Provided channel has indexes greater than the number \
@@ -308,9 +315,8 @@ class ClimateDataSourceSpec:
 class ClimateDatapipe(Datapipe):
     """
     A Climate DALI data pipeline. This pipeline loads data from
-    HDF5/NetCDF4 files, which can include latitude, longitude, cosine of the
-    solar zenith angle, geopotential, and land-sea mask if specified. Additionally,
-    it normalizes
+    HDF5/NetCDF4 files. It can also return additional data such as the
+    solar zenith angle for each time step. Additionally, it normalizes
     the data if a statistics file is provided. The pipeline returns a dictionary
     with the following structure, where {name} indicates the name of the data
     source provided:
@@ -321,18 +327,15 @@ class ClimateDatapipe(Datapipe):
       statistics file is provided.
     - `timestamps-{name}`: Tensors of shape (batch_size, num_steps), containing
       timestamps for each timestep in the sequence.
-    - `land_sea_mask`: Tensor of shape (batch_size, 1, height, width),
-      containing the land sea mask if a path to a land sea mask file is
-      provided.
-    - `geopotential`: Tensor of shape (batch_size, 1, height, width), containing
-      geopotential if a path to a geopotential file is provided.
-    - `latlon`: Tensor of shape (batch_size, 2, height, width), containing
-      latitude and longitude meshgrid if specified.
-    - `cos_latlon`: Tensor of shape (batch_size, 3, height, width), containing
-      `[cos(lat), sin(lon), cos(lon)]` if specified. This is required by many
-      neural climate models.
+    - `{aux_variable}-{name}`: Tensors of shape
+      (batch_size, num_steps, aux_channels, height, width),
+      containing the auxiliary variables returned by each data source
     - `cos_zenith-{name}`: Tensors of shape (batch_size, num_steps, 1, height, width),
       containing the cosine of the solar zenith angle if specified.
+    - `{invariant_name}: Tensors of shape (batch_size, invariant_channels, height, width),
+      containing the time-invariant data (depending only on spatial coordinates)
+      returned by the datapipe. These can include e.g.
+      land-sea mask and geopotential/surface elevation.
 
     To use this data pipeline, your data directory must be structured as
     follows:
@@ -361,23 +364,24 @@ class ClimateDatapipe(Datapipe):
         Time in hours between each timestep in the dataset, by default 6 hr
     start_year : int, optional
         Start year of dataset, by default 1980
-    lsm_filename : str, optional
-        Path to land sea mask file, by default None
-    lsm_variable : str, optional
-        Variable to load from land sea mask file, by default "LSM"
-    geopotential_filename : str, optional
-        Path to geopotential file, by default None
-    geopotential_variable : str, optional
-        Variable to load from geopotential file, by default "Z"
-    use_latlon : bool, optional
-        Include sine and cosine of latitude and longitude, by default False
     latlon_bounds : Tuple[Tuple[float, float], Tuple[float, float]], optional
         Bounds of latitude and longitude in the data, in the format
         ((lat_start, lat_end,), (lon_start, lon_end)).
         By default ((90, -90), (0, 360)).
-    patch_size : Union[Tuple[int, int], int, None], optional
-        If specified, crops input and output variables so image dimensions are
-        divisible by patch_size, by default None
+    crop_window: Union[Tuple[Tuple[float, float], Tuple[float, float]], None], optional
+        The window to crop the data to, in the format ((i0,i1), (j0,j1)) where the
+        first spatial dimension will be cropped to i0:i1 and the second to j0:j1.
+        If not given, all data will be used.
+    invariants : Mapping[str,Callable], optional
+        Specifies the time-invariant data (for example latitude and longitude)
+        included in the data samples. Should be a dict where the keys are the
+        names of the invariants and the values are the corresponding
+        functions. The functions need to accept an argument of the shape
+        (2, data_shape[0], data_shape[1]) where the first dimension contains
+        latitude and longitude in degrees and the other dimensions corresponding
+        to the shape of data in the data files. For example,
+        invariants={"trig_latlon": invariants.LatLon()}
+        will include the sin/cos of lat/lon in the output.
     num_samples_per_year : int, optional
         Number of samples taken from each year. If None, all will be used, by default None
     shuffle : bool, optional
@@ -398,16 +402,12 @@ class ClimateDatapipe(Datapipe):
         batch_size: int = 1,
         dt: float = 6.0,
         start_year: int = 1980,
-        lsm_filename: str = None,
-        lsm_variable: str = "LSM",
-        geopotential_filename: str = None,
-        geopotential_variable: str = "Z",
-        use_latlon: bool = False,
         latlon_bounds: Tuple[Tuple[float, float], Tuple[float, float]] = (
             (90, -90),
             (0, 360),
         ),
-        patch_size: Union[Tuple[int, int], int, None] = None,
+        crop_window: Union[Tuple[Tuple[float, float], Tuple[float, float]], None] = None,
+        invariants: Union[Mapping[str,Callable], None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
         num_workers: int = 1,  # TODO: is there a faster good default?
@@ -422,34 +422,24 @@ class ClimateDatapipe(Datapipe):
         self.shuffle = shuffle
         self.dt = dt
         self.start_year = start_year
-        self.lsm_filename = lsm_filename
-        self.lsm_variable = lsm_variable
-        self.geopotential_filename = geopotential_filename
-        self.geopotential_variable = geopotential_variable
-        self.use_latlon = use_latlon
-        self.latlon_bounds = latlon_bounds
+        self.data_latlon_bounds = latlon_bounds
         self.process_rank = process_rank
         self.world_size = world_size
-        if isinstance(patch_size, int):
-            patch_size = (patch_size, patch_size)
-        self.patch_size = patch_size
         self.num_samples_per_year = num_samples_per_year
         self.logger = PythonLogger()
+
+        if invariants is None:
+            invariants = {}
 
         # Determine outputs of pipeline
         self.pipe_outputs = []
         for (i, spec) in enumerate(self.sources):
             name = spec.name if spec.name is not None else i
             self.pipe_outputs += [f"state_seq-{name}", f"timestamps-{name}"]
+            self.pipe_outputs.extend(f"{aux_var}-{name}" for aux_var in spec.aux_variables)
             if spec.use_cos_zenith:
                 self.pipe_outputs.append(f"cos_zenith-{name}")
-        if self.lsm_filename is not None:
-            self.pipe_outputs.append("land_sea_mask")
-        if self.geopotential_filename is not None:
-            self.pipe_outputs.append("geopotential")
-        if self.use_latlon:
-            self.pipe_outputs.append("latlon")
-            self.pipe_outputs.append("cos_latlon")
+        self.pipe_outputs.extend(invariants.keys())
 
         # Set up device, needed for pipeline
         if isinstance(device, str):
@@ -462,94 +452,32 @@ class ClimateDatapipe(Datapipe):
 
         # Load all data files and statistics
         for spec in sources:
-            spec.parse_dataset_files(
-                num_samples_per_year=num_samples_per_year, patch_size=patch_size
-            )
+            spec.parse_dataset_files(num_samples_per_year=num_samples_per_year)
         for (i, spec_i) in enumerate(sources):
             for spec_j in sources[i + 1 :]:
                 if not spec_i.dimensions_compatible(spec_j):
                     raise ValueError("Incompatible data sources")
-        if self.lsm_filename is not None:
-            self._load_land_sea_mask()
-        if self.geopotential_filename is not None:
-            self._load_geopotential()
-        if self.use_latlon or any(spec.use_cos_zenith for spec in sources):
-            self._load_latlon()
+        
+        self.data_latlon = np.stack(latlon_grid(
+            bounds=self.data_latlon_bounds, shape=sources[0].data_shape
+        ), axis=0)
+        if crop_window is None:
+            crop_window = (
+                0, sources[0].cropped_data_shape[0],
+                0, sources[0].cropped_data_shape[1]
+            )
+        self.crop_window = crop_window
+        self.window_latlon = self._crop_to_window(self.data_latlon)
+        self.window_latlon_dali = dali.types.Constant(self.window_latlon)
+        
+        # load invariants
+        self.invariants = {
+            var: callback(self.window_latlon)
+            for (var, callback) in invariants.items()
+        }
 
         # Create pipeline
         self.pipe = self._create_pipeline()
-
-    def _read_invariant_autoflip(self, filename, var, normalize=False):
-        """Get invariant from netCDF file."""
-        with xr.open_dataset(filename) as ds:
-            x = ds[var].to_numpy().astype(np.float32)
-            try:
-                lat = ds["latitude"].to_numpy()
-                flip = lat[1] > lat[0]  # TODO: this could be more foolproof
-            except (IndexError, KeyError):
-                self.logger.warning(
-                    f"Could not find latitude information in {filename}. "
-                    "Assuming it is not flipped."
-                )
-                flip = False
-
-        if flip:
-            x = np.flip(x, axis=1)  # flip latitude axis
-        if x.shape[1:] != self.sources[0].data_shape:
-            raise AssertionError(  # TODO: this should be ValueError?
-                f"{var} shape {x.shape} does not match " f"data shape {self.data_shape}"
-            )
-        x = x[
-            :,
-            : self.sources[0].cropped_data_shape[0],
-            : self.sources[0].cropped_data_shape[1],
-        ]
-        if normalize:
-            x = (x - x.mean()) / x.std()
-        return dali.types.Constant(x)
-
-    def _load_land_sea_mask(self) -> None:
-        """Load land-sea mask from netCDF file."""
-        self.lsm = self._read_invariant_autoflip(self.lsm_filename, self.lsm_variable)
-
-    def _load_geopotential(self, normalize: bool = True) -> None:
-        """Get geopotential from netCDF file."""
-        self.geopotential = self._read_invariant_autoflip(
-            self.geopotential_filename, self.geopotential_variable, normalize=normalize
-        )
-
-    def _load_latlon(self) -> None:
-        """Load latitude and longitude coordinates from data shape and compute cos/sin versions."""
-
-        # get latitudes and longitudes from data shape
-        lat = np.linspace(
-            *self.latlon_bounds[0],
-            self.sources[0].data_shape[0],
-        ).astype(
-            np.float32
-        )  # lat at grid cell edges
-        lat = lat[: self.sources[0].cropped_data_shape[0]]
-        lon = np.linspace(
-            *self.latlon_bounds[1],
-            self.sources[0].data_shape[1]
-            + 1,  # treat differently from lat due to wrap-around
-        ).astype(
-            np.float32
-        )  # lon at grid cell edges
-        lon = lon[: self.sources[0].cropped_data_shape[1]]
-        lat, lon = np.meshgrid(lat, lon, indexing="ij")
-        self.latlon = dali.types.Constant(np.stack((lat, lon), axis=0))
-
-        # cos/sin latitudes and longitudes
-        # sin_lat added not sure why it wasn't there originally.
-        # TODO: check if there was some good reason not to have it.
-        sin_lat = np.sin(np.deg2rad(lat))
-        cos_lat = np.cos(np.deg2rad(lat))
-        sin_lon = np.sin(np.deg2rad(lon))
-        cos_lon = np.cos(np.deg2rad(lon))
-        self.cos_latlon = dali.types.Constant(
-            np.stack((sin_lat, cos_lat, sin_lon, cos_lon), axis=0)
-        )  # TODO: calling this cos_latlon is a bit misleading?
 
     def _source_cls_from_type(self, source_type: str) -> type:
         """Get the external source class based on a string descriptor."""
@@ -557,6 +485,14 @@ class ClimateDatapipe(Datapipe):
             "hdf5": ClimateHDF5DaliExternalSource,
             "netcdf4": ClimateNetCDF4DaliExternalSource,
         }[source_type]
+    
+    def _crop_to_window(self, x):
+        cw = self.crop_window
+        if isinstance(x, dali.pipeline.DataNode):
+            # DALI doesn't support ellipsis notation
+            return x[:, :, cw[0][0]:cw[0][1], cw[1][0]:cw[1][1]]
+        else:
+            return x[..., cw[0][0]:cw[0][1], cw[1][0]:cw[1][1]]
 
     def _source_outputs(self, spec: ClimateDataSourceSpec) -> List:
         """Create DALI outputs for a given data source specification.
@@ -572,7 +508,9 @@ class ClimateDatapipe(Datapipe):
             data_paths=spec.data_paths,
             num_samples=spec.total_length,
             channels=spec.channels,
+            latlon=self.data_latlon,
             variables=spec.variables,
+            aux_variables=spec.aux_variables,
             stride=spec.stride,
             dt=self.dt,
             start_year=self.start_year,
@@ -588,30 +526,39 @@ class ClimateDatapipe(Datapipe):
         self.total_length = len(source) // self.batch_size
 
         # Read current batch
-        state_seq, timestamps = dali.fn.external_source(
+        (state_seq, timestamps, *aux) = dali.fn.external_source(
             source,
-            num_outputs=2,
+            num_outputs=source.num_outputs(),
             parallel=True,
             batch=False,
         )
 
         # Crop
-        h, w = self.sources[0].cropped_data_shape
-        state_seq = state_seq[:, :, :h, :w]
+        state_seq = self._crop_to_window(state_seq)
+        aux = (self._crop_to_window(x) for x in aux)
 
         # Normalize
         if spec.stats_files is not None:
             state_seq = dali.fn.normalize(state_seq, mean=spec.mu, stddev=spec.sd)
 
         # Make output list
-        outputs = [state_seq, timestamps]
+        outputs = [state_seq, timestamps, *aux]
+        
         # Get cosine zenith angle
         if spec.use_cos_zenith:
             cos_zenith = dali.fn.cast(
-                cos_zenith_angle(timestamps, latlon=self.latlon), dtype=dali.types.FLOAT
+                cos_zenith_angle(timestamps, latlon=self.window_latlon_dali),
+                dtype=dali.types.FLOAT
             )
             outputs.append(cos_zenith)
+
         return outputs
+    
+    def _invariant_outputs(self):
+        for inv in self.invariants.values():
+            if self.crop_window is not None:                
+                inv = self._crop_to_window(inv)
+            yield dali.types.Constant(inv)
 
     def _create_pipeline(self) -> dali.Pipeline:
         """Create DALI pipeline
@@ -631,19 +578,13 @@ class ClimateDatapipe(Datapipe):
         )
 
         with pipe:
-            # Concatenate outputs from all sources
+            # Concatenate outputs from all sources as well as invariants
             outputs = list(
-                chain(*(self._source_outputs(spec) for spec in self.sources))
+                chain(
+                    *(self._source_outputs(spec) for spec in self.sources),
+                    self._invariant_outputs()
+                )
             )
-
-            # Get static inputs
-            if self.lsm_filename is not None:
-                outputs.append(self.lsm)
-            if self.geopotential_filename is not None:
-                outputs.append(self.geopotential)
-            if self.use_latlon:
-                outputs.append(self.latlon)
-                outputs.append(self.cos_latlon)
 
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that
@@ -675,19 +616,23 @@ class ClimateDaliExternalSource(ABC):
         Total number of training samples
     channels : Iterable[int]
         List representing which climate variables to load
-    variables: Union[List[str], None], optional for HDF5 files, mandatory for NetCDF4 files
-        List of named variables to load. Variables will be read in the order specified
-        by this parameter.
-    stride : int
-        Number of steps between input and output variables
     num_steps : int
         Number of timesteps to load
+    stride : int
+        Number of steps between input and output variables
     dt : float, optional
         Time in hours between each timestep in the dataset, by default 6 hr
     start_year : int, optional
         Start year of dataset, by default 1980
     num_samples_per_year : int
         Number of samples randomly taken from each year
+    variables: Union[List[str], None], optional for HDF5 files, mandatory for NetCDF4 files
+        List of named variables to load. Variables will be read in the order specified
+        by this parameter.
+    aux_variables : Union[Mapping[str, Callable], None], optional
+        A dictionary mapping strings to callables that accept arguments
+        (timestamps: numpy.ndarray, latlon: numpy.ndarray). These define any auxiliary
+        variables returned from this source.
     batch_size : int, optional
         Batch size, by default 1
     shuffle : bool, optional
@@ -713,7 +658,9 @@ class ClimateDaliExternalSource(ABC):
         dt: float,
         start_year: int,
         num_samples_per_year: int,
+        latlon: np.ndarray,
         variables: Union[List[str], None] = None,
+        aux_variables: List[Union[str,Callable]] = (),
         batch_size: int = 1,
         shuffle: bool = True,
         process_rank: int = 0,
@@ -724,7 +671,9 @@ class ClimateDaliExternalSource(ABC):
         self.data_files = [None] * len(self.data_paths)
         self.num_samples = num_samples
         self.chans = list(channels)
+        self.latlon = latlon
         self.variables = variables
+        self.aux_variables = aux_variables
         self.num_steps = num_steps
         self.stride = stride
         self.dt = dt
@@ -776,7 +725,17 @@ class ClimateDaliExternalSource(ABC):
                 for i in range(self.num_steps)
             ]
         )
-        return state_seq, timestamps
+
+        # outputs from auxiliary sources
+        aux_outputs = (
+            callback(timestamps, self.latlon) 
+            for callback in self.aux_variables.values()               
+        )
+
+        return (state_seq, timestamps, *aux_outputs)
+
+    def num_outputs(self):
+        return 2 + len(self.aux_variables)
 
     def __len__(self):
         return len(self.indices)
