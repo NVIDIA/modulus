@@ -1,0 +1,63 @@
+# Physics Informed FNO for Nonlinear Shallow Water Equations
+
+This example demonstrates physics informing of a
+data-driven model using numerical derivatives (PINO).
+
+## Problem overview
+
+This is an extension of the 2D nonlinear shallow water equation data-driven problem.
+In addition to the data loss, we will demonstrate the use of physics constraints,
+specifically the equation residual loss. [Modulus Sym](https://github.com/NVIDIA/modulus-sym)
+has utilities tailored for physics-informed machine learning. It also presents an
+abstracted APIs that allows users to think and model the problem from the lens of
+equations, constraints, etc. In this example, we will only leverage the physics-informed
+utilites to see how we can add physics to an existing data-driven model with ease while
+still maintaining the flexibility to define our own training loop and other details.
+For a more abstracted definition of these type of problems, where the training loop
+definition and other things is taken care of implictily, you may refer
+[Modulus Sym](https://github.com/NVIDIA/modulus-sym)
+
+## Dataset
+
+The training and validation datasets for this example can be found on the
+[PINO Applications Github page](https://github.com/shawnrosofsky/PINO_Applications).
+The downloading and pre-processing of the data can also be done by running
+the below set of commands:
+
+```bash
+python download_data.py
+```
+
+To demonstrate the usefulness of the Physics loss, we will deliberately choose a smaller
+dataset size of 45 samples. In such regiemes, the effect of physics loss is more
+evident, as it regularizes the model in the absense of large data.
+
+## Model overview and architecture
+
+In this example, we will use a Fourier Neural Operator (FNO). and then compute the
+derivatives in a PINO style, using Numerical differentiation with fourier derivatives.
+With this example, we intend to demonstrate how to implement multiple
+equations into the loss function.
+
+In this example we will also use the `PDE` class from Modulus-Sym to symbolically define
+the PDEs. This is very convinient and most natural way to define these PDEs and allows
+us to print the equations to check for correctness. This also abstracts out the
+complexity of converting the equation into a pytorch representation. Modulus Sym also
+provides several complex, well tested PDEs like 3D Navier-Stokes, Linear elasticity,
+Electromagnetics, etc. pre-defined which can be used directly in physics-informing
+applications. We will also give you the option to choose between the
+derivative functions from Modulus-Sym or from the original paper.  
+
+## Getting Started
+
+To get started with the example, simply run,
+
+```bash
+python train_swe_nl_pino.py
+```
+
+## References
+
+- [Applications of physics informed neural operators](https://arxiv.org/abs/2203.12634)
+- [Fourier Neural Operator for Parametric Partial Differential Equations](https://arxiv.org/abs/2010.08895)
+- [Physics-Informed Neural Operator for Learning Partial Differential Equations](https://arxiv.org/abs/2111.03794)
