@@ -20,7 +20,7 @@ from omegaconf import DictConfig
 
 
 class UNetEncoder(th.nn.Module):
-    """ Generic UNetEncoder that can be applied to arbitrary meshes.
+    """Generic UNetEncoder that can be applied to arbitrary meshes.
 
     Parameters
     ----------
@@ -44,6 +44,7 @@ class UNetEncoder(th.nn.Module):
     enable_healpixpad, bool, optional
         If the healpixpad library should be used (if installed)
     """
+
     def __init__(
         self,
         conv_block: DictConfig,
@@ -115,5 +116,5 @@ class UNetEncoder(th.nn.Module):
         return outputs
 
     def reset(self):
-        """ Resets the state of the decoder layers """
+        """Resets the state of the decoder layers"""
         pass

@@ -25,7 +25,7 @@ from .healpix_layers import HEALPixLayer
 
 
 class ConvGRUBlock(th.nn.Module):
-    """ Class that implements a Convolutional GRU
+    """Class that implements a Convolutional GRU
     Code modified from
     https://github.com/happyjin/ConvGRU-pytorch/blob/master/convGRU.py
 
@@ -41,7 +41,7 @@ class ConvGRUBlock(th.nn.Module):
         Enable nhwc format, passed to wrapper
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
-        """
+    """
 
     def __init__(
         self,
@@ -103,7 +103,7 @@ class ConvGRUBlock(th.nn.Module):
 
 
 class BasicConvBlock(th.nn.Module):
-    """ Convolution block consisting of n subsequent convolutions and activations
+    """Convolution block consisting of n subsequent convolutions and activations
 
     Parameters
     ----------
@@ -128,6 +128,7 @@ class BasicConvBlock(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -166,7 +167,7 @@ class BasicConvBlock(th.nn.Module):
 
 
 class ConvNeXtBlock(th.nn.Module):
-    """ Class implementing a modified ConvNeXt network as described in https://arxiv.org/pdf/2201.03545.pdf
+    """Class implementing a modified ConvNeXt network as described in https://arxiv.org/pdf/2201.03545.pdf
     and shown in figure 4
 
     Parameters
@@ -192,6 +193,7 @@ class ConvNeXtBlock(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -268,7 +270,7 @@ class ConvNeXtBlock(th.nn.Module):
 
 
 class DoubleConvNeXtBlock(th.nn.Module):
-    """ Modification of ConvNeXtBlock block this time putting two sequentially
+    """Modification of ConvNeXtBlock block this time putting two sequentially
     in a single block with the number of channels in the middle being the
     number of latent channels
 
@@ -295,6 +297,7 @@ class DoubleConvNeXtBlock(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -437,10 +440,10 @@ class DoubleConvNeXtBlock(th.nn.Module):
 
 
 class SymmetricConvNeXtBlock(th.nn.Module):
-    """ Another modification of ConvNeXtBlock block this time using 4 layers and adding
+    """Another modification of ConvNeXtBlock block this time using 4 layers and adding
     a layer that instead of going from in_channels to latent*upscale channesl goes to
     latent channels first
-    
+
     Parameters
     ----------
     geometry_layer: torch.nn.Module, optional
@@ -464,6 +467,7 @@ class SymmetricConvNeXtBlock(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -562,7 +566,7 @@ class SymmetricConvNeXtBlock(th.nn.Module):
 
 
 class MaxPool(th.nn.Module):
-    """ This class provides a wrapper for a HEALPix (or other) tensor data
+    """This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.MaxPool2d class.
 
     Parameters
@@ -576,6 +580,7 @@ class MaxPool(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -596,7 +601,7 @@ class MaxPool(th.nn.Module):
 
 
 class AvgPool(th.nn.Module):
-    """ This class provides a wrapper for a HEALPix (or other) tensor data
+    """This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.AvgPool2d class.
 
     Parameters
@@ -610,6 +615,7 @@ class AvgPool(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -635,7 +641,7 @@ class AvgPool(th.nn.Module):
 
 
 class InterpolationUpsample(th.nn.Module):
-    """ This class provides a wrapper for a HEALPix (or other) tensor data
+    """This class provides a wrapper for a HEALPix (or other) tensor data
     around Interpolation
 
     Parameters
@@ -651,6 +657,7 @@ class InterpolationUpsample(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -673,9 +680,9 @@ class InterpolationUpsample(th.nn.Module):
 
 
 class TransposedConvUpsample(th.nn.Module):
-    """ This class provides a wrapper for a HEALPix (or other) tensor data
+    """This class provides a wrapper for a HEALPix (or other) tensor data
     around the torch.nn.ConvTranspose2d class.
-    
+
     Parameters
     ----------
     geometry_layer: torch.nn.Module, optional
@@ -693,6 +700,7 @@ class TransposedConvUpsample(th.nn.Module):
     enable_healpixpad: bool, optional
         If HEALPixPadding should be enabled, passed to wrapper
     """
+
     def __init__(
         self,
         geometry_layer: th.nn.Module = HEALPixLayer,
@@ -732,7 +740,7 @@ class TransposedConvUpsample(th.nn.Module):
 
 
 class Interpolate(th.nn.Module):
-    """ Helper class that handles interpolation
+    """Helper class that handles interpolation
     This is done as a class so that scale and mode can be stored
 
     Parameters:

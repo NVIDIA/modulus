@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ruff: noqa: E402
-import math
 
+import common
 import numpy as np
 import pytest
 import torch
@@ -24,8 +24,6 @@ from modulus.models.dlwp_healpix_layers import (
     HEALPixPadding,
     HEALPixUnfoldFaces,
 )
-
-import common
 
 
 class MulX(torch.nn.Module):
@@ -61,25 +59,29 @@ def test_HEALPixUnfoldFaces(device):
     # first dim is B * num_faces
     tensor_size[0] *= num_faces
     invar = torch.ones(*tensor_size, device=device)
-    print(f'tensor size {tensor_size} output size {output_size} invar shape {invar.shape}')
+    print(
+        f"tensor size {tensor_size} output size {output_size} invar shape {invar.shape}"
+    )
 
     outvar = unfold_func(invar)
     assert outvar.shape == output_size
 
+
 HEALPixPadding_testdata = [
-    ("cuda:0",2),
-    ("cuda:0",3),
-    ("cuda:0",4),
-    ("cpu",2),
-    ("cpu",3),
-    ("cpu",4),
+    ("cuda:0", 2),
+    ("cuda:0", 3),
+    ("cuda:0", 4),
+    ("cpu", 2),
+    ("cpu", 3),
+    ("cpu", 4),
 ]
+
 
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
 def test_HEALPixPadding(device, padding):
     print(f"TESTING padding {padding}")
-    num_faces = 12 # standard for healpix
-    batch_size = 2 
+    num_faces = 12  # standard for healpix
+    batch_size = 2
     pad_func = HEALPixPadding(padding)
 
     hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
@@ -99,14 +101,16 @@ def test_HEALPixPadding(device, padding):
     outvar = pad_func(invar)
     assert outvar.shape == out_size
 
+
 HEALPixLayer_testdata = [
-    ("cuda:0",2),
-    ("cuda:0",3),
-    ("cuda:0",4),
-    ("cpu",2),
-    ("cpu",3),
-    ("cpu",4),
+    ("cuda:0", 2),
+    ("cuda:0", 3),
+    ("cuda:0", 4),
+    ("cpu", 2),
+    ("cpu", 3),
+    ("cpu", 4),
 ]
+
 
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
 def test_HEALPixLayer(device, multiplier):

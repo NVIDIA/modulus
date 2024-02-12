@@ -27,7 +27,7 @@ def insolation(
 
     Parameters
     ----------
-    dates: 
+    dates:
     dates: np.ndarray
         1d array: datetime or Timestamp
     lat: np.ndarray

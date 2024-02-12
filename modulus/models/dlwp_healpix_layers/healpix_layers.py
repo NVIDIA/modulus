@@ -52,7 +52,7 @@ except ImportError:
 
 
 class HEALPixFoldFaces(th.nn.Module):
-    """ Class that folds the faces of a HealPIX tensor
+    """Class that folds the faces of a HealPIX tensor
 
     Parameters
     ----------
@@ -90,7 +90,7 @@ class HEALPixFoldFaces(th.nn.Module):
 
 
 class HEALPixUnfoldFaces(th.nn.Module):
-    """ Class that unfolds the faces of a HealPIX tensor
+    """Class that unfolds the faces of a HealPIX tensor
 
     Parameters
     ----------
@@ -143,6 +143,7 @@ class HEALPixPaddingv2(th.nn.Module):
     padding: int
         The padding size
     """
+
     def __init__(self, padding: int):
         super().__init__()
         self.unfold = HEALPixUnfoldFaces(num_faces=12)
@@ -178,6 +179,7 @@ class HEALPixPadding(th.nn.Module):
     enable_nhwc: bool, optional
         If nhwc format is being used, default False
     """
+
     def __init__(self, padding: int, enable_nhwc: bool = False):
         super().__init__()
         self.p = padding
@@ -537,7 +539,7 @@ class HEALPixPadding(th.nn.Module):
 
 
 class HEALPixLayer(th.nn.Module):
-    """ Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
+    """Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
     shape [..., 12, H, W], where 12 is the dimension of the faces.
 
     Parameters
@@ -547,6 +549,7 @@ class HEALPixLayer(th.nn.Module):
     kwargs:
         The arguments that are passed to the torch layer function, e.g., kernel_size
     """
+
     def __init__(self, layer, **kwargs):
         super().__init__()
         layers = []
