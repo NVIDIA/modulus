@@ -53,7 +53,7 @@ if C.use_apex:
     try:
         import apex
     except:
-        pass
+        raise ImportError("Apex is not installed.")
 
 if C.cugraphops_encoder or C.cugraphops_processor or C.cugraphops_decoder:
     try:
@@ -237,8 +237,7 @@ if __name__ == "__main__":
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    if dist.rank == 0:
-        logger.file_logging()
+    rank_zero_logger.file_logging()
 
     # initialize trainer
     trainer = GraphCastTrainer(wb, dist, rank_zero_logger)
