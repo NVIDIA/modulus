@@ -20,7 +20,7 @@ import threading
 import torch
 
 # distributed stuff
-import torch.distributed as dist
+from modulus.distributed import DistributedManager
 from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
@@ -29,6 +29,7 @@ from tqdm import tqdm
 # custom
 from utils import write_checkpoint
 
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
 class Trainer():
     """
@@ -87,14 +88,17 @@ class Trainer():
 
         self.model = model.to(device=self.device)
 
-        if dist.is_initialized():
-            self.dataloader_train, self.sampler_train = data_module.train_dataloader(num_shards=dist.get_world_size(),
-                                                                                     shard_id=dist.get_rank())
-            self.dataloader_valid, self.sampler_valid = data_module.val_dataloader(num_shards=dist.get_world_size(),
-                                                                                   shard_id=dist.get_rank())
-        else:
-            self.dataloader_train, self.sampler_train = data_module.train_dataloader()
-            self.dataloader_valid, self.sampler_valid = data_module.val_dataloader()
+        self.dist = DistributedManager()
+
+        # Initialize logger.
+        self.logger = PythonLogger(name="training_loop")  # General python logger
+        self.logger0 = RankZeroLoggingWrapper(self.logger, self.dist)
+        self.logger.file_logging(file_name=f".logs/training_loop_{self.dist.rank}.log")
+
+        self.dataloader_train, self.sampler_train = data_module.train_dataloader(num_shards=self.dist.world_size,
+                                                                                    shard_id=self.dist.rank)
+        self.dataloader_valid, self.sampler_valid = data_module.val_dataloader(num_shards=self.dist.world_size,
+                                                                                shard_id=self.dist.rank)
         self.output_dir_tb = os.path.join(output_dir, "tensorboard")
 
         # set the other parameters
@@ -122,7 +126,7 @@ class Trainer():
         self.train_graph = None
         self.eval_graph = None
 
-        if dist.is_initialized():
+        if torch.distributed.is_initialized():
 
             capture_stream = torch.cuda.Stream()
             with torch.cuda.stream(capture_stream):
@@ -134,26 +138,25 @@ class Trainer():
                                  gradient_as_bucket_view = True)
                 capture_stream.synchronize()
 
-            self.print_to_screen = dist.get_rank() == 0
+            # for status bars
+            self.print_to_screen = self.dist.rank == 0
 
             # capture graph if requested
             if graph_mode in ["train", "train_eval"]:
-                if self.print_to_screen:
-                    print("Capturing model for training ...")
+                self.logger0.info("Capturing model for training ...")
                 # get the shapes
                 inp, tar = next(iter(self.dataloader_train))
 
                 self._train_capture(capture_stream, [x.shape for x in inp], tar.shape)
 
                 if graph_mode == "train_eval":
-                    if self.print_to_screen:
-                        print("Capturing model for validation ...")
+                    self.logger0.info("Capturing model for validation ...")
                     self._eval_capture(capture_stream)
 
 
         # Set up tensorboard summary_writer or try 'weights and biases'
         # Initialize tensorbaord to track scalars
-        if (dist.is_initialized() and dist.get_rank() == 0) or not dist.is_initialized():
+        if self.dist.rank == 0:
             self.writer = SummaryWriter(log_dir=self.output_dir_tb)
         
             
@@ -289,7 +292,7 @@ class Trainer():
                 pbar.set_description(f"Training   epoch {epoch+1}/{self.max_epochs}")
 
                 # Trach epoch in tensorboard
-                if (dist.is_initialized() and dist.get_rank() == 0) or not dist.is_initialized():
+                if self.dist.rank == 0:
                     self.writer.add_scalar(tag="epoch", scalar_value=epoch, global_step=iteration)
 
                 torch.cuda.nvtx.range_push(f"training step {training_step}") 
@@ -346,7 +349,7 @@ class Trainer():
 
                 torch.cuda.nvtx.range_pop()
 
-                if (dist.is_initialized() and dist.get_rank() == 0) or not dist.is_initialized():
+                if self.dist.rank == 0:
                     self.writer.add_scalar(tag="loss", scalar_value=train_loss, global_step=iteration)
                 iteration += 1
                 training_step += 1
@@ -406,8 +409,8 @@ class Trainer():
                     # increment sample counter
                     validation_stats[-1] += bsize
 
-                if dist.is_initialized():
-                    dist.all_reduce(validation_stats)
+                if torch.distributed.is_initialized():
+                    torch.distributed.all_reduce(validation_stats)
 
                 validation_error = (validation_stats[0] / validation_stats[-1]).item()
 
@@ -427,7 +430,7 @@ class Trainer():
             torch.cuda.nvtx.range_pop()
 
             # Logging and checkpoint saving
-            if (dist.is_initialized() and dist.get_rank() == 0) or not dist.is_initialized():
+            if self.dist.rank == 0:
                 if self.lr_scheduler is not None:
                     self.writer.add_scalar(tag="learning_rate", scalar_value=self.optimizer.param_groups[0]['lr'],
                                            global_step=iteration)
@@ -439,9 +442,10 @@ class Trainer():
                                            global_step=iteration)
 
                 # Write model checkpoint to file, using a separate thread
+                self.logger0.info("Writing checkpoint")
                 thread = threading.Thread(
                     target=write_checkpoint,
-                    args=(self.model.module if dist.is_initialized() else self.model,
+                    args=(self.model.module if torch.distributed.is_initialized() else self.model,
                           self.optimizer,
                           self.lr_scheduler, epoch+1,
                           iteration,
@@ -462,12 +466,12 @@ class Trainer():
 
             # Check early stopping criterium
             if self.early_stopping_patience is not None and epochs_since_improved >= self.early_stopping_patience:
-                print(f"Hit early stopping criterium by not improving the validation error for {epochs_since_improved}"
+                self.logger0.info(f"Hit early stopping criterium by not improving the validation error for {epochs_since_improved}"
                        " epochs. Finishing training.")
                 break
 
         # Wrap up
-        if dist.get_rank() == 0:
+        if self.dist.rank == 0:
             try:
                 thread.join()
             except UnboundLocalError:

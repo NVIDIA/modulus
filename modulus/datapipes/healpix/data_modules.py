@@ -24,7 +24,8 @@ import numpy as np
 
 # distributed stuff
 import torch
-import torch.distributed as dist
+from modulus.distributed import DistributedManager
+
 import xarray as xr
 
 # Internal modules
@@ -512,9 +513,12 @@ class TimeSeriesDataModule:
         else:
             raise ValueError("'data_format' must be one of ['classic']")
 
-        if dist.is_initialized():
+        DistributedManager.initialize()
+        dist = DistributedManager()
+
+        if torch.distributed.is_initialized():
             if self.prebuilt_dataset:
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     create_fn(
                         src_directory=self.src_directory,
                         dst_directory=self.dst_directory,
@@ -530,7 +534,7 @@ class TimeSeriesDataModule:
                     )
 
                 # wait for rank 0 to complete, because then the files are guaranteed to exist
-                dist.barrier(device_ids=[torch.cuda.current_device()])
+                torch.distributed.barrier()
 
                 dataset = open_fn(
                     directory=self.dst_directory,
@@ -919,10 +923,14 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         else:
             raise ValueError("'data_format' must be one of ['classic']")
 
+        # Initialize distributed manager
+        DistributedManager.initialize()
+        dist = DistributedManager()
+
         coupled_variables = self._get_coupled_vars()
-        if dist.is_initialized():
+        if torch.distributed.is_initialized():
             if self.prebuilt_dataset:
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     create_fn(
                         src_directory=self.src_directory,
                         dst_directory=self.dst_directory,
@@ -938,7 +946,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     )
 
                 # wait for rank 0 to complete, because then the files are guaranteed to exist
-                dist.barrier(device_ids=[torch.cuda.current_device()])
+                torch.distributed.barrier()
 
                 dataset = open_fn(
                     directory=self.dst_directory,
