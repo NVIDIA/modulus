@@ -20,18 +20,18 @@ import xarray as xr
 
 
 class TrailingAverageCoupler:
-    """ Coupler used to inferface two components of the earth system
-    
+    """Coupler used to inferface two components of the earth system
+
     Trailing average coupler uses coupled input times as the right side of
     an averag that is taken over an "averaging_window" window size.
 
     Parameters
     ----------
-    dataset: xr.Dataset 
+    dataset: xr.Dataset
         Dataset that holds coupled data
-    batch_size: int 
+    batch_size: int
         Batch sized use for training, forecasting batch size should be 1
-    variables: Sequence 
+    variables: Sequence
         Strings that indicate the coupled variable names in the dataset
     presteps: int
         The number of model steps used to initialize the
@@ -44,12 +44,13 @@ class TrailingAverageCoupler:
         period over which coupled data is averaged before sent back to model
     input_times: int, optional
         sequence of pandas Timedelta objects that indicate which times are to be coupled
-    prepared_coupled_data: boolean, optional 
+    prepared_coupled_data: boolean, optional
         If True assumes data in dataset has been prepared approiately for
         training: averages have already been calculated so that each time
         step denotes the right side of a averaging_window window.
         This is highly recommended for training, default True
     """
+
     def __init__(
         self,
         dataset: xr.Dataset,
@@ -100,7 +101,7 @@ class TrailingAverageCoupler:
         ----------
         interval: int
             Ratio of dataset timestep to model dt
-        data_time_step: 
+        data_time_step:
             Dataset timestep in hours, can be integer or pandas interpretable string
         """
 
@@ -158,15 +159,16 @@ class TrailingAverageCoupler:
         Construct array of coupled inputs that includes values required for
         model integration steps.
 
-        batch: 
+        batch:
             indices of dataset sample dimension associated with current batch
-        batch_size: int 
+        batch_size: int
             batch size
         """
 
         # reset integrated couplings
         self.integrated_couplings = np.empty(
-            (batch_size, self.coupled_integration_dim, self.timevar_dim) + self.spatial_dims
+            (batch_size, self.coupled_integration_dim, self.timevar_dim)
+            + self.spatial_dims
         )
 
         # extract coupled variables and scale lazily

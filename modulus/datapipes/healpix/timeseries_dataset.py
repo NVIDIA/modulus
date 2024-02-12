@@ -44,7 +44,7 @@ class MetaData(DatapipeMetaData):
 class TimeSeriesDataset(Dataset, Datapipe):
     """
     Dataset for sampling from continuous time-series data, compatible with pytorch data loading.
-    
+
     Parameters
     ----------
     dataset: xr.Dataset
@@ -78,6 +78,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
             - providing this parameter configures the data loader to only produce this number of samples, and
                 NOT produce any target array.
     """
+
     def __init__(
         self,
         dataset: xr.Dataset,
@@ -182,7 +183,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
         self._get_scaling_da()
 
     def get_constants(self):
-        """ Returns the constants used in this dataset
+        """Returns the constants used in this dataset
 
         Returns
         -------

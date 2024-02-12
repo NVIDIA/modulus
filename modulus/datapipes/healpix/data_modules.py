@@ -74,7 +74,7 @@ def open_time_series_dataset_classic_on_the_fly(
         The chunk size to use for the input datasets, default 32
     scaling: DictConfig, optional
         Not used for open_time_series_dataset_classic_on_the_fly
-    
+
     Returns
     -------
     xr.Dataset: The merged dataset
@@ -178,7 +178,7 @@ def open_time_series_dataset_classic_prebuilt(
         Not used for open_time_series_dataset_classic_prebuilt, default False
     batch_size: str, optional
         The chunk size to use for the input datasets, default 32
-    
+
     Returns
     -------
     xr.Dataset: The opened dataset
@@ -229,7 +229,7 @@ def create_time_series_dataset_classic(
         Scale factors applied to the listed variables, default None
     overwrite: bool, optional
         IF an existing dataset exists at the destination replace it, default False
-    
+
     Returns
     -------
     xr.Dataset: The merged dataset
@@ -344,7 +344,7 @@ def create_time_series_dataset_classic(
 
 
 class TimeSeriesDataModule:
-    """ pytorch-lightning module for complete model train, validation, and test data loading. Uses
+    """pytorch-lightning module for complete model train, validation, and test data loading. Uses
     dlwp.data.data_loading.TimeSeriesDataset under-the-hood. Loaded data files follow the naming scheme
     {directory}/{prefix}{variable/constant}{suffix}{[.nc, .zarr]}
 
@@ -417,6 +417,7 @@ class TimeSeriesDataModule:
             - providing this parameter configures the data loader to only produce this number of samples, and
                 NOT produce any target array.
     """
+
     def __init__(
         self,
         src_directory: str = ".",
@@ -446,7 +447,6 @@ class TimeSeriesDataModule:
         prebuilt_dataset: bool = True,
         forecast_init_times: Optional[Sequence] = None,
     ):
-
         super().__init__()
         self.src_directory = src_directory
         self.dst_directory = dst_directory
@@ -485,7 +485,7 @@ class TimeSeriesDataModule:
         self.setup()
 
     def get_constants(self) -> Optional[np.ndarray]:
-        """ Returns the constants used in this dataset
+        """Returns the constants used in this dataset
 
         Returns
         -------
@@ -501,7 +501,7 @@ class TimeSeriesDataModule:
         )
 
     def setup(self) -> None:
-        """ Setup the datasets used for this DataModule """
+        """Setup the datasets used for this DataModule"""
         if self.data_format == "classic":
             create_fn = create_time_series_dataset_classic
             open_fn = (
@@ -646,7 +646,7 @@ class TimeSeriesDataModule:
             )
 
     def train_dataloader(self, num_shards=1, shard_id=0) -> DataLoader:
-        """ Setup the training dataloader
+        """Setup the training dataloader
 
         Parameters
         ----------
@@ -688,7 +688,7 @@ class TimeSeriesDataModule:
         return loader, sampler
 
     def val_dataloader(self, num_shards=1, shard_id=0) -> DataLoader:
-        """ Setup the validation dataloader
+        """Setup the validation dataloader
 
         Parameters
         ----------
@@ -726,7 +726,7 @@ class TimeSeriesDataModule:
         return loader, sampler
 
     def test_dataloader(self, num_shards=1, shard_id=0) -> DataLoader:
-        """ Setup the test dataloader
+        """Setup the test dataloader
 
         Parameters
         ----------
@@ -841,6 +841,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         A Sequence of dictionaries that define the mechanics of couplings with other earth system
         components, default None
     """
+
     def __init__(
         self,
         src_directory: str = ".",
@@ -908,7 +909,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         return coupled_variables
 
     def setup(self) -> None:
-        """ Setup the datasets used for this DataModule """
+        """Setup the datasets used for this DataModule"""
         if self.data_format == "classic":
             create_fn = create_time_series_dataset_classic
             open_fn = (

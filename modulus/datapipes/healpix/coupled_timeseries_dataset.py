@@ -32,7 +32,6 @@ from modulus.utils.insolation import insolation
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class MetaData(DatapipeMetaData):
     name: str = "CoupledTimeSeries"
@@ -44,7 +43,7 @@ class MetaData(DatapipeMetaData):
 
 
 class CoupledTimeSeriesDataset(TimeSeriesDataset, Datapipe):
-    """ 
+    """
     Dataset for coupling TimesSeriesDataset with external inputs
     from various earth system components
 
@@ -88,6 +87,7 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset, Datapipe):
         A Sequence of dictionaries that define the mechanics of couplings with other earth system
         components, default None
     """
+
     def __init__(
         self,
         dataset: xr.Dataset,

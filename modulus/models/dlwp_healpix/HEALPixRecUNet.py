@@ -45,8 +45,8 @@ class MetaData(ModelMetaData):
 
 
 class HEALPixRecUNet(Module):
-    """ Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh.
-    
+    """Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh.
+
     Parameters
     ----------
     encoder: DictConfig
@@ -82,6 +82,7 @@ class HEALPixRecUNet(Module):
     couplings: list, optional
         sequence of dictionaries that describe coupling mechanisms
     """
+
     def __init__(
         self,
         encoder: DictConfig,
@@ -176,7 +177,7 @@ class HEALPixRecUNet(Module):
             list of expected input tensors (inputs, decoder_inputs, constants)
         step: int, optional
             step number in the sequence of integration_steps
-        
+
         Returns
         -------
         torch.Tensor: reshaped Tensor in expected shape for model encoder
@@ -349,7 +350,7 @@ is not available at this time."
 
     def forward(self, inputs: Sequence, output_only_last=False) -> th.Tensor:
         """
-        Forward pass of the 
+        Forward pass of the
 
         Parameters
         ----------
@@ -427,6 +428,6 @@ is not available at this time."
         return th.cat(outputs, dim=self.channel_dim)
 
     def reset(self):
-        """ Resets the state of the network """
+        """Resets the state of the network"""
         self.encoder.reset()
         self.decoder.reset()

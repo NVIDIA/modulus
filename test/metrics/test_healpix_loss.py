@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import Sequence
+
 import numpy as np
 import pytest
 import torch
-from torch import Tensor
+
 from modulus.metrics.climate.healpix_loss import BaseMSE, WeightedMSE
-from dataclasses import dataclass
-from typing import Sequence
+
 
 @pytest.fixture
 def test_data():
     # create dummy data
 
-    # We'll pretend h,w are a lat lon grid instead of healpix 
+    # We'll pretend h,w are a lat lon grid instead of healpix
     # so the test works the same
     # Set lat/lon in terms of degrees (for use with _compute_lat_weights)
     def generate_test_data(channels=2, img_shape=(768, 768)):
@@ -36,25 +38,29 @@ def test_data():
         targ_tensor_np = np.cos(np.pi * yv / (180))
 
         return channels, pred_tensor_np, targ_tensor_np
+
     return generate_test_data
 
+
 @dataclass
-class trainer_helper():
-    """ helper class for setup with the MSE testers """
+class trainer_helper:
+    """helper class for setup with the MSE testers"""
+
     output_variables: Sequence
     device: str
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     mse_func = BaseMSE()
     channels, pred_tensor_np, targ_tensor_np = test_data()
-    
-    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels,-1,-1)
-    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels,-1,-1)
+
+    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels, -1, -1)
+    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels, -1, -1)
 
     # expand out to 6 dimensions
-    pred_tensor = pred_tensor[(None,)*3]
-    targ_tensor = targ_tensor[(None,)*3]
+    pred_tensor = pred_tensor[(None,) * 3]
+    targ_tensor = targ_tensor[(None,) * 3]
 
     # test for insufficient dimensions
     with pytest.raises(
@@ -73,7 +79,7 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
         mse_func(torch.zeros((10,), device=device), torch.zeros((10,), device=device))
 
     # test for 0 loss
-    error = mse_func(targ_tensor, targ_tensor) 
+    error = mse_func(targ_tensor, targ_tensor)
     assert torch.allclose(
         error,
         torch.zeros([1], dtype=torch.float32, device=device),
@@ -84,7 +90,7 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     # int( cos(x)^2 - cos(2x)^2 )dx, x = 0...2*pi = pi/4
     # So MSE should be pi/4 / (pi) = 0.25
     error = mse_func(pred_tensor**2, targ_tensor**2)
-    print(f'error {error}')
+    print(f"error {error}")
     assert torch.allclose(
         error,
         0.25 * torch.ones([1], dtype=torch.float32, device=device),
@@ -96,7 +102,7 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     num_channels = 3
-    var_list = ["a", "b","ones"]
+    var_list = ["a", "b", "ones"]
     channels, pred_tensor_np, targ_tensor_np = test_data(channels=num_channels)
     trainer = trainer_helper(
         output_variables=var_list,
@@ -108,14 +114,14 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     # Giving the last channel half the weight results in a per loss of:
     # [0.25*0.5, 0.25*0.25, 0.0*0.25] == [0.125,0.0625,0]
     # and an average weighted loss of 0.0625
-    channel_weights = [0.5,0.25,0.25]
-    channel_weighted_mse = torch.Tensor([0.125,0.0625,0]).to(device)
+    channel_weights = [0.5, 0.25, 0.25]
+    channel_weighted_mse = torch.Tensor([0.125, 0.0625, 0]).to(device)
     mean_weighted_mse = channel_weighted_mse.mean()
     weighted_mse_func = WeightedMSE(channel_weights)
     weighted_mse_func.setup(trainer)
-    
-    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels,-1,-1)
-    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels,-1,-1)
+
+    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels, -1, -1)
+    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels, -1, -1)
 
     tensor_size = pred_tensor.shape[-2:]
     ones = torch.zeros(tensor_size, device=device)
@@ -123,13 +129,12 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     # make the last channel of prediction and target the same
     pred_tensor = pred_tensor.contiguous()
     targ_tensor = targ_tensor.contiguous()
-    pred_tensor[-1,...] = ones[...]
-    targ_tensor[-1,...] = ones[...]
+    pred_tensor[-1, ...] = ones[...]
+    targ_tensor[-1, ...] = ones[...]
 
     # expand out to 6 dimensions
-    pred_tensor = pred_tensor[(None,)*3]
-    targ_tensor = targ_tensor[(None,)*3]
-
+    pred_tensor = pred_tensor[(None,) * 3]
+    targ_tensor = targ_tensor[(None,) * 3]
 
     # test for insufficient dimensions
     with pytest.raises(
@@ -145,25 +150,29 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     with pytest.raises(
         AssertionError, match="Expected predictions to have 6 dimensions"
     ):
-        weighted_mse_func(torch.zeros((10,), device=device), torch.zeros((10,), device=device))
+        weighted_mse_func(
+            torch.zeros((10,), device=device), torch.zeros((10,), device=device)
+        )
 
     # test for 0 loss
-    print(f'devices pred {pred_tensor.device} targ {targ_tensor.device} trainer {trainer.device}')
-    error = weighted_mse_func(pred_tensor**2, targ_tensor**2, average_channels=False) 
+    print(
+        f"devices pred {pred_tensor.device} targ {targ_tensor.device} trainer {trainer.device}"
+    )
+    error = weighted_mse_func(
+        pred_tensor**2, targ_tensor**2, average_channels=False
+    )
     assert torch.allclose(
         error,
         channel_weighted_mse,
         rtol=rtol,
         atol=atol,
     )
-  
-      # test for 0 loss
-    error = weighted_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True) 
+
+    # test for 0 loss
+    error = weighted_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
     assert torch.allclose(
         error,
         mean_weighted_mse,
         rtol=rtol,
         atol=atol,
     )
-
-    
