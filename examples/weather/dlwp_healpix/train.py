@@ -19,7 +19,7 @@ import sys
 import hydra
 import numpy as np
 import torch as th
-import torch.distributed as dist
+from modulus.distributed import DistributedManager
 from hydra.utils import instantiate
 
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
@@ -28,49 +28,24 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @hydra.main(config_path='./configs', config_name='config', version_base=None)
 def train(cfg):
-    logger = PythonLogger("train")  # General python logger
-    logger.file_logging("train.log")
+    # Initialize distributed
+    DistributedManager.initialize()
+    dist = DistributedManager()
 
-    logger.info(f"experiment working directory: {os.getcwd()}")
+    # set device globally to be sure that no spurious context are created on gpu 0:
+    th.cuda.set_device(dist.device)
 
-    # Initialize torch distributed
-    world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', 1))
-    world_rank = int(os.getenv('OMPI_COMM_WORLD_RANK', 0))
-
-    port = cfg.port
-    master_address = cfg.master_address
-
-    # Initialize process groups
-    if world_size == 0:
-        device = th.device("cpu")
-    elif world_size == 1:
-        # set device
-        device = th.device("cuda:0")
-
-        # some other settings
-        th.backends.cudnn.benchmark = True
-        
-        # set device globally to be sure that no spurious context are created on gpu 0:
-        th.cuda.set_device(device)
-    else:
-        dist.init_process_group(backend='nccl',
-                                init_method=f"tcp://{master_address}:{port}",
-                                rank=world_rank,
-                                world_size=world_size)
-        # set device
-        local_rank = world_rank % th.cuda.device_count()
-        device = th.device(f"cuda:{local_rank}")
-
-        # some other settings
-        th.backends.cudnn.benchmark = True
-        
-        # set device globally to be sure that no spurious context are created on gpu 0:
-        th.cuda.set_device(device)
+    # Initialize logger.
+    os.makedirs(".logs", exist_ok=True)
+    logger = PythonLogger(name="train")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
+    logger0.info(f"experiment working directory: {os.getcwd()}")
 
     # Seed
     if cfg.seed is not None:
         th.manual_seed(cfg.seed)
-        if world_size > 0:
+        if th.cuda.is_available():
             th.cuda.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
@@ -92,11 +67,7 @@ def train(cfg):
     model.batch_size = cfg.batch_size
     model.learning_rate = cfg.learning_rate
 
-    if dist.is_initialized():
-        if dist.get_rank() == 0:
-            logger.info("Model initialized")
-    else:
-        logger.info("Model initialized")
+    logger0.info("Model initialized")
 
     # Instantiate PyTorch modules (with state dictionaries from checkpoint if given)
     criterion = instantiate(cfg.trainer.criterion)
@@ -139,7 +110,7 @@ def train(cfg):
         criterion=criterion,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        device=device
+        device=dist.device
         )
     trainer.fit(
         epoch=epoch,
