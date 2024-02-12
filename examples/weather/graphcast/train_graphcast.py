@@ -45,14 +45,15 @@ from constants import Constants
 from modulus.datapipes.climate import ERA5HDF5Datapipe
 from modulus.distributed import DistributedManager
 
-try:
-    import apex
-except:
-    pass
-
-
 # Instantiate constants, and save to JSON file
 C = Constants()
+
+# Optionally import apex
+if C.use_apex:
+    try:
+        import apex
+    except:
+        pass
 
 if C.cugraphops_encoder or C.cugraphops_processor or C.cugraphops_decoder:
     try:
@@ -146,6 +147,7 @@ class GraphCastTrainer(BaseTrainer):
             data_dir=os.path.join(C.dataset_path, "train"),
             stats_dir=os.path.join(C.dataset_path, "stats"),
             channels=[i for i in range(C.num_channels)],
+            num_samples_per_year=C.num_samples_per_year_train,
             num_steps=1,
             batch_size=1,
             num_workers=C.num_workers,
@@ -235,7 +237,8 @@ if __name__ == "__main__":
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    logger.file_logging()
+    if dist.rank == 0:
+        logger.file_logging()
 
     # initialize trainer
     trainer = GraphCastTrainer(wb, dist, rank_zero_logger)

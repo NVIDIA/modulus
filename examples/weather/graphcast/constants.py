@@ -43,6 +43,7 @@ class Constants(BaseModel):
     dataset_path: str = "/data"
     static_dataset_path: str = "datasets/static"
     latlon_res: Tuple[int, int] = (721, 1440)
+    num_samples_per_year_train: int = 1448
     num_workers: int = 0  # 8
     num_channels: int = 3  # 34
     num_channels_val: int = 3
@@ -65,6 +66,7 @@ class Constants(BaseModel):
     ckpt_path: str = "checkpoints_34var"
     val_dir: str = "validation_34var"
     ckpt_name: str = "model_34var.pt"
+    use_apex: bool = False
     pyt_profiler: bool = False
     profile: bool = False
     profile_range: Tuple = (90, 110)
