@@ -33,7 +33,7 @@ class Constants(BaseModel):
 
     # data configs
     data_path: str = "./data/test_validation"
-
+    
     # training configs
     batch_size: int = 1
     num_steps: int = int(2e7)

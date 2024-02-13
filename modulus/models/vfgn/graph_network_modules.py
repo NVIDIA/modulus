@@ -483,19 +483,13 @@ class EncodeProcessDecode(Module):
             mlp_hidden_size,
             mlp_num_hidden_layers,
             num_message_passing_steps,
-            output_size,
-            device_list=None
+            output_size
     ):
         if not (latent_size > 0 and mlp_hidden_size > 0 and mlp_num_hidden_layers > 0):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         if not (num_message_passing_steps > 0):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         super().__init__(meta=MetaData(name="vfgn_encoderprocess_decode"))
-
-        if device_list is None:
-            self.device_list = ['cpu']
-        else:
-            self.device_list = device_list
 
         self._encoder_network = EncoderNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size)
 
@@ -523,14 +517,14 @@ class EncodeProcessDecode(Module):
         # print("receivers: ", receivers.shape, senders.shape)
         # print("receivers: ", receivers)
         # print("senders: ", senders)
-
+        self.device_list = x.device.type # decide the device type
         x, edge_attr = self._encoder_network(x, edge_attr)
 
         pre_x = x
         pre_edge_attr = edge_attr
 
         n_steps = len(self._processor_networks)
-        n_inter = int(n_steps / len(self.device_list))
+        n_inter = int(n_steps) # prevent divide by zero
 
         i = 0
         j = 0
@@ -538,7 +532,7 @@ class EncodeProcessDecode(Module):
         origin_device = x.device
 
         for processor_network_k in self._processor_networks:
-            p_device = self.device_list[j]
+            p_device = self.device_list#[j]
             processor_network_k = processor_network_k.to(p_device)
             pre_x = pre_x.to(p_device)
             pre_edge_attr = pre_edge_attr.to(p_device)
@@ -673,7 +667,7 @@ class LearnedSimulator(Module):
         for i in range(n):
             total_num_edges_graph_i = len(senders_per_graph_list[i])
 
-            random_num = random.choice([True, False])
+            random_num = False#random.choice([True, False])
 
             if random_num:
                 choiced_indices = random.choices([j for j in range(total_num_edges_graph_i)],
@@ -751,6 +745,7 @@ class LearnedSimulator(Module):
                                                                   n_edge.cpu().detach().numpy())
         senders = torch.LongTensor(senders).to(position_sequence.device)
         receivers = torch.LongTensor(receivers).to(position_sequence.device)
+        print('current update senders')
 
         # 1. Node features
         node_features = []
@@ -774,10 +769,11 @@ class LearnedSimulator(Module):
         # 2. Edge features
         edge_features = []
         # Relative displacement and distances normalized to radius
-        print("senders: ", senders, senders.shape)
-        print("receivers: ", receivers, receivers.shape)
-        normalized_relative_displacements = (most_recent_position.index_select(0, senders) -
-                                             most_recent_position.index_select(0, receivers)) / self._connectivity_param
+        # normalized_relative_displacements = (most_recent_position.index_select(0, senders) -
+        #                                      most_recent_position.index_select(0, receivers)) / self._connectivity_param
+
+        normalized_relative_displacements = (most_recent_position.index_select(0, senders.squeeze()) -
+                                             most_recent_position.index_select(0, receivers.squeeze())) / self._connectivity_param
         edge_features.append(normalized_relative_displacements)
         normalized_relative_distances = torch.norm(normalized_relative_displacements, dim=-1, keepdim=True)
         edge_features.append(normalized_relative_distances)

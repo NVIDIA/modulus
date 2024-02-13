@@ -528,6 +528,7 @@ def main(_):
     # save constants to JSON file
     # todo: test the disk.rank init and save
     if dist.rank == 0:
+        print('check main',C.ckpt_path)
         os.makedirs(C.ckpt_path, exist_ok=True)
         with open(
                 os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
