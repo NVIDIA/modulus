@@ -197,6 +197,7 @@ class Module(torch.nn.Module):
             local_path = Path(temp_dir)
 
             torch.save(self.state_dict(), local_path / "model.pt")
+            print("save path: ", local_path, "/model.pt")
 
             with open(local_path / "args.json", "w") as f:
                 json.dump(self._args, f)
@@ -273,10 +274,13 @@ class Module(torch.nn.Module):
 
         # Download and cache the checkpoint file if needed
         cached_file_name = _download_cached(file_name)
+        print("load cached_file_name: ", cached_file_name)
 
         # Use a temporary directory to extract the tar file
         with tempfile.TemporaryDirectory() as temp_dir:
             local_path = Path(temp_dir)
+            print("tempfile local_path: ", local_path)
+            print("cached_file_name: ", cached_file_name)
 
             # Open the tar file and extract its contents to the temporary directory
             with tarfile.open(cached_file_name, "r") as tar:
@@ -292,6 +296,7 @@ class Module(torch.nn.Module):
             model_dict = torch.load(
                 local_path.joinpath("model.pt"), map_location=device
             )
+            print("model dict path: ", local_path.joinpath("model.pt"))
             self.load_state_dict(model_dict)
 
     @classmethod
@@ -319,6 +324,8 @@ class Module(torch.nn.Module):
         # Use a temporary directory to extract the tar file
         with tempfile.TemporaryDirectory() as temp_dir:
             local_path = Path(temp_dir)
+            print("local_path: ", local_path)
+            print("cached_file_name: ", cached_file_name)
 
             # Open the tar file and extract its contents to the temporary directory
             with tarfile.open(cached_file_name, "r") as tar:
@@ -338,6 +345,8 @@ class Module(torch.nn.Module):
             model_dict = torch.load(
                 local_path.joinpath("model.pt"), map_location=model.device
             )
+            print("\n\n module.py torch loaded model_dict ", model_dict)
+            print("\n\n model: ", model)
             model.load_state_dict(model_dict)
 
         return model

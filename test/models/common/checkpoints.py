@@ -71,8 +71,11 @@ def validate_checkpoint(
     except IOError:
         pass
 
+    # print("save ckpt does_not_exist success \n\n")
     # Now test forward passes
+    # print("forward model_1 pred")
     output_1 = model_1.forward(*in_args)
+    # print("forward model_2 pred")
     output_2 = model_2.forward(*in_args)
 
     # Model outputs should initially be different
@@ -81,13 +84,17 @@ def validate_checkpoint(
     ), "Model outputs should initially be different"
 
     # Save checkpoint from model 1 and load it into model 2
+    print("\n\nTest the save, load function ")
     model_1.save("checkpoint.mdlus")
     model_2.load("checkpoint.mdlus")
+    print("model_2 loaded checkpoint")
 
     # Forward with loaded checkpoint
     output_2 = model_2.forward(*in_args)
     loaded_checkpoint = compare_output(output_1, output_2, rtol, atol)
+    # print("compare_output loaded_checkpoint: ", loaded_checkpoint)
 
+    print("\n\nTest the modulus.Module.from_checkpoint function ")
     # Restore checkpoint with from_checkpoint, checks initialization of model directly from checkpoint
     model_2 = modulus.Module.from_checkpoint("checkpoint.mdlus").to(model_1.device)
     output_2 = model_2.forward(*in_args)

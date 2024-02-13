@@ -116,6 +116,7 @@ def validate_forward_accuracy(
     file_name = (
         Path(__file__).parents[1].resolve() / Path("data") / Path(file_name.lower())
     )
+    print("loaded file: ", file_name)
     # If file does not exist, we will create it then error
     # Model should then reproduce it on next pytest run
     if not file_name.exists():
@@ -125,6 +126,7 @@ def validate_forward_accuracy(
         )
     # Load tensor dictionary and check
     else:
+        print("load the statedict")
         tensor_dict = torch.load(str(file_name))
         output_target = tuple(
             [value.to(model.device) for value in tensor_dict.values()]

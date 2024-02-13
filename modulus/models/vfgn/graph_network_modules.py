@@ -736,6 +736,9 @@ class LearnedSimulator(Module):
     def EncodingFeature(self, position_sequence, n_node, n_edge,
                         senders_list, receivers_list,
                         global_context, particle_types):
+        print("EncodingFeature senders_list: ", senders_list.shape)
+        print("EncodingFeature receivers_list: ", receivers_list.shape)
+        print("EncodingFeature global_context: ", global_context.shape)
         # aggregate all features
         most_recent_position = position_sequence[:, -1]
         velocity_sequence = self.time_diff(position_sequence)
@@ -771,7 +774,8 @@ class LearnedSimulator(Module):
         # 2. Edge features
         edge_features = []
         # Relative displacement and distances normalized to radius
-        print()
+        print("senders: ", senders, senders.shape)
+        print("receivers: ", receivers, receivers.shape)
         normalized_relative_displacements = (most_recent_position.index_select(0, senders) -
                                              most_recent_position.index_select(0, receivers)) / self._connectivity_param
         edge_features.append(normalized_relative_displacements)
@@ -787,6 +791,8 @@ class LearnedSimulator(Module):
                                                                                        context_stats.std.device))
 
             global_features = []
+            print("repeat_interleave n_node: ", n_node)
+            print("global_context: ", global_context.shape)
             for i in range(global_context.shape[0]):
                 global_context_= torch.unsqueeze(global_context[i], 0)
                 context_i = torch.repeat_interleave(global_context_, n_node[i].to(torch.long), dim=0)
@@ -952,6 +958,8 @@ class LearnedSimulator(Module):
         noisy_position_sequence = position_sequence + position_sequence_noise
 
         # Perform the forward pass with the noisy position sequence.
+        print("forward global_context: ", global_context.shape)
+
         input_graph = self.EncodingFeature(noisy_position_sequence,
                                            n_particles_per_example, n_edges_per_example,
                                            senders, receivers,
@@ -962,11 +970,16 @@ class LearnedSimulator(Module):
 
         # Calculate the target acceleration, using an `adjusted_next_position `that
         # is shifted by the noise in the last input position.
+        print("\n position_sequence_noise: ", position_sequence_noise.shape)
         most_recent_noise = position_sequence_noise[:, -1]
+        print("most_recent_noise: ", most_recent_noise.shape)
 
         most_recent_noise = torch.unsqueeze(most_recent_noise, axis=1)
+        print("unsqueeze most_recent_noise: ", most_recent_noise.shape)
 
         most_recent_noises = torch.tile(most_recent_noise, [1, predict_length, 1])
+        print("tile most_recent_noise: ", most_recent_noise.shape)
+        print("tile next_positions: ", next_positions.shape)
 
         next_position_adjusted = next_positions + most_recent_noises
         # print("next_position_adjusted: ", next_position_adjusted, next_position_adjusted.shape)

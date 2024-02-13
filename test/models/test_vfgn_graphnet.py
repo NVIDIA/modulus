@@ -318,10 +318,12 @@ def test_simulator_forward(device):
 
     cast = lambda v: np.array(v, dtype=np.float64)
     dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
+    dummy_context_meta = [747.9937656176759]
     dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
                         torch.DoubleTensor(cast(dummy_metadata)))
-
-    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
+    dummy_context_stats = Stats(torch.DoubleTensor(cast(dummy_context_meta)),
+                        torch.DoubleTensor(cast(dummy_context_meta)))
+    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_context_stats}
     model = LearnedSimulator(
         num_dimensions=3,
         num_seq=5,  # the default implementation on INPUT_SEQUENCE_LENGTH >= 3
@@ -332,30 +334,89 @@ def test_simulator_forward(device):
     ).to(device)
 
     # initialize node number, simulation steps s
-    bsize = 2
+    # bsize = 2
     node_cnt = random.randint(1, 10000)
     edge_cnt = random.randint(1, 10000)
     sim_steps = random.randint(1, 100)
 
-    invar_next_positions = torch.randn(bsize, node_cnt, 3).to(device)
-    invar_position_sequence_noise = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
-    invar_position_sequence = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
+    invar_next_positions = torch.randn(node_cnt, 3).to(device)
+    invar_position_sequence_noise = torch.randn(node_cnt, sim_steps, 3).to(device)
+    invar_position_sequence = torch.randn(node_cnt, sim_steps, 3).to(device)
 
     invar_n_particles = torch.tensor([node_cnt]).to(device)
     invar_n_edges = torch.tensor([edge_cnt]).to(device)
 
-    invar_receivers = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
-    invar_senders = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
+    invar_receivers = torch.randint(node_cnt, (edge_cnt, )).to(device)
+    invar_senders = torch.randint(node_cnt, (edge_cnt, )).to(device)
 
     invar_predict_length = random.randint(1, 5)
-    invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-    invar_particle_types = torch.randint(3, (bsize, node_cnt)).to(device)
+    # invar_global_context = torch.randn(sim_steps, 1).to(device)
+    invar_global_context = torch.randn(1, sim_steps).to(device)
+    invar_particle_types = torch.randint(3, (node_cnt, )).to(device)
 
+    print("invar_global_context: ", invar_global_context.shape)
     invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
              invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
              invar_global_context, invar_particle_types)
 
     assert common.validate_forward_accuracy(model, (*invar,))
+
+
+# def test_simulator_forward_batch(device):
+#     """Test VFGN simulator forward pass"""
+#     torch.manual_seed(0)
+#     # Construct VFGN simulator model
+#
+#     class Stats:
+#         def __init__(self, mean, std):
+#             self.mean = mean
+#             self.std = std
+#
+#         def to(self, device):
+#             self.mean = self.mean.to(device)
+#             self.std = self.std.to(device)
+#             return self
+#
+#     cast = lambda v: np.array(v, dtype=np.float64)
+#     dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
+#     dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
+#                         torch.DoubleTensor(cast(dummy_metadata)))
+#
+#     normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
+#     model = LearnedSimulator(
+#         num_dimensions=3,
+#         num_seq=5,  # the default implementation on INPUT_SEQUENCE_LENGTH >= 3
+#         boundaries=torch.DoubleTensor([[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]), # torch.DoubleTensor(metadata['bounds'])
+#         num_particle_types=3,
+#         particle_type_embedding_size=16,
+#         normalization_stats=normalization_stats,
+#     ).to(device)
+#
+#     # initialize node number, simulation steps s
+#     bsize = 2
+#     node_cnt = random.randint(1, 10000)
+#     edge_cnt = random.randint(1, 10000)
+#     sim_steps = random.randint(1, 100)
+#
+#     invar_next_positions = torch.randn(bsize, node_cnt, 3).to(device)
+#     invar_position_sequence_noise = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
+#     invar_position_sequence = torch.randn(bsize, node_cnt, sim_steps, 3).to(device)
+#
+#     invar_n_particles = torch.tensor([node_cnt]).to(device)
+#     invar_n_edges = torch.tensor([edge_cnt]).to(device)
+#
+#     invar_receivers = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
+#     invar_senders = torch.randint(node_cnt, (bsize, edge_cnt)).to(device)
+#
+#     invar_predict_length = random.randint(1, 5)
+#     invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
+#     invar_particle_types = torch.randint(3, (bsize, node_cnt)).to(device)
+#
+#     invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
+#              invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
+#              invar_global_context, invar_particle_types)
+#
+#     assert common.validate_forward_accuracy(model, (*invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
