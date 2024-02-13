@@ -1,3 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import torch
 from torch import nn
 
@@ -34,8 +50,12 @@ class PatchEmbed2D(nn.Module):
             padding_left = w_pad // 2
             padding_right = int(w_pad - padding_left)
 
-        self.pad = nn.ZeroPad2d((padding_left, padding_right, padding_top, padding_bottom))
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.pad = nn.ZeroPad2d(
+            (padding_left, padding_right, padding_top, padding_bottom)
+        )
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -43,8 +63,6 @@ class PatchEmbed2D(nn.Module):
 
     def forward(self, x: torch.Tensor):
         B, C, H, W = x.shape
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         x = self.pad(x)
         x = self.proj(x)
         if self.norm is not None:
@@ -69,7 +87,9 @@ class PatchEmbed3D(nn.Module):
         self.img_size = img_size
         level, height, width = img_size
         l_patch_size, h_patch_size, w_patch_size = patch_size
-        padding_left = padding_right = padding_top = padding_bottom = padding_front = padding_back = 0
+        padding_left = (
+            padding_right
+        ) = padding_top = padding_bottom = padding_front = padding_back = 0
 
         l_remainder = level % l_patch_size
         h_remainder = height % l_patch_size
@@ -89,9 +109,18 @@ class PatchEmbed3D(nn.Module):
             padding_right = w_pad - padding_left
 
         self.pad = nn.ZeroPad3d(
-            (padding_left, padding_right, padding_top, padding_bottom, padding_front, padding_back)
+            (
+                padding_left,
+                padding_right,
+                padding_top,
+                padding_bottom,
+                padding_front,
+                padding_back,
+            )
         )
-        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv3d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -99,13 +128,12 @@ class PatchEmbed3D(nn.Module):
 
     def forward(self, x: torch.Tensor):
         B, C, L, H, W = x.shape
-        assert L == self.img_size[0] and H == self.img_size[1] and W == self.img_size[2], \
-            f"Input image size ({L}*{H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}*{self.img_size[2]})."
         x = self.pad(x)
         x = self.proj(x)
         if self.norm:
             x = self.norm(x.permute(0, 2, 3, 4, 1)).permute(0, 4, 1, 2, 3)
         return x
+
 
 class PatchRecovery2D(nn.Module):
     """
@@ -135,7 +163,9 @@ class PatchRecovery2D(nn.Module):
         padding_left = w_pad // 2
         padding_right = int(w_pad - padding_left)
 
-        return output[:, :, padding_top: H - padding_bottom, padding_left: W - padding_right]
+        return output[
+            :, :, padding_top : H - padding_bottom, padding_left : W - padding_right
+        ]
 
 
 class PatchRecovery3D(nn.Module):
@@ -171,5 +201,10 @@ class PatchRecovery3D(nn.Module):
         padding_left = lon_pad // 2
         padding_right = lon_pad - padding_left
 
-        return output[:, :, padding_front: Pl - padding_back,
-               padding_top: Lat - padding_bottom, padding_left: Lon - padding_right]
+        return output[
+            :,
+            :,
+            padding_front : Pl - padding_back,
+            padding_top : Lat - padding_bottom,
+            padding_left : Lon - padding_right,
+        ]
