@@ -1,21 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import torch
-from torch import Tensor
-import torch.nn as nn
-import dgl
-
-try:
-    from dgl import DGLGraph
-except:
-    raise ImportError(
-        "Mesh Graph Net requires the DGL library. Install the "
-        + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
-    )
-from typing import Callable, Tuple, List, Union
-from dataclasses import dataclass
-
-from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 import torch_cluster
 import torch_scatter
+
+from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 
 
 class Mesh_Reduced(torch.nn.Module):
@@ -185,8 +188,7 @@ class Mesh_Reduced(torch.nn.Module):
             torch.tensor([len(position_pivotal)] * graph.batch_size).to(x.device)
         )
 
-        if self.knn_every_step == True:
-            # x, _, _, _ = self.knn_interpolate(x=x,pos_x=position_mesh,pos_y=position_pivotal)
+        if self.knn_every_step:
             x, _, _, _ = self.knn_interpolate(
                 x=x,
                 pos_x=position_mesh_batch,
@@ -194,7 +196,7 @@ class Mesh_Reduced(torch.nn.Module):
                 batch_x=batch_mesh,
                 batch_y=batch_pivotal,
             )
-        elif self.knn_every_step == False and self.knn_encoder_already == False:
+        elif self.knn_every_step is False and self.knn_encoder_already is False:
             (
                 x,
                 self.x_idx_encode,
@@ -204,7 +206,7 @@ class Mesh_Reduced(torch.nn.Module):
                 x=x, pos_x=position_mesh_batch, pos_y=position_pivotal_batch
             )
             self.knn_encoder_already = True
-        elif self.knn_every_step == False and self.knn_encoder_already == True:
+        elif self.knn_every_step is False and self.knn_encoder_already is True:
             x = self.knn_interpolate_fast(
                 x=x,
                 pos_x=position_mesh_batch,
@@ -226,7 +228,7 @@ class Mesh_Reduced(torch.nn.Module):
             torch.tensor([len(position_pivotal)] * graph.batch_size).to(x.device)
         )
 
-        if self.knn_every_step == True:
+        if self.knn_every_step is True:
             x, _, _, _ = self.knn_interpolate(
                 x=x,
                 pos_x=position_pivotal_batch,
@@ -234,7 +236,7 @@ class Mesh_Reduced(torch.nn.Module):
                 batch_x=batch_pivotal,
                 batch_y=batch_mesh,
             )
-        elif self.knn_every_step == False and self.knn_decoder_already == False:
+        elif self.knn_every_step is False and self.knn_decoder_already is False:
             (
                 x,
                 self.x_idx_decode,
@@ -244,7 +246,7 @@ class Mesh_Reduced(torch.nn.Module):
                 x=x, pos_x=position_pivotal_batch, pos_y=position_mesh_batch
             )
             self.knn_decoder_already = True
-        elif self.knn_every_step == False and self.knn_decoder_already == True:
+        elif self.knn_every_step is False and self.knn_decoder_already is True:
             x = self.knn_interpolate_fast(
                 x=x,
                 pos_x=position_pivotal_batch,

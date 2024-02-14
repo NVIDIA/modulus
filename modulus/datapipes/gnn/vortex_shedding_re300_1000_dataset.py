@@ -1,12 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+import pdb
+
+import dgl
+import numpy as np
+import torch
 from dgl.data import DGLDataset
 from dgl.dataloading import GraphDataLoader
-import numpy as np
-import os
-import torch
-import dgl
-import pdb
-from .utils import read_vtp_file, save_json, load_json
 from tqdm import tqdm
+
+from .utils import load_json, save_json
 
 
 class LatentDataset(DGLDataset):
@@ -29,7 +47,7 @@ class LatentDataset(DGLDataset):
         self.split = split
         self.sequence_len = 401
         self.data_dir = data_dir
-        if produce_latents == True:
+        if produce_latents:
             self.save_latents(Encoder, position_mesh, position_pivotal, dist)
 
         self.z = torch.load("{}/latent_{}.pt".format(self.data_dir, self.split)).cpu()
@@ -194,15 +212,15 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
     @staticmethod
     def normalize(invar, mu, std):
         """normalizes a tensor"""
-        assert invar.size()[-1] == mu.size()[-1]
-        assert invar.size()[-1] == std.size()[-1]
+        if invar.size()[-1] != mu.size()[-1] or invar.size()[-1] != std.size()[-1]:
+            raise ValueError(
+                "invar, mu, and std must have the same size in the last dimension"
+            )
         return (invar - mu.expand(invar.size())) / std.expand(invar.size())
 
     @staticmethod
     def denormalize(invar, mu, std):
         """denormalizes a tensor"""
-        # assert invar.size()[-1] == mu.size()[-1]
-        # assert invar.size()[-1] == std.size()[-1]
         denormalized_invar = invar * std + mu
         return denormalized_invar
 

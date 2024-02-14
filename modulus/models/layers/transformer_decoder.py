@@ -1,9 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import copy
+from typing import Callable, Optional, Union
+
 import torch
 from torch import Tensor
-from torch.nn import Module, MultiheadAttention, Dropout, Linear, LayerNorm, ModuleList
+from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList, MultiheadAttention
 from torch.nn import functional as F
-from typing import Optional, Any, Union, Callable
-import copy
 
 
 class TransformerDecoder(Module):
@@ -47,8 +64,6 @@ class TransformerDecoder(Module):
         """
         output = tgt
 
-        seq_len = _get_seq_len(tgt, self.layers[0].self_attn.batch_first)
-        # tgt_is_causal = _detect_is_causal_mask(tgt_mask, tgt_is_causal, seq_len)
         tgt_is_causal = True
 
         for mod in self.layers:
@@ -267,6 +282,7 @@ def _detect_is_causal_mask(
 
     if is_causal is None and mask is not None:
         sz = size if size is not None else mask.size(-2)
+        # ruff: noqa: F821
         causal_comparison = _generate_square_subsequent_mask(
             sz, device=mask.device, dtype=mask.dtype
         )

@@ -1,13 +1,28 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import torch
+from torch import Tensor, nn
+from torch.nn import LayerNorm
+
+from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
 from modulus.models.layers.transformer_decoder import (
     DecoderOnlyLayer,
     TransformerDecoder,
 )
-from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
-from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
-from torch import nn
-from torch.nn import LayerNorm
-from torch import Tensor
 
 
 class Sequence_Model(torch.nn.Module):
@@ -100,7 +115,7 @@ class Sequence_Model(torch.nn.Module):
         )
 
     def forward(self, x, context=None):
-        if context != None:
+        if context is not None:
             context = self.context_encoder(context)
             x = torch.cat([context, x], dim=1)
         x = self.input_encoder(x)
