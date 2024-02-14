@@ -41,13 +41,16 @@ class MulX(torch.nn.Module):
 def test_HEALPixFoldFaces(device):
     fold_func = HEALPixFoldFaces()
 
-    tensor_size = torch.randint(low=1, high=4, size=(5,)).tolist()
+    tensor_size = torch.randint(low=2, high=4, size=(5,)).tolist()
     output_size = (tensor_size[0] * tensor_size[1], *tensor_size[2:])
     invar = torch.ones(*tensor_size, device=device)
 
     outvar = fold_func(invar)
     assert outvar.shape == output_size
 
+    fold_func = HEALPixFoldFaces(enable_nhwc=True)
+    assert fold_func(invar).shape == outvar.shape
+    assert fold_func(invar).stride() != outvar.stride() 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUnfoldFaces(device):
@@ -84,6 +87,12 @@ def test_HEALPixPadding(device, padding):
     batch_size = 2
     pad_func = HEALPixPadding(padding)
 
+    # test invalid padding size
+    with pytest.raises(
+        AssertionError, match=("invalid value for 'padding', expected int > 0 but got {padding}")
+    ):
+        pad_func = HEALPixPadding(0)
+    
     hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
     c_size = torch.randint(low=3, high=7, size=(1,)).tolist()
     hw_size = np.asarray(hw_size + hw_size)
@@ -116,8 +125,35 @@ HEALPixLayer_testdata = [
 def test_HEALPixLayer(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 
-    tensor_size = torch.randint(low=1, high=4, size=(2,)).tolist()
-    tensor_size = [2, 12, *tensor_size]
+    tensor_size = torch.randint(low=2, high=4, size=(1,)).tolist()
+    tensor_size = [24, 4, *tensor_size, *tensor_size]
     invar = torch.rand(tensor_size, device=device)
+    outvar = layer(invar)
 
-    assert common.compare_output(layer(invar), invar * multiplier)
+    assert common.compare_output(outvar, invar * multiplier)
+
+    # test nhwc mode and dilation
+    layer = HEALPixLayer(
+        layer=torch.nn.Conv2d,
+        in_channels=4,
+        out_channels=8,
+        kernel_size=3,
+        device=device,
+        #dilation=4,
+    )
+
+    outvar = layer(invar)
+
+    layer = HEALPixLayer(
+        layer=torch.nn.Conv2d,
+        in_channels=4,
+        out_channels=8,
+        kernel_size=3,
+        device=device,
+        dilation=1,
+        enable_healpixpad=True,
+        enable_nhwc=True,
+    )
+
+    assert outvar.shape == layer(invar).shape
+    assert outvar.stride() != layer(invar).stride()

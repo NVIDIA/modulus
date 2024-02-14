@@ -41,11 +41,9 @@ import torch
 import torch as th
 
 sys.path.append("/home/disk/quicksilver/nacc/dlesm/HealPixPad")
-have_healpixpad = False
+have_healpixpad = True
 try:
     from healpixpad import HEALPixPad
-
-    have_healpixpad = True
 except ImportError:
     print("Warning, cannot find healpixpad module")
     have_healpixpad = False
@@ -144,13 +142,13 @@ class HEALPixPaddingv2(th.nn.Module):
         The padding size
     """
 
-    def __init__(self, padding: int):
+    def __init__(self, padding: int):  # pragma: no cover
         super().__init__()
         self.unfold = HEALPixUnfoldFaces(num_faces=12)
         self.fold = HEALPixFoldFaces()
         self.padding = HEALPixPad(padding=padding)
 
-    def forward(self, x):
+    def forward(self, x):  # pragma: no cover
         torch.cuda.nvtx.range_push("HEALPixPaddingv2:forward")
 
         x = self.unfold(x)
@@ -578,12 +576,13 @@ class HEALPixLayer(th.nn.Module):
                 )
                 dilation = 1 if "dilation" not in kwargs else kwargs["dilation"]
                 padding = ((kernel_size - 1) // 2) * dilation
+                print(f'padding {padding} kernel size {kernel_size} {dilation}')
                 if (
                     enable_healpixpad
                     and have_healpixpad
                     and th.cuda.is_available()
                     and not enable_nhwc
-                ):
+                ):  #pragma: no cover
                     layers.append(HEALPixPaddingv2(padding=padding))
                 else:
                     layers.append(

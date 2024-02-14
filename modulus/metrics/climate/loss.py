@@ -32,8 +32,6 @@ class MSE_SSIM(torch.nn.Module):
         weights=[0.5, 0.5],
     ):
         """
-        Constructor method.
-
         Parameters:
         ----------
         mse_params: optional
@@ -85,19 +83,19 @@ class MSE_SSIM(torch.nn.Module):
         # check tensor shapes to ensure proper computation of loss
         if prediction.shape[-1] != prediction.shape[-2]:
             raise AssertionError(
-                f"Spatial dims H and W must match, got {prediction.shape[-2]} {prediction.shape[-1]} "
+                f"Spatial dims H and W must match: got {prediction.shape[-2]} and {prediction.shape[-1]}"
             )
         if prediction.shape[3] != 12:
-            raise AssertionError(f"Spatial dim F must be 12, go {prediction.shape[3]}")
+            raise AssertionError(f"Spatial dim F must be 12: got {prediction.shape[3]}")
         if prediction.shape[2] != model.output_channels:
             raise AssertionError(
-                f"model output channels and prediction output channels don't match: {model.output_channels} {prediction.shape[2]}"
+                f"model output channels and prediction output channels don't match: got {model.output_channels} for model and {prediction.shape[2]} for input"
             )
         if not (
             (prediction.shape[1] == model.output_time_dim)
             or (prediction.shape[1] == model.output_time_dim // model.input_time_dim)
         ):
-            raise AssertionError
+            raise AssertionError("Number of time steps in prediction must equal to model output time dim, or model output time dime divided by model input time dim")
 
         # store the location of output and target tensors
         device = prediction.device
@@ -185,9 +183,13 @@ class SSIM(torch.nn.Module):
         Forward pass of the SSIM loss
 
         param predicted: torch.Tensor
-            Predicted image of shape [B, T, C, F, H, W]
+            Predicted image of shape
+            [B, T, C, F, H, W] with time series forcasting
+            [B, C, F, H, W] without time series forcasting
         param target: torch.Tensor
-            Ground truth image of shape [B, T, C, F, H, W]
+            Ground truth image of shape
+            [B, T, C, F, H, W] with time series forcasting
+            [B, C, F, H, W] without time series forcasting
         param mask: torch.Tensor, optional
             Mask for excluding pixels
         param epoch: int, optional
@@ -198,6 +200,16 @@ class SSIM(torch.nn.Module):
         torch.Tensor
             The structural similarity loss
         """
+
+        if predicted.ndim != target.ndim:
+            raise AssertionError("Predicted and target tensor need to have the same number of dimensions")
+        if not self.time_series_forecasting and not(predicted.ndim == 4 or predicted.ndim == 5):
+            raise AssertionError("Need 4 or 5 dimensions when not using time series forecasting")
+        if self.time_series_forecasting and not(predicted.ndim == 5 or predicted.ndim == 6):
+            raise AssertionError("Need 5 or 6 dimensions when using time series forecasting")
+        # if predicted.ndim != 4 and predicted.ndim != 5:
+        #     raise AssertionError("Expected 4 or 5 dimensions in input")  
+        
         predicted = predicted.transpose(dim0=2, dim1=3)
         target = target.transpose(dim0=2, dim1=3)
         if self.time_series_forecasting:
@@ -206,9 +218,7 @@ class SSIM(torch.nn.Module):
             target = torch.flatten(target, start_dim=0, end_dim=2)
 
         window = self.window.expand(predicted.shape[1], -1, -1, -1)
-
-        if window.dtype != predicted.dtype:
-            window = window.to(dtype=predicted.dtype)
+        window = window.to(dtype=predicted.dtype)
 
         return self._ssim(predicted, target, window, mask, epoch)
 
