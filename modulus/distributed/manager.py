@@ -332,7 +332,7 @@ class DistributedManager(object):
 
         manager = DistributedManager()
 
-        manager._distributed = (world_size > 1) and torch.distributed.is_available()
+        manager._distributed = torch.distributed.is_available()
         if manager._distributed:
             # Update rank and world_size if using distributed
             manager._rank = rank
@@ -343,7 +343,6 @@ class DistributedManager(object):
                 manager._local_rank = local_rank
 
             # Setup distributed process group
-            # time.sleep(1)
             dist.init_process_group(
                 backend, rank=manager.rank, world_size=manager.world_size
             )
@@ -372,23 +371,28 @@ class DistributedManager(object):
         Parameters
         ----------
         name : str
-        Name of the process subgroup to be created.
+            Name of the process subgroup to be created.
 
         size : int
-        Size of the process subgroup to be created. This must be an integer factor of
-        the parent group's size.
+            Size of the process subgroup to be created. This must be an integer factor of
+            the parent group's size.
 
         group_name : Optional[str]
-        Name of the parent process group, optional. If None, the default process group
-        will be used. Default None.
+            Name of the parent process group, optional. If None, the default process group
+            will be used. Default None.
 
         verbose : bool
-        Print out ranks of each created process group, default False.
+            Print out ranks of each created process group, default False.
 
         """
         manager = DistributedManager()
         if not manager.distributed:
-            return None
+            raise AssertionError(
+                "torch.distributed is unavailable. "
+                "Check pytorch build to ensure the distributed package is available. "
+                "If building PyTorch from source, set `USE_DISTRIBUTED=1` "
+                "to enable the distributed package"
+            )
 
         if name in manager._groups:
             raise AssertionError(f"Group with name {name} already exists")
@@ -453,7 +457,12 @@ class DistributedManager(object):
         """
         manager = DistributedManager()
         if not manager.distributed:
-            return None
+            raise AssertionError(
+                "torch.distributed is unavailable. "
+                "Check pytorch build to ensure the distributed package is available. "
+                "If building PyTorch from source, set `USE_DISTRIBUTED=1` "
+                "to enable the distributed package"
+            )
 
         if group_name not in manager._groups:
             raise ValueError(f"Group with name {group_name} does not exist")
@@ -535,6 +544,12 @@ class DistributedManager(object):
     def cleanup():
         """Clean up distributed group and singleton"""
         # Destroying group.WORLD is enough for all process groups to get destroyed
-        dist.barrier()  # just make sure that no process hangs
-        dist.destroy_process_group()
+        if DistributedManager().distributed:
+            if torch.cuda.is_available():
+                dist.barrier(
+                    device_ids=[DistributedManager().local_rank]
+                )  # just make sure that no process hangs
+            else:
+                dist.barrier()  # just make sure that no process hangs
+            dist.destroy_process_group()
         DistributedManager._shared_state = {}

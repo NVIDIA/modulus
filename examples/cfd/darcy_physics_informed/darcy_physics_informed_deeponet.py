@@ -30,33 +30,33 @@ from modulus.launch.logging import LaunchLogger
 from modulus.launch.utils.checkpoint import save_checkpoint
 
 from utils import HDF5MapStyleDataset
-from darcy_pde import Darcy
+from modulus.sym.eq.pdes.diffusion import Diffusion
+
+from modulus.sym.graph import Graph
+from modulus.sym.key import Key
+from modulus.sym.node import Node
+from typing import Optional, Dict
+from modulus.sym.models.arch import Arch
 
 
-def validation_step(model_branch, model_trunk, dataloader, epoch):
+def validation_step(graph, dataloader, epoch):
     """Validation Step"""
-    model_branch.eval()
-    model_trunk.eval()
 
     with torch.no_grad():
         loss_epoch = 0
         for data in dataloader:
             invar, outvar, x_invar, y_invar = data
-            coords = torch.cat(
-                (x_invar.squeeze(dim=2), y_invar.squeeze(dim=2)), dim=0
-            ).reshape(-1, 2)
+            out = graph.forward(
+                {"k_prime": invar[:, 0].unsqueeze(dim=1), "x": x_invar, "y": y_invar}
+            )
 
-            branch_out = model_branch(invar[:, 0].unsqueeze(dim=1))
-            trunk_out = model_trunk(coords)
-            branch_out = branch_out.reshape(-1, 240 * 240)
-            trunk_out = trunk_out.reshape(-1, 240 * 240)
-            deepo_out = trunk_out * branch_out
-            deepo_out = deepo_out.reshape(-1, 1, 240, 240)
-            loss_epoch += F.mse_loss(outvar, deepo_out)
+            deepo_out_u = out["u"]
+
+            loss_epoch += F.mse_loss(outvar, deepo_out_u)
 
         # convert data to numpy
         outvar = outvar.detach().cpu().numpy()
-        predvar = deepo_out.detach().cpu().numpy()
+        predvar = deepo_out_u.detach().cpu().numpy()
 
         # plotting
         fig, ax = plt.subplots(1, 3, figsize=(25, 5))
@@ -80,22 +80,100 @@ def validation_step(model_branch, model_trunk, dataloader, epoch):
         return loss_epoch / len(dataloader)
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="config.yaml")
+class MdlsSymWrapper(Arch):
+    """
+    Wrapper model to convert Modulus model to Modulus-Sym model.
+
+    Modulus Sym relies on the inputs/outputs of the model being dictionary of tensors.
+    This wrapper converts the input dictionary of tensors to a tensor inputs that can
+    be processed by the Modulus model that operate on tensors. Appropriate
+    transformations are performed in the forward pass of the model to translate between
+    these two input/output definitions.
+
+    These transformations can differ based on the models. For e.g. typically for a fully
+    connected network, the input tensors are combined by concatenating them along
+    appropriate dimension before passing them as an input to the Modulus model.
+    During the output, the process is reversed, the output tensor from pytorch model is
+    split across appropriate dimensions and then converted to a dictionary with
+    appropriate keys to produce the final output.
+
+    Having the model wrapped in a wrapper like this allows gradient computation using
+    the Modulus Sym's optimized gradient computing backend.
+
+    For more details on Modulus Sym models, refer:
+    https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-custom-models-in-modulus
+    For more details on Key class, refer:
+    https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.key
+    """
+
+    def __init__(
+        self,
+        input_keys=[Key("k"), Key("x"), Key("y")],
+        output_keys=[Key("k_prime"), Key("u")],
+        trunk_net=None,
+        branch_net=None,
+    ):
+        super(MdlsSymWrapper, self).__init__(
+            input_keys=input_keys,
+            output_keys=output_keys,
+        )
+
+        self.branch_net = branch_net
+        self.trunk_net = trunk_net
+
+    def forward(self, dict_tensor: Dict[str, torch.Tensor]):
+        # Concatenate x, y inputs to feeed in the trunk network which has a MLP
+        xy_input_shape = dict_tensor["x"].shape
+        xy = self.concat_input(
+            {
+                k: dict_tensor[k].view(xy_input_shape[0], -1, 1) for k in ["x", "y"]
+            },  # flatten the coordinate dimensions
+            ["x", "y"],
+            detach_dict=self.detach_key_dict,
+            dim=-1,  # concat along the last dimension to form the feature vector.
+        )
+        fc_out = self.trunk_net(xy)
+
+        # Pass the k-prime for the FNO input
+        fno_out = self.branch_net(dict_tensor["k_prime"])
+
+        # reshape the fc_out
+        fc_out = fc_out.view(
+            xy_input_shape[0], -1, xy_input_shape[-2], xy_input_shape[-1]
+        )
+
+        # multiply the outputs of branch and trunk networks to get the final output
+        out = fc_out * fno_out
+
+        return self.split_output(
+            out, self.output_key_dict, dim=1
+        )  # Split along the channel dimension to get a dictionary of tensors
+
+
+@hydra.main(version_base="1.3", config_path="conf", config_name="config_deeponet.yaml")
 def main(cfg: DictConfig):
+
+    # CUDA support
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
     LaunchLogger.initialize()
 
-    darcy = Darcy()
+    # Use Diffusion equation for the Darcy PDE
+    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0 * 4.49996e00 * 3.88433e-03)
+
     darcy_node = darcy.make_nodes()
 
     dataset = HDF5MapStyleDataset(
-        to_absolute_path("./datasets/Darcy_241/train.hdf5"), device="cuda"
+        to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device
     )
     validation_dataset = HDF5MapStyleDataset(
-        to_absolute_path("./datasets/Darcy_241/validation.hdf5"), device="cuda"
+        to_absolute_path("./datasets/Darcy_241/validation.hdf5"), device=device
     )
 
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
 
     validation_dataloader = DataLoader(validation_dataset, batch_size=1, shuffle=False)
 
@@ -109,20 +187,54 @@ def main(cfg: DictConfig):
         num_fno_layers=cfg.model.fno.num_fno_layers,
         num_fno_modes=cfg.model.fno.num_fno_modes,
         padding=cfg.model.fno.padding,
-    ).to("cuda")
+    )
 
     model_trunk = FullyConnected(
         in_features=cfg.model.fc.in_features,
         out_features=cfg.model.fc.out_features,
         layer_size=cfg.model.fc.layer_size,
         num_layers=cfg.model.fc.num_layers,
-    ).to("cuda")
+    )
+
+    # Define k-prime as an auxiliary variable that is a copy of k.
+    # Having k as the output of the model will allow gradients of k (for pde loss)
+    # to be computed using Sym's gradient backend
+    model = MdlsSymWrapper(
+        input_keys=[Key("k_prime"), Key("x"), Key("y")],
+        output_keys=[Key("k"), Key("u")],
+        trunk_net=model_trunk,
+        branch_net=model_branch,
+    )
+
+    nodes = darcy_node + [model.make_node(name="network", jit=False)]
+
+    # note: this example uses the Graph class from Modulus Sym to construct the
+    # computational graph. This allows you to leverage Modulus Sym's optimized
+    # derivative backend to compute the derivatives, along with other benefits like
+    # symbolic definition of PDEs and leveraging the PDEs from Modulus Sym's PDE
+    # module.
+    # For more details, refer: https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.graph
+    graph = Graph(
+        nodes,
+        [Key("k_prime"), Key("x"), Key("y")],
+        [Key("k"), Key("u"), Key("diffusion_u")],
+        func_arch=False,
+    ).to(device)
+
+    # For pure inference (no gradients)
+    graph_infer = Graph(
+        [model.make_node(name="network", jit=False)],
+        [Key("k_prime"), Key("x"), Key("y")],
+        [Key("k"), Key("u")],  # No PDE Key
+        func_arch=False,
+    ).to(device)
 
     optimizer = torch.optim.Adam(
         chain(model_branch.parameters(), model_trunk.parameters()),
         betas=(0.9, 0.999),
         lr=cfg.start_lr,
         weight_decay=0.0,
+        fused=True if torch.cuda.is_available() else False,
     )
 
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg.gamma)
@@ -137,70 +249,31 @@ def main(cfg: DictConfig):
         ) as log:
             for data in dataloader:
                 optimizer.zero_grad()
-                invar = data[0]
                 outvar = data[1]
-                x_invar = data[2].squeeze(dim=2).reshape(-1, 1).requires_grad_(True)
-                y_invar = data[3].squeeze(dim=2).reshape(-1, 1).requires_grad_(True)
-                coords = torch.cat((x_invar, y_invar), dim=1)
 
                 # compute forward pass
-                branch_out = model_branch(invar[:, 0].unsqueeze(dim=1))
-                trunk_out = model_trunk(coords)
-                branch_out = branch_out.reshape(-1, 1)
-                trunk_out = trunk_out.reshape(-1, 1)
-                deepo_out = trunk_out * branch_out
-
-                # Compute physics loss
-                # note: the derivative computation can be done using Modulus-Sym
-                # utilities. However, for the purposes of this example, we show it using
-                # torch.autograd.
-                grad_sol = torch.autograd.grad(
-                    deepo_out.sum(),
-                    [x_invar, y_invar],
-                    create_graph=True,  # grad_outputs=torch.ones_like(deepo_out)
-                )
-                sol_x = grad_sol[0]
-                sol_y = grad_sol[1]
-
-                sol_x_x = torch.autograd.grad(
-                    sol_x.sum(),
-                    [x_invar],
-                    create_graph=True,  # grad_outputs=torch.ones_like(sol_x)
-                )[0]
-                sol_y_y = torch.autograd.grad(
-                    sol_y.sum(),
-                    [y_invar],
-                    create_graph=True,  # grad_outputs=torch.ones_like(sol_y)
-                )[0]
-
-                k, k_x, k_y = (
-                    invar[:, 0].reshape(-1, 1),
-                    invar[:, 1].reshape(-1, 1),
-                    invar[:, 2].reshape(-1, 1),
-                )
-
-                pde_out = darcy_node[0].evaluate(
+                out = graph.forward(
                     {
-                        "sol__x": sol_x,
-                        "sol__y": sol_y,
-                        "sol__x__x": sol_x_x,
-                        "sol__y__y": sol_y_y,
-                        "K": k,
-                        "K__x": k_x,
-                        "K__y": k_y,
+                        "k_prime": data[0][:, 0].unsqueeze(dim=1),
+                        "x": data[2].requires_grad_(True),
+                        "y": data[3].requires_grad_(True),
                     }
                 )
 
-                pde_out_arr = pde_out["darcy"]
-                pde_out_arr = pde_out_arr.reshape(-1, 240, 240)
+                pde_out_arr = out["diffusion_u"]
+
+                # Boundary condition
                 pde_out_arr = F.pad(
-                    pde_out_arr[:, 2:-2, 2:-2], [2, 2, 2, 2], "constant", 0
+                    pde_out_arr[..., 2:-2, 2:-2], [2, 2, 2, 2], "constant", 0
                 )
                 loss_pde = F.l1_loss(pde_out_arr, torch.zeros_like(pde_out_arr))
 
                 # Compute data loss
-                deepo_out = deepo_out.reshape(-1, 1, 240, 240)
-                loss_data = F.mse_loss(outvar, deepo_out)
+                deepo_out_u = out["u"]
+                deepo_out_k = out["k"]
+                loss_data = F.mse_loss(outvar, deepo_out_u) + F.mse_loss(
+                    data[0][:, 0].unsqueeze(dim=1), deepo_out_k
+                )
 
                 # Compute total loss
                 loss = loss_data + cfg.phy_wt * loss_pde
@@ -216,9 +289,7 @@ def main(cfg: DictConfig):
             log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
 
         with LaunchLogger("valid", epoch=epoch) as log:
-            error = validation_step(
-                model_branch, model_trunk, validation_dataloader, epoch
-            )
+            error = validation_step(graph_infer, validation_dataloader, epoch)
             log.log_epoch({"Validation error": error})
 
         save_checkpoint(
