@@ -7,7 +7,9 @@ import time, os
 import wandb as wb
 
 from modulus.models.mesh_reduced.mesh_reduced import Mesh_Reduced
-from modulus.datapipes.gnn.vortex_shedding_re300_1000_dataset import VortexSheddingRe300To1000Dataset
+from modulus.datapipes.gnn.vortex_shedding_re300_1000_dataset import (
+    VortexSheddingRe300To1000Dataset,
+)
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -19,17 +21,17 @@ from constants import Constants
 from tqdm import tqdm
 
 C = Constants()
+
+
 class Mesh_ReducedTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
         dataset_train = VortexSheddingRe300To1000Dataset(
-            name="vortex_shedding_train",
-            split="train"
+            name="vortex_shedding_train", split="train"
         )
 
         dataset_test = VortexSheddingRe300To1000Dataset(
-            name="vortex_shedding_train",
-            split="test"
+            name="vortex_shedding_train", split="test"
         )
 
         self.dataloader = GraphDataLoader(
@@ -51,7 +53,10 @@ class Mesh_ReducedTrainer:
         )
 
         self.model = Mesh_Reduced(
-            C.num_input_features, C.num_edge_features, C.num_output_features, knn_every_step = C.knn_every_step
+            C.num_input_features,
+            C.num_edge_features,
+            C.num_output_features,
+            knn_every_step=C.knn_every_step,
         )
 
         if C.jit:
@@ -84,13 +89,21 @@ class Mesh_ReducedTrainer:
             device=dist.device,
         )
 
-    def forward(self, graph,  position_mesh, position_pivotal):
+    def forward(self, graph, position_mesh, position_pivotal):
         with autocast(enabled=C.amp):
-            z  = self.model.encode(graph.ndata["x"], graph.edata["x"], graph,  position_mesh, position_pivotal)
-            x = self.model.decode(z, graph.edata["x"], graph,  position_mesh, position_pivotal)
-            loss = self.criterion(x,graph.ndata["x"])
+            z = self.model.encode(
+                graph.ndata["x"],
+                graph.edata["x"],
+                graph,
+                position_mesh,
+                position_pivotal,
+            )
+            x = self.model.decode(
+                z, graph.edata["x"], graph, position_mesh, position_pivotal
+            )
+            loss = self.criterion(x, graph.ndata["x"])
             return loss
-        
+
     def train(self, graph, position_mesh, position_pivotal):
         graph = graph.to(self.dist.device)
         self.optimizer.zero_grad()
@@ -98,24 +111,39 @@ class Mesh_ReducedTrainer:
         self.backward(loss)
         self.scheduler.step()
         return loss
-    
+
     @torch.no_grad()
     def test(self, graph, position_mesh, position_pivotal):
         graph = graph.to(self.dist.device)
         with autocast(enabled=C.amp):
-            z  = self.model.encode(graph.ndata["x"], graph.edata["x"], graph,  position_mesh, position_pivotal)
-            x = self.model.decode(z, graph.edata["x"], graph,  position_mesh, position_pivotal)
-            loss = self.criterion(x,graph.ndata["x"]) 
-               
-            relative_error = loss/self.criterion(graph.ndata["x"], graph.ndata["x"]*0.0).detach()
+            z = self.model.encode(
+                graph.ndata["x"],
+                graph.edata["x"],
+                graph,
+                position_mesh,
+                position_pivotal,
+            )
+            x = self.model.decode(
+                z, graph.edata["x"], graph, position_mesh, position_pivotal
+            )
+            loss = self.criterion(x, graph.ndata["x"])
+
+            relative_error = (
+                loss / self.criterion(graph.ndata["x"], graph.ndata["x"] * 0.0).detach()
+            )
             relative_error_s_record = []
             for i in range(C.num_input_features):
-                loss_s = self.criterion(x[:,i],graph.ndata["x"][:,i])
-                relative_error_s =  loss_s/self.criterion(graph.ndata["x"][:,i], graph.ndata["x"][:,i]*0.0).detach()
+                loss_s = self.criterion(x[:, i], graph.ndata["x"][:, i])
+                relative_error_s = (
+                    loss_s
+                    / self.criterion(
+                        graph.ndata["x"][:, i], graph.ndata["x"][:, i] * 0.0
+                    ).detach()
+                )
                 relative_error_s_record.append(relative_error_s)
-        
-        return loss, relative_error, relative_error_s_record        
-        
+
+        return loss, relative_error, relative_error_s_record
+
     def backward(self, loss):
         # backward pass
         if C.amp:
@@ -125,7 +153,6 @@ class Mesh_ReducedTrainer:
         else:
             loss.backward()
             self.optimizer.step()
-
 
 
 if __name__ == "__main__":
@@ -153,7 +180,6 @@ if __name__ == "__main__":
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     logger.file_logging()
 
-
     trainer = Mesh_ReducedTrainer(wb, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
@@ -161,7 +187,7 @@ if __name__ == "__main__":
     position_pivotal = torch.from_numpy(np.loadtxt(C.pivotal_dir)).to(dist.device)
     for epoch in range(trainer.epoch_init, C.epochs):
         for graph in tqdm(trainer.dataloader):
-            loss = trainer.train(graph,position_mesh,position_pivotal)
+            loss = trainer.train(graph, position_mesh, position_pivotal)
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss:10.3e}, time per epoch: {(time.time()-start):10.3e}"
         )
@@ -170,7 +196,7 @@ if __name__ == "__main__":
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if dist.rank == 0 and epoch%100 == 0:
+        if dist.rank == 0 and epoch % 100 == 0:
             save_checkpoint(
                 os.path.join(C.ckpt_path, C.ckpt_name),
                 models=trainer.model,
@@ -182,4 +208,3 @@ if __name__ == "__main__":
             logger.info(f"Saved model on rank {dist.rank}")
         start = time.time()
     rank_zero_logger.info("Training completed!")
-

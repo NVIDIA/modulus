@@ -14,7 +14,7 @@ class TransformerDecoder(Module):
         num_layers: the number of sub-decoder-layers in the decoder (required).
         norm: the layer normalization component (optional).
     """
-    __constants__ = ['norm']
+    __constants__ = ["norm"]
 
     def __init__(self, decoder_layer, num_layers, norm=None):
         super().__init__()
@@ -22,8 +22,14 @@ class TransformerDecoder(Module):
         self.layers = _get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
         self.norm = norm
-    def forward(self, tgt: Tensor, tgt_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
-                tgt_is_causal: Optional[bool] = None) -> Tensor:
+
+    def forward(
+        self,
+        tgt: Tensor,
+        tgt_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        tgt_is_causal: Optional[bool] = None,
+    ) -> Tensor:
         """Pass the inputs (and mask) through the decoder layer in turn.
 
         Args:
@@ -42,22 +48,21 @@ class TransformerDecoder(Module):
         output = tgt
 
         seq_len = _get_seq_len(tgt, self.layers[0].self_attn.batch_first)
-        #tgt_is_causal = _detect_is_causal_mask(tgt_mask, tgt_is_causal, seq_len)
+        # tgt_is_causal = _detect_is_causal_mask(tgt_mask, tgt_is_causal, seq_len)
         tgt_is_causal = True
 
         for mod in self.layers:
-            output = mod(output, tgt_mask=tgt_mask,
-                         
-                         tgt_key_padding_mask=tgt_key_padding_mask,
-                     
-                         tgt_is_causal=tgt_is_causal)
+            output = mod(
+                output,
+                tgt_mask=tgt_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                tgt_is_causal=tgt_is_causal,
+            )
 
         if self.norm is not None:
             output = self.norm(output)
 
         return output
-
-
 
 
 class DecoderOnlyLayer(Module):
@@ -80,18 +85,40 @@ class DecoderOnlyLayer(Module):
             bias. Default: ``True``.
 
     """
-    __constants__ = ['norm_first']
+    __constants__ = ["norm_first"]
 
-    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
-                                            bias=bias, **factory_kwargs)
-        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
-                                                 bias=bias, **factory_kwargs)
+        self.self_attn = MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            bias=bias,
+            **factory_kwargs,
+        )
+        self.multihead_attn = MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            bias=bias,
+            **factory_kwargs,
+        )
         # Implementation of Feedforward model
         self.linear1 = Linear(d_model, dim_feedforward, bias=bias, **factory_kwargs)
         self.dropout = Dropout(dropout)
@@ -112,8 +139,8 @@ class DecoderOnlyLayer(Module):
             self.activation = activation
 
     def __setstate__(self, state):
-        if 'activation' not in state:
-            state['activation'] = F.relu
+        if "activation" not in state:
+            state["activation"] = F.relu
         super().__setstate__(state)
 
     def forward(
@@ -121,7 +148,7 @@ class DecoderOnlyLayer(Module):
         tgt: Tensor,
         tgt_mask: Optional[Tensor] = None,
         tgt_key_padding_mask: Optional[Tensor] = None,
-        tgt_is_causal: bool = False
+        tgt_is_causal: bool = False,
     ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer.
 
@@ -153,42 +180,66 @@ class DecoderOnlyLayer(Module):
 
         x = tgt
         if self.norm_first:
-            x = x + self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal)
-            x = x + self._mha_block(self.norm2(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal )
+            x = x + self._sa_block(
+                self.norm1(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal
+            )
+            x = x + self._mha_block(
+                self.norm2(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal
+            )
             x = x + self._ff_block(self.norm3(x))
         else:
-            x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal))
-            x = self.norm2(x + self._mha_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal))
+            x = self.norm1(
+                x + self._sa_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal)
+            )
+            x = self.norm2(
+                x + self._mha_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal)
+            )
             x = self.norm3(x + self._ff_block(x))
 
         return x
 
-
     # self-attention block
-    def _sa_block(self, x: Tensor,
-                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
-        x = self.self_attn(x, x, x,
-                           attn_mask=attn_mask,
-                           key_padding_mask=key_padding_mask,
-                           is_causal=is_causal,
-                           need_weights=False)[0]
+    def _sa_block(
+        self,
+        x: Tensor,
+        attn_mask: Optional[Tensor],
+        key_padding_mask: Optional[Tensor],
+        is_causal: bool = False,
+    ) -> Tensor:
+        x = self.self_attn(
+            x,
+            x,
+            x,
+            attn_mask=attn_mask,
+            key_padding_mask=key_padding_mask,
+            is_causal=is_causal,
+            need_weights=False,
+        )[0]
         return self.dropout1(x)
 
     # multihead attention block
-    def _mha_block(self, x: Tensor,
-                   attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
-        x = self.multihead_attn(x, x, x,
-                                attn_mask=attn_mask,
-                                key_padding_mask=key_padding_mask,
-                                is_causal=is_causal,
-                                need_weights=False)[0]
+    def _mha_block(
+        self,
+        x: Tensor,
+        attn_mask: Optional[Tensor],
+        key_padding_mask: Optional[Tensor],
+        is_causal: bool = False,
+    ) -> Tensor:
+        x = self.multihead_attn(
+            x,
+            x,
+            x,
+            attn_mask=attn_mask,
+            key_padding_mask=key_padding_mask,
+            is_causal=is_causal,
+            need_weights=False,
+        )[0]
         return self.dropout2(x)
 
     # feed forward block
     def _ff_block(self, x: Tensor) -> Tensor:
         x = self.linear2(self.dropout(self.activation(self.linear1(x))))
         return self.dropout3(x)
-
 
 
 def _get_clones(module, N):
@@ -206,20 +257,19 @@ def _get_activation_fn(activation: str) -> Callable[[Tensor], Tensor]:
 
 
 def _detect_is_causal_mask(
-        mask: Optional[Tensor],
-        is_causal: Optional[bool] = None,
-        size: Optional[int] = None,
+    mask: Optional[Tensor],
+    is_causal: Optional[bool] = None,
+    size: Optional[int] = None,
 ) -> bool:
-    """Return whether the given attention mask is causal.
-
-    """
+    """Return whether the given attention mask is causal."""
     # Prevent type refinement
-    make_causal = (is_causal is True)
+    make_causal = is_causal is True
 
     if is_causal is None and mask is not None:
         sz = size if size is not None else mask.size(-2)
         causal_comparison = _generate_square_subsequent_mask(
-            sz, device=mask.device, dtype=mask.dtype)
+            sz, device=mask.device, dtype=mask.dtype
+        )
 
         # Do not use `torch.equal` so we handle batched masks by
         # broadcasting the comparison.
@@ -230,10 +280,8 @@ def _detect_is_causal_mask(
 
     return make_causal
 
-def _get_seq_len(
-        src: Tensor,
-        batch_first: bool
-) -> Optional[int]:
+
+def _get_seq_len(src: Tensor, batch_first: bool) -> Optional[int]:
 
     if src.is_nested:
         return None
@@ -246,4 +294,3 @@ def _get_seq_len(
             # batched: B, S, E if batch_first else S, B, E
             seq_len_pos = 1 if batch_first else 0
             return src_size[seq_len_pos]
-

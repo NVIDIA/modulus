@@ -9,7 +9,10 @@ from tqdm import tqdm
 
 from modulus.models.mesh_reduced.temporal_model import Sequence_Model
 from modulus.models.mesh_reduced.mesh_reduced import Mesh_Reduced
-from modulus.datapipes.gnn.vortex_shedding_re300_1000_dataset import VortexSheddingRe300To1000Dataset, LatentDataset
+from modulus.datapipes.gnn.vortex_shedding_re300_1000_dataset import (
+    VortexSheddingRe300To1000Dataset,
+    LatentDataset,
+)
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -20,30 +23,36 @@ from modulus.launch.utils import load_checkpoint, save_checkpoint
 from constants import Constants
 
 C = Constants()
+
+
 class Sequence_Trainer:
-    def __init__(self, wb, dist, 
-                 produce_latents = True,  
-                 Encoder = None, 
-		         position_mesh = None, 
-		         position_pivotal = None,
-                 rank_zero_logger = None):
+    def __init__(
+        self,
+        wb,
+        dist,
+        produce_latents=True,
+        Encoder=None,
+        position_mesh=None,
+        position_pivotal=None,
+        rank_zero_logger=None,
+    ):
         self.dist = dist
         dataset_train = LatentDataset(
             split="train",
-            produce_latents = produce_latents,
-		    Encoder = Encoder, 
-		    position_mesh = position_mesh, 
-		    position_pivotal = position_pivotal,
-            dist = dist
+            produce_latents=produce_latents,
+            Encoder=Encoder,
+            position_mesh=position_mesh,
+            position_pivotal=position_pivotal,
+            dist=dist,
         )
 
         dataset_test = LatentDataset(
             split="test",
-            produce_latents = produce_latents,
-		    Encoder = Encoder, 
-		    position_mesh = position_mesh, 
-		    position_pivotal = position_pivotal,
-            dist = dist
+            produce_latents=produce_latents,
+            Encoder=Encoder,
+            position_mesh=position_mesh,
+            position_pivotal=position_pivotal,
+            dist=dist,
         )
 
         self.dataloader = GraphDataLoader(
@@ -65,16 +74,13 @@ class Sequence_Trainer:
         )
 
         self.dataset_graph_train = VortexSheddingRe300To1000Dataset(
-            name="vortex_shedding_train",
-            split="train"
+            name="vortex_shedding_train", split="train"
         )
 
         self.dataset_graph_test = VortexSheddingRe300To1000Dataset(
-            name="vortex_shedding_train",
-            split="test"
+            name="vortex_shedding_train", split="test"
         )
 
-      
         self.dataloader_graph = GraphDataLoader(
             self.dataset_graph_train,
             batch_size=1,
@@ -123,15 +129,28 @@ class Sequence_Trainer:
             scaler=self.scaler,
             device=dist.device,
         )
-    
+
     def denormalize(self, sample):
-        for j in range(sample.size()[0]):	
-            sample[j] = self.dataset_graph_train.denormalize(sample[j], self.dataset_graph_train.node_stats["node_mean"].to(self.dist.device),  
-            self.dataset_graph_train.node_stats["node_std"].to(self.dist.device))
+        for j in range(sample.size()[0]):
+            sample[j] = self.dataset_graph_train.denormalize(
+                sample[j],
+                self.dataset_graph_train.node_stats["node_mean"].to(self.dist.device),
+                self.dataset_graph_train.node_stats["node_std"].to(self.dist.device),
+            )
         return sample
-    
+
     @torch.no_grad()
-    def sample(self, z0, context, ground_trueth, true_latent, encoder, graph, position_mesh, position_pivotal):
+    def sample(
+        self,
+        z0,
+        context,
+        ground_trueth,
+        true_latent,
+        encoder,
+        graph,
+        position_mesh,
+        position_pivotal,
+    ):
         self.model.eval()
         x_samples = []
         z0 = z0.to(self.dist.device)
@@ -141,44 +160,70 @@ class Sequence_Trainer:
             z_sample = z_samples[0, i]
             z_sample = z_sample.reshape(256, 3)
 
-            x_sample = encoder.decode(z_sample, graph.edata["x"], graph,  position_mesh, position_pivotal)
+            x_sample = encoder.decode(
+                z_sample, graph.edata["x"], graph, position_mesh, position_pivotal
+            )
             x_samples.append(x_sample.unsqueeze(0))
         x_samples = torch.cat(x_samples)
         x_samples = self.denormalize(x_samples)
-        
+
         ground_trueth = self.denormalize(ground_trueth)
-        
+
         loss_record_u = []
         loss_record_v = []
         loss_record_p = []
-      
-
 
         for i in range(400):
-            loss = self.criterion(ground_trueth[i+1:i+2,:,0], x_samples[i+1:i+2,:,0])          
-            relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,0], ground_trueth[i+1:i+2,:,0]*0.0).detach()
+            loss = self.criterion(
+                ground_trueth[i + 1 : i + 2, :, 0], x_samples[i + 1 : i + 2, :, 0]
+            )
+            relative_error = (
+                loss
+                / self.criterion(
+                    ground_trueth[i + 1 : i + 2, :, 0],
+                    ground_trueth[i + 1 : i + 2, :, 0] * 0.0,
+                ).detach()
+            )
             loss_record_u.append(relative_error)
         relative_error_u = torch.mean(torch.tensor(loss_record_u))
         for i in range(400):
-            loss = self.criterion(ground_trueth[i+1:i+2,:,1], x_samples[i+1:i+2,:,1])          
-            relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,1], ground_trueth[i+1:i+2,:,1]*0.0).detach()
+            loss = self.criterion(
+                ground_trueth[i + 1 : i + 2, :, 1], x_samples[i + 1 : i + 2, :, 1]
+            )
+            relative_error = (
+                loss
+                / self.criterion(
+                    ground_trueth[i + 1 : i + 2, :, 1],
+                    ground_trueth[i + 1 : i + 2, :, 1] * 0.0,
+                ).detach()
+            )
             loss_record_v.append(relative_error)
         relative_error_v = torch.mean(torch.tensor(loss_record_v))
         for i in range(400):
-            loss = self.criterion(ground_trueth[i+1:i+2,:,2], x_samples[i+1:i+2,:,2])          
-            relative_error = loss/self.criterion(ground_trueth[i+1:i+2,:,2], ground_trueth[i+1:i+2,:,2]*0.0).detach()
+            loss = self.criterion(
+                ground_trueth[i + 1 : i + 2, :, 2], x_samples[i + 1 : i + 2, :, 2]
+            )
+            relative_error = (
+                loss
+                / self.criterion(
+                    ground_trueth[i + 1 : i + 2, :, 2],
+                    ground_trueth[i + 1 : i + 2, :, 2] * 0.0,
+                ).detach()
+            )
             loss_record_p.append(relative_error)
         relative_error_p = torch.mean(torch.tensor(loss_record_p))
-        
+
         return x_samples, relative_error_u, relative_error_v, relative_error_p
 
-    def forward(self, z, context = None):
+    def forward(self, z, context=None):
         with autocast(enabled=C.amp):
-            prediction  = self.model(z, context)
-            loss = self.criterion(z[:,1:], prediction[:,:-1])
-            relative_error = torch.sqrt(loss/self.criterion(z[:,1:], z[:,1:]*0.0)).detach()
+            prediction = self.model(z, context)
+            loss = self.criterion(z[:, 1:], prediction[:, :-1])
+            relative_error = torch.sqrt(
+                loss / self.criterion(z[:, 1:], z[:, 1:] * 0.0)
+            ).detach()
             return loss, relative_error
-        
+
     def train(self, z, context):
         z = z.to(self.dist.device)
         context = context.to(self.dist.device)
@@ -199,7 +244,6 @@ class Sequence_Trainer:
             self.optimizer.step()
 
 
-
 if __name__ == "__main__":
     # initialize distributed manager
     DistributedManager.initialize()
@@ -209,7 +253,10 @@ if __name__ == "__main__":
     if dist.rank == 0:
         os.makedirs(C.ckpt_sequence_path, exist_ok=True)
         with open(
-            os.path.join(C.ckpt_sequence_path, C.ckpt_sequence_name.replace(".pt", ".json")), "w"
+            os.path.join(
+                C.ckpt_sequence_path, C.ckpt_sequence_name.replace(".pt", ".json")
+            ),
+            "w",
         ) as json_file:
             json_file.write(C.json(indent=4))
 
@@ -227,35 +274,38 @@ if __name__ == "__main__":
 
     position_mesh = torch.from_numpy(np.loadtxt(C.mesh_dir)).to(dist.device)
     position_pivotal = torch.from_numpy(np.loadtxt(C.pivotal_dir)).to(dist.device)
-    #Load Graph Encoder
-    Encoder = Mesh_Reduced(C.num_input_features, C.num_edge_features, C.num_output_features)
+    # Load Graph Encoder
+    Encoder = Mesh_Reduced(
+        C.num_input_features, C.num_edge_features, C.num_output_features
+    )
     Encoder = Encoder.to(dist.device)
     _ = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
-            models=Encoder,
-            scaler =GradScaler(),
-            device=dist.device
-        )
+        os.path.join(C.ckpt_path, C.ckpt_name),
+        models=Encoder,
+        scaler=GradScaler(),
+        device=dist.device,
+    )
 
-
-
-
-    trainer = Sequence_Trainer(wb, dist, produce_latents=C.produce_latents, Encoder = Encoder, 
-		         position_mesh = position_mesh, 
-		         position_pivotal = position_pivotal,
-                 rank_zero_logger = rank_zero_logger)
+    trainer = Sequence_Trainer(
+        wb,
+        dist,
+        produce_latents=C.produce_latents,
+        Encoder=Encoder,
+        position_mesh=position_mesh,
+        position_pivotal=position_pivotal,
+        rank_zero_logger=rank_zero_logger,
+    )
     start = time.time()
     rank_zero_logger.info("Training started...")
-    
-    
+
     for epoch in range(trainer.epoch_init, C.epochs_sequence):
         n_batch = 0.0
         loss_total = 0.0
         for lc in tqdm(trainer.dataloader):
-            loss,relative_error = trainer.train(lc[0], lc[1])
+            loss, relative_error = trainer.train(lc[0], lc[1])
             loss_total = loss_total + loss
             n_batch = n_batch + 1
-        avg_loss = loss_total/n_batch
+        avg_loss = loss_total / n_batch
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {avg_loss:10.3e}, relative_error: {relative_error:10.3e},time per epoch: {(time.time()-start):10.3e}"
         )
@@ -264,7 +314,7 @@ if __name__ == "__main__":
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if dist.rank == 0 and epoch%5000 == 0:
+        if dist.rank == 0 and epoch % 5000 == 0:
             save_checkpoint(
                 os.path.join(C.ckpt_sequence_path, C.ckpt_sequence_name),
                 models=trainer.model,

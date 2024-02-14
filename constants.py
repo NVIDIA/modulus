@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from typing import Tuple, Optional
 
 
-
 class Constants(BaseModel):
     """vortex shedding constants"""
 
@@ -14,7 +13,7 @@ class Constants(BaseModel):
     mesh_dir: str = "dataset/meshPosition_all.txt"
 
     # training configs for encoder-decoder model
-    batch_size: int = 10 # GNN training batch
+    batch_size: int = 10  # GNN training batch
     epochs: int = 301
     num_training_samples: int = 400
     num_training_time_steps: int = 300
@@ -34,8 +33,7 @@ class Constants(BaseModel):
     ckpt_sequence_path: str = "checkpoints/new_sequence"
     ckpt_sequence_name: str = "sequence_model.pt"
     sequence_batch_size: int = 1
-    produce_latents = True   #Set it as True when first produce latent representations from the encoder 
-
+    produce_latents = True  # Set it as True when first produce latent representations from the encoder
 
     # performance configs
     amp: bool = False
