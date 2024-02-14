@@ -210,7 +210,8 @@ class GraphDataset:
                  data_path="None", batch_size=1, prefetch_buffer_size=100):
         self.dataset = get_input_fn(data_path, batch_size, prefetch_buffer_size,
                                    mode=mode, split=split)()
-        self.size = len(list(self.dataset))
+        # self.size = len(list(self.dataset))
+        self.size = size
         self.dataset = iter(self.dataset)
         self.pos = 0
 

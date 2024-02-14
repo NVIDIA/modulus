@@ -8,6 +8,11 @@
 
   - test version: tensorflow-2.15.0.post1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
 
+  - for logging:
+    
+    - pip install wandb
+    - pip3 install mlflow
+    - 
 
 - Dev: 
 

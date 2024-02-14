@@ -359,7 +359,7 @@ def test_simulator_forward(device):
 
     assert common.validate_forward_accuracy(model, 
                                             (*invar,),
-                                            file_name=f"vfgn_ls_output.pth",
+                                            # file_name=f"vfgn_ls_output.pth",
                                             atol=1e-4)
 
 
@@ -509,16 +509,18 @@ def test_simulator_checkpoint(device):
 
     cast = lambda v: np.array(v, dtype=np.float64)
     dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
+    dummy_context_meta = [747.9937656176759]
     dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
                         torch.DoubleTensor(cast(dummy_metadata)))
-
-    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
+    dummy_context_stats = Stats(torch.DoubleTensor(cast(dummy_context_meta)),
+                        torch.DoubleTensor(cast(dummy_context_meta)))
+    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_context_stats}
     
     model_1 = LearnedSimulator(
         num_dimensions=3,
         num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
         boundaries=torch.DoubleTensor([[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]),
-        # torch.DoubleTensor(metadata['bounds'])
+        # boundaries=[[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]],
         num_particle_types=3,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
@@ -528,7 +530,6 @@ def test_simulator_checkpoint(device):
         num_dimensions=3,
         num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
         boundaries=torch.DoubleTensor([[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]),
-        # torch.DoubleTensor(metadata['bounds'])
         num_particle_types=3,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,

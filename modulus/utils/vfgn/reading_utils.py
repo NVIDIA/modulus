@@ -34,7 +34,7 @@ _FEATURE_DESCRIPTION_WITH_GLOBAL_CONTEXT['step_context'] = tf.io.VarLenFeature(
 _FEATURE_DTYPES = {
     'position': {
         'in': np.float64,
-           'out': tf.float64
+        'out': tf.float64
     },
     'step_context': {
         'in': np.float64,
@@ -163,7 +163,7 @@ def split_trajectory(context, features, window_length=7, predict_length=10):
 
   # todo: change the hard-coded trajectory length to be the entire global context (/ sintering profile) sequence length
   # sequence length here is the default sintering 2-stage total length
-  trajectory_length = 14+24
+  # trajectory_length = 14+24
 
   # Process the parsed_features
   if 'step_context' in features:

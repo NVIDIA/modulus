@@ -33,6 +33,12 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
+physical_devices = tf.config.list_physical_devices('GPU')
+try:
+  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+except:
+  # Invalid device or cannot modify virtual devices once initialized.
+  pass
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -103,7 +109,7 @@ def Train(rank_zero_logger, dist):
                              num_particle_types=NUM_PARTICLE_TYPES, particle_type_embedding_size=16,
                              normalization_stats=normalization_stats)
 
-    writer = SummaryWriter(log_dir=C.model_path)
+    writer = SummaryWriter(log_dir=C.model_path_vfgn)
 
     optimizer = None
     device = 'cpu'
@@ -364,7 +370,7 @@ def Train(rank_zero_logger, dist):
 
                 if test_loss < best_loss:
                     torch.save(model.state_dict(),
-                               os.path.join(C.model_path, 'model_loss-{:.2E}_step-{}.pt'.format(test_loss, step)))
+                               os.path.join(C.model_path_vfgn, 'model_loss-{:.2E}_step-{}.pt'.format(test_loss, step)))
                     best_loss = test_loss
             model.train()
 
@@ -414,7 +420,7 @@ def Test(rank_zero_logger):
                     particle_types=features['particle_type'].to(device),
                     global_context=global_context_step.to(device)
                 )
-                model.load_state_dict(torch.load(C.model_path))
+                model.load_state_dict(torch.load(C.model_path_vfgn))
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info("device: ", device)
                 print("device: ", device)
@@ -527,13 +533,13 @@ def main(_):
 
     # save constants to JSON file
     # todo: test the disk.rank init and save
-    if dist.rank == 0:
-        print('check main',C.ckpt_path)
-        os.makedirs(C.ckpt_path, exist_ok=True)
-        with open(
-                os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
-        ) as json_file:
-            json_file.write(C.json(indent=4))
+    # if dist.rank == 0:
+    #     print('check main', C.ckpt_path)
+    #     os.makedirs(C.ckpt_path, exist_ok=True)
+    #     with open(
+    #             os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
+    #     ) as json_file:
+    #         json_file.write(C.json(indent=4))
 
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 

@@ -44,7 +44,7 @@ class Constants(BaseModel):
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    model_path: str = "models"
+    model_path_vfgn: str = "models/test24"
     # The path for saving outputs (e.g. rollouts).
     output_path: str = "rollouts"
     prefetch_buffer_size: int = 100
@@ -52,6 +52,7 @@ class Constants(BaseModel):
     # devices settings
     device: str = 'cuda:0'
     # flags.DEFINE_string('message_passing_devices', 'cuda:0', or "['cuda:0', 'cuda:1]",help="The devices for message passing")
+    message_passing_devices: str = "['cuda:0']"
 
     # performance configs
     fp16: bool = False

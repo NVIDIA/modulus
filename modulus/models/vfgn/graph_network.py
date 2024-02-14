@@ -89,10 +89,10 @@ class MLPNet(torch.nn.Module):
         return getattr(self, name)
 
     def forward(self, x):
-        origin_device=x.device
+        # origin_device=x.device
 
         lin_s = self.dynamic('lin_s', Linear, x.shape[-1], self.mlp_hidden_size)
-        lin_s = lin_s.to(origin_device)
+        # lin_s = lin_s.to(origin_device)
 
         x = lin_s(x)
         x = self.relu(x)
@@ -231,7 +231,11 @@ class DecoderNet(torch.nn.Module):
 
 
 class EncodeProcessDecode(torch.nn.Module):
-    def __init__(self, latent_size, mlp_hidden_size, mlp_num_hidden_layers, num_message_passing_steps, output_size,
+    def __init__(self,
+                 latent_size,
+                 mlp_hidden_size, mlp_num_hidden_layers,
+                 num_message_passing_steps,
+                 output_size,
                  device_list=None):
         super(EncodeProcessDecode, self).__init__()
         if device_list is None:
