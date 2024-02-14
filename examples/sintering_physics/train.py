@@ -52,8 +52,10 @@ from modulus.models.vfgn.graph_dataset import GraphDataset
 from modulus.distributed.manager import DistributedManager
 
 from modulus.launch.logging import (
+    LaunchLogger,
     PythonLogger,
     initialize_wandb,
+    initialize_mlflow,
     RankZeroLoggingWrapper,
 )
 
@@ -216,7 +218,6 @@ def Train(rank_zero_logger, dist):
                                      torch.zeros(loss_plane.shape, dtype=inputs.dtype).to(device))
             loss_plane = torch.sum(loss_plane) / torch.sum(num_anchor_plane)
             rank_zero_logger.info(f"loss: {loss}, loss_plane: {loss_plane}")
-            print(f"loss: {loss}, loss_plane: {loss_plane}")
 
             loss = loss + C.l_plane * loss_plane
 
@@ -238,7 +239,6 @@ def Train(rank_zero_logger, dist):
 
                 loss_plane = torch.sum(loss_plane) / torch.sum(num_anchor_plane)
                 rank_zero_logger.info(f"loss: {loss}, loss_plane: {loss_plane}")
-                print(f"loss: {loss}, loss_plane: {loss_plane}")
                 loss = loss + C.l_plane * loss_plane
 
         elif C.loss == "correlation":
@@ -249,7 +249,6 @@ def Train(rank_zero_logger, dist):
             - todo: fix the pid list for each build
             """
             rank_zero_logger.info("processing correlation loss\n\n")
-            print("processing correlation loss\n\n")
 
             loss_corr_factor = 1
             k = 100 # OR 1/ 100 * particle num, whichever smaller
@@ -280,7 +279,6 @@ def Train(rank_zero_logger, dist):
         elif C.loss == "me":
             # adding the L1 loss component with weight defined by "C.l_me"
             rank_zero_logger.info("processing ME loss\n\n")
-            print("processing ME loss\n\n")
             loss_l1 = torch.nn.functional.l1_loss(pred_acceleration, target_acceleration)
             loss_l1 = loss_l1 * decay_fators_3
             loss_l1 = torch.sum(loss_l1, dim=-1)
@@ -299,8 +297,7 @@ def Train(rank_zero_logger, dist):
             loss = torch.where(non_kinematic_mask, loss, torch.zeros(loss.shape, dtype=loss.dtype).to(device))
             loss = torch.sum(loss) / torch.sum(num_non_kinematic)
 
-        rank_zero_logger.info("loss: ", loss)
-        print("loss: ", loss)
+        rank_zero_logger.info(f"loss: {loss}")
         # back propogation
         optimizer.zero_grad()
         if C.fp16:
@@ -422,8 +419,7 @@ def Test(rank_zero_logger):
                 )
                 model.load_state_dict(torch.load(C.model_path_vfgn))
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-                rank_zero_logger.info("device: ", device)
-                print("device: ", device)
+                rank_zero_logger.info(f"device: {device}")
                 # config optimizer
                 # todo: check msg passing device
                 model.setMessagePassingDevices(['cuda:0'])
@@ -436,8 +432,6 @@ def Test(rank_zero_logger):
             global_context = features['step_context'].to(device)
             rank_zero_logger.info(f"\n initial_positions shape: {initial_positions.shape}")
             rank_zero_logger.info(f"\n ground_truth_positions shape: {ground_truth_positions.shape}")
-            # print("\n initial_positions shape: ", initial_positions.shape)
-            # print("\n ground_truth_positions shape: ", ground_truth_positions.shape)
 
             num_steps = ground_truth_positions.shape[1]
 
@@ -446,12 +440,9 @@ def Test(rank_zero_logger):
 
             start_time = time.time()
             rank_zero_logger.info(f"start time: {start_time}\n")
-            print("start time: ", start_time)
-            print("\n")
 
             for step in range(num_steps):
                 rank_zero_logger.info(f"start predictiong step: {step}")
-                print("start predictiong step: ", step)
                 if global_context is None:
                     global_context_step = None
                 else:
@@ -492,8 +483,6 @@ def Test(rank_zero_logger):
             updated_predictions = torch.stack(updated_predictions)
             rank_zero_logger.info(f"\n updated_predictions shape: {updated_predictions.shape}")
             rank_zero_logger.info(f"\n ground_truth_positions shape: {ground_truth_positions.shape}")
-            print("\n updated_predictions shape: ", updated_predictions.shape)
-            print("\n ground_truth_positions shape: ", ground_truth_positions.shape)
 
             initial_positions_list = initial_positions.cpu().numpy().tolist()
             updated_predictions_list = updated_predictions.cpu().numpy().tolist()
@@ -523,7 +512,6 @@ def Test(rank_zero_logger):
 
             example_index+=1
             rank_zero_logger.info(f"prediction time: {time.time()-start_time}\n")
-            print(f"prediction time: {time.time()-start_time}\n")
 
 
 def main(_):
@@ -550,6 +538,7 @@ def main(_):
 
 if __name__ == '__main__':
     # tf.disable_v2_behavior()
+    LaunchLogger.initialize()  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
