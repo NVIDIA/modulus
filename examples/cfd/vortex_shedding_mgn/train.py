@@ -14,67 +14,82 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import time
+from warnings import warn
+
+import hydra
 import torch
+import wandb
+
 from dgl.dataloading import GraphDataLoader
-from torch.cuda.amp import autocast, GradScaler
+
+from omegaconf import DictConfig
+
+from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
-import time, os
-import wandb as wb
+
+from constants import Constants
+
+from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
+from modulus.distributed.manager import DistributedManager
+from modulus.launch.logging import (
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    initialize_wandb,
+)
+from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.models.meshgraphnet import MeshGraphNet
 
 try:
     import apex
-except:
-    pass
+except ImportError:
+    warn(
+        "NVIDIA Apex (https://github.com/nvidia/apex) is not installed, "
+        "FusedAdam optimizer will not be used."
+    )
 
-from modulus.models.meshgraphnet import MeshGraphNet
-from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
-from modulus.distributed.manager import DistributedManager
-
-from modulus.launch.logging import (
-    PythonLogger,
-    initialize_wandb,
-    RankZeroLoggingWrapper,
-)
-from modulus.launch.utils import load_checkpoint, save_checkpoint
-from constants import Constants
 
 # Instantiate constants
 C = Constants()
 
 
 class MGNTrainer:
-    def __init__(self, wb, dist, rank_zero_logger):
+    def __init__(self, cfg: DictConfig, dist, rank_zero_logger):
         self.dist = dist
+
+        orig_dir = hydra.utils.get_original_cwd()
 
         # instantiate dataset
         dataset = VortexSheddingDataset(
             name="vortex_shedding_train",
-            data_dir=C.data_dir,
+            data_dir=os.path.normpath(os.path.join(orig_dir, cfg.data_dir)),
             split="train",
-            num_samples=C.num_training_samples,
-            num_steps=C.num_training_time_steps,
+            num_samples=cfg.num_training_samples,
+            num_steps=cfg.num_training_time_steps,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=True,
             drop_last=True,
             pin_memory=True,
             use_ddp=dist.world_size > 1,
+            num_workers=cfg.num_dataloader_workers,
         )
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.num_input_features, C.num_edge_features, C.num_output_features
+            cfg.num_input_features, cfg.num_edge_features, cfg.num_output_features
         )
-        if C.jit:
+        if cfg.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
         else:
             self.model = self.model.to(dist.device)
-        if C.watch_model and not C.jit and dist.rank == 0:
-            wb.watch(self.model)
+        if cfg.watch_model and not cfg.jit and dist.rank == 0:
+            wandb.watch(self.model)
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -139,32 +154,33 @@ class MGNTrainer:
             self.optimizer.step()
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # save constants to JSON file
-    if dist.rank == 0:
-        os.makedirs(C.ckpt_path, exist_ok=True)
-        with open(
-            os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
-        ) as json_file:
-            json_file.write(C.model_dump_json(indent=4))
+    # # save constants to JSON file
+    # if dist.rank == 0:
+    #     os.makedirs(C.ckpt_path, exist_ok=True)
+    #     with open(
+    #         os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
+    #     ) as json_file:
+    #         json_file.write(C.model_dump_json(indent=4))
 
-    # initialize loggers
+    # Initialize loggers.
     initialize_wandb(
         project="Modulus-Launch",
         entity="Modulus",
         name="Vortex_Shedding-Training",
         group="Vortex_Shedding-DDP-Group",
-        mode=C.wandb_mode,
+        mode=cfg.wandb_mode,
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    logger.file_logging()
+    rank_zero_logger.file_logging()
 
-    trainer = MGNTrainer(wb, dist, rank_zero_logger)
+    trainer = MGNTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
     for epoch in range(trainer.epoch_init, C.epochs):
@@ -173,7 +189,7 @@ if __name__ == "__main__":
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss:10.3e}, time per epoch: {(time.time()-start):10.3e}"
         )
-        wb.log({"loss": loss.detach().cpu()})
+        wandb.log({"loss": loss.detach().cpu()})
 
         # save checkpoint
         if dist.world_size > 1:
@@ -190,3 +206,7 @@ if __name__ == "__main__":
             logger.info(f"Saved model on rank {dist.rank}")
         start = time.time()
     rank_zero_logger.info("Training completed!")
+
+
+if __name__ == "__main__":
+    main()
