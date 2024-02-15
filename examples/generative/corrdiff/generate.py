@@ -90,6 +90,10 @@ def main(cfg: DictConfig) -> None:
     out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
     img_shape_x = getattr(cfg, "img_shape_x", 448)
     img_shape_y = getattr(cfg, "img_shape_y", 448)
+    patch_shape_x = getattr(cfg, "patch_shape_x", 448)
+    patch_shape_y = getattr(cfg, "patch_shape_y", 448)
+    overlap_pix = getattr(cfg, "overlap_pix", 0)
+    boundary_pix = getattr(cfg, "boundary_pix", 2)
     roll = getattr(cfg, "roll", False)
     add_grid = getattr(cfg, "add_grid", True)
     ds_factor = getattr(cfg, "ds_factor", 1)
@@ -107,7 +111,12 @@ def main(cfg: DictConfig) -> None:
 
     # Sampler kwargs
     if sampling_method == "stochastic":
-        sampler_kwargs = {}
+        sampler_kwargs = {
+            "img_shape": img_shape_x,
+            "patch_shape": patch_shape_x,
+            "overlap_pix": overlap_pix,
+            "boundary_pix": boundary_pix,
+        }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
             "sigma_min": sigma_min,
