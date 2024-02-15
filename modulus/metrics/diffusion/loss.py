@@ -436,6 +436,11 @@ class ResLoss:
     def __init__(
         self,
         regression_net,
+        img_shape_x, 
+        img_shape_y, 
+        patch_shape_x, 
+        patch_shape_y, 
+        patch_num, 
         P_mean: float = 0.0,
         P_std: float = 1.2,
         sigma_data: float = 0.5,
@@ -444,6 +449,11 @@ class ResLoss:
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
+        self.img_shape_x = img_shape_x
+        self.img_shape_y = img_shape_y
+        self.patch_shape_x = patch_shape_x
+        self.patch_shape_y = patch_shape_y
+        self.patch_num = patch_num
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
@@ -475,25 +485,51 @@ class ResLoss:
         """
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
-
-        # augment for conditional generaiton
+        weight = (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
+        
+        #augment for conditional generaiton
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+        y = y_tot[:,:img_clean.shape[1],:,:]
+        y_lr = y_tot[:,img_clean.shape[1]:,:,:]
 
-        # form residual
+        #form residual
         y_mean = self.unet(
             torch.zeros_like(y, device=img_clean.device),
             y_lr,
             sigma,
             labels,
             augment_labels=augment_labels,
-        )
+        )       
+        
         y = y - y_mean
+
+        #patchified training
+        if (self.img_shape_x != self.patch_shape_x or self.img_shape_y != self.patch_shape_y):
+
+            b = y.shape[0]
+            c_in = y_lr.shape[1]
+            c_out = y.shape[1]
+            rnd_normal = torch.randn([img_clean.shape[0]*self.patch_num, 1, 1, 1], device=img_clean.device)
+            sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+            weight = (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
+            
+            #global interpolation
+            input_interp = torch.nn.functional.interpolate(img_lr[:,0:c_in-4], (self.patch_shape_x, self.patch_shape_y), mode='bilinear')
+            
+            #patch generation from a single sample (not from random samples due to memory consumption of regression)
+            y_new = torch.zeros(b*self.patch_num, c_out, self.patch_shape_x, self.patch_shape_y, device=img_clean.device)
+            y_lr_new = torch.zeros(b*self.patch_num, c_in+input_interp.shape[1], self.patch_shape_x, self.patch_shape_y, device=img_clean.device)
+            for i in range(self.patch_num):
+                rnd_x = random.randint(0, self.img_shape_x-self.patch_shape_x)
+                rnd_y = random.randint(0, self.img_shape_y-self.patch_shape_y) 
+                y_new[b*i:b*(i+1),] = y[:,:, rnd_x: rnd_x+self.patch_shape_x, rnd_y: rnd_y+self.patch_shape_y]
+                y_lr_new[b*i:b*(i+1),] = torch.cat((y_lr[:,:, rnd_x: rnd_x+self.patch_shape_x, rnd_y: rnd_y+self.patch_shape_y],input_interp), 1)
+                
+            y = y_new
+            y_lr = y_lr_new
 
         latent = y + torch.randn_like(y) * sigma
         D_yn = net(latent, y_lr, sigma, labels, augment_labels=augment_labels)
