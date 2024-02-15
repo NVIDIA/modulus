@@ -30,8 +30,6 @@ from omegaconf import DictConfig
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
-from constants import Constants
-
 from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
