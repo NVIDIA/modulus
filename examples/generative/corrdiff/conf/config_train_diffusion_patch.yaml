@@ -34,9 +34,9 @@ task: diffusion
 ## Hyperparameters
 duration: 200
   # Training duration
-batch: 256
+batch: 2560
   # Total batch size
-batch_gpu: 2
+batch_gpu: 20
   # Limit batch size per GPU
 cbase: null  # TODO check
   # Channel multiplier
