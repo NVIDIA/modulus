@@ -17,7 +17,8 @@ such models can help solve real world problems.
 |[Gray-Scott System](./cfd/gray_scott_rnn/)|RNN|YES|
 |[Darcy Flow](./cfd/darcy_fno/)|FNO|NO|
 |[Darcy Flow using Nested-FNOs](./cfd/darcy_nested_fnos/)|Nested-FNO|NO|
-|[Darcy Flow (Data + Physics Driven)](./cfd/darcy_physics_informed/)|FNO and MLP|NO|
+|[Darcy Flow (Data + Physics Driven) using DeepONet approach](./cfd/darcy_physics_informed/)|FNO (branch) and MLP (trunk)|NO|
+|[Darcy Flow (Data + Physics Driven) using PINO approach (Numerical gradients)](./cfd/darcy_physics_informed/)|FNO|NO|
 |[Stokes Flow (Physics Informed Fine-Tuning)](./cfd/stokes_mgn/)|MeshGraphNet and MLP|NO|
 
 ## Weather
