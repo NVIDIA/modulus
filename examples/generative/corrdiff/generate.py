@@ -134,6 +134,19 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown sampling method {sampling_method}")
 
+    if patch_shape_x != img_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a factor of 32")
+    if patch_shape_x > img_shape_x:
+        patch_shape_x = img_shape_x
+    if patch_shape_y > img_shape_y:
+        patch_shape_y = img_shape_y
+    if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
+        logger0.info("Patch-based generation enabled")
+    else:
+        logger0.info("Patch-based generation disabled")
+        
     # Initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
