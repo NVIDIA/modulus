@@ -62,6 +62,13 @@ Welcome to Modulus Core's documentation!
    
    examples/molecular_dynamics/lennard_jones/README.rst
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples: Generative
+   :name: Examples: Generative
+   
+   examples/generative/corrdiff/README.rst
+
 
 Indices and tables
 ==================
