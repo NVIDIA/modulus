@@ -78,6 +78,9 @@ def training_loop(
     out_channels=[0, 17, 18, 19],
     img_shape_x=448,
     img_shape_y=448,
+    patch_shape_x=448,
+    patch_shape_y=448,
+    patch_num=1,
     roll=False,
     add_grid=True,
     ds_factor=4,
@@ -194,7 +197,13 @@ def training_loop(
     if task == "diffusion":
         net_reg = Module.from_checkpoint("checkpoints/regression.mdlus")
         net_reg.eval().requires_grad_(False).to(device)
-        interface_kwargs = dict(regression_net=net_reg)
+        interface_kwargs = dict(regression_net=net_reg,
+                                img_shape_x = img_shape_x,
+                                img_shape_y = img_shape_y,
+                                patch_shape_x = patch_shape_x,
+                                patch_shape_y = patch_shape_y,
+                                patch_num = patch_num
+                                )
         logger0.success("Loaded the pre-trained regression network")
     else:
         interface_kwargs = {}
