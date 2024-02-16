@@ -14,13 +14,29 @@
 
 # Get defaults
 defaults:
+
+  # Dataset
   #- dataset/7_var
-  - dataset/34_var
-    #- transform/trim_lat720
+  - dataset/healpix_19_var
+  #- dataset/34_var
+  
+  # Transform
   - transform/downsample
+  #- transform/trim_lat720
+  #- transform/healpix
+
+  # Filesystem
   - filesystem/local
+  #- filesystem/pbss
+
+  # Model
+  - model/sfno
     #- model/afno
-  - model/graphcastnet
-    #- training/afno
+    #- model/graphcastnet
+
+  # Training
+  #- training/afno
   - training/graphcastnet
+
+  # Validation
   - validation/afno

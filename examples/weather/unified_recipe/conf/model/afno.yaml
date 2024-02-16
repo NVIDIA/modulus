@@ -21,8 +21,8 @@ args:
   inp_shape: ${model.input_shape}
   in_channels: ${model.nr_input_channels}
   out_channels: ${model.nr_output_channels}
-  patch_size: [8, 8]
-  embed_dim: 128
+  patch_size: [4, 4]
+  embed_dim: 768
   depth: 12
   mlp_ratio: 4
   drop_rate: 0.0

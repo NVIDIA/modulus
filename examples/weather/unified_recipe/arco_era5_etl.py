@@ -20,6 +20,7 @@ from typing import Any, Iterable, List, Union, Tuple
 from pathlib import Path
 from tqdm import tqdm
 from dask.diagnostics import ProgressBar
+import dask
 import datetime
 
 class ARCOERA5ETL:
@@ -33,6 +34,7 @@ class ARCOERA5ETL:
         predicted_variables: List[str],
         dataset_filename: Union[str, Path] = "./data.zarr",
         fs: fsspec.filesystem = fsspec.filesystem("file"),
+        cache_storage: str = "./arco_era5_cache",
         transform: None = None,
         date_range: Tuple[str, str] = ("2000-01-01", "2001-01-01"),
         dt: int = 1, # 1 hour
@@ -49,11 +51,31 @@ class ARCOERA5ETL:
         assert dt in [1, 3, 6, 12], "dt must be 1, 3, 6, or 12"
         self.dt = dt
 
-        # Load arco xarray
-        arco_fs = fsspec.filesystem('gs')
+        # ARCO filename
         self.arco_filename = 'gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3'
+
+        # Cache data if specified
+        if cache_storage is not None:
+            arco_fs = fsspec.filesystem(
+                'simplecache',
+                target_protocol='gs',
+                cache_storage=cache_storage,
+            )
+        else:
+            arco_fs = fsspec.filesystem('gs')
+
+        # Open dataset
         self.arco_mapper = arco_fs.get_mapper(self.arco_filename)
         self.arco_era5 = xr.open_zarr(self.arco_mapper, consolidated=True)
+
+        # TODO: remove this
+        #years = np.arange(1979, 2023)
+        #zarr_files = [f"./full_year_{year}.zarr" for year in years]
+        #xr_datasets = [xr.open_zarr(file) for file in zarr_files]
+        #xr_datasets = [ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31")) for year, ds in zip(years, xr_datasets)]
+        #xr_datasets = xr.concat(xr_datasets, dim="time")
+        #self.arco_era5 = xr_datasets
+
 
         # Subset variables (this speeds up chunking)
         needed_variables = ["latitude", "longitude", "time", "level"]
@@ -123,5 +145,8 @@ class ARCOERA5ETL:
         delayed_obj = self.arco_era5_subset.to_zarr(mapper, consolidated=True, compute=False)
 
         # Wait for save to finish
+        # only run with 1 worker
         with ProgressBar():
             delayed_obj.compute()
+            #with dask.config.set(scheduler='single-threaded'):
+            #    delayed_obj.compute()

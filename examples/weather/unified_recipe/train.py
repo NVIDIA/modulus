@@ -48,11 +48,22 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.metrics.general.mse import batch_normalized_mse
 
 from seq_zarr_datapipe import SeqZarrDatapipe
 
 
+def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+    """Calculates batch-wise normalized mse error between two tensors.
+    """
+
+    pred_flat = pred.reshape(pred.size(0), -1)
+    target_flat = target.reshape(target.size(0), -1)
+
+    diff_norms = torch.linalg.norm(pred_flat - target_flat, ord=2.0, dim=1)
+    target_norms = torch.linalg.norm(target_flat, ord=2.0, dim=1)
+
+    error = diff_norms / target_norms
+    return torch.mean(error)
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -84,6 +95,7 @@ def main(cfg: DictConfig) -> None:
             "__args__": {k: tuple(v) if isinstance(v, ListConfig) else v for k, v in cfg.model.args.items()}, # TODO: maybe mobe this conversion to resolver?
         }
     )
+    print(dist.device)
     model = model.to(dist.device)
 
     # Distributed learning
@@ -98,7 +110,6 @@ def main(cfg: DictConfig) -> None:
                 find_unused_parameters=dist.find_unused_parameters,
             )
         torch.cuda.current_stream().wait_stream(ddps)
-        torch.device.synchronize()
 
     # Initialize optimizer
     OptimizerClass = getattr(optimizers, cfg.training.optimizer.name)
@@ -203,7 +214,6 @@ def main(cfg: DictConfig) -> None:
 
     # Main training loop
     global_epoch = 0
-    print(loaded_epoch)
     for stage in cfg.training.stages:
 
         # Skip if loaded epoch is greater than current stage

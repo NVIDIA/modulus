@@ -13,24 +13,23 @@
 # limitations under the License.
 
 import numpy as np
-import healpy as hp
-import reproject as rp
-import astropy as ap
+import xarray as xr
+import dask
 
 # Downsample transform
 def downsample_transform(dataset, downsample_factor=4):
     dataset = dataset.coarsen({"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim").mean()
-    returndataset 
+    return dataset 
 
 # Trim lat from 721 to 720
 def trim_lat720_transform(dataset):
     dataset = dataset.isel(latitude=slice(0, -1))
-    returndataset 
+    return dataset 
 
 # Helpix transform
 # Reference:
 # https://github.com/nathanielcresswellclay/zephyr/blob/main/data_processing/remap/healpix.py
-def helpix_transform(dataset, nside=32, order="bilinear"):
+def healpix_transform(dataset, nside=32, order="bilinear"):
 
     # Get the lat/lon coordinates
     lon = len(dataset.longitude.values)
@@ -67,24 +66,54 @@ def helpix_transform(dataset, nside=32, order="bilinear"):
 
     # Create numpy remapping function
     def remap_func(x):
-        x = np.flip(x, axis=1)
-        hpx1d, _ = rp.reproject_from_healpix(
-            (x, wcs_ll2hpx), 
-            coord_system_in='icrs',
-            nside=nside,
-            order=order,
-            nested=True,
-        )
-        hpx3d = np.zeros((12, nside, nside), dtype=x.dtype)
-        hpx3d[index_mapping_1d_to_3d[:, 0], index_mapping_1d_to_3d[:, 1], index_mapping_1d_to_3d[:, 2]] = hpx1d
+
+        # Use dask delayed to parallelize the remapping
+        # while keeping the xarray structure
+        @dask.delayed
+        def _remap_func(x):
+            # Convert to healpix grid
+            x = x.values
+            x = np.flip(x, axis=1)
+            hpx1d, _ = rp.reproject_to_healpix(
+                (x, wcs_ll2hpx), 
+                coord_system_out='icrs',
+                nside=nside,
+                order=order,
+                nested=True,
+            )
+            hpx3d = np.zeros((12, nside, nside), dtype=x.dtype)
+            hpx3d[index_mapping_1d_to_3d[:, 0], index_mapping_1d_to_3d[:, 1], index_mapping_1d_to_3d[:, 2]] = hpx1d
+
+            return hpx3d
+
+        # Run the delayed function
+        old_x = x
+        x = _remap_func(x)
+
+        # Convert back to dask array
+        x = dask.array.from_delayed(x, shape=(12, nside, nside), dtype=old_x.dtype)
+
+        # Convert back to xarray
+        x = xr.DataArray(x, dims=["face", "nside_x", "nside_y"])
+
+        return x
 
     # Apply the remapping function
-    dataset = dataset.groupby("time").map(lambda x: remap_func(x))
+    dataset["predicted"] = dataset["predicted"].groupby("time").map(lambda x: x.groupby("predicted_channel").map(lambda y: remap_func(y)))
+    dataset["unpredicted"] = dataset["unpredicted"].groupby("time").map(lambda x: x.groupby("unpredicted_channel").map(lambda y: remap_func(y)))
 
     return dataset
 
 transform_registry = {
     "downsample": downsample_transform,
     "trim_lat720": trim_lat720_transform,
-    "helpix": helpix_transform,
 }
+
+try:
+    import astropy as ap
+    import healpy as hp
+    import reproject as rp
+    transform_registry["healpix"] = healpix_transform
+except:
+    import warnings
+    warnings.warn("Unable to import healpix transform. Skipping...")

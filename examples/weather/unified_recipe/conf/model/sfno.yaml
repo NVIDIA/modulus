@@ -12,20 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-nr_input_steps: 1
+name: SFNO
+nr_input_channels: ${eval:'(${training.nr_input_steps} * (${dataset.nr_predicted_variables} + ${dataset.nr_unpredicted_variables}))'}
+nr_output_channels: ${dataset.nr_predicted_variables}
+input_shape: ${transform.transformed_shape}
 
-optimizer:
-  name: FusedAdam
-  args:
-    lr: 0.0005
-    betas: [0.9, 0.999]
-
-stages:
-  - name: "Cosine Annealing LR"
-    max_iterations: inf
-    num_epochs: 100
-    unroll_steps: 1
-    batch_size: 8
-    lr_scheduler_name: CosineAnnealingLR
-    args:
-      T_max: 150
+args:
+  inp_shape: ${model.input_shape}
+  out_shape: ${model.input_shape}
+  in_channels: ${model.nr_input_channels}
+  out_channels: ${model.nr_output_channels}
+  embed_dim: 768

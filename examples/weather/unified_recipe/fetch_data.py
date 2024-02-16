@@ -34,7 +34,12 @@ def main(cfg: DictConfig) -> None:
         transform = transform_registry[cfg.transform.name]
     except KeyError:
         raise NotImplementedError(f'Transform {cfg.transform.name} not implemented')
-    transform = lambda x: transform(x, **cfg.transform.kwargs) if cfg.transform.kwargs else transform(x)
+    if "kwargs" in cfg.transform:
+        def wrapper_transform(transform, **kwargs):
+            def _transform(x):
+                return transform(x, **kwargs)
+            return _transform
+        transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Initialize filesytem
     if cfg.filesystem.type == 'file':

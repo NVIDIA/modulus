@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-train_dataset_filename: train_7var_${transform.name}.zarr
-val_dataset_filename: val_7var_${transform.name}.zarr
+train_dataset_filename: train_19var_${transform.name}.zarr
+val_dataset_filename: val_19var_${transform.name}.zarr
 
 dt: 6
 
+  #train_years: ["1979-01-01", "1979-01-07"]
+  #val_years: ["2016-01-01", "2017-12-31"]
 train_years: ["1979-01-01", "2015-12-31"]
 val_years: ["2016-01-01", "2017-12-31"]
 
@@ -26,16 +28,15 @@ nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 f
 unpredicted_variables:
   - "land_sea_mask"
   - "toa_incident_solar_radiation"
+  - "geopotential_at_surface"
 
 predicted_variables:
-  - "2m_temperature"
   - "total_column_water_vapour"
-  - "100m_u_component_of_wind"
-  - "100m_v_component_of_wind"
+  - "2m_temperature"
   - "10m_u_component_of_wind"
   - "10m_v_component_of_wind"
-  - "mean_sea_level_pressure"
-  - ["temperature", [850, 500, 250, 100, 50]]
-  - ["u_component_of_wind", [850, 500, 250, 100, 50]]
-  - ["v_component_of_wind", [850, 500, 250, 100, 50]]
-  - ["geopotential", [850, 500, 250, 100, 50]]
+  - ["geopotential", [1000, 850, 500, 250, 50]]
+  - ["temperature", [850, 500, 250, 50]]
+  - ["u_component_of_wind", [850, 500, 250, 50]]
+  - ["v_component_of_wind", [850, 500, 250, 50]]
+  - ["specific_humidity", [850, 500, 250, 50]]
