@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The citation file.
 - Link to the CWA dataset.
+- Pangu Weather model
+- Fengwu model
+- SwinRNN model
+- WeatherBench dataset loader
 
 ### Changed
 
