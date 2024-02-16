@@ -471,10 +471,8 @@ class ClimateDatapipe(Datapipe):
         )
         if crop_window is None:
             crop_window = (
-                0,
-                sources[0].cropped_data_shape[0],
-                0,
-                sources[0].cropped_data_shape[1],
+                (0, sources[0].cropped_data_shape[0]),
+                (0, sources[0].cropped_data_shape[1]),
             )
         self.crop_window = crop_window
         self.window_latlon = self._crop_to_window(self.data_latlon)
