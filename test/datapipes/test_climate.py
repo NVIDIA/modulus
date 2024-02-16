@@ -99,15 +99,12 @@ def test_climate_hdf5_constructor(
         **spec_kwargs
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
-        [spec],
-        invariants=invariants,
-        device=torch.device(device),
-        **datapipe_kwargs
+        [spec], invariants=invariants, device=torch.device(device), **datapipe_kwargs
     )
 
     # iterate datapipe is iterable
@@ -165,7 +162,7 @@ def test_climate_hdf5_constructor(
             [spec],
             invariants=invariants,
             device=torch.device(device),
-            **{**datapipe_kwargs, **{"num_samples_per_year": 100}}
+            **{**datapipe_kwargs, **{"num_samples_per_year": 5}}
         )
         raise ValueError("Failed to raise error given invalid num_samples_per_year")
     except ValueError:
@@ -177,13 +174,13 @@ def test_climate_hdf5_constructor(
             data_dir=data_dir,
             stats_files=stats_files,
             metadata_path=metadata_path,
-            **{**spec_kwargs, **{"channels": [20]}}
+            **{**spec_kwargs, **{"channels": [1]}}
         )
         datapipe = ClimateDatapipe(
             [spec],
             invariants=invariants,
             device=torch.device(device),
-            **{**datapipe_kwargs, **{"num_samples_per_year": 100}}
+            **{**datapipe_kwargs, **{"num_samples_per_year": 5}}
         )
         raise ValueError("Failed to raise error given invalid channel id")
     except ValueError:
@@ -214,15 +211,12 @@ def test_climate_hdf5_device(
         **spec_kwargs
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
-        [spec],
-        invariants=invariants,
-        device=torch.device(device),
-        **datapipe_kwargs
+        [spec], invariants=invariants, device=torch.device(device), **datapipe_kwargs
     )
 
     # test single sample
@@ -271,9 +265,9 @@ def test_climate_hdf5_shape(
         stride=1,
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
         [spec],
@@ -361,15 +355,12 @@ def test_era5_hdf5_sequence(
         stride=stride,
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
-        [spec],
-        invariants=invariants,
-        device=torch.device(device),
-        **datapipe_kwargs
+        [spec], invariants=invariants, device=torch.device(device), **datapipe_kwargs
     )
 
     # get single sample
@@ -417,9 +408,9 @@ def test_era5_hdf5_shuffle(
         stride=stride,
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
         [spec],
@@ -445,7 +436,13 @@ def test_era5_hdf5_shuffle(
 @import_or_fail("netCDF4")
 @pytest.mark.parametrize("device", ["cuda:0"])
 def test_era5_hdf5_cudagraphs(
-    data_dir, stats_files, lsm_filename, geopotential_filename, device, metadata_path, pytestconfig
+    data_dir,
+    stats_files,
+    lsm_filename,
+    geopotential_filename,
+    device,
+    metadata_path,
+    pytestconfig,
 ):
 
     from modulus.datapipes.climate import ClimateDatapipe, ClimateDataSourceSpec
@@ -463,15 +460,12 @@ def test_era5_hdf5_cudagraphs(
         **spec_kwargs
     )
     invariants = {
-        "land_sea_mask": invariant.FileInvariant(lsm_filename, "LSM"),
-        "geopotential": invariant.FileInvariant(geopotential_filename, "Z"),
-        "cos_latlon": invariant.LatLon()
+        "land_sea_mask": invariant.FileInvariant(lsm_filename, "lsm"),
+        "geopotential": invariant.FileInvariant(geopotential_filename, "z"),
+        "cos_latlon": invariant.LatLon(),
     }
     datapipe = ClimateDatapipe(
-        [spec],
-        invariants=invariants,
-        device=torch.device(device),
-        **datapipe_kwargs
+        [spec], invariants=invariants, device=torch.device(device), **datapipe_kwargs
     )
 
     assert common.check_cuda_graphs(datapipe, input_fn)
