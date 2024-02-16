@@ -1,5 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from abc import ABC, abstractmethod
-from typing import Tuple, List
+from typing import List, Tuple
 
 import numpy as np
 import xarray as xr
@@ -10,34 +26,38 @@ def latlon_grid(
         (90, -90),
         (0, 360),
     ),
-    shape: Tuple[int, int] = (1440,721)    
-) -> np.ndarray :
-    """Infer latitude and longitude coordinates from bounds and data shape."""
+    shape: Tuple[int, int] = (1440, 721),
+) -> np.ndarray:
+    """Infer latitude and longitude coordinates from bounds and data shape on a
+    equirectangular grid."""
 
     # get latitudes and longitudes from data shape
     lat = np.linspace(*bounds[0], shape[0], dtype=np.float32)
 
     # does longitude wrap around the globe?
-    lon_wraparound = ((bounds[1][0] % 360) == (bounds[1][1] % 360))
+    lon_wraparound = (bounds[1][0] % 360) == (bounds[1][1] % 360)
     if lon_wraparound:
         # treat differently from lat due to wrap-around
-        lon = np.linspace(*bounds[1], shape[1]+1, dtype=np.float32)[:-1]
+        lon = np.linspace(*bounds[1], shape[1] + 1, dtype=np.float32)[:-1]
     else:
         lon = np.linspace(*bounds[1], shape[1], dtype=np.float32)
 
-    return np.meshgrid(lat, lon, indexing='ij')
+    return np.meshgrid(lat, lon, indexing="ij")
 
 
 class Invariant(ABC):
+    """Invariant abstract class representing data that is invariant to inputs on load"""
+
     @abstractmethod
     def __call__(self, latlon: np.ndarray):
         pass
 
 
 class LatLon(Invariant):
+    """Time invariant latitude and longitude coordinates and trig functions"""
+
     def __init__(
-        self,
-        outputs: List[str] = ("sin_lat", "cos_lat", "sin_lon", "cos_lon")
+        self, outputs: List[str] = ("sin_lat", "cos_lat", "sin_lon", "cos_lon")
     ):
         """
         Outputs latitude and longitude and their trigonometric functions.
@@ -69,45 +89,45 @@ class LatLon(Invariant):
 
 
 class FileInvariant(Invariant):
+    """
+    Loads an time-invariant variable from a NetCDF4 file. The file should
+    contain one or more data variables of dimensions
+    `(channels, latitude, longitude)` as well as variables `latitude` and
+    `longitude` specifying these coordinates. `latitude` and `longitude`
+    can be either 2D or 1D.
+
+    Parameters
+    ----------
+    filename: str
+        Path to the file containing the variable
+    var_name: str
+        The variable in the file containing the data
+    normalize: bool, optional
+        If True, normalize the data by to zero-mean and unit variance.
+        Default False.
+    interp_method: str, optional
+        Any argument accepted by xarray.DataArray.interp.
+        Default 'linear'.
+    """
+
     def __init__(
         self,
         filename: str,
         var_name: str,
         normalize=False,
-        interp_method='linear',
+        interp_method="linear",
     ):
-        """
-        Loads an time-invariant variable from a NetCDF4 file. The file should
-        contain one or more data variables of dimensions 
-        `(channels, latitude, longitude)` as well as variables `latitude` and
-        `longitude` specifying these coordinates. `latitude` and `longitude`
-        can be either 2D or 1D.
-
-        Parameters
-        ----------
-        filename: str
-            Path to the file containing the variable
-        var_name: str
-            The variable in the file containing the data
-        normalize: bool, optional
-            If True, normalize the data by to zero-mean and unit variance.
-            Default False.
-        interp_method: str, optional
-            Any argument accepted by xarray.DataArray.interp.
-            Default 'linear'.
-        """
-
         with xr.open_dataset(filename) as ds:
             self.data = ds[var_name].astype(np.float32)
             self.lat = ds["latitude"].to_numpy().astype(np.float32)
             self.lon = ds["longitude"].to_numpy().astype(np.float32)
 
-        if (self.lat.ndim == 1):
-            (self.lat, self.lon) = np.meshgrid(self.lat, self.lon, indexing='ij')
+        if self.lat.ndim == 1:
+            (self.lat, self.lon) = np.meshgrid(self.lat, self.lon, indexing="ij")
 
         if normalize:
             self.data = (self.data - self.data.mean()) / self.data.std()
-        
+
         self.interp_method = interp_method
 
     def __call__(self, latlon: np.ndarray):

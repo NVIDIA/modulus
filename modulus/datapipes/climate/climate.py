@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 
 import json
 from abc import ABC, abstractmethod
@@ -37,8 +40,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Mapping, Tuple, Union
 
-from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
 from modulus.datapipes.climate.utils.invariant import latlon_grid
+from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
 from modulus.launch.logging import PythonLogger
@@ -406,8 +409,10 @@ class ClimateDatapipe(Datapipe):
             (90, -90),
             (0, 360),
         ),
-        crop_window: Union[Tuple[Tuple[float, float], Tuple[float, float]], None] = None,
-        invariants: Union[Mapping[str,Callable], None] = None,
+        crop_window: Union[
+            Tuple[Tuple[float, float], Tuple[float, float]], None
+        ] = None,
+        invariants: Union[Mapping[str, Callable], None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
         num_workers: int = 1,  # TODO: is there a faster good default?
@@ -436,7 +441,9 @@ class ClimateDatapipe(Datapipe):
         for (i, spec) in enumerate(self.sources):
             name = spec.name if spec.name is not None else i
             self.pipe_outputs += [f"state_seq-{name}", f"timestamps-{name}"]
-            self.pipe_outputs.extend(f"{aux_var}-{name}" for aux_var in spec.aux_variables)
+            self.pipe_outputs.extend(
+                f"{aux_var}-{name}" for aux_var in spec.aux_variables
+            )
             if spec.use_cos_zenith:
                 self.pipe_outputs.append(f"cos_zenith-{name}")
         self.pipe_outputs.extend(invariants.keys())
@@ -457,23 +464,25 @@ class ClimateDatapipe(Datapipe):
             for spec_j in sources[i + 1 :]:
                 if not spec_i.dimensions_compatible(spec_j):
                     raise ValueError("Incompatible data sources")
-        
-        self.data_latlon = np.stack(latlon_grid(
-            bounds=self.data_latlon_bounds, shape=sources[0].data_shape
-        ), axis=0)
+
+        self.data_latlon = np.stack(
+            latlon_grid(bounds=self.data_latlon_bounds, shape=sources[0].data_shape),
+            axis=0,
+        )
         if crop_window is None:
             crop_window = (
-                0, sources[0].cropped_data_shape[0],
-                0, sources[0].cropped_data_shape[1]
+                0,
+                sources[0].cropped_data_shape[0],
+                0,
+                sources[0].cropped_data_shape[1],
             )
         self.crop_window = crop_window
         self.window_latlon = self._crop_to_window(self.data_latlon)
         self.window_latlon_dali = dali.types.Constant(self.window_latlon)
-        
+
         # load invariants
         self.invariants = {
-            var: callback(self.window_latlon)
-            for (var, callback) in invariants.items()
+            var: callback(self.window_latlon) for (var, callback) in invariants.items()
         }
 
         # Create pipeline
@@ -485,14 +494,14 @@ class ClimateDatapipe(Datapipe):
             "hdf5": ClimateHDF5DaliExternalSource,
             "netcdf4": ClimateNetCDF4DaliExternalSource,
         }[source_type]
-    
+
     def _crop_to_window(self, x):
         cw = self.crop_window
         if isinstance(x, dali.pipeline.DataNode):
             # DALI doesn't support ellipsis notation
-            return x[:, :, cw[0][0]:cw[0][1], cw[1][0]:cw[1][1]]
+            return x[:, :, cw[0][0] : cw[0][1], cw[1][0] : cw[1][1]]
         else:
-            return x[..., cw[0][0]:cw[0][1], cw[1][0]:cw[1][1]]
+            return x[..., cw[0][0] : cw[0][1], cw[1][0] : cw[1][1]]
 
     def _source_outputs(self, spec: ClimateDataSourceSpec) -> List:
         """Create DALI outputs for a given data source specification.
@@ -543,20 +552,20 @@ class ClimateDatapipe(Datapipe):
 
         # Make output list
         outputs = [state_seq, timestamps, *aux]
-        
+
         # Get cosine zenith angle
         if spec.use_cos_zenith:
             cos_zenith = dali.fn.cast(
                 cos_zenith_angle(timestamps, latlon=self.window_latlon_dali),
-                dtype=dali.types.FLOAT
+                dtype=dali.types.FLOAT,
             )
             outputs.append(cos_zenith)
 
         return outputs
-    
+
     def _invariant_outputs(self):
         for inv in self.invariants.values():
-            if self.crop_window is not None:                
+            if self.crop_window is not None:
                 inv = self._crop_to_window(inv)
             yield dali.types.Constant(inv)
 
@@ -582,7 +591,7 @@ class ClimateDatapipe(Datapipe):
             outputs = list(
                 chain(
                     *(self._source_outputs(spec) for spec in self.sources),
-                    self._invariant_outputs()
+                    self._invariant_outputs(),
                 )
             )
 
@@ -660,7 +669,7 @@ class ClimateDaliExternalSource(ABC):
         num_samples_per_year: int,
         latlon: np.ndarray,
         variables: Union[List[str], None] = None,
-        aux_variables: List[Union[str,Callable]] = (),
+        aux_variables: List[Union[str, Callable]] = (),
         batch_size: int = 1,
         shuffle: bool = True,
         process_rank: int = 0,
@@ -728,8 +737,8 @@ class ClimateDaliExternalSource(ABC):
 
         # outputs from auxiliary sources
         aux_outputs = (
-            callback(timestamps, self.latlon) 
-            for callback in self.aux_variables.values()               
+            callback(timestamps, self.latlon)
+            for callback in self.aux_variables.values()
         )
 
         return (state_seq, timestamps, *aux_outputs)
