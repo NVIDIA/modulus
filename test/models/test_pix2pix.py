@@ -24,7 +24,7 @@ from modulus.models.pix2pix import Pix2Pix
 from . import common
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cvpu"])
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_pix2pix_forward(device):
     """Test pix2pix forward pass"""
     torch.manual_seed(0)

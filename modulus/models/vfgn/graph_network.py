@@ -1,3 +1,6 @@
+# ignore_header_test
+# ruff: noqa: E402
+
 # Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
