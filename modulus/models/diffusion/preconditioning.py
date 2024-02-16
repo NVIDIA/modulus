@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +24,7 @@ from dataclasses import dataclass
 from typing import List, Union
 
 import numpy as np
+import nvtx
 import torch
 
 from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
@@ -750,6 +753,7 @@ class EDMPrecondSR(Module):
             **model_kwargs,
         )  # TODO needs better handling
 
+    @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):

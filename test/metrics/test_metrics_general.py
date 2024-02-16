@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +19,6 @@ import os
 import numpy as np
 import pytest
 import torch
-import torch.distributed as dist
 
 import modulus.metrics.general.calibration as cal
 import modulus.metrics.general.crps as crps
@@ -66,16 +67,12 @@ def get_disagreements(inputs, bins, counts, test):
 @pytest.mark.parametrize("input_shape", [(1, 72, 144), (1, 360, 720)])
 def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
-    if (device == "cuda:0") and (not dist.is_initialized()):
+    if (device == "cuda:0") and (not DistributedManager.is_initialized()):
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12345"
         os.environ["RANK"] = "0"
         os.environ["WORLD_SIZE"] = "1"
-        DistributedManager.setup()
-        manager = DistributedManager()
-        dist.init_process_group(
-            "nccl", rank=manager.rank, world_size=manager.world_size
-        )
+        DistributedManager.initialize()
     x = torch.randn([10, *input_shape], device=device)
     y = torch.randn([5, *input_shape], device=device)
 
@@ -225,7 +222,7 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
         rtol=rtol,
         atol=atol,
     )
-    if (device == "cuda:0") and (not dist.is_initialized()):
+    if device == "cuda:0":
         DistributedManager.cleanup()
 
 
@@ -469,19 +466,12 @@ def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     DistributedManager._shared_state = {}
-    if (device == "cuda:0") and (not dist.is_initialized()):
+    if (device == "cuda:0") and (not DistributedManager.is_initialized()):
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12345"
         os.environ["RANK"] = "0"
         os.environ["WORLD_SIZE"] = "1"
-        DistributedManager.setup()
-        manager = DistributedManager()
-        # Test Raises Error, since process_group is not initiated
-        with pytest.raises(RuntimeError) as e_info:
-            em.EnsembleMetrics((1, 72, 144), device=device)
-        dist.init_process_group(
-            "nccl", rank=manager.rank, world_size=manager.world_size
-        )
+        DistributedManager.initialize()
 
     ens_metric = em.EnsembleMetrics((1, 72, 144), device=device)
     with pytest.raises(NotImplementedError) as e_info:
@@ -566,6 +556,9 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
     )
     _sumxy, _sum2xy, _n = em._update_var(_sumxy, _sum2xy, _n, y[1:], batch_dim=0)
     assert torch.allclose(varxy, _sum2xy / (_n - 1.0), rtol=rtol, atol=atol)
+
+    if device == "cuda:0":
+        DistributedManager.cleanup()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

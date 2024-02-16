@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +16,13 @@
 
 
 import numpy as np
+import nvtx
 import torch
 
 # ruff: noqa: E731
 
 
+@nvtx.annotate(message="ablation_sampler", color="red")
 def ablation_sampler(
     net,
     latents,

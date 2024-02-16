@@ -69,8 +69,8 @@ torch.Size([128, 64])
 
 Modulus has many optional dependencies that are used in specific components.
 When using pip, all dependencies used in Modulus can be installed with
-`pip install modulus[all]`. If you are developing Modulus, developer dependencies
-can be installed using `pip install modulus[dev]`. Otherwise, additional dependencies
+`pip install nvidia-modulus[all]`. If you are developing Modulus, developer dependencies
+can be installed using `pip install nvidia-modulus[dev]`. Otherwise, additional dependencies
 can be installed on a case by case basis. A detailed information on installing the
 optional dependencies can be found in the
 [Getting Started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html).
@@ -81,7 +81,7 @@ The recommended Modulus docker image can be pulled from the
 [NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus):
 
 ```Bash
-docker pull nvcr.io/nvidia/modulus/modulus:23.11
+docker pull nvcr.io/nvidia/modulus/modulus:24.01
 ```
 
 Inside the container you can clone the Modulus git repositories and get started with the
@@ -90,7 +90,7 @@ examples from this repo.
 
 ```bash
 docker run --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --runtime nvidia \
---rm -it nvcr.io/nvidia/modulus/modulus:23.11 bash
+--rm -it nvcr.io/nvidia/modulus/modulus:24.01 bash
 git clone https://github.com/NVIDIA/modulus.git
 cd modulus/examples/cfd/darcy_fno/
 pip install warp-lang # install NVIDIA Warp to run the darcy example

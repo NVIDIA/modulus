@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +20,7 @@ hydra:
 
 
 ## Main options
-outdir: "./output"   
+outdir: "./output_regression"   
   # Where to save the results
 data: 2023-01-24-cwb-4years.zarr
   # Path to the dataset
@@ -26,6 +28,8 @@ arch: ddpmpp-cwb-v0-regression
   # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
 precond: unetregression
   # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
+task: regression
+  # Which model to train [regression, diffusion]
 
 ## Hyperparameters
 duration: 200
@@ -59,6 +63,8 @@ workers: 4
 
 
 ## I/O-related options
+wandb_mode: offline
+  # Wights & biases mode [online, ofline, disabled]
 desc: ''
   # String to include in result dir name
 tick: 1

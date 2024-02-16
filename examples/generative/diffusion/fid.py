@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +27,7 @@ import torch
 import tqdm
 from dataset import ImageFolderDataset
 from omegaconf import DictConfig
-from utils import open_url
+from misc import open_url
 
 from modulus.metrics.diffusion import calculate_fid_from_inception_stats
 from modulus.distributed import DistributedManager
