@@ -16,22 +16,26 @@
 # limitations under the License.
 
 
-import torch
-import pytest
 import random
+
 import numpy as np
+import pytest
+import torch
 
 # can be commented out when test in Modulus installation
 # import sys
 # sys.path.append("/home/chenle/codes/sintering/modulus24/")
-from modulus.models.vfgn.graph_network_modules import MLPNet
-from modulus.models.vfgn.graph_network_modules import EncodeProcessDecode
-from modulus.models.vfgn.graph_network_modules import LearnedSimulator
+from modulus.models.vfgn.graph_network_modules import (
+    EncodeProcessDecode,
+    LearnedSimulator,
+    MLPNet,
+)
 
 # from modulus.models.vfgn.graph_network_modules import MLPNet
 # from modulus.models.vfgn.graph_network_modules import EncodeProcessDecode
 # from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 from . import common
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_mlpnet_forward(device):
@@ -49,10 +53,10 @@ def test_mlpnet_forward(device):
     node_size = 1000
     feat_size = 3
     invar = torch.randn(bsize, node_size, feat_size).to(device)
-    assert common.validate_forward_accuracy(model, 
-                                            (invar,),
-                                            file_name=f"vfgn_mlp_output.pth",
-                                            atol=1e-4)
+    assert common.validate_forward_accuracy(
+        model, (invar,), file_name="vfgn_mlp_output.pth", atol=1e-4
+    )
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_mlpnet_optims(device):
@@ -119,10 +123,10 @@ def test_mlpnet_checkpoint(device):
 def test_mlpnet_deploy(device):
     """Test MLP-NET  deployment support"""
     model = MLPNet(
-            mlp_hidden_size=128,
-            mlp_num_hidden_layers=2,
-            output_size=3,
-        ).to(device)
+        mlp_hidden_size=128,
+        mlp_num_hidden_layers=2,
+        output_size=3,
+    ).to(device)
 
     bsize = random.randint(1, 2)
     node_size = random.randint(10, 10000)
@@ -163,9 +167,7 @@ def test_encodeProcessDecode_forward(device):
 
     invar = (invar_node_attr, invar_edge_attr, invar_receivers, invar_senders)
 
-    assert common.validate_forward_accuracy(model,
-                                            (*invar, ),
-                                            atol=1e-4)
+    assert common.validate_forward_accuracy(model, (*invar,), atol=1e-4)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -240,6 +242,7 @@ def test_encodeProcessDecode_optims(device):
     model, invar = setup_model()
     assert common.validate_combo_optims(model, (*invar,))
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_encodeProcessDecode_checkpoint(device):
     """Test EncodeProcessDecode checkpoint save/load"""
@@ -297,6 +300,7 @@ def test_encodeProcessDecode_deploy(device):
 
     assert common.validate_onnx_runtime(model, (*invar,))
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_simulator_forward(device):
     """Test VFGN simulator forward pass"""
@@ -314,17 +318,31 @@ def test_simulator_forward(device):
             return self
 
     cast = lambda v: np.array(v, dtype=np.float64)
-    dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
+    dummy_metadata = [
+        -0.008786813221081134,
+        -0.004392095496219808,
+        -0.00173827297612587,
+    ]
     dummy_context_meta = [747.9937656176759]
-    dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
-                        torch.DoubleTensor(cast(dummy_metadata)))
-    dummy_context_stats = Stats(torch.DoubleTensor(cast(dummy_context_meta)),
-                        torch.DoubleTensor(cast(dummy_context_meta)))
-    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_context_stats}
+    dummy_stats = Stats(
+        torch.DoubleTensor(cast(dummy_metadata)),
+        torch.DoubleTensor(cast(dummy_metadata)),
+    )
+    dummy_context_stats = Stats(
+        torch.DoubleTensor(cast(dummy_context_meta)),
+        torch.DoubleTensor(cast(dummy_context_meta)),
+    )
+    normalization_stats = {
+        "acceleration": dummy_stats,
+        "velocity": dummy_stats,
+        "context": dummy_context_stats,
+    }
     model = LearnedSimulator(
         num_dimensions=3,
         num_seq=5,  # the default implementation on INPUT_SEQUENCE_LENGTH >= 3
-        boundaries=torch.DoubleTensor([[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]), # torch.DoubleTensor(metadata['bounds'])
+        boundaries=torch.DoubleTensor(
+            [[-5.0, 5.0], [-5.0, 5.0], [-5.0, 5.0]]
+        ),  # torch.DoubleTensor(metadata['bounds'])
         num_particle_types=3,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
@@ -337,30 +355,51 @@ def test_simulator_forward(device):
     sim_steps = 5
     k = 4
 
-    invar_next_positions = torch.randn(bsize*node_cnt,1, 3).to(device) # target to predict 
-    invar_position_sequence_noise = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # noise augmentation 
-    invar_position_sequence       = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # input sequence
+    invar_next_positions = torch.randn(bsize * node_cnt, 1, 3).to(
+        device
+    )  # target to predict
+    invar_position_sequence_noise = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # noise augmentation
+    invar_position_sequence = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # input sequence
 
-    invar_n_particles = torch.tensor([node_cnt]*bsize).to(device) # node size per batch
-    invar_n_edges = torch.tensor([edge_cnt]*bsize).to(device) # edge size per batch
-     
-    # identity graph with repeatation 
-    invar_receivers = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
-    invar_senders   = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    invar_n_particles = torch.tensor([node_cnt] * bsize).to(
+        device
+    )  # node size per batch
+    invar_n_edges = torch.tensor([edge_cnt] * bsize).to(device)  # edge size per batch
 
-    invar_predict_length = 2#random.randint(1, 5)
+    # identity graph with repeatation
+    invar_receivers = (
+        torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    )
+    invar_senders = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+
+    invar_predict_length = 2  # random.randint(1, 5)
     invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-    invar_particle_types = torch.randint(3, (bsize*node_cnt,)).to(device)
+    invar_particle_types = torch.randint(3, (bsize * node_cnt,)).to(device)
 
     print("invar_global_context: ", invar_global_context.shape)
-    invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
-             invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
-             invar_global_context, invar_particle_types)
+    invar = (
+        invar_next_positions,
+        invar_position_sequence_noise,
+        invar_position_sequence,
+        invar_n_particles,
+        invar_n_edges,
+        invar_senders,
+        invar_receivers,
+        invar_predict_length,
+        invar_global_context,
+        invar_particle_types,
+    )
 
-    assert common.validate_forward_accuracy(model, 
-                                            (*invar,),
-                                            # file_name=f"vfgn_ls_output.pth",
-                                            atol=1e-4)
+    assert common.validate_forward_accuracy(
+        model,
+        (*invar,),
+        # file_name=f"vfgn_ls_output.pth",
+        atol=1e-4,
+    )
 
 
 # def test_simulator_forward_batch(device):
@@ -424,6 +463,7 @@ def test_simulator_forward(device):
 def test_simulator_optims(device):
     def setup_model():
         """Setups up fresh VFGN simulator model and inputs for optim test"""
+
         class Stats:
             def __init__(self, mean, std):
                 self.mean = mean
@@ -435,11 +475,21 @@ def test_simulator_optims(device):
                 return self
 
         cast = lambda v: np.array(v, dtype=np.float64)
-        dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
-        dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
-                            torch.DoubleTensor(cast(dummy_metadata)))
+        dummy_metadata = [
+            -0.008786813221081134,
+            -0.004392095496219808,
+            -0.00173827297612587,
+        ]
+        dummy_stats = Stats(
+            torch.DoubleTensor(cast(dummy_metadata)),
+            torch.DoubleTensor(cast(dummy_metadata)),
+        )
 
-        normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
+        normalization_stats = {
+            "acceleration": dummy_stats,
+            "velocity": dummy_stats,
+            "context": dummy_stats,
+        }
         model = LearnedSimulator(
             num_dimensions=3,
             num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
@@ -456,25 +506,47 @@ def test_simulator_optims(device):
         sim_steps = 5
         k = 4
 
-        invar_next_positions = torch.randn(bsize*node_cnt,1, 3).to(device) # target to predict 
-        invar_position_sequence_noise = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # noise augmentation 
-        invar_position_sequence       = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # input sequence
+        invar_next_positions = torch.randn(bsize * node_cnt, 1, 3).to(
+            device
+        )  # target to predict
+        invar_position_sequence_noise = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+            device
+        )  # noise augmentation
+        invar_position_sequence = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+            device
+        )  # input sequence
 
-        invar_n_particles = torch.tensor([node_cnt]*bsize).to(device) # node size per batch
-        invar_n_edges = torch.tensor([edge_cnt]*bsize).to(device) # edge size per batch
-        
-        # identity graph with repeatation 
-        invar_receivers = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device) 
-        invar_senders   = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+        invar_n_particles = torch.tensor([node_cnt] * bsize).to(
+            device
+        )  # node size per batch
+        invar_n_edges = torch.tensor([edge_cnt] * bsize).to(
+            device
+        )  # edge size per batch
+
+        # identity graph with repeatation
+        invar_receivers = (
+            torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+        )
+        invar_senders = (
+            torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+        )
 
         invar_predict_length = torch.LongTensor([random.randint(1, 5)]).squeeze()
         invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-        invar_particle_types = torch.randint(3, (bsize*node_cnt,)).to(device)
-    
+        invar_particle_types = torch.randint(3, (bsize * node_cnt,)).to(device)
 
-        invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
-                 invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
-                 invar_global_context, invar_particle_types)
+        invar = (
+            invar_next_positions,
+            invar_position_sequence_noise,
+            invar_position_sequence,
+            invar_n_particles,
+            invar_n_edges,
+            invar_senders,
+            invar_receivers,
+            invar_predict_length,
+            invar_global_context,
+            invar_particle_types,
+        )
 
         return model, invar
 
@@ -508,14 +580,26 @@ def test_simulator_checkpoint(device):
             return self
 
     cast = lambda v: np.array(v, dtype=np.float64)
-    dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
+    dummy_metadata = [
+        -0.008786813221081134,
+        -0.004392095496219808,
+        -0.00173827297612587,
+    ]
     dummy_context_meta = [747.9937656176759]
-    dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
-                        torch.DoubleTensor(cast(dummy_metadata)))
-    dummy_context_stats = Stats(torch.DoubleTensor(cast(dummy_context_meta)),
-                        torch.DoubleTensor(cast(dummy_context_meta)))
-    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_context_stats}
-    
+    dummy_stats = Stats(
+        torch.DoubleTensor(cast(dummy_metadata)),
+        torch.DoubleTensor(cast(dummy_metadata)),
+    )
+    dummy_context_stats = Stats(
+        torch.DoubleTensor(cast(dummy_context_meta)),
+        torch.DoubleTensor(cast(dummy_context_meta)),
+    )
+    normalization_stats = {
+        "acceleration": dummy_stats,
+        "velocity": dummy_stats,
+        "context": dummy_context_stats,
+    }
+
     model_1 = LearnedSimulator(
         num_dimensions=3,
         num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
@@ -541,32 +625,52 @@ def test_simulator_checkpoint(device):
     sim_steps = 5
     k = 4
 
-    invar_next_positions = torch.randn(bsize*node_cnt,1, 3).to(device) # target to predict 
-    invar_position_sequence_noise = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # noise augmentation 
-    invar_position_sequence       = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # input sequence
+    invar_next_positions = torch.randn(bsize * node_cnt, 1, 3).to(
+        device
+    )  # target to predict
+    invar_position_sequence_noise = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # noise augmentation
+    invar_position_sequence = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # input sequence
 
-    invar_n_particles = torch.tensor([node_cnt]*bsize).to(device) # node size per batch
-    invar_n_edges = torch.tensor([edge_cnt]*bsize).to(device) # edge size per batch
-     
-    # identity graph with repeatation 
-    invar_receivers = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
-    invar_senders   = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    invar_n_particles = torch.tensor([node_cnt] * bsize).to(
+        device
+    )  # node size per batch
+    invar_n_edges = torch.tensor([edge_cnt] * bsize).to(device)  # edge size per batch
+
+    # identity graph with repeatation
+    invar_receivers = (
+        torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    )
+    invar_senders = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
 
     invar_predict_length = random.randint(1, 5)
     invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-    invar_particle_types = torch.randint(3, (bsize*node_cnt,)).to(device)
-    
+    invar_particle_types = torch.randint(3, (bsize * node_cnt,)).to(device)
 
-    invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
-             invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
-             invar_global_context, invar_particle_types)
+    invar = (
+        invar_next_positions,
+        invar_position_sequence_noise,
+        invar_position_sequence,
+        invar_n_particles,
+        invar_n_edges,
+        invar_senders,
+        invar_receivers,
+        invar_predict_length,
+        invar_global_context,
+        invar_particle_types,
+    )
 
     assert common.validate_checkpoint(model_1, model_2, (*invar,))
+
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_simulator_deploy(device):
     """Test VFGN simulator deployment support"""
+
     class Stats:
         def __init__(self, mean, std):
             self.mean = mean
@@ -578,11 +682,21 @@ def test_simulator_deploy(device):
             return self
 
     cast = lambda v: np.array(v, dtype=np.float64)
-    dummy_metadata = [-0.008786813221081134, -0.004392095496219808, -0.00173827297612587]
-    dummy_stats = Stats(torch.DoubleTensor(cast(dummy_metadata)),
-                        torch.DoubleTensor(cast(dummy_metadata)))
+    dummy_metadata = [
+        -0.008786813221081134,
+        -0.004392095496219808,
+        -0.00173827297612587,
+    ]
+    dummy_stats = Stats(
+        torch.DoubleTensor(cast(dummy_metadata)),
+        torch.DoubleTensor(cast(dummy_metadata)),
+    )
 
-    normalization_stats = {'acceleration': dummy_stats, 'velocity': dummy_stats, 'context': dummy_stats}
+    normalization_stats = {
+        "acceleration": dummy_stats,
+        "velocity": dummy_stats,
+        "context": dummy_stats,
+    }
     model = LearnedSimulator(
         num_dimensions=3,
         num_seq=5,  # the implementation on INPUT_SEQUENCE_LENGTH >= 3
@@ -599,25 +713,43 @@ def test_simulator_deploy(device):
     sim_steps = 5
     k = 4
 
-    invar_next_positions = torch.randn(bsize*node_cnt,1, 3).to(device) # target to predict 
-    invar_position_sequence_noise = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # noise augmentation 
-    invar_position_sequence       = torch.randn(bsize*node_cnt, sim_steps, 3).to(device) # input sequence
+    invar_next_positions = torch.randn(bsize * node_cnt, 1, 3).to(
+        device
+    )  # target to predict
+    invar_position_sequence_noise = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # noise augmentation
+    invar_position_sequence = torch.randn(bsize * node_cnt, sim_steps, 3).to(
+        device
+    )  # input sequence
 
-    invar_n_particles = torch.tensor([node_cnt]*bsize).to(device) # node size per batch
-    invar_n_edges = torch.tensor([edge_cnt]*bsize).to(device) # edge size per batch
-     
-    # identity graph with repeatation 
-    invar_receivers = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
-    invar_senders   = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    invar_n_particles = torch.tensor([node_cnt] * bsize).to(
+        device
+    )  # node size per batch
+    invar_n_edges = torch.tensor([edge_cnt] * bsize).to(device)  # edge size per batch
+
+    # identity graph with repeatation
+    invar_receivers = (
+        torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
+    )
+    invar_senders = torch.arange(node_cnt).repeat(bsize).repeat_interleave(k).to(device)
 
     invar_predict_length = torch.LongTensor([random.randint(1, 5)]).squeeze()
     invar_global_context = torch.randn(bsize, sim_steps, 1).to(device)
-    invar_particle_types = torch.randint(3, (bsize*node_cnt,)).to(device)
-    
+    invar_particle_types = torch.randint(3, (bsize * node_cnt,)).to(device)
 
-    invar = (invar_next_positions, invar_position_sequence_noise, invar_position_sequence,
-             invar_n_particles, invar_n_edges, invar_senders, invar_receivers, invar_predict_length,
-             invar_global_context, invar_particle_types)
+    invar = (
+        invar_next_positions,
+        invar_position_sequence_noise,
+        invar_position_sequence,
+        invar_n_particles,
+        invar_n_edges,
+        invar_senders,
+        invar_receivers,
+        invar_predict_length,
+        invar_global_context,
+        invar_particle_types,
+    )
 
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))

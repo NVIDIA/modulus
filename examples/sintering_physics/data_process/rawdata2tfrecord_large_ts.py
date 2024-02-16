@@ -44,30 +44,25 @@ from ..constants import Constants
 C = Constants()
 # Create a description of the features.
 _FEATURE_DESCRIPTION = {
-    'position': tf.io.VarLenFeature(tf.string),
+    "position": tf.io.VarLenFeature(tf.string),
 }
 
 _FEATURE_DESCRIPTION_WITH_GLOBAL_CONTEXT = _FEATURE_DESCRIPTION.copy()
-_FEATURE_DESCRIPTION_WITH_GLOBAL_CONTEXT['step_context'] = tf.io.VarLenFeature(
-    tf.string)
+_FEATURE_DESCRIPTION_WITH_GLOBAL_CONTEXT["step_context"] = tf.io.VarLenFeature(
+    tf.string
+)
 
 _FEATURE_DTYPES = {
-    'position': {
-        'in': np.float64,
-        'out': tf.float64
-    },
-    'step_context': {
-        'in': np.float64,
-        'out': tf.float64
-    }
+    "position": {"in": np.float64, "out": tf.float64},
+    "step_context": {"in": np.float64, "out": tf.float64},
 }
 
 _CONTEXT_FEATURES = {
-    'key': tf.io.FixedLenFeature([], tf.int64, default_value=0),
-    'particle_type': tf.io.VarLenFeature(tf.string),
-    'senders': tf.io.VarLenFeature(tf.string),
-    'receivers': tf.io.VarLenFeature(tf.string),
-    }
+    "key": tf.io.FixedLenFeature([], tf.int64, default_value=0),
+    "particle_type": tf.io.VarLenFeature(tf.string),
+    "senders": tf.io.VarLenFeature(tf.string),
+    "receivers": tf.io.VarLenFeature(tf.string),
+}
 
 
 def arrange_data(data):
@@ -110,7 +105,7 @@ def get_data_position(data):
     n_points = points.shape[0]
 
     # uvw_values = data['displacement_U']
-    uvw_values = data['u__v__w']
+    uvw_values = data["u__v__w"]
     print("get_data_position read uvw_values: ", uvw_values.shape)
 
     pos_list = []
@@ -131,7 +126,8 @@ def get_data_position(data):
 
             arranged_data[point] = True
 
-    return np.array(pos_list),index_list
+    return np.array(pos_list), index_list
+
 
 def read_sol_time(series_file):
     """
@@ -141,12 +137,12 @@ def read_sol_time(series_file):
     """
     dict_sol_time = {}
     time_list = []
-    with open(series_file, 'r') as fobj:
+    with open(series_file, "r") as fobj:
         data = json.load(fobj)
 
-    for idx, item in enumerate(data['files']):
-        time_list.append(item['time'])
-        dict_sol_time[item['name']] = [item['time']]
+    for idx, item in enumerate(data["files"]):
+        time_list.append(item["time"])
+        dict_sol_time[item["name"]] = [item["time"]]
 
     return dict_sol_time
 
@@ -160,15 +156,19 @@ def read_temperature(temp_file):
     """
     # reading csv file
     print("read temperature file from path: ", temp_file)
-    with open(temp_file, 'r') as csvfile:
+    with open(temp_file, "r") as csvfile:
         # creating a csv reader object
         csvreader = csv.reader(csvfile)
 
         # extracting each data row one by one
         for idx, row in enumerate(csvreader):
             # print(row)
-            if row[0].find('temperature_curve') != -1:
-                print("find sintering_temperature_curve: ", row[0], row[0].find('temperature_curve'))
+            if row[0].find("temperature_curve") != -1:
+                print(
+                    "find sintering_temperature_curve: ",
+                    row[0],
+                    row[0].find("temperature_curve"),
+                )
                 temp_row = row[1:]
                 break
 
@@ -184,14 +184,15 @@ def get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_l
     t_list = []
     temp_list = []
     for idx in range(len(temp_curve_list) // 2):
-        t_list.append(int(temp_curve_list[idx*2]) / 3600)
-        temp_list.append(int(temp_curve_list[idx*2+1]))
+        t_list.append(int(temp_curve_list[idx * 2]) / 3600)
+        temp_list.append(int(temp_curve_list[idx * 2 + 1]))
 
     sol_name = os.path.basename(solution_path)
     sol_time = int(dict_sol_time[sol_name][0])
 
     # search range
     sol_time = sol_time / 3600
+
     def find_nearest(array, value):
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
@@ -203,13 +204,15 @@ def get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_l
     if nearest_value == sol_time:
         return temp_list[nearest_id]
     elif nearest_value < sol_time:
-        start_temp, end_temp = temp_list[nearest_id], temp_list[nearest_id+1]
-        start_time, end_time = nearest_value, t_list[nearest_id+1]
+        start_temp, end_temp = temp_list[nearest_id], temp_list[nearest_id + 1]
+        start_time, end_time = nearest_value, t_list[nearest_id + 1]
     else:
-        start_temp, end_temp = temp_list[nearest_id-1], temp_list[nearest_id]
-        start_time, end_time = t_list[nearest_id-1], nearest_value
+        start_temp, end_temp = temp_list[nearest_id - 1], temp_list[nearest_id]
+        start_time, end_time = t_list[nearest_id - 1], nearest_value
 
-    temp = ((end_temp - start_temp) / (end_time - start_time)) * (sol_time-start_time) + start_temp
+    temp = ((end_temp - start_temp) / (end_time - start_time)) * (
+        sol_time - start_time
+    ) + start_temp
 
     print("solname | soltime | temp: ", sol_name, sol_time, temp)
     return temp
@@ -232,7 +235,9 @@ def get_solution_temperature(solution_path, dict_sol_time, temp_curve_list):
     if sol_time >= equil_time:
         return equil_temp
     else:
-        temp = ((equil_temp - start_temp) / (equil_time - start_time)) * sol_time + start_temp
+        temp = (
+            (equil_temp - start_temp) / (equil_time - start_time)
+        ) * sol_time + start_temp
     return temp
 
 
@@ -240,6 +245,7 @@ def get_solution_time(solution_path, dict_sol_time):
     sol_name = os.path.basename(solution_path)
     sol_time = int(dict_sol_time[sol_name][0])
     return sol_time
+
 
 def _compute_connectivity(positions, radius):
     """Get the indices of connected edges with radius connectivity.
@@ -271,7 +277,7 @@ def get_anchor_point(ds):
         anchor point index: int
     """
     # Read the Digital sintering software raw data, field version name: "u_v_w"
-    ds1=ds['u__v__w']
+    ds1 = ds["u__v__w"]
     ## return index of the anchor point
     ds1_ax = np.where(ds1[:, 0] == 0)[0]
     ds1_ay = np.where(ds1[:, 1] == 0)[0]
@@ -292,8 +298,8 @@ def get_anchor_zplane(ds):
         anchor plane points index: List[int]
     """
     print("find the anchor plane")
-    n_points=ds.points.shape[0]
-    uvw_values = ds['u__v__w']
+    n_points = ds.points.shape[0]
+    uvw_values = ds["u__v__w"]
     print("ds.points: ", ds.points.shape)
 
     z_plane = []
@@ -306,35 +312,40 @@ def get_anchor_zplane(ds):
 
             # set non-0 threshold
             threshold_z = 0.1
-            assert uvw[2]<threshold_z, "wrong anchor point: {} {}".format(ip,uvw[2])
+            assert uvw[2] < threshold_z, "wrong anchor point: {} {}".format(ip, uvw[2])
 
     z_plane = set(z_plane)
     print("cnt of z anchor plane points:", len(z_plane))
     return z_plane
 
+
 def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None):
-    build_path = os.path.join(raw_data_path, 'out')
-    solution_list = glob.glob(build_path + '/solution-*.pvtu')
+    build_path = os.path.join(raw_data_path, "out")
+    solution_list = glob.glob(build_path + "/solution-*.pvtu")
     solution_list = sorted(solution_list, key=get_solution_id)
-    assert len(solution_list) >= 3, "Need to have at least 3 solution files as input to start prediction or analysis!"
+    assert (
+        len(solution_list) >= 3
+    ), "Need to have at least 3 solution files as input to start prediction or analysis!"
 
     # For each build, read the displacement.pvtu.series file
-    series_file = os.path.join(raw_data_path, 'out', "solution.pvtu.series")
+    series_file = os.path.join(raw_data_path, "out", "solution.pvtu.series")
     # print("Find and read series file: ", series_file)
     assert os.path.exists(series_file), "volume-deformation.pvtu.series not exists!"
     dict_sol_time = read_sol_time(series_file)
 
     # For each build, read the temperature profile at every time step
     temp_profile_path = os.path.join(raw_data_path, "params.prm")
-    assert os.path.exists(temp_profile_path), "Temperature profile file params.prm not exists!"
+    assert os.path.exists(
+        temp_profile_path
+    ), "Temperature profile file params.prm not exists!"
     temp_curve_list = read_temperature(temp_profile_path)
 
     # Get the stage separation time-temperature pairs
     stage_t_list = []
     stage_temp_list = []
     for idx in range(len(temp_curve_list) // 2):
-        stage_t_list.append(int(temp_curve_list[idx*2]))
-        stage_temp_list.append(int(temp_curve_list[idx*2+1]))
+        stage_t_list.append(int(temp_curve_list[idx * 2]))
+        stage_temp_list.append(int(temp_curve_list[idx * 2 + 1]))
 
     # Record stage ids
     # For example, for an entire sintering duration of 3393 simulation steps, can choose the data process window
@@ -363,10 +374,12 @@ def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None
     solution_data_begin = pv.read(solution_list[0])
 
     radius_begin = utils.get_radius(solution_data_begin)
-    print("get simulation radius: ", radius_begin) # i.e. radius: 1.2
+    print("get simulation radius: ", radius_begin)  # i.e. radius: 1.2
 
     pos_array_begin, index_list = get_data_position(solution_data_begin)
-    senders_graph_i, receivers_graph_i = _compute_connectivity(pos_array_begin, radius_begin)
+    senders_graph_i, receivers_graph_i = _compute_connectivity(
+        pos_array_begin, radius_begin
+    )
     print("number of edge: ", senders_graph_i.shape[0])
 
     if C.ADD_ANCHOR:
@@ -381,11 +394,11 @@ def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None
                 anchors.append(pi)
             if index_list[pi] == anchor_0:
                 anchor_point = pi
-                print("anchor point: ",pi)
+                print("anchor point: ", pi)
 
         print("anchors: ", anchors, len(anchors))
 
-    solution_step_list=solution_list[init_idx::step]
+    solution_step_list = solution_list[init_idx::step]
     print("\nprocess with start idx: ", init_idx)
     print("solution list len: ", len(solution_step_list))
     for solution_path in solution_step_list:
@@ -395,7 +408,9 @@ def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None
 
         solution_id = get_solution_id(solution_path)
         if start_index <= solution_id <= end_index:
-            solution_temp = get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_list)
+            solution_temp = get_solution_temperature_customer(
+                solution_path, dict_sol_time, temp_curve_list
+            )
             print(f"process {solution_path}, time: {time_}")
             print(f"solution time: {time_}, solution_temp: {solution_temp}")
 
@@ -406,7 +421,9 @@ def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None
 
             if radius == 0:
                 radius = utils.get_radius(solution_data)
-                senders_graph_i, receivers_graph_i = _compute_connectivity(pos_array, radius)
+                senders_graph_i, receivers_graph_i = _compute_connectivity(
+                    pos_array, radius
+                )
                 print("number of edge: ", senders_graph_i.shape[0])
 
             particles_list.append(pos_array)
@@ -414,49 +431,64 @@ def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None
             temp_list.append(solution_temp)
 
     # ensure all sequences have same length
-    if init_idx != 0 and len(particles_list) != metadata['sequence_length']:
+    if init_idx != 0 and len(particles_list) != metadata["sequence_length"]:
         skip = True
     else:
         skip = False
 
-    return key_list, particles_list, temp_list, senders_graph_i, receivers_graph_i, \
-           radius, anchors, anchor_point, skip
+    return (
+        key_list,
+        particles_list,
+        temp_list,
+        senders_graph_i,
+        receivers_graph_i,
+        radius,
+        anchors,
+        anchor_point,
+        skip,
+    )
 
 
-def compute_metadata_stats(metadata, particles_list_builds, velocity_list_builds,
-                           acceleration_list_builds, radius_list, temp_list_builds):
+def compute_metadata_stats(
+    metadata,
+    particles_list_builds,
+    velocity_list_builds,
+    acceleration_list_builds,
+    radius_list,
+    temp_list_builds,
+):
     # Compute position mean, std
     # todo: check why use different norm dimension
     # todo: change the pos stats to 3d as well
-    position_stats_array=np.concatenate(particles_list_builds)
-    position_std=position_stats_array.std()
-    metadata['pos_mean'] = position_stats_array.mean()
-    metadata['pos_std'] = position_stats_array.std()
+    position_stats_array = np.concatenate(particles_list_builds)
+    position_std = position_stats_array.std()
+    metadata["pos_mean"] = position_stats_array.mean()
+    metadata["pos_std"] = position_stats_array.std()
 
     # Compute velocity mean, std
-    velocity_stats_array=np.concatenate(velocity_list_builds)
-    velocity_stats_array = velocity_stats_array/position_std
-    metadata['vel_mean'] = [i for i in velocity_stats_array.mean(axis=0).tolist()]
-    metadata['vel_std'] = [i for i in velocity_stats_array.std(axis=0).tolist()]
+    velocity_stats_array = np.concatenate(velocity_list_builds)
+    velocity_stats_array = velocity_stats_array / position_std
+    metadata["vel_mean"] = [i for i in velocity_stats_array.mean(axis=0).tolist()]
+    metadata["vel_std"] = [i for i in velocity_stats_array.std(axis=0).tolist()]
 
     # Compute acceleration mean, std
     acceleration_stats_array = np.concatenate(acceleration_list_builds)
-    acceleration_stats_array = acceleration_stats_array/position_std
-    metadata['acc_mean'] = [i for i in acceleration_stats_array.mean(axis=0).tolist()]
-    metadata['acc_std'] = [i for i in acceleration_stats_array.std(axis=0).tolist()]
+    acceleration_stats_array = acceleration_stats_array / position_std
+    metadata["acc_mean"] = [i for i in acceleration_stats_array.mean(axis=0).tolist()]
+    metadata["acc_std"] = [i for i in acceleration_stats_array.std(axis=0).tolist()]
 
     # Compute radius mean, std
-    radius_array = np.array(radius_list)/position_std
-    metadata['default_connectivity_radius'] = radius_array.mean()
+    radius_array = np.array(radius_list) / position_std
+    metadata["default_connectivity_radius"] = radius_array.mean()
 
     # Compute temperature mean, std
-    metadata['context_mean'] = [np.array(temp_list_builds).mean()]
-    metadata['context_std'] = [np.array(temp_list_builds).std()]
+    metadata["context_mean"] = [np.array(temp_list_builds).mean()]
+    metadata["context_std"] = [np.array(temp_list_builds).std()]
     print(np.array(temp_list_builds).shape)
-    if np.array(temp_list_builds).ndim >1:
-        metadata['context_feat_len'] = np.array(temp_list_builds).shape[1]
+    if np.array(temp_list_builds).ndim > 1:
+        metadata["context_feat_len"] = np.array(temp_list_builds).shape[1]
     else:
-        metadata['context_feat_len'] = 1
+        metadata["context_feat_len"] = 1
 
     return metadata
 
@@ -467,7 +499,9 @@ def write_tfrecord_entry(writer, features, particles_array, times_array):
     timestep_list = tf_sequence_example.feature_lists.feature_list["step_context"]
 
     for i in range(len(particles_array)):
-        position_list.feature.add().bytes_list.value.append(particles_array[i].tobytes())
+        position_list.feature.add().bytes_list.value.append(
+            particles_array[i].tobytes()
+        )
         timestep_list.feature.add().bytes_list.value.append(times_array[i].tobytes())
 
     writer.write(tf_sequence_example.SerializeToString())
@@ -482,21 +516,23 @@ def main(argv):
     """
     raw_data_dir, metadata_json_path, mode = argv
 
-    with open(os.path.join(metadata_json_path, "metadata.json"), 'r') as f:
+    with open(os.path.join(metadata_json_path, "metadata.json"), "r") as f:
         metadata = json.load(f)
         print("meta: ", metadata)
     if mode != "stats":
-        writer = tf.io.TFRecordWriter(os.path.join(metadata_json_path, mode+'.tfrecord'))
+        writer = tf.io.TFRecordWriter(
+            os.path.join(metadata_json_path, mode + ".tfrecord")
+        )
 
     # State the build names
     # i.e. choose from ['busbar', 'USB_casing', 'pushing_grip', 'ExtrusionScrew' or other customize builds]
     build_list = []
-    if mode == 'train' or mode == 'stats':
+    if mode == "train" or mode == "stats":
         # sample build list data names
         build_list = []
     elif mode == "test":
         # test data for validation data - NVIDIA
-        build_list = ['busbar', 'USB_casing', 'pushing_grip', 'ExtrusionScrew']
+        build_list = ["busbar", "USB_casing", "pushing_grip", "ExtrusionScrew"]
     else:
         print("Mode not implemented")
         exit()
@@ -515,10 +551,21 @@ def main(argv):
         # Get information for each build, the params 100 as step size,
         # 30 for sampling frequency is for testing purpose
         for init_idx in range(0, 100, 30):
-            key_list, particles_list, temp_list, \
-            senders_graph_i, receivers_graph_i, \
-            radius, anchors, anchor_point, skip = read_solutions_data_temp_range(os.path.join(raw_data_dir, build_name),
-                                                                                 init_idx=init_idx, metadata=metadata)
+            (
+                key_list,
+                particles_list,
+                temp_list,
+                senders_graph_i,
+                receivers_graph_i,
+                radius,
+                anchors,
+                anchor_point,
+                skip,
+            ) = read_solutions_data_temp_range(
+                os.path.join(raw_data_dir, build_name),
+                init_idx=init_idx,
+                metadata=metadata,
+            )
 
             # Gather information across builds, prep for builds stats calculation
             particles_list_builds += particles_list
@@ -528,7 +575,9 @@ def main(argv):
             velocity_list_builds += velocity_list
 
             acceleration_array = time_diff(velocity_array)
-            acceleration_list = [acceleration_array[i] for i in range(acceleration_array.shape[0])]
+            acceleration_list = [
+                acceleration_array[i] for i in range(acceleration_array.shape[0])
+            ]
             acceleration_list_builds += acceleration_list
 
             radius_list.append(radius)
@@ -540,16 +589,18 @@ def main(argv):
             n_steps = particles_array.shape[0]
             n_particles = particles_array.shape[1]
             if init_idx == 0:
-                metadata['sequence_length'] = n_steps
+                metadata["sequence_length"] = n_steps
 
             # Write to TFRECORD
-            if mode == 'train' or mode == 'test' or mode == 'generalization':
+            if mode == "train" or mode == "test" or mode == "generalization":
                 # Reshape: append all nodes in one timestep to same array, i.e. (12, 3321)
-                particles_array = particles_array.reshape((n_steps, -1)).astype(np.float64)
+                particles_array = particles_array.reshape((n_steps, -1)).astype(
+                    np.float64
+                )
 
                 # normalize data
-                particles_mean = metadata['pos_mean']
-                particles_std = metadata['pos_std']
+                particles_mean = metadata["pos_mean"]
+                particles_std = metadata["pos_std"]
                 particles_array = (particles_array - particles_mean) / particles_std
 
                 # set same particle type for now, can vary the type as an additional feature
@@ -566,10 +617,10 @@ def main(argv):
 
                 # Add global features
                 context_features = {
-                    'particle_type': utils._bytes_feature(particles_type),
-                    'key': utils.create_int_feature(key_i),
-                    'senders': utils._bytes_feature(senders_graph_i.tobytes()),
-                    'receivers': utils._bytes_feature(receivers_graph_i.tobytes()),
+                    "particle_type": utils._bytes_feature(particles_type),
+                    "key": utils.create_int_feature(key_i),
+                    "senders": utils._bytes_feature(senders_graph_i.tobytes()),
+                    "receivers": utils._bytes_feature(receivers_graph_i.tobytes()),
                 }
 
                 key_i += 1
@@ -578,27 +629,37 @@ def main(argv):
                 for idx_build in range(1):
                     start_idx, end_idx = 0, particles_array.shape[0]
                     print(f"write range: {start_idx}-{end_idx}")
-                    write_tfrecord_entry(writer, features, particles_array[start_idx: end_idx],
-                                         temps_array[start_idx: end_idx])
+                    write_tfrecord_entry(
+                        writer,
+                        features,
+                        particles_array[start_idx:end_idx],
+                        temps_array[start_idx:end_idx],
+                    )
 
                 print("Finale feature shape: ", particles_array.shape)
 
     # Write metadata file
-    if mode == 'stats':
-        metadata = compute_metadata_stats(metadata, particles_list_builds, velocity_list_builds,
-                                          acceleration_list_builds, radius_list, temp_list_builds)
-        metadata['sequence_length'] = n_steps - 1
-        metadata['dim'] = 3
+    if mode == "stats":
+        metadata = compute_metadata_stats(
+            metadata,
+            particles_list_builds,
+            velocity_list_builds,
+            acceleration_list_builds,
+            radius_list,
+            temp_list_builds,
+        )
+        metadata["sequence_length"] = n_steps - 1
+        metadata["dim"] = 3
 
-        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
+        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
             json.dump(metadata, f)
     elif mode == "test" or mode == "generalization":
         print("Finale feature shape: ", particles_array.shape)
-        metadata['sequence_length'] = particles_array.shape[0] - 1
-        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
+        metadata["sequence_length"] = particles_array.shape[0] - 1
+        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
             json.dump(metadata, f)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     argv = sys.argv[1:]
     main(argv)

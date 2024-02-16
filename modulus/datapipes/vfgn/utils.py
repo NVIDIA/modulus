@@ -12,33 +12,39 @@
 # limitations under the License.
 
 
-import os, json
-import numpy as np
+import json
 import math
+import os
 
+import numpy as np
 import tensorflow as tf
 import torch
 
-
 NUM_PARTICLE_TYPES = 3
-KINEMATIC_PARTICLE_ID = 0   # refers to anchor point
+KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
 METAL_PARTICLE_ID = 2  # refers to normal particles
-ANCHOR_PLANE_PARTICLE_ID = 1    # refers to anchor plane
+ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
+
 
 def _read_metadata(data_path):
-    with open(os.path.join(data_path, 'metadata.json'), 'rt') as fp:
+    with open(os.path.join(data_path, "metadata.json"), "rt") as fp:
         return json.load(fp)
 
+
 def _combine_std(std_x, std_y):
-    ''' combine standard deviation with l2 norm'''
-    return np.sqrt(std_x ** 2 + std_y ** 2)
+    """combine standard deviation with l2 norm"""
+    return np.sqrt(std_x**2 + std_y**2)
+
+
 def tf2torch(t):
     t = torch.from_numpy(t.numpy())
     return t
 
+
 def torch2tf(t):
     t = tf.convert_to_tensor(t.cpu().numpy())
     return t
+
 
 def get_kinematic_mask(particle_types):
     """Returns a boolean mask, set to true for kinematic (obstacle) particles."""
@@ -47,56 +53,61 @@ def get_kinematic_mask(particle_types):
 
     return particle_types == torch.ones(particle_types.shape) * KINEMATIC_PARTICLE_ID
 
+
 def get_metal_mask(particle_types):
     """Returns a boolean mask, set to true for metal particles."""
     # get free particles
     return particle_types == torch.ones(particle_types.shape) * METAL_PARTICLE_ID
 
+
 def get_anchor_z_mask(particle_types):
     # get anchor plane particles
     return particle_types == torch.ones(particle_types.shape) * ANCHOR_PLANE_PARTICLE_ID
 
+
 def cos_theta(p1, p2):
     """compute cosine of two non-zero vectors"""
-    return (torch.dot(p1, p2)) / ((torch.sqrt(torch.dot(p1, p1))) * (math.sqrt(torch.dot(p2, p2))))
+    return (torch.dot(p1, p2)) / (
+        (torch.sqrt(torch.dot(p1, p1))) * (math.sqrt(torch.dot(p2, p2)))
+    )
 
 
-def weighted_square_error(y_pre,y, device):
-    k=y_pre-y
-    k=k.view(-1)
-    k=torch.square(k)
-    sorted, indices = torch.sort(k,descending=True)
+def weighted_square_error(y_pre, y, device):
+    k = y_pre - y
+    k = k.view(-1)
+    k = torch.square(k)
+    sorted, indices = torch.sort(k, descending=True)
     print("weight: ", sorted.size())
-    n=sorted.size()[0]
+    n = sorted.size()[0]
 
-    weights=[]
-    dw=1.0/n
+    weights = []
+    dw = 1.0 / n
     for i in range(n):
         weights.append(dw)
-        dw=dw*0.99
-    weights=torch.FloatTensor(weights).to(device)
+        dw = dw * 0.99
+    weights = torch.FloatTensor(weights).to(device)
 
-    out=weights*sorted
+    out = weights * sorted
 
-    out=torch.sum(out)
+    out = torch.sum(out)
     print("weighted_square_error out: ", out)
     return out
 
 
 def weighted_loss(loss_, device):
-    loss_=loss_.view(-1)
-    sorted, indices = torch.sort(loss_,descending=True)
-    n=sorted.size()[0]
+    loss_ = loss_.view(-1)
+    sorted, indices = torch.sort(loss_, descending=True)
+    n = sorted.size()[0]
 
-    weights=[]
-    dw=1.0/n
+    weights = []
+    dw = 1.0 / n
     for i in range(n):
         weights.append(dw)
-        dw=dw*0.99
-    weights=torch.FloatTensor(weights).to(device)
+        dw = dw * 0.99
+    weights = torch.FloatTensor(weights).to(device)
 
-    out=weights*sorted
+    out = weights * sorted
 
-    out=torch.sum(out)
+    out = torch.sum(out)
     print("out: ", out)
     return out

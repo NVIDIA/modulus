@@ -24,6 +24,7 @@ from typing import Tuple, Optional
 
 class Constants(BaseModel):
     """Virtual Foundry (Digital Sintering) Graphnet constants"""
+
     # Train model, one step evaluation or rollout evaluation.
     # exec mode options: ['train', 'eval', 'eval_rollout']
     mode: str = "train"
@@ -33,7 +34,7 @@ class Constants(BaseModel):
 
     # data configs
     data_path: str = "./data/test_validation"
-    
+
     # training configs
     batch_size: int = 1
     num_steps: int = int(2e7)
@@ -50,7 +51,7 @@ class Constants(BaseModel):
     prefetch_buffer_size: int = 100
 
     # devices settings
-    device: str = 'cuda:0'
+    device: str = "cuda:0"
     # flags.DEFINE_string('message_passing_devices', 'cuda:0', or "['cuda:0', 'cuda:1]",help="The devices for message passing")
     message_passing_devices: str = "['cuda:0']"
 
@@ -71,7 +72,7 @@ class Constants(BaseModel):
     block_on_show: bool = True
     # test data type: ['standard', 'train', 'test']
     ds_type: str = "standard"
-    #Test build name
+    # Test build name
     test_build: str = "test0"
     plot_tolerance_range: bool = True
     plot_3d: bool = False

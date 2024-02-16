@@ -22,16 +22,19 @@ from ..constants import Constants
 
 C = Constants()
 
+
 def read_raw_folder(data_dir):
     """
     data_dir: Physics Simulation Engine raw output folder path, contains folder /out/solution-*.pvtu
     Read the Physics Simulation Engine raw output folder
     sort all timestep deformation files in time-series
     """
-    build_path = os.path.join(data_dir, 'out')
-    solution_list = glob.glob(build_path + '/volume-deformation-*.pvtu')
+    build_path = os.path.join(data_dir, "out")
+    solution_list = glob.glob(build_path + "/volume-deformation-*.pvtu")
     solution_list = sorted(solution_list, key=get_solution_id)
-    assert len(solution_list) >= 3, "Need to have at least 3 solution files as input to start prediction or analysis!"
+    assert (
+        len(solution_list) >= 3
+    ), "Need to have at least 3 solution files as input to start prediction or analysis!"
     return solution_list
 
 
@@ -42,7 +45,7 @@ def get_solution_id(solution_name):
 
     return: sorted keys by int index
     """
-    m = re.search('solution-(\d+)', solution_name)
+    m = re.search("solution-(\d+)", solution_name)
     if m:
         id = int(m.group(1))
         return id
@@ -54,7 +57,7 @@ def time_diff(sequence_array):
     sequence_array: Position/ velosity/ acceleration numpy array,
     return:  step-wise difference
     """
-    return sequence_array[1:,:]-sequence_array[:-1,:]
+    return sequence_array[1:, :] - sequence_array[:-1, :]
 
 
 def _bytes_feature(value):
@@ -99,10 +102,10 @@ def get_data_position(data):
 
     # uvw_values: the feature name storing voxel deformation,
     # depend on physics engine version, could also be data['u__v__w']
-    uvw_values = data['displacement_U']
+    uvw_values = data["displacement_U"]
 
     pos_list = []
-    index_list=[]
+    index_list = []
 
     for point_index in range(n_points):
         uvw = uvw_values[point_index]
@@ -123,10 +126,12 @@ def read_configs(raw_data_path):
     """
     # For each build, read the temperature profile at every time step
     params_prm_path = os.path.join(raw_data_path, "params.prm")
-    assert os.path.exists(params_prm_path), f"Temperature profile file params.prm not exists! {params_prm_path}"
+    assert os.path.exists(
+        params_prm_path
+    ), f"Temperature profile file params.prm not exists! {params_prm_path}"
 
     # reading csv file
-    with open(params_prm_path, 'r') as csvfile:
+    with open(params_prm_path, "r") as csvfile:
         # creating a csv reader object
         csvreader = csv.reader(csvfile)
 
@@ -136,13 +141,13 @@ def read_configs(raw_data_path):
                 # i.e. ['set sintering_temperature_curve=0', '20', '16320', '1380', '23520', '1380']
                 temp_row = row[1:]
             elif "initial_time" in row[0]:
-                initial_time = int(float(row[0].split('=')[1].strip()))
+                initial_time = int(float(row[0].split("=")[1].strip()))
             elif "final_time" in row[0]:
-                final_time = int(float(row[0].split('=')[1].strip()))
+                final_time = int(float(row[0].split("=")[1].strip()))
             elif "time_step" in row[0]:
-                time_step = int(float(row[0].split('=')[1].strip()))
+                time_step = int(float(row[0].split("=")[1].strip()))
             elif "save_every_n_steps" in row[0]:
-                save_every_n_steps = int(float(row[0].split('=')[1].strip()))
+                save_every_n_steps = int(float(row[0].split("=")[1].strip()))
 
     # temp_curve_list = read_temperature(params_prm_path)
     # Add temperature data to each solution file
@@ -153,9 +158,7 @@ def read_configs(raw_data_path):
     stage_temp_list = []
     for idx in range(len(temp_curve_list) // 2):
         # t_list.append(int(temp_curve_list[idx*2]) / 3600)
-        stage_t_list.append(int(temp_curve_list[idx*2]))
-        stage_temp_list.append(int(temp_curve_list[idx*2+1]))
+        stage_t_list.append(int(temp_curve_list[idx * 2]))
+        stage_temp_list.append(int(temp_curve_list[idx * 2 + 1]))
 
     return (initial_time, final_time, time_step, save_every_n_steps), temp_curve_list
-
-

@@ -64,16 +64,12 @@ for i in range(0, len(solution_list_solver), 3):
 
 fig, ax = plt.subplots()
 
-ax.plot(sol_index, pos_list_axis, "b-", linewidth=1, label='solver mean')
-ax.plot(sol_index, pos_list_axis_vfgn, "y-", linewidth=1, label='vfgn')
+ax.plot(sol_index, pos_list_axis, "b-", linewidth=1, label="solver mean")
+ax.plot(sol_index, pos_list_axis_vfgn, "y-", linewidth=1, label="vfgn")
 ax.set_ylabel(" mean deformation (mm)", color="blue", fontsize=14)
 
-fig_name = 'check_consistency_axis'
+fig_name = "check_consistency_axis"
 # ax.set_title('p'+str(pid), fontsize=14)
 ax.legend(loc="upper left")
-fig.savefig(fig_name+'.jpg',
-            format='png',
-            dpi=100,
-            bbox_inches='tight')
+fig.savefig(fig_name + ".jpg", format="png", dpi=100, bbox_inches="tight")
 plt.close()
-

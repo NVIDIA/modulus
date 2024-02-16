@@ -28,6 +28,8 @@ from utils import read_raw_folder, get_solution_id, time_diff, get_data_position
 from ..constants import Constants
 
 C = Constants()
+
+
 def main():
     solution_list = read_raw_folder(C.raw_data_dir)
 
@@ -55,19 +57,16 @@ def main():
     build_name = os.path.basename(C.raw_data_dir)
     fig, ax = plt.subplots()
     sol_index = [i for i in range(acc_3d_mean.shape[0])]
-    ax.plot(sol_index, acc_3d_mean[:,0], "b-", linewidth=1, label='x-dim velocity')
-    ax.plot(sol_index, acc_3d_mean[:,1], "y-", linewidth=1, label='y-dim velocity')
-    ax.plot(sol_index, acc_3d_mean[:,2], "g-", linewidth=1, label='z-dim velocity')
+    ax.plot(sol_index, acc_3d_mean[:, 0], "b-", linewidth=1, label="x-dim velocity")
+    ax.plot(sol_index, acc_3d_mean[:, 1], "y-", linewidth=1, label="y-dim velocity")
+    ax.plot(sol_index, acc_3d_mean[:, 2], "g-", linewidth=1, label="z-dim velocity")
     ax.set_xlabel("time steps", color="blue", fontsize=14)
     ax.set_ylabel("acce", color="blue", fontsize=14)
     # ax.set_ylim(0, 3e-6)
 
     ax.legend(loc="lower right")
-    fig_name = 'acc_3d_'+build_name+'_step'+str(step)
-    fig.savefig(fig_name+'.jpg',
-                format='png',
-                dpi=100,
-                bbox_inches='tight')
+    fig_name = "acc_3d_" + build_name + "_step" + str(step)
+    fig.savefig(fig_name + ".jpg", format="png", dpi=100, bbox_inches="tight")
 
 
 if __name__ == "__main__":
