@@ -134,7 +134,18 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown sampling method {sampling_method}")
 
-    if patch_shape_x != img_shape_y:
+
+        
+    # Initialize distributed manager
+    DistributedManager.initialize()
+    dist = DistributedManager()
+
+    # Initialize logger
+    logger = PythonLogger("generate")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging("generate.log")
+
+    if patch_shape_x != patch_shape_y:
         raise NotImplementedError("Rectangular patch not supported yet")
     if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
         raise ValueError("Patch shape needs to be a factor of 32")
@@ -147,15 +158,6 @@ def main(cfg: DictConfig) -> None:
     else:
         logger0.info("Patch-based generation disabled")
         
-    # Initialize distributed manager
-    DistributedManager.initialize()
-    dist = DistributedManager()
-
-    # Initialize logger
-    logger = PythonLogger("generate")  # General python logger
-    logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging("generate.log")
-
     logger0.info(f"Train data path: {train_data_path}")
     dataset, sampler = get_dataset_and_sampler(
         path=train_data_path,  # TODO check if this should be train data path
