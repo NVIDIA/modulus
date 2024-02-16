@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+experiment_name: "Unified-Training"
+experiment_desc: "unified training recipe for global weather models"
+run_desc: "unified training recipe for global weather models"
+
 # Get defaults
 defaults:
 

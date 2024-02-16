@@ -123,7 +123,7 @@ class SeqZarrDatapipe(Datapipe):
         )
 
         with pipe:
-            # ERA5 source
+            # Zarr source
             source = SeqZarrSource(
                 self.zarr_dataset,
                 self.variables,

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Molecular Dynamics example.
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
+- Unified weather model training example.
 
 ### Changed
 

@@ -77,10 +77,10 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize loggers
     initialize_mlflow(
-        experiment_name="Modulus-Launch-Dev",
-        experiment_desc="Modulus launch development",
+        experiment_name=cfg.experiment_name,
+        experiment_desc=cfg.experiment_desc,
         run_name=f"{cfg.model.name}-trainng",
-        run_desc="Forcast Model Training",
+        run_desc=cfg.experiment_desc,
         user_name="Modulus User",
         mode="offline",
     )
