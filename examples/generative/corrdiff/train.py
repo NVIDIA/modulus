@@ -209,7 +209,7 @@ def main(cfg: DictConfig) -> None:
     if augment > 0:
         raise NotImplementedError("Augmentation is not implemented")
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
-    if c.patch_shape_x != c.img_shape_y:
+    if c.patch_shape_x != c.patch_shape_y:
         raise NotImplementedError("Rectangular patch not supported yet")
     if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
         raise ValueError("Patch shape needs to be a factor of 32")
