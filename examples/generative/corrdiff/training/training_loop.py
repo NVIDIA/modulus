@@ -174,6 +174,8 @@ def training_loop(
     )
 
     img_in_channels = len(in_channels)  # noise + low-res input
+    if img_shape_x!=patch_shape_x or img_shape_y!=patch_shape_y:
+        img_in_channels *= 2 # add global maps for patch-based model
     if add_grid:
         img_in_channels = img_in_channels + N_grid_channels
 
