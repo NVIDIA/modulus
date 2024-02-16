@@ -68,8 +68,10 @@ class MetaData(ModelMetaData):
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    func_torch: bool = True
-    auto_grad: bool = True
+    #func_torch: bool = True
+    #auto_grad: bool = True
+    func_torch: bool = False
+    auto_grad: bool = False
 
 
 class MLPNet(torch.nn.Module):
@@ -242,9 +244,8 @@ class InteractionNet(torch.nn.Module):
         )
 
     def forward(self, x, edge_attr, receivers, senders):
-        assert (
-            x.shape[-1] == edge_attr.shape[-1]
-        ), "node feature size should equal to edge feature size"
+        if not (x.shape[-1] == edge_attr.shape[-1]):
+            raise ValueError("node feature size should equal to edge feature size")
 
         return self._node_block(*self._edge_block(x, edge_attr, receivers, senders))
 

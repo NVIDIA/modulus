@@ -126,8 +126,9 @@ def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
             # Custom batching on the leading axis.
             ds = batch_concat(ds, batch_size)
         elif mode == "rollout":
-            # Rollout evaluation only available for batch size 1
-            assert batch_size == 1
+            if not batch_size == 1:
+                raise ValueError("Rollout evaluation only available for batch size 1")
+
             ds = ds.map(prepare_rollout_inputs)
         else:
             raise ValueError(f"mode: {mode} not recognized")
