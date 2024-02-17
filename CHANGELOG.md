@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
 - Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+- Unified weather model training example.
 
 ### Changed
 
