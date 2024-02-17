@@ -148,8 +148,8 @@ def _download_cached(
         raise error
 
     cache_path = os.path.join(local_cache_path, filename)
+    
     url = urllib.parse.urlparse(path)
-    print("cache_path/ url: ", cache_path)
 
     # TODO watch for race condition here
     if not os.path.exists(cache_path):
