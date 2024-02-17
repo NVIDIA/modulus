@@ -14,5 +14,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .climate import ClimateDatapipe, ClimateDataSourceSpec
-from .era5_hdf5 import ERA5HDF5Datapipe
+experiment_name: "Unified-Training"
+experiment_desc: "unified training recipe for global weather models"
+run_desc: "unified training recipe for global weather models"
+
+# Get defaults
+defaults:
+
+  # Dataset
+  #- dataset/7_var
+  - dataset/healpix_19_var
+  #- dataset/34_var
+  
+  # Transform
+  - transform/downsample
+  #- transform/trim_lat720
+  #- transform/healpix
+
+  # Filesystem
+  - filesystem/local
+  #- filesystem/pbss
+
+  # Model
+  - model/sfno
+    #- model/afno
+    #- model/graphcastnet
+
+  # Training
+  #- training/afno
+  - training/graphcastnet
+
+  # Validation
+  - validation/afno

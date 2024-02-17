@@ -6,12 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0a0] - 2024-03-XX
+## [0.6.0a0] - 2024-04-XX
 
 ### Added
 
 - The citation file.
 - Link to the CWA dataset.
+- ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 
 ### Changed
 
@@ -45,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
 - Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+- Unified weather model training example.
 
 ### Changed
 
