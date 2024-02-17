@@ -19,6 +19,16 @@ import dask
 
 # Downsample transform
 def downsample_transform(dataset, downsample_factor=4):
+    """
+    Downsample the dataset by a factor of downsample_factor
+
+    Parameters
+    ----------
+    dataset : xarray.Dataset
+        The dataset to downsample
+    downsample_factor : int
+        The factor to downsample by
+    """
     dataset = dataset.coarsen(
         {"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim"
     ).mean()
@@ -27,6 +37,15 @@ def downsample_transform(dataset, downsample_factor=4):
 
 # Trim lat from 721 to 720
 def trim_lat720_transform(dataset):
+    """
+    Trim the latitude from 721 to 720
+
+    Parameters
+    ----------
+    dataset : xarray.Dataset
+        The dataset to trim
+    """
+
     dataset = dataset.isel(latitude=slice(0, -1))
     return dataset
 
@@ -35,6 +54,19 @@ def trim_lat720_transform(dataset):
 # Reference:
 # https://github.com/nathanielcresswellclay/zephyr/blob/main/data_processing/remap/healpix.py
 def healpix_transform(dataset, nside=32, order="bilinear"):
+    """
+    Transform the dataset to healpix grid
+
+    Parameters
+    ----------
+    dataset : xarray.Dataset
+        The dataset to transform
+    nside : int
+        The nside of the healpix grid
+    order : str
+        The order of the interpolation
+    """
+
     # Get the lat/lon coordinates
     lon = len(dataset.longitude.values)
     lat = len(dataset.latitude.values)
