@@ -25,7 +25,6 @@ from transform.transform import transform_registry
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-
     # Resolve config so that all values are concrete
     OmegaConf.resolve(cfg)
 
@@ -33,49 +32,59 @@ def main(cfg: DictConfig) -> None:
     try:
         transform = transform_registry[cfg.transform.name]
     except KeyError:
-        raise NotImplementedError(f'Transform {cfg.transform.name} not implemented')
+        raise NotImplementedError(f"Transform {cfg.transform.name} not implemented")
     if "kwargs" in cfg.transform:
+
         def wrapper_transform(transform, **kwargs):
             def _transform(x):
                 return transform(x, **kwargs)
+
             return _transform
+
         transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Initialize filesytem
-    if cfg.filesystem.type == 'file':
+    if cfg.filesystem.type == "file":
         fs = fsspec.filesystem(cfg.filesystem.type)
-    elif cfg.filesystem.type == 's3':
-        fs = fsspec.filesystem(cfg.filesystem.type,
-                               key=cfg.filesystem.key,
-                               secret=os.environ["AWS_SECRET_ACCESS_KEY"], 
-                               client_kwargs={'endpoint_url': cfg.filesystem.endpoint_url,
-                                              'region_name': cfg.filesystem.region_name})
+    elif cfg.filesystem.type == "s3":
+        fs = fsspec.filesystem(
+            cfg.filesystem.type,
+            key=cfg.filesystem.key,
+            secret=os.environ["AWS_SECRET_ACCESS_KEY"],
+            client_kwargs={
+                "endpoint_url": cfg.filesystem.endpoint_url,
+                "region_name": cfg.filesystem.region_name,
+            },
+        )
     else:
-        raise NotImplementedError(f'Filesystem type {cfg.filesystem.type} not implemented')
+        raise NotImplementedError(
+            f"Filesystem type {cfg.filesystem.type} not implemented"
+        )
 
     # Make train data
     train_etl_pipe = ARCOERA5ETL(
-            unpredicted_variables=cfg.dataset.unpredicted_variables,
-            predicted_variables=cfg.dataset.predicted_variables,
-            dataset_filename=cfg.dataset.train_dataset_filename,
-            fs=fs,
-            transform=transform,
-            date_range=cfg.dataset.train_years,
-            dt=cfg.dataset.dt,
+        unpredicted_variables=cfg.dataset.unpredicted_variables,
+        predicted_variables=cfg.dataset.predicted_variables,
+        dataset_filename=cfg.dataset.train_dataset_filename,
+        fs=fs,
+        transform=transform,
+        date_range=cfg.dataset.train_years,
+        dt=cfg.dataset.dt,
     )
     train_etl_pipe()
 
     # Make validation data
     val_etl_pipe = ARCOERA5ETL(
-            unpredicted_variables=cfg.dataset.unpredicted_variables,
-            predicted_variables=cfg.dataset.predicted_variables,
-            dataset_filename=cfg.dataset.val_dataset_filename,
-            fs=fs,
-            transform=transform,
-            date_range=cfg.dataset.val_years,
-            dt=cfg.dataset.dt,
+        unpredicted_variables=cfg.dataset.unpredicted_variables,
+        predicted_variables=cfg.dataset.predicted_variables,
+        dataset_filename=cfg.dataset.val_dataset_filename,
+        fs=fs,
+        transform=transform,
+        date_range=cfg.dataset.val_years,
+        dt=cfg.dataset.dt,
     )
     val_etl_pipe()
+
 
 if __name__ == "__main__":
     main()

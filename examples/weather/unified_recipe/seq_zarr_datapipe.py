@@ -34,6 +34,7 @@ from modulus.datapipes.meta import DatapipeMetaData
 
 Tensor = torch.Tensor
 
+
 @dataclass
 class MetaData(DatapipeMetaData):
     name: str = "SeqZarrDatapipe"
@@ -196,7 +197,6 @@ class SeqZarrSource:
         process_rank: int = 0,
         world_size: int = 1,
     ):
-
         # Set up parameters
         self.zarr_dataset = zarr_dataset
         self.variables = variables
@@ -219,7 +219,6 @@ class SeqZarrSource:
 
         # Set up last epoch
         self.last_epoch = None
-
 
     def __call__(
         self, sample_info: dali.types.SampleInfo

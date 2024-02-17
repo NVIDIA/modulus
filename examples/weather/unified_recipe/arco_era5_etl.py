@@ -23,6 +23,7 @@ from dask.diagnostics import ProgressBar
 import dask
 import datetime
 
+
 class ARCOERA5ETL:
     """
     ETL script for converting ARCO ERA5 dataset loadable with Zarr datapipe
@@ -37,7 +38,7 @@ class ARCOERA5ETL:
         cache_storage: str = "./arco_era5_cache",
         transform: None = None,
         date_range: Tuple[str, str] = ("2000-01-01", "2001-01-01"),
-        dt: int = 1, # 1 hour
+        dt: int = 1,  # 1 hour
     ):
         super().__init__()
 
@@ -52,30 +53,31 @@ class ARCOERA5ETL:
         self.dt = dt
 
         # ARCO filename
-        self.arco_filename = 'gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3'
+        self.arco_filename = (
+            "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
+        )
 
         # Cache data if specified
         if cache_storage is not None:
             arco_fs = fsspec.filesystem(
-                'simplecache',
-                target_protocol='gs',
+                "simplecache",
+                target_protocol="gs",
                 cache_storage=cache_storage,
             )
         else:
-            arco_fs = fsspec.filesystem('gs')
+            arco_fs = fsspec.filesystem("gs")
 
         # Open dataset
         self.arco_mapper = arco_fs.get_mapper(self.arco_filename)
         self.arco_era5 = xr.open_zarr(self.arco_mapper, consolidated=True)
 
         # TODO: remove this
-        #years = np.arange(1979, 2023)
-        #zarr_files = [f"./full_year_{year}.zarr" for year in years]
-        #xr_datasets = [xr.open_zarr(file) for file in zarr_files]
-        #xr_datasets = [ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31")) for year, ds in zip(years, xr_datasets)]
-        #xr_datasets = xr.concat(xr_datasets, dim="time")
-        #self.arco_era5 = xr_datasets
-
+        # years = np.arange(1979, 2023)
+        # zarr_files = [f"./full_year_{year}.zarr" for year in years]
+        # xr_datasets = [xr.open_zarr(file) for file in zarr_files]
+        # xr_datasets = [ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31")) for year, ds in zip(years, xr_datasets)]
+        # xr_datasets = xr.concat(xr_datasets, dim="time")
+        # self.arco_era5 = xr_datasets
 
         # Subset variables (this speeds up chunking)
         needed_variables = ["latitude", "longitude", "time", "level"]
@@ -89,42 +91,69 @@ class ARCOERA5ETL:
                 self.arco_era5 = self.arco_era5.drop_vars(variables)
 
         # Chunk data
-        self.arco_era5 = self.arco_era5.sel(time=slice(datetime.datetime.strptime(date_range[0], "%Y-%m-%d"), datetime.datetime.strptime(date_range[1], "%Y-%m-%d")))
-        self.arco_era5 = self.arco_era5.sel(time=self.arco_era5.time.dt.hour.isin(np.arange(0, 24, self.dt)))
-        self.arco_era5 = self.arco_era5.chunk({"time": 1, "level": 1, "latitude": 721, "longitude": 1440})
+        self.arco_era5 = self.arco_era5.sel(
+            time=slice(
+                datetime.datetime.strptime(date_range[0], "%Y-%m-%d"),
+                datetime.datetime.strptime(date_range[1], "%Y-%m-%d"),
+            )
+        )
+        self.arco_era5 = self.arco_era5.sel(
+            time=self.arco_era5.time.dt.hour.isin(np.arange(0, 24, self.dt))
+        )
+        self.arco_era5 = self.arco_era5.chunk(
+            {"time": 1, "level": 1, "latitude": 721, "longitude": 1440}
+        )
 
         # Gather all predicted variables
         xarray_predicted_variables = []
         for variable in self.predicted_variables:
-            if not isinstance(variable, str): # TODO: better way to check if list
+            if not isinstance(variable, str):  # TODO: better way to check if list
                 pressure_variable = self.arco_era5[variable[0]].sel(level=variable[1])
                 pressure_variable = pressure_variable.drop("level")
-                pressure_variable = pressure_variable.rename({"level": "predicted_channel"})
+                pressure_variable = pressure_variable.rename(
+                    {"level": "predicted_channel"}
+                )
                 xarray_predicted_variables.append(pressure_variable)
             else:
                 single_variable = self.arco_era5[variable]
-                single_variable = single_variable.expand_dims("predicted_channel", axis=1)
+                single_variable = single_variable.expand_dims(
+                    "predicted_channel", axis=1
+                )
                 xarray_predicted_variables.append(single_variable)
 
         # Gather all unpredicted variables
         xarray_unpredicted_variables = []
         for variable in self.unpredicted_variables:
-            if not isinstance(variable, str): # TODO: better way to check if list
+            if not isinstance(variable, str):  # TODO: better way to check if list
                 pressure_variable = self.arco_era5[variable[0]].sel(level=variable[1])
                 pressure_variable = pressure_variable.drop("level")
-                pressure_variable = pressure_variable.rename({"level": "unpredicted_channel"})
+                pressure_variable = pressure_variable.rename(
+                    {"level": "unpredicted_channel"}
+                )
                 xarray_unpredicted_variables.append(pressure_variable)
             else:
                 single_variable = self.arco_era5[variable]
-                single_variable = single_variable.expand_dims("unpredicted_channel", axis=1)
+                single_variable = single_variable.expand_dims(
+                    "unpredicted_channel", axis=1
+                )
                 xarray_unpredicted_variables.append(single_variable)
 
-        # Concatenate all variables 
+        # Concatenate all variables
         self.arco_era5_subset = xr.Dataset()
-        self.arco_era5_subset["predicted"] = xr.concat(xarray_predicted_variables, dim="predicted_channel")
-        self.arco_era5_subset["unpredicted"] = xr.concat(xarray_unpredicted_variables, dim="unpredicted_channel")
-        self.arco_era5_subset['time'] = self.arco_era5['time']
-        self.arco_era5_subset = self.arco_era5_subset.chunk({"time": 1, "predicted_channel": self.arco_era5_subset.predicted_channel.size, "unpredicted_channel": self.arco_era5_subset.unpredicted_channel.size})
+        self.arco_era5_subset["predicted"] = xr.concat(
+            xarray_predicted_variables, dim="predicted_channel"
+        )
+        self.arco_era5_subset["unpredicted"] = xr.concat(
+            xarray_unpredicted_variables, dim="unpredicted_channel"
+        )
+        self.arco_era5_subset["time"] = self.arco_era5["time"]
+        self.arco_era5_subset = self.arco_era5_subset.chunk(
+            {
+                "time": 1,
+                "predicted_channel": self.arco_era5_subset.predicted_channel.size,
+                "unpredicted_channel": self.arco_era5_subset.unpredicted_channel.size,
+            }
+        )
 
     def __call__(self):
         """
@@ -142,11 +171,13 @@ class ARCOERA5ETL:
 
         # Save
         mapper = self.fs.get_mapper(self.dataset_filename)
-        delayed_obj = self.arco_era5_subset.to_zarr(mapper, consolidated=True, compute=False)
+        delayed_obj = self.arco_era5_subset.to_zarr(
+            mapper, consolidated=True, compute=False
+        )
 
         # Wait for save to finish
         # only run with 1 worker
         with ProgressBar():
             delayed_obj.compute()
-            #with dask.config.set(scheduler='single-threaded'):
+            # with dask.config.set(scheduler='single-threaded'):
             #    delayed_obj.compute()

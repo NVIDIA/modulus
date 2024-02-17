@@ -53,8 +53,7 @@ from seq_zarr_datapipe import SeqZarrDatapipe
 
 
 def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
-    """Calculates batch-wise normalized mse error between two tensors.
-    """
+    """Calculates batch-wise normalized mse error between two tensors."""
 
     pred_flat = pred.reshape(pred.size(0), -1)
     target_flat = target.reshape(target.size(0), -1)
@@ -65,8 +64,12 @@ def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
     error = diff_norms / target_norms
     return torch.mean(error)
 
+
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
+    """
+    Main training function for unified weather model training.
+    """
 
     # Resolve config so that all values are concrete
     OmegaConf.resolve(cfg)
@@ -92,7 +95,10 @@ def main(cfg: DictConfig) -> None:
     model = Module.instantiate(
         {
             "__name__": cfg.model.name,
-            "__args__": {k: tuple(v) if isinstance(v, ListConfig) else v for k, v in cfg.model.args.items()}, # TODO: maybe mobe this conversion to resolver?
+            "__args__": {
+                k: tuple(v) if isinstance(v, ListConfig) else v
+                for k, v in cfg.model.args.items()
+            },  # TODO: maybe mobe this conversion to resolver?
         }
     )
     print(dist.device)
@@ -127,16 +133,22 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Initialize filesytem
-    if cfg.filesystem.type == 'file':
+    if cfg.filesystem.type == "file":
         fs = fsspec.filesystem(cfg.filesystem.type)
-    elif cfg.filesystem.type == 's3':
-        fs = fsspec.filesystem(cfg.filesystem.type,
-                               key=cfg.filesystem.key,
-                               secret=os.environ["AWS_SECRET_ACCESS_KEY"], 
-                               client_kwargs={'endpoint_url': cfg.filesystem.endpoint_url,
-                                              'region_name': cfg.filesystem.region_name})
+    elif cfg.filesystem.type == "s3":
+        fs = fsspec.filesystem(
+            cfg.filesystem.type,
+            key=cfg.filesystem.key,
+            secret=os.environ["AWS_SECRET_ACCESS_KEY"],
+            client_kwargs={
+                "endpoint_url": cfg.filesystem.endpoint_url,
+                "region_name": cfg.filesystem.region_name,
+            },
+        )
     else:
-        raise NotImplementedError(f'Filesystem type {cfg.filesystem.type} not implemented')
+        raise NotImplementedError(
+            f"Filesystem type {cfg.filesystem.type} not implemented"
+        )
 
     # Get filesystem mapper for datasets
     train_dataset_mapper = fs.get_mapper(cfg.dataset.train_dataset_filename)
@@ -144,8 +156,8 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
-        zarr_dataset=zarr.open(val_dataset_mapper, mode='r'),
-        variables=['time', 'predicted', 'unpredicted'],
+        zarr_dataset=zarr.open(val_dataset_mapper, mode="r"),
+        variables=["time", "predicted", "unpredicted"],
         batch_size=cfg.validation.batch_size,
         num_steps=cfg.validation.num_steps + cfg.training.nr_input_steps,
         shuffle=False,
@@ -155,8 +167,13 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Normalizer (TODO: Maybe wrap this into model)
-    predicted_batch_norm = nn.BatchNorm2d(cfg.dataset.nr_predicted_variables, momentum=None, affine=False).to(dist.device)
-    unpredicted_batch_norm = nn.BatchNorm2d(cfg.dataset.nr_unpredicted_variables, momentum=None, affine=False).to(dist.device)
+    predicted_batch_norm = nn.BatchNorm2d(
+        cfg.dataset.nr_predicted_variables, momentum=None, affine=False
+    ).to(dist.device)
+    unpredicted_batch_norm = nn.BatchNorm2d(
+        cfg.dataset.nr_unpredicted_variables, momentum=None, affine=False
+    ).to(dist.device)
+
     def normalize_variables(variables, batch_norm):
         shape = variables.shape
         variables = variables.flatten(0, 1)
@@ -165,7 +182,9 @@ def main(cfg: DictConfig) -> None:
         return variables
 
     # Unroll network
-    def unroll(model, predicted_variables, unpredicted_variables, nr_input_steps, cpu=False):
+    def unroll(
+        model, predicted_variables, unpredicted_variables, nr_input_steps, cpu=False
+    ):
         # Get number of steps to unroll
         steps = unpredicted_variables.shape[1] - nr_input_steps
 
@@ -174,7 +193,7 @@ def main(cfg: DictConfig) -> None:
         pred_i = predicted_variables[:, :nr_input_steps]
 
         # Unroll
-        model_predicted = [] 
+        model_predicted = []
         for i in range(steps):
             # Get prediction for the first step
             model_pred_i = model(torch.cat([pred_i, unpred_i], dim=2).flatten(1, 2))
@@ -193,29 +212,43 @@ def main(cfg: DictConfig) -> None:
     @StaticCaptureEvaluateNoGrad(model=model, logger=logger, use_graphs=False)
     def eval_forward(model, predicted_variables, unpredicted_variables, nr_input_steps):
         # Forward pass
-        net_predicted_variables = unroll(model, predicted_variables, unpredicted_variables, nr_input_steps)
+        net_predicted_variables = unroll(
+            model, predicted_variables, unpredicted_variables, nr_input_steps
+        )
 
         # Get l2 loss
         num_elements = torch.prod(torch.Tensor(list(net_predicted_variables.shape[1:])))
-        loss = torch.sum(torch.pow(net_predicted_variables - predicted_variables[:, nr_input_steps:], 2)) / num_elements
+        loss = (
+            torch.sum(
+                torch.pow(
+                    net_predicted_variables - predicted_variables[:, nr_input_steps:], 2
+                )
+            )
+            / num_elements
+        )
 
         return loss, net_predicted_variables, predicted_variables[:, nr_input_steps:]
 
     # Training forward pass
     @StaticCaptureTraining(model=model, optim=optimizer, logger=logger)
-    def train_step_forward(model, predicted_variables, unpredicted_variables, nr_input_steps):
+    def train_step_forward(
+        model, predicted_variables, unpredicted_variables, nr_input_steps
+    ):
         # Forward pass
-        net_predicted_variables = unroll(model, predicted_variables, unpredicted_variables, nr_input_steps)
+        net_predicted_variables = unroll(
+            model, predicted_variables, unpredicted_variables, nr_input_steps
+        )
 
         # Compute loss
-        loss = batch_normalized_mse(net_predicted_variables, predicted_variables[:, nr_input_steps:])
+        loss = batch_normalized_mse(
+            net_predicted_variables, predicted_variables[:, nr_input_steps:]
+        )
 
         return loss
 
     # Main training loop
     global_epoch = 0
     for stage in cfg.training.stages:
-
         # Skip if loaded epoch is greater than current stage
         if loaded_epoch > global_epoch:
             # Check if current stage needs to be run
@@ -231,8 +264,8 @@ def main(cfg: DictConfig) -> None:
 
         # Create new datapipe
         train_datapipe = SeqZarrDatapipe(
-            zarr_dataset=zarr.open(train_dataset_mapper, mode='r'),
-            variables=['time', 'predicted', 'unpredicted'],
+            zarr_dataset=zarr.open(train_dataset_mapper, mode="r"),
+            variables=["time", "predicted", "unpredicted"],
             batch_size=stage.batch_size,
             num_steps=stage.unroll_steps + cfg.training.nr_input_steps,
             shuffle=True,
@@ -248,15 +281,16 @@ def main(cfg: DictConfig) -> None:
         # Set scheduler to current step
         current_step = len(train_datapipe) * (stage.num_epochs - num_epochs)
         scheduler.step(current_step)
- 
+
         # Run number of epochs
         for epoch in range(num_epochs):
-
             # Wrap epoch in launch logger for console / WandB logs
             with LaunchLogger(
-                "train", epoch=epoch, num_mini_batch=len(train_datapipe), epoch_alert_freq=10
+                "train",
+                epoch=epoch,
+                num_mini_batch=len(train_datapipe),
+                epoch_alert_freq=10,
             ) as log:
-
                 # Track memory throughput
                 tic = time.time()
                 nr_bytes = 0
@@ -272,15 +306,30 @@ def main(cfg: DictConfig) -> None:
                     unpredicted_variables = data[0]["unpredicted"]
 
                     # Normalize variables
-                    predicted_variables = normalize_variables(predicted_variables, predicted_batch_norm)
-                    unpredicted_variables = normalize_variables(unpredicted_variables, unpredicted_batch_norm)
+                    predicted_variables = normalize_variables(
+                        predicted_variables, predicted_batch_norm
+                    )
+                    unpredicted_variables = normalize_variables(
+                        unpredicted_variables, unpredicted_batch_norm
+                    )
 
                     # Log memory throughput
-                    nr_bytes += predicted_variables.element_size() * predicted_variables.nelement()
-                    nr_bytes += unpredicted_variables.element_size() * unpredicted_variables.nelement()
+                    nr_bytes += (
+                        predicted_variables.element_size()
+                        * predicted_variables.nelement()
+                    )
+                    nr_bytes += (
+                        unpredicted_variables.element_size()
+                        * unpredicted_variables.nelement()
+                    )
 
                     # Perform training step
-                    loss = train_step_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
+                    loss = train_step_forward(
+                        model,
+                        predicted_variables,
+                        unpredicted_variables,
+                        cfg.training.nr_input_steps,
+                    )
                     log.log_minibatch({"loss": loss.detach()})
 
                     # Step scheduler
@@ -294,10 +343,8 @@ def main(cfg: DictConfig) -> None:
 
             # Perform validation
             if dist.rank == 0:
-
                 # Wrap validation in launch logger for console / WandB logs
                 with LaunchLogger("valid", epoch=epoch) as log:
-
                     # Switch to eval mode
                     model.eval()
 
@@ -305,38 +352,63 @@ def main(cfg: DictConfig) -> None:
                     loss_epoch = 0.0
                     num_examples = 0
                     for i, data in enumerate(val_datapipe):
-
                         # Get predicted and unpredicted variables
                         predicted_variables = data[0]["predicted"]
                         unpredicted_variables = data[0]["unpredicted"]
 
                         # Normalize variables
-                        predicted_variables = normalize_variables(predicted_variables, predicted_batch_norm)
-                        unpredicted_variables = normalize_variables(unpredicted_variables, unpredicted_batch_norm)
+                        predicted_variables = normalize_variables(
+                            predicted_variables, predicted_batch_norm
+                        )
+                        unpredicted_variables = normalize_variables(
+                            unpredicted_variables, unpredicted_batch_norm
+                        )
 
                         # Perform validation step and compute loss
-                        loss, net_predicted_variables, predicted_variables = eval_forward(model, predicted_variables, unpredicted_variables, cfg.training.nr_input_steps)
+                        (
+                            loss,
+                            net_predicted_variables,
+                            predicted_variables,
+                        ) = eval_forward(
+                            model,
+                            predicted_variables,
+                            unpredicted_variables,
+                            cfg.training.nr_input_steps,
+                        )
                         loss_epoch += loss.detach().cpu().numpy()
                         num_examples += predicted_variables.shape[0]
 
                         # Plot validation on first batch
                         if i == 0:
-                            net_predicted_variables = net_predicted_variables.cpu().numpy()
+                            net_predicted_variables = (
+                                net_predicted_variables.cpu().numpy()
+                            )
                             predicted_variables = predicted_variables.cpu().numpy()
                             for chan in range(net_predicted_variables.shape[2]):
                                 plt.close("all")
                                 fig, ax = plt.subplots(
-                                    3, net_predicted_variables.shape[1], figsize=(15, net_predicted_variables.shape[0] * 5)
+                                    3,
+                                    net_predicted_variables.shape[1],
+                                    figsize=(15, net_predicted_variables.shape[0] * 5),
                                 )
                                 for t in range(net_predicted_variables.shape[1]):
-                                    ax[0, t].set_title("Network prediction, Step {}".format(t))
-                                    ax[1, t].set_title("Ground truth, Step {}".format(t))
+                                    ax[0, t].set_title(
+                                        "Network prediction, Step {}".format(t)
+                                    )
+                                    ax[1, t].set_title(
+                                        "Ground truth, Step {}".format(t)
+                                    )
                                     ax[2, t].set_title("Difference, Step {}".format(t))
                                     ax[0, t].imshow(net_predicted_variables[0, t, chan])
                                     ax[1, t].imshow(predicted_variables[0, t, chan])
-                                    ax[2, t].imshow(net_predicted_variables[0, t, chan] - predicted_variables[0, t, chan])
-                
-                                fig.savefig(f"forcast_validation_channel{chan}_epoch{epoch}.png")
+                                    ax[2, t].imshow(
+                                        net_predicted_variables[0, t, chan]
+                                        - predicted_variables[0, t, chan]
+                                    )
+
+                                fig.savefig(
+                                    f"forcast_validation_channel{chan}_epoch{epoch}.png"
+                                )
 
                     # Log validation loss
                     log.log_epoch({"Validation error": loss_epoch / num_examples})
