@@ -29,6 +29,7 @@ def downsample_transform(dataset, downsample_factor=4):
     downsample_factor : int
         The factor to downsample by
     """
+
     dataset = dataset.coarsen(
         {"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim"
     ).mean()
