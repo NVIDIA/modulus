@@ -16,21 +16,25 @@ import numpy as np
 import xarray as xr
 import dask
 
+
 # Downsample transform
 def downsample_transform(dataset, downsample_factor=4):
-    dataset = dataset.coarsen({"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim").mean()
-    return dataset 
+    dataset = dataset.coarsen(
+        {"latitude": downsample_factor, "longitude": downsample_factor}, boundary="trim"
+    ).mean()
+    return dataset
+
 
 # Trim lat from 721 to 720
 def trim_lat720_transform(dataset):
     dataset = dataset.isel(latitude=slice(0, -1))
-    return dataset 
+    return dataset
+
 
 # Helpix transform
 # Reference:
 # https://github.com/nathanielcresswellclay/zephyr/blob/main/data_processing/remap/healpix.py
 def healpix_transform(dataset, nside=32, order="bilinear"):
-
     # Get the lat/lon coordinates
     lon = len(dataset.longitude.values)
     lat = len(dataset.latitude.values)
@@ -38,18 +42,18 @@ def healpix_transform(dataset, nside=32, order="bilinear"):
 
     # Create the healpix grid
     wcs_input_dict = {
-        'CTYPE1': 'RA---CAR',  # can be further specified with, e.g., RA---MOL, GLON-MOL, ELON-MOL
-        'CUNIT1': 'deg',
-        'CDELT1': -res,  # -r produces for some reason less NaNs
-        'CRPIX1': lon/2.0,
-        'CRVAL1': 180.0,
-        'NAXIS1': lon,  # does not seem to have an effect
-        'CTYPE2': 'DEC--CAR',  # can be further specified with, e.g., DEC--MOL, GLAT-MOL, ELAT-MOL 
-        'CUNIT2': 'deg',
-        'CDELT2': -res,
-        'CRPIX2': (lat + 1)/2.0,
-        'CRVAL2': 0.0,
-        'NAXIS2': lat
+        "CTYPE1": "RA---CAR",  # can be further specified with, e.g., RA---MOL, GLON-MOL, ELON-MOL
+        "CUNIT1": "deg",
+        "CDELT1": -res,  # -r produces for some reason less NaNs
+        "CRPIX1": lon / 2.0,
+        "CRVAL1": 180.0,
+        "NAXIS1": lon,  # does not seem to have an effect
+        "CTYPE2": "DEC--CAR",  # can be further specified with, e.g., DEC--MOL, GLAT-MOL, ELAT-MOL
+        "CUNIT2": "deg",
+        "CDELT2": -res,
+        "CRPIX2": (lat + 1) / 2.0,
+        "CRVAL2": 0.0,
+        "NAXIS2": lat,
     }
     wcs_ll2hpx = ap.wcs.WCS(wcs_input_dict)
 
@@ -57,7 +61,7 @@ def healpix_transform(dataset, nside=32, order="bilinear"):
     index_mapping_1d_to_3d = np.zeros((hp.nside2npix(nside), 3), dtype=np.int64)
     for i in range(hp.nside2npix(nside)):
         f = i // (nside * nside)
-        hpxidx = format(i % (nside * nside), 'b').zfill(nside)
+        hpxidx = format(i % (nside * nside), "b").zfill(nside)
         bits_even = hpxidx[::2]
         bits_odd = hpxidx[1::2]
         y = int(bits_even, 2)
@@ -66,7 +70,6 @@ def healpix_transform(dataset, nside=32, order="bilinear"):
 
     # Create numpy remapping function
     def remap_func(x):
-
         # Use dask delayed to parallelize the remapping
         # while keeping the xarray structure
         @dask.delayed
@@ -75,14 +78,18 @@ def healpix_transform(dataset, nside=32, order="bilinear"):
             x = x.values
             x = np.flip(x, axis=1)
             hpx1d, _ = rp.reproject_to_healpix(
-                (x, wcs_ll2hpx), 
-                coord_system_out='icrs',
+                (x, wcs_ll2hpx),
+                coord_system_out="icrs",
                 nside=nside,
                 order=order,
                 nested=True,
             )
             hpx3d = np.zeros((12, nside, nside), dtype=x.dtype)
-            hpx3d[index_mapping_1d_to_3d[:, 0], index_mapping_1d_to_3d[:, 1], index_mapping_1d_to_3d[:, 2]] = hpx1d
+            hpx3d[
+                index_mapping_1d_to_3d[:, 0],
+                index_mapping_1d_to_3d[:, 1],
+                index_mapping_1d_to_3d[:, 2],
+            ] = hpx1d
 
             return hpx3d
 
@@ -99,10 +106,19 @@ def healpix_transform(dataset, nside=32, order="bilinear"):
         return x
 
     # Apply the remapping function
-    dataset["predicted"] = dataset["predicted"].groupby("time").map(lambda x: x.groupby("predicted_channel").map(lambda y: remap_func(y)))
-    dataset["unpredicted"] = dataset["unpredicted"].groupby("time").map(lambda x: x.groupby("unpredicted_channel").map(lambda y: remap_func(y)))
+    dataset["predicted"] = (
+        dataset["predicted"]
+        .groupby("time")
+        .map(lambda x: x.groupby("predicted_channel").map(lambda y: remap_func(y)))
+    )
+    dataset["unpredicted"] = (
+        dataset["unpredicted"]
+        .groupby("time")
+        .map(lambda x: x.groupby("unpredicted_channel").map(lambda y: remap_func(y)))
+    )
 
     return dataset
+
 
 transform_registry = {
     "downsample": downsample_transform,
@@ -113,7 +129,9 @@ try:
     import astropy as ap
     import healpy as hp
     import reproject as rp
+
     transform_registry["healpix"] = healpix_transform
 except:
     import warnings
+
     warnings.warn("Unable to import healpix transform. Skipping...")
