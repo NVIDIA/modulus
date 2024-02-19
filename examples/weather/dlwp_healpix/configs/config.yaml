@@ -20,7 +20,7 @@ defaults:
 
 experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
 output_dir: outputs/${experiment_name}
-checkpoint_name: null
+checkpoint_name: last.ckpt
 load_weights_only: false
 seed: 0
 
