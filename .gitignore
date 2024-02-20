@@ -166,3 +166,4 @@ mlruns/
 # Hydra
 outputs/
 multirun/
+.hydra/

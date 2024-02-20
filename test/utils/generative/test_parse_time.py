@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +16,13 @@
 
 import datetime
 
-import cftime
+import pytest
 import yaml
+from pytest_utils import import_or_fail
 
 from modulus.utils.generative import convert_datetime_to_cftime
+
+cftime = pytest.importorskip("cftime")
 
 # ruff: noqa: S101  # TODo remove exception
 
@@ -30,7 +35,8 @@ def test_datetime_yaml():
     assert dt == loaded
 
 
-def test_convert_to_cftime():
+@import_or_fail("cftime")
+def test_convert_to_cftime(pytestconfig):
     """test parse time"""
     dt = datetime.datetime(2011, 1, 1)
     expected = cftime.DatetimeGregorian(2011, 1, 1)

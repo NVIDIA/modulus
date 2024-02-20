@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -136,6 +138,7 @@ class MeshGraphNet(Module):
         aggregation: str = "sum",
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
+        recompute_activation: bool = False,
     ):
         super().__init__(meta=MetaData())
 
@@ -148,7 +151,7 @@ class MeshGraphNet(Module):
             hidden_layers=num_layers_edge_encoder,
             activation_fn=activation_fn,
             norm_type="LayerNorm",
-            recompute_activation=False,
+            recompute_activation=recompute_activation,
         )
 
         self.node_encoder = MeshGraphMLP(
@@ -158,7 +161,7 @@ class MeshGraphNet(Module):
             hidden_layers=num_layers_node_encoder,
             activation_fn=activation_fn,
             norm_type="LayerNorm",
-            recompute_activation=False,
+            recompute_activation=recompute_activation,
         )
 
         self.node_decoder = MeshGraphMLP(
@@ -168,7 +171,7 @@ class MeshGraphNet(Module):
             hidden_layers=num_layers_node_decoder,
             activation_fn=activation_fn,
             norm_type=None,
-            recompute_activation=False,
+            recompute_activation=recompute_activation,
         )
         self.processor = MeshGraphNetProcessor(
             processor_size=processor_size,

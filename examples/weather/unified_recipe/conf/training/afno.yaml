@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +13,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+nr_input_steps: 1
+
+optimizer:
+  name: FusedAdam
+  args:
+    lr: 0.0005
+    betas: [0.9, 0.999]
+
+stages:
+  - name: "Cosine Annealing LR"
+    max_iterations: inf
+    num_epochs: 100
+    unroll_steps: 1
+    batch_size: 8
+    lr_scheduler_name: CosineAnnealingLR
+    args:
+      T_max: 150

@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -193,7 +195,7 @@ class Mean(EnsembleMetrics):
             DistributedManager.is_initialized() and dist.is_initialized()
         ):  # pragma: no cover
             # Collect local sums, n
-            sums = torch.sum(inputs, batch_dim=dim)
+            sums = torch.sum(inputs, dim=dim)
             n = torch.as_tensor([inputs.shape[dim]], device=self.device)
 
             # Reduce

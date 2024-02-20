@@ -6,7 +6,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0a0] - 2024-01-XX
+## [0.6.0a0] - 2024-04-XX
+
+### Added
+
+- The citation file.
+- Link to the CWA dataset.
+- ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- Consistent handling of single GPU runs in DistributedManager
+
+### Security
+
+### Dependencies
+
+- Updated DGL build in Dockerfile
+- Updated default base image
+- Moved Onnx from optional to required dependencies
+- Optional Makani dependency required for SFNO model.
+
+## [0.5.0] - 2024-01-25
 
 ### Added
 
@@ -18,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Molecular Dynamics example.
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
+- Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+- Unified weather model training example.
 
 ### Changed
 
@@ -39,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Dependencies
 
 - Removed experimental SFNO dependencies
-- Added CorrDiff dependencies (cftime, einops, pyspng)
+- Added CorrDiff dependencies (cftime, einops, pyspng, nvtx)
 - Made tqdm a required dependency
 
 ## [0.4.0] - 2023-11-20
