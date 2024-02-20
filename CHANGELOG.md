@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Consistent handling of single GPU runs in DistributedManager
+- Output location of objects downloaded with NGC file system
 
 ### Security
 
@@ -54,15 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MLFLow logging such that only proc 0 logs to MLFlow.
 - FNO given seperate methods for constructing lift and spectral encoder layers.
 
-### Deprecated
-
 ### Removed
 
 - The experimental SFNO
-
-### Fixed
-
-### Security
 
 ### Dependencies
 
