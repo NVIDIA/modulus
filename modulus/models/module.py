@@ -55,25 +55,32 @@ class Module(torch.nn.Module):
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
+
+        # Get signature of __init__ function
         sig = inspect.signature(cls.__init__)
+
+        # Bind args and kwargs to signature
         bound_args = sig.bind_partial(
             *([None] + list(args)), **kwargs
         )  # Add None to account for self
         bound_args.apply_defaults()
-        print(bound_args.kwargs)
-        print(bound_args.args)
-        print(bound_args.arguments)
-        print(bound_args)
-        for k, v in bound_args.arguments.items():
-            print(k, v)
-            print(type(v))
-            print(type(k))
-        exit()
 
+        # Get args and kwargs (excluding self and unroll kwargs)
+        instantiate_args = {}
+        for param, (k, v) in zip(sig.parameters.values(), bound_args.arguments.items()):
+            if k != "self": # Skip self
+                if param.kind == param.VAR_KEYWORD:
+                    instantiate_args.update(v)
+                else:
+                    instantiate_args[k] = v
+            else:
+                continue
+
+        # Store args needed for instantiation
         out._args = {
             "__name__": cls.__name__,
             "__module__": cls.__module__,
-            "__args__": {k: v for k, v in bound_args.kwargs.items() if k != "self"},
+            "__args__": instantiate_args,
         }
         return out
 
