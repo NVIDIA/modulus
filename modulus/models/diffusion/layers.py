@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -446,6 +448,7 @@ class UNetBlock(torch.nn.Module):
             )
 
     def forward(self, x, emb):
+        torch.cuda.nvtx.range_push("UNetBlock")
         orig = x
         x = self.conv0(silu(self.norm0(x)))
 
@@ -474,6 +477,7 @@ class UNetBlock(torch.nn.Module):
             a = torch.einsum("nqk,nck->ncq", w, v)
             x = self.proj(a.reshape(*x.shape)).add_(x)
             x = x * self.skip_scale
+        torch.cuda.nvtx.range_pop()
         return x
 
 

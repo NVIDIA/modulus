@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -496,7 +498,7 @@ def get_zarr_dataset(
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,
     }[normalization]
-    logging.info("Normalization:", get_target_normalization)
+    logger.info(f"Normalization: {normalization}")
     zdataset = _ZarrDataset(path, get_target_normalization=get_target_normalization)
     return ZarrDataset(
         dataset=zdataset,

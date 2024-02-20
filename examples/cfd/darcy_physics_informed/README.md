@@ -1,4 +1,4 @@
-# Physics Informed DeepONet for Darcy flow
+# Physics Guided models for Darcy flow
 
 This example demonstrates physics informing of a data-driven model using to approaces -
 the DeepONet approach which computes the gradients using Autograd and an approach using

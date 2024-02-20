@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,4 +15,4 @@
 # limitations under the License.
 
 from .fid import calculate_fid_from_inception_stats
-from .loss import EDMLoss, MixtureLoss, RegressionLoss, ResLoss, VELoss, VPLoss
+from .loss import EDMLoss, RegressionLoss, ResLoss, VELoss, VPLoss

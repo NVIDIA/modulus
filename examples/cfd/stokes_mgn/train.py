@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -204,7 +206,7 @@ if __name__ == "__main__":
         with open(
             os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
         ) as json_file:
-            json_file.write(C.json(indent=4))
+            json_file.write(C.model_dump_json(indent=4))
 
     # initialize loggers
     initialize_wandb(
