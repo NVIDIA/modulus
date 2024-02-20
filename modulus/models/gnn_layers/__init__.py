@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,5 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .distributed_graph import DistributedGraph
+from .distributed_graph import (
+    DistributedGraph,
+    GraphPartition,
+    partition_graph_by_coordinate_bbox,
+    partition_graph_nodewise,
+    partition_graph_with_id_mapping,
+)
 from .graph import CuGraphCSC

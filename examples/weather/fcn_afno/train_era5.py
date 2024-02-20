@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -119,7 +121,7 @@ def main(cfg: DictConfig) -> None:
         num_samples_per_year=cfg.num_samples_per_year_train,
         batch_size=2,
         patch_size=(8, 8),
-        num_workers=8,
+        num_workers=cfg.num_workers_train,
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
@@ -136,16 +138,16 @@ def main(cfg: DictConfig) -> None:
             batch_size=1,
             patch_size=(8, 8),
             device=dist.device,
-            num_workers=8,
+            num_workers=cfg.num_workers_validation,
             shuffle=False,
         )
         logger.success(f"Loaded validaton datapipe of size {len(validation_datapipe)}")
 
     fcn_model = AFNO(
-        img_size=(720, 1440),
+        inp_shape=[720, 1440],
         in_channels=20,
         out_channels=20,
-        patch_size=(8, 8),
+        patch_size=[8, 8],
         embed_dim=768,
         depth=12,
         num_blocks=8,

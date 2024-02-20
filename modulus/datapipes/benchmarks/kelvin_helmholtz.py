@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -243,7 +245,6 @@ class KelvinHelmholtz2D(Datapipe):
 
         # run solver
         for s in range(self.nr_snapshots):
-
             # save arrays for
             wp.copy(self.seq_rho[s], self.rho)
             wp.copy(self.seq_vel[s], self.vel)
@@ -251,7 +252,6 @@ class KelvinHelmholtz2D(Datapipe):
 
             # iterations
             for i in range(self.iteration_per_snapshot):
-
                 # compute primitives
                 wp.launch(
                     euler_conserved_to_primitive_batched_2d,
@@ -373,13 +373,11 @@ class KelvinHelmholtz2D(Datapipe):
             for b_ind in batch_ind:
                 np.random.shuffle(b_ind)
             for bb in range(self.nr_snapshots - self.seq_length):
-
                 # run over batch to gather samples
                 batched_seq_rho = []
                 batched_seq_vel = []
                 batched_seq_p = []
                 for b in range(self.batch_size):
-
                     # gather seq from each batch
                     seq_rho = []
                     seq_vel = []

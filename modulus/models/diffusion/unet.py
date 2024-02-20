@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 from dataclasses import dataclass
 
 import torch
 
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+
+network_module = importlib.import_module("modulus.models.diffusion")
 
 
 @dataclass
@@ -38,7 +43,7 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class UNet(Module):
+class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
     U-Net architecture.
 
@@ -90,7 +95,7 @@ class UNet(Module):
         model_type="DhariwalUNet",
         **model_kwargs,
     ):
-        super().__init__()
+        super().__init__(meta=MetaData)
         self.img_resolution = img_resolution
         self.img_channels = img_channels
 
@@ -102,7 +107,8 @@ class UNet(Module):
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
-        self.model = globals()[model_type](
+        model_class = getattr(network_module, model_type)
+        self.model = model_class(
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
@@ -113,7 +119,6 @@ class UNet(Module):
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
-
         # SR: concatenate input channels
         if img_lr is None:
             x = x
@@ -135,18 +140,20 @@ class UNet(Module):
             else torch.float32
         )
 
-        c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        c_skip = 0.0 * c_skip
-        c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        c_out = torch.ones_like(c_out)
-        c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        c_in = torch.ones_like(c_in)
-        c_noise = sigma.log() / 4
-        c_noise = 0.0 * c_noise
+        # c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
+        # c_skip = 0.0 * c_skip
+        # c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
+        # c_out = torch.ones_like(c_out)
+        # c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
+        # c_in = torch.ones_like(c_in)
+        # c_noise = sigma.log() / 4
+        # c_noise = 0.0 * c_noise
 
         F_x = self.model(
-            (c_in * x).to(dtype),
-            c_noise.flatten(),
+            x.to(dtype),  # (c_in * x).to(dtype),
+            torch.zeros(
+                sigma.numel(), dtype=sigma.dtype, device=sigma.device
+            ),  # c_noise.flatten()
             class_labels=class_labels,
             **model_kwargs,
         )
@@ -157,8 +164,9 @@ class UNet(Module):
             )
 
         # skip connection - for SR there's size mismatch bwtween input and output
-        x = x[:, 0 : self.img_out_channels, :, :]
-        D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        # x = x[:, 0 : self.img_out_channels, :, :]
+        # D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        D_x = F_x.to(torch.float32)
         return D_x
 
     def round_sigma(self, sigma):

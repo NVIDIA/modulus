@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -360,7 +362,6 @@ class PatchEmbed(nn.Module):
         patch_size: List[int] = [16, 16],
         embed_dim: int = 256,
     ):
-
         super().__init__()
         if len(inp_shape) != 2:
             raise ValueError("inp_shape should be a list of length 2")

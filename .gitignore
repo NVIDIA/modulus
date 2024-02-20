@@ -160,7 +160,10 @@ cython_debug/
 
 # Additional stuff
 nsight-systems*
+build/
+mlruns/
 
 # Hydra
 outputs/
 multirun/
+.hydra/

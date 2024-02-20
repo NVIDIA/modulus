@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,14 +44,14 @@ class PythonLogger:
         """Log to file"""
         if os.path.exists(file_name):
             os.remove(file_name)
-            formatter = logging.Formatter(
-                "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
-                datefmt="%H:%M:%S",
-            )
-            filehandler = logging.FileHandler(file_name)
-            filehandler.setFormatter(formatter)
-            filehandler.setLevel(logging.DEBUG)
-            self.logger.addHandler(filehandler)
+        formatter = logging.Formatter(
+            "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        filehandler = logging.FileHandler(file_name)
+        filehandler.setFormatter(formatter)
+        filehandler.setLevel(logging.DEBUG)
+        self.logger.addHandler(filehandler)
 
     def log(self, message: str):
         """Log message"""

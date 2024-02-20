@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,4 +18,4 @@
 from .autograd import all_gather_v, gather_v, indexed_all_to_all_v, scatter_v
 from .config import ProcessGroupConfig, ProcessGroupNode
 from .manager import DistributedManager
-from .utils import gather_loss
+from .utils import mark_module_as_shared, reduce_loss, unmark_module_as_shared

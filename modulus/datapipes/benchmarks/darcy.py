@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -202,7 +204,6 @@ class Darcy2D(Datapipe):
 
         # run solver
         for res in range(self.nr_multigrids):
-
             # calculate grid reduction factor and reduced dim
             grid_reduction_factor = 2 ** (self.nr_multigrids - res - 1)
             if grid_reduction_factor > 1:
@@ -216,7 +217,6 @@ class Darcy2D(Datapipe):
             for k in range(
                 self.max_iterations // self.iterations_per_convergence_check
             ):
-
                 # run jacobi iterations
                 for s in range(self.iterations_per_convergence_check):
                     # iterate solver

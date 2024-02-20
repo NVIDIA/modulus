@@ -6,16 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0a0] - 2024-01-XX
+## [0.6.0a0] - 2024-04-XX
 
 ### Added
 
-- Distributed process group configuration mechanism.
-- DistributedManager utility to instantiate process groups based on they
-process group config.
-- Brain anomaly detection example.
-- Updated Frechet Inception Distance to use Wasserstein 2-norm with improved
-stability.
+- The citation file.
+- Link to the CWA dataset.
+- ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 
 ### Changed
 
@@ -25,9 +22,47 @@ stability.
 
 ### Fixed
 
+- Consistent handling of single GPU runs in DistributedManager
+- Output location of objects downloaded with NGC file system
+
 ### Security
 
 ### Dependencies
+
+- Updated DGL build in Dockerfile
+- Updated default base image
+- Moved Onnx from optional to required dependencies
+- Optional Makani dependency required for SFNO model.
+
+## [0.5.0] - 2024-01-25
+
+### Added
+
+- Distributed process group configuration mechanism.
+- DistributedManager utility to instantiate process groups based on a process group config.
+- Helper functions to faciliate distributed training with shared parameters.
+- Brain anomaly detection example.
+- Updated Frechet Inception Distance to use Wasserstein 2-norm with improved stability.
+- Molecular Dynamics example.
+- Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
+- Physics-Informed Stokes Flow example.
+- Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+- Unified weather model training example.
+
+### Changed
+
+- MLFLow logging such that only proc 0 logs to MLFlow.
+- FNO given seperate methods for constructing lift and spectral encoder layers.
+
+### Removed
+
+- The experimental SFNO
+
+### Dependencies
+
+- Removed experimental SFNO dependencies
+- Added CorrDiff dependencies (cftime, einops, pyspng, nvtx)
+- Made tqdm a required dependency
 
 ## [0.4.0] - 2023-11-20
 

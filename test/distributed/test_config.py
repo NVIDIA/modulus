@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -135,7 +137,7 @@ def run_distributed_model_config(rank, model_parallel_size, verbose):
 @pytest.mark.multigpu
 def test_distributed_model_config():
     num_gpus = torch.cuda.device_count()
-    assert num_gpus == 2, "Not enough GPUs available for test"
+    assert num_gpus >= 2, "Not enough GPUs available for test"
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
