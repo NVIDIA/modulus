@@ -36,8 +36,8 @@ defaults:
   #- filesystem/pbss
 
   # Model
-  - model/sfno
-    #- model/afno
+  #- model/sfno
+  - model/afno
     #- model/graphcastnet
 
   # Training

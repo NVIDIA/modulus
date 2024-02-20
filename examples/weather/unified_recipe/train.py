@@ -52,9 +52,10 @@ from modulus.launch.logging import (
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 from seq_zarr_datapipe import SeqZarrDatapipe
+from save_model_card import save_model_card
 
 
-def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+def batch_normalized_mse(pred, target) -> float:
     """Calculates batch-wise normalized mse error between two tensors."""
 
     pred_flat = pred.reshape(pred.size(0), -1)
@@ -65,6 +66,7 @@ def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
 
     error = diff_norms / target_norms
     return torch.mean(error)
+
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
@@ -103,9 +105,17 @@ def main(cfg: DictConfig) -> None:
             },  # TODO: maybe mobe this conversion to resolver?
         }
     )
-    print(dist.device)
     model = model.to(dist.device)
 
+    # Save model card
+    save_model_card(
+        model,
+        cfg.dataset.predicted_variables,
+        cfg.dataset.unpredicted_variables,
+        save_path="./model_card",
+        readme="This is a model card for the global weather model.",
+    )
+ 
     # Distributed learning
     if dist.world_size > 1:
         ddps = torch.cuda.Stream()
@@ -435,8 +445,16 @@ def main(cfg: DictConfig) -> None:
 
         # Finish training
         if dist.rank == 0:
+            # Save model card
+            logger.info("Saving model card")
+            save_model_card(
+                model,
+                cfg.dataset.predicted_variables,
+                cfg.dataset.unpredicted_variables,
+                save_path="./model_card",
+                readme="This is a model card for the global weather model.",
+            )
             logger.info("Finished training!")
-
 
 if __name__ == "__main__":
     main()
