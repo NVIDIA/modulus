@@ -14,5 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .climate import ClimateDatapipe, ClimateDataSourceSpec
-from .era5_hdf5 import ERA5HDF5Datapipe
+name: healpix
+
+kwargs:
+  nside: 256
+  order: bilinear
+
+transformed_shape:
+  - 12
+  - ${transform.kwargs.nside}
+  - ${transform.kwargs.nside}

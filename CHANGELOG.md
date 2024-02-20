@@ -6,12 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0a0] - 2024-03-XX
+## [0.6.0a0] - 2024-04-XX
 
 ### Added
 
 - The citation file.
 - Link to the CWA dataset.
+- ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 - Performance optimizations to CorrDiff.
 
 ### Changed
@@ -22,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Consistent handling of single GPU runs in DistributedManager
+- Output location of objects downloaded with NGC file system
+
 ### Security
 
 ### Dependencies
@@ -29,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated DGL build in Dockerfile
 - Updated default base image
 - Moved Onnx from optional to required dependencies
+- Optional Makani dependency required for SFNO model.
 
 ## [0.5.0] - 2024-01-25
 
@@ -43,21 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved usage of GraphPartition, added more flexible ways of defining a partitioned graph.
 - Physics-Informed Stokes Flow example.
 - Profiling markers, benchmarking and performance optimizations for CorrDiff inference.
+- Unified weather model training example.
 
 ### Changed
 
 - MLFLow logging such that only proc 0 logs to MLFlow.
 - FNO given seperate methods for constructing lift and spectral encoder layers.
 
-### Deprecated
-
 ### Removed
 
 - The experimental SFNO
-
-### Fixed
-
-### Security
 
 ### Dependencies
 
