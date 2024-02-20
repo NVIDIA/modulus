@@ -60,12 +60,20 @@ class Module(torch.nn.Module):
             *([None] + list(args)), **kwargs
         )  # Add None to account for self
         bound_args.apply_defaults()
-        bound_args.arguments.pop("self", None)
+        print(bound_args.kwargs)
+        print(bound_args.args)
+        print(bound_args.arguments)
+        print(bound_args)
+        for k, v in bound_args.arguments.items():
+            print(k, v)
+            print(type(v))
+            print(type(k))
+        exit()
 
         out._args = {
             "__name__": cls.__name__,
             "__module__": cls.__module__,
-            "__args__": {k: v for k, v in bound_args.kwargs.items()},
+            "__args__": {k: v for k, v in bound_args.kwargs.items() if k != "self"},
         }
         return out
 
