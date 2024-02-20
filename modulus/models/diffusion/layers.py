@@ -270,28 +270,34 @@ class GroupNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(num_channels))
 
     def forward(self, x):
-        # x = torch.nn.functional.group_norm(
-        #     x,
-        #     num_groups=self.num_groups,
-        #     weight=self.weight.to(x.dtype),
-        #     bias=self.bias.to(x.dtype),
-        #     eps=self.eps,
-        # )
-        dtype = x.dtype
-        x = x.float()
-        x = rearrange(x, "b (g c) h w -> b g c h w", g=self.num_groups)
+        if self.training:
+            # Use default torch implementation of GroupNorm for training
+            # This does not support channels last memory format
+            x = torch.nn.functional.group_norm(
+                x,
+                num_groups=self.num_groups,
+                weight=self.weight.to(x.dtype),
+                bias=self.bias.to(x.dtype),
+                eps=self.eps,
+            )
+        else:
+            # Use custom GroupNorm implementation that supports channels last
+            # memory layout for inference
+            dtype = x.dtype
+            x = x.float()
+            x = rearrange(x, "b (g c) h w -> b g c h w", g=self.num_groups)
 
-        mean = x.mean(dim=[2, 3, 4], keepdim=True)
-        var = x.var(dim=[2, 3, 4], keepdim=True)
+            mean = x.mean(dim=[2, 3, 4], keepdim=True)
+            var = x.var(dim=[2, 3, 4], keepdim=True)
 
-        x = (x - mean) * (var + self.eps).rsqrt()
-        x = rearrange(x, "b g c h w -> b (g c) h w")
+            x = (x - mean) * (var + self.eps).rsqrt()
+            x = rearrange(x, "b g c h w -> b (g c) h w")
 
-        weight = rearrange(self.weight, "c -> 1 c 1 1")
-        bias = rearrange(self.bias, "c -> 1 c 1 1")
-        x = x * weight + bias
+            weight = rearrange(self.weight, "c -> 1 c 1 1")
+            bias = rearrange(self.bias, "c -> 1 c 1 1")
+            x = x * weight + bias
 
-        x = x.type(dtype)
+            x = x.type(dtype)
         return x
 
 
