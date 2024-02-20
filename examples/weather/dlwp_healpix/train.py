@@ -19,58 +19,35 @@ import sys
 import hydra
 import numpy as np
 import torch as th
-import torch.distributed as dist
+from modulus.distributed import DistributedManager
 from hydra.utils import instantiate
 
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @hydra.main(config_path='./configs', config_name='config', version_base=None)
 def train(cfg):
-    logger = PythonLogger("train")  # General python logger
-    logger.file_logging("train.log")
+    # Initialize distributed
+    DistributedManager.initialize()
+    dist = DistributedManager()
 
-    logger.info(f"experiment working directory: {os.getcwd()}")
+    # set device globally to be sure that no spurious context are created on gpu 0:
+    th.cuda.set_device(dist.device)
 
-    # Initialize torch distributed
-    world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', 1))
-    world_rank = int(os.getenv('OMPI_COMM_WORLD_RANK', 0))
-
-    port = cfg.port
-    master_address = cfg.master_address
-
-    # Initialize process groups
-    if world_size == 0:
-        device = th.device("cpu")
-    elif world_size == 1:
-        # set device
-        device = th.device("cuda:0")
-
-        # some other settings
-        th.backends.cudnn.benchmark = True
-        
-        # set device globally to be sure that no spurious context are created on gpu 0:
-        th.cuda.set_device(device)
-    else:
-        dist.init_process_group(backend='nccl',
-                                init_method=f"tcp://{master_address}:{port}",
-                                rank=world_rank,
-                                world_size=world_size)
-        # set device
-        local_rank = world_rank % th.cuda.device_count()
-        device = th.device(f"cuda:{local_rank}")
-
-        # some other settings
-        th.backends.cudnn.benchmark = True
-        
-        # set device globally to be sure that no spurious context are created on gpu 0:
-        th.cuda.set_device(device)
+    # Initialize logger.
+    os.makedirs(".logs", exist_ok=True)
+    logger = PythonLogger(name="train")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)
+    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
+    logger0.info(f"experiment working directory: {os.getcwd()}")
 
     # Seed
     if cfg.seed is not None:
         th.manual_seed(cfg.seed)
-        if world_size > 0:
+        if th.cuda.is_available():
             th.cuda.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
@@ -92,11 +69,7 @@ def train(cfg):
     model.batch_size = cfg.batch_size
     model.learning_rate = cfg.learning_rate
 
-    if dist.is_initialized():
-        if dist.get_rank() == 0:
-            logger.info("Model initialized")
-    else:
-        logger.info("Model initialized")
+    logger0.info("Model initialized")
 
     # Instantiate PyTorch modules (with state dictionaries from checkpoint if given)
     criterion = instantiate(cfg.trainer.criterion)
@@ -104,34 +77,40 @@ def train(cfg):
     lr_scheduler = instantiate(cfg.trainer.lr_scheduler, optimizer=optimizer) \
                    if cfg.trainer.lr_scheduler is not None else None
 
+    # setup startup values
+    epoch = 0
+    val_error = th.inf
+    iteration = 0
+    epochs_since_improved = 0
+
     # Prepare training under consideration of checkpoint if given
     if cfg.get("checkpoint_name", None) is not None:
-        checkpoint_path = os.path.join(cfg.get("output_dir"), "tensorboard", "checkpoints", cfg.get("checkpoint_name"))
-        checkpoint = th.load(checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        if not cfg.get("load_weights_only"):
-            # Load optimizer
-            optimizer_state_dict = checkpoint["optimizer_state_dict"]
-            optimizer.load_state_dict(optimizer_state_dict)
-            # Move tensors to the appropriate device as in https://github.com/pytorch/pytorch/issues/2830
-            for state in optimizer.state.values():
-                for k, v in state.items():
-                    if th.is_tensor(v):
-                        state[k] = v.to(device=device)
-            # Optionally load scheduler
-            if lr_scheduler is not None:
-                lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        epoch = checkpoint["epoch"]
-        val_error = checkpoint["val_error"]
-        iteration = checkpoint["iteration"]
-        epochs_since_improved = checkpoint["epochs_since_improved"] if "epochs_since_improved" in checkpoint.keys() else 0
-    else:
-        epoch = 0
-        val_error = th.inf
-        iteration = 0
-        epochs_since_improved = 0
+        checkpoint_path = Path(cfg.get("output_dir"), "tensorboard", "checkpoints", cfg.get("checkpoint_name"))
+        if checkpoint_path.exists():
+            logger0.info(f"Loading checkpoint: {checkpoint_path}")
+            checkpoint = th.load(checkpoint_path, map_location=dist.device)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            if not cfg.get("load_weights_only"):
+                # Load optimizer
+                optimizer_state_dict = checkpoint["optimizer_state_dict"]
+                optimizer.load_state_dict(optimizer_state_dict)
+                # Move tensors to the appropriate device as in https://github.com/pytorch/pytorch/issues/2830
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if th.is_tensor(v):
+                            state[k] = v.to(device=dist.device)
+                # Optionally load scheduler
+                if lr_scheduler is not None:
+                    lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            epoch = checkpoint["epoch"]
+            val_error = checkpoint["val_error"]
+            iteration = checkpoint["iteration"]
+            epochs_since_improved = checkpoint["epochs_since_improved"] if "epochs_since_improved" in checkpoint.keys() else 0
+        else:
+            logger0.info(f"Checkpoint not found, weights not loaded. Requested path: {checkpoint_path}")
 
     # Instantiate the trainer and fit the model
+    logger0.info(f"instantiating model")
     trainer = instantiate(
         cfg.trainer,
         model=model,
@@ -139,8 +118,9 @@ def train(cfg):
         criterion=criterion,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        device=device
+        device=dist.device
         )
+    logger0.info(f"starting training")
     trainer.fit(
         epoch=epoch,
         validation_error=val_error,

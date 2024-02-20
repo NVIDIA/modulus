@@ -24,16 +24,17 @@ import numpy as np
 
 # distributed stuff
 import torch
-import torch.distributed as dist
+from modulus.distributed import DistributedManager
+
 import xarray as xr
 
 # Internal modules
-from coupled_timeseries_dataset import CoupledTimeSeriesDataset
+from .coupled_timeseries_dataset import CoupledTimeSeriesDataset
 from dask.diagnostics import ProgressBar
 
 # External modules
 from omegaconf import DictConfig
-from timeseries_dataset import TimeSeriesDataset
+from .timeseries_dataset import TimeSeriesDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -390,10 +391,10 @@ class TimeSeriesDataModule:
         Number of time steps in the output array, default 1
     data_time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3H"
+        original data time series, default "3h"
     time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6H"
+        time steps, default "6h"
     gap: Union[int, str], optional
         either integer hours or a str interpretable by pandas: time step between the last input time and
         the first output time. Defaults to `time_step`.
@@ -436,8 +437,8 @@ class TimeSeriesDataModule:
         presteps: int = 0,
         input_time_dim: int = 1,
         output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3H",
-        time_step: Union[int, str] = "6H",
+        data_time_step: Union[int, str] = "3h",
+        time_step: Union[int, str] = "6h",
         gap: Union[int, str, None] = None,
         shuffle: bool = True,
         add_insolation: bool = False,
@@ -512,9 +513,12 @@ class TimeSeriesDataModule:
         else:
             raise ValueError("'data_format' must be one of ['classic']")
 
-        if dist.is_initialized():
+        DistributedManager.initialize()
+        dist = DistributedManager()
+
+        if torch.distributed.is_initialized():
             if self.prebuilt_dataset:
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     create_fn(
                         src_directory=self.src_directory,
                         dst_directory=self.dst_directory,
@@ -530,7 +534,7 @@ class TimeSeriesDataModule:
                     )
 
                 # wait for rank 0 to complete, because then the files are guaranteed to exist
-                dist.barrier(device_ids=[torch.cuda.current_device()])
+                torch.distributed.barrier()
 
                 dataset = open_fn(
                     directory=self.dst_directory,
@@ -811,10 +815,10 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         Number of time steps in the output array, default 1
     data_time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3H"
+        original data time series, default "3h"
     time_step: Union[int, str], optional
         Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6H"
+        time steps, default "6h"
     gap: Union[int, str], optional
         either integer hours or a str interpretable by pandas: time step between the last input time and
         the first output time. Defaults to `time_step`.
@@ -860,8 +864,8 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         presteps: int = 0,
         input_time_dim: int = 1,
         output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3H",
-        time_step: Union[int, str] = "6H",
+        data_time_step: Union[int, str] = "3h",
+        time_step: Union[int, str] = "6h",
         gap: Union[int, str, None] = None,
         shuffle: bool = True,
         add_insolation: bool = False,
@@ -920,10 +924,14 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         else:
             raise ValueError("'data_format' must be one of ['classic']")
 
+        # Initialize distributed manager
+        DistributedManager.initialize()
+        dist = DistributedManager()
+
         coupled_variables = self._get_coupled_vars()
-        if dist.is_initialized():
+        if torch.distributed.is_initialized():
             if self.prebuilt_dataset:
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     create_fn(
                         src_directory=self.src_directory,
                         dst_directory=self.dst_directory,
@@ -939,7 +947,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     )
 
                 # wait for rank 0 to complete, because then the files are guaranteed to exist
-                dist.barrier(device_ids=[torch.cuda.current_device()])
+                torch.distributed.barrier()
 
                 dataset = open_fn(
                     directory=self.dst_directory,
