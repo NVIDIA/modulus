@@ -65,6 +65,7 @@ def main(cfg: DictConfig) -> None:
     sampling_method = getattr(cfg, "sampling_method", "stochastic")
     seed_batch_size = getattr(cfg, "seed_batch_size", 1)
     force_fp16 = getattr(cfg, "force_fp16", False)
+    use_torch_compile = getattr(cfg, "use_torch_compile", True)
 
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
@@ -188,11 +189,12 @@ def main(cfg: DictConfig) -> None:
         net_res.use_fp16 = True
 
     # Reset since we are using a different mode.
-    torch._dynamo.reset()
-    compile_mode = "reduce-overhead"
-    # Only compile residual network
-    # Overhead of compiling regression network outweights any benefits
-    net_res = torch.compile(net_res, mode=compile_mode)
+    if use_torch_compile:
+        torch._dynamo.reset()
+        compile_mode = "reduce-overhead"
+        # Only compile residual network
+        # Overhead of compiling regression network outweights any benefits
+        net_res = torch.compile(net_res, mode=compile_mode)
 
     def generate_fn(image_lr):
         """Function to generate an image
