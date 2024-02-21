@@ -4,36 +4,30 @@
 
 - Download Modulus, make or install
 
-- Find the matching torch-scatter version with torch: pip install torch-scatter -f `https://data.pyg.org/whl/torch-2.2.0%2Bcu121/torch_scatter-2.1.2%2Bpt22cu121-cp311-cp311-linux_x86_64.whl`
+- Find the matching torch-scatter version with torch and cuda version enabled: 
+  - i.e. pip install torch-scatter -f `https://data.pyg.org/whl/torch-2.2.0%2Bcu121/torch_scatter-2.1.2%2Bpt22cu121-cp311-cp311-linux_x86_64.whl
+  - download other versions of torch_scatter from `https://data.pyg.org/whl/`.
+`
 - pip install tensorflow
 
   - test version: tensorflow-2.15.0.post1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
-  - for logging:
-    - pip install wandb
-    - pip3 install mlflow
+- for logging:
+  - pip install wandb
+  - pip3 install mlflow
 
-  - For training with mixed precision: 
+- For training with mixed precision: 
     
-    - https://github.com/NVIDIA/apex
+  - https://github.com/NVIDIA/apex
+-  pyvista is required only if need to run data proprocessing with the raw
+simulation data files
   
 - Dev:
 
   - install pytest
   - pip install importlib-metadata
 
-## Setup
 
-download torch_scatter from `https://data.pyg.org/whl/`.
-In a conda env with pytorch / cuda available, run:
-
-```bash
-pip install -r requirements.txt
-pip install ./torch_scatter-2.0.6-cp38-cp38-linux_x86_64.whl
-```
-
-note: pyvista is required only if need to run data proprocessing with the raw
-simulation data files
 
 ## Train
 
