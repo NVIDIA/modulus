@@ -14,6 +14,10 @@
     - pip3 install mlflow
     - 
 
+  - For training with mixed precision: 
+    
+    - https://github.com/NVIDIA/apex
+  
 - Dev: 
 
   - install pytest 
