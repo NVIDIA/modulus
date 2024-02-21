@@ -132,7 +132,6 @@ def _download_cached(
 ) -> str:
     sha = hashlib.sha256(path.encode())
     filename = sha.hexdigest()
-    print("_download_cached, local_cache_path: ", local_cache_path)
     try:
         os.makedirs(local_cache_path, exist_ok=True)
     except PermissionError as error:
@@ -149,8 +148,8 @@ def _download_cached(
         raise error
 
     cache_path = os.path.join(local_cache_path, filename)
+    
     url = urllib.parse.urlparse(path)
-    print("cache_path/ url: ", cache_path)
 
     # TODO watch for race condition here
     if not os.path.exists(cache_path):

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Consistent handling of single GPU runs in DistributedManager
+
 ### Security
 
 ### Dependencies
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated DGL build in Dockerfile
 - Updated default base image
 - Moved Onnx from optional to required dependencies
+- Optional Makani dependency required for SFNO model.
 
 ## [0.5.0] - 2024-01-25
 

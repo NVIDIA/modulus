@@ -27,3 +27,5 @@ start_epoch: 0
 max_epoch: 80
 
 num_samples_per_year_train: 1456
+num_workers_train: 8
+num_workers_validation: 8

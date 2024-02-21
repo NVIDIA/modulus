@@ -1,3 +1,6 @@
+# ignore_header_test
+# ruff: noqa: E402
+
 # Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,12 +29,13 @@
 # limitations under the License.
 
 
-
 import random
+
 import numpy as np
 import torch
-from torch.nn import Sequential, Linear, LayerNorm, ReLU, Embedding
 import torch.nn.functional as F
+from torch.nn import Embedding, Linear, ReLU
+
 try:
     from torch_scatter import scatter
 except ImportError:
@@ -40,18 +44,17 @@ except ImportError:
         + "package at: https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html"
     )
 
-from torch.utils.checkpoint import checkpoint
-from torch import Tensor
-
 from dataclasses import dataclass
+
+from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 
 from ..meta import ModelMetaData
 from ..module import Module
 
-
 STD_EPSILON = 1e-8
 
-#todo: check the metadata values
+# todo: check the metadata values
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -67,8 +70,10 @@ class MetaData(ModelMetaData):
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    func_torch: bool = True
-    auto_grad: bool = True
+    #func_torch: bool = True
+    #auto_grad: bool = True
+    func_torch: bool = False
+    auto_grad: bool = False
 
 
 class MLPNet(Module):
@@ -101,15 +106,14 @@ class MLPNet(Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size: int = 128,
-            mlp_num_hidden_layers: int = 2,
-            output_size: int = 128,
-            layer_norm: bool = True
+        self,
+        mlp_hidden_size: int = 128,
+        mlp_num_hidden_layers: int = 2,
+        output_size: int = 128,
+        layer_norm: bool = True,
     ):
-        assert (
-                mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
-        ), "Invalid arch params"
+        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0):
+            raise ValueError("Invalid arch params")
         super().__init__(meta=MetaData(name="vfgn_mlpnet"))
 
         # create cnt = hidden_layer layers
@@ -126,14 +130,14 @@ class MLPNet(Module):
         self.relu = ReLU()
 
     def dynamic(self, name: str, module_class, *args, **kwargs):
-        """ Use dynamic layer to create 1st layer according to the input node number """
+        """Use dynamic layer to create 1st layer according to the input node number"""
         if not hasattr(self, name):
             self.add_module(name, module_class(*args, **kwargs))
         return getattr(self, name)
 
     def forward(self, x):
-        origin_device=x.device
-        lin_s = self.dynamic('lin_s', Linear, x.shape[-1], self.mlp_hidden_size)
+        origin_device = x.device
+        lin_s = self.dynamic("lin_s", Linear, x.shape[-1], self.mlp_hidden_size)
         print("\n")
         lin_s = lin_s.to(origin_device)
 
@@ -165,14 +169,14 @@ class EncoderNet(Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size: int = 128,
-            mlp_num_hidden_layers: int = 2,
-            latent_size: int = 128,
+        self,
+        mlp_hidden_size: int = 128,
+        mlp_num_hidden_layers: int = 2,
+        latent_size: int = 128,
     ):
-        assert (
-                mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0
-        ), "Invalid arch params - EncoderNet"
+        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0):
+            raise ValueError("Invalid arch params - EncoderNet")
+        
         super().__init__(meta=MetaData(name="vfgn_encoder"))
 
         self._mlp_hidden_size = mlp_hidden_size
@@ -223,13 +227,13 @@ class EdgeBlock(Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            latent_size,
-            node_dim=0,
-            use_receiver_nodes=True,
-            use_sender_nodes=True
+        self,
+        mlp_hidden_size,
+        mlp_num_hidden_layers,
+        latent_size,
+        node_dim=0,
+        use_receiver_nodes=True,
+        use_sender_nodes=True,
     ):
         super().__init__(meta=MetaData(name="vfgn_edgeblock"))
         self.node_dim = node_dim
@@ -292,14 +296,14 @@ class NodeBlock(Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            latent_size,
-            aggr="add",
-            node_dim=0,
-            use_received_edges=True,
-            use_sent_edges=False
+        self,
+        mlp_hidden_size,
+        mlp_num_hidden_layers,
+        latent_size,
+        aggr="add",
+        node_dim=0,
+        use_received_edges=True,
+        use_sent_edges=False,
     ):
         super().__init__(meta=MetaData(name="vfgn_nodeblock"))
         self.aggr = aggr
@@ -318,14 +322,24 @@ class NodeBlock(Module):
 
         # aggregate received edges
         if self.use_received_edges:
-            receivers_edge = scatter(dim=self.node_dim, dim_size=dim_size, index=receivers, src=edge_attr,
-                                     reduce=self.aggr)
+            receivers_edge = scatter(
+                dim=self.node_dim,
+                dim_size=dim_size,
+                index=receivers,
+                src=edge_attr,
+                reduce=self.aggr,
+            )
             nodes_to_collect.append(receivers_edge)
 
         # aggregate sent edges
         if self.use_sent_edges:
-            senders_edge = scatter(dim=self.node_dim, dim_size=dim_size, index=senders, src=edge_attr,
-                                   reduce=self.aggr)
+            senders_edge = scatter(
+                dim=self.node_dim,
+                dim_size=dim_size,
+                index=senders,
+                src=edge_attr,
+                reduce=self.aggr,
+            )
             nodes_to_collect.append(senders_edge)
 
         collected_nodes = torch.cat(nodes_to_collect, axis=-1)
@@ -352,19 +366,24 @@ class InteractionNet(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            latent_size,
-            aggr="add",
-            node_dim=0
+        self,
+        mlp_hidden_size,
+        mlp_num_hidden_layers,
+        latent_size,
+        aggr="add",
+        node_dim=0,
     ):
         super(InteractionNet, self).__init__()
-        self._edge_block = EdgeBlock(mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim)
-        self._node_block = NodeBlock(mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim)
+        self._edge_block = EdgeBlock(
+            mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim
+        )
+        self._node_block = NodeBlock(
+            mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim
+        )
 
     def forward(self, x, edge_attr, receivers, senders):
-        assert x.shape[-1] == edge_attr.shape[-1], "node feature size should equal to edge feature size"
+        if not (x.shape[-1] == edge_attr.shape[-1]): 
+            raise ValueError("node feature size should equal to edge feature size")
 
         return self._node_block(*self._edge_block(x, edge_attr, receivers, senders))
 
@@ -386,18 +405,22 @@ class ResInteractionNet(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            latent_size,
-            aggr="add",
-            node_dim=0
+        self,
+        mlp_hidden_size,
+        mlp_num_hidden_layers,
+        latent_size,
+        aggr="add",
+        node_dim=0,
     ):
         super(ResInteractionNet, self).__init__()
-        self.itn = InteractionNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim)
+        self.itn = InteractionNet(
+            mlp_hidden_size, mlp_num_hidden_layers, latent_size, aggr, node_dim
+        )
 
     def forward(self, x, edge_attr, receivers, senders):
-        x_res, edge_attr_res, receivers, senders = self.itn(x, edge_attr, receivers, senders)
+        x_res, edge_attr_res, receivers, senders = self.itn(
+            x, edge_attr, receivers, senders
+        )
 
         x_new = x + x_res
         edge_attr_new = edge_attr + edge_attr_res
@@ -420,17 +443,13 @@ class DecoderNet(Module):
         Number of output channels
     """
 
-    def __init__(
-            self,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            output_size
-    ):
-        assert (
-                mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
-        ), "Invalid arch params - DecoderNet"
+    def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, output_size):
+        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0): 
+            raise ValueError("Invalid arch params - DecoderNet")
         super().__init__(meta=MetaData(name="vfgn_decoder"))
-        self.mlp = MLPNet(mlp_hidden_size, mlp_num_hidden_layers, output_size, layer_norm=False)
+        self.mlp = MLPNet(
+            mlp_hidden_size, mlp_num_hidden_layers, output_size, layer_norm=False
+        )
 
     def forward(self, x):
         # number of layer is important, or the network will overfit
@@ -478,12 +497,12 @@ class EncodeProcessDecode(Module):
     """
 
     def __init__(
-            self,
-            latent_size,
-            mlp_hidden_size,
-            mlp_num_hidden_layers,
-            num_message_passing_steps,
-            output_size
+        self,
+        latent_size,
+        mlp_hidden_size,
+        mlp_num_hidden_layers,
+        num_message_passing_steps,
+        output_size,
     ):
         if not (latent_size > 0 and mlp_hidden_size > 0 and mlp_num_hidden_layers > 0):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
@@ -491,17 +510,23 @@ class EncodeProcessDecode(Module):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         super().__init__(meta=MetaData(name="vfgn_encoderprocess_decode"))
 
-        self._encoder_network = EncoderNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size)
+        self._encoder_network = EncoderNet(
+            mlp_hidden_size, mlp_num_hidden_layers, latent_size
+        )
 
         self._processor_networks = []
         for _ in range(num_message_passing_steps):
-            self._processor_networks.append(InteractionNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size))
+            self._processor_networks.append(
+                InteractionNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size)
+            )
         self._processor_networks = torch.nn.ModuleList(self._processor_networks)
 
-        self._decoder_network = DecoderNet(mlp_hidden_size, mlp_num_hidden_layers, output_size)
+        self._decoder_network = DecoderNet(
+            mlp_hidden_size, mlp_num_hidden_layers, output_size
+        )
 
-    def set_device(self,device_list):
-        self.device_list=device_list
+    def set_device(self, device_list):
+        self.device_list = device_list
 
     def forward(self, x, edge_attr, receivers, senders):
         """
@@ -517,14 +542,14 @@ class EncodeProcessDecode(Module):
         # print("receivers: ", receivers.shape, senders.shape)
         # print("receivers: ", receivers)
         # print("senders: ", senders)
-        self.device_list = x.device.type # decide the device type
+        self.device_list = x.device.type  # decide the device type
         x, edge_attr = self._encoder_network(x, edge_attr)
 
         pre_x = x
         pre_edge_attr = edge_attr
 
         n_steps = len(self._processor_networks)
-        n_inter = int(n_steps) # prevent divide by zero
+        n_inter = int(n_steps)  # prevent divide by zero
 
         i = 0
         j = 0
@@ -532,7 +557,7 @@ class EncodeProcessDecode(Module):
         origin_device = x.device
 
         for processor_network_k in self._processor_networks:
-            p_device = self.device_list#[j]
+            p_device = self.device_list  # [j]
             processor_network_k = processor_network_k.to(p_device)
             pre_x = pre_x.to(p_device)
             pre_edge_attr = pre_edge_attr.to(p_device)
@@ -542,8 +567,9 @@ class EncodeProcessDecode(Module):
             # print("checkpoint input shape: ", )
             # print("\n processor_network_k ...  x/ edge_attr: ", pre_x.shape, pre_edge_attr.shape)
             # print(" shape of receivers, senders: ", receivers.shape, senders.shape)
-            diff_x, diff_edge_attr, receivers, senders = checkpoint(processor_network_k, pre_x, pre_edge_attr,
-                                                                    receivers, senders)
+            diff_x, diff_edge_attr, receivers, senders = checkpoint(
+                processor_network_k, pre_x, pre_edge_attr, receivers, senders
+            )
 
             pre_x = x.to(p_device) + diff_x
             pre_edge_attr = edge_attr.to(p_device) + diff_edge_attr
@@ -597,19 +623,19 @@ class LearnedSimulator(Module):
     ----
     """
 
-    def __init__(self,
-                 num_dimensions : int = 3,
-                 num_seq : int = 5,
-                 boundaries : list[list[float]] = None,
-                 num_particle_types : int = 3,
-                 particle_type_embedding_size : int = 16,
-                 normalization_stats : map = None,
-                 graph_mode : str = 'radius',
-                 connectivity_param : float = 0.015,
-                 ):
-        assert (
-                num_dimensions >= 0 and num_seq >= 3
-        ), "Invalid arch params - LearnedSimulator"
+    def __init__(
+        self,
+        num_dimensions: int = 3,
+        num_seq: int = 5,
+        boundaries: list[list[float]] = None,
+        num_particle_types: int = 3,
+        particle_type_embedding_size: int = 16,
+        normalization_stats: map = None,
+        graph_mode: str = "radius",
+        connectivity_param: float = 0.015,
+    ):
+        if not (num_dimensions >= 0 and num_seq >= 3): 
+            raise ValueError("Invalid arch params - LearnedSimulator")
         super().__init__(meta=MetaData(name="vfgn_simulator"))
 
         # network parameters
@@ -627,32 +653,43 @@ class LearnedSimulator(Module):
 
         self.graph_mode = graph_mode
 
-        self._graph_network = EncodeProcessDecode(self._latent_size, self._mlp_hidden_size, self._mlp_num_hidden_layers,
-                                                  self._num_message_passing_steps, self._num_dimensions)
+        self._graph_network = EncodeProcessDecode(
+            self._latent_size,
+            self._mlp_hidden_size,
+            self._mlp_num_hidden_layers,
+            self._num_message_passing_steps,
+            self._num_dimensions,
+        )
 
         # positional embedding with different particle types
         self._num_particle_types = num_particle_types
-        self.embedding = Embedding(self._num_particle_types + 1, particle_type_embedding_size)
-        self.message_passing_devices=[]
+        self.embedding = Embedding(
+            self._num_particle_types + 1, particle_type_embedding_size
+        )
+        self.message_passing_devices = []
 
-    def setMessagePassingDevices(self,devices):
-        self.message_passing_devices=devices
+    def setMessagePassingDevices(self, devices):
+        self.message_passing_devices = devices
 
     def to(self, device):
         new_self = super(LearnedSimulator, self).to(device)
         new_self._boundaries = self._boundaries.to(device)
         for key in self._normalization_stats:
             new_self._normalization_stats[key].to(device)
-        if device != 'cpu':
+        if device != "cpu":
             self._graph_network.set_device(self.message_passing_devices)
         return new_self
 
     def time_diff(self, input_seq):
         return input_seq[:, 1:] - input_seq[:, :-1]
 
-    def _compute_connectivity_for_batch(self, senders_list, receivers_list, n_node, n_edge):
+    def _compute_connectivity_for_batch(
+        self, senders_list, receivers_list, n_node, n_edge
+    ):
         senders_per_graph_list = np.split(senders_list, np.cumsum(n_edge[:-1]), axis=0)
-        receivers_per_graph_list = np.split(receivers_list, np.cumsum(n_edge[:-1]), axis=0)
+        receivers_per_graph_list = np.split(
+            receivers_list, np.cumsum(n_edge[:-1]), axis=0
+        )
 
         receivers_list = []
         senders_list = []
@@ -667,11 +704,13 @@ class LearnedSimulator(Module):
         for i in range(n):
             total_num_edges_graph_i = len(senders_per_graph_list[i])
 
-            random_num = False#random.choice([True, False])
+            random_num = False  # random.choice([True, False])
 
             if random_num:
-                choiced_indices = random.choices([j for j in range(total_num_edges_graph_i)],
-                                                 k=int(total_num_edges_graph_i * drop_out_rate))
+                choiced_indices = random.choices(
+                    [j for j in range(total_num_edges_graph_i)],
+                    k=int(total_num_edges_graph_i * drop_out_rate),
+                )
                 choiced_indices = sorted(choiced_indices)
 
                 senders_graph_i = senders_per_graph_list[i][choiced_indices]
@@ -698,7 +737,9 @@ class LearnedSimulator(Module):
 
         return senders, receivers
 
-    def get_random_walk_noise_for_position_sequence(self, position_sequence, noise_std_last_step):
+    def get_random_walk_noise_for_position_sequence(
+        self, position_sequence, noise_std_last_step
+    ):
         """Returns random-walk noise in the velocity applied to the position."""
 
         velocity_sequence = self.time_diff(position_sequence)
@@ -711,8 +752,11 @@ class LearnedSimulator(Module):
         # TODO(alvarosg): Make sure this is consistent with the value and
         # description provided in the paper.
         num_velocities = velocity_sequence.shape[1]
-        velocity_sequence_noise = torch.empty(velocity_sequence.shape, dtype=velocity_sequence.dtype).normal_(mean=0,
-                                                                                                              std=noise_std_last_step / num_velocities ** 0.5)  # float
+        velocity_sequence_noise = torch.empty(
+            velocity_sequence.shape, dtype=velocity_sequence.dtype
+        ).normal_(
+            mean=0, std=noise_std_last_step / num_velocities**0.5
+        )  # float
 
         # Apply the random walk
         velocity_sequence_noise = torch.cumsum(velocity_sequence_noise, dim=1)
@@ -721,15 +765,28 @@ class LearnedSimulator(Module):
         # an Euler intergrator and a dt = 1, and adding no noise to the very first
         # position (since that will only be used to calculate the first position
         # change).
-        position_sequence_noise = torch.cat([
-            torch.zeros(velocity_sequence_noise[:, 0:1].shape, dtype=velocity_sequence.dtype),
-            torch.cumsum(velocity_sequence_noise, axis=1)], axis=1)
+        position_sequence_noise = torch.cat(
+            [
+                torch.zeros(
+                    velocity_sequence_noise[:, 0:1].shape, dtype=velocity_sequence.dtype
+                ),
+                torch.cumsum(velocity_sequence_noise, axis=1),
+            ],
+            axis=1,
+        )
 
         return position_sequence_noise
 
-    def EncodingFeature(self, position_sequence, n_node, n_edge,
-                        senders_list, receivers_list,
-                        global_context, particle_types):
+    def EncodingFeature(
+        self,
+        position_sequence,
+        n_node,
+        n_edge,
+        senders_list,
+        receivers_list,
+        global_context,
+        particle_types,
+    ):
         print("EncodingFeature senders_list: ", senders_list.shape)
         print("EncodingFeature receivers_list: ", receivers_list.shape)
         print("EncodingFeature global_context: ", global_context.shape)
@@ -739,27 +796,37 @@ class LearnedSimulator(Module):
         acceleration_sequence = self.time_diff(velocity_sequence)
 
         # dynamically updage the graph
-        senders, receivers = self._compute_connectivity_for_batch(senders_list.cpu().detach().numpy(),
-                                                                  receivers_list.cpu().detach().numpy(),
-                                                                  n_node.cpu().detach().numpy(),
-                                                                  n_edge.cpu().detach().numpy())
+        senders, receivers = self._compute_connectivity_for_batch(
+            senders_list.cpu().detach().numpy(),
+            receivers_list.cpu().detach().numpy(),
+            n_node.cpu().detach().numpy(),
+            n_edge.cpu().detach().numpy(),
+        )
         senders = torch.LongTensor(senders).to(position_sequence.device)
         receivers = torch.LongTensor(receivers).to(position_sequence.device)
-        print('current update senders')
+        print("current update senders")
 
         # 1. Node features
         node_features = []
-        velocity_stats = self._normalization_stats['velocity']
-        normalized_velocity_sequence = (velocity_sequence - velocity_stats.mean) / velocity_stats.std
-        normalized_velocity_sequence = normalized_velocity_sequence[:,-1]
+        velocity_stats = self._normalization_stats["velocity"]
+        normalized_velocity_sequence = (
+            velocity_sequence - velocity_stats.mean
+        ) / velocity_stats.std
+        normalized_velocity_sequence = normalized_velocity_sequence[:, -1]
 
-        flat_velocity_sequence = normalized_velocity_sequence.reshape([normalized_velocity_sequence.shape[0], -1])
+        flat_velocity_sequence = normalized_velocity_sequence.reshape(
+            [normalized_velocity_sequence.shape[0], -1]
+        )
         node_features.append(flat_velocity_sequence)
 
         acceleration_stats = self._normalization_stats["acceleration"]
-        normalized_acceleration_sequence = (acceleration_sequence-acceleration_stats.mean) / acceleration_stats.std
+        normalized_acceleration_sequence = (
+            acceleration_sequence - acceleration_stats.mean
+        ) / acceleration_stats.std
 
-        flat_acceleration_sequence = normalized_acceleration_sequence.reshape([normalized_acceleration_sequence.shape[0],-1])
+        flat_acceleration_sequence = normalized_acceleration_sequence.reshape(
+            [normalized_acceleration_sequence.shape[0], -1]
+        )
         node_features.append(flat_acceleration_sequence)
 
         if self._num_particle_types > 1:
@@ -772,26 +839,33 @@ class LearnedSimulator(Module):
         # normalized_relative_displacements = (most_recent_position.index_select(0, senders) -
         #                                      most_recent_position.index_select(0, receivers)) / self._connectivity_param
 
-        normalized_relative_displacements = (most_recent_position.index_select(0, senders.squeeze()) -
-                                             most_recent_position.index_select(0, receivers.squeeze())) / self._connectivity_param
+        normalized_relative_displacements = (
+            most_recent_position.index_select(0, senders.squeeze())
+            - most_recent_position.index_select(0, receivers.squeeze())
+        ) / self._connectivity_param
         edge_features.append(normalized_relative_displacements)
-        normalized_relative_distances = torch.norm(normalized_relative_displacements, dim=-1, keepdim=True)
+        normalized_relative_distances = torch.norm(
+            normalized_relative_displacements, dim=-1, keepdim=True
+        )
         edge_features.append(normalized_relative_distances)
 
         # 3. Normalized the global context.
         if global_context is not None:
             context_stats = self._normalization_stats["context"]
             # Context in some datasets are all zero, so add an epsilon for numerical
-            global_context = (global_context - context_stats.mean) / torch.maximum(context_stats.std,
-                                                                                   torch.FloatTensor([STD_EPSILON]).to(
-                                                                                       context_stats.std.device))
+            global_context = (global_context - context_stats.mean) / torch.maximum(
+                context_stats.std,
+                torch.FloatTensor([STD_EPSILON]).to(context_stats.std.device),
+            )
 
             global_features = []
             print("repeat_interleave n_node: ", n_node)
             print("global_context: ", global_context.shape)
             for i in range(global_context.shape[0]):
-                global_context_= torch.unsqueeze(global_context[i], 0)
-                context_i = torch.repeat_interleave(global_context_, n_node[i].to(torch.long), dim=0)
+                global_context_ = torch.unsqueeze(global_context[i], 0)
+                context_i = torch.repeat_interleave(
+                    global_context_, n_node[i].to(torch.long), dim=0
+                )
 
                 global_features.append(context_i)
 
@@ -809,20 +883,30 @@ class LearnedSimulator(Module):
 
         return x, edge_attr, senders, receivers
 
-    def DecodingFeature(self, normalized_accelerations, position_sequence, predict_length):
+    def DecodingFeature(
+        self, normalized_accelerations, position_sequence, predict_length
+    ):
         #  cast from float to double as the output of network
         normalized_accelerations = normalized_accelerations.double()
 
         # model works on the normal space - need to invert it to the original space
-        acceleration_stats = self._normalization_stats['acceleration']
-        normalized_accelerations = normalized_accelerations.reshape([-1, predict_length, 3])
+        acceleration_stats = self._normalization_stats["acceleration"]
+        normalized_accelerations = normalized_accelerations.reshape(
+            [-1, predict_length, 3]
+        )
 
-        accelerations = (normalized_accelerations * acceleration_stats.std) + acceleration_stats.mean
-        velocity_changes = torch.cumsum(accelerations, axis=1, dtype=accelerations.dtype)
+        accelerations = (
+            normalized_accelerations * acceleration_stats.std
+        ) + acceleration_stats.mean
+        velocity_changes = torch.cumsum(
+            accelerations, axis=1, dtype=accelerations.dtype
+        )
 
         most_recent_velocity = position_sequence[:, -1] - position_sequence[:, -2]
         most_recent_velocity = torch.unsqueeze(most_recent_velocity, axis=1)
-        most_recent_velocities = torch.tile(most_recent_velocity, [1, predict_length, 1])
+        most_recent_velocities = torch.tile(
+            most_recent_velocity, [1, predict_length, 1]
+        )
         velocities = most_recent_velocities + velocity_changes
 
         position_changes = torch.cumsum(velocities, axis=1, dtype=velocities.dtype)
@@ -838,32 +922,40 @@ class LearnedSimulator(Module):
     def _inverse_decoder_postprocessor(self, next_positions, position_sequence):
         """Inverse of `_decoder_postprocessor`."""
         most_recent_positions = position_sequence[:, -2:]
-        previous_positions = torch.cat([most_recent_positions, next_positions[:, :-1]], axis=1)
+        previous_positions = torch.cat(
+            [most_recent_positions, next_positions[:, :-1]], axis=1
+        )
 
-        positions = torch.cat([torch.unsqueeze(position_sequence[:, -1], axis=1), next_positions], axis=1)
+        positions = torch.cat(
+            [torch.unsqueeze(position_sequence[:, -1], axis=1), next_positions], axis=1
+        )
 
         velocities = positions - previous_positions
         accelerations = velocities[:, 1:] - velocities[:, :-1]
 
         acceleration_stats = self._normalization_stats["acceleration"]
-        normalized_accelerations = (accelerations - acceleration_stats.mean) / acceleration_stats.std
+        normalized_accelerations = (
+            accelerations - acceleration_stats.mean
+        ) / acceleration_stats.std
 
-        normalized_accelerations = normalized_accelerations.reshape([-1, self._num_dimensions])
+        normalized_accelerations = normalized_accelerations.reshape(
+            [-1, self._num_dimensions]
+        )
 
         #  cast from double to float as the input of network
         normalized_accelerations = normalized_accelerations.float()
         return normalized_accelerations
 
     def inference(
-            self,
-            position_sequence: Tensor,
-            n_particles_per_example,
-            n_edges_per_example,
-            senders,
-            receivers,
-            predict_length,
-            global_context=None,
-            particle_types=None
+        self,
+        position_sequence: Tensor,
+        n_particles_per_example,
+        n_edges_per_example,
+        senders,
+        receivers,
+        predict_length,
+        global_context=None,
+        particle_types=None,
     ) -> Tensor:
         """
         Inference with the LearnedSimulator network
@@ -892,28 +984,36 @@ class LearnedSimulator(Module):
             i.e. torch.Size([34, 1])
         """
 
-        input_graph = self.EncodingFeature(position_sequence, n_particles_per_example, n_edges_per_example,
-                                           senders, receivers, global_context,
-                                           particle_types)
+        input_graph = self.EncodingFeature(
+            position_sequence,
+            n_particles_per_example,
+            n_edges_per_example,
+            senders,
+            receivers,
+            global_context,
+            particle_types,
+        )
 
         predicted_normalized_accelerations = self._graph_network(*input_graph)
 
-        next_position = self.DecodingFeature(predicted_normalized_accelerations, position_sequence, predict_length)
+        next_position = self.DecodingFeature(
+            predicted_normalized_accelerations, position_sequence, predict_length
+        )
 
         return next_position
 
     def forward(
-            self,
-            next_positions: Tensor,
-            position_sequence_noise: Tensor,
-            position_sequence: Tensor,
-            n_particles_per_example,
-            n_edges_per_example,
-            senders: Tensor,
-            receivers: Tensor,
-            predict_length,
-            global_context=None,
-            particle_types=None,
+        self,
+        next_positions: Tensor,
+        position_sequence_noise: Tensor,
+        position_sequence: Tensor,
+        n_particles_per_example,
+        n_edges_per_example,
+        senders: Tensor,
+        receivers: Tensor,
+        predict_length,
+        global_context=None,
+        particle_types=None,
     ) -> Tensor:
         """
         Training step with the LearnedSimulator network,
@@ -944,7 +1044,7 @@ class LearnedSimulator(Module):
             torch.Size([1394])
         global_context: torch.Tensor([sim_step, feat_dim], dtype=torch.float)
             i.e. torch.Size([34, 1])
-            
+
         Returns:
             Tensors of shape [num_particles_in_batch, num_dimensions] with the
             predicted and target normalized accelerations.
@@ -956,11 +1056,15 @@ class LearnedSimulator(Module):
         # Perform the forward pass with the noisy position sequence.
         print("forward global_context: ", global_context.shape)
 
-        input_graph = self.EncodingFeature(noisy_position_sequence,
-                                           n_particles_per_example, n_edges_per_example,
-                                           senders, receivers,
-                                           global_context,
-                                           particle_types)
+        input_graph = self.EncodingFeature(
+            noisy_position_sequence,
+            n_particles_per_example,
+            n_edges_per_example,
+            senders,
+            receivers,
+            global_context,
+            particle_types,
+        )
 
         predicted_normalized_accelerations = self._graph_network(*input_graph)
 
@@ -981,7 +1085,8 @@ class LearnedSimulator(Module):
         # print("next_position_adjusted: ", next_position_adjusted, next_position_adjusted.shape)
 
         target_normalized_acceleration = self._inverse_decoder_postprocessor(
-            next_position_adjusted, noisy_position_sequence)
+            next_position_adjusted, noisy_position_sequence
+        )
         # As a result the inverted Euler update in the `_inverse_decoder` produces:
         # * A target acceleration that does not explicitly correct for the noise in
         #   the input positions, as the `next_position_adjusted` is different
@@ -997,6 +1102,8 @@ class LearnedSimulator(Module):
 
     def get_normalized_acceleration(self, acceleration, predict_length):
         acceleration_stats = self._normalization_stats["acceleration"]
-        normalized_acceleration = (acceleration - acceleration_stats.mean) / acceleration_stats.std
+        normalized_acceleration = (
+            acceleration - acceleration_stats.mean
+        ) / acceleration_stats.std
         normalized_acceleration = torch.tile(normalized_acceleration, [predict_length])
         return normalized_acceleration

@@ -54,6 +54,14 @@ dev = [
     "ruff==0.0.290",
 ]
 
+makani = [
+    # TODO(akamenev): PyPI does not allow direct URL deps, update once Makani is in PyPI
+    # "makani @ git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0",
+    "torch-harmonics>=0.6.5",
+    "tensorly>=0.8.1",
+    "tensorly-torch>=0.4.0",
+]
+
 all = [
     "h5py>=3.7.0",
     "netcdf4>=1.6.3",
@@ -66,7 +74,8 @@ all = [
     "einops>=0.7.0",
     "pyspng>=0.1.0",
     "nvidia-modulus[launch]",
-    "nvidia-modulus[dev]"
+    "nvidia-modulus[dev]",
+    "nvidia-modulus[makani]",
 ]
 
 

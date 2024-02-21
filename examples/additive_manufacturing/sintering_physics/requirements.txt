@@ -1,0 +1,4 @@
+# pyvista is optional, required if need to run data preprocessing from raw simulation
+# pyvista==0.32.1
+tensorflow==2.16 # generate tfrecord
+torch==2.2.0

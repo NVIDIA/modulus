@@ -1,3 +1,6 @@
+# ignore_header_test
+# ruff: noqa: E402
+
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,8 +27,9 @@
 # limitations under the License.
 
 
-import os
 import functools
+import os
+
 import tree
 
 try:
@@ -36,19 +40,17 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
-from modulus.utils.vfgn import reading_utils
+from modulus.utils.vfgn import reading_utils, utils
 from modulus.utils.vfgn.utils import _read_metadata
-from modulus.utils.vfgn import utils
 
-
-INPUT_SEQUENCE_LENGTH = 5 # calculate the last 5 velocities. [options: 5, 10]
-PREDICT_LENGTH = 1 #[options: 5]
+INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
+PREDICT_LENGTH = 1  # [options: 5]
 LOSS_DECAY_FACTOR = 0.6
 
 NUM_PARTICLE_TYPES = 3
-KINEMATIC_PARTICLE_ID = 0   # refers to anchor point
+KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
 METAL_PARTICLE_ID = 2  # refers to normal particles
-ANCHOR_PLANE_PARTICLE_ID = 1    # refers to anchor plane
+ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
 
 
 def batch_concat(dataset, batch_size):
@@ -65,15 +67,18 @@ def batch_concat(dataset, batch_size):
     # correct shape.
     initial_state = tree.map_structure(
         lambda spec: tf.zeros(  # pylint: disable=g-long-lambda
-            shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype),
-        dataset.element_spec)
+            shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype
+        ),
+        dataset.element_spec,
+    )
 
     # We run through the nest and concatenate each entry with the previous state.
     def reduce_window(initial_state, ds):
         return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
 
     return windowed_ds.map(
-        lambda *x: tree.map_structure(reduce_window, initial_state, x))
+        lambda *x: tree.map_structure(reduce_window, initial_state, x)
+    )
 
 
 def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
@@ -94,33 +99,39 @@ def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
         metadata = _read_metadata(data_path)
 
         # Create a tf.data.Dataset from the TFRecord.
-        ds = tf.data.TFRecordDataset([os.path.join(data_path, f'{split}.tfrecord')])
-        ds = ds.map(functools.partial(
-            reading_utils.parse_serialized_simulation_example, metadata=metadata))
+        ds = tf.data.TFRecordDataset([os.path.join(data_path, f"{split}.tfrecord")])
+        ds = ds.map(
+            functools.partial(
+                reading_utils.parse_serialized_simulation_example, metadata=metadata
+            )
+        )
 
-        if mode.startswith('one_step'):
+        if mode.startswith("one_step"):
             # Splits an entire trajectory into chunks of n steps. (n=INPUT_SEQUENCE_LENGTH)
             # Previous steps are used to compute the input velocities
             split_with_window = functools.partial(
                 reading_utils.split_trajectory,
-                window_length=INPUT_SEQUENCE_LENGTH, predict_length=PREDICT_LENGTH)
+                window_length=INPUT_SEQUENCE_LENGTH,
+                predict_length=PREDICT_LENGTH,
+            )
             ds = ds.flat_map(split_with_window)
             # Splits a chunk into input steps and target steps
             ds = ds.map(prepare_inputs)
             # If in train mode, repeat dataset forever and shuffle.
-            if mode == 'one_step_train':
+            if mode == "one_step_train":
                 ds.prefetch(buffer_size=prefetch_buffer_size)
                 ds = ds.repeat()
                 ds = ds.shuffle(512)
 
             # Custom batching on the leading axis.
             ds = batch_concat(ds, batch_size)
-        elif mode == 'rollout':
-            # Rollout evaluation only available for batch size 1
-            assert batch_size == 1
+        elif mode == "rollout":
+            if not batch_size == 1:
+                raise ValueError("Rollout evaluation only available for batch size 1")
+
             ds = ds.map(prepare_rollout_inputs)
         else:
-            raise ValueError(f'mode: {mode} not recognized')
+            raise ValueError(f"mode: {mode} not recognized")
 
         return ds
 
@@ -153,31 +164,34 @@ def prepare_inputs(tensor_dict):
     """
     predict_length = PREDICT_LENGTH
 
-    pos = tensor_dict['position']
+    pos = tensor_dict["position"]
     pos = tf.transpose(pos, perm=[1, 0, 2])
 
     # The target position is the final step of the stack of positions.
     target_position = pos[:, -predict_length:]
 
     # Remove the target from the input.
-    tensor_dict['position'] = pos[:, :-predict_length]
+    tensor_dict["position"] = pos[:, :-predict_length]
 
     # Compute the number of particles per example.
     num_particles = tf.shape(pos)[0]
     # Add an extra dimension for stacking via concat.
-    tensor_dict['n_particles_per_example'] = num_particles[tf.newaxis]
+    tensor_dict["n_particles_per_example"] = num_particles[tf.newaxis]
 
-    num_edges = tf.shape(tensor_dict['senders'])[0]
-    tensor_dict['n_edges_per_example'] = num_edges[tf.newaxis]
+    num_edges = tf.shape(tensor_dict["senders"])[0]
+    tensor_dict["n_edges_per_example"] = num_edges[tf.newaxis]
 
-    if 'step_context' in tensor_dict:
+    if "step_context" in tensor_dict:
         # Take the input global context. We have a stack of global contexts,
         # and we take the penultimate since the final is the target.
 
         # Method: input the entire sequence of sintering profile
-        tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'],[1, -1])
+        tensor_dict["step_context"] = tf.reshape(tensor_dict["step_context"], [1, -1])
 
-    print("prepare inputs, tensor_dict['step_context'] shape: ", tensor_dict['step_context'].shape)
+    print(
+        "prepare inputs, tensor_dict['step_context'] shape: ",
+        tensor_dict["step_context"].shape,
+    )
 
     return tensor_dict, target_position
 
@@ -186,30 +200,37 @@ def prepare_rollout_inputs(context, features):
     """Prepares an inputs trajectory for rollout."""
     out_dict = {**context}
 
-    pos = tf.transpose(features['position'], [1, 0, 2])
+    pos = tf.transpose(features["position"], [1, 0, 2])
     # The target position is the final step of the stack of positions.
     target_position = pos[:, -1]
 
     #  can change whether to Remove the target from the input, with: out_dict['position'] = pos[:, :-1]
-    out_dict['position'] = pos
+    out_dict["position"] = pos
 
     # Compute the number of nodes
-    out_dict['n_particles_per_example'] = [tf.shape(pos)[0]]
-    out_dict['n_edges_per_example'] = [tf.shape(context['senders'])[0]]
-    if 'step_context' in features:
-        out_dict['step_context'] = tf.dtypes.cast(features['step_context'], tf.float64)
+    out_dict["n_particles_per_example"] = [tf.shape(pos)[0]]
+    out_dict["n_edges_per_example"] = [tf.shape(context["senders"])[0]]
+    if "step_context" in features:
+        out_dict["step_context"] = tf.dtypes.cast(features["step_context"], tf.float64)
 
-    out_dict['is_trajectory'] = tf.constant([True], tf.bool)
+    out_dict["is_trajectory"] = tf.constant([True], tf.bool)
     return out_dict, target_position
-
 
 
 class GraphDataset:
     # todo: update the size
-    def __init__(self, size=1000, mode='one_step_train', split='train',
-                 data_path="None", batch_size=1, prefetch_buffer_size=100):
-        self.dataset = get_input_fn(data_path, batch_size, prefetch_buffer_size,
-                                   mode=mode, split=split)()
+    def __init__(
+        self,
+        size=1000,
+        mode="one_step_train",
+        split="train",
+        data_path="None",
+        batch_size=1,
+        prefetch_buffer_size=100,
+    ):
+        self.dataset = get_input_fn(
+            data_path, batch_size, prefetch_buffer_size, mode=mode, split=split
+        )()
         # self.size = len(list(self.dataset))
         self.size = size
         self.dataset = iter(self.dataset)
@@ -219,8 +240,8 @@ class GraphDataset:
         return self.size
 
     def __next__(self):
-        print("get next ds: pos/ size: " , self.pos, self.size)
-        if self.pos< self.size:
+        print("get next ds: pos/ size: ", self.pos, self.size)
+        if self.pos < self.size:
             features, targets = self.dataset.get_next()
             for key in features:
                 if key != "key":
