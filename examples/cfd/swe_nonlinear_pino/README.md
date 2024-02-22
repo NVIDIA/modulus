@@ -7,10 +7,10 @@ data-driven model using numerical derivatives (PINO).
 
 To examine the properties of PINOs with 3 coupled nonlinear equations, we
 examined the ability of the networks to reproduce the nonlinear shallow water
-equations. These equations are applicable in a number of physical scenerios
+equations. These equations are applicable in several physical scenarios
 including tsunami modeling.  We assumed that the total fluid column height
 $\eta(x,y,t)$ was composed of a mean height plus some perturbation,
-but the initial velicity fields $u(x,y,t)$ and $v(x,y,t)$ were initially
+but the initial velocity fields $u(x,y,t)$ and $v(x,y,t)$ were initially
 zero. These equations are given by
 
 $$\begin{align}
@@ -33,7 +33,7 @@ x,y \in[0,1), \ t \in[0,1],
 
 where the gravitational coefficient $g=1$ and the viscosity coefficient
 $\nu=0.002$ to prevent the formation of shocks. Below we plot how each of these
-fields evolves in space and time according to the PINO predictions and to the
+fields evolves in space and time according to the PINO predictions and the
 simulated data.  We observe that the error in each of these cases is relatively small.
 
 <!-- {: .center} -->
@@ -42,13 +42,13 @@ simulated data.  We observe that the error in each of these cases is relatively 
 We will demonstrate the use of data loss and physics constraints,
 specifically the equation residual loss, to create accurate predictions.
 [Modulus Sym](https://github.com/NVIDIA/modulus-sym)
-has utilities tailored for physics-informed machine learning. It also presents an
-abstracted APIs that allows users to think and model the problem from the lens of
+has utilities tailored for physics-informed machine learning. It also presents
+abstracted APIs that allow users to think and model the problem from the lens of
 equations, constraints, etc. In this example, we will only leverage the physics-informed
-utilites to see how we can add physics to an existing data-driven model with ease while
+utilities to see how we can add physics to an existing data-driven model with ease while
 still maintaining the flexibility to define our own training loop and other details.
 For a more abstracted definition of these type of problems, where the training loop
-definition and other things is taken care of implictily, you may refer
+definition and other things is taken care of implicitly, you may refer
 [Modulus Sym](https://github.com/NVIDIA/modulus-sym)
 
 ## Dataset
@@ -69,15 +69,15 @@ evident, as it regularizes the model in the absence of large data.
 ## Model overview and architecture
 
 In this example, we will use a Fourier Neural Operator (FNO). and then compute the
-derivatives in a PINO style, using Numerical differentiation with fourier derivatives.
+derivatives in a PINO style, using Numerical differentiation with Fourier derivatives.
 With this example, we intend to demonstrate how to implement multiple
 equations into the loss function.
 
-In this example we will also use the `PDE` class from Modulus-Sym to symbolically define
+In this example, we will also use the `PDE` class from Modulus-Sym to symbolically define
 the PDEs. This is very convinient and most natural way to define these PDEs and allows
 us to print the equations to check for correctness. This also abstracts out the
 complexity of converting the equation into a pytorch representation. Modulus Sym also
-provides several complex, well tested PDEs like 3D Navier-Stokes, Linear elasticity,
+provides several complex, well-tested PDEs like 3D Navier-Stokes, Linear elasticity,
 Electromagnetics, etc. pre-defined which can be used directly in physics-informing
 applications. We will also give you the option to choose between the
 derivative functions from Modulus-Sym or from the original paper.  
