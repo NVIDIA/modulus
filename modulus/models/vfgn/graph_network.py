@@ -126,10 +126,7 @@ class EncoderNet(torch.nn.Module):
         self.node_mlp = MLPNet(mlp_hidden_size, mlp_num_hidden_layers, latent_size)
 
     def forward(self, x, edge_attr):
-        print("\n Input to EncoderNet shape: ", x.shape)
         x = self.node_mlp(x)
-        print("\n EncoderNet encoded mlp : ", x.shape)
-
         edge_attr = self.edge_mlp(edge_attr)
 
         return x, edge_attr
@@ -324,11 +321,11 @@ class EncodeProcessDecode(torch.nn.Module):
 
     def forward(self, x, edge_attr, receivers, senders):
         x, edge_attr = self._encoder_network(x, edge_attr)
-        print(
-            "Check shape of EncodeProcessDecode, x/ edge_attr: ",
-            x.shape,
-            edge_attr.shape,
-        )
+        # print(
+        #     "Check shape of EncodeProcessDecode, x/ edge_attr: ",
+        #     x.shape,
+        #     edge_attr.shape,
+        # )
 
         pre_x = x
         pre_edge_attr = edge_attr

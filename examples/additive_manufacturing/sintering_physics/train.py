@@ -47,6 +47,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
+from modulus.models.vfgn.graph_network import LearnedSimulator as LearnedSimulatorBeta
 from modulus.utils.vfgn import utils
 from modulus.utils.vfgn.utils import _read_metadata
 from modulus.models.vfgn.graph_dataset import GraphDataset
@@ -102,7 +103,10 @@ def Train(rank_zero_logger, dist):
         prefetch_buffer_size=C.prefetch_buffer_size,
     )
     testDataset = GraphDataset(
-        size=C.num_steps, split="test", data_path=C.data_path, batch_size=C.batch_size
+        size=C.num_steps,
+        split="test",
+        data_path=C.data_path,
+        batch_size=C.batch_size
     )
 
     # config model
@@ -473,6 +477,7 @@ def Train(rank_zero_logger, dist):
 
 
 def Test(rank_zero_logger, dist):
+    # config test dataset
     dataset = GraphDataset(
         mode="rollout",
         split=C.eval_split,
@@ -502,14 +507,24 @@ def Test(rank_zero_logger, dist):
         "context": context_stats,
     }
 
-    model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-        num_seq=INPUT_SEQUENCE_LENGTH,
-        boundaries=torch.DoubleTensor(metadata["bounds"]),
-        num_particle_types=NUM_PARTICLE_TYPES,
-        particle_type_embedding_size=16,
-        normalization_stats=normalization_stats,
-    )
+    if not C.version_modulus:
+        model = LearnedSimulatorBeta(
+            num_dimensions=metadata["dim"] * PREDICT_LENGTH,
+            num_seq=INPUT_SEQUENCE_LENGTH,
+            boundaries=torch.DoubleTensor(metadata["bounds"]),
+            num_particle_types=NUM_PARTICLE_TYPES,
+            particle_type_embedding_size=16,
+            normalization_stats=normalization_stats,
+        )
+    else:
+        model = LearnedSimulator(
+            num_dimensions=metadata["dim"] * PREDICT_LENGTH,
+            num_seq=INPUT_SEQUENCE_LENGTH,
+            boundaries=torch.DoubleTensor(metadata["bounds"]),
+            num_particle_types=NUM_PARTICLE_TYPES,
+            particle_type_embedding_size=16,
+            normalization_stats=normalization_stats,
+        )
 
     loaded = False
     example_index = 0

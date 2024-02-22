@@ -34,10 +34,15 @@ simulation data files
 
 ## Train
 
-> python train.py --data_path={data path for the pre-processed data in tfrecord
-format, i.e.
-data/large-time-step/step_100} --model_path=models/{path to store training model}
---loss={i.e.me loss} --noise_std={i.e.1e-9}
+Change the params in constants.py for training: 
+
+- mode: "train"
+- model_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
+- data_path: {data path for the pre-processed data in tfrecord}, i.e. "./data/test_validation"
+- noise_std: i.e.1e-9
+- loss: i.e.me loss
+Then run:
+> python train.py 
 
 Currently default params:
 
@@ -53,8 +58,12 @@ Change the params in constants.py for testing:
 - batch_size: 1
 - noise_std: 0
 - model_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
-- output_path: {path to store outputs}, i.e. "rollouts/test240222"
+- output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
+
+- version_modulus
+  - to test / inference with provided trained ckpt : version_modulus: False 
+  - to test / inference with your own newly trained ckpt : version_modulus: True 
 
 Then run: 
 > python train.py 

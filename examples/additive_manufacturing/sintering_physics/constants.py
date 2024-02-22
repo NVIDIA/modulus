@@ -28,11 +28,9 @@ from typing import Tuple, Optional
 class Constants(BaseModel):
     """Virtual Foundry (Digital Sintering) Graphnet constants"""
 
-    # Train model, one step evaluation or rollout evaluation.
-    # exec mode options: ['train', 'eval', 'eval_rollout']
+    # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval', 'eval_rollout']
     mode: str = "eval_rollout"
-    # eval_split is Split to use when running evaluation,
-    # options: ['train', 'valid', 'test']
+    # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
     eval_split: str = "test"
 
     # data configs
@@ -51,7 +49,7 @@ class Constants(BaseModel):
     # The path for saving checkpoints of the model.
     model_path_vfgn: str = "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
     # The path for saving outputs (e.g. rollouts).
-    output_path: str = "rollouts/test240222"
+    output_path: str = "rollouts/test24"
     prefetch_buffer_size: int = 100
 
     # devices settings
@@ -66,6 +64,7 @@ class Constants(BaseModel):
     rollout_refine: bool = False
     meta1: str = "step100_s1"
     meta2: str = "step100_s2"
+    version_modulus: bool = False
 
     # Rollout settings
     # "Path to rollout pickle file"
