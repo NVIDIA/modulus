@@ -14,23 +14,21 @@ but the initial velicity fields $u(x,y,t)$ and $v(x,y,t)$ were initially
 zero. These equations are given by
 
 $$\begin{align}
-\label{eq:swe_nonlin_I}
 \frac{\partial(\eta)}{\partial t}+\frac{\partial(\eta u)}{\partial x}+
-\frac{\partial(\eta v)}{\partial y}&=0,  \\\\ \nonumber \\\\
-\label{eq:swe_nonlin_II}
-\frac{\partial(\eta u)}{\partial t}+\frac{\partial}{\partial x}
-\left(\eta u^{2}+\frac{1}{2} g \eta^{2}\right)+
-\frac{\partial(\eta u v)}{\partial y}&=\nu\left(u_{xx} + u_{yy}\right),
-\\\\ \nonumber \\\\
-\label{eq:swe_nonlin_III}
+\frac{\partial(\eta v)}{\partial y}&=0,  \\
+\frac{\partial(\eta u)}{\partial t}+
+\frac{\partial}{\partial x}\left(\eta u^{2}+\frac{1}{2} g
+\eta^{2}\right)+
+\frac{\partial(\eta u v)}{\partial y}&=\nu\left(u_{xx} + u_{yy}\right), \\
 \frac{\partial(\eta v)}{\partial t}+\frac{\partial(\eta u v)}{\partial x}+
-\frac{\partial}{\partial y}\left(\eta v^{2}+\frac{1}{2} g \eta^{2}\right)
-&=\nu\left(v_{xx} + v_{yy}\right), \\\\ \nonumber \\\\
-\end{align}
-\begin{align}
-\textrm{with} \quad \eta(x,y,0) = \eta_{0}(x,y),\ u(x,y,0)=0,\ v(x,y,0)=0,\
-\quad
-x,y \in[0,1), \ t \in[0,1], \nonumber
+\frac{\partial}{\partial y}\left(\eta v^{2}+\frac{1}{2} g
+\eta^{2}\right)&=\nu\left(v_{xx} + v_{yy}\right),
+\end{align}$$
+
+$$\begin{align}
+\textrm{with} \quad \eta(x,y,0) = \eta_{0}(x,y),\ u(x,y,0)=0,\
+v(x,y,0)=0,\ \quad
+x,y \in[0,1), \ t \in[0,1],
 \end{align}$$
 
 where the gravitational coefficient $g=1$ and the viscosity coefficient
