@@ -78,7 +78,7 @@ def train(cfg):
                    if cfg.trainer.lr_scheduler is not None else None
 
     # setup startup values
-    epoch = 0
+    epoch = 1
     val_error = th.inf
     iteration = 0
     epochs_since_improved = 0
