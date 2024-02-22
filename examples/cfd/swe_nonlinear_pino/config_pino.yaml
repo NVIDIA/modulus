@@ -27,7 +27,7 @@ milestones: [25, 50, 75, 100, 125, 150]
 batchsize: 1
 
 loss:
-  derivative: 'original' #option to calculate derivatives using 'original' paper or through 'modulus'
+  derivative: 'modulus' #option to calculate derivatives using 'original' paper or through 'modulus'
   ic_loss: 5.0
   f_loss: 1.0
   xy_loss: 10.0
@@ -62,3 +62,12 @@ model:
     num_fno_layers: 4
     num_fno_modes: 8
     padding: 5
+
+movie:
+  val_cbar_index: -1
+  err_cbar_index: -1
+  remove_frames: True
+  font_size: 12
+  frame_ext: 'jpg'
+  nmovies: 1
+

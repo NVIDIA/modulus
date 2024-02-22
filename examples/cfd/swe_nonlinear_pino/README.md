@@ -5,9 +5,45 @@ data-driven model using numerical derivatives (PINO).
 
 ## Problem overview
 
-This is an extension of the 2D nonlinear shallow water equation data-driven problem.
-In addition to the data loss, we will demonstrate the use of physics constraints,
-specifically the equation residual loss. [Modulus Sym](https://github.com/NVIDIA/modulus-sym)
+To examine the properties of PINOs with 3 coupled nonlinear equations, we
+examined the ability of the networks to reproduce the nonlinear shallow water
+equations. These equations are applicable in a number of physical scenerios
+including tsunami modeling.  We assumed that the total fluid column height
+$\eta(x,y,t)$ was composed of a mean height plus some perturbation,
+but the initial velicity fields $u(x,y,t)$ and $v(x,y,t)$ were initially
+zero. These equations are given by
+
+$$\begin{align}
+\label{eq:swe_nonlin_I}
+\frac{\partial(\eta)}{\partial t}+\frac{\partial(\eta u)}{\partial x}+
+\frac{\partial(\eta v)}{\partial y}&=0,  \\\\ \nonumber \\\\
+\label{eq:swe_nonlin_II}
+\frac{\partial(\eta u)}{\partial t}+\frac{\partial}{\partial x}
+\left(\eta u^{2}+\frac{1}{2} g \eta^{2}\right)+
+\frac{\partial(\eta u v)}{\partial y}&=\nu\left(u_{xx} + u_{yy}\right),
+\\\\ \nonumber \\\\
+\label{eq:swe_nonlin_III}
+\frac{\partial(\eta v)}{\partial t}+\frac{\partial(\eta u v)}{\partial x}+
+\frac{\partial}{\partial y}\left(\eta v^{2}+\frac{1}{2} g \eta^{2}\right)
+&=\nu\left(v_{xx} + v_{yy}\right), \\\\ \nonumber \\\\
+\end{align}
+\begin{align}
+\textrm{with} \quad \eta(x,y,0) = \eta_{0}(x,y),\ u(x,y,0)=0,\ v(x,y,0)=0,\
+\quad
+x,y \in[0,1), \ t \in[0,1], \nonumber
+\end{align}$$
+
+where the gravitational coefficient $g=1$ and the viscosity coefficient
+$\nu=0.002$ to prevent the formation of shocks. Below we plot how each of these
+fields evolves in space and time according to the PINO predictions and to the
+simulated data.  We observe that the error in each of these cases is relatively small.
+
+<!-- {: .center} -->
+![Nonlinear Shallow Water Equations 2D predictions](figures/SWE_0.png)
+
+We will demonstrate the use of data loss and physics constraints,
+specifically the equation residual loss, to create accurate predictions.
+[Modulus Sym](https://github.com/NVIDIA/modulus-sym)
 has utilities tailored for physics-informed machine learning. It also presents an
 abstracted APIs that allows users to think and model the problem from the lens of
 equations, constraints, etc. In this example, we will only leverage the physics-informed
@@ -30,7 +66,7 @@ python download_data.py
 
 To demonstrate the usefulness of the Physics loss, we will deliberately choose a smaller
 dataset size of 45 samples. In such regiemes, the effect of physics loss is more
-evident, as it regularizes the model in the absense of large data.
+evident, as it regularizes the model in the absence of large data.
 
 ## Model overview and architecture
 

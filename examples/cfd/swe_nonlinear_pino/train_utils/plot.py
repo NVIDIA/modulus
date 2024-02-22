@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import torch
+import imageio
+import os
 import matplotlib.pyplot as plt
 from .utils import get_grid3d
 
@@ -30,6 +32,7 @@ def plot_predictions(
     font_size=None,
 ):
 
+    """Plot PINO predictions on dataset"""
     if font_size is not None:
         plt.rcParams.update({"font.size": font_size})
 
@@ -69,7 +72,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 2)
-    # plt.pcolor(XX,TT, S_test, cmap='jet')
     plt.pcolormesh(X, Y, true_h, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -81,7 +83,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 3)
-    # plt.pcolor(XX,TT, S_pred, cmap='jet')
     plt.pcolormesh(X, Y, pred_h, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -93,7 +94,6 @@ def plot_predictions(
     plt.tight_layout()
 
     plt.subplot(3, 4, 4)
-    # plt.pcolor(XX,TT, S_pred - S_test, cmap='jet')
     plt.pcolormesh(X, Y, pred_h - true_h, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -112,7 +112,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 6)
-    # plt.pcolor(XX,TT, S_test, cmap='jet')
     plt.pcolormesh(X, Y, true_u, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -123,7 +122,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 7)
-    # plt.pcolor(XX,TT, S_pred, cmap='jet')
     plt.pcolormesh(X, Y, pred_u, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -135,7 +133,6 @@ def plot_predictions(
     plt.tight_layout()
 
     plt.subplot(3, 4, 8)
-    # plt.pcolor(XX,TT, S_pred - S_test, cmap='jet')
     plt.pcolormesh(X, Y, pred_u - true_u, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -154,7 +151,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 10)
-    # plt.pcolor(XX,TT, S_test, cmap='jet')
     plt.pcolormesh(X, Y, true_v, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -165,7 +161,6 @@ def plot_predictions(
     plt.axis("square")
 
     plt.subplot(3, 4, 11)
-    # plt.pcolor(XX,TT, S_pred, cmap='jet')
     plt.pcolormesh(X, Y, pred_v, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -177,7 +172,6 @@ def plot_predictions(
     plt.tight_layout()
 
     plt.subplot(3, 4, 12)
-    # plt.pcolor(XX,TT, S_pred - S_test, cmap='jet')
     plt.pcolormesh(X, Y, pred_v - true_v, cmap="jet", shading="gouraud")
     plt.colorbar()
     # plt.xlabel('$x$')
@@ -188,4 +182,132 @@ def plot_predictions(
 
     if save_path is not None:
         plt.savefig(f"{save_path}.png", bbox_inches="tight")
-    plt.show()
+    plt.close()
+
+
+def generate_movie(
+    key,
+    test_x,
+    test_y,
+    preds_y,
+    plot_title="",
+    field=0,
+    val_cbar_index=-1,
+    err_cbar_index=-1,
+    val_clim=None,
+    err_clim=None,
+    font_size=None,
+    movie_dir="",
+    movie_name="movie.gif",
+    frame_basename="movie",
+    frame_ext="jpg",
+    remove_frames=True,
+):
+    """Generates a movie on test predictions"""
+    frame_files = []
+
+    if movie_dir:
+        os.makedirs(movie_dir, exist_ok=True)
+
+    if font_size is not None:
+        plt.rcParams.update({"font.size": font_size})
+
+    if len(preds_y.shape) == 4:
+        Nsamples, Nx, Ny, Nt = preds_y.shape
+        preds_y = preds_y.reshape(Nsamples, Nx, Ny, Nt, 1)
+        test_y = test_y.reshape(Nsamples, Nx, Ny, Nt, 1)
+    Nsamples, Nx, Ny, Nt, Nfields = preds_y.shape
+
+    pred = preds_y[key, ..., field]
+    true = test_y[key, ..., field]
+    error = pred - true
+
+    a = test_x[key]
+    x = torch.linspace(0, 1, Nx + 1)[:-1]
+    y = torch.linspace(0, 1, Ny + 1)[:-1]
+    X, Y = torch.meshgrid(x, y, indexing="ij")
+    t = a[0, 0, :, 2]
+
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    ax1 = axs[0]
+    ax2 = axs[1]
+    ax3 = axs[2]
+
+    pcm1 = ax1.pcolormesh(
+        X, Y, true[..., val_cbar_index], cmap="jet", label="true", shading="gouraud"
+    )
+    pcm2 = ax2.pcolormesh(
+        X, Y, pred[..., val_cbar_index], cmap="jet", label="pred", shading="gouraud"
+    )
+    pcm3 = ax3.pcolormesh(
+        X, Y, error[..., err_cbar_index], cmap="jet", label="error", shading="gouraud"
+    )
+
+    if val_clim is None:
+        val_clim = pcm1.get_clim()
+    if err_clim is None:
+        err_clim = pcm3.get_clim()
+
+    pcm1.set_clim(val_clim)
+    plt.colorbar(pcm1, ax=ax1)
+    ax1.axis("square")
+
+    pcm2.set_clim(val_clim)
+    plt.colorbar(pcm2, ax=ax2)
+    ax2.axis("square")
+
+    pcm3.set_clim(err_clim)
+    plt.colorbar(pcm3, ax=ax3)
+    ax3.axis("square")
+
+    plt.tight_layout()
+
+    for i in range(Nt):
+        # Exact
+        ax1.clear()
+        pcm1 = ax1.pcolormesh(
+            X, Y, true[..., i], cmap="jet", label="true", shading="gouraud"
+        )
+        pcm1.set_clim(val_clim)
+        ax1.set_title(f"Exact {plot_title}: $t={t[i]:.2f}$")
+        ax1.axis("square")
+
+        # Predictions
+        ax2.clear()
+        pcm2 = ax2.pcolormesh(
+            X, Y, pred[..., i], cmap="jet", label="pred", shading="gouraud"
+        )
+        pcm2.set_clim(val_clim)
+        ax2.set_title(f"Predict {plot_title}: $t={t[i]:.2f}$")
+        ax2.axis("square")
+
+        # Error
+        ax3.clear()
+        pcm3 = ax3.pcolormesh(
+            X, Y, error[..., i], cmap="jet", label="error", shading="gouraud"
+        )
+        pcm3.set_clim(err_clim)
+        ax3.set_title(f"Error {plot_title}: $t={t[i]:.2f}$")
+        ax3.axis("square")
+
+        #         plt.tight_layout()
+        fig.canvas.draw()
+
+        if movie_dir:
+            frame_path = os.path.join(movie_dir, f"{frame_basename}-{i:03}.{frame_ext}")
+            frame_files.append(frame_path)
+            plt.savefig(frame_path)
+
+    if movie_dir:
+        movie_path = os.path.join(movie_dir, movie_name)
+        with imageio.get_writer(movie_path, mode="I") as writer:
+            for frame in frame_files:
+                image = imageio.imread(frame)
+                writer.append_data(image)
+
+    if movie_dir and remove_frames:
+        for frame in frame_files:
+            try:
+                os.remove(frame)
+            except:
+                pass

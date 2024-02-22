@@ -88,7 +88,7 @@ def ic_loss(out, s0):
     return loss_ic
 
 
-def FDM_swe_nonlin(h, u, v, D=1, g=1.0, nu=1.0e-3, device=0):
+def fdm_swe_nonlin(h, u, v, D=1, g=1.0, nu=1.0e-3, device=0):
     "Original method in paper to calculate fourier derivatives"
     batchsize = u.size(0)
     nx = u.size(1)
@@ -121,30 +121,25 @@ def FDM_swe_nonlin(h, u, v, D=1, g=1.0, nu=1.0e-3, device=0):
     # Wavenumbers in y-direction
     k_max = nx // 2
     N = nx
-    k_x = (
-        torch.cat(
-            (
-                torch.arange(start=0, end=k_max, step=1, device=device),
-                torch.arange(start=-k_max, end=0, step=1, device=device),
-            ),
-            0,
-        )
-        .reshape(N, 1)
-        .repeat(1, N)
-        .reshape(1, N, N, 1)
+    k_x = torch.cat(
+        (
+            torch.arange(start=0, end=k_max, step=1, device=device),
+            torch.arange(start=-k_max, end=0, step=1, device=device),
+        ),
+        0,
     )
-    k_y = (
-        torch.cat(
-            (
-                torch.arange(start=0, end=k_max, step=1, device=device),
-                torch.arange(start=-k_max, end=0, step=1, device=device),
-            ),
-            0,
-        )
-        .reshape(1, N)
-        .repeat(N, 1)
-        .reshape(1, N, N, 1)
+    k_x = k_x[None, :, None, None]
+    k_x = k_x.expand(1, N, N, 1).clone()
+
+    k_y = torch.cat(
+        (
+            torch.arange(start=0, end=k_max, step=1, device=device),
+            torch.arange(start=-k_max, end=0, step=1, device=device),
+        ),
+        0,
     )
+    k_y = k_y[None, None, :, None]
+    k_y = k_y.expand(1, N, N, 1).clone()
 
     # Compute laplacian in fourier space
     hux_h = 2j * np.pi * k_x * hu_h
@@ -200,10 +195,10 @@ def FDM_swe_nonlin(h, u, v, D=1, g=1.0, nu=1.0e-3, device=0):
     return Dh, Du, Dv
 
 
-def PINO_loss_swe_nonlin(
+def pino_loss_swe_nonlin(
     s, g=1.0, nu=0.001, h_weight=1.0, u_weight=1.0, v_weight=1.0, device=0
 ):
-    "Calculate PDE Loss using FDM_swe_nonlin like original paper"
+    "Calculate PDE Loss using fdm_swe_nonlin like original paper"
     batchsize = s.size(0)
     nx = s.size(1)
     ny = s.size(2)
@@ -213,7 +208,7 @@ def PINO_loss_swe_nonlin(
     h = s[..., 0]
     u = s[..., 1]
     v = s[..., 2]
-    Dh, Du, Dv = FDM_swe_nonlin(h, u, v, g=g, nu=nu, device=device)
+    Dh, Du, Dv = fdm_swe_nonlin(h, u, v, g=g, nu=nu, device=device)
     Dh *= h_weight
     Du *= u_weight
     Dv *= v_weight
@@ -226,7 +221,7 @@ def PINO_loss_swe_nonlin(
     return loss_f
 
 
-def modulus_FDM_swe_nonlin(h, u, v, pde_node, D=1, device=0):
+def modulus_fdm_swe_nonlin(h, u, v, pde_node, D=1, device=0):
     "Calculate fourier derivatives using modulus"
     batchsize = u.size(0)
     nx = u.size(1)
@@ -306,7 +301,7 @@ def modulus_FDM_swe_nonlin(h, u, v, pde_node, D=1, device=0):
 
 
 def modulus_fourier(s, pde_node, h_weight=1.0, u_weight=1.0, v_weight=1.0, device=0):
-    "Calculate PDE Loss using modulus_FDM_swe_nonlin with Modulus functions"
+    "Calculate PDE Loss using modulus_fdm_swe_nonlin with Modulus functions"
     batchsize = s.size(0)
     nx = s.size(1)
     ny = s.size(2)
@@ -317,7 +312,7 @@ def modulus_fourier(s, pde_node, h_weight=1.0, u_weight=1.0, v_weight=1.0, devic
     u = s[..., 1]
     v = s[..., 2]
 
-    Dh, Du, Dv = modulus_FDM_swe_nonlin(h, u, v, pde_node, device=device)
+    Dh, Du, Dv = modulus_fdm_swe_nonlin(h, u, v, pde_node, device=device)
     Dh *= h_weight
     Du *= u_weight
     Dv *= v_weight

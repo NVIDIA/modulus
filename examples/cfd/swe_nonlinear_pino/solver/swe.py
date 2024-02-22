@@ -80,7 +80,7 @@ class SWE_Nonlinear:
         )
         return h0
 
-    # All Central Differencing Functions are 4th order.  These are used to compute ann inputs.
+    # All Central Differencing Functions are 4th order.  These are used to compute PINO inputs.
     def CD_i(self, data, axis, dx):
         "Central Differencing Function used for Dx and Dy"
         data_m2 = torch.roll(data, shifts=2, dims=axis)
@@ -153,14 +153,12 @@ class SWE_Nonlinear:
 
     def rk4(self, h, u, v, t=0):
         h_RHS1, u_RHS1, v_RHS1 = self.calc_RHS(h, u, v)
-        # display(h_RHS1)
         t1 = t + 0.5 * self.dt
         h1 = self.update_field(h, h_RHS1, step_frac=0.5)
         u1 = self.update_field(u, u_RHS1, step_frac=0.5)
         v1 = self.update_field(v, v_RHS1, step_frac=0.5)
 
         h_RHS2, u_RHS2, v_RHS2 = self.calc_RHS(h1, u1, v1)
-        # display(h_RHS2)
 
         t2 = t + 0.5 * self.dt
         h2 = self.update_field(h, h_RHS2, step_frac=0.5)
@@ -168,14 +166,13 @@ class SWE_Nonlinear:
         v2 = self.update_field(v, v_RHS2, step_frac=0.5)
 
         h_RHS3, u_RHS3, v_RHS3 = self.calc_RHS(h2, u2, v2)
-        # display(h_RHS3)
+
         t3 = t + self.dt
         h3 = self.update_field(h, h_RHS3, step_frac=1.0)
         u3 = self.update_field(u, u_RHS3, step_frac=1.0)
         v3 = self.update_field(v, v_RHS3, step_frac=1.0)
 
         h_RHS4, u_RHS4, v_RHS4 = self.calc_RHS(h3, u3, v3)
-        # display(h_RHS4)
 
         t_new = t + self.dt
         h_new = self.rk4_merge_RHS(h, h_RHS1, h_RHS2, h_RHS3, h_RHS4)
@@ -214,12 +211,7 @@ class SWE_Nonlinear:
 
     def driver(self, h0, save_interval=10, plot_interval=0):
         # plot results
-        # t,it = get_time(time)
-        #         display(u0[:self.Nx,:self.Ny].shape)
-        # self.u0 = u0[:self.Nx]
         self.h0 = h0[: self.Nx, : self.Ny]
-        # self.u0 = u0[:self.Nx,:self.Ny]
-        # self.v0 = v0[:self.Nx,:self.Ny]
         self.h = self.h0
         self.u = self.u0
         self.v = self.v0
@@ -239,7 +231,6 @@ class SWE_Nonlinear:
             self.T.append(self.t)
         # Compute equations
         while self.t < self.tend:
-            #             print(f"t:\t{self.t}")
             self.h, self.u, self.v, self.t = self.rk4(self.h, self.u, self.v, self.t)
 
             self.it += 1

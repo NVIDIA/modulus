@@ -59,8 +59,6 @@ class GRF_Mattern(object):
             )
         else:
             self.eta2 = size**dim * sigma * (sqrt(2.0 * pi) * l) ** dim
-        # if sigma is None:
-        #     sigma = tau**(0.5*(2*alpha - self.dim))
 
         k_max = size // 2
         if self.bc == "periodic":
@@ -79,7 +77,6 @@ class GRF_Mattern(object):
 
             k2 = k**2
             if nu is not None:
-                # self.sqrt_eig = (size**dim)*sqrt(2.0)*sigma*((const*(k**2) + tau**2)**(-alpha/2.0))
                 eigs = 1.0 + (const / (kappa * length) ** 2 * k2)
                 self.sqrt_eig = self.eta2 / (length**dim) * eigs ** (-alpha / 2.0)
             else:
@@ -108,7 +105,6 @@ class GRF_Mattern(object):
 
             k2 = k_x**2 + k_y**2
             if nu is not None:
-                # self.sqrt_eig = (size**dim)*sqrt(2.0)*sigma*((const*(k_x**2 + k_y**2) + tau**2)**(-alpha/2.0))
                 eigs = 1.0 + (const / (kappa * length) ** 2 * k2)
                 self.sqrt_eig = self.eta2 / (length**dim) * eigs ** (-alpha / 2.0)
             else:
@@ -138,7 +134,6 @@ class GRF_Mattern(object):
 
             k2 = k_x**2 + k_y**2 + k_z**2
             if nu is not None:
-                # self.sqrt_eig = (size**dim)*sqrt(2.0)*sigma*((const*(k_x**2 + k_y**2 + k_z**2) + tau**2)**(-alpha/2.0))
                 eigs = 1.0 + (const / (kappa * length) ** 2 * k2)
                 self.sqrt_eig = self.eta2 / (length**dim) * eigs ** (-alpha / 2.0)
             else:
@@ -175,68 +170,28 @@ class GRF_Mattern(object):
 
 
 if __name__ == "__main__":
-    import argparse
+    from hydra import compose, initialize
     import h5py
     import os
     import matplotlib.pyplot as plt
 
-    parser = argparse.ArgumentParser(description="Description of your program")
-    parser.add_argument("-d", "--dim", type=int, default=2, help="Number of dimensions")
-    parser.add_argument(
-        "-N", "--num_samples", type=int, default=1, help="Number of samples"
-    )
-    parser.add_argument(
-        "-n", "--num_points", type=int, default=128, help="Number of points"
-    )
-    parser.add_argument(
-        "-L", "--length", type=float, default=1.0, help="Length of domain"
-    )
-    parser.add_argument(
-        "-l",
-        "--length_scale",
-        type=float,
-        default=0.1,
-        help="Scale of typical spacial deviations",
-    )
-    parser.add_argument(
-        "-s", "--sigma", type=float, default=1.0, help="Amplitude of deviations"
-    )
-    parser.add_argument(
-        "--nu",
-        type=float,
-        default=None,
-        help="Smoothness parameter. Set to None for RBF Kernel",
-    )
-    parser.add_argument(
-        "--mean", type=float, default=None, help="Mean value for distribution"
-    )
-    parser.add_argument(
-        "-b",
-        "--boundary_condition",
-        type=str,
-        default="periodic",
-        help="Boundary condition type (periodic is the only one that has been tested)",
-    )
-    parser.add_argument(
-        "-f", "--file", type=str, default="", help="Base filename to save data"
-    )
-    parser.add_argument("-p", "--plot", action="store_true", help="Plot first field")
-    args = parser.parse_args()
+    initialize(version_base=None, config_path=".", job_name="generate_field")
+    cfg = compose(config_name="example_field")
 
-    N = args.num_samples
-    n = args.num_points
-    dim = args.dim
-    L = args.length
+    N = cfg.num_samples
+    n = cfg.num_points
+    dim = cfg.dim
+    L = cfg.length
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     grf = GRF_Mattern(
-        dim=args.dim,
-        size=args.num_points,
-        length=args.length,
-        nu=args.nu,
-        l=args.length_scale,
-        sigma=args.sigma,
-        boundary=args.boundary_condition,
-        constant_eig=args.mean,
+        dim=cfg.dim,
+        size=cfg.num_points,
+        length=cfg.length,
+        nu=cfg.nu,
+        l=cfg.length_scale,
+        sigma=cfg.sigma,
+        boundary=cfg.boundary_condition,
+        constant_eig=cfg.mean,
         device=device,
     )
     U = grf.sample(N)
@@ -246,7 +201,7 @@ if __name__ == "__main__":
     u = np.pad(U.cpu().numpy(), pad_width, mode="wrap")
     x = np.linspace(0, L, n + 1)
     digits = int(math.log10(N)) + 1
-    basefile = args.file
+    basefile = cfg.file
     if basefile:
         filedir, file = os.path.split(basefile)
         if filedir:
@@ -260,7 +215,7 @@ if __name__ == "__main__":
                     coord_name = f"x{j+1}"
                     hf.create_dataset(coord_name, data=x)
 
-    if args.plot:
+    if cfg.plot:
         # coords = [x for _ in dim]
         # X = np.meshgrid(*coords, indexing='ij')
         if dim == 2:

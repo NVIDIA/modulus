@@ -31,11 +31,11 @@ from modulus.launch.utils.checkpoint import save_checkpoint
 
 from train_utils.datasets import DataLoader2D_swe
 from swe_nl_pde import SWE_NL
-from train_utils.losses import swe_loss, ic_loss, PINO_loss_swe_nonlin, modulus_fourier
-from train_utils.plot import plot_predictions
+from train_utils.losses import swe_loss, ic_loss, pino_loss_swe_nonlin, modulus_fourier
+from train_utils.plot import plot_predictions, generate_movie
 
 
-def test_step(model, dataloader, log, cfg):
+def test_step(model, dataloader, log, cfg, swe_nl_node, device, option):
     """Test Step"""
     model.eval()
 
@@ -58,7 +58,7 @@ def test_step(model, dataloader, log, cfg):
     with torch.no_grad():
         for i, data in enumerate(dataloader):
             x, y = data
-            x, y = x.to("cuda"), y.to("cuda")
+            x, y = x.to(device), y.to(device)
             x_in = F.pad(x, (0, 0, 0, padding), "constant", 0)
             x_in = x_in.permute(0, 4, 3, 1, 2)
             # compute forward pass
@@ -103,20 +103,50 @@ def test_step(model, dataloader, log, cfg):
                 {"test loss_l2": loss_l2.detach(), "test loss_pde": loss_pde.detach()}
             )
 
-        figures_dir = to_absolute_path("outputs_pino/figures/")
-        os.makedirs(figures_dir, exist_ok=True)
+        if option == "plot":
+            figures_dir = to_absolute_path("outputs_pino/figures/")
+            os.makedirs(figures_dir, exist_ok=True)
 
-        for key in range(len(preds_y)):
-            save_path = os.path.join(figures_dir, f"SWE_{key}")
-            plot_predictions(
-                key,
-                key_t,
-                test_x,
-                test_y,
-                preds_y,
-                print_index=True,
-                save_path=save_path,
-            )
+            for key in range(len(preds_y)):
+                save_path = os.path.join(figures_dir, f"SWE_{key}")
+                plot_predictions(
+                    key,
+                    key_t,
+                    test_x,
+                    test_y,
+                    preds_y,
+                    print_index=True,
+                    save_path=save_path,
+                )
+        elif option == "movie":
+            movie_dir = to_absolute_path("outputs_pino/movies/")
+
+            for key in range(len(preds_y)):
+                if key == cfg.movie.nmovies:
+                    break
+                for field, name in enumerate(["eta", "u", "v"]):
+                    movie_name = f"SWE_NonLinear_{key}_{name}.gif"
+                    frame_basename = f"SWE_NonLinear_{key}_{name}_frame"
+                    if field == 0:
+                        name = "\\" + name
+                    plot_title = f"${name}$"
+
+                    generate_movie(
+                        key,
+                        test_x,
+                        test_y,
+                        preds_y,
+                        plot_title=plot_title,
+                        field=field,
+                        val_cbar_index=cfg.movie.val_cbar_index,
+                        err_cbar_index=cfg.movie.err_cbar_index,
+                        movie_dir=movie_dir,
+                        movie_name=movie_name,
+                        frame_basename=frame_basename,
+                        frame_ext=cfg.movie.frame_ext,
+                        remove_frames=cfg.movie.remove_frames,
+                        font_size=cfg.movie.font_size,
+                    )
 
 
 @hydra.main(version_base="1.3", config_path=".", config_name="config_pino.yaml")
@@ -187,7 +217,7 @@ def main(cfg: DictConfig):
         ) as log:
             for x, y in train_loader:
                 # Pad input to be put into model
-                x, y = x.to("cuda"), y.to("cuda")
+                x, y = x.to(device), y.to(device)
                 x_in = F.pad(x, (0, 0, 0, padding), "constant", 0)
                 x_in = x_in.permute(0, 4, 3, 1, 2)
                 # compute forward pass and unpad output
@@ -201,7 +231,7 @@ def main(cfg: DictConfig):
 
                 # Compute PDE loss using 'modulus' functions or method from 'original' paper
                 if cfg.loss.derivative == "original":
-                    loss_pde = PINO_loss_swe_nonlin(
+                    loss_pde = pino_loss_swe_nonlin(
                         out,
                         g=cfg.data.g,
                         nu=cfg.data.nu,
@@ -254,9 +284,14 @@ def main(cfg: DictConfig):
             epoch=epoch,
         )
 
-    # Test model
+        # Test model every 15 epochs
+        if (epoch + 1) % 15 == 0:
+            with LaunchLogger("test", epoch=epoch) as log:
+                test_step(model, test_loader, log, cfg, swe_nl_node, device, "plot")
+
+    # Generates movies of predictions
     with LaunchLogger("test", epoch=epoch) as log:
-        test_step(model, test_loader, log, cfg)
+        test_step(model, test_loader, log, cfg, swe_nl_node, device, "movie")
 
 
 if __name__ == "__main__":
