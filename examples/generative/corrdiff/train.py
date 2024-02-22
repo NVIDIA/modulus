@@ -40,13 +40,22 @@ warnings.filterwarnings(
 )  # False warning printed by PyTorch 1.12.
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="config_train")
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
 def main(cfg: DictConfig) -> None:
     """Train diffusion-based generative model using the techniques described in the
     paper "Elucidating the Design Space of Diffusion-Based Generative Models".
     """
 
+    # Sanity check
+    if not hasattr(cfg, 'task'):
+        raise ValueError("Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>")
+
+    # Dump the configs
+    os.makedirs(cfg.outdir, exist_ok=True)
+    OmegaConf.save(cfg, os.path.join(cfg.outdir ,"config.yaml"))
+
     # Parse options
+    regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     data = getattr(cfg, "data", "./data")
@@ -213,6 +222,8 @@ def main(cfg: DictConfig) -> None:
     c.update(batch_size=batch, batch_gpu=batch_gpu)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
     c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
+    if regression_checkpoint_path:
+        c.regression_checkpoint_path = regression_checkpoint_path
 
     # Random seed.
     if seed is not None:
