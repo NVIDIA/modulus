@@ -30,7 +30,7 @@ class Constants(BaseModel):
 
     # Train model, one step evaluation or rollout evaluation.
     # exec mode options: ['train', 'eval', 'eval_rollout']
-    mode: str = "train"
+    mode: str = "eval_rollout"
     # eval_split is Split to use when running evaluation,
     # options: ['train', 'valid', 'test']
     eval_split: str = "test"
@@ -42,15 +42,16 @@ class Constants(BaseModel):
     batch_size: int = 1
     num_steps: int = int(2e7)
     eval_steps: int = 1
-    noise_std: float = 6.7e-4
+    # default 6.7e-4, for eval, set noise_std=0
+    noise_std: float = 0
     # loss type options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
     loss: str = "standard"
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    model_path_vfgn: str = "models/test24"
+    model_path_vfgn: str = "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
     # The path for saving outputs (e.g. rollouts).
-    output_path: str = "rollouts"
+    output_path: str = "rollouts/test240222"
     prefetch_buffer_size: int = 100
 
     # devices settings
@@ -70,7 +71,7 @@ class Constants(BaseModel):
     # "Path to rollout pickle file"
     # todo: change to json
     rollout_path: str = "rollouts/rollout_test_0.pkl"
-    metadata_path: str = "data"
+    metadata_path: str = "./data/test_validation"
     step_stride: int = 3
     block_on_show: bool = True
     # test data type: ['standard', 'train', 'test']

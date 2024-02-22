@@ -472,7 +472,7 @@ def Train(rank_zero_logger, dist):
     writer.close()
 
 
-def Test(rank_zero_logger):
+def Test(rank_zero_logger, dist):
     dataset = GraphDataset(
         mode="rollout",
         split=C.eval_split,

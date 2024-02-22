@@ -6,8 +6,11 @@
 
 - Find the matching torch-scatter version with torch and cuda version enabled: 
   - i.e. pip install torch-scatter -f `https://data.pyg.org/whl/torch-2.2.0%2Bcu121/torch_scatter-2.1.2%2Bpt22cu121-cp311-cp311-linux_x86_64.whl
-  - download other versions of torch_scatter from `https://data.pyg.org/whl/`.
-`
+    (replace the torch-scatter wheel with the matching cuda, torch version )
+  - torch-scatter installation guide: https://pypi.org/project/torch-scatter/
+  - wheels source: `https://data.pyg.org/whl/`
+
+
 - pip install tensorflow
 
   - test version: tensorflow-2.15.0.post1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -44,14 +47,18 @@ Currently default params:
 
 ## Test
 
-> python train.py --mode=eval_rollout --batch_size=1
---model_path={path to model trained ckpt} --noise_std=0
---output_path={path to store outputs} --data_path={preprocessed test data tfrecord}
+Change the params in constants.py for testing: 
 
-i.e.
-> python train.py --mode=eval_rollout --batch_size=1
---model_path=models/m2_lr6/model_loss-4.17E-06_step-1113000.pt
---noise_std=0 --output_path=rollouts/ --data_path=data/
+- mode: "eval_rollout"
+- batch_size: 1
+- noise_std: 0
+- model_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
+- output_path: {path to store outputs}, i.e. "rollouts/test240222"
+- data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
+
+Then run: 
+> python train.py 
+
 
 To generate visualization of the test result:
 
