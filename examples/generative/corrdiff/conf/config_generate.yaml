@@ -46,6 +46,10 @@ force_fp16: true
 num_writer_workers: 1
   # number of workers to use for writing file
   # To support multiple workers a threadsafe version of the netCDF library must be used
+use_torch_compile: True
+  # whether to use torch.compile on the diffusion model
+  # this will make the first time stamp generation very slow due to compilation overheads
+  # but will significantly speed up subsequent inference runs
 
 ## Data options
 train_data_path: /data/data2/2023-01-24-cwb-4years.zarr  #"s3://sw_climate_fno/nbrenowitz/2023-01-24-cwb-4years.zarr"  #"./train_data"
