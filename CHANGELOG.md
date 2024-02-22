@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The citation file.
 - Link to the CWA dataset.
 - ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
+- Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 
 ### Changed
