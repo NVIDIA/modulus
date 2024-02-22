@@ -14,5 +14,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .climate import ClimateDatapipe, ClimateDataSourceSpec
-from .era5_hdf5 import ERA5HDF5Datapipe
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ./outputs/
+
+# data configs
+data_dir: ./raw_dataset/cylinder_flow/cylinder_flow
+
+# training configs
+batch_size: 1
+epochs: 25
+num_training_samples: 400
+num_training_time_steps: 300
+lr: 0.0001
+lr_decay_rate: 0.9999991
+num_input_features: 6
+num_output_features: 3
+num_edge_features: 3
+
+# performance configs
+use_apex: True
+amp: False
+jit: False
+num_dataloader_workers: 4
+do_concat_trick: False
+num_processor_checkpoint_segments: 0
+recompute_activation: False
+
+# wandb configs
+wandb_mode: disabled
+watch_model: False
+
+ckpt_path: "./checkpoints"
