@@ -129,7 +129,7 @@ class Trainer():
         # for status bars
         self.print_to_screen = self.dist.rank == 0
 
-        if self.dist.device.type == "cuda" and False:
+        if self.dist.device.type == "cuda":
             capture_stream = torch.cuda.Stream()
             if torch.distributed.is_initialized():
                 with torch.cuda.stream(capture_stream):
