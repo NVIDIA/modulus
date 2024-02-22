@@ -89,7 +89,7 @@ def training_loop(
     N_grid_channels=4,
     normalization="v1",
     wandb_mode="disabled",
-    regression_checkpoint_path=None
+    regression_checkpoint_path=None,
 ):
     """CorrDiff training loop"""
 
@@ -194,7 +194,9 @@ def training_loop(
     logger0.info("Setting up optimizer...")
     if task == "diffusion":
         if regression_checkpoint_path is None:
-            raise FileNotFoundError("Need to specify regression_checkpoint_path for training the diffusion model")
+            raise FileNotFoundError(
+                "Need to specify regression_checkpoint_path for training the diffusion model"
+            )
         net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
         interface_kwargs = dict(regression_net=net_reg)

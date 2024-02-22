@@ -47,12 +47,14 @@ def main(cfg: DictConfig) -> None:
     """
 
     # Sanity check
-    if not hasattr(cfg, 'task'):
-        raise ValueError("Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>")
+    if not hasattr(cfg, "task"):
+        raise ValueError(
+            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
+        )
 
     # Dump the configs
     os.makedirs(cfg.outdir, exist_ok=True)
-    OmegaConf.save(cfg, os.path.join(cfg.outdir ,"config.yaml"))
+    OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
 
     # Parse options
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
