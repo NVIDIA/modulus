@@ -23,7 +23,7 @@
 
 Usage (from parent directory):
 
-`python -m learning_to_simulate.render_rollout --rollout_path={OUTPUT_PATH}/rollout_test_1.pkl`
+`python -m learning_to_simulate.render_rollout --rollout_path={OUTPUT_PATH}/rollout_test_1.json`
 
 Where {OUTPUT_PATH} is the output path passed to `train.py` in "eval_rollout"
 mode.
@@ -34,17 +34,23 @@ It may require installing Tkinter with `sudo apt-get install python3.7-tk`.
 
 import os, json
 import numpy as np
-
 from absl import app
-
-# from absl import flags
 
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d.axes3d as p3
 from matplotlib import animation
 
+from modulus.distributed.manager import DistributedManager
+from modulus.launch.logging import (
+    LaunchLogger,
+    PythonLogger,
+    initialize_wandb,
+    initialize_mlflow,
+    RankZeroLoggingWrapper,
+)
 
 from constants import Constants
+
 
 C = Constants()
 
@@ -379,22 +385,33 @@ def plot_mean_error_temperature(rollout_data, metadata, plot_steps, build_name):
 
 
 def main(unused_argv):
+    """
+    Read from the prediction output, which is saved in rollout_path, i.e. rollouts/rollout_test_0.json
+        initial_positions.shape:(time_Step_size for init input, partical_size, dim), i.e.(5, 1394, 3)
+        predicted_rollout.shape:(time_Step_size for predicted steps, partical_size, dim), i.e.(29, 1394, 3)
+        ground_truth_rollout.shape:(time_Step_size for GT steps, partical_size, dim), i.e.(29, 1394, 3)
+    """
+    # initialize distributed manager
+    DistributedManager.initialize()
+    dist = DistributedManager()
+    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
+
     if not C.rollout_path:
         raise ValueError("A `rollout_path` must be passed.")
     with open(C.rollout_path, "rb") as file:
         rollout_data = json.load(file)
 
-    print("load metadata from path: ", os.path.join(C.metadata_path, "metadata.json"))
-    with open(os.path.join(C.metadata_path, "metadata.json"), "r") as f:
+    metadata_path_json = os.path.join(C.metadata_path, "metadata.json")
+    rank_zero_logger.info(f"load metadata from path: {metadata_path_json}")
+    print("load metadata from path: ", metadata_path_json)
+    with open(metadata_path_json, "r") as f:
         metadata = json.load(f)
 
     pos_mean = metadata["pos_mean"]
     pos_std = metadata["pos_std"]
-    print("load from the metadata partical position mean/ std: ", pos_mean, pos_std)
+    rank_zero_logger.info(f"load from the metadata partical position mean={pos_mean}/ std={pos_std}")
 
     # after transpose, vector shape
-    # initial_positions.shape:(time_Step_size for init input, partical_size, dim), i.e.(5, 1394, 3)
-    # predicted_rollout.shape:(time_Step_size, partical_size, dim), i.e.(29, 1394, 3)
     initial_positions = np.asarray((rollout_data["initial_positions"]))
     predicted_rollout = np.asarray((rollout_data["predicted_rollout"]))
     ground_truth_rollout = np.asarray((rollout_data["ground_truth_rollout"]))
@@ -404,11 +421,13 @@ def main(unused_argv):
 
     # metadata recorded sequence_length = len(initial_positions) + len(predicted_rollout) -1
     seq_len = metadata["sequence_length"]
-    print("initial steps #=", len(initial_positions))
-    print("pred steps #=", len(predicted_rollout))
+    rank_zero_logger.info(f"initial steps #= {len(initial_positions)}")
+    rank_zero_logger.info(f"pred steps #= {len(predicted_rollout)}")
     n = len(predicted_rollout)
 
+    # Compute prediction accuracy if ground-truth data available
     for i in range(n):
+        # Denormalize with saved metadata
         gt_step = ground_truth_rollout[i]
         gt_step = pos_std * gt_step + pos_mean
 
@@ -423,9 +442,9 @@ def main(unused_argv):
         mse = np.mean(mse0)
         me = np.mean(me0)
         # print(f"ground truth: {A}, me: {me}")
+        rank_zero_logger.info(f"{i} step, me: {me}, mse: {mse}")
 
-        print(f"{i} step, me: {me}, mse: {mse}")
-
+    # Compute the entire sintering profile prediction accuracy
     gt_seq = ground_truth_rollout[:n, ...]
     gt_seq = pos_std * gt_seq + pos_mean
 
@@ -433,12 +452,12 @@ def main(unused_argv):
     pred_seq = pos_std * pred_seq + pos_mean
     diff_seq = gt_seq - pred_seq
     diff_seq = diff_seq.reshape((-1, 3))
-    mse0 = np.square(C)
-    me0 = np.absolute(C)
+    mse0 = np.square(diff_seq)
+    me0 = np.absolute(diff_seq)
 
     mse = np.mean(mse0)
     me = np.mean(me0)
-    print(f"rollout shape: {gt_seq.shape}, total me: {me}")
+    rank_zero_logger.info(f"rollout shape: {gt_seq.shape}, total me: {me}")
 
     ############ PLOT ############
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -468,4 +487,8 @@ def main(unused_argv):
 
 
 if __name__ == "__main__":
+    LaunchLogger.initialize()  # Modulus launch logger
+    logger = PythonLogger("main")  # General python logger
+    logger.file_logging()
+
     app.run(main)

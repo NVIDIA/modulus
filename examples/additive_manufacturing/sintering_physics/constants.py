@@ -29,7 +29,7 @@ class Constants(BaseModel):
     """Virtual Foundry (Digital Sintering) Graphnet constants"""
 
     # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval', 'eval_rollout']
-    mode: str = "eval_rollout"
+    mode: str = "train"
     # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
     eval_split: str = "test"
 
@@ -41,13 +41,13 @@ class Constants(BaseModel):
     num_steps: int = int(2e7)
     eval_steps: int = 1
     # default 6.7e-4, for eval, set noise_std=0
-    noise_std: float = 0
+    noise_std: float = 1e-9
     # loss type options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
     loss: str = "standard"
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    model_path_vfgn: str = "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
+    model_path_vfgn: str = "models/test"
     # The path for saving outputs (e.g. rollouts).
     output_path: str = "rollouts/test24"
     prefetch_buffer_size: int = 100
@@ -69,7 +69,7 @@ class Constants(BaseModel):
     # Rollout settings
     # "Path to rollout pickle file"
     # todo: change to json
-    rollout_path: str = "rollouts/rollout_test_0.pkl"
+    rollout_path: str = "rollouts/rollout_test_0.json"
     metadata_path: str = "./data/test_validation"
     step_stride: int = 3
     block_on_show: bool = True

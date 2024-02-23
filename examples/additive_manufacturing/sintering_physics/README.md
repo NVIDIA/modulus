@@ -49,6 +49,7 @@ Currently default params:
 - INPUT_SEQUENCE_LENGTH = 5
 - PREDICT_LENGTH = 1
 - NUM_PARTICLE_TYPES = 3
+- Provided ckpt trained at every 100 step of Physcis sintering simulation data
 
 ## Test
 
@@ -69,16 +70,14 @@ Then run:
 > python train.py 
 
 
-To generate visualization of the test result:
+## To generate visualization of the test result:
 
-> python  render_rollout.py --rollout_path={selected predicted .pkl}
---metadata_path={metadata path} --test_build={test file name}
+- rollout_path={selected_prediction_output.json}, i.e. "rollouts/rollout_test_0.json"
+- metadata_path={metadata path}, i.e. "./data/test_validation"
+- test_build={test file name}, i.e. "test0"
 
-i.e.
-> python render_rollout.py --rollout_path=rollouts/rollout_test_2.pkl
---metadata_path=data --test_build=2
+> python  render_rollout.py
 
-(100 step model)/home/chenle/data/large-time-step
 
 ## Data
 
