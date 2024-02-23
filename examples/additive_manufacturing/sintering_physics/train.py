@@ -479,6 +479,7 @@ def Train(rank_zero_logger, dist):
 def Test(rank_zero_logger, dist):
     # config test dataset
     dataset = GraphDataset(
+        # size=C.num_steps,
         mode="rollout",
         split=C.eval_split,
         data_path=C.data_path,

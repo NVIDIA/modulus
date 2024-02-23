@@ -231,8 +231,15 @@ class GraphDataset:
         self.dataset = get_input_fn(
             data_path, batch_size, prefetch_buffer_size, mode=mode, split=split
         )()
-        # self.size = len(list(self.dataset))
-        self.size = size
+
+        if mode == "rollout":
+            # test with test data size:
+            self.size = len(list(self.dataset))
+        else:
+            # train
+            self.size = size
+        print("checked ds size: ", mode, self.size)
+
         self.dataset = iter(self.dataset)
         self.pos = 0
 
