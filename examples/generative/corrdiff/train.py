@@ -232,7 +232,6 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Patch-based training enabled")
     else:
         logger0.info("Patch-based training disabled")
-    
 
     # Training options.
     c.total_kimg = max(int(duration * 1000), 1)

@@ -136,8 +136,6 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown sampling method {sampling_method}")
 
-
-        
     # Initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -159,7 +157,7 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
-        
+
     logger0.info(f"Train data path: {train_data_path}")
     dataset, sampler = get_dataset_and_sampler(
         path=train_data_path,  # TODO check if this should be train data path

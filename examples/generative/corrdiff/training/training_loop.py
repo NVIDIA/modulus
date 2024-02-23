@@ -175,8 +175,8 @@ def training_loop(
     )
 
     img_in_channels = len(in_channels)  # noise + low-res input
-    if img_shape_x!=patch_shape_x or img_shape_y!=patch_shape_y:
-        img_in_channels *= 2 # add global maps for patch-based model
+    if img_shape_x != patch_shape_x or img_shape_y != patch_shape_y:
+        img_in_channels *= 2  # add global maps for patch-based model
     if add_grid:
         img_in_channels = img_in_channels + N_grid_channels
 
@@ -204,13 +204,14 @@ def training_loop(
             )
         net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
-        interface_kwargs = dict(regression_net=net_reg,
-                                img_shape_x = img_shape_x,
-                                img_shape_y = img_shape_y,
-                                patch_shape_x = patch_shape_x,
-                                patch_shape_y = patch_shape_y,
-                                patch_num = patch_num
-                                )
+        interface_kwargs = dict(
+            regression_net=net_reg,
+            img_shape_x=img_shape_x,
+            img_shape_y=img_shape_y,
+            patch_shape_x=patch_shape_x,
+            patch_shape_y=patch_shape_y,
+            patch_num=patch_num,
+        )
         logger0.success("Loaded the pre-trained regression network")
     else:
         interface_kwargs = {}
