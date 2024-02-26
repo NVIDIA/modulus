@@ -20,6 +20,10 @@ import numpy as np
 import time, os
 import wandb as wb
 
+import hydra
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
+
 try:
     import apex
 except:
@@ -42,12 +46,8 @@ from modulus.launch.logging import (
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from utils import relative_lp_error, get_dataset
-from constants import Constants
 
 from collections import OrderedDict
-
-# Instantiate constants
-C = Constants()
 
 from sympy import Symbol, Function, Number
 from modulus.sym.eq.pde import PDE
@@ -434,7 +434,8 @@ class PhysicsInformedFineTuner:
             return error_u, error_v, error_p
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     # CUDA support
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -447,14 +448,14 @@ if __name__ == "__main__":
         entity="Modulus",
         name="Stokes-Physics-Informed-Fine-Tuning",
         group="Stokes-DDP-Group",
-        mode=C.wandb_mode,
+        mode=cfg.wandb_mode,
     )
 
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
     # Get dataset
-    path = os.path.join(C.results_dir, C.graph_path)
+    path = os.path.join(to_absolute_path(cfg.results_dir), cfg.graph_path)
 
     # get_dataset() function here provides the true values (ref_*) and the gnn
     # predictions (gnn_*) along with other data required for the PINN training.
@@ -491,7 +492,7 @@ if __name__ == "__main__":
     )
 
     logger.info("Inference (with physics-informed training for fine-tuning) started...")
-    for iters in range(C.pi_iters):
+    for iters in range(cfg.pi_iters):
         # Start timing the iteration
         start_iter_time = time.time()
 
@@ -564,3 +565,7 @@ if __name__ == "__main__":
         polydata.save(path)
 
     logger.info("Inference completed!")
+
+
+if __name__ == "__main__":
+    main()
