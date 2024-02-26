@@ -14,12 +14,12 @@ def export_diagnostic_e2mip(
     datapipe: ClimateDatapipe,
     in_source: ClimateDataSourceSpec,
     out_source: ClimateDataSourceSpec,
-    extra_in_variables: Union[List[str],None]=None,
-    extra_out_variables: Union[List[str],None]=None,
-    model_name: Union[str,None]=None
+    extra_in_variables: Union[List[str], None] = None,
+    extra_out_variables: Union[List[str], None] = None,
+    model_name: Union[str, None] = None,
 ):
     """Convert a diagnostic model module into an Earth-2 MIP model package."""
-    
+
     # automatically add extra variables from datapipe
     use_latlon = "sincos_latlon" in datapipe.invariants
     add_extra_variables = {
@@ -50,10 +50,14 @@ def export_diagnostic_e2mip(
         model_name = model.meta.name
 
     _create_e2mip_package(
-        out_dir, model_name, model,
-        in_channel_names, out_channel_names, grid_shape=grid_shape,
+        out_dir,
+        model_name,
+        model,
+        in_channel_names,
+        out_channel_names,
+        grid_shape=grid_shape,
         input_stats={"mean": in_source.mu, "std": in_source.sd},
-        output_stats={"mean": out_source.mu, "std": out_source.sd}
+        output_stats={"mean": out_source.mu, "std": out_source.sd},
     )
 
 
@@ -63,9 +67,9 @@ def _create_e2mip_package(
     model,
     in_channel_names,
     out_channel_names,
-    grid_shape=(720,1440),
+    grid_shape=(720, 1440),
     input_stats=None,
-    output_stats=None
+    output_stats=None,
 ):
     model_dir = os.path.join(out_dir, model_name)
     os.makedirs(model_dir, exist_ok=True)
@@ -76,10 +80,10 @@ def _create_e2mip_package(
     metadata = {
         "grid": "x".join(str(n) for n in grid_shape),
         "in_channel_names": in_channel_names,
-        "out_channel_names": out_channel_names
+        "out_channel_names": out_channel_names,
     }
     metadata_fn = os.path.join(model_dir, "metadata.json")
-    with open(metadata_fn, 'w') as f:
+    with open(metadata_fn, "w") as f:
         json.dump(metadata, f, indent=2)
 
     if input_stats is not None:

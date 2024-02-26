@@ -9,23 +9,21 @@ from modulus.distributed import DistributedManager
 
 
 def setup_datapipes(
-        train_specs: Iterable[ClimateDataSourceSpec],
-        valid_specs: Iterable[ClimateDataSourceSpec],
-        dist_manager: DistributedManager,
-        geopotential_filename: Union[str, None] = None,
-        geopotential_variable: str = "Z",
-        lsm_filename: Union[str, None] = None,
-        lsm_variable: str = "LSM",
-        use_latlon: bool = True,
-        num_samples_per_year_train: int = 1456,
-        num_samples_per_year_valid: int = 4,
-        batch_size_train: int = 2, # TODO: enable setting global batch size
-        batch_size_valid: Union[int, None] = None,
-        crop_window: Union[
-            Tuple[Tuple[float, float], Tuple[float, float]], None
-        ] = None,
-        num_workers: int = 8,
-    ):
+    train_specs: Iterable[ClimateDataSourceSpec],
+    valid_specs: Iterable[ClimateDataSourceSpec],
+    dist_manager: DistributedManager,
+    geopotential_filename: Union[str, None] = None,
+    geopotential_variable: str = "Z",
+    lsm_filename: Union[str, None] = None,
+    lsm_variable: str = "LSM",
+    use_latlon: bool = True,
+    num_samples_per_year_train: int = 1456,
+    num_samples_per_year_valid: int = 4,
+    batch_size_train: int = 2,  # TODO: enable setting global batch size
+    batch_size_valid: Union[int, None] = None,
+    crop_window: Union[Tuple[Tuple[float, float], Tuple[float, float]], None] = None,
+    num_workers: int = 8,
+):
     if batch_size_valid is None:
         batch_size_valid = batch_size_train
 
@@ -45,7 +43,7 @@ def setup_datapipes(
         "crop_window": crop_window,
         "invariants": invariants,
         "num_workers": num_workers,
-        "device": dist_manager.device
+        "device": dist_manager.device,
     }
 
     train_datapipe = ClimateDatapipe(
@@ -54,7 +52,7 @@ def setup_datapipes(
         batch_size=batch_size_train,
         process_rank=dist_manager.rank,
         world_size=dist_manager.world_size,
-        **datapipe_kwargs
+        **datapipe_kwargs,
     )
 
     valid_datapipe = ClimateDatapipe(
@@ -62,7 +60,7 @@ def setup_datapipes(
         num_samples_per_year=num_samples_per_year_valid,
         batch_size=1,
         shuffle=False,
-        **datapipe_kwargs
+        **datapipe_kwargs,
     )
 
     return (train_datapipe, valid_datapipe)
@@ -72,34 +70,27 @@ def data_source_specs(
     state_params: dict,
     diag_params: dict,
     train_dir: str = "train",
-    valid_dir: str = "test"
+    valid_dir: str = "test",
 ):
     """Initialize data source specs for both training and validation."""
-    state_dir = state_params.pop('data_dir')
-    diag_dir = diag_params.pop('data_dir')
+    state_dir = state_params.pop("data_dir")
+    diag_dir = diag_params.pop("data_dir")
 
     state_train_spec = ClimateDataSourceSpec(
-        data_dir=os.path.join(state_dir, train_dir),
-        **state_params
+        data_dir=os.path.join(state_dir, train_dir), **state_params
     )
     diag_train_spec = ClimateDataSourceSpec(
-        data_dir=os.path.join(diag_dir, train_dir),
-        **diag_params
+        data_dir=os.path.join(diag_dir, train_dir), **diag_params
     )
 
     state_valid_spec = ClimateDataSourceSpec(
-        data_dir=os.path.join(state_dir, valid_dir),
-        **state_params
+        data_dir=os.path.join(state_dir, valid_dir), **state_params
     )
     diag_valid_spec = ClimateDataSourceSpec(
-        data_dir=os.path.join(diag_dir, valid_dir),
-        **diag_params
+        data_dir=os.path.join(diag_dir, valid_dir), **diag_params
     )
 
-    return (
-        [state_train_spec, diag_train_spec],
-        [state_valid_spec, diag_valid_spec]
-    )
+    return ([state_train_spec, diag_train_spec], [state_valid_spec, diag_valid_spec])
 
 
 def batch_converter(
@@ -115,7 +106,7 @@ def batch_converter(
     diag_name = diag_spec.name
 
     @torch.no_grad()
-    def _input_output_from_batch_data(batch):        
+    def _input_output_from_batch_data(batch):
         batch = batch[0]
 
         # concatenate all input variables to a single tensor
@@ -129,12 +120,12 @@ def batch_converter(
         if "land_sea_mask" in datapipe.invariants:
             state.append(torch.unsqueeze(batch["land_sea_mask"], dim=1))
         state = torch.cat(state, dim=2)
-        state = torch.squeeze(state, dim=1) # drop time dimension
+        state = torch.squeeze(state, dim=1)  # drop time dimension
 
-        diag = batch[f'state_seq-{diag_name}']
-        diag = torch.squeeze(diag, dim=1) # drop time dimension
+        diag = batch[f"state_seq-{diag_name}"]
+        diag = torch.squeeze(diag, dim=1)  # drop time dimension
         if diag_norm is not None:
-            diag = diag_norm.normalize(diag) # custom normalization
+            diag = diag_norm.normalize(diag)  # custom normalization
 
         return (state, diag)
 

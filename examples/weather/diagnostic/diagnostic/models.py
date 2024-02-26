@@ -13,19 +13,16 @@ default_model_params = {
     }
 }
 
+
 def setup_model(
-    model_type: str = "afno",
-    model_name: Union[str,None] = None,
-    **model_cfg
+    model_type: str = "afno", model_name: Union[str, None] = None, **model_cfg
 ) -> Module:
     """Setup model from config dict."""
     model_kwargs = default_model_params[model_type].copy()
     model_kwargs.update(model_cfg)
 
     if model_type == "afno":
-        model = AFNO(
-            **model_kwargs
-        )
+        model = AFNO(**model_kwargs)
     # TODO: add other model types
 
     if model_name is not None:

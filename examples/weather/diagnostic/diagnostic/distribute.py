@@ -13,7 +13,7 @@ def distribute_model(model: Module) -> Tuple[Module, DistributedManager]:
     ----------
     model: modulus.Module
         The model to be distributed
-    
+
     Returns
     -------
     (model: modulus.Module, dist: modulus.distributed.DistributedManager)

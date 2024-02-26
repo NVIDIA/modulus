@@ -3,6 +3,7 @@ import warnings
 
 import torch
 from torch import Tensor
+
 try:
     from apex.optimizers import FusedAdam
 except ImportError:
@@ -19,23 +20,23 @@ class Trainer:
     """Training loop for diagnostic models."""
 
     def __init__(
-            self,
-            model: Module,
-            dist_manager: DistributedManager,
-            loss: Callable,
-            train_datapipe: Sequence,
-            valid_datapipe: Sequence,
-            input_output_from_batch_data: Union[Callable,None] = None,
-            optimizer: Union[Type[torch.optim.Optimizer], None] = None,
-            optimizer_params: Union[dict,None] = None,
-            scheduler: Union[Type[torch.optim.lr_scheduler.LRScheduler], None] = None,
-            scheduler_params: Union[dict,None] = None,
-            max_epoch: int = 1,
-            load_epoch: Union[int,str,None] = None,
-            checkpoint_every: int = 1,
-            checkpoint_dir: Union[str,None] = None,
-            validation_callbacks: Iterable[Callable] = ()
-        ):
+        self,
+        model: Module,
+        dist_manager: DistributedManager,
+        loss: Callable,
+        train_datapipe: Sequence,
+        valid_datapipe: Sequence,
+        input_output_from_batch_data: Union[Callable, None] = None,
+        optimizer: Union[Type[torch.optim.Optimizer], None] = None,
+        optimizer_params: Union[dict, None] = None,
+        scheduler: Union[Type[torch.optim.lr_scheduler.LRScheduler], None] = None,
+        scheduler_params: Union[dict, None] = None,
+        max_epoch: int = 1,
+        load_epoch: Union[int, str, None] = None,
+        checkpoint_every: int = 1,
+        checkpoint_dir: Union[str, None] = None,
+        validation_callbacks: Iterable[Callable] = (),
+    ):
         self.model = model
         self.dist_manager = dist_manager
         self.loss = loss
@@ -46,10 +47,10 @@ class Trainer:
             input_output_from_batch_data = lambda x: x
         self.input_output_from_batch_data = input_output_from_batch_data
         self.optimizer = self._setup_optimizer(
-            opt_cls=optimizer, opt_params=optimizer_params)
+            opt_cls=optimizer, opt_params=optimizer_params
+        )
         self.lr_scheduler = self._setup_lr_scheduler(
-            scheduler_cls=scheduler,
-            scheduler_params=scheduler_params
+            scheduler_cls=scheduler, scheduler_params=scheduler_params
         )
         self.validation_callbacks = list(validation_callbacks)
         self.device = self.dist_manager.device
@@ -60,7 +61,7 @@ class Trainer:
         self.epoch = 1
         if load_epoch is not None:
             epoch = None if load_epoch == "latest" else load_epoch
-            self.load_checkpoint(epoch=epoch)        
+            self.load_checkpoint(epoch=epoch)
 
         # wrap capture here instead of using decorator so it'll still be wrapped if
         # overridden by a subclass
@@ -68,13 +69,11 @@ class Trainer:
             model=self.model,
             optim=self.optimizer,
             logger=self.logger,
-            use_graphs=False # for some reason use_graphs=True causes a crash
+            use_graphs=False,  # for some reason use_graphs=True causes a crash
         )(self.train_step_forward)
 
         self.eval_step = StaticCaptureEvaluateNoGrad(
-            model=self.model,
-            logger=self.logger,
-            use_graphs=False
+            model=self.model, logger=self.logger, use_graphs=False
         )(self.eval_step)
 
     def eval_step(self, invar: Tensor) -> Tensor:
@@ -88,7 +87,7 @@ class Trainer:
 
     def fit(self):
         """Main function for training loop."""
-        for self.epoch in range(self.epoch, self.max_epoch+1):
+        for self.epoch in range(self.epoch, self.max_epoch + 1):
             self.train_on_epoch()
 
         if self.dist_manager.rank == 0:
@@ -97,10 +96,12 @@ class Trainer:
     def train_on_epoch(self):
         """Train for one epoch."""
         with LaunchLogger(
-            "train", epoch=self.epoch,
-            num_mini_batch=len(self.train_datapipe), epoch_alert_freq=10
+            "train",
+            epoch=self.epoch,
+            num_mini_batch=len(self.train_datapipe),
+            epoch_alert_freq=10,
         ) as log:
-            for batch in self.train_datapipe:                
+            for batch in self.train_datapipe:
                 loss = self.train_step_forward(
                     *self.input_output_from_batch_data(batch)
                 )
@@ -119,11 +120,8 @@ class Trainer:
 
         self.lr_scheduler.step()
 
-        checkpoint_epoch = (
-            (self.checkpoint_dir is not None) and (
-                (self.epoch % self.checkpoint_every == 0) or
-                (self.epoch == self.max_epoch)
-            )
+        checkpoint_epoch = (self.checkpoint_dir is not None) and (
+            (self.epoch % self.checkpoint_every == 0) or (self.epoch == self.max_epoch)
         )
         if checkpoint_epoch and self.dist_manager.rank == 0:
             # Save Modulus Launch checkpoint
@@ -153,7 +151,7 @@ class Trainer:
 
                 for callback in self.validation_callbacks:
                     callback(outvar_true, outvar_pred, epoch=self.epoch, batch_idx=i)
-        finally: # restore train state even if exception occurs
+        finally:  # restore train state even if exception occurs
             model.train()
         return loss_epoch / num_examples
 
@@ -166,7 +164,7 @@ class Trainer:
         if opt_cls is None:
             try:
                 opt_cls = FusedAdam
-            except NameError: # in case we don't have apex
+            except NameError:  # in case we don't have apex
                 opt_cls = torch.optim.AdamW
 
         return opt_cls(self.model.parameters(), **opt_kwargs)
@@ -184,7 +182,7 @@ class Trainer:
 
     def load_checkpoint(self, epoch: Union[int, None] = None) -> int:
         """Load training state from checkpoint.
-        
+
         Parameters
         ----------
         epoch: int or None, optional
@@ -192,29 +190,25 @@ class Trainer:
             latest epoch.
         """
         if self.checkpoint_dir is None:
-            raise ValueError(
-                "checkpoint_dir must be set in order to load checkpoints."
-            )
+            raise ValueError("checkpoint_dir must be set in order to load checkpoints.")
         self.epoch = load_checkpoint(
             self.checkpoint_dir,
             models=self.model,
             optimizer=self.optimizer,
             scheduler=self.lr_scheduler,
             device=self.device,
-            epoch=epoch
+            epoch=epoch,
         )
         return self.epoch
 
     def save_checkpoint(self):
         """Save training state from checkpoint."""
         if self.checkpoint_dir is None:
-            raise ValueError(
-                "checkpoint_dir must be set in order to save checkpoints."
-            )
+            raise ValueError("checkpoint_dir must be set in order to save checkpoints.")
         save_checkpoint(
             self.checkpoint_dir,
             models=self.model,
             optimizer=self.optimizer,
             scheduler=self.lr_scheduler,
-            epoch=self.epoch
+            epoch=self.epoch,
         )

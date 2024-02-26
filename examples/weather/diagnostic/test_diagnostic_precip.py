@@ -8,23 +8,27 @@ import torch
 from diagnostic import data, distribute, loss, models, precip, train
 
 
-@hydra.main(version_base=None, config_path="config", config_name="diagnostic_precip.yaml")
+@hydra.main(
+    version_base=None, config_path="config", config_name="diagnostic_precip.yaml"
+)
 def main(cfg):
     test_diagnostic(**OmegaConf.to_container(cfg))
 
 
-def test_diagnostic(**cfg):    
+def test_diagnostic(**cfg):
     # setup model
     model = models.setup_model(**cfg["model"])
     (model, dist_manager) = distribute.distribute_model(model)
 
     # setup datapipes
     (train_specs, valid_specs) = data.data_source_specs(
-        cfg["sources"]["state_params"], cfg["sources"]["diag_params"],
-        valid_dir="out_of_sample"
+        cfg["sources"]["state_params"],
+        cfg["sources"]["diag_params"],
+        valid_dir="out_of_sample",
     )
-    cfg["datapipe"]["num_samples_per_year_valid"] = \
-        cfg["datapipe"]["num_samples_per_year_train"] # validate on entire year
+    cfg["datapipe"]["num_samples_per_year_valid"] = cfg["datapipe"][
+        "num_samples_per_year_train"
+    ]  # validate on entire year
     (train_datapipe, valid_datapipe) = data.setup_datapipes(
         train_specs,
         valid_specs,
@@ -40,8 +44,8 @@ def test_diagnostic(**cfg):
     # setup loss
     loss_func = loss.GeometricL2Loss(
         lat_indices_used=train_datapipe.crop_window[0]
-    ) # TODO: this should be configurable
-    loss_func = loss_func.to(device=dist_manager.device) 
+    )  # TODO: this should be configurable
+    loss_func = loss_func.to(device=dist_manager.device)
 
     # conversion from datapipe format to (input, target) tuples
     batch_conv = data.batch_converter(
@@ -57,23 +61,24 @@ def test_diagnostic(**cfg):
         valid_datapipe=valid_datapipe,
         input_output_from_batch_data=batch_conv,
         validation_callbacks=[rmse_callback],
-        **cfg["training"]
+        **cfg["training"],
     )
 
     # evaluate model
     trainer.validate_on_epoch()
-    
+
     # save results
     rmse = rmse_callback.value().cpu().numpy()
 
     os.makedirs("./results", exist_ok=True)
-    np.save("./results/rmse.npy", rmse) # TODO: should be configurable
+    np.save("./results/rmse.npy", rmse)  # TODO: should be configurable
 
 
 class RMSECallback:
     """Callable that keeps track of RMS error.
     Can be used in `Trainer.validation_callbacks`.
     """
+
     def __init__(self, device, mean=None, std=None):
         self.mse = None
         self.n_samples = 0
@@ -86,18 +91,18 @@ class RMSECallback:
             outvar_true = outvar_true * self.std + self.mean
             outvar_pred = outvar_pred * self.std + self.mean
 
-        # compute squared difference        
-        sqr_diff = torch.square(outvar_true-outvar_pred)
+        # compute squared difference
+        sqr_diff = torch.square(outvar_true - outvar_pred)
         batch_size = sqr_diff.shape[0]
-        avg_axes = tuple(range(sqr_diff.ndim-2))
+        avg_axes = tuple(range(sqr_diff.ndim - 2))
         sqr_diff = torch.mean(sqr_diff, axis=avg_axes)
 
         # accumulate MSE
         if self.mse is None:
             self.mse = sqr_diff
         else:
-            old_weight = self.n_samples/(self.n_samples+batch_size)
-            new_weight = 1-old_weight
+            old_weight = self.n_samples / (self.n_samples + batch_size)
+            new_weight = 1 - old_weight
             self.mse = old_weight * self.mse + new_weight * sqr_diff
         self.n_samples += batch_size
 

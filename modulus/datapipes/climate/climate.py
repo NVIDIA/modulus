@@ -126,7 +126,7 @@ class ClimateDataSourceSpec:
         aux_variables: Union[Mapping[str, Callable], None] = None,
         num_steps: int = 1,
         stride: int = 1,
-        backend_kwargs: Union[dict, None] = None
+        backend_kwargs: Union[dict, None] = None,
     ):
         self.data_dir = Path(data_dir)
         self.name = name
@@ -673,7 +673,7 @@ class ClimateDaliExternalSource(ABC):
         shuffle: bool = True,
         process_rank: int = 0,
         world_size: int = 1,
-        backend_kwargs: Union[dict, None] = None
+        backend_kwargs: Union[dict, None] = None,
     ):
         self.data_paths = list(data_paths)
         # Will be populated later once each worker starts running in its own process.
@@ -782,11 +782,13 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             # Lazy opening avoids unnecessary file open ops when sharding.
             # NOTE: The SciPy NetCDF reader can be used if the netCDF4 library
             # causes crashes.
-            reader = self.backend_kwargs.get('reader', 'netcdf4')
-            if reader == 'scipy':
-                self.data_files[year_idx] = scipy.io.netcdf_file(self.data_paths[year_idx])
-            elif reader == 'netcdf4':
-                self.data_files[year_idx] = nc.Dataset(self.data_paths[year_idx], 'r')
+            reader = self.backend_kwargs.get("reader", "netcdf4")
+            if reader == "scipy":
+                self.data_files[year_idx] = scipy.io.netcdf_file(
+                    self.data_paths[year_idx]
+                )
+            elif reader == "netcdf4":
+                self.data_files[year_idx] = nc.Dataset(self.data_paths[year_idx], "r")
                 self.data_files[year_idx].set_auto_maskandscale(False)
 
         return self.data_files[year_idx]
@@ -802,8 +804,8 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             output[:, i] = v[
                 idx : idx + self.num_steps * self.stride : self.stride
             ].copy()  # .copy() avoids hanging references
-            if hasattr(v, 'scale_factor'):
+            if hasattr(v, "scale_factor"):
                 output[:, i] *= v.scale_factor
-            if hasattr(v, 'add_offset'):
+            if hasattr(v, "add_offset"):
                 output[:, i] += v.add_offset
         return output
