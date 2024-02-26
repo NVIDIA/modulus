@@ -92,6 +92,10 @@ def main(cfg: DictConfig) -> None:
     out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
     img_shape_x = getattr(cfg, "img_shape_x", 448)
     img_shape_y = getattr(cfg, "img_shape_y", 448)
+    patch_shape_x = getattr(cfg, "patch_shape_x", 448)
+    patch_shape_y = getattr(cfg, "patch_shape_y", 448)
+    overlap_pix = getattr(cfg, "overlap_pix", 0)
+    boundary_pix = getattr(cfg, "boundary_pix", 2)
     roll = getattr(cfg, "roll", False)
     add_grid = getattr(cfg, "add_grid", True)
     ds_factor = getattr(cfg, "ds_factor", 1)
@@ -109,7 +113,12 @@ def main(cfg: DictConfig) -> None:
 
     # Sampler kwargs
     if sampling_method == "stochastic":
-        sampler_kwargs = {}
+        sampler_kwargs = {
+            "img_shape": img_shape_x,
+            "patch_shape": patch_shape_x,
+            "overlap_pix": overlap_pix,
+            "boundary_pix": boundary_pix,
+        }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
             "sigma_min": sigma_min,
@@ -135,6 +144,19 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger("generate")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging("generate.log")
+
+    if patch_shape_x != patch_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a factor of 32")
+    if patch_shape_x > img_shape_x:
+        patch_shape_x = img_shape_x
+    if patch_shape_y > img_shape_y:
+        patch_shape_y = img_shape_y
+    if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
+        logger0.info("Patch-based generation enabled")
+    else:
+        logger0.info("Patch-based generation disabled")
 
     logger0.info(f"Train data path: {train_data_path}")
     dataset, sampler = get_dataset_and_sampler(
