@@ -306,14 +306,17 @@ class PhysicsInformedFineTuner:
         return u, v
 
     def loss(self):
+        # inflow points
         x_in, y_in = self.coords_inflow[:, 0:1], self.coords_inflow[:, 1:2]
         results_inflow = self.graph_full.forward({"x": x_in, "y": y_in})
         pred_u_in, pred_v_in = results_inflow["u"], results_inflow["v"]
 
+        # no-slip points
         x_no_slip, y_no_slip = self.coords_noslip[:, 0:1], self.coords_noslip[:, 1:2]
         results_noslip = self.graph_full.forward({"x": x_no_slip, "y": y_no_slip})
         pred_u_noslip, pred_v_noslip = results_noslip["u"], results_noslip["v"]
 
+        # interior points
         x_int, y_int = self.coords[:, 0:1], self.coords[:, 1:2]
         results_int = self.graph_full.forward({"x": x_int, "y": y_int})
         pred_mom_u, pred_mom_v, pred_cont = (
