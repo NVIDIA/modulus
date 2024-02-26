@@ -100,7 +100,6 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
         file_url = f"https://api.ngc.nvidia.com/v2/org/{org}/team/{team}/models/{model}/versions/{version}/files/{filename}"
     else:
         file_url = f"https://api.ngc.nvidia.com/v2/models/{org}/{team}/{model}/versions/{version}/files/{filename}"
-    local_url = f"{LOCAL_CACHE}/{filename}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     # Streaming here for larger files
     with requests.get(file_url, headers=headers, stream=True, timeout=timeout) as r:
@@ -109,20 +108,20 @@ def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> st
         chunk_size = 1024  # 1 kb
         progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
         progress_bar.set_description(f"Fetching {filename}")
-        with open(local_url, "wb") as f:
+        with open(out_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=chunk_size):
                 progress_bar.update(len(chunk))
                 f.write(chunk)
         progress_bar.close()
 
     # Unzip contents if zip file (most model files are)
-    if zipfile.is_zipfile(local_url):
-        with zipfile.ZipFile(local_url, "r") as zip_ref:
+    if zipfile.is_zipfile(out_path):
+        temp_path = out_path + ".zip"
+        os.rename(out_path, temp_path)
+        with zipfile.ZipFile(temp_path, "r") as zip_ref:
             zip_ref.extractall(out_path)
         # Clean up zip
-        os.remove(local_url)
-    else:
-        os.rename(local_url, out_path)
+        os.remove(temp_path)
 
     return out_path
 

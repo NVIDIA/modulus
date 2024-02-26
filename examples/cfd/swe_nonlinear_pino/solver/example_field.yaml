@@ -14,21 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: False
 
-
-defaults:
-  - config_train_base
-
-## Main options
-outdir: "./output_regression"   
-  # Where to save the results
-arch: ddpmpp-cwb-v0-regression
-  # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: unetregression
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: regression
-  # Which model to train [regression, diffusion]
-
+dim: 2                               # Number of dimensions
+num_samples: 1                       # Number of samples
+num_points: 128                      # Number of points
+length: 1.0                          # Length of domain
+length_scale: 0.1                    # Scale of typical spacial deviations
+sigma: 1.0                           # Amplitude of deviations
+nu: null                             # Smoothness parameter. Set to null for RBF Kernel
+mean: null                           # Mean value for distribution
+boundary_condition: "periodic"       # Boundary condition type 
+file: "example"                      # Base filename to save data
+plot: False                          # Plot first field
