@@ -19,39 +19,41 @@ import sys
 import torch
 import matplotlib.pyplot as plt
 
-from constants import Constants
 from modulus.datapipes.climate import ERA5HDF5Datapipe
 
-C = Constants()
+import hydra
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
 
 
 class Validation:
     """Run validation on GraphCast model"""
 
-    def __init__(self, model, dtype, dist, wb):
+    def __init__(self, cfg: DictConfig, model, dtype, dist, wb):
+        self.val_dir = to_absolute_path(cfg.val_dir)
         self.model = model
         self.dtype = dtype
         self.dist = dist
         self.wb = wb
         self.val_datapipe = ERA5HDF5Datapipe(
-            data_dir=os.path.join(C.dataset_path, "test"),
-            stats_dir=os.path.join(C.dataset_path, "stats"),
-            channels=[i for i in range(C.num_channels)],
-            num_steps=C.num_val_steps,
+            data_dir=os.path.join(cfg.dataset_path, "test"),
+            stats_dir=os.path.join(cfg.dataset_path, "stats"),
+            channels=[i for i in range(cfg.num_channels)],
+            num_steps=cfg.num_val_steps,
             batch_size=1,
-            num_samples_per_year=C.num_val_spy,
+            num_samples_per_year=cfg.num_val_spy,
             shuffle=False,
             device=self.dist.device,
             process_rank=self.dist.rank,
             world_size=self.dist.world_size,
-            num_workers=C.num_workers,
+            num_workers=cfg.num_workers,
         )
         print(f"Loaded validation datapipe of size {len(self.val_datapipe)}")
 
     @torch.no_grad()
     def step(self, channels=[0, 1, 2], iter=0):
         torch.cuda.nvtx.range_push("Validation")
-        os.makedirs(C.val_dir, exist_ok=True)
+        os.makedirs(self.val_dir, exist_ok=True)
         loss_epoch = 0
         for i, data in enumerate(self.val_datapipe):
             invar = data[0]["invar"].to(dtype=self.dtype)
@@ -109,7 +111,8 @@ class Validation:
 
                     fig.savefig(
                         os.path.join(
-                            C.val_dir, f"era5_validation_channel{chan}_iter{iter}.png"
+                            self.val_dir,
+                            f"era5_validation_channel{chan}_iter{iter}.png",
                         )
                     )
                     self.wb.log({f"val_chan{chan}_iter{iter}": fig}, step=iter)
