@@ -61,6 +61,10 @@ in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
 out_channels: [0, 17, 18, 19]
 img_shape_x: 448
 img_shape_y: 448
+patch_shape_x: 448
+patch_shape_y: 448
+overlap_pix: 4 
+boundary_pix: 2
 roll: false
 add_grid: true
 ds_factor: 4
@@ -73,9 +77,11 @@ N_grid_channels: 4
 normalization: "v1"
 times:
   - 2021-02-02T00:00:00
-  - 2021-02-07T07:00:00
-  - 2021-02-08T16:00:00
-  - 2021-02-09T20:00:00
+  - 2021-03-02T00:00:00
+  - 2021-04-02T00:00:00
+  # hurricane
+  - 2021-09-12T00:00:00
+  - 2021-09-12T12:00:00
 
 ## Deterministic sampler options
 sigma_min: null

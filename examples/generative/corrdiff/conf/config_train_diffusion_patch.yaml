@@ -34,3 +34,17 @@ task: diffusion
 ## I/O
 regression_checkpoint_path: checkpoints/regression.mdlus
   # Where to save the checkpoints
+
+## Hyperparameters
+batch: 2560
+  # Total batch size
+batch_gpu: 20
+  # Limit batch size per GPU
+
+patch_shape_x: 64
+patch_shape_y: 64
+patch_num: 10
+
+gridtype: "sinusoidal"
+N_grid_channels: 4
+normalization: "v1"
