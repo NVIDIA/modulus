@@ -18,7 +18,6 @@ import os
 
 import torch
 import numpy as np
-import wandb as wb
 
 import hydra
 from hydra.utils import to_absolute_path
@@ -50,7 +49,7 @@ except:
 
 
 class MGNRollout:
-    def __init__(self, cfg: DictConfig, wb, logger):
+    def __init__(self, cfg: DictConfig, logger):
         self.logger = logger
         self.results_dir = cfg.results_dir
 
@@ -150,7 +149,7 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging()
 
     logger.info("Rollout started...")
-    rollout = MGNRollout(cfg, wb, logger)
+    rollout = MGNRollout(cfg, logger)
     rollout.predict()
 
 

@@ -18,7 +18,7 @@ import torch
 import numpy as np
 
 import time, os
-import wandb as wb
+import wandb
 
 import hydra
 from hydra.utils import to_absolute_path
@@ -213,7 +213,6 @@ class PhysicsInformedFineTuner:
 
     def __init__(
         self,
-        wb,
         device,
         gnn_u,
         gnn_v,
@@ -228,7 +227,6 @@ class PhysicsInformedFineTuner:
     ):
         super(PhysicsInformedFineTuner, self).__init__()
 
-        self.wb = wb
         self.device = device
         self.nu = nu
 
@@ -427,7 +425,7 @@ class PhysicsInformedFineTuner:
             error_p = torch.linalg.norm(self.ref_p - pred_p) / torch.linalg.norm(
                 self.ref_p
             )
-            self.wb.log(
+            wandb.log(
                 {
                     "test_u_error (%)": error_u.detach().cpu().numpy(),
                     "test_v_error (%)": error_v.detach().cpu().numpy(),
@@ -480,7 +478,6 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize model
     pi_fine_tuner = PhysicsInformedFineTuner(
-        wb,
         device,
         gnn_u,
         gnn_v,

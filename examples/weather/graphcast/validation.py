@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 from modulus.datapipes.climate import ERA5HDF5Datapipe
 
 import hydra
+import wandb
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 
@@ -29,12 +30,11 @@ from omegaconf import DictConfig
 class Validation:
     """Run validation on GraphCast model"""
 
-    def __init__(self, cfg: DictConfig, model, dtype, dist, wb):
+    def __init__(self, cfg: DictConfig, model, dtype, dist):
         self.val_dir = to_absolute_path(cfg.val_dir)
         self.model = model
         self.dtype = dtype
         self.dist = dist
-        self.wb = wb
         self.val_datapipe = ERA5HDF5Datapipe(
             data_dir=os.path.join(cfg.dataset_path, "test"),
             stats_dir=os.path.join(cfg.dataset_path, "stats"),
@@ -115,6 +115,6 @@ class Validation:
                             f"era5_validation_channel{chan}_iter{iter}.png",
                         )
                     )
-                    self.wb.log({f"val_chan{chan}_iter{iter}": fig}, step=iter)
+                    wandb.log({f"val_chan{chan}_iter{iter}": fig}, step=iter)
 
         return loss_epoch / len(self.val_datapipe)

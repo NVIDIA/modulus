@@ -19,7 +19,7 @@ from dgl.dataloading import GraphDataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel
 import time, os
-import wandb as wb
+import wandb
 
 import hydra
 from hydra.utils import to_absolute_path
@@ -44,9 +44,8 @@ from utils import relative_lp_error
 
 
 class MGNTrainer:
-    def __init__(self, cfg: DictConfig, wb, dist, rank_zero_logger):
+    def __init__(self, cfg: DictConfig, dist, rank_zero_logger):
         self.dist = dist
-        self.wb = wb
         self.rank_zero_logger = rank_zero_logger
         self.amp = cfg.amp
 
@@ -165,7 +164,7 @@ class MGNTrainer:
             loss.backward()
             self.optimizer.step()
         lr = self.get_lr()
-        self.wb.log({"lr": lr})
+        wandb.log({"lr": lr})
 
     def get_lr(self):
         for param_group in self.optimizer.param_groups:
@@ -189,7 +188,7 @@ class MGNTrainer:
             errors[key] = errors[key] / len(self.validation_dataloader)
             self.rank_zero_logger.info(f"validation error_{key} (%): {errors[key]}")
 
-        self.wb.log(
+        wandb.log(
             {
                 "val_u_error (%)": errors["u"],
                 "val_v_error (%)": errors["v"],
@@ -215,9 +214,9 @@ def main(cfg: DictConfig) -> None:
 
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    logger.file_logging()
+    rank_zero_logger.file_logging()
 
-    trainer = MGNTrainer(cfg, wb, dist, rank_zero_logger)
+    trainer = MGNTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
 
@@ -230,7 +229,7 @@ def main(cfg: DictConfig) -> None:
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss_agg:10.3e}, lr: {trainer.get_lr()}, time per epoch: {(time.time() - start):10.3e}"
         )
-        wb.log({"loss": loss_agg})
+        wandb.log({"loss": loss_agg})
 
         # validation
         if dist.rank == 0:
@@ -248,9 +247,9 @@ def main(cfg: DictConfig) -> None:
                 scaler=trainer.scaler,
                 epoch=epoch,
             )
-            logger.info(f"Saved model on rank {dist.rank}")
+            rank_zero_logger.info(f"Saved model on rank {dist.rank}")
             start = time.time()
-    logger.info("Training completed!")
+    rank_zero_logger.info("Training completed!")
 
 
 if __name__ == "__main__":

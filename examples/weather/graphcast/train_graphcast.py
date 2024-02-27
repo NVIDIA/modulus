@@ -21,7 +21,7 @@ from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel
 import numpy as np
 import time
-import wandb as wb
+import wandb
 import torch.cuda.profiler as profiler
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, LambdaLR
 
@@ -52,7 +52,7 @@ from omegaconf import DictConfig
 class GraphCastTrainer(BaseTrainer):
     """GraphCast Trainer"""
 
-    def __init__(self, cfg: DictConfig, wb, dist, rank_zero_logger):
+    def __init__(self, cfg: DictConfig, dist, rank_zero_logger):
         super().__init__()
         self.dist = dist
         self.dtype = torch.bfloat16 if cfg.full_bf16 else torch.float32
@@ -114,7 +114,7 @@ class GraphCastTrainer(BaseTrainer):
         else:
             self.model = self.model.to(dtype=self.dtype).to(device=dist.device)
         if cfg.watch_model and not cfg.jit and dist.rank == 0:
-            wb.watch(self.model)
+            wandb.watch(self.model)
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -150,7 +150,7 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the validation
         if dist.rank == 0:
-            self.validation = Validation(cfg, self.model, self.dtype, self.dist, wb)
+            self.validation = Validation(cfg, self.model, self.dtype, self.dist)
 
         # enable train mode
         self.model.train()
@@ -240,7 +240,7 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger.file_logging()
 
     # initialize trainer
-    trainer = GraphCastTrainer(cfg, wb, dist, rank_zero_logger)
+    trainer = GraphCastTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
     loss_agg, iter, tagged_iter, num_rollout_steps = 0, trainer.iter_init, 1, 1
@@ -359,7 +359,7 @@ def main(cfg: DictConfig) -> None:
                         f"iteration: {iter}, loss: {loss_agg/cfg.save_freq:10.3e}, \
                             time per iter: {(time.time()-start)/cfg.save_freq:10.3e}"
                     )
-                    wb.log(
+                    wandb.log(
                         {
                             "loss": loss_agg / cfg.save_freq,
                             "learning_rate": trainer.scheduler.get_last_lr()[0],
