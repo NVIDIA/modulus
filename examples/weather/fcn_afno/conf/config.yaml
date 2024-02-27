@@ -20,6 +20,16 @@ hydra:
   run:
     dir: ./outputs/
 
+train_dir: ./dataset/train
+validation_dir: ./dataset/val
+stats_dir: ./dataset/stats
+
+ckpt_path: ./checkpoints
+
+num_channels: 20
+num_steps_train: 1
+num_steps_validation: 8
+
 wb_artifacts: False
 use_mlflow: True
 
@@ -27,5 +37,9 @@ start_epoch: 0
 max_epoch: 80
 
 num_samples_per_year_train: 1456
+num_samples_per_year_validation: 4
 num_workers_train: 8
 num_workers_validation: 8
+
+batch_size_train: 2
+batch_size_validation: 1
