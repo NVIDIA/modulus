@@ -80,6 +80,7 @@ def main(cfg: DictConfig) -> None:
     ls = getattr(cfg, "ls", 1)
     bench = getattr(cfg, "bench", True)
     workers = getattr(cfg, "workers", 4)
+    songunet_checkpoint_level = getattr(cfg, "songunet_checkpoint_level", 0)
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
@@ -158,6 +159,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="positional",
             encoder_type="standard",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )  # , attn_resolutions=[28]
         c.network_kwargs.update(
             channel_mult_noise=1,
@@ -173,6 +175,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="zero",
             encoder_type="standard",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )  # , attn_resolutions=[28]
         c.network_kwargs.update(
             channel_mult_noise=1,
@@ -188,6 +191,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="fourier",
             encoder_type="residual",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )
         c.network_kwargs.update(
             channel_mult_noise=2,

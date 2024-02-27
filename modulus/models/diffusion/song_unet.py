@@ -26,6 +26,7 @@ import numpy as np
 import nvtx
 import torch
 from torch.nn.functional import silu
+from torch.utils.checkpoint import checkpoint
 
 from modulus.models.diffusion import (
     Conv2d,
@@ -106,6 +107,8 @@ class SongUNet(Module):
         'standard'.
     resample_filter : List[int], optional (default=[1,1])
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
+    checkpoint_level : int, optional (default=0)
+        How many layers should use gradient checkpointing, 0 is None
 
 
     Note:
@@ -149,6 +152,7 @@ class SongUNet(Module):
         encoder_type: str = "standard",
         decoder_type: str = "standard",
         resample_filter: List[int] = [1, 1],
+        checkpoint_level: int = 0,
     ):
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
@@ -190,6 +194,9 @@ class SongUNet(Module):
             init_zero=init_zero,
             init_attn=init_attn,
         )
+
+        # set the threshold for checkpointing based on image resolution
+        self.checkpoint_threshold = (img_resolution >> checkpoint_level) + 1
 
         # Mapping.
         if self.embedding_type != "zero":
@@ -344,7 +351,14 @@ class SongUNet(Module):
                 elif "aux_residual" in name:
                     x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
                 else:
-                    x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
+                    # For UNetBlocks check if we should use gradient checkpointing
+                    if isinstance(block, UNetBlock):
+                        if x.shape[-1] > self.checkpoint_threshold:
+                            x = checkpoint(block, x, emb, use_reentrant=False)
+                        else:
+                            x = block(x, emb)
+                    else:
+                        x = block(x)
                     skips.append(x)
 
         # Decoder.
@@ -362,5 +376,10 @@ class SongUNet(Module):
                 else:
                     if x.shape[1] != block.in_channels:
                         x = torch.cat([x, skips.pop()], dim=1)
-                    x = block(x, emb)
+                    # check for checkpointing on decoder blocks and up sampling blocks
+                    if ((x.shape[-1] > self.checkpoint_threshold and "_block" in name)
+                        or (x.shape[-1] > (self.checkpoint_threshold / 2) and "_up" in name)):
+                        x = checkpoint(block, x, emb, use_reentrant=False)
+                    else:
+                        x = block(x, emb)
         return aux

@@ -54,6 +54,8 @@ bench: false
   # Enable cuDNN benchmarking
 workers: 4
   # DataLoader worker processes
+songunet_checkpoint_level: 0
+  # Gradient checkpointing level, value is number of layers to checkpoint
 
 
 ## I/O-related options

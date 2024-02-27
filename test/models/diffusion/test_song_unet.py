@@ -63,6 +63,26 @@ def test_song_unet_forward(device):
         atol=1e-3,
     )
 
+    # Same, but with checkpointing enabled
+    model = UNet(
+        img_resolution=64,
+        in_channels=2,
+        out_channels=2,
+        embedding_type="fourier",
+        channel_mult_noise=2,
+        encoder_type="residual",
+        resample_filter=[1, 3, 3, 1],
+        checkpoint_level=4,
+    ).to(device)
+
+    assert common.validate_forward_accuracy(
+        model,
+        (input_image, noise_labels, class_labels),
+        file_name="ncsnpp_unet_output.pth",
+        atol=1e-3,
+    )
+
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_constructor(device):
