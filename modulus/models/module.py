@@ -70,13 +70,15 @@ class Module(torch.nn.Module):
         # Get args and kwargs (excluding self and unroll kwargs)
         instantiate_args = {}
         for param, (k, v) in zip(sig.parameters.values(), bound_args.arguments.items()):
-            if k != "self":  # Skip self
-                if param.kind == param.VAR_KEYWORD:
-                    instantiate_args.update(v)
-                else:
-                    instantiate_args[k] = v
-            else:
+            # Skip self
+            if k == "self":
                 continue
+
+            # Add args and kwargs to instantiate_args
+            if param.kind == param.VAR_KEYWORD:
+                instantiate_args.update(v)
+            else:
+                instantiate_args[k] = v
 
         # Store args needed for instantiation
         out._args = {
