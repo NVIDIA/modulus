@@ -78,6 +78,9 @@ def training_loop(
     out_channels=[0, 17, 18, 19],
     img_shape_x=448,
     img_shape_y=448,
+    patch_shape_x=448,
+    patch_shape_y=448,
+    patch_num=1,
     roll=False,
     add_grid=True,
     ds_factor=4,
@@ -89,6 +92,7 @@ def training_loop(
     N_grid_channels=4,
     normalization="v1",
     wandb_mode="disabled",
+    regression_checkpoint_path=None,
 ):
     """CorrDiff training loop"""
 
@@ -171,6 +175,8 @@ def training_loop(
     )
 
     img_in_channels = len(in_channels)  # noise + low-res input
+    if img_shape_x != patch_shape_x or img_shape_y != patch_shape_y:
+        img_in_channels *= 2  # add global maps for patch-based model
     if add_grid:
         img_in_channels = img_in_channels + N_grid_channels
 
@@ -192,9 +198,20 @@ def training_loop(
     # Setup optimizer.
     logger0.info("Setting up optimizer...")
     if task == "diffusion":
-        net_reg = Module.from_checkpoint("checkpoints/regression.mdlus")
+        if regression_checkpoint_path is None:
+            raise FileNotFoundError(
+                "Need to specify regression_checkpoint_path for training the diffusion model"
+            )
+        net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
-        interface_kwargs = dict(regression_net=net_reg)
+        interface_kwargs = dict(
+            regression_net=net_reg,
+            img_shape_x=img_shape_x,
+            img_shape_y=img_shape_y,
+            patch_shape_x=patch_shape_x,
+            patch_shape_y=patch_shape_y,
+            patch_num=patch_num,
+        )
         logger0.success("Loaded the pre-trained regression network")
     else:
         interface_kwargs = {}

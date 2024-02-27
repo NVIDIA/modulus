@@ -14,76 +14,92 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
+import hydra
+from hydra.utils import to_absolute_path
 import torch
+import wandb
+
 from dgl.dataloading import GraphDataLoader
-from torch.cuda.amp import autocast, GradScaler
+
+from omegaconf import DictConfig
+
+from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
-import time, os
-import wandb as wb
 
-try:
-    import apex
-except:
-    pass
-
-from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
 from modulus.distributed.manager import DistributedManager
-
 from modulus.launch.logging import (
     PythonLogger,
-    initialize_wandb,
     RankZeroLoggingWrapper,
+    initialize_wandb,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from constants import Constants
-
-# Instantiate constants
-C = Constants()
+from modulus.models.meshgraphnet import MeshGraphNet
 
 
 class MGNTrainer:
-    def __init__(self, wb, dist, rank_zero_logger):
-        self.dist = dist
+    def __init__(self, cfg: DictConfig, rank_zero_logger: RankZeroLoggingWrapper):
+        assert DistributedManager.is_initialized()
+        self.dist = DistributedManager()
+
+        self.amp = cfg.amp
+        # MGN with recompute_activation currently supports only SiLU activation function.
+        mlp_act = "relu"
+        if cfg.recompute_activation:
+            rank_zero_logger.info(
+                "Setting MLP activation to SiLU required by recompute_activation."
+            )
+            mlp_act = "silu"
 
         # instantiate dataset
         dataset = VortexSheddingDataset(
             name="vortex_shedding_train",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="train",
-            num_samples=C.num_training_samples,
-            num_steps=C.num_training_time_steps,
+            num_samples=cfg.num_training_samples,
+            num_steps=cfg.num_training_time_steps,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=True,
             drop_last=True,
             pin_memory=True,
-            use_ddp=dist.world_size > 1,
+            use_ddp=self.dist.world_size > 1,
+            num_workers=cfg.num_dataloader_workers,
         )
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.num_input_features, C.num_edge_features, C.num_output_features
+            cfg.num_input_features,
+            cfg.num_edge_features,
+            cfg.num_output_features,
+            mlp_activation_fn=mlp_act,
+            do_concat_trick=cfg.do_concat_trick,
+            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
+            recompute_activation=cfg.recompute_activation,
         )
-        if C.jit:
-            self.model = torch.jit.script(self.model).to(dist.device)
+        if cfg.jit:
+            if not self.model.meta.jit:
+                raise ValueError("MeshGraphNet is not yet JIT-compatible.")
+            self.model = torch.jit.script(self.model).to(self.dist.device)
         else:
-            self.model = self.model.to(dist.device)
-        if C.watch_model and not C.jit and dist.rank == 0:
-            wb.watch(self.model)
+            self.model = self.model.to(self.dist.device)
+        if cfg.watch_model and not cfg.jit and self.dist.rank == 0:
+            wandb.watch(self.model)
 
         # distributed data parallel for multi-node training
-        if dist.world_size > 1:
+        if self.dist.world_size > 1:
             self.model = DistributedDataParallel(
                 self.model,
-                device_ids=[dist.local_rank],
-                output_device=dist.device,
-                broadcast_buffers=dist.broadcast_buffers,
-                find_unused_parameters=dist.find_unused_parameters,
+                device_ids=[self.dist.local_rank],
+                output_device=self.dist.device,
+                broadcast_buffers=self.dist.broadcast_buffers,
+                find_unused_parameters=self.dist.find_unused_parameters,
             )
 
         # enable train mode
@@ -91,26 +107,37 @@ class MGNTrainer:
 
         # instantiate loss, optimizer, and scheduler
         self.criterion = torch.nn.MSELoss()
+
+        self.optimizer = None
         try:
-            self.optimizer = apex.optimizers.FusedAdam(self.model.parameters(), lr=C.lr)
-            rank_zero_logger.info("Using FusedAdam optimizer")
-        except:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=C.lr)
+            if cfg.use_apex:
+                from apex.optimizers import FusedAdam
+
+                self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
+        except ImportError:
+            rank_zero_logger.warning(
+                "NVIDIA Apex (https://github.com/nvidia/apex) is not installed, "
+                "FusedAdam optimizer will not be used."
+            )
+        if self.optimizer is None:
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
+        rank_zero_logger.info(f"Using {self.optimizer.__class__.__name__} optimizer")
+
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer, lr_lambda=lambda epoch: C.lr_decay_rate**epoch
+            self.optimizer, lr_lambda=lambda epoch: cfg.lr_decay_rate**epoch
         )
         self.scaler = GradScaler()
 
         # load checkpoint
-        if dist.world_size > 1:
+        if self.dist.world_size > 1:
             torch.distributed.barrier()
         self.epoch_init = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
+            to_absolute_path(cfg.ckpt_path),
             models=self.model,
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             scaler=self.scaler,
-            device=dist.device,
+            device=self.dist.device,
         )
 
     def train(self, graph):
@@ -123,14 +150,14 @@ class MGNTrainer:
 
     def forward(self, graph):
         # forward pass
-        with autocast(enabled=C.amp):
+        with autocast(enabled=self.amp):
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             loss = self.criterion(pred, graph.ndata["y"])
             return loss
 
     def backward(self, loss):
         # backward pass
-        if C.amp:
+        if self.amp:
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
@@ -139,48 +166,41 @@ class MGNTrainer:
             self.optimizer.step()
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # save constants to JSON file
-    if dist.rank == 0:
-        os.makedirs(C.ckpt_path, exist_ok=True)
-        with open(
-            os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
-        ) as json_file:
-            json_file.write(C.model_dump_json(indent=4))
-
-    # initialize loggers
+    # Initialize loggers.
     initialize_wandb(
         project="Modulus-Launch",
         entity="Modulus",
         name="Vortex_Shedding-Training",
         group="Vortex_Shedding-DDP-Group",
-        mode=C.wandb_mode,
+        mode=cfg.wandb_mode,
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    logger.file_logging()
+    rank_zero_logger.file_logging()
 
-    trainer = MGNTrainer(wb, dist, rank_zero_logger)
+    trainer = MGNTrainer(cfg, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
-    for epoch in range(trainer.epoch_init, C.epochs):
+    for epoch in range(trainer.epoch_init, cfg.epochs):
         for graph in trainer.dataloader:
             loss = trainer.train(graph)
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss:10.3e}, time per epoch: {(time.time()-start):10.3e}"
         )
-        wb.log({"loss": loss.detach().cpu()})
+        wandb.log({"loss": loss.detach().cpu()})
 
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
         if dist.rank == 0:
             save_checkpoint(
-                os.path.join(C.ckpt_path, C.ckpt_name),
+                to_absolute_path(cfg.ckpt_path),
                 models=trainer.model,
                 optimizer=trainer.optimizer,
                 scheduler=trainer.scheduler,
@@ -190,3 +210,7 @@ if __name__ == "__main__":
             logger.info(f"Saved model on rank {dist.rank}")
         start = time.time()
     rank_zero_logger.info("Training completed!")
+
+
+if __name__ == "__main__":
+    main()
