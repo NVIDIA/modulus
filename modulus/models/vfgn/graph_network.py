@@ -52,7 +52,6 @@ from ..meta import ModelMetaData
 
 STD_EPSILON = 1e-8
 
-# todo: check the metadata values
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -62,19 +61,20 @@ class MetaData(ModelMetaData):
     amp_cpu: bool = False  # Reflect padding not supported in bfloat16
     amp_gpu: bool = False
     # Inference
-    # onnx: bool = True
     onnx_cpu: bool = False
     onnx_gpu: bool = False
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    # func_torch: bool = True
-    # auto_grad: bool = True
     func_torch: bool = False
     auto_grad: bool = False
 
 
 class MLPNet(torch.nn.Module):
+    """
+    A Multilayer Perceptron (MLP) network implemented in PyTorch, configurable with
+    a variable number of hidden layers and layer normalization.
+    """
     def __init__(
         self, mlp_hidden_size, mlp_num_hidden_layers, output_size, layer_norm=True
     ):
@@ -116,6 +116,9 @@ class MLPNet(torch.nn.Module):
 
 
 class EncoderNet(torch.nn.Module):
+    """
+    Encoder network.
+    """
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, latent_size):
         super(EncoderNet, self).__init__()
 
@@ -133,6 +136,7 @@ class EncoderNet(torch.nn.Module):
 
 
 class EdgeBlock(torch.nn.Module):
+    """Edge block"""
     def __init__(
         self,
         mlp_hidden_size,
@@ -169,6 +173,7 @@ class EdgeBlock(torch.nn.Module):
 
 
 class NodeBlock(torch.nn.Module):
+    """Node block"""
     def __init__(
         self,
         mlp_hidden_size,
@@ -224,6 +229,7 @@ class NodeBlock(torch.nn.Module):
 
 
 class InteractionNet(torch.nn.Module):
+    """Interaction network"""
     def __init__(
         self,
         mlp_hidden_size,
@@ -248,6 +254,7 @@ class InteractionNet(torch.nn.Module):
 
 
 class ResInteractionNet(torch.nn.Module):
+    """Residual interaction network"""
     def __init__(
         self,
         mlp_hidden_size,
@@ -273,6 +280,7 @@ class ResInteractionNet(torch.nn.Module):
 
 
 class DecoderNet(torch.nn.Module):
+    """decoder network"""
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, output_size):
         super(DecoderNet, self).__init__()
         self.mlp = MLPNet(
@@ -286,6 +294,7 @@ class DecoderNet(torch.nn.Module):
 
 
 class EncodeProcessDecode(torch.nn.Module):
+    """Module that assembles encoder, processor, and decoder"""
     def __init__(
         self,
         latent_size,
@@ -317,6 +326,7 @@ class EncodeProcessDecode(torch.nn.Module):
         )
 
     def set_device(self, device_list):
+        """sets the device"""
         self.device_list = device_list
 
     def forward(self, x, edge_attr, receivers, senders):
@@ -362,6 +372,7 @@ class EncodeProcessDecode(torch.nn.Module):
 
 
 class LearnedSimulator(torch.nn.Module):
+    """The VFGN architecture"""
     # setting DGCNN (dynamic graph computation)
     def __init__(
         self,
@@ -406,9 +417,13 @@ class LearnedSimulator(torch.nn.Module):
         self.message_passing_devices = []
 
     def setMessagePassingDevices(self, devices):
+        """
+        setts the devices to be used for message passing in the neural network model.
+        """
         self.message_passing_devices = devices
 
     def to(self, device):
+        """Device transfer"""
         new_self = super(LearnedSimulator, self).to(device)
         new_self._boundaries = self._boundaries.to(device)
         for key in self._normalization_stats:
@@ -418,6 +433,9 @@ class LearnedSimulator(torch.nn.Module):
         return new_self
 
     def time_diff(self, input_seq):
+        """
+        Calculates the difference between consecutive elements in a sequence, effectively computing the discrete time derivative.
+        """ 
         return input_seq[:, 1:] - input_seq[:, :-1]
 
     def _compute_connectivity_for_batch(
@@ -524,6 +542,7 @@ class LearnedSimulator(torch.nn.Module):
         global_context,
         particle_types,
     ):
+        """Feature encoder"""
         # aggregate all features
         most_recent_position = position_sequence[:, -1]
         velocity_sequence = self.time_diff(position_sequence)
@@ -614,6 +633,7 @@ class LearnedSimulator(torch.nn.Module):
     def DecodingFeature(
         self, normalized_accelerations, position_sequence, predict_length
     ):
+        """Feature decoder"""
         #  cast from float to double as the output of network
         normalized_accelerations = normalized_accelerations.double()
 
@@ -782,6 +802,10 @@ class LearnedSimulator(torch.nn.Module):
         return predicted_normalized_accelerations, target_normalized_acceleration
 
     def get_normalized_acceleration(self, acceleration, predict_length):
+        """
+        Normalizes the acceleration data using predefined statistics and
+        replicates it across a specified prediction length.
+        """
         acceleration_stats = self._normalization_stats["acceleration"]
         normalized_acceleration = (
             acceleration - acceleration_stats.mean
