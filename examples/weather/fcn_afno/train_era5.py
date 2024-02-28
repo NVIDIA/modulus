@@ -117,7 +117,7 @@ def main(cfg: DictConfig) -> None:
     datapipe = ERA5HDF5Datapipe(
         data_dir=to_absolute_path(cfg.train_dir),
         stats_dir=to_absolute_path(cfg.stats_dir),
-        channels=list(range(cfg.num_channels)),
+        channels=cfg.channels,
         num_steps=cfg.num_steps_train,
         num_samples_per_year=cfg.num_samples_per_year_train,
         batch_size=cfg.batch_size_train,
@@ -133,7 +133,7 @@ def main(cfg: DictConfig) -> None:
         validation_datapipe = ERA5HDF5Datapipe(
             data_dir=to_absolute_path(cfg.validation_dir),
             stats_dir=to_absolute_path(cfg.stats_dir),
-            channels=list(range(cfg.num_channels)),
+            channels=cfg.channels,
             num_steps=cfg.num_steps_validation,
             num_samples_per_year=cfg.num_samples_per_year_validation,
             batch_size=cfg.batch_size_validation,
@@ -146,8 +146,8 @@ def main(cfg: DictConfig) -> None:
 
     fcn_model = AFNO(
         inp_shape=[720, 1440],
-        in_channels=cfg.num_channels,
-        out_channels=cfg.num_channels,
+        in_channels=len(cfg.channels),
+        out_channels=len(cfg.channels),
         patch_size=[8, 8],
         embed_dim=768,
         depth=12,
