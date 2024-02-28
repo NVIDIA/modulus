@@ -218,6 +218,11 @@ def prepare_rollout_inputs(context, features):
 
 
 class GraphDataset:
+    """
+    A dataset class for graph-based models, handling data loading and iteration
+    for training or evaluation in different modes.
+    """
+
     # todo: update the size
     def __init__(
         self,

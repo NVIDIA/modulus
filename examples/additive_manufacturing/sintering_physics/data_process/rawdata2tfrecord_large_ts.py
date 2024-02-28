@@ -69,6 +69,10 @@ _CONTEXT_FEATURES = {
 
 
 def arrange_data(data):
+    """
+    Organizes data from a structured format into a dictionary keyed by
+    point coordinates.
+    """
     arranged_data = {}
 
     name2array = {}
@@ -245,6 +249,10 @@ def get_solution_temperature(solution_path, dict_sol_time, temp_curve_list):
 
 
 def get_solution_time(solution_path, dict_sol_time):
+    """
+    Retrieves the time associated with a solution from a dictionary using the
+    solution's file name.
+    """
     sol_name = os.path.basename(solution_path)
     sol_time = int(dict_sol_time[sol_name][0])
     return sol_time
@@ -323,6 +331,10 @@ def get_anchor_zplane(ds):
 
 
 def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None):
+    """
+    Reads and processes simulation data, extracting relevant features and
+    connectivity for each time step.
+    """
     build_path = os.path.join(raw_data_path, "out")
     solution_list = glob.glob(build_path + "/solution-*.pvtu")
     solution_list = sorted(solution_list, key=get_solution_id)
@@ -460,7 +472,10 @@ def compute_metadata_stats(
     radius_list,
     temp_list_builds,
 ):
-    # Compute position mean, std
+    """
+    Calculates and updates metadata with statistical information like mean and
+    standard deviation for various features.
+    """
     # todo: check why use different norm dimension
     # todo: change the pos stats to 3d as well
     position_stats_array = np.concatenate(particles_list_builds)
@@ -497,6 +512,10 @@ def compute_metadata_stats(
 
 
 def write_tfrecord_entry(writer, features, particles_array, times_array):
+    """
+    Writes a sequence of particle positions and times as a TFRecord entry using a
+    TensorFlow writer.
+    """
     tf_sequence_example = tf.train.SequenceExample(context=features)
     position_list = tf_sequence_example.feature_lists.feature_list["position"]
     timestep_list = tf_sequence_example.feature_lists.feature_list["step_context"]
@@ -538,7 +557,7 @@ def main(argv):
         build_list = ["busbar", "USB_casing", "pushing_grip", "ExtrusionScrew"]
     else:
         print("Mode not implemented")
-        exit()
+        exit(1)
 
     key_i = 0
     n_steps = 0
