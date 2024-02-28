@@ -14,28 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch, dgl
+import os
+
+import hydra
+from hydra.utils import to_absolute_path
+
 from dgl.dataloading import GraphDataLoader
-import torch
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib import animation
 from matplotlib import tri as mtri
-import os
 from matplotlib.patches import Rectangle
+import numpy as np
+from omegaconf import DictConfig
+import torch
 
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.vortex_shedding_dataset import VortexSheddingDataset
 from modulus.launch.logging import PythonLogger
 from modulus.launch.utils import load_checkpoint
-from constants import Constants
-
-# Instantiate constants
-C = Constants()
 
 
 class MGNRollout:
-    def __init__(self, logger):
+    def __init__(self, cfg: DictConfig, logger: PythonLogger):
+        self.num_test_time_steps = cfg.num_test_time_steps
+        self.frame_skip = cfg.frame_skip
+
         # set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using {self.device} device")
@@ -43,10 +46,10 @@ class MGNRollout:
         # instantiate dataset
         self.dataset = VortexSheddingDataset(
             name="vortex_shedding_test",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="test",
-            num_samples=C.num_test_samples,
-            num_steps=C.num_test_time_steps,
+            num_samples=cfg.num_test_samples,
+            num_steps=cfg.num_test_time_steps,
         )
 
         # instantiate dataloader
@@ -59,9 +62,15 @@ class MGNRollout:
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.num_input_features, C.num_edge_features, C.num_output_features
+            cfg.num_input_features,
+            cfg.num_edge_features,
+            cfg.num_output_features,
+            mlp_activation_fn="silu" if cfg.recompute_activation else "relu",
+            do_concat_trick=cfg.do_concat_trick,
+            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
+            recompute_activation=cfg.recompute_activation,
         )
-        if C.jit:
+        if cfg.jit:
             self.model = torch.jit.script(self.model).to(self.device)
         else:
             self.model = self.model.to(self.device)
@@ -70,8 +79,8 @@ class MGNRollout:
         self.model.eval()
 
         # load checkpoint
-        _ = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
+        load_checkpoint(
+            to_absolute_path(cfg.ckpt_path),
             models=self.model,
             device=self.device,
         )
@@ -103,7 +112,7 @@ class MGNRollout:
             # inference step
             invar = graph.ndata["x"].clone()
 
-            if i % (C.num_test_time_steps - 1) != 0:
+            if i % (self.num_test_time_steps - 1) != 0:
                 invar[:, 0:2] = self.pred[i - 1][:, 0:2].clone()
                 i += 1
             invar[:, 0:2] = self.dataset.normalize_node(
@@ -165,7 +174,7 @@ class MGNRollout:
             os.makedirs("./animations")
 
     def animate(self, num):
-        num *= C.frame_skip
+        num *= self.frame_skip
         graph = self.graphs[num]
         y_star = self.pred_i[num].numpy()
         y_exact = self.exact_i[num].numpy()
@@ -204,20 +213,25 @@ class MGNRollout:
         return self.fig
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
     logger.info("Rollout started...")
-    rollout = MGNRollout(logger)
-    idx = [rollout.var_identifier[k] for k in C.viz_vars]
+    rollout = MGNRollout(cfg, logger)
+    idx = [rollout.var_identifier[k] for k in cfg.viz_vars]
     rollout.predict()
     for i in idx:
         rollout.init_animation(i)
         ani = animation.FuncAnimation(
             rollout.fig,
             rollout.animate,
-            frames=len(rollout.graphs) // C.frame_skip,
-            interval=C.frame_interval,
+            frames=len(rollout.graphs) // cfg.frame_skip,
+            interval=cfg.frame_interval,
         )
-        ani.save("animations/animation_" + C.viz_vars[i] + ".gif")
-        logger.info(f"Created animation for {C.viz_vars[i]}")
+        ani.save("animations/animation_" + cfg.viz_vars[i] + ".gif")
+        logger.info(f"Created animation for {cfg.viz_vars[i]}")
+
+
+if __name__ == "__main__":
+    main()
