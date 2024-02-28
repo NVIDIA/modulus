@@ -215,7 +215,7 @@ def plot_3Danime(rollout_data, pred_denorm, save_name):
     def update_graph(num):
         outputs = []
         for _, label, points, graph in plot_info:
-            
+
             data = points[num, ...]
             graph.set_data(data[:, 0], data[:, 1])
             graph.set_3d_properties(data[:, 2])
@@ -409,7 +409,9 @@ def main(unused_argv):
 
     pos_mean = metadata["pos_mean"]
     pos_std = metadata["pos_std"]
-    rank_zero_logger.info(f"load from the metadata partical position mean={pos_mean}/ std={pos_std}")
+    rank_zero_logger.info(
+        f"load from the metadata partical position mean={pos_mean}/ std={pos_std}"
+    )
 
     # after transpose, vector shape
     initial_positions = np.asarray((rollout_data["initial_positions"]))

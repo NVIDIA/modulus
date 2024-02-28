@@ -197,7 +197,7 @@ class Module(torch.nn.Module):
             local_path = Path(temp_dir)
 
             torch.save(self.state_dict(), local_path / "model.pt")
-            
+
             with open(local_path / "args.json", "w") as f:
                 json.dump(self._args, f)
 

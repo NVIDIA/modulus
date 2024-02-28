@@ -70,8 +70,8 @@ class MetaData(ModelMetaData):
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    #func_torch: bool = True
-    #auto_grad: bool = True
+    # func_torch: bool = True
+    # auto_grad: bool = True
     func_torch: bool = False
     auto_grad: bool = False
 
@@ -112,7 +112,9 @@ class MLPNet(Module):
         output_size: int = 128,
         layer_norm: bool = True,
     ):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0):
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
+        ):
             raise ValueError("Invalid arch params")
         super().__init__(meta=MetaData(name="vfgn_mlpnet"))
 
@@ -173,9 +175,11 @@ class EncoderNet(Module):
         mlp_num_hidden_layers: int = 2,
         latent_size: int = 128,
     ):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0):
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0
+        ):
             raise ValueError("Invalid arch params - EncoderNet")
-        
+
         super().__init__(meta=MetaData(name="vfgn_encoder"))
 
         self._mlp_hidden_size = mlp_hidden_size
@@ -381,7 +385,7 @@ class InteractionNet(torch.nn.Module):
         )
 
     def forward(self, x, edge_attr, receivers, senders):
-        if not (x.shape[-1] == edge_attr.shape[-1]): 
+        if not (x.shape[-1] == edge_attr.shape[-1]):
             raise ValueError("node feature size should equal to edge feature size")
 
         return self._node_block(*self._edge_block(x, edge_attr, receivers, senders))
@@ -443,7 +447,9 @@ class DecoderNet(Module):
     """
 
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, output_size):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0): 
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
+        ):
             raise ValueError("Invalid arch params - DecoderNet")
         super().__init__(meta=MetaData(name="vfgn_decoder"))
         self.mlp = MLPNet(
@@ -633,7 +639,7 @@ class LearnedSimulator(Module):
         graph_mode: str = "radius",
         connectivity_param: float = 0.015,
     ):
-        if not (num_dimensions >= 0 and num_seq >= 3): 
+        if not (num_dimensions >= 0 and num_seq >= 3):
             raise ValueError("Invalid arch params - LearnedSimulator")
         super().__init__(meta=MetaData(name="vfgn_simulator"))
 

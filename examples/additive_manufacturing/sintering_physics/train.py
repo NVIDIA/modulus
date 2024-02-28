@@ -101,10 +101,7 @@ def Train(rank_zero_logger, dist):
         prefetch_buffer_size=C.prefetch_buffer_size,
     )
     testDataset = GraphDataset(
-        size=C.num_steps,
-        split="test",
-        data_path=C.data_path,
-        batch_size=C.batch_size
+        size=C.num_steps, split="test", data_path=C.data_path, batch_size=C.batch_size
     )
 
     # config model

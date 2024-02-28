@@ -68,8 +68,8 @@ class MetaData(ModelMetaData):
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    #func_torch: bool = True
-    #auto_grad: bool = True
+    # func_torch: bool = True
+    # auto_grad: bool = True
     func_torch: bool = False
     auto_grad: bool = False
 
