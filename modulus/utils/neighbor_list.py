@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Tuple, Union
+
 import torch
 import warp as wp
-
-from typing import Tuple, Union
 
 
 @wp.kernel
