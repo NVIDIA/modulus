@@ -194,7 +194,6 @@ def main(cfg: DictConfig) -> None:
     def train_step_forward(my_model, invar, outvar):
         # Multi-step prediction
         loss = 0
-        # Multi-step not supported
         for t in range(outvar.shape[1]):
             outpred = my_model(invar)
             invar = outpred
