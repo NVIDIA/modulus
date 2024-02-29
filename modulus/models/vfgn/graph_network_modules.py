@@ -54,6 +54,7 @@ from ..module import Module
 
 STD_EPSILON = 1e-8
 
+
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -527,7 +528,7 @@ class EncodeProcessDecode(Module):
         )
 
     def set_device(self, device_list):
-        """ device list"""
+        """device list"""
         self.device_list = device_list
 
     def forward(self, x, edge_attr, receivers, senders):
@@ -689,7 +690,7 @@ class LearnedSimulator(Module):
     def time_diff(self, input_seq):
         """
         Calculates the difference between consecutive elements in a sequence, effectively computing the discrete time derivative.
-        """ 
+        """
         return input_seq[:, 1:] - input_seq[:, :-1]
 
     def _compute_connectivity_for_batch(

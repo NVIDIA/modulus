@@ -52,6 +52,7 @@ from ..meta import ModelMetaData
 
 STD_EPSILON = 1e-8
 
+
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -75,6 +76,7 @@ class MLPNet(torch.nn.Module):
     A Multilayer Perceptron (MLP) network implemented in PyTorch, configurable with
     a variable number of hidden layers and layer normalization.
     """
+
     def __init__(
         self, mlp_hidden_size, mlp_num_hidden_layers, output_size, layer_norm=True
     ):
@@ -119,6 +121,7 @@ class EncoderNet(torch.nn.Module):
     """
     Encoder network.
     """
+
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, latent_size):
         super(EncoderNet, self).__init__()
 
@@ -137,6 +140,7 @@ class EncoderNet(torch.nn.Module):
 
 class EdgeBlock(torch.nn.Module):
     """Edge block"""
+
     def __init__(
         self,
         mlp_hidden_size,
@@ -174,6 +178,7 @@ class EdgeBlock(torch.nn.Module):
 
 class NodeBlock(torch.nn.Module):
     """Node block"""
+
     def __init__(
         self,
         mlp_hidden_size,
@@ -230,6 +235,7 @@ class NodeBlock(torch.nn.Module):
 
 class InteractionNet(torch.nn.Module):
     """Interaction network"""
+
     def __init__(
         self,
         mlp_hidden_size,
@@ -255,6 +261,7 @@ class InteractionNet(torch.nn.Module):
 
 class ResInteractionNet(torch.nn.Module):
     """Residual interaction network"""
+
     def __init__(
         self,
         mlp_hidden_size,
@@ -281,6 +288,7 @@ class ResInteractionNet(torch.nn.Module):
 
 class DecoderNet(torch.nn.Module):
     """decoder network"""
+
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, output_size):
         super(DecoderNet, self).__init__()
         self.mlp = MLPNet(
@@ -295,6 +303,7 @@ class DecoderNet(torch.nn.Module):
 
 class EncodeProcessDecode(torch.nn.Module):
     """Module that assembles encoder, processor, and decoder"""
+
     def __init__(
         self,
         latent_size,
@@ -373,6 +382,7 @@ class EncodeProcessDecode(torch.nn.Module):
 
 class LearnedSimulator(torch.nn.Module):
     """The VFGN architecture"""
+
     # setting DGCNN (dynamic graph computation)
     def __init__(
         self,
@@ -435,7 +445,7 @@ class LearnedSimulator(torch.nn.Module):
     def time_diff(self, input_seq):
         """
         Calculates the difference between consecutive elements in a sequence, effectively computing the discrete time derivative.
-        """ 
+        """
         return input_seq[:, 1:] - input_seq[:, :-1]
 
     def _compute_connectivity_for_batch(
