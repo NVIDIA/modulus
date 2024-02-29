@@ -28,6 +28,17 @@ def radius_search_count(
     result_count: wp.array(dtype=wp.int32),
     radius: wp.float32,
 ):
+    """
+    Warp kernel for counting the number of points within a specified radius
+    for each query point, using a hash grid for spatial queries.
+
+    Args:
+        hashgrid: An array representing the hash grid.
+        points: An array of points in space.
+        queries: An array of query points.
+        result_count: An array to store the count of neighboring points within the radius for each query point.
+        radius: The search radius around each query point.
+    """
     tid = wp.tid()
 
     # create grid query around point
@@ -57,6 +68,19 @@ def radius_search_query(
     result_point_dist: wp.array(dtype=wp.float32),
     radius: wp.float32,
 ):
+    """
+    Warp kernel for performing radius search queries on a set of points,
+    storing the results of neighboring points within a specified radius.
+
+    Args:
+        hashgrid: An array representing the hash grid.
+        points: An array of points in space.
+        queries: An array of query points.
+        result_offset: An array to store the offset in the results array for each query point.
+        result_point_idx: An array to store the indices of neighboring points found within the radius for each query point.
+        result_point_dist: An array to store the distances to neighboring points within the radius for each query point.
+        radius: The search radius around each query point.
+    """
     tid = wp.tid()
 
     # create grid query around point
@@ -84,6 +108,20 @@ def radius_search(
     grid_dim: Union[int, Tuple[int, int, int]] = (128, 128, 128),
     device: str = "cuda",
 ):
+    """
+    Warp kernel for performing a radius search for each query point within a
+    specified radius, using a hash grid for efficient spatial querying.
+
+    Args:
+        points: An array of points in space.
+        queries: An array of query points.
+        radius: The search radius around each query point.
+        grid_dim: The dimensions of the hash grid, either as an integer or a tuple of three integers.
+        device: The device (e.g., 'cuda' or 'cpu') on which computations are performed.
+
+    Returns:
+        A tuple containing the indices of neighboring points, their distances to the query points, and an offset array for result indexing.
+    """
     # convert grid_dim to Tuple if it is int
     if isinstance(grid_dim, int):
         grid_dim = (grid_dim, grid_dim, grid_dim)
