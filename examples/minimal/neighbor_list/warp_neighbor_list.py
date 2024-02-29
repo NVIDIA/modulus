@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple, Union
-
 import torch
 
 from modulus.utils import radius_search
@@ -38,7 +36,6 @@ def test_warp(
     points: torch.Tensor,
     radius: float,
     min_tries: int,
-    device: str,
 ):
     timer = Meter("Warp")
     points_wp = wp.from_torch(points, dtype=wp.vec3)
@@ -72,7 +69,7 @@ if __name__ == "__main__":
 
         for radius in radii:
             try:
-                min_time, max_mem = test_warp(points, radius, min_tries, device)
+                min_time, max_mem = test_warp(points, radius, min_tries)
                 warp_times.append(min_time)
                 warp_max_mems.append(max_mem)
             except Exception as e:
@@ -80,6 +77,6 @@ if __name__ == "__main__":
 
         print(f"\n\nResults for {N} points")
         # Print table
-        print("Radius\tWarp Min Time\tWarp Max Mem (MB)")
+        print("Radius\tWarp Min Time (sec)\tWarp Max Mem (MB)")
         for i in range(len(radii)):
             print(f"{radii[i]}\t{warp_times[i]}\t{warp_max_mems[i] / 1024 / 1024}")

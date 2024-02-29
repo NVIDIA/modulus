@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple, Union
-
 import torch
 import warp as wp
 
@@ -105,7 +103,7 @@ def radius_search(
     points: wp.array(dtype=wp.vec3),
     queries: wp.array(dtype=wp.vec3),
     radius: float,
-    grid_dim: Union[int, Tuple[int, int, int]] = (128, 128, 128),
+    grid_dim: int | tuple[int, int, int] = (128, 128, 128),
     device: str = "cuda",
 ):
     """
