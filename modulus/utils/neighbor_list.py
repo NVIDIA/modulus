@@ -109,8 +109,8 @@ def radius_search(
     device: str = "cuda",
 ):
     """
-    Warp kernel for performing a radius search for each query point within a
-    specified radius, using a hash grid for efficient spatial querying.
+    Performs a radius search for each query point within a specified radius,
+    using a hash grid for efficient spatial querying.
 
     Args:
         points: An array of points in space.
@@ -170,4 +170,8 @@ def radius_search(
         device=device,
     )
 
-    return (result_point_idx, result_point_dist, torch_offset)
+    return (
+        result_point_idx,
+        result_point_dist,
+        wp.from_torch(torch_offset, dtype=wp.int32),
+    )
