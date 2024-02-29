@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
+- Added more config options to FCN AFNO example.
 
 ### Deprecated
 
