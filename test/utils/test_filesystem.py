@@ -86,13 +86,26 @@ def test_ngc_model_file_private():
     assert calculate_checksum(path) == known_checksum
 
 
+@pytest.mark.skip("Need no-org file to test")
+@pytest.mark.skipif(
+    "NGC_API_KEY" not in os.environ, reason="Skipping because no NGC API key"
+)
+def test_ngc_model_file_private_no_team():
+    test_url = ""
+    package = filesystem.Package(test_url, seperator="/")
+    path = package.get("model/layers.py")
+
+    known_checksum = "177eb43feecf3b4ebdb6cb59e7d445bb5878a26cd9015962b8c9ddd13a648638"
+    assert calculate_checksum(path) == known_checksum
+
+
 def test_ngc_model_file_invalid():
     test_url = "ngc://models/nvidia/modulus/modulus_dlwp_cubesphere/v0.2"
     package = filesystem.Package(test_url, seperator="/")
     with pytest.raises(ValueError):
         package.get("dlwp_cubesphere.zip")
 
-    test_url = "ngc://models/nvidia/modulus_dlwp_cubesphere@v0.2"
+    test_url = "ngc://models/modulus_dlwp_cubesphere@v0.2"
     package = filesystem.Package(test_url, seperator="/")
     with pytest.raises(ValueError):
         package.get("dlwp_cubesphere.zip")

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
+- Support for organization level model files on NGC file system
 
 ### Changed
 
