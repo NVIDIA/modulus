@@ -54,7 +54,6 @@ from ..module import Module
 
 STD_EPSILON = 1e-8
 
-# todo: check the metadata values
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -64,14 +63,11 @@ class MetaData(ModelMetaData):
     amp_cpu: bool = False  # Reflect padding not supported in bfloat16
     amp_gpu: bool = False
     # Inference
-    # onnx: bool = True
     onnx_cpu: bool = False
     onnx_gpu: bool = False
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    # func_torch: bool = True
-    # auto_grad: bool = True
     func_torch: bool = False
     auto_grad: bool = False
 
@@ -531,6 +527,7 @@ class EncodeProcessDecode(Module):
         )
 
     def set_device(self, device_list):
+        """ device list"""
         self.device_list = device_list
 
     def forward(self, x, edge_attr, receivers, senders):
@@ -674,9 +671,13 @@ class LearnedSimulator(Module):
         self.message_passing_devices = []
 
     def setMessagePassingDevices(self, devices):
+        """
+        setts the devices to be used for message passing in the neural network model.
+        """
         self.message_passing_devices = devices
 
     def to(self, device):
+        """Device transfer"""
         new_self = super(LearnedSimulator, self).to(device)
         new_self._boundaries = self._boundaries.to(device)
         for key in self._normalization_stats:
@@ -686,6 +687,9 @@ class LearnedSimulator(Module):
         return new_self
 
     def time_diff(self, input_seq):
+        """
+        Calculates the difference between consecutive elements in a sequence, effectively computing the discrete time derivative.
+        """ 
         return input_seq[:, 1:] - input_seq[:, :-1]
 
     def _compute_connectivity_for_batch(
@@ -792,6 +796,7 @@ class LearnedSimulator(Module):
         global_context,
         particle_types,
     ):
+        """Feature encoder"""
         # aggregate all features
         most_recent_position = position_sequence[:, -1]
         velocity_sequence = self.time_diff(position_sequence)
@@ -887,6 +892,7 @@ class LearnedSimulator(Module):
     def DecodingFeature(
         self, normalized_accelerations, position_sequence, predict_length
     ):
+        """Feature decoder"""
         #  cast from float to double as the output of network
         normalized_accelerations = normalized_accelerations.double()
 
@@ -1096,6 +1102,10 @@ class LearnedSimulator(Module):
         return predicted_normalized_accelerations, target_normalized_acceleration
 
     def get_normalized_acceleration(self, acceleration, predict_length):
+        """
+        Normalizes the acceleration data using predefined statistics and
+        replicates it across a specified prediction length.
+        """
         acceleration_stats = self._normalization_stats["acceleration"]
         normalized_acceleration = (
             acceleration - acceleration_stats.mean
