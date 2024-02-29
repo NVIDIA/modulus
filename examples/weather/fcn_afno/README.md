@@ -55,7 +55,7 @@ the model architecture.
 To train the model, run
 
 ```bash
-python train_era5.py
+python train_era5.py train_dir=path_to_train_dir validation_dir=path_to_val_dir stats_dir=path_to_stats_dir
 ```
 
 Progress can be monitored using MLFlow. Open a new terminal and navigate to the training
@@ -71,7 +71,7 @@ Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU tr
 run
 
 ```bash
-mpirun -np <num_GPUs> python train_era5.py
+mpirun -np <num_GPUs> python train_era5.py provide_script_parameters_here
 ```
 
 If running inside a docker container, you may need to include the `--allow-run-as-root`
