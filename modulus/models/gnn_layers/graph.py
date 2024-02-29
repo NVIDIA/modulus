@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +27,7 @@ except ImportError:
     # for Python versions < 3.11
     from typing_extensions import Self
 
-from modulus.models.gnn_layers import DistributedGraph
+from modulus.models.gnn_layers import DistributedGraph, GraphPartition
 
 try:
     from pylibcugraphops.pytorch import BipartiteCSC, StaticCSC
@@ -90,6 +92,7 @@ class CuGraphCSC:
         cache_graph: bool = True,
         partition_size: Optional[int] = -1,
         partition_group_name: Optional[str] = None,
+        graph_partition: Optional[GraphPartition] = None,
     ) -> None:
         self.offsets = offsets
         self.indices = indices
@@ -121,6 +124,7 @@ class CuGraphCSC:
             self.indices,
             partition_size,
             partition_group_name,
+            graph_partition=graph_partition,
         )
         # overwrite graph information with local graph after distribution
         self.offsets = self.dist_graph.graph_partition.local_offsets

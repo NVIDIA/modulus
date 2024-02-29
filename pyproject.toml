@@ -22,7 +22,10 @@ dependencies = [
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytz>=2023.3",
-    "treelib>=1.2.5"
+    "treelib>=1.2.5",
+    "tqdm>=4.60.0",
+    "nvtx>=0.2.8",
+    "onnx>=1.14.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -40,7 +43,6 @@ launch = [
     "pydantic>=2.4.2",
     "imageio>=2.28.1",
     "moviepy>=1.0.3",
-    "tqdm>=4.60.0",
 ]
 
 dev = [
@@ -52,21 +54,28 @@ dev = [
     "ruff==0.0.290",
 ]
 
+makani = [
+    # TODO(akamenev): PyPI does not allow direct URL deps, update once Makani is in PyPI
+    # "makani @ git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0",
+    "torch-harmonics>=0.6.5",
+    "tensorly>=0.8.1",
+    "tensorly-torch>=0.4.0",
+]
+
 all = [
     "h5py>=3.7.0",
-    "mpi4py>=3.1.4",
     "netcdf4>=1.6.3",
     "ruamel.yaml>=0.17.22",
     "scikit-learn>=1.0.2",
     "warp-lang>=0.6.0",
-    "tensorly>=0.8.1",
-    "tensorly-torch>=0.4.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
-    "torch-harmonics>=0.6.2",
-    "onnx>=1.14.0",
+    "cftime>=1.6.2",
+    "einops>=0.7.0",
+    "pyspng>=0.1.0",
     "nvidia-modulus[launch]",
-    "nvidia-modulus[dev]"
+    "nvidia-modulus[dev]",
+    "nvidia-modulus[makani]",
 ]
 
 
@@ -74,10 +83,10 @@ all = [
 version = {attr = "modulus.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["modulus", "modulus.*"] 
+include = ["modulus", "modulus.*"]
 
 [tool.ruff]
-# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`), 
+# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`),
 # isort (`I`), and performance 'PERF' rules.
 select = ["E", "F", "S", "I", "PERF"]
 fixable = ["I"]
@@ -86,7 +95,7 @@ fixable = ["I"]
 # and `S311` (random number generators)
 ignore = ["E501", "S311"]
 
-# Exclude the examples and experimental folders 
+# Exclude the examples and experimental folders
 exclude = ["examples", "modulus/experimental"]
 
 [tool.ruff.per-file-ignores]
@@ -97,3 +106,13 @@ exclude = ["examples", "modulus/experimental"]
 # Ignore `S101` (assertions) in all `test` files.
 "test/*.py" = ["S101"]
 
+[project.entry-points."modulus.models"]
+AFNO = "modulus.models.afno:AFNO"
+DLWP = "modulus.models.dlwp:DLWP"
+FNO = "modulus.models.fno:FNO"
+GraphCastNet = "modulus.models.graphcast:GraphCastNet"
+MeshGraphNet = "modulus.models.meshgraphnet:MeshGraphNet"
+FullyConnected = "modulus.models.mlp:FullyConnected"
+Pix2Pix = "modulus.models.pix2pix:Pix2Pix"
+One2ManyRNN = "modulus.models.rnn:One2ManyRNN"
+SRResNet = "modulus.models.srrn:SRResNet"

@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +23,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from einops import rearrange
 from torch.nn.functional import silu
 
 from modulus.models.diffusion import weight_init
@@ -267,13 +270,34 @@ class GroupNorm(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.zeros(num_channels))
 
     def forward(self, x):
-        x = torch.nn.functional.group_norm(
-            x,
-            num_groups=self.num_groups,
-            weight=self.weight.to(x.dtype),
-            bias=self.bias.to(x.dtype),
-            eps=self.eps,
-        )
+        if self.training:
+            # Use default torch implementation of GroupNorm for training
+            # This does not support channels last memory format
+            x = torch.nn.functional.group_norm(
+                x,
+                num_groups=self.num_groups,
+                weight=self.weight.to(x.dtype),
+                bias=self.bias.to(x.dtype),
+                eps=self.eps,
+            )
+        else:
+            # Use custom GroupNorm implementation that supports channels last
+            # memory layout for inference
+            dtype = x.dtype
+            x = x.float()
+            x = rearrange(x, "b (g c) h w -> b g c h w", g=self.num_groups)
+
+            mean = x.mean(dim=[2, 3, 4], keepdim=True)
+            var = x.var(dim=[2, 3, 4], keepdim=True)
+
+            x = (x - mean) * (var + self.eps).rsqrt()
+            x = rearrange(x, "b g c h w -> b (g c) h w")
+
+            weight = rearrange(self.weight, "c -> 1 c 1 1")
+            bias = rearrange(self.bias, "c -> 1 c 1 1")
+            x = x * weight + bias
+
+            x = x.type(dtype)
         return x
 
 
@@ -290,7 +314,7 @@ class AttentionOp(torch.autograd.Function):
             torch.einsum(
                 "ncq,nck->nqk",
                 q.to(torch.float32),
-                (k / np.sqrt(k.shape[1])).to(torch.float32),
+                (k / torch.sqrt(torch.tensor(k.shape[1]))).to(torch.float32),
             )
             .softmax(dim=2)
             .to(q.dtype)
@@ -446,6 +470,7 @@ class UNetBlock(torch.nn.Module):
             )
 
     def forward(self, x, emb):
+        torch.cuda.nvtx.range_push("UNetBlock")
         orig = x
         x = self.conv0(silu(self.norm0(x)))
 
@@ -474,6 +499,7 @@ class UNetBlock(torch.nn.Module):
             a = torch.einsum("nqk,nck->ncq", w, v)
             x = self.proj(a.reshape(*x.shape)).add_(x)
             x = x * self.skip_scale
+        torch.cuda.nvtx.range_pop()
         return x
 
 

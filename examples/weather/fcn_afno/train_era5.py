@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,8 +15,8 @@
 # limitations under the License.
 
 import torch
-import os
 import hydra
+from hydra.utils import to_absolute_path
 import wandb
 import matplotlib.pyplot as plt
 
@@ -113,13 +115,14 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main")  # General python logger
 
     datapipe = ERA5HDF5Datapipe(
-        data_dir="/data/train/",
-        stats_dir="/data/stats/",
-        channels=[i for i in range(20)],
+        data_dir=to_absolute_path(cfg.train_dir),
+        stats_dir=to_absolute_path(cfg.stats_dir),
+        channels=cfg.channels,
+        num_steps=cfg.num_steps_train,
         num_samples_per_year=cfg.num_samples_per_year_train,
-        batch_size=2,
+        batch_size=cfg.batch_size_train,
         patch_size=(8, 8),
-        num_workers=8,
+        num_workers=cfg.num_workers_train,
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
@@ -128,24 +131,24 @@ def main(cfg: DictConfig) -> None:
     if dist.rank == 0:
         logger.file_logging()
         validation_datapipe = ERA5HDF5Datapipe(
-            data_dir="/data/test/",
-            stats_dir="/data/stats/",
-            channels=[i for i in range(20)],
-            num_steps=8,
-            num_samples_per_year=4,
-            batch_size=1,
+            data_dir=to_absolute_path(cfg.validation_dir),
+            stats_dir=to_absolute_path(cfg.stats_dir),
+            channels=cfg.channels,
+            num_steps=cfg.num_steps_validation,
+            num_samples_per_year=cfg.num_samples_per_year_validation,
+            batch_size=cfg.batch_size_validation,
             patch_size=(8, 8),
             device=dist.device,
-            num_workers=8,
+            num_workers=cfg.num_workers_validation,
             shuffle=False,
         )
-        logger.success(f"Loaded validaton datapipe of size {len(validation_datapipe)}")
+        logger.success(f"Loaded validation datapipe of size {len(validation_datapipe)}")
 
     fcn_model = AFNO(
-        img_size=(720, 1440),
-        in_channels=20,
-        out_channels=20,
-        patch_size=(8, 8),
+        inp_shape=[720, 1440],
+        in_channels=len(cfg.channels),
+        out_channels=len(cfg.channels),
+        patch_size=[8, 8],
         embed_dim=768,
         depth=12,
         num_blocks=8,
@@ -176,7 +179,7 @@ def main(cfg: DictConfig) -> None:
 
     # Attempt to load latest checkpoint if one exists
     loaded_epoch = load_checkpoint(
-        "./checkpoints",
+        to_absolute_path(cfg.ckpt_path),
         models=fcn_model,
         optimizer=optimizer,
         scheduler=scheduler,
@@ -191,7 +194,6 @@ def main(cfg: DictConfig) -> None:
     def train_step_forward(my_model, invar, outvar):
         # Multi-step prediction
         loss = 0
-        # Multi-step not supported
         for t in range(outvar.shape[1]):
             outpred = my_model(invar)
             invar = outpred
@@ -231,7 +233,7 @@ def main(cfg: DictConfig) -> None:
         if (epoch % 5 == 0 or epoch == 1) and dist.rank == 0:
             # Use Modulus Launch checkpoint
             save_checkpoint(
-                "./checkpoints",
+                to_absolute_path(cfg.ckpt_path),
                 models=fcn_model,
                 optimizer=optimizer,
                 scheduler=scheduler,

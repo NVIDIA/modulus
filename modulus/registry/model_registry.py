@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from importlib.metadata import EntryPoint, entry_points
 from typing import List, Union
 
-import pkg_resources
+# This import is required for compatibility with doctests.
+import importlib_metadata
 
 import modulus
 
@@ -36,8 +40,7 @@ class ModelRegistry:
     @staticmethod
     def _construct_registry() -> dict:
         registry = {}
-        group = "modulus.models"
-        entrypoints = pkg_resources.iter_entry_points(group)
+        entrypoints = entry_points(group="modulus.models")
         for entry_point in entrypoints:
             registry[entry_point.name] = entry_point
         return registry
@@ -99,13 +102,13 @@ class ModelRegistry:
             If no model is registered under the provided name.
         """
 
-        if name in self._model_registry:
-            model = self._model_registry[name]
-            if isinstance(model, pkg_resources.EntryPoint):
+        model = self._model_registry.get(name)
+        if model is not None:
+            if isinstance(model, (EntryPoint, importlib_metadata.EntryPoint)):
                 model = model.load()
             return model
-        else:
-            raise KeyError(f"No model is registered under the name {name}")
+
+        raise KeyError(f"No model is registered under the name {name}")
 
     def list_models(self) -> List[str]:
         """

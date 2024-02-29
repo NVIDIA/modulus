@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pkg_resources
+from importlib.metadata import entry_points
+
 import pytest
 from pytest_utils import _import_or_fail
 
@@ -28,7 +31,6 @@ from pytest_utils import _import_or_fail
         "FullyConnected",
         "Pix2Pix",
         "One2ManyRNN",
-        #'SphericalFourierNeuralOperatorNet',
         "SRResNet",
     ],
 )
@@ -41,7 +43,7 @@ def test_model_entry_points(model_name, pytestconfig):
     # Get all the models exposed by the package
     models = {
         entry_point.name: entry_point
-        for entry_point in pkg_resources.iter_entry_points("modulus.models")
+        for entry_point in entry_points(group="modulus.models")
     }
 
     # Assert that the model is among them

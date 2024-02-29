@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +28,6 @@ from modulus.distributed import DistributedManager
 
 from .console import PythonLogger
 from .launch import LaunchLogger
-from .utils import create_ddp_group_tag
 
 logger = PythonLogger("mlflow")
 
@@ -82,16 +83,16 @@ def initialize_mlflow(
         Returns MLFlow logging client and active run object
     """
     dist = DistributedManager()
-    if DistributedManager.is_initialized() and dist.distributed:
-        group_name = create_ddp_group_tag(run_name)
-        run_name = f"{run_name}-Process_{dist.rank}"
-    else:
-        start_time = datetime.now().astimezone()
-        time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
-        group_name = f"{run_name}_{time_string}"
+    if dist.rank != 0:  # only root process should be logging to mlflow
+        return
+
+    start_time = datetime.now().astimezone()
+    time_string = start_time.strftime("%m/%d/%y_%H-%M-%S")
+    group_name = f"{run_name}_{time_string}"
+
     # Set default value here for Hydra
     if tracking_location is None:
-        tracking_location = str(Path(f"./mlruns_{dist.rank}").absolute())
+        tracking_location = str(Path("./mlruns").absolute())
 
     # Set up URI (remote or local)
     if mode == "online":
@@ -168,7 +169,7 @@ def check_mlflow_logged_in(client: MlflowClient):
     """
 
     logger.warning(
-        "Checking MLFlow logging location is working (if this hangs its not)"
+        "Checking MLFlow logging location is working (if this hangs it's not)"
     )
     t0 = os.environ.get("MLFLOW_HTTP_REQUEST_TIMEOUT", None)
     try:

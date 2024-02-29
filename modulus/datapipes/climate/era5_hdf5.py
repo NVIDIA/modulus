@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -154,8 +156,11 @@ class ERA5HDF5Datapipe(Datapipe):
         # assuming other files have exactly the same format.
         self.logger.info(f"Getting file stats from {self.data_paths[0]}")
         with h5py.File(self.data_paths[0], "r") as f:
-            # truncate the dataset to avoid out-of-range sampling
-            data_samples_per_year = f["fields"].shape[0] - self.num_steps * self.stride
+            # truncate the dataset to avoid out-of-range sampling and ensure each
+            # rank has same number of samples (to avoid deadlocks)
+            data_samples_per_year = (
+                (f["fields"].shape[0] - self.num_steps * self.stride) // self.world_size
+            ) * self.world_size
             self.img_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them

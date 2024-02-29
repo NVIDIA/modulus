@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,13 +52,13 @@ def check_shuffle(
     tensor_tags = [int(t.flatten()[0]) for t in tensors]
 
     # check if number of samples has correct length
-    if correct_length - stride != len(tensor_tags):
+    if correct_length != len(tensor_tags):
         logger.warning("Number of samples not matching expected")
         logger.warning(f"Expected Number of Samples: {correct_length}")
         logger.warning(f"Number of Samples: {len(tensor_tags)}")
         return False
 
-    expected_tags = list(range(correct_length - stride))
+    expected_tags = list(range(correct_length))
 
     # check if shuffle is false
     if not shuffle:
