@@ -54,7 +54,7 @@ from ..module import Module
 
 STD_EPSILON = 1e-8
 
-# todo: check the metadata values
+
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "VFGN"
@@ -64,14 +64,11 @@ class MetaData(ModelMetaData):
     amp_cpu: bool = False  # Reflect padding not supported in bfloat16
     amp_gpu: bool = False
     # Inference
-    # onnx: bool = True
     onnx_cpu: bool = False
     onnx_gpu: bool = False
     onnx_runtime: bool = False
     # Physics informed
     var_dim: int = 1
-    #func_torch: bool = True
-    #auto_grad: bool = True
     func_torch: bool = False
     auto_grad: bool = False
 
@@ -112,7 +109,9 @@ class MLPNet(Module):
         output_size: int = 128,
         layer_norm: bool = True,
     ):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0):
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
+        ):
             raise ValueError("Invalid arch params")
         super().__init__(meta=MetaData(name="vfgn_mlpnet"))
 
@@ -173,9 +172,11 @@ class EncoderNet(Module):
         mlp_num_hidden_layers: int = 2,
         latent_size: int = 128,
     ):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0):
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and latent_size >= 0
+        ):
             raise ValueError("Invalid arch params - EncoderNet")
-        
+
         super().__init__(meta=MetaData(name="vfgn_encoder"))
 
         self._mlp_hidden_size = mlp_hidden_size
@@ -381,7 +382,7 @@ class InteractionNet(torch.nn.Module):
         )
 
     def forward(self, x, edge_attr, receivers, senders):
-        if not (x.shape[-1] == edge_attr.shape[-1]): 
+        if not (x.shape[-1] == edge_attr.shape[-1]):
             raise ValueError("node feature size should equal to edge feature size")
 
         return self._node_block(*self._edge_block(x, edge_attr, receivers, senders))
@@ -443,7 +444,9 @@ class DecoderNet(Module):
     """
 
     def __init__(self, mlp_hidden_size, mlp_num_hidden_layers, output_size):
-        if not (mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0): 
+        if not (
+            mlp_hidden_size >= 0 and mlp_num_hidden_layers >= 0 and output_size >= 0
+        ):
             raise ValueError("Invalid arch params - DecoderNet")
         super().__init__(meta=MetaData(name="vfgn_decoder"))
         self.mlp = MLPNet(
@@ -525,6 +528,7 @@ class EncodeProcessDecode(Module):
         )
 
     def set_device(self, device_list):
+        """device list"""
         self.device_list = device_list
 
     def forward(self, x, edge_attr, receivers, senders):
@@ -633,7 +637,7 @@ class LearnedSimulator(Module):
         graph_mode: str = "radius",
         connectivity_param: float = 0.015,
     ):
-        if not (num_dimensions >= 0 and num_seq >= 3): 
+        if not (num_dimensions >= 0 and num_seq >= 3):
             raise ValueError("Invalid arch params - LearnedSimulator")
         super().__init__(meta=MetaData(name="vfgn_simulator"))
 
@@ -668,9 +672,13 @@ class LearnedSimulator(Module):
         self.message_passing_devices = []
 
     def setMessagePassingDevices(self, devices):
+        """
+        setts the devices to be used for message passing in the neural network model.
+        """
         self.message_passing_devices = devices
 
     def to(self, device):
+        """Device transfer"""
         new_self = super(LearnedSimulator, self).to(device)
         new_self._boundaries = self._boundaries.to(device)
         for key in self._normalization_stats:
@@ -680,6 +688,9 @@ class LearnedSimulator(Module):
         return new_self
 
     def time_diff(self, input_seq):
+        """
+        Calculates the difference between consecutive elements in a sequence, effectively computing the discrete time derivative.
+        """
         return input_seq[:, 1:] - input_seq[:, :-1]
 
     def _compute_connectivity_for_batch(
@@ -786,6 +797,7 @@ class LearnedSimulator(Module):
         global_context,
         particle_types,
     ):
+        """Feature encoder"""
         # aggregate all features
         most_recent_position = position_sequence[:, -1]
         velocity_sequence = self.time_diff(position_sequence)
@@ -881,6 +893,7 @@ class LearnedSimulator(Module):
     def DecodingFeature(
         self, normalized_accelerations, position_sequence, predict_length
     ):
+        """Feature decoder"""
         #  cast from float to double as the output of network
         normalized_accelerations = normalized_accelerations.double()
 
@@ -1090,6 +1103,10 @@ class LearnedSimulator(Module):
         return predicted_normalized_accelerations, target_normalized_acceleration
 
     def get_normalized_acceleration(self, acceleration, predict_length):
+        """
+        Normalizes the acceleration data using predefined statistics and
+        replicates it across a specified prediction length.
+        """
         acceleration_stats = self._normalization_stats["acceleration"]
         normalized_acceleration = (
             acceleration - acceleration_stats.mean

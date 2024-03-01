@@ -38,6 +38,7 @@ ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
 
 
 def _read_metadata(data_path):
+    """reads metadata"""
     with open(os.path.join(data_path, "metadata.json"), "rt") as fp:
         return json.load(fp)
 
@@ -48,11 +49,17 @@ def _combine_std(std_x, std_y):
 
 
 def tf2torch(t):
+    """
+    Converts a TensorFlow tensor to a PyTorch tensor.
+    """
     t = torch.from_numpy(t.numpy())
     return t
 
 
 def torch2tf(t):
+    """
+    Converts a PyTorch tensor to a TensorFlow tensor.
+    """
     t = tf.convert_to_tensor(t.cpu().numpy())
     return t
 
@@ -66,22 +73,31 @@ def get_kinematic_mask(particle_types):
 
 
 def get_metal_mask(particle_types):
+    """Returns a boolean mask, set to true for metal particles."""
     # get free particles
     return particle_types == torch.ones(particle_types.shape) * METAL_PARTICLE_ID
 
 
 def get_anchor_z_mask(particle_types):
+    """
+    Generates a mask identifying anchor plane particles in a tensor of particle types.
+    """
     # get anchor plane particles
     return particle_types == torch.ones(particle_types.shape) * ANCHOR_PLANE_PARTICLE_ID
 
 
 def cos_theta(p1, p2):
+    """compute cosine of two non-zero vectors"""
     return (torch.dot(p1, p2)) / (
         (torch.sqrt(torch.dot(p1, p1))) * (math.sqrt(torch.dot(p2, p2)))
     )
 
 
 def weighted_square_error(y_pre, y, device):
+    """
+    Calculates a weighted square error for predictions, emphasizing larger errors
+    by sorting and applying diminishing weights.
+    """
     k = y_pre - y
     k = k.view(-1)
     k = torch.square(k)
@@ -104,6 +120,10 @@ def weighted_square_error(y_pre, y, device):
 
 
 def weighted_loss(loss_, device):
+    """
+    Computes a loss value where individual components are weighted, with higher weights
+    assigned to larger loss components.
+    """
     loss_ = loss_.view(-1)
     sorted, indices = torch.sort(loss_, descending=True)
     n = sorted.size()[0]

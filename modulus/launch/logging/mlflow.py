@@ -169,7 +169,7 @@ def check_mlflow_logged_in(client: MlflowClient):
     """
 
     logger.warning(
-        "Checking MLFlow logging location is working (if this hangs its not)"
+        "Checking MLFlow logging location is working (if this hangs it's not)"
     )
     t0 = os.environ.get("MLFLOW_HTTP_REQUEST_TIMEOUT", None)
     try:

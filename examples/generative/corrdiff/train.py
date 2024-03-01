@@ -40,13 +40,24 @@ warnings.filterwarnings(
 )  # False warning printed by PyTorch 1.12.
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="config_train")
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
 def main(cfg: DictConfig) -> None:
     """Train diffusion-based generative model using the techniques described in the
     paper "Elucidating the Design Space of Diffusion-Based Generative Models".
     """
 
+    # Sanity check
+    if not hasattr(cfg, "task"):
+        raise ValueError(
+            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
+        )
+
+    # Dump the configs
+    os.makedirs(cfg.outdir, exist_ok=True)
+    OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
+
     # Parse options
+    regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     data = getattr(cfg, "data", "./data")
@@ -94,6 +105,9 @@ def main(cfg: DictConfig) -> None:
     c.out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
     c.img_shape_x = getattr(cfg, "img_shape_x", 448)
     c.img_shape_y = getattr(cfg, "img_shape_y", 448)
+    c.patch_shape_x = getattr(cfg, "patch_shape_x", 448)
+    c.patch_shape_y = getattr(cfg, "patch_shape_y", 448)
+    c.patch_num = getattr(cfg, "patch_num", 1)
     c.roll = getattr(cfg, "roll", False)
     c.add_grid = getattr(cfg, "add_grid", True)
     c.ds_factor = getattr(cfg, "ds_factor", 1)
@@ -206,6 +220,18 @@ def main(cfg: DictConfig) -> None:
     if augment > 0:
         raise NotImplementedError("Augmentation is not implemented")
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
+    if c.patch_shape_x != c.patch_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a factor of 32")
+    if c.patch_shape_x > c.img_shape_x:
+        c.patch_shape_x = c.img_shape_x
+    if c.patch_shape_y > c.img_shape_y:
+        c.patch_shape_y = c.img_shape_y
+    if c.patch_shape_x != c.img_shape_x or c.patch_shape_y != c.img_shape_y:
+        logger0.info("Patch-based training enabled")
+    else:
+        logger0.info("Patch-based training disabled")
 
     # Training options.
     c.total_kimg = max(int(duration * 1000), 1)
@@ -213,6 +239,8 @@ def main(cfg: DictConfig) -> None:
     c.update(batch_size=batch, batch_gpu=batch_gpu)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
     c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
+    if regression_checkpoint_path:
+        c.regression_checkpoint_path = regression_checkpoint_path
 
     # Random seed.
     if seed is not None:

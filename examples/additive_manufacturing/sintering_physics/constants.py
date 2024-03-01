@@ -69,8 +69,6 @@ class Constants(BaseModel):
     version_modulus: bool = False
 
     # Rollout settings
-    # "Path to rollout pickle file"
-    # todo: change to json
     rollout_path: str = "rollouts/rollout_test_0.json"
     metadata_path: str = "./data/test_validation"
     step_stride: int = 3

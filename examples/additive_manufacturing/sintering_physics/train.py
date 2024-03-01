@@ -67,11 +67,18 @@ C = Constants()
 
 
 class Stats:
+    """
+    Represents statistical attributes with methods for device transfer.
+    """
+
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
 
     def to(self, device):
+        """
+        Transfers the mean and standard deviation to a specified device.
+        """
         self.mean = self.mean.to(device)
         self.std = self.std.to(device)
         return self
@@ -92,6 +99,9 @@ cast = lambda v: np.array(v, dtype=np.float64)
 
 
 def Train(rank_zero_logger, dist):
+    """
+    Trains a graph-based model, evaluating and saving its performance periodically.
+    """
     # config dataset
     dataset = GraphDataset(
         size=C.num_steps,
@@ -100,10 +110,7 @@ def Train(rank_zero_logger, dist):
         prefetch_buffer_size=C.prefetch_buffer_size,
     )
     testDataset = GraphDataset(
-        size=C.num_steps,
-        split="test",
-        data_path=C.data_path,
-        batch_size=C.batch_size
+        size=C.num_steps, split="test", data_path=C.data_path, batch_size=C.batch_size
     )
 
     # config model
@@ -474,6 +481,10 @@ def Train(rank_zero_logger, dist):
 
 
 def Test(rank_zero_logger, dist):
+    """
+    Executes the testing phase for a graph-based model, generating and
+    storing predictions.
+    """
     # config test dataset
     dataset = GraphDataset(
         # size=C.num_steps,
@@ -682,6 +693,9 @@ def Test(rank_zero_logger, dist):
 
 
 def main(_):
+    """
+    Triggers the train or test phase based on the configuration.
+    """
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()

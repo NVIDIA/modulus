@@ -63,11 +63,16 @@ flags.DEFINE_string(
 
 
 class Stats:
+    """
+    Represents statistical attributes, specifically mean and standard deviation.
+    """
+
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
 
     def to(self, device):
+        """Transfers the mean and standard deviation to a specified device."""
         self.mean = self.mean.to(device)
         self.std = self.std.to(device)
         return self
@@ -94,16 +99,17 @@ def get_kinematic_mask(particle_types):
 
 
 def get_metal_mask(particle_types):
-    # get free particles
+    """get free particles"""
     return particle_types == torch.ones(particle_types.shape) * METAL_PARTICLE_ID
 
 
 def get_anchor_z_mask(particle_types):
-    # get anchor plane particles
+    """get anchor plane particles"""
     return particle_types == torch.ones(particle_types.shape) * ANCHOR_PLANE_PARTICLE_ID
 
 
 def cos_theta(p1, p2):
+    """Calculates the cosine of the angle between two vectors using the dot product."""
     return (torch.dot(p1, p2)) / (
         (torch.sqrt(torch.dot(p1, p1))) * (math.sqrt(torch.dot(p2, p2)))
     )
@@ -207,6 +213,9 @@ def batch_concat(dataset, batch_size):
 
     # We run through the nest and concatenate each entry with the previous state.
     def reduce_window(initial_state, ds):
+        """
+        Reduces a dataset by concatenating elements along a specified axis.
+        """
         return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
 
     return windowed_ds.map(
@@ -215,6 +224,9 @@ def batch_concat(dataset, batch_size):
 
 
 def _read_metadata(data_path):
+    """
+    Reads and returns the contents of the metadata JSON file from a specified directory.
+    """
     with open(os.path.join(data_path, "metadata.json"), "rt") as fp:
         print(os.path.join(data_path, "metadata.json"))
         return json.loads(fp.read())
@@ -290,6 +302,10 @@ def infer_stage(
     metadata_2=None,
     renorm=False,
 ):
+    """
+    Performs inference over a specified number of steps using a given model
+    and updates predictions.
+    """
     len_predicted = len(updated_predictions)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("infer_stage device: ", device)
@@ -374,6 +390,10 @@ def infer_stage(
 
 
 def load_stage_model(model, model_path, features, global_context_step, sequence_length):
+    """
+    Loads a model from a specified path, configures it for inference, and returns
+    the prepared model.
+    """
     device = "cpu"
     global_context_step = global_context_step[:, :sequence_length]
     print("load_stage_model, global_context_step: ", global_context_step.shape)
@@ -402,20 +422,33 @@ def load_stage_model(model, model_path, features, global_context_step, sequence_
 
 
 def _combine_std(std_x, std_y):
+    """
+    Combines two standard deviations using the Pythagorean theorem.
+    """
     return np.sqrt(std_x**2 + std_y**2)
 
 
 def tf2torch(t):
+    """
+    Converts a TensorFlow tensor to a PyTorch tensor.
+    """
     t = torch.from_numpy(t.numpy())
     return t
 
 
 def torch2tf(t):
+    """
+    Converts a PyTorch tensor to a TensorFlow tensor.
+    """
     t = tf.convert_to_tensor(t.cpu().numpy())
     return t
 
 
 class GraphDataset:
+    """
+    A dataset class for handling graph data, specifically for training and evaluation.
+    """
+
     def __init__(self, size=1000, mode="one_step_train", split="train"):
         self.dataset = get_input_fn(
             FLAGS.data_path, FLAGS.batch_size, mode=mode, split=split
@@ -448,6 +481,10 @@ cast = lambda v: np.array(v, dtype=np.float64)
 
 
 def Test():
+    """
+    Conducts a test process on a graph dataset using a multi-stage model approach
+    for predictions.
+    """
     dataset = GraphDataset(mode="rollout", split=FLAGS.eval_split)
 
     metadat_1 = _read_metadata(os.path.join(FLAGS.data_path, FLAGS.meta1))

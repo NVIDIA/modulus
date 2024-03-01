@@ -1,3 +1,6 @@
+# ignore_header_test
+# ruff: noqa: E402
+
 # © Copyright 2023 HP Development Company, L.P.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -184,11 +187,10 @@ def split_trajectory(context, features, window_length=7, predict_length=10):
             global_stack.append(read_step_context)
         model_input_features["step_context"] = tf.stack(global_stack)
 
-    pos_stack = []
-    for idx in range(input_trajectory_length):
-        pos_stack.append(
-            features["position"][idx : idx + window_length + predict_length]
-        )
+    pos_stack = [
+        features["position"][idx : idx + window_length + predict_length]
+        for idx in range(input_trajectory_length)
+    ]
     model_input_features["position"] = tf.stack(pos_stack)
 
     return tf.data.Dataset.from_tensor_slices(model_input_features)
