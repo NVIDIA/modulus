@@ -757,10 +757,10 @@ class EDMPrecondSR(Module):
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
-        # Concatenate input channels
-        x = torch.cat((x, img_lr), dim=1)
-
         x = x.to(torch.float32)
+        # Apply scaling to x
+        x = (1 / (self.sigma_data**2 + sigma**2).sqrt()) * x
+
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
             None
@@ -779,6 +779,8 @@ class EDMPrecondSR(Module):
         c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
+
+        x = torch.cat((x, img_lr), dim=1)
 
         F_x = self.model(
             (c_in * x).to(dtype),
