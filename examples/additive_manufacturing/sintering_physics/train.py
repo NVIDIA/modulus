@@ -81,7 +81,6 @@ device = "cpu"
 
 INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
 PREDICT_LENGTH = 1  # [options: 5]
-LOSS_DECAY_FACTOR = 0.6
 
 NUM_PARTICLE_TYPES = 3
 KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
@@ -238,7 +237,7 @@ def Train(rank_zero_logger, dist):
         loss = (pred_acceleration - target_acceleration) ** 2
 
         decay_fators_1 = torch.DoubleTensor(
-            [math.pow(LOSS_DECAY_FACTOR, i) for i in range(PREDICT_LENGTH)]
+            [math.pow(C.loss_decay_factor, i) for i in range(PREDICT_LENGTH)]
         ).to(device)
         decay_fators_3 = torch.repeat_interleave(decay_fators_1, repeats=3)
 

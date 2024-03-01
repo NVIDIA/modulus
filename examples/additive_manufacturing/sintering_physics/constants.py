@@ -43,7 +43,9 @@ class Constants(BaseModel):
     # default 6.7e-4, for eval, set noise_std=0
     noise_std: float = 1e-9
     # loss type options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
-    loss: str = "standard"
+    loss: str = "me"
+    # loss_decay_factor for loss type = me, for example, range (0, 1]
+    loss_decay_factor: float = 0.6
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.

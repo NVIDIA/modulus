@@ -71,11 +71,11 @@ def validate_checkpoint(
     except IOError:
         pass
 
-    # print("save ckpt does_not_exist success \n\n")
+    print("save ckpt does_not_exist success \n\n")
     # Now test forward passes
-    # print("forward model_1 pred")
+    print("forward model_1 pred")
     output_1 = model_1.forward(*in_args)
-    # print("forward model_2 pred")
+    print("forward model_2 pred")
     output_2 = model_2.forward(*in_args)
 
     # Model outputs should initially be different
