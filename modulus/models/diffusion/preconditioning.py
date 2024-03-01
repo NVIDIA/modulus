@@ -755,11 +755,15 @@ class EDMPrecondSR(Module):
 
     @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
+        self,
+        x,
+        img_lr,
+        sigma,
+        class_labels=None,
+        force_fp32=False,
+        scale_img_lr=True,
+        **model_kwargs,
     ):
-        x = x.to(torch.float32)
-        # Apply scaling to x
-        x = (1 / (self.sigma_data**2 + sigma**2).sqrt()) * x
 
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
@@ -780,7 +784,14 @@ class EDMPrecondSR(Module):
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
 
-        x = torch.cat((x, img_lr), dim=1)
+        if scale_img_lr:
+            if img_lr is not None:
+                x = torch.cat((x.to(torch.float32), img_lr.to(torch.float32)), dim=1)
+            x = c_in * x
+        else:
+            x = c_in * x.to(torch.float32)
+            if img_lr is not None:
+                x = torch.cat((x, img_lr.to(torch.float32)), dim=1)
 
         F_x = self.model(
             (c_in * x).to(dtype),
