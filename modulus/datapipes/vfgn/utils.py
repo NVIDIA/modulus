@@ -1,7 +1,8 @@
-# ignore_header_test
-# ruff: noqa: E402
-
 # © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,8 +21,15 @@ import math
 import os
 
 import numpy as np
-import tensorflow as tf
 import torch
+
+try:
+    import tensorflow as tf
+except ImportError:
+    raise ImportError(
+        "Mesh Graph Net Datapipe requires the Tensorflow library. Install the "
+        + "package at: https://www.tensorflow.org/install"
+    )
 
 NUM_PARTICLE_TYPES = 3
 KINEMATIC_PARTICLE_ID = 0  # refers to anchor point

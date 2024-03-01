@@ -170,7 +170,7 @@ def split_trajectory(context, features, window_length=7, predict_length=10):
 
     # todo: change the hard-coded trajectory length to be the entire global context (/ sintering profile) sequence length
     # sequence length here is the default sintering 2-stage total length
-    trajectory_length = 14 + 24
+    # trajectory_length = 14 + 24
 
     # Process the parsed_features
     if "step_context" in features:
