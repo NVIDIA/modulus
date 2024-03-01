@@ -42,8 +42,6 @@ except ImportError:
 
 from modulus.datapipes.vfgn import reading_utils, utils
 from modulus.datapipes.vfgn.utils import _read_metadata
-# from modulus.utils.vfgn import reading_utils, utils
-# from modulus.utils.vfgn.utils import _read_metadata
 
 INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
 PREDICT_LENGTH = 1  # [options: 5]
