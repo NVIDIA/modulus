@@ -263,7 +263,7 @@ def training_loop(
             p_ema.copy_(p_net.detach().lerp(p_ema, ema_beta))
 
         # Perform maintenance tasks once per tick.
-        cur_nimg += batch_size_local
+        cur_nimg += batch_size_global
         done = cur_nimg >= total_kimg * 1000
         if (
             (not done)
