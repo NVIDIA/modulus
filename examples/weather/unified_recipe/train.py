@@ -27,7 +27,9 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.cuda.amp import GradScaler
 from torch.optim.lr_scheduler import SequentialLR
 from torch import nn
+from torch import Tensor
 from tqdm import tqdm
+from typing import Union
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
@@ -103,7 +105,6 @@ def main(cfg: DictConfig) -> None:
             },  # TODO: maybe mobe this conversion to resolver?
         }
     )
-    print(dist.device)
     model = model.to(dist.device)
 
     # Distributed learning
@@ -153,8 +154,8 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Get filesystem mapper for datasets
-    train_dataset_mapper = fs.get_mapper(cfg.dataset.train_dataset_filename)
-    val_dataset_mapper = fs.get_mapper(cfg.dataset.val_dataset_filename)
+    train_dataset_mapper = fs.get_mapper(cfg.curated_dataset.train_dataset_filename)
+    val_dataset_mapper = fs.get_mapper(cfg.curated_dataset.val_dataset_filename)
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
@@ -170,10 +171,10 @@ def main(cfg: DictConfig) -> None:
 
     # Normalizer (TODO: Maybe wrap this into model)
     predicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_predicted_variables, momentum=None, affine=False
+        cfg.curated_dataset.nr_predicted_variables, momentum=None, affine=False
     ).to(dist.device)
     unpredicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_unpredicted_variables, momentum=None, affine=False
+        cfg.curated_dataset.nr_unpredicted_variables, momentum=None, affine=False
     ).to(dist.device)
 
     def normalize_variables(variables, batch_norm):

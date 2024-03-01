@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hydra
+import fsspec
+from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import zarr
 import xarray as xr
-import fsspec
 from typing import Any, Iterable, List, Union, Tuple
 from pathlib import Path
 from tqdm import tqdm
@@ -25,10 +27,14 @@ from dask.diagnostics import ProgressBar
 import dask
 import datetime
 
+# Add eval to OmegaConf TODO: Remove when OmegaConf is updated
+OmegaConf.register_new_resolver("eval", eval)
 
-class ARCOERA5ETL:
+from transform.transform import transform_registry
+
+class CurateERA5:
     """
-    ETL script for converting ARCO ERA5 dataset loadable with Zarr datapipe
+    Curate a Zarr ERA5 dataset to a Zarr dataset used for training global weather models.
     """
 
     def __init__(
@@ -37,10 +43,12 @@ class ARCOERA5ETL:
         predicted_variables: List[str],
         dataset_filename: Union[str, Path] = "./data.zarr",
         fs: fsspec.filesystem = fsspec.filesystem("file"),
-        cache_storage: str = "./arco_era5_cache",
+        curated_dataset_filename: Union[str, Path] = "./curated_data.zarr",
+        curated_fs: fsspec.filesystem = fsspec.filesystem("file"),
         transform: None = None,
         date_range: Tuple[str, str] = ("2000-01-01", "2001-01-01"),
         dt: int = 1,  # 1 hour
+        single_threaded: bool = False,
     ):
         super().__init__()
 
@@ -49,37 +57,17 @@ class ARCOERA5ETL:
         self.predicted_variables = predicted_variables
         self.dataset_filename = dataset_filename
         self.fs = fs
+        self.curated_dataset_filename = curated_dataset_filename
+        self.curated_fs = curated_fs
         self.transform = transform
         self.date_range = date_range
         assert dt in [1, 3, 6, 12], "dt must be 1, 3, 6, or 12"
         self.dt = dt
+        self.single_threaded = single_threaded
 
-        # ARCO filename
-        self.arco_filename = (
-            "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
-        )
-
-        # Cache data if specified
-        if cache_storage is not None:
-            arco_fs = fsspec.filesystem(
-                "simplecache",
-                target_protocol="gs",
-                cache_storage=cache_storage,
-            )
-        else:
-            arco_fs = fsspec.filesystem("gs")
-
-        # Open dataset
-        self.arco_mapper = arco_fs.get_mapper(self.arco_filename)
-        self.arco_era5 = xr.open_zarr(self.arco_mapper, consolidated=True)
-
-        # TODO: remove this
-        # years = np.arange(1979, 2023)
-        # zarr_files = [f"./full_year_{year}.zarr" for year in years]
-        # xr_datasets = [xr.open_zarr(file) for file in zarr_files]
-        # xr_datasets = [ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31")) for year, ds in zip(years, xr_datasets)]
-        # xr_datasets = xr.concat(xr_datasets, dim="time")
-        # self.arco_era5 = xr_datasets
+        # Open dataset to do curation from
+        mapper = fs.get_mapper(self.dataset_filename)
+        self.era5 = xr.open_zarr(mapper, consolidated=True)
 
         # Subset variables (this speeds up chunking)
         needed_variables = ["latitude", "longitude", "time", "level"]
@@ -88,21 +76,21 @@ class ARCOERA5ETL:
                 needed_variables.append(variable[0])
             else:
                 needed_variables.append(variable)
-        for variables in self.arco_era5.variables:
+        for variables in self.era5.variables:
             if variables not in needed_variables:
-                self.arco_era5 = self.arco_era5.drop_vars(variables)
+                self.era5 = self.era5.drop_vars(variables)
 
         # Chunk data
-        self.arco_era5 = self.arco_era5.sel(
+        self.era5 = self.era5.sel(
             time=slice(
                 datetime.datetime.strptime(date_range[0], "%Y-%m-%d"),
                 datetime.datetime.strptime(date_range[1], "%Y-%m-%d"),
             )
         )
-        self.arco_era5 = self.arco_era5.sel(
-            time=self.arco_era5.time.dt.hour.isin(np.arange(0, 24, self.dt))
+        self.era5 = self.era5.sel(
+            time=self.era5.time.dt.hour.isin(np.arange(0, 24, self.dt))
         )
-        self.arco_era5 = self.arco_era5.chunk(
+        self.era5 = self.era5.chunk(
             {"time": 1, "level": 1, "latitude": 721, "longitude": 1440}
         )
 
@@ -110,14 +98,14 @@ class ARCOERA5ETL:
         xarray_predicted_variables = []
         for variable in self.predicted_variables:
             if not isinstance(variable, str):  # TODO: better way to check if list
-                pressure_variable = self.arco_era5[variable[0]].sel(level=variable[1])
+                pressure_variable = self.era5[variable[0]].sel(level=variable[1])
                 pressure_variable = pressure_variable.drop("level")
                 pressure_variable = pressure_variable.rename(
                     {"level": "predicted_channel"}
                 )
                 xarray_predicted_variables.append(pressure_variable)
             else:
-                single_variable = self.arco_era5[variable]
+                single_variable = self.era5[variable]
                 single_variable = single_variable.expand_dims(
                     "predicted_channel", axis=1
                 )
@@ -127,33 +115,33 @@ class ARCOERA5ETL:
         xarray_unpredicted_variables = []
         for variable in self.unpredicted_variables:
             if not isinstance(variable, str):  # TODO: better way to check if list
-                pressure_variable = self.arco_era5[variable[0]].sel(level=variable[1])
+                pressure_variable = self.era5[variable[0]].sel(level=variable[1])
                 pressure_variable = pressure_variable.drop("level")
                 pressure_variable = pressure_variable.rename(
                     {"level": "unpredicted_channel"}
                 )
                 xarray_unpredicted_variables.append(pressure_variable)
             else:
-                single_variable = self.arco_era5[variable]
+                single_variable = self.era5[variable]
                 single_variable = single_variable.expand_dims(
                     "unpredicted_channel", axis=1
                 )
                 xarray_unpredicted_variables.append(single_variable)
 
         # Concatenate all variables
-        self.arco_era5_subset = xr.Dataset()
-        self.arco_era5_subset["predicted"] = xr.concat(
+        self.era5_subset = xr.Dataset()
+        self.era5_subset["predicted"] = xr.concat(
             xarray_predicted_variables, dim="predicted_channel"
         )
-        self.arco_era5_subset["unpredicted"] = xr.concat(
+        self.era5_subset["unpredicted"] = xr.concat(
             xarray_unpredicted_variables, dim="unpredicted_channel"
         )
-        self.arco_era5_subset["time"] = self.arco_era5["time"]
-        self.arco_era5_subset = self.arco_era5_subset.chunk(
+        self.era5_subset["time"] = self.era5["time"]
+        self.era5_subset = self.era5_subset.chunk(
             {
                 "time": 1,
-                "predicted_channel": self.arco_era5_subset.predicted_channel.size,
-                "unpredicted_channel": self.arco_era5_subset.unpredicted_channel.size,
+                "predicted_channel": self.era5_subset.predicted_channel.size,
+                "unpredicted_channel": self.era5_subset.unpredicted_channel.size,
             }
         )
 
@@ -163,23 +151,80 @@ class ARCOERA5ETL:
         """
 
         # Check if already exists
-        if self.fs.exists(self.dataset_filename):
-            print(f"Zarr file {self.dataset_filename} already exists. Skipping.")
+        if self.fs.exists(self.curated_dataset_filename):
+            print(f"Zarr file {self.curated_dataset_filename} already exists")
             return
 
         # Run transform if specified
         if self.transform is not None:
-            self.arco_era5_subset = self.transform(self.arco_era5_subset)
+            self.era5_subset = self.transform(self.era5_subset)
 
         # Save
-        mapper = self.fs.get_mapper(self.dataset_filename)
-        delayed_obj = self.arco_era5_subset.to_zarr(
+        mapper = self.fs.get_mapper(self.curated_dataset_filename)
+        delayed_obj = self.era5_subset.to_zarr(
             mapper, consolidated=True, compute=False
         )
 
-        # Wait for save to finish
-        # only run with 1 worker
+        # Wait for save to finish (Single-threaded legacy issue)
         with ProgressBar():
-            delayed_obj.compute()
-            # with dask.config.set(scheduler='single-threaded'):
-            #    delayed_obj.compute()
+            if self.single_threaded:
+                with dask.config.set(scheduler="single-threaded"):
+                    delayed_obj.compute()
+            else:
+                delayed_obj.compute()
+
+@hydra.main(version_base="1.2", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
+    # Resolve config so that all values are concrete
+    OmegaConf.resolve(cfg)
+
+    # Get transform function
+    try:
+        transform = transform_registry[cfg.transform.name]
+    except KeyError:
+        raise NotImplementedError(f"Transform {cfg.transform.name} not implemented")
+    if "kwargs" in cfg.transform:
+
+        def wrapper_transform(transform, **kwargs):
+            def _transform(x):
+                return transform(x, **kwargs)
+
+            return _transform
+
+        transform = wrapper_transform(transform, **cfg.transform.kwargs)
+
+    # Get filesystem
+    # TODO: add filesystems behond local when needed 
+    fs = fsspec.filesystem("file")
+
+    # Make train data
+    curate_train_era5 = CurateERA5(
+        unpredicted_variables=cfg.curated_dataset.unpredicted_variables,
+        predicted_variables=cfg.curated_dataset.predicted_variables,
+        dataset_filename=cfg.dataset.dataset_filename,
+        fs=fs,
+        curated_dataset_filename=cfg.curated_dataset.train_dataset_filename,
+        curated_fs=fs,
+        transform=transform,
+        date_range=cfg.curated_dataset.train_years,
+        dt=cfg.curated_dataset.dt,
+    )
+    curate_train_era5()
+
+    # Make validation data
+    curate_val_era5 = CurateERA5(
+        unpredicted_variables=cfg.curated_dataset.unpredicted_variables,
+        predicted_variables=cfg.curated_dataset.predicted_variables,
+        dataset_filename=cfg.dataset.dataset_filename,
+        fs=fs,
+        curated_dataset_filename=cfg.curated_dataset.val_dataset_filename,
+        curated_fs=fs,
+        transform=transform,
+        date_range=cfg.curated_dataset.val_years,
+        dt=cfg.curated_dataset.dt,
+    )
+    curate_val_era5()
+
+
+if __name__ == "__main__":
+    main()
