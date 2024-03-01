@@ -32,6 +32,7 @@ OmegaConf.register_new_resolver("eval", eval)
 
 from transform.transform import transform_registry
 
+
 class CurateERA5:
     """
     Curate a Zarr ERA5 dataset to a Zarr dataset used for training global weather models.
@@ -161,9 +162,7 @@ class CurateERA5:
 
         # Save
         mapper = self.fs.get_mapper(self.curated_dataset_filename)
-        delayed_obj = self.era5_subset.to_zarr(
-            mapper, consolidated=True, compute=False
-        )
+        delayed_obj = self.era5_subset.to_zarr(mapper, consolidated=True, compute=False)
 
         # Wait for save to finish (Single-threaded legacy issue)
         with ProgressBar():
@@ -172,6 +171,7 @@ class CurateERA5:
                     delayed_obj.compute()
             else:
                 delayed_obj.compute()
+
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -194,7 +194,7 @@ def main(cfg: DictConfig) -> None:
         transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Get filesystem
-    # TODO: add filesystems behond local when needed 
+    # TODO: add filesystems behond local when needed
     fs = fsspec.filesystem("file")
 
     # Make train data

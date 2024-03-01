@@ -33,13 +33,19 @@ def main(cfg: DictConfig) -> None:
     OmegaConf.resolve(cfg)
 
     # Get ARCO ERA5 dataset
-    arco_filename = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
+    arco_filename = (
+        "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
+    )
     gs_fs = fsspec.filesystem("gs")
     arco_era5 = xr.open_zarr(gs_fs.get_mapper(arco_filename), consolidated=True)
 
     # Drop variables that are not needed
     for variable in arco_era5.variables:
-        if variable not in cfg.dataset.single_level_variables + cfg.dataset.pressure_level_variables:
+        if (
+            variable
+            not in cfg.dataset.single_level_variables
+            + cfg.dataset.pressure_level_variables
+        ):
             arco_era5 = arco_era5.drop(variable)
 
     # Make encoding for chunking pressure level variables
@@ -64,9 +70,14 @@ def main(cfg: DictConfig) -> None:
         # TODO: Remove single_threaded when machine updated
         if cfg.dataset.single_threaded:
             with dask.config.set(scheduler="single-threaded"):
-                arco_era5.to_zarr(cfg.dataset.dataset_filename, consolidated=True, encoding=encoding)
+                arco_era5.to_zarr(
+                    cfg.dataset.dataset_filename, consolidated=True, encoding=encoding
+                )
         else:
-            arco_era5.to_zarr(cfg.dataset.dataset_filename, consolidated=True, encoding=encoding)
+            arco_era5.to_zarr(
+                cfg.dataset.dataset_filename, consolidated=True, encoding=encoding
+            )
+
 
 if __name__ == "__main__":
     main()
