@@ -29,7 +29,7 @@ class Constants(BaseModel):
     """Virtual Foundry (Digital Sintering) Graphnet constants"""
 
     # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval', 'eval_rollout']
-    mode: str = "train"
+    mode: str = "test"
     # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
     eval_split: str = "test"
 
@@ -49,7 +49,7 @@ class Constants(BaseModel):
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    model_path_vfgn: str = "models/test"
+    model_path_vfgn: str = "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
     # The path for saving outputs (e.g. rollouts).
     output_path: str = "rollouts/test24"
     prefetch_buffer_size: int = 100
@@ -66,7 +66,6 @@ class Constants(BaseModel):
     rollout_refine: bool = False
     meta1: str = "step100_s1"
     meta2: str = "step100_s2"
-    version_modulus: bool = False
 
     # Rollout settings
     rollout_path: str = "rollouts/rollout_test_0.json"

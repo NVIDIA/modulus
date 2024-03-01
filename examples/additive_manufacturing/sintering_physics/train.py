@@ -48,7 +48,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-from modulus.models.vfgn.graph_network import LearnedSimulator as LearnedSimulatorBeta
 from modulus.utils.vfgn import utils
 from modulus.utils.vfgn.utils import _read_metadata
 from modulus.models.vfgn.graph_dataset import GraphDataset
@@ -273,7 +272,7 @@ def Train(rank_zero_logger, dist):
             # compute the loss in z-axis of anchor plane points
             loss_plane = pred_acceleration[..., 2] ** 2
             decay_fator = torch.DoubleTensor(
-                [math.pow(LOSS_DECAY_FACTOR, i) for i in range(1)]
+                [math.pow(C.loss_decay_factor, i) for i in range(1)]
             ).to(device)
             loss_plane = loss_plane * decay_fator
 
@@ -517,24 +516,14 @@ def Test(rank_zero_logger, dist):
         "context": context_stats,
     }
 
-    if not C.version_modulus:
-        model = LearnedSimulatorBeta(
-            num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-            num_seq=INPUT_SEQUENCE_LENGTH,
-            boundaries=torch.DoubleTensor(metadata["bounds"]),
-            num_particle_types=NUM_PARTICLE_TYPES,
-            particle_type_embedding_size=16,
-            normalization_stats=normalization_stats,
-        )
-    else:
-        model = LearnedSimulator(
-            num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-            num_seq=INPUT_SEQUENCE_LENGTH,
-            boundaries=torch.DoubleTensor(metadata["bounds"]),
-            num_particle_types=NUM_PARTICLE_TYPES,
-            particle_type_embedding_size=16,
-            normalization_stats=normalization_stats,
-        )
+    model = LearnedSimulator(
+        num_dimensions=metadata["dim"] * PREDICT_LENGTH,
+        num_seq=INPUT_SEQUENCE_LENGTH,
+        boundaries=torch.DoubleTensor(metadata["bounds"]),
+        num_particle_types=NUM_PARTICLE_TYPES,
+        particle_type_embedding_size=16,
+        normalization_stats=normalization_stats,
+    )
 
     loaded = False
     example_index = 0
@@ -564,7 +553,10 @@ def Test(rank_zero_logger, dist):
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
-                model.load_state_dict(torch.load(C.model_path_vfgn))
+
+                # Loading the pretrained model from model_path_vfgn
+                # For provided ckpt with missing keys, ignore
+                model.load_state_dict(torch.load(C.model_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"device: {device}")
                 # config optimizer

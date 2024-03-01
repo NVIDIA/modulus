@@ -78,7 +78,8 @@ def create_int_feature(values):
 
 def get_radius(data):
     """
-    Read from raw data the cell size, set radius default = 1.2* cell_size
+    From a pyvista read file, compute the radius between 2 points.
+        Get the maximum distance of XYZ-dim from the random cell (cell_id = 0)
     return: computed radius
     """
     cell_0 = data.GetCell(0)

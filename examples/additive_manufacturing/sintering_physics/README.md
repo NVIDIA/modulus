@@ -65,7 +65,6 @@ Change the params in constants.py for testing:
   - to test / inference with provided trained ckpt : version_modulus: False
   - to test / inference with your own newly trained ckpt : version_modulus: True
 
-<<<<<<< HEAD
 
 Then run: 
 

@@ -75,7 +75,8 @@ class MetaData(ModelMetaData):
 
 class MLPNet(Module):
     """
-    Multi-layer perceptron network.
+    A Multilayer Perceptron (MLP) network implemented in PyTorch, configurable with
+    a variable number of hidden layers and layer normalization.
 
     Parameters
     ----------
@@ -540,11 +541,6 @@ class EncodeProcessDecode(Module):
         receivers/ senders:
             Torch tensor, list of node indexes, shape: (batch_size,  edge_list_size:[list of node indexes])
         """
-        # print("test_encodeProcessDecode_forward shape node/edge_attr:", x.shape, edge_attr.shape)
-        # print(x)
-        # print("receivers: ", receivers.shape, senders.shape)
-        # print("receivers: ", receivers)
-        # print("senders: ", senders)
         self.device_list = x.device.type  # decide the device type
         x, edge_attr = self._encoder_network(x, edge_attr)
 
@@ -567,9 +563,6 @@ class EncodeProcessDecode(Module):
             receivers = receivers.to(p_device)
             senders = senders.to(p_device)
 
-            # print("checkpoint input shape: ", )
-            # print("\n processor_network_k ...  x/ edge_attr: ", pre_x.shape, pre_edge_attr.shape)
-            # print(" shape of receivers, senders: ", receivers.shape, senders.shape)
             diff_x, diff_edge_attr, receivers, senders = checkpoint(
                 processor_network_k, pre_x, pre_edge_attr, receivers, senders
             )
@@ -580,9 +573,7 @@ class EncodeProcessDecode(Module):
             if i % n_inter == 0:
                 j += 1
 
-        # print("output pre_x : ", pre_x.shape)
         x = self._decoder_network(pre_x.to(origin_device))
-        # print("output size x : ", x.shape)
 
         return x
 
@@ -696,6 +687,11 @@ class LearnedSimulator(Module):
     def _compute_connectivity_for_batch(
         self, senders_list, receivers_list, n_node, n_edge
     ):
+        """
+        Dynamically update the edge features with random dropout
+        For each graph, randomly select whether apply edge drop-out to this node
+        If applying random drop-out, a default drop_out_rate = 0.6 is applied to the edges
+        """
         senders_per_graph_list = np.split(senders_list, np.cumsum(n_edge[:-1]), axis=0)
         receivers_per_graph_list = np.split(
             receivers_list, np.cumsum(n_edge[:-1]), axis=0
@@ -797,7 +793,12 @@ class LearnedSimulator(Module):
         global_context,
         particle_types,
     ):
-        """Feature encoder"""
+        """
+        Feature encoder contains 3 parts:
+            - Adding the node features that includes: position, velocity, sequence of accelerations
+            - Adding the edge features with random dropout applied
+            - Adding the global features to the node features, in this case, sintering temperature is includes
+        """
         # aggregate all features
         most_recent_position = position_sequence[:, -1]
         velocity_sequence = self.time_diff(position_sequence)

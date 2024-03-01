@@ -140,7 +140,7 @@ def read_sol_time(series_file):
     """
     Read the solution.pvtu.series file
     Returns:
-
+        Dictionary contains the sintering simulation file name, and corresponding timestamp for the simulation file
     """
     dict_sol_time = {}
     time_list = []
