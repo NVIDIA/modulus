@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from module import Module
+from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -52,7 +52,6 @@ from .dataset import get_zarr_dataset
 def training_loop(
     task,
     run_dir=".",  # Output directory.
-    dataset_kwargs={},  # Options for training set.
     data_loader_kwargs={},  # Options for torch.utils.data.DataLoader.
     network_kwargs={},  # Options for model and preconditioning.
     loss_kwargs={},  # Options for loss function.
@@ -67,7 +66,6 @@ def training_loop(
     lr_rampup_kimg=10000,  # Learning rate ramp-up duration.
     loss_scaling=1,  # Loss scaling factor for reducing FP16 under/overflows.
     kimg_per_tick=50,  # Interval of progress prints.
-    snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     train_data_path=None,
@@ -103,7 +101,7 @@ def training_loop(
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
 
     # wandb logger
     initialize_wandb(

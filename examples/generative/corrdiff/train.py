@@ -27,6 +27,7 @@ import re
 import warnings
 
 import hydra
+from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 from training import training_loop
@@ -57,10 +58,9 @@ def main(cfg: DictConfig) -> None:
     OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
 
     # Parse options
-    regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
+    regression_checkpoint_path = getattr(cfg, to_absolute_path("regression_checkpoint_path"), None)
     task = getattr(cfg, "task")
-    outdir = getattr(cfg, "outdir", "./output")
-    data = getattr(cfg, "data", "./data")
+    outdir = getattr(cfg, to_absolute_path("outdir"), "./output"))
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
     precond = getattr(cfg, "precond", "unetregression")
 
@@ -85,7 +85,6 @@ def main(cfg: DictConfig) -> None:
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     desc = getattr(cfg, "desc")
     tick = getattr(cfg, "tick", 1)
-    snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
@@ -95,7 +94,7 @@ def main(cfg: DictConfig) -> None:
     c = EasyDict()
     c.task = task
     c.wandb_mode = wandb_mode
-    c.train_data_path = getattr(cfg, "train_data_path")
+    c.train_data_path = getattr(cfg, to_absolute_path("train_data_path"))
     c.crop_size_x = getattr(cfg, "crop_size_x", 448)
     c.crop_size_y = getattr(cfg, "crop_size_y", 448)
     c.n_history = getattr(cfg, "n_history", 0)
@@ -113,8 +112,8 @@ def main(cfg: DictConfig) -> None:
     c.ds_factor = getattr(cfg, "ds_factor", 1)
     c.min_path = getattr(cfg, "min_path", None)
     c.max_path = getattr(cfg, "max_path", None)
-    c.global_means_path = getattr(cfg, "global_means_path", None)
-    c.global_stds_path = getattr(cfg, "global_stds_path", None)
+    c.global_means_path = getattr(cfg, to_absolute_path("global_means_path"), None)
+    c.global_stds_path = getattr(cfg, to_absolute_path("global_stds_path"), None)
     c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
     c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     c.normalization = getattr(cfg, "normalization", "v2")
@@ -124,13 +123,15 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs(".logs", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
+
+    # inform about the output
+    logger.info(f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}")
 
     # Initialize config dict.
-    c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
     c.data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
@@ -238,7 +239,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size=batch, batch_gpu=batch_gpu)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
+    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -257,7 +258,6 @@ def main(cfg: DictConfig) -> None:
         c.ema_rampup_ratio = None
 
     # Description string.
-    cond_str = "cond" if c.dataset_kwargs.use_labels else "uncond"
     dtype_str = "fp16" if c.network_kwargs.use_fp16 else "fp32"
     desc = f"{cond_str:s}-{arch:s}-{precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}"
     if desc is not None:
@@ -273,8 +273,6 @@ def main(cfg: DictConfig) -> None:
     logger0.info("Training options:")
     logger0.info(json.dumps(c, indent=2))
     logger0.info(f"Output directory:        {c.run_dir}")
-    logger0.info(f"Dataset path:            {c.dataset_kwargs.path}")
-    logger0.info(f"Class-conditional:       {c.dataset_kwargs.use_labels}")
     logger0.info(f"Network architecture:    {arch}")
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
