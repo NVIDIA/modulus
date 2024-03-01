@@ -17,24 +17,21 @@
 """Generate random images using the techniques described in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import cftime
+from concurrent.futures import ThreadPoolExecutor
 import datetime
+
+import cftime
+from einops import rearrange
 import hydra
 import netCDF4 as nc
-import numpy as np
 import nvtx
+from omegaconf import OmegaConf, DictConfig
 import torch
+from torch.distributed import gather
 import torch._dynamo
 import tqdm
-import training.dataset
-import training.time
-from einops import rearrange
-from omegaconf import DictConfig
-from training.dataset import (
-    denormalize,
-)
 
-from torch.distributed import gather
+
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import (
@@ -44,7 +41,12 @@ from modulus.utils.generative import (
 )
 from module import Module  # TODO import from Core once the kwargs issue is fixed
 
-from concurrent.futures import ThreadPoolExecutor
+from datasets.base import DownscalingDataset
+from datasets.dataset import init_dataset_from_config
+from training.time import convert_datetime_to_cftime, time_range
+
+
+time_format = "%Y-%m-%dT%H:%M:%S"
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
@@ -81,35 +83,31 @@ def main(cfg: DictConfig) -> None:
     S_noise = getattr(cfg, "S_noise", 1)
 
     # Parse data options
-    train_data_path = getattr(cfg, "train_data_path")
+    times_range = getattr(cfg, "time_range", None)
     patch_size = getattr(cfg, "patch_size", 448)
-    crop_size_x = getattr(cfg, "crop_size_x", 448)
-    crop_size_y = getattr(cfg, "crop_size_y", 448)
-    n_history = getattr(cfg, "n_history", 0)
-    in_channels = getattr(
-        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
-    )
-    out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
-    img_shape_x = getattr(cfg, "img_shape_x", 448)
-    img_shape_y = getattr(cfg, "img_shape_y", 448)
     patch_shape_x = getattr(cfg, "patch_shape_x", 448)
     patch_shape_y = getattr(cfg, "patch_shape_y", 448)
     overlap_pix = getattr(cfg, "overlap_pix", 0)
     boundary_pix = getattr(cfg, "boundary_pix", 2)
-    roll = getattr(cfg, "roll", False)
-    add_grid = getattr(cfg, "add_grid", True)
-    ds_factor = getattr(cfg, "ds_factor", 1)
-    min_path = getattr(cfg, "min_path", None)
-    max_path = getattr(cfg, "max_path", None)
-    global_means_path = getattr(cfg, "global_means_path", None)
-    global_stds_path = getattr(cfg, "global_stds_path", None)
-    gridtype = getattr(cfg, "gridtype", "sinusoidal")
-    N_grid_channels = getattr(cfg, "N_grid_channels", 4)
-    normalization = getattr(cfg, "normalization", "v2")
+
+    if times_range is not None:
+        times = []
+        t_start = datetime.datetime.strptime(times_range[0], time_format)
+        t_end = datetime.datetime.strptime(times_range[1], time_format)
+        dt = datetime.timedelta(hours=(times_range[2] if len(times_range) > 2 else 1))
+        times = [
+            t.strftime(time_format)
+            for t in time_range(t_start, t_end, dt, inclusive=True)
+        ]
     times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
 
     # writer options
     num_writer_workers = getattr(cfg, "num_writer_workers", 1)
+
+    # Create dataset object
+    dataset_cfg = OmegaConf.to_container(cfg.dataset)
+    dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
+    (img_shape_y, img_shape_x) = dataset.image_shape()
 
     # Sampler kwargs
     if sampling_method == "stochastic":
@@ -157,31 +155,6 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
-
-    logger0.info(f"Train data path: {train_data_path}")
-    dataset, sampler = get_dataset_and_sampler(
-        path=train_data_path,  # TODO check if this should be train data path
-        n_history=n_history,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        img_shape_x=img_shape_x,
-        img_shape_y=img_shape_y,
-        crop_size_x=crop_size_x,
-        crop_size_y=crop_size_y,
-        roll=roll,
-        add_grid=add_grid,
-        train=None,
-        ds_factor=ds_factor,
-        min_path=min_path,
-        max_path=max_path,
-        global_means_path=global_means_path,
-        global_stds_path=global_stds_path,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
-        times=times,
-        normalization=normalization,
-        all_times=True,
-    )
 
     logger0.info(f"torch.__version__: {torch.__version__}")
 
@@ -235,8 +208,8 @@ def main(cfg: DictConfig) -> None:
                 image_lr_patch = rearrange(
                     image_lr,
                     "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                    h1=crop_size_x // patch_size,
-                    w1=crop_size_y // patch_size,
+                    h1=img_shape_x // patch_size,
+                    w1=img_shape_y // patch_size,
                 )
                 torch.cuda.nvtx.range_pop()
             image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
@@ -343,66 +316,16 @@ def main(cfg: DictConfig) -> None:
 
 
 def _get_name(channel_info):
-    plev = (
-        ""
-        if np.isnan(channel_info["pressure"])
-        else "{:d}".format(int(channel_info["pressure"]))
-    )
-    return channel_info["variable"] + plev
+    return channel_info.name + channel_info.level
 
 
-def get_dataset_and_sampler(
-    path,
-    n_history,
-    in_channels,
-    out_channels,
-    img_shape_x,
-    img_shape_y,
-    crop_size_x,
-    crop_size_y,
-    roll,
-    add_grid,
-    train,
-    ds_factor,
-    min_path,
-    max_path,
-    global_means_path,
-    global_stds_path,
-    gridtype,
-    N_grid_channels,
-    times,
-    normalization="v1",
-    all_times=False,
-):
+def get_dataset_and_sampler(dataset_cfg, times):
     """
     Get a dataset and sampler for generation.
     """
-    dataset = training.dataset.get_zarr_dataset(
-        path=path,
-        n_history=n_history,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        img_shape_x=img_shape_x,
-        img_shape_y=img_shape_y,
-        crop_size_x=crop_size_x,
-        crop_size_y=crop_size_y,
-        roll=roll,
-        add_grid=add_grid,
-        train=train,
-        ds_factor=ds_factor,
-        min_path=min_path,
-        max_path=max_path,
-        global_means_path=global_means_path,
-        global_stds_path=global_stds_path,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
-        normalization=normalization,
-        all_times=all_times,
-    )
+    (dataset, _) = init_dataset_from_config(dataset_cfg, batch_size=1)
     plot_times = [
-        training.time.convert_datetime_to_cftime(
-            datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")
-        )
+        convert_datetime_to_cftime(datetime.datetime.strptime(time, time_format))
         for time in times
     ]
     all_times = dataset.time()
@@ -448,11 +371,7 @@ def generate_and_save(
     writer_executor = ThreadPoolExecutor(max_workers=num_writer_workers)
     writer_threads = []
 
-    input_channel_info = dataset.input_channels()
-    output_channel_info = dataset.output_channels()
     times = dataset.time()
-    input_norm = dataset.info()["input_normalization"]
-    target_norm = dataset.info()["target_normalization"]
 
     for image_tar, image_lr, index in iter(data_loader):
         time_index += 1
@@ -482,12 +401,7 @@ def generate_and_save(
                 writer_executor.submit(
                     save_images,
                     writer,
-                    list(dataset.in_channels),
-                    input_channel_info,
-                    list(dataset.out_channels),
-                    output_channel_info,
-                    input_norm,
-                    target_norm,
+                    dataset,
                     list(times),
                     image_out.cpu(),
                     image_tar.cpu(),
@@ -624,15 +538,11 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
     latents,
     img_lr,
     class_labels=None,
-    randn_like=torch.randn_like,
     num_steps=2,
     sigma_min=0.0,
     sigma_max=0.0,
     rho=7,
-    S_churn=0,
-    S_min=0,
-    S_max=float("inf"),
-    S_noise=0.0,
+    **kwargs,
 ):
     """
     Perform U-Net regression with temporal sampling.
@@ -689,12 +599,7 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
 
 def save_images(
     writer,
-    in_channels,
-    input_channel_info,
-    out_channels,
-    output_channel_info,
-    input_norm,
-    target_norm,
+    dataset: DownscalingDataset,
     times,
     image_out,
     image_tar,
@@ -722,28 +627,13 @@ def save_images(
     t_index (int): index where times are located
     """
     # weather sub-plot
-    mx, sx = input_norm
-    mx = mx[in_channels]
     image_lr2 = image_lr[0].unsqueeze(0)
-
-    # add zeros for grid embeddings
-    padding = image_lr2.shape[1] - len(mx)
-    if not padding >= 0:
-        raise ValueError("padding must be non-negative")
-
-    mx = np.concatenate([mx, np.zeros(padding)])
-    # add zeros for grid embeddings
-    sx = sx[in_channels]
-    sx = np.concatenate([sx, np.ones(padding)])
     image_lr2 = image_lr2.cpu().numpy()
-    image_lr2 = denormalize(image_lr2, mx, sx)
+    image_lr2 = dataset.denormalize_input(image_lr2)
 
-    my, sy = target_norm
-    my = my[out_channels]
-    sy = sy[out_channels]
     image_tar2 = image_tar[0].unsqueeze(0)
     image_tar2 = image_tar2.cpu().numpy()
-    image_tar2 = denormalize(image_tar2, my, sy)
+    image_tar2 = dataset.denormalize_output(image_tar2)
 
     # some runtime assertions
     if image_tar2.ndim != 4:
@@ -756,12 +646,12 @@ def save_images(
 
         # Denormalize the input and outputs
         image_out2 = image_out2.cpu().numpy()
-        image_out2 = denormalize(image_out2, my, sy)
+        image_out2 = dataset.denormalize_output(image_out2)
 
         time = times[t_index]
         writer.write_time(time_index, time)
         for channel_idx in range(image_out2.shape[1]):
-            info = output_channel_info[channel_idx]
+            info = dataset.output_channels()[channel_idx]
             channel_name = _get_name(info)
             truth = image_tar2[0, channel_idx]
 
@@ -770,6 +660,7 @@ def save_images(
                 channel_name, time_index, idx, image_out2[0, channel_idx]
             )
 
+        input_channel_info = dataset.input_channels()
         for channel_idx in range(len(input_channel_info)):
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
@@ -791,23 +682,23 @@ class NetCDFWriter:
         ny, nx = lat.shape
 
         # create lat/lon grid
-        f.createDimension("x", nx - 2)
-        f.createDimension("y", ny - 2)
+        f.createDimension("x", nx)
+        f.createDimension("y", ny)
 
         v = f.createVariable("lat", "f", dimensions=("y", "x"))
-        v[:] = lat[1:-1, 1:-1]
+        v[:] = lat
         v.standard_name = "latitude"
         v.units = "degrees_north"
 
         v = f.createVariable("lon", "f", dimensions=("y", "x"))
-        v[:] = lon[1:-1, 1:-1]
+        v[:] = lon
         v.standard_name = "longitude"
         v.units = "degrees_east"
 
         # create time dimension
         v = f.createVariable("time", "i8", ("time"))
         v.calendar = "standard"
-        v.units = "hours since 1990-01-01 0:0:0"
+        v.units = "hours since 1990-01-01 00:00:00"
 
         self.truth_group = f.createGroup("truth")
         self.prediction_group = f.createGroup("prediction")
@@ -821,10 +712,6 @@ class NetCDFWriter:
             )
 
         # setup input data in netCDF
-
-        n_grid_inputs = 4  # TODO get this from the model object
-        for i in range(n_grid_inputs):
-            input_channels.append({"variable": "grid", "pressure": i})
 
         for variable in input_channels:
             name = _get_name(variable)
