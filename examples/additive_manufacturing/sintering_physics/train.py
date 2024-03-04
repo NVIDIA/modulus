@@ -167,8 +167,7 @@ def Train(rank_zero_logger, dist):
             inputs, noise_std_last_step=C.noise_std
         )
         if C.loss.startswith("anchor"):
-            rank_zero_logger.info("compute noise_mask...")
-            print("compute noise_mask")
+            rank_zero_logger.info("Compute noise_mask...")
             # if C.loss == 'anchor':
 
             non_kinematic_mask = utils.get_metal_mask(features["particle_type"])
@@ -564,7 +563,7 @@ def Test(rank_zero_logger, dist):
                 # For provided ckpt with missing keys, ignore
                 model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-                rank_zero_logger.info(f"device: {device}")
+                rank_zero_logger.info(f"Device: {device}")
                 # config optimizer
                 # todo: check msg passing device
                 model.setMessagePassingDevices(["cuda:0"])
@@ -580,10 +579,10 @@ def Test(rank_zero_logger, dist):
             )
             global_context = features["step_context"].to(device)
             rank_zero_logger.info(
-                f"\n initial_positions shape: {initial_positions.shape}"
+                f"\n Initial_positions shape: {initial_positions.shape}"
             )
             rank_zero_logger.info(
-                f"\n ground_truth_positions shape: {ground_truth_positions.shape}"
+                f"\n Ground_truth_positions shape: {ground_truth_positions.shape}"
             )
 
             num_steps = ground_truth_positions.shape[1]
@@ -655,10 +654,10 @@ def Test(rank_zero_logger, dist):
 
             updated_predictions = torch.stack(updated_predictions)
             rank_zero_logger.info(
-                f"\n updated_predictions shape: {updated_predictions.shape}"
+                f"\n Updated_predictions shape: {updated_predictions.shape}"
             )
             rank_zero_logger.info(
-                f"\n ground_truth_positions shape: {ground_truth_positions.shape}"
+                f"\n Ground_truth_positions shape: {ground_truth_positions.shape}"
             )
 
             initial_positions_list = initial_positions.cpu().numpy().tolist()
@@ -688,7 +687,7 @@ def Test(rank_zero_logger, dist):
                 json.dump(rollout_op, file_object)
 
             example_index += 1
-            rank_zero_logger.info(f"prediction time: {time.time()-start_time}\n")
+            rank_zero_logger.info(f"Prediction time: {time.time()-start_time}\n")
 
 
 def main(_):
@@ -713,8 +712,10 @@ def main(_):
 
     if C.mode == "train":
         Train(rank_zero_logger, dist)
-    else:
+    elif C.mode == "eval_rollout":
         Test(rank_zero_logger, dist)
+    else:
+        raise NotImplementedError("Mode not implemented ")
 
 
 if __name__ == "__main__":

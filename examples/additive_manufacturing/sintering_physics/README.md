@@ -33,10 +33,11 @@ simulation data files
 Change the params in constants.py for training:
 
 - mode: "train"
-- model_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
+- ckpt_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
 - data_path: {data path for the pre-processed data in tfrecord}, i.e. "./data/test_validation"
 - noise_std: i.e.1e-9
-- loss: i.e.me loss
+- loss: i.e. me loss # options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
+
 Then run:
 
 ```bash
@@ -55,9 +56,10 @@ Currently default params:
 Change the params in constants.py for testing:
 
 - mode: "eval_rollout"
+- eval_split: "test"
 - batch_size: 1
 - noise_std: 0
-- model_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
+- ckpt_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
 - output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
 
@@ -83,10 +85,11 @@ python render_rollout.py
 Change the params in constants.py for inference run:
 
 (model tested with spliting the entire sintering profile into 2 stages, can combine the entire sintering profile inferencing according to train schema)
-
+- mode: "rollout"
+- eval_split: "inference"  # name of the tfrecord dataset 
 - noise_std: 0
-- model_path_s1={path to model trained ckpt for sintering stage-1}, i.e. "models/ckpt/model_s1.pt"
-- model_path_s2={path to model trained ckpt for sintering stage-2}, i.e. "models/ckpt/model_s2.pt"
+- batch_size: 1
+- ckpt_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/models/ckpt/model_loss-4.17E-06_step-1113000.pt"
 - output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
 

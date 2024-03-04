@@ -28,28 +28,26 @@ from typing import Tuple, Optional
 class Constants(BaseModel):
     """Virtual Foundry (Digital Sintering) Graphnet constants"""
 
-    # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval', 'eval_rollout']
-    mode: str = "train"
-    # eval_split is Split to use when running evaluation, options: ['train', 'valid', 'test']
+    # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval_rollout', 'rollout']
+    mode: str = "rollout"
+    # eval_split is Split to use when running evaluation, the dataset name, options: ['train', 'valid', 'test']
     eval_split: str = "test"
 
     # data configs
     data_path: str = "./data/test_validation"
 
     """ training configs """
-    batch_size: int = 2
+    batch_size: int = 1
     num_steps: int = int(2e7)
     eval_steps: int = 1
-    # default 6.7e-4, for eval, set noise_std=0
-    noise_std: float = 1e-9
-    # loss type options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
+    noise_std: float = 0
     loss: str = "me"
     # loss_decay_factor for loss type = me, for example, range (0, 1]
     loss_decay_factor: float = 0.6
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    ckpt_path_vfgn: str = "models/test2403"
+    ckpt_path_vfgn: str = "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
     # The path for saving outputs (e.g. rollouts).
     output_path: str = "rollouts/test24"
     prefetch_buffer_size: int = 100
@@ -65,10 +63,6 @@ class Constants(BaseModel):
     """ test & visualization configs """
     # Set False for: rollout the predictions, True for: single-step prediction for all steps
     rollout_refine: bool = False
-    meta1: str = "meta1"
-    meta2: str = "meta2"
-    ckpt_path_s1: str =  "models/ckpt/model_s1.pt"
-    ckpt_path_s2: str = "models/ckpt/model_s2.pt"
 
     # Rollout settings
     rollout_path: str = "rollouts/rollout_test_0.json"
