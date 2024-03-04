@@ -45,7 +45,7 @@ METAL_PARTICLE_ID = 2  # refers to normal particles
 ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
 
 
-def batch_concat_lambda(dataset, batch_size):
+def batch_concat(dataset, batch_size):
     """We implement batching as concatenating on the leading axis."""
 
     # We create a dataset of datasets of length batch_size.
@@ -67,63 +67,6 @@ def batch_concat_lambda(dataset, batch_size):
     # We run through the nest and concatenate each entry with the previous state.
     def reduce_window(initial_state, ds):
         return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
-
-    return windowed_ds.map(
-        lambda *x: tree.map_structure(reduce_window, initial_state, x)
-    )
-
-
-def batch_concat(dataset, batch_size):
-    """
-    We implement batching as concatenating on the leading axis.
-    dataset:  <_ShuffleDataset, i.e.
-                element_spec=(
-                        {'particle_type': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
-                        'senders': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
-                        'receivers': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
-                        'step_context': TensorSpec(shape=(1, 33), dtype=tf.float64, name=None),
-                        'position': TensorSpec(shape=(None, 5, 3), dtype=tf.float64, name=None),
-                        'n_particles_per_example': TensorSpec(shape=(1,), dtype=tf.int32, name=None),
-                        'n_edges_per_example': TensorSpec(shape=(1,), dtype=tf.int32, name=None)
-                        },
-                        TensorSpec(shape=(None, 1, 3), dtype=tf.float64, name=None))>
-    """
-
-    # We create a dataset of datasets of length batch_size.
-    windowed_ds = dataset.window(batch_size)
-    # The plan is then to reduce every nested dataset by concatenating. We can
-    # do this using tf.data.Dataset.reduce. This requires an initial state, and
-    # then incrementally reduces by running through the dataset
-
-    # Get initial state. In this case this will be empty tensors of the
-    # correct shape.
-
-    # def form_tensor(spec):
-    #     tensor_ = tf.zeros(  # pylint: disable=g-long-lambda
-    #                     shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype)
-    #
-    #     return tensor_
-    #
-    #
-    # initial_state = tree.map_structure(form_tensor(dataset.element_spec),
-    #                                    dataset.element_spec)
-
-    # for each item in element_spec, init a tensor with matching size of zeros
-    initial_state = tree.map_structure(
-        lambda spec: tf.zeros(  # pylint: disable=g-long-lambda
-            shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype
-        ),
-        dataset.element_spec,
-    )
-    #
-    # print("check init_state: ", initial_state0)
-    # print("check init_state: ", initial_state1)
-    # exit()
-
-    # We run through the nest and concatenate each entry with the previous state.
-    def reduce_window(initial_state, ds):
-        return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
-
 
     return windowed_ds.map(
         lambda *x: tree.map_structure(reduce_window, initial_state, x)
@@ -237,6 +180,12 @@ def prepare_inputs(tensor_dict):
         # Method: input the entire sequence of sintering profile
         tensor_dict["step_context"] = tf.reshape(tensor_dict["step_context"], [1, -1])
 
+    # if mode== inference:
+    #     if "step_context" in tensor_dict:
+    #         tensor_dict["step_context"] = tensor_dict["step_context"][-predict_length - 1]
+    #         # Add an extra dimension for stacking via concat.
+    #         tensor_dict["step_context"] = tensor_dict["step_context"][tf.newaxis]
+
     print(
         "prepare inputs, tensor_dict['step_context'] shape: ",
         tensor_dict["step_context"].shape,
@@ -255,6 +204,8 @@ def prepare_rollout_inputs(context, features):
 
     #  can change whether to Remove the target from the input, with: out_dict['position'] = pos[:, :-1]
     out_dict["position"] = pos
+    #  if mode == "inference
+    #     out_dict["position"] = pos[:, :-1]
 
     # Compute the number of nodes
     out_dict["n_particles_per_example"] = [tf.shape(pos)[0]]
@@ -287,12 +238,11 @@ class GraphDataset:
         )()
 
         if mode == "rollout":
-            # test with test data size:
+            # test / inference with test data size:
             self.size = len(list(self.dataset))
         else:
             # train
             self.size = size
-        print("checked ds size: ", mode, self.size)
 
         self.dataset = iter(self.dataset)
         self.pos = 0
@@ -301,7 +251,7 @@ class GraphDataset:
         return self.size
 
     def __next__(self):
-        print("get next ds: pos/ size: ", self.pos, self.size)
+        # print("get next ds: pos/ size: ", self.pos, self.size)
         if self.pos < self.size:
             features, targets = self.dataset.get_next()
             for key in features:

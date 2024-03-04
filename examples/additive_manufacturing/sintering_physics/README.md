@@ -50,7 +50,7 @@ Currently default params:
 - NUM_PARTICLE_TYPES = 3
 - Provided ckpt trained at every 100 step of Physcis sintering simulation data
 
-## Test
+## Test (with the provided sample data)
 
 Change the params in constants.py for testing:
 
@@ -60,10 +60,6 @@ Change the params in constants.py for testing:
 - model_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/model_loss-4.17E-06_step-1113000.pt"
 - output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
-
-- version_modulus
-  - to test / inference with provided trained ckpt : version_modulus: False
-  - to test / inference with your own newly trained ckpt : version_modulus: True
 
 
 Then run: 
@@ -80,6 +76,23 @@ python train.py
 
 ```bash
 python render_rollout.py
+```
+
+## Inference 
+
+Change the params in constants.py for inference run:
+
+(model tested with spliting the entire sintering profile into 2 stages, can combine the entire sintering profile inferencing according to train schema)
+
+- noise_std: 0
+- model_path_s1={path to model trained ckpt for sintering stage-1}, i.e. "models/ckpt/model_s1.pt"
+- model_path_s2={path to model trained ckpt for sintering stage-2}, i.e. "models/ckpt/model_s2.pt"
+- output_path: {path to store outputs}, i.e. "rollouts/test24"
+- data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
+
+
+```bash
+python inference.py
 ```
 
 ## Data

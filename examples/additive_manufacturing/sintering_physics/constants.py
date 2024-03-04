@@ -36,7 +36,7 @@ class Constants(BaseModel):
     # data configs
     data_path: str = "./data/test_validation"
 
-    # training configs
+    """ training configs """
     batch_size: int = 2
     num_steps: int = int(2e7)
     eval_steps: int = 1
@@ -62,10 +62,13 @@ class Constants(BaseModel):
     # performance configs
     fp16: bool = False
 
-    # test & visualization configs
+    """ test & visualization configs """
+    # Set False for: rollout the predictions, True for: single-step prediction for all steps
     rollout_refine: bool = False
     meta1: str = "step100_s1"
     meta2: str = "step100_s2"
+    model_path_s1: str =  "models/step100_s1_weighted/model_loss-1.95E-06_step-154700.pt"
+    model_path_s2: str = "models/step100_s2_lr5_weighted/model_loss-7.16E-05_step-135850.pt"
 
     # Rollout settings
     rollout_path: str = "rollouts/rollout_test_0.json"
