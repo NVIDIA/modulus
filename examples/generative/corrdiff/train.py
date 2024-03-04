@@ -203,7 +203,7 @@ def main(cfg: DictConfig) -> None:
 
     # Preconditioning & loss function.
     if precond == "edm":
-        c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
+        c.network_kwargs.class_name = "training.networks.EDMPrecondSRV2"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
         c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
