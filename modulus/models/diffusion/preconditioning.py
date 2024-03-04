@@ -758,9 +758,6 @@ class EDMPrecondSR(Module):
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
         x = x.to(torch.float32)
-        # Apply scaling to x
-        x = (1 / (self.sigma_data**2 + sigma**2).sqrt()) * x
-
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
             None
@@ -780,10 +777,14 @@ class EDMPrecondSR(Module):
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
 
-        x = torch.cat((x, img_lr), dim=1)
+        if img_lr is None:
+            arg = c_in * x
+        else:
+            img_lr = img_lr.to(torch.float32)
+            arg = torch.cat([c_in * x, img_lr], dim=1)
 
         F_x = self.model(
-            (c_in * x).to(dtype),
+            (c_in * arg).to(dtype),
             c_noise.flatten(),
             class_labels=class_labels,
             **model_kwargs,
@@ -795,8 +796,8 @@ class EDMPrecondSR(Module):
             )
 
         # Skip connection - for SR there's size mismatch bwtween input and output
-        x = x[:, 0 : self.img_out_channels, :, :]
-        D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        arg = arg[:, 0 : self.img_out_channels, :, :]
+        D_x = c_skip * arg + c_out * F_x.to(torch.float32)
         return D_x
 
     @staticmethod
