@@ -264,8 +264,8 @@ def main(cfg: DictConfig) -> None:
                 image_out = rearrange(
                     image_out,
                     "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                    h1=crop_size_x // patch_size,
-                    w1=crop_size_y // patch_size,
+                    h1=img_shape_x // patch_size,
+                    w1=img_shape_y // patch_size,
                 )
 
             # Gather tensors on rank 0
