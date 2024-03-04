@@ -1,19 +1,11 @@
 # ignore_header_test
 # ruff: noqa: E402
 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 # © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -53,7 +45,7 @@ METAL_PARTICLE_ID = 2  # refers to normal particles
 ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
 
 
-def batch_concat(dataset, batch_size):
+def batch_concat_lambda(dataset, batch_size):
     """We implement batching as concatenating on the leading axis."""
 
     # We create a dataset of datasets of length batch_size.
@@ -80,6 +72,65 @@ def batch_concat(dataset, batch_size):
         lambda *x: tree.map_structure(reduce_window, initial_state, x)
     )
 
+
+def batch_concat(dataset, batch_size):
+    """
+    We implement batching as concatenating on the leading axis.
+    dataset:  <_ShuffleDataset, i.e.
+                element_spec=(
+                        {'particle_type': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
+                        'senders': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
+                        'receivers': TensorSpec(shape=(None,), dtype=tf.int64, name=None),
+                        'step_context': TensorSpec(shape=(1, 33), dtype=tf.float64, name=None),
+                        'position': TensorSpec(shape=(None, 5, 3), dtype=tf.float64, name=None),
+                        'n_particles_per_example': TensorSpec(shape=(1,), dtype=tf.int32, name=None),
+                        'n_edges_per_example': TensorSpec(shape=(1,), dtype=tf.int32, name=None)
+                        },
+                        TensorSpec(shape=(None, 1, 3), dtype=tf.float64, name=None))>
+    """
+
+    # We create a dataset of datasets of length batch_size.
+    windowed_ds = dataset.window(batch_size)
+    print("windowed_ds: ", windowed_ds)
+    print("element_spec: ", windowed_ds.element_spec)# windowed_ds.element_spec.shape)
+    print("as list: ", windowed_ds.element_spec.shape.as_list())
+    # The plan is then to reduce every nested dataset by concatenating. We can
+    # do this using tf.data.Dataset.reduce. This requires an initial state, and
+    # then incrementally reduces by running through the dataset
+
+    # Get initial state. In this case this will be empty tensors of the
+    # correct shape.
+
+    # def form_tensor(spec):
+    #     tensor_ = tf.zeros(  # pylint: disable=g-long-lambda
+    #                     shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype)
+    #
+    #     return tensor_
+    #
+    #
+    # initial_state = tree.map_structure(form_tensor(dataset.element_spec),
+    #                                    dataset.element_spec)
+
+    # for each item in element_spec, init a tensor with matching size of zeros
+    initial_state = tree.map_structure(
+        lambda spec: tf.zeros(  # pylint: disable=g-long-lambda
+            shape=[0] + spec.shape.as_list()[1:], dtype=spec.dtype
+        ),
+        dataset.element_spec,
+    )
+    #
+    # print("check init_state: ", initial_state0)
+    # print("check init_state: ", initial_state1)
+    # exit()
+
+    # We run through the nest and concatenate each entry with the previous state.
+    def reduce_window(initial_state, ds):
+        return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
+
+
+    return windowed_ds.map(
+        lambda *x: tree.map_structure(reduce_window, initial_state, x)
+    )
 
 def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
     """Gets the learning simulation input function for tf.estimator.Estimator.
@@ -124,6 +175,7 @@ def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
                 ds = ds.shuffle(512)
 
             # Custom batching on the leading axis.
+            print("before apply batch_concat ds: ", ds)
             ds = batch_concat(ds, batch_size)
         elif mode == "rollout":
             if not batch_size == 1:
