@@ -91,9 +91,6 @@ def batch_concat(dataset, batch_size):
 
     # We create a dataset of datasets of length batch_size.
     windowed_ds = dataset.window(batch_size)
-    print("windowed_ds: ", windowed_ds)
-    print("element_spec: ", windowed_ds.element_spec)# windowed_ds.element_spec.shape)
-    print("as list: ", windowed_ds.element_spec.shape.as_list())
     # The plan is then to reduce every nested dataset by concatenating. We can
     # do this using tf.data.Dataset.reduce. This requires an initial state, and
     # then incrementally reduces by running through the dataset
