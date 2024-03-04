@@ -72,6 +72,7 @@ def batch_concat(dataset, batch_size):
         lambda *x: tree.map_structure(reduce_window, initial_state, x)
     )
 
+
 def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
     """Gets the learning simulation input function for tf.estimator.Estimator.
 
