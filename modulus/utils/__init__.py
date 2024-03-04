@@ -18,4 +18,3 @@ from .capture import (
     StaticCaptureEvaluateNoGrad,
     StaticCaptureTraining,
 )
-from .neighbor_list import radius_search
