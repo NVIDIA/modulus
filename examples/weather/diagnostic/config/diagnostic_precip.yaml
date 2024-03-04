@@ -15,7 +15,7 @@
 # limitations under the License.
 
 model:
-  model_type: "afno"
+  model_type: "AFNO"
   model_name: "diagnostic-precip-afno"
   inp_shape: [720, 1440]
   in_channels: 27 # TODO: this could be automated
