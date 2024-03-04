@@ -48,8 +48,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-from modulus.utils.vfgn import utils
-from modulus.utils.vfgn.utils import _read_metadata
+from modulus.datapipes.vfgn import utils
+from modulus.datapipes.vfgn.utils import _read_metadata
 from modulus.models.vfgn.graph_dataset import GraphDataset
 
 from modulus.distributed.manager import DistributedManager

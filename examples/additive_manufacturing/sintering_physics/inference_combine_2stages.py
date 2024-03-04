@@ -40,7 +40,7 @@ except ImportError:
 
 from tqdm import tqdm
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-from modulus.utils.vfgn import reading_utils
+from modulus.datapipes.vfgn import reading_utils
 
 from ..constants import Constants
 
