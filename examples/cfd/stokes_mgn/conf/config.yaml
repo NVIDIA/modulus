@@ -19,28 +19,41 @@ hydra:
     chdir: True
   run:
     dir: ./outputs/
+  
+ckpt_path: "./checkpoints"
+ckpt_name: "./stokes.pt"
+data_dir: "./dataset"
+results_dir: "./results"
 
-train_dir: /data/train
-validation_dir: /data/test
-stats_dir: /data/stats
+input_dim_nodes: 7
+input_dim_edges: 3
+output_dim: 3
+hidden_dim_node_encoder: 256
+hidden_dim_edge_encoder: 256
+hidden_dim_node_decoder: 256
 
-ckpt_path: ./checkpoints
+aggregation: "sum"
+batch_size: 1
+epochs: 500
 
-channels: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+num_training_samples: 500
+num_validation_samples: 10
+num_test_samples: 10
 
-num_steps_train: 1
-num_steps_validation: 8
+lr: 1e-4
+lr_decay_rate: 0.99985
 
-wb_artifacts: False
-use_mlflow: True
+amp: False
+jit: False
+wandb_mode: "disabled"
 
-start_epoch: 0
-max_epoch: 80
+# Physics-informed constants
+graph_path: "graph_7.vtp"
 
-num_samples_per_year_train: 1456
-num_samples_per_year_validation: 4
-num_workers_train: 8
-num_workers_validation: 8
+mlp_hidden_dim: 256
+mlp_num_layers: 6
+mlp_input_dim: 2
+mlp_output_dim: 3
 
-batch_size_train: 2
-batch_size_validation: 1
+pi_iters: 10000
+pi_lr: 0.001
