@@ -42,10 +42,10 @@ from tqdm import tqdm
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 from modulus.datapipes.vfgn import reading_utils
 
-from ..constants import Constants
+from constants import Constants
 
-C = Constants()
-
+FLAGS = Constants()
+FLAGS.batch_size = 1 
 
 flags.DEFINE_string(
     "model_path_s1",
