@@ -49,7 +49,7 @@ class Constants(BaseModel):
     l_plane: float = 30
     l_me: float = 3
     # The path for saving checkpoints of the model.
-    model_path_vfgn: str = "models/test2403"
+    ckpt_path_vfgn: str = "models/test2403"
     # The path for saving outputs (e.g. rollouts).
     output_path: str = "rollouts/test24"
     prefetch_buffer_size: int = 100
@@ -65,10 +65,10 @@ class Constants(BaseModel):
     """ test & visualization configs """
     # Set False for: rollout the predictions, True for: single-step prediction for all steps
     rollout_refine: bool = False
-    meta1: str = "step100_s1"
-    meta2: str = "step100_s2"
-    model_path_s1: str =  "models/step100_s1_weighted/model_loss-1.95E-06_step-154700.pt"
-    model_path_s2: str = "models/step100_s2_lr5_weighted/model_loss-7.16E-05_step-135850.pt"
+    meta1: str = "meta1"
+    meta2: str = "meta2"
+    ckpt_path_s1: str =  "models/ckpt/model_s1.pt"
+    ckpt_path_s2: str = "models/ckpt/model_s2.pt"
 
     # Rollout settings
     rollout_path: str = "rollouts/rollout_test_0.json"

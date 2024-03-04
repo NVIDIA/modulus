@@ -233,6 +233,7 @@ class GraphDataset:
         batch_size=1,
         prefetch_buffer_size=100,
     ):
+        self.mode = mode
         self.dataset = get_input_fn(
             data_path, batch_size, prefetch_buffer_size, mode=mode, split=split
         )()

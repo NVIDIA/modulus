@@ -148,7 +148,7 @@ def Train(rank_zero_logger, dist):
         normalization_stats=normalization_stats,
     )
 
-    writer = SummaryWriter(log_dir=C.model_path_vfgn)
+    writer = SummaryWriter(log_dir=C.ckpt_path_vfgn)
 
     optimizer = None
     device = "cpu"
@@ -474,7 +474,7 @@ def Train(rank_zero_logger, dist):
                     torch.save(
                         model.state_dict(),
                         os.path.join(
-                            C.model_path_vfgn,
+                            C.ckpt_path_vfgn,
                             "model_loss-{:.2E}_step-{}.pt".format(test_loss, step),
                         ),
                     )
@@ -560,9 +560,9 @@ def Test(rank_zero_logger, dist):
                     global_context=global_context_step.to(device),
                 )
 
-                # Loading the pretrained model from model_path_vfgn
+                # Loading the pretrained model from model ckpt_path_vfgn
                 # For provided ckpt with missing keys, ignore
-                model.load_state_dict(torch.load(C.model_path_vfgn), strict=False)
+                model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"device: {device}")
                 # config optimizer

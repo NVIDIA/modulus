@@ -224,6 +224,7 @@ def Inference(rank_zero_logger, dist):
     # config inference dataset
     dataset = GraphDataset(
         mode="rollout",
+        data_path=C.data_path,
         split=C.eval_split
     )
     rank_zero_logger.info(f"Initialized inference dataset with mode {dataset.mode}, dataset size {dataset.size}...")
@@ -322,21 +323,21 @@ def Inference(rank_zero_logger, dist):
                 ##### Load model from ckpts
                 model_s1 = load_stage_model(
                     model_s1,
-                    C.model_path_s1,
+                    C.ckpt_path_s1,
                     features,
                     global_context_step,
                     sequence_length_s1,
                 )
-                rank_zero_logger.info(f"Loaded model#1 from ckpt path {C.model_path_s1}")
+                rank_zero_logger.info(f"Loaded model#1 from ckpt path {C.ckpt_path_s1}")
 
                 model_s2 = load_stage_model(
                     model_s2,
-                    C.model_path_s2,
+                    C.ckpt_path_s2,
                     features,
                     global_context_step,
                     sequence_length_s2,
                 )
-                rank_zero_logger.info(f"Loaded model#1 from ckpt path {C.model_path_s2}")
+                rank_zero_logger.info(f"Loaded model#1 from ckpt path {C.ckpt_path_s2}")
 
                 loaded = True
 
