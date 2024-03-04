@@ -377,8 +377,11 @@ class SongUNet(Module):
                     if x.shape[1] != block.in_channels:
                         x = torch.cat([x, skips.pop()], dim=1)
                     # check for checkpointing on decoder blocks and up sampling blocks
-                    if ((x.shape[-1] > self.checkpoint_threshold and "_block" in name)
-                        or (x.shape[-1] > (self.checkpoint_threshold / 2) and "_up" in name)):
+                    if (
+                        x.shape[-1] > self.checkpoint_threshold and "_block" in name
+                    ) or (
+                        x.shape[-1] > (self.checkpoint_threshold / 2) and "_up" in name
+                    ):
                         x = checkpoint(block, x, emb, use_reentrant=False)
                     else:
                         x = block(x, emb)
