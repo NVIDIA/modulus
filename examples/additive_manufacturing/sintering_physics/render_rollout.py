@@ -121,7 +121,6 @@ def compute_accuracy_percent(rollout_data_tuple, trajectory_len):
 def plot_rollout_percentage(
     percentage_rollout_list, percent_uvw, save_path, save_name, build_name="ladder"
 ):
-
     """
     bar plot of rollout percentage loss
     Args:

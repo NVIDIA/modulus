@@ -101,7 +101,9 @@ def Inference(rank_zero_logger, dist):
     Executes the testing phase for a graph-based model, generating and
     storing predictions.
     """
-    rank_zero_logger.info(f"\n\n.......... Start calling model inference with defined data path ........\n\n")
+    rank_zero_logger.info(
+        f"\n\n.......... Start calling model inference with defined data path ........\n\n"
+    )
 
     # config test dataset
     dataset = GraphDataset(
@@ -111,7 +113,9 @@ def Inference(rank_zero_logger, dist):
         data_path=C.data_path,
         batch_size=C.batch_size,
     )
-    rank_zero_logger.info(f"Initialized inference dataset with mode {dataset.mode}, dataset size {dataset.size}...")
+    rank_zero_logger.info(
+        f"Initialized inference dataset with mode {dataset.mode}, dataset size {dataset.size}..."
+    )
 
     metadata = _read_metadata(C.data_path)
     acceleration_stats = Stats(
@@ -179,7 +183,9 @@ def Inference(rank_zero_logger, dist):
                 model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
-                rank_zero_logger.info(f"Loaded model from ckpt path: {C.ckpt_path_vfgn}")
+                rank_zero_logger.info(
+                    f"Loaded model from ckpt path: {C.ckpt_path_vfgn}"
+                )
 
                 # config optimizer
                 # todo: check msg passing device
@@ -203,9 +209,7 @@ def Inference(rank_zero_logger, dist):
 
             # num_steps = ground_truth_positions.shape[1]
             num_steps = global_context.shape[0] - INPUT_SEQUENCE_LENGTH
-            rank_zero_logger.info(
-                f"\n Start prediction for {num_steps} steps...... "
-            )
+            rank_zero_logger.info(f"\n Start prediction for {num_steps} steps...... ")
 
             current_positions = initial_positions
             updated_predictions = []
@@ -265,7 +269,6 @@ def Inference(rank_zero_logger, dist):
                 current_positions = torch.cat(
                     [current_positions[:, 1:], next_position.unsqueeze(1)], axis=1
                 )
-
 
             updated_predictions = torch.stack(updated_predictions)
             rank_zero_logger.info(

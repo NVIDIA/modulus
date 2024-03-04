@@ -107,15 +107,16 @@ def Train(rank_zero_logger, dist):
         batch_size=C.batch_size,
         prefetch_buffer_size=C.prefetch_buffer_size,
     )
-    rank_zero_logger.info(f"Initialized train dataset with mode {dataset.mode}, dataset size {dataset.size}...")
+    rank_zero_logger.info(
+        f"Initialized train dataset with mode {dataset.mode}, dataset size {dataset.size}..."
+    )
 
     testDataset = GraphDataset(
-        size=C.num_steps,
-        split="test",
-        data_path=C.data_path,
-        batch_size=C.batch_size
+        size=C.num_steps, split="test", data_path=C.data_path, batch_size=C.batch_size
     )
-    rank_zero_logger.info(f"Initialized testDataset with mode {testDataset.mode}, dataset size {testDataset.size}...")
+    rank_zero_logger.info(
+        f"Initialized testDataset with mode {testDataset.mode}, dataset size {testDataset.size}..."
+    )
 
     # config model
     metadata = _read_metadata(C.data_path)
@@ -488,7 +489,9 @@ def Test(rank_zero_logger, dist):
     Executes the testing phase for a graph-based model, generating and
     storing predictions.
     """
-    rank_zero_logger.info(f"\n\n.......... Start Testing model with defined data path ........\n\n")
+    rank_zero_logger.info(
+        f"\n\n.......... Start Testing model with defined data path ........\n\n"
+    )
 
     # config test dataset
     dataset = GraphDataset(
