@@ -58,7 +58,7 @@ def training_loop(
     augment_kwargs=None,  # Options for augmentation pipeline, None = disable.
     seed=0,  # Global random seed.
     batch_size_global=512,  # Total batch size for one training iteration.
-    batch_size_local=None,  # Limit batch size per GPU, None = no limit.
+    batch_size_gpu=None,  # Limit batch size per GPU, None = no limit.
     total_kimg=200000,  # Training duration, measured in thousands of training images.
     ema_halflife_kimg=500,  # Half-life of the exponential moving average (EMA) of model weights.
     ema_rampup_ratio=0.05,  # EMA ramp-up coefficient, None = no rampup.
@@ -106,16 +106,13 @@ def training_loop(
 
     # Select batch size per GPU.
     batch_gpu_total = batch_size_global // dist.world_size
-    logger0.info(f"batch_size_local: {batch_size_local}")
-    if batch_size_local is None or batch_size_local > batch_gpu_total:
-        batch_size_local = batch_gpu_total
-    num_accumulation_rounds = batch_gpu_total // batch_size_local
-    if (
-        batch_size_global
-        != batch_size_local * num_accumulation_rounds * dist.world_size
-    ):
+    logger0.info(f"batch_size_gpu: {batch_size_gpu}")
+    if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
+        batch_size_gpu = batch_gpu_total
+    num_accumulation_rounds = batch_gpu_total // batch_size_gpu
+    if batch_size_global != batch_size_gpu * num_accumulation_rounds * dist.world_size:
         raise ValueError(
-            "batch_size_global must be equal to batch_size_local * num_accumulation_rounds * dist.world_size"
+            "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
     img_in_channels = len(dataset.input_channels())  # noise + low-res input

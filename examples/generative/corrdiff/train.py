@@ -61,7 +61,7 @@ def main(cfg: DictConfig) -> None:
     # parse hyperparameters
     duration = getattr(cfg, "duration", 200)
     batch_size_global = getattr(cfg, "batch", 256)
-    batch_size_local = getattr(cfg, "batch_gpu", 2)
+    batch_size_gpu = getattr(cfg, "batch_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -196,7 +196,7 @@ def main(cfg: DictConfig) -> None:
     # Training options.
     c.total_kimg = max(int(duration * 1000), 1)
     c.ema_halflife_kimg = int(ema * 1000)
-    c.update(batch_size_local=batch_size_local, batch_size_global=batch_size_global)
+    c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
     c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
     if regression_checkpoint_path:
@@ -244,7 +244,7 @@ def main(cfg: DictConfig) -> None:
             json.dump(c, f, indent=2)
 
     (dataset, dataset_iterator) = init_dataset_from_config(
-        dataset_cfg, data_loader_kwargs, batch_size=batch_size_local, seed=seed
+        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
     )
 
     (img_shape_y, img_shape_x) = dataset.image_shape()
