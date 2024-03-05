@@ -16,19 +16,37 @@
 
 hydra:
   job:
-    chdir: False
+    chdir: True
+  run:
+    dir: ./outputs/
 
+data_dir: ./dataset
+ckpt_path: ./checkpoints
 
-defaults:
-  - config_train_base
+input_dim_nodes: 11
+input_dim_edges: 4
+output_dim: 4
+aggregation: sum
+hidden_dim_node_encoder: 256
+hidden_dim_edge_encoder: 256
+hidden_dim_node_decoder: 256
 
-## Main options
-outdir: "./output_regression"   
-  # Where to save the results
-arch: ddpmpp-cwb-v0-regression
-  # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: unetregression
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: regression
-  # Which model to train [regression, diffusion]
+batch_size: 1
+epochs: 500
+num_training_samples: 683
+num_validation_samples: 100
+num_test_samples: 100
 
+lr: 0.0001
+lr_decay_rate: 0.99985
+
+# performance configs
+use_apex: True
+amp: False
+jit: False
+num_dataloader_workers: 4
+do_concat_trick: False
+num_processor_checkpoint_segments: 0
+recompute_activation: False
+
+wandb_mode: disabled

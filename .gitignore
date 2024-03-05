@@ -162,6 +162,7 @@ cython_debug/
 nsight-systems*
 build/
 mlruns/
+checkpoints/
 
 # Hydra
 outputs/

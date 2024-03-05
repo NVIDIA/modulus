@@ -18,7 +18,10 @@ import os
 
 import torch
 import numpy as np
-import wandb as wb
+
+import hydra
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
 
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.stokes_dataset import StokesDataset
@@ -26,7 +29,6 @@ from modulus.launch.utils import load_checkpoint
 from modulus.launch.logging import PythonLogger
 
 from utils import relative_lp_error
-from constants import Constants
 
 try:
     from dgl.dataloading import GraphDataLoader
@@ -45,11 +47,12 @@ except:
         + "pip install pyvista"
     )
 
-C = Constants()
-
 
 class MGNRollout:
-    def __init__(self, wb):
+    def __init__(self, cfg: DictConfig, logger):
+        self.logger = logger
+        self.results_dir = cfg.results_dir
+
         # set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {self.device} device")
@@ -57,25 +60,25 @@ class MGNRollout:
         # instantiate dataset
         self.dataset = StokesDataset(
             name="stokes_test",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="test",
-            num_samples=C.num_test_samples,
+            num_samples=cfg.num_test_samples,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=False,
             drop_last=False,
         )
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.input_dim_nodes,
-            C.input_dim_edges,
-            C.output_dim,
-            aggregation=C.aggregation,
+            cfg.input_dim_nodes,
+            cfg.input_dim_edges,
+            cfg.output_dim,
+            aggregation=cfg.aggregation,
             hidden_dim_node_encoder=256,
             hidden_dim_edge_encoder=256,
             hidden_dim_node_decoder=256,
@@ -87,7 +90,7 @@ class MGNRollout:
 
         # load checkpoint
         _ = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
+            to_absolute_path(cfg.ckpt_path),
             models=self.model,
             device=self.device,
         )
@@ -129,19 +132,26 @@ class MGNRollout:
                 )
 
                 error = relative_lp_error(pred_val, target_val)
-                logger.info(f"Sample {i} - l2 error of {key}(%): {error:.3f}")
+                self.logger.info(f"Sample {i} - l2 error of {key}(%): {error:.3f}")
 
                 polydata[f"pred_{key}"] = pred_val.detach().cpu().numpy()
 
-            logger.info("-" * 50)
-            os.makedirs(C.results_dir, exist_ok=True)
-            polydata.save(os.path.join(C.results_dir, f"graph_{i}.vtp"))
+            self.logger.info("-" * 50)
+            os.makedirs(to_absolute_path(self.results_dir), exist_ok=True)
+            polydata.save(
+                os.path.join(to_absolute_path(self.results_dir), f"graph_{i}.vtp")
+            )
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
     logger.info("Rollout started...")
-    rollout = MGNRollout(wb)
+    rollout = MGNRollout(cfg, logger)
     rollout.predict()
+
+
+if __name__ == "__main__":
+    main()
