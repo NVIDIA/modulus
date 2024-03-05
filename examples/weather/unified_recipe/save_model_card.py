@@ -17,7 +17,7 @@
 import os
 import json
 
-def save_model_card(
+def save_inference_model_package(
     model,
     predicted_variables,
     unpredicted_variables,
@@ -25,12 +25,13 @@ def save_model_card(
     readme=None,
     ):
     """
-    Save model card for model global weather model.
+    Save inference model card for model global weather model.
 
-    The model card will be a directory with the following files:
+    The model package is a directory with the following files:
     - model.mdlus: The model file.
     - variables.json: A json file with the predicted and unpredicted variables.
     - README.md: A readme file with the readme text.
+    These files help transfer trained models to inference usecases.
 
     Parameters
     ----------
