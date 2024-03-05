@@ -74,7 +74,7 @@ class Sequence_Trainer:
 
         self.dataloader = GraphDataLoader(
             dataset_train,
-            batch_size=C.batch_size,
+            batch_size=C.batch_size_sequence,
             shuffle=True,
             drop_last=True,
             pin_memory=True,

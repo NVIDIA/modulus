@@ -26,9 +26,10 @@ class Constants(BaseModel):
     data_dir: str = "dataset/rawData.npy"
     pivotal_dir: str = "dataset/meshPosition_pivotal.txt"
     mesh_dir: str = "dataset/meshPosition_all.txt"
+    sequence_len: int = 401
 
     # training configs for encoder-decoder model
-    batch_size: int = 10  # GNN training batch
+    batch_size: int = 5  # GNN training batch
     epochs: int = 301
     num_training_samples: int = 400
     num_training_time_steps: int = 300
@@ -37,18 +38,18 @@ class Constants(BaseModel):
     num_input_features: int = 3
     num_output_features: int = 3
     num_edge_features: int = 3
-    knn_every_step: bool = True
     ckpt_path: str = "checkpoints/new_encoding"
     ckpt_name: str = "model.pt"
 
     # training configs for sequence model
     epochs_sequence: int = 200001
+    batch_size_sequence: int = 10
     sequence_dim: int = 768
     sequence_context_dim: int = 6
     ckpt_sequence_path: str = "checkpoints/new_sequence"
     ckpt_sequence_name: str = "sequence_model.pt"
     sequence_batch_size: int = 1
-    produce_latents = False  # Set it as True when first produce latent representations from the encoder
+    produce_latents: bool = False  # Set it as True when first produce latent representations from the encoder
 
     # performance configs
     amp: bool = False

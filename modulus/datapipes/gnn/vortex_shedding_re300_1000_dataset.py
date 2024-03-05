@@ -15,15 +15,12 @@
 # limitations under the License.
 
 import os
-import pdb
-
 import dgl
 import numpy as np
 import torch
 from dgl.data import DGLDataset
 from dgl.dataloading import GraphDataLoader
 from tqdm import tqdm
-
 from .utils import load_json, save_json
 
 
@@ -33,6 +30,7 @@ class LatentDataset(DGLDataset):
         name="dataset",
         data_dir="dataset",
         split="train",
+        sequence_len=401,
         produce_latents=True,
         Encoder=None,
         position_mesh=None,
@@ -45,7 +43,7 @@ class LatentDataset(DGLDataset):
             verbose=verbose,
         )
         self.split = split
-        self.sequence_len = 401
+        self.sequence_len = sequence_len
         self.data_dir = data_dir
         if produce_latents:
             self.save_latents(Encoder, position_mesh, position_pivotal, dist)
@@ -73,10 +71,9 @@ class LatentDataset(DGLDataset):
             listCatALL.append(nu / nu.max())
         if self.split == "train":
             index = [i for i in range(101) if i % 2 == 0]
-            # index = [0]
         else:
             index = [i for i in range(101) if i % 2 == 1]
-        # index_interest = [i for i in range(101) if i % 2 == 0]
+        
 
         self.re = torch.cat(listCatALL, dim=1)[index, :]
 
@@ -131,7 +128,6 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         # select training and testing set
         if self.split == "train":
             self.sequence_ids = [i for i in range(101) if i % 2 == 0]
-            # self.sequence_ids = [0]
         if self.split == "test":
             self.sequence_ids = [i for i in range(101) if i % 2 == 1]
 
@@ -139,9 +135,6 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         self.solution_states = torch.from_numpy(
             self.rawData["x"][self.sequence_ids, :, :, :]
         ).float()
-
-        # cell volume
-        # self.M = torch.from_numpy(self.rawData['mass'])
 
         # edge information
         self.E = torch.from_numpy(self.rawData["edge_attr"]).float()
@@ -183,8 +176,7 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         sidx = idx // self.sequence_len
         tidx = idx % self.sequence_len
 
-        # node_features = torch.cat([self.solution_states[sidx,tidx],
-        # 						   self.M],dim=1)
+        
         node_features = self.solution_states[sidx, tidx]
         node_targets = self.solution_states[sidx, tidx]
         graph = dgl.graph((self.A[0], self.A[1]), num_nodes=self.num_nodes)
@@ -224,9 +216,3 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         denormalized_invar = invar * std + mu
         return denormalized_invar
 
-
-if __name__ == "__main__":
-    data_set = VortexSheddingRe300To1000Dataset(split="train")
-    data_loader = GraphDataLoader(data_set, batch_size=5, shuffle=True)
-    for batched_graph in data_loader:
-        pdb.set_trace()
