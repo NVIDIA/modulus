@@ -60,8 +60,8 @@ def main(cfg: DictConfig) -> None:
 
     # parse hyperparameters
     duration = getattr(cfg, "duration", 200)
-    batch_size_global = getattr(cfg, "batch", 256)
-    batch_size_gpu = getattr(cfg, "batch_gpu", 2)
+    batch_size_global = getattr(cfg, "batch_size_global", 256)
+    batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)

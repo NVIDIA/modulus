@@ -28,9 +28,9 @@ data: 2023-01-24-cwb-4years.zarr
 ## Hyperparameters
 duration: 200
   # Training duration
-batch: 256
+batch_size_global: 256
   # Total batch size
-batch_gpu: 2
+batch_size_gpu: 2
   # Limit batch size per GPU
 cbase: null  # TODO check
   # Channel multiplier
