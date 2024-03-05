@@ -14,34 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-experiment_name: "Unified-Training"
-experiment_desc: "unified training recipe for global weather models"
-run_desc: "unified training recipe for global weather models"
+name: AFNO
+nr_input_channels: ${eval:'(${training.nr_input_steps} * (${curated_dataset.nr_predicted_variables} + ${curated_dataset.nr_unpredicted_variables}))'}
+nr_output_channels: ${curated_dataset.nr_predicted_variables}
+input_shape: ${transform.transformed_shape}
 
-# Get defaults
-defaults:
-
-  # Dataset
-  - dataset/tiny_6hr_subsample
-  #- dataset/6hr_subsample # uncomment for full dataset
-
-  # Curated Dataset
-  - curated_dataset/tiny_7_var
-  #- curated_dataset/7_var # uncomment for full dataset
-  
-  # Transform
-  - transform/trim_lat720
-
-  # Filesystem
-  - filesystem/local
-
-  # Model
-  - model/tiny_afno
-  #- model/afno
-  #- model/graphcastnet
-
-  # Training
-  - training/afno
-
-  # Validation
-  - validation/afno
+args:
+  inp_shape: ${model.input_shape}
+  in_channels: ${model.nr_input_channels}
+  out_channels: ${model.nr_output_channels}
+  patch_size: [8, 8]
+  embed_dim: 128
+  depth: 12
+  mlp_ratio: 4
+  drop_rate: 0.0
+  num_blocks: 8
+  sparsity_threshold: 0.01
+  hard_thresholding_fraction: 1.0

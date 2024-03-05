@@ -14,19 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import os
-import hydra
-import wandb
-import matplotlib.pyplot as plt
 import time
+from typing import Union
+
 import fsspec
+import hydra
+import matplotlib.pyplot as plt
+import torch
 import zarr
-from omegaconf import DictConfig, OmegaConf, ListConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from torch import Tensor, nn
 from torch.nn.parallel import DistributedDataParallel
-from torch.cuda.amp import GradScaler
-from torch.optim.lr_scheduler import SequentialLR
-from torch import nn
 from tqdm import tqdm
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
@@ -42,17 +41,17 @@ except:
 
 from modulus import Module
 from modulus.distributed import DistributedManager
-from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
-    initialize_mlflow,
     RankZeroLoggingWrapper,
+    initialize_mlflow,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 
 from seq_zarr_datapipe import SeqZarrDatapipe
-from save_model_card import save_model_card
+from model_packages import save_inference_model_package
 
 
 def batch_normalized_mse(pred, target) -> float:
@@ -66,7 +65,6 @@ def batch_normalized_mse(pred, target) -> float:
 
     error = diff_norms / target_norms
     return torch.mean(error)
-
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
@@ -93,7 +91,6 @@ def main(cfg: DictConfig) -> None:
     )
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
-    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
     # Initialize model
     model = Module.instantiate(
@@ -107,15 +104,6 @@ def main(cfg: DictConfig) -> None:
     )
     model = model.to(dist.device)
 
-    # Save model card
-    save_model_card(
-        model,
-        cfg.dataset.predicted_variables,
-        cfg.dataset.unpredicted_variables,
-        save_path="./model_card",
-        readme="This is a model card for the global weather model.",
-    )
- 
     # Distributed learning
     if dist.world_size > 1:
         ddps = torch.cuda.Stream()
@@ -163,8 +151,8 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Get filesystem mapper for datasets
-    train_dataset_mapper = fs.get_mapper(cfg.dataset.train_dataset_filename)
-    val_dataset_mapper = fs.get_mapper(cfg.dataset.val_dataset_filename)
+    train_dataset_mapper = fs.get_mapper(cfg.curated_dataset.train_dataset_filename)
+    val_dataset_mapper = fs.get_mapper(cfg.curated_dataset.val_dataset_filename)
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
@@ -180,10 +168,10 @@ def main(cfg: DictConfig) -> None:
 
     # Normalizer (TODO: Maybe wrap this into model)
     predicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_predicted_variables, momentum=None, affine=False
+        cfg.curated_dataset.nr_predicted_variables, momentum=None, affine=False
     ).to(dist.device)
     unpredicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_unpredicted_variables, momentum=None, affine=False
+        cfg.curated_dataset.nr_unpredicted_variables, momentum=None, affine=False
     ).to(dist.device)
 
     def normalize_variables(variables, batch_norm):
@@ -192,6 +180,16 @@ def main(cfg: DictConfig) -> None:
         variables = batch_norm(variables)
         variables = variables.view(shape)
         return variables
+
+    # Save model card
+    save_inference_model_package(
+        model,
+        cfg,
+        predicted_variable_normalizer=predicted_batch_norm,
+        unpredicted_variable_normalizer=unpredicted_batch_norm,
+        save_path="./model_card",
+        readme="This is a model card for the global weather model.",  # TODO: Add more info for NVC
+    )
 
     # Unroll network
     def unroll(
@@ -447,14 +445,16 @@ def main(cfg: DictConfig) -> None:
         if dist.rank == 0:
             # Save model card
             logger.info("Saving model card")
-            save_model_card(
+            save_inference_model_package(
                 model,
-                cfg.dataset.predicted_variables,
-                cfg.dataset.unpredicted_variables,
-                save_path="./model_card",
+                cfg,
+                predicted_variable_normalizer=predicted_batch_norm,
+                unpredicted_variable_normalizer=unpredicted_batch_norm,
+                save_path="./model_package_{}".format(cfg.experiment_name),
                 readme="This is a model card for the global weather model.",
             )
             logger.info("Finished training!")
+
 
 if __name__ == "__main__":
     main()
