@@ -99,7 +99,8 @@ def main(cfg: DictConfig) -> None:
             t.strftime(time_format)
             for t in time_range(t_start, t_end, dt, inclusive=True)
         ]
-    times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
+    else:
+        times = getattr(cfg, "times", ["2021-02-02T00:00:00"])
 
     # writer options
     num_writer_workers = getattr(cfg, "num_writer_workers", 1)
