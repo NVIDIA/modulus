@@ -197,14 +197,8 @@ class Mesh_Reduced(torch.nn.Module):
                 batch_y=batch_pivotal,
             )
         elif self.knn_every_step is False and self.knn_encoder_already is False:
-            (
-                x,
-                self.x_idx_encode,
-                self.y_idx_encode,
-                self.weights_encode,
-            ) = self.knn_interpolate(
-                x=x, pos_x=position_mesh_batch, pos_y=position_pivotal_batch
-            )
+            
+            x,self.x_idx_encode,self.y_idx_encode,self.weights_encode = self.knn_interpolate(x=x, pos_x=position_mesh_batch, pos_y=position_pivotal_batch)
             self.knn_encoder_already = True
         elif self.knn_every_step is False and self.knn_encoder_already is True:
             x = self.knn_interpolate_fast(
@@ -237,14 +231,8 @@ class Mesh_Reduced(torch.nn.Module):
                 batch_y=batch_mesh,
             )
         elif self.knn_every_step is False and self.knn_decoder_already is False:
-            (
-                x,
-                self.x_idx_decode,
-                self.y_idx_decode,
-                self.weights_decode,
-            ) = self.knn_interpolate(
-                x=x, pos_x=position_pivotal_batch, pos_y=position_mesh_batch
-            )
+            
+            x,self.x_idx_decode,self.y_idx_decode,self.weights_decode = self.knn_interpolate(x=x, pos_x=position_pivotal_batch, pos_y=position_mesh_batch)
             self.knn_decoder_already = True
         elif self.knn_every_step is False and self.knn_decoder_already is True:
             x = self.knn_interpolate_fast(

@@ -32,12 +32,12 @@ class Constants(BaseModel):
     epochs: int = 301
     num_training_samples: int = 400
     num_training_time_steps: int = 300
-    lr: float = 0.0001
+    lr: float = 0.00001 #0.0001
     lr_decay_rate: float = 0.9999991
     num_input_features: int = 3
     num_output_features: int = 3
     num_edge_features: int = 3
-    knn_every_step: bool = False
+    knn_every_step: bool = True
     ckpt_path: str = "checkpoints/new_encoding"
     ckpt_name: str = "model.pt"
 
@@ -48,7 +48,7 @@ class Constants(BaseModel):
     ckpt_sequence_path: str = "checkpoints/new_sequence"
     ckpt_sequence_name: str = "sequence_model.pt"
     sequence_batch_size: int = 1
-    produce_latents = True  # Set it as True when first produce latent representations from the encoder
+    produce_latents = False  # Set it as True when first produce latent representations from the encoder
 
     # performance configs
     amp: bool = False
