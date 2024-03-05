@@ -22,8 +22,8 @@ dt: 6
 train_years: ["1979-01-01", "2015-12-31"]
 val_years: ["2016-01-01", "2017-12-31"]
 
-nr_predicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${dataset.predicted_variables}])'}
-nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${dataset.unpredicted_variables}])'}
+nr_predicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.predicted_variables}])'}
+nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.unpredicted_variables}])'}
 
 unpredicted_variables:
   - "land_sea_mask"
@@ -37,7 +37,3 @@ predicted_variables:
   - "10m_u_component_of_wind"
   - "10m_v_component_of_wind"
   - "mean_sea_level_pressure"
-  - ["temperature", [850, 500, 250, 100, 50]]
-  - ["u_component_of_wind", [850, 500, 250, 100, 50]]
-  - ["v_component_of_wind", [850, 500, 250, 100, 50]]
-  - ["geopotential", [850, 500, 250, 100, 50]]
