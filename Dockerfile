@@ -74,7 +74,6 @@ ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
 RUN pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html
-RUN pip install --no-cache-dir --no-deps dglgo -f https://data.dgl.ai/wheels-test/repo.html
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
