@@ -209,8 +209,8 @@ def main(cfg: DictConfig) -> None:
                 image_lr_patch = rearrange(
                     image_lr,
                     "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                    h1=img_shape_x // patch_size,
-                    w1=img_shape_y // patch_size,
+                    h1=img_shape_y // patch_size,
+                    w1=img_shape_x // patch_size,
                 )
                 torch.cuda.nvtx.range_pop()
             image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
@@ -265,8 +265,8 @@ def main(cfg: DictConfig) -> None:
                 image_out = rearrange(
                     image_out,
                     "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                    h1=img_shape_x // patch_size,
-                    w1=img_shape_y // patch_size,
+                    h1=img_shape_y // patch_size,
+                    w1=img_shape_x // patch_size,
                 )
 
             # Gather tensors on rank 0
