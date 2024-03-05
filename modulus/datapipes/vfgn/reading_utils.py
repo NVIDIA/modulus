@@ -56,6 +56,7 @@ _CONTEXT_FEATURES = {
 
 
 def convert_to_tensor(x, encoded_dtype):
+    """Convert inputs to tensor"""
     if len(x) == 1:
         out = np.frombuffer(x[0].numpy(), dtype=encoded_dtype)
     else:

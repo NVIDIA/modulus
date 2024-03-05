@@ -66,6 +66,7 @@ def batch_concat(dataset, batch_size):
 
     # We run through the nest and concatenate each entry with the previous state.
     def reduce_window(initial_state, ds):
+        """reduce every nested dataset by concatenating, done using tf.data.Dataset.reduce"""
         return ds.reduce(initial_state, lambda x, y: tf.concat([x, y], axis=0))
 
     return windowed_ds.map(
@@ -87,6 +88,7 @@ def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
     """
 
     def input_fn():
+        """Gets the learning simulation input function for tf.estimator"""
         # Load the metadata of the dataset.
         metadata = _read_metadata(data_path)
 

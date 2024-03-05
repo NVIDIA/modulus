@@ -34,9 +34,6 @@ from modulus.models.vfgn.graph_network_modules import (
     MLPNet,
 )
 
-# from modulus.models.vfgn.graph_network_modules import MLPNet
-# from modulus.models.vfgn.graph_network_modules import EncodeProcessDecode
-# from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 from . import common
 
 
@@ -156,8 +153,6 @@ def test_encodeProcessDecode_forward(device):
     ).to(device)
 
     # random init node attribute tensor, edge attribute tensor
-    # node_cnt, node_feat_size = random.randint(1, 10000), random.randint(1, 100)
-    # edge_cnt, edge_feat_size = random.randint(1, 10000), random.randint(1, 100)
     node_cnt, node_feat_size = 5000, 61
     edge_cnt, edge_feat_size = 7700, 5
 
