@@ -16,7 +16,11 @@
 
 import torch
 
-from modulus.models.diffusion.preconditioning import EDMPrecondSRV2, _ConditionalPrecond
+from modulus.models.diffusion.preconditioning import (
+    EDMPrecondSRV2,
+    _ConditionalPrecond,
+)
+from modulus.models.module import Module
 
 
 def test__ConditionalPrecond():
@@ -50,6 +54,10 @@ def test__ConditionalPrecond():
     assert torch.allclose(torch.tensor(expected), torch.max(output))
 
 
-def test_EDMPrecondSRV2():
+def test_EDMPrecondSRV2_serialization(tmp_path):
     module = EDMPrecondSRV2(8, 1, 1)
     assert isinstance(module, _ConditionalPrecond)
+    model_path = tmp_path / "output.mdlus"
+    module.save(model_path.as_posix())
+    loaded = Module.from_checkpoint(model_path.as_posix())
+    assert isinstance(loaded, EDMPrecondSRV2)

@@ -896,18 +896,9 @@ class _ConditionalPrecond(torch.nn.Module):
         return torch.as_tensor(sigma)
 
 
-def EDMPrecondSRV2(
-    img_resolution,
-    img_in_channels,
-    img_out_channels,
-    label_dim=0,
-    use_fp16=False,
-    sigma_min=0.0,
-    sigma_max=float("inf"),
-    sigma_data=0.5,
-    model_type="DhariwalUNet",
-    **model_kwargs,
-) -> _ConditionalPrecond:
+class EDMPrecondSRV2(_ConditionalPrecond, Module):
+    # note this order of inheritance is necessesary  since Module.__init__ calls
+    # super().__init__
     """EDM Preconditioner with appropriate handling of conditional inputs via concatenation
 
     This helper is provided to have a similar interface to EDMPrecondSR,
@@ -947,21 +938,42 @@ def EDMPrecondSRV2(
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
     arXiv preprint arXiv:2309.15214.
     """
-    model_class = getattr(network_module, model_type)
-    model = model_class(
-        img_resolution=img_resolution,
-        in_channels=img_in_channels + img_out_channels,
-        out_channels=img_out_channels,
-        label_dim=label_dim,
+
+    def __init__(
+        self,
+        img_resolution,
+        img_in_channels,
+        img_out_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0.0,
+        sigma_max=float("inf"),
+        sigma_data=0.5,
+        model_type="DhariwalUNet",
         **model_kwargs,
-    )
-    return _ConditionalPrecond(
-        model=model,
-        img_resolution=img_resolution,
-        img_channels=img_out_channels,
-        label_dim=label_dim,
-        use_fp16=use_fp16,
-        sigma_min=sigma_min,
-        sigma_max=sigma_max,
-        sigma_data=sigma_data,
-    )
+    ) -> None:
+        # The use of multiple inheritance here is a workaround to make the
+        # preconditioner serializeable. The arguments of a Modulus model must be
+        # serializeable, but _ConditionalPrecond uses a compositional design for
+        # easier testing and modularity. Would be easier if modulus didn't rely
+        # on object inheritance for saving/loading.
+        Module.__init__(self, meta=EDMPrecondSRMetaData)
+        model_class = getattr(network_module, model_type)
+        model = model_class(
+            img_resolution=img_resolution,
+            in_channels=img_in_channels + img_out_channels,
+            out_channels=img_out_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )
+        _ConditionalPrecond.__init__(
+            self,
+            model=model,
+            img_resolution=img_resolution,
+            img_channels=img_out_channels,
+            label_dim=label_dim,
+            use_fp16=use_fp16,
+            sigma_min=sigma_min,
+            sigma_max=sigma_max,
+            sigma_data=sigma_data,
+        )
