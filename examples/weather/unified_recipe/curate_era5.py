@@ -14,18 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hydra
-import fsspec
-from omegaconf import DictConfig, OmegaConf
-import numpy as np
-import zarr
-import xarray as xr
-from typing import Any, Iterable, List, Union, Tuple
-from pathlib import Path
-from tqdm import tqdm
-from dask.diagnostics import ProgressBar
-import dask
 import datetime
+from pathlib import Path
+from typing import List, Tuple, Union
+
+import dask
+import fsspec
+import hydra
+import numpy as np
+import xarray as xr
+from dask.diagnostics import ProgressBar
+from omegaconf import DictConfig, OmegaConf
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
@@ -77,9 +76,9 @@ class CurateERA5:
                 needed_variables.append(variable[0])
             else:
                 needed_variables.append(variable)
-        for variables in self.era5.variables:
-            if variables not in needed_variables:
-                self.era5 = self.era5.drop_vars(variables)
+        for variable in self.era5.variables:
+            if variable not in needed_variables:
+                self.era5 = self.era5.drop_vars(variable)
 
         # Chunk data
         self.era5 = self.era5.sel(
@@ -194,7 +193,7 @@ def main(cfg: DictConfig) -> None:
         transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Get filesystem
-    # TODO: add filesystems behond local when needed
+    # TODO: add filesystems beyond local when needed
     fs = fsspec.filesystem("file")
 
     # Make train data

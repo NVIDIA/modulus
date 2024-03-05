@@ -14,14 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hydra
-import fsspec
-from omegaconf import DictConfig, OmegaConf
-import xarray as xr
-import numpy as np
-import dask
-from dask.diagnostics import ProgressBar
 import datetime
+
+import dask
+import fsspec
+import hydra
+import numpy as np
+import xarray as xr
+from dask.diagnostics import ProgressBar
+from omegaconf import DictConfig, OmegaConf
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
@@ -64,7 +65,7 @@ def main(cfg: DictConfig) -> None:
         time=arco_era5.time.dt.hour.isin(np.arange(0, 24, cfg.dataset.dt))
     )
 
-    # save to pbss fs
+    # Save data
     print("Saving Data")
     with ProgressBar():
         # TODO: Remove single_threaded when machine updated

@@ -7,10 +7,10 @@ training procedure is straightforward.
 ## Configs
 
 The `conf` directory contains the configuration files for the model, data,
-training, etc... The configs are given in YAML format and use the `omegaconf`
+training, etc. The configs are given in YAML format and use the `omegaconf`
 library to manage them. Several example configs are given for generating
 different datasets, models, and training procedures. For example, AFNO and
-Graphcast are given with corresponding training procedure and datasets configs.
+GraphCast are given with corresponding training procedure and datasets configs.
 The default configs are set to only download and train a tiny dataset and can be
 run on an 8GB GPU. To train larger models please adjust `conf/config.yaml`
 according to the comments.
@@ -38,7 +38,7 @@ storage for non-tiny configs but can be adjusted to download a smaller subset of
 the data. Given a 2.5 Gb/s connection the download will take ~1.5 days. The
 default configs will only download ~100 GBs.
 
-```bash python download_era5.py```
+```python download_era5.py```
 
 ### Generate Curated Dataset for Training
 
@@ -48,7 +48,7 @@ this can be found in `./conf/curated_dataset/`. This script will generate the
 zarr dataset needed for training including needed transformations such as
 regridding.
 
-```bash python curate_era5.py```
+```python curate_era5.py```
 
 ### NOTE
 
@@ -68,19 +68,19 @@ Apart from the dataset configs the main configs for training are `model`,
 `training`, and `validation`. These can be adjusted accordingly and to train the
 model, run
 
-```bash python train.py```
+```python train.py```
 
 Progress can be monitored using MLFlow. Open a new terminal and navigate to the
 training directory, then run:
 
-```bash mlflow ui -p 2458```
+```mlflow ui -p 2458```
 
 View progress in a browser at <http://127.0.0.1:2458>
 
 Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU
 training, run
 
-```bash mpirun -np <num_GPUs> python train.py```
+```mpirun -np <num_GPUs> python train.py```
 
 If running inside a docker container, you may need to include the
 `--allow-run-as-root` in the multi-GPU run command.

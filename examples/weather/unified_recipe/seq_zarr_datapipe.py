@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+from typing import Tuple, Union
+
 import numpy as np
 import torch
 import zarr
-from dataclasses import dataclass
-from typing import Union, Tuple
-from pathlib import Path
 
 try:
     import nvidia.dali as dali

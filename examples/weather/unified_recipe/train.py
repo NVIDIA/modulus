@@ -14,22 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import os
-import hydra
-import wandb
-import matplotlib.pyplot as plt
 import time
-import fsspec
-import zarr
-from omegaconf import DictConfig, OmegaConf, ListConfig
-from torch.nn.parallel import DistributedDataParallel
-from torch.cuda.amp import GradScaler
-from torch.optim.lr_scheduler import SequentialLR
-from torch import nn
-from torch import Tensor
-from tqdm import tqdm
 from typing import Union
+
+import fsspec
+import hydra
+import matplotlib.pyplot as plt
+import torch
+import zarr
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from torch import Tensor, nn
+from torch.nn.parallel import DistributedDataParallel
+from tqdm import tqdm
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
@@ -44,14 +41,10 @@ except:
 
 from modulus import Module
 from modulus.distributed import DistributedManager
-from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
-from modulus.launch.logging import (
-    LaunchLogger,
-    PythonLogger,
-    initialize_mlflow,
-    RankZeroLoggingWrapper,
-)
+from modulus.launch.logging import (LaunchLogger, PythonLogger,
+                                    RankZeroLoggingWrapper, initialize_mlflow)
 from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 
 from seq_zarr_datapipe import SeqZarrDatapipe
 
@@ -93,7 +86,6 @@ def main(cfg: DictConfig) -> None:
     )
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
-    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
     # Initialize model
     model = Module.instantiate(
