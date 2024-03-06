@@ -14,23 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: GraphCastNet
+name: AFNO
 nr_input_channels: ${eval:'(${training.nr_input_steps} * (${curated_dataset.nr_predicted_variables} + ${curated_dataset.nr_unpredicted_variables}))'}
 nr_output_channels: ${curated_dataset.nr_predicted_variables}
 input_shape: ${transform.transformed_shape}
 
 args:
-  meshgraph_path: "icospheres.json"
-  static_dataset_path: null
-  input_res: ${model.input_shape}
-  input_dim_grid_nodes: ${model.nr_input_channels}
-  input_dim_mesh_nodes: 3
-  input_dim_edges: 4
-  output_dim_grid_nodes: ${model.nr_output_channels}
-  processor_layers: 16
-  hidden_dim: 64
-  do_concat_trick: True
-  use_cugraphops_encoder: False
-  use_cugraphops_processor: False
-  use_cugraphops_decoder: False
-  recompute_activation: False
+  inp_shape: ${model.input_shape}
+  in_channels: ${model.nr_input_channels}
+  out_channels: ${model.nr_output_channels}
+  patch_size: [8, 8]
+  embed_dim: 128
+  depth: 12
+  mlp_ratio: 4
+  drop_rate: 0.0
+  num_blocks: 8
+  sparsity_threshold: 0.01
+  hard_thresholding_fraction: 1.0

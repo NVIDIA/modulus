@@ -24,10 +24,10 @@ optimizer:
 
 stages:
   - name: "Cosine Annealing LR"
-    max_iterations: inf
+    max_iterations: .inf
     num_epochs: 100
     unroll_steps: 1
-    batch_size: 8
+    batch_size: 2
     lr_scheduler_name: CosineAnnealingLR
     args:
       T_max: 150
