@@ -25,6 +25,8 @@ def save_inference_model_package(
     cfg,
     predicted_variable_normalizer,
     unpredicted_variable_normalizer,
+    latitude,
+    longitude,
     save_path,
     readme=None,
 ):
@@ -38,6 +40,8 @@ def save_inference_model_package(
     - predicted_variable_stds.npy: A numpy file with the predicted variable standard deviations.
     - unpredicted_variable_means.npy: A numpy file with the unpredicted variable means.
     - unpredicted_variable_stds.npy: A numpy file with the unpredicted variable standard deviations.
+    - latitude.npy: A numpy file with the latitude values.
+    - longitude.npy: A numpy file with the longitude values.
     - README.md: A readme file with the readme text.
     These files help transfer trained models to inference usecases.
 
@@ -88,6 +92,12 @@ def save_inference_model_package(
         np.save(f, unpredicted_variable_means)
     with open(os.path.join(save_path, "unpredicted_variable_stds.npy"), "wb") as f:
         np.save(f, unpredicted_variable_stds)
+
+    # Save latitude and longitude
+    with open(os.path.join(save_path, "latitude.npy"), "wb") as f:
+        np.save(f, latitude)
+    with open(os.path.join(save_path, "longitude.npy"), "wb") as f:
+        np.save(f, longitude)
 
     # Save readme
     if readme is not None:

@@ -181,16 +181,6 @@ def main(cfg: DictConfig) -> None:
         variables = variables.view(shape)
         return variables
 
-    # Save model card
-    save_inference_model_package(
-        model,
-        cfg,
-        predicted_variable_normalizer=predicted_batch_norm,
-        unpredicted_variable_normalizer=unpredicted_batch_norm,
-        save_path="./model_card",
-        readme="This is a model card for the global weather model.",  # TODO: Add more info for NVC
-    )
-
     # Unroll network
     def unroll(
         model, predicted_variables, unpredicted_variables, nr_input_steps, cpu=False
@@ -450,6 +440,10 @@ def main(cfg: DictConfig) -> None:
                 cfg,
                 predicted_variable_normalizer=predicted_batch_norm,
                 unpredicted_variable_normalizer=unpredicted_batch_norm,
+                latitude=zarr.open(cfg.dataset.dataset_filename, mode="r")["latitude"],
+                longitude=zarr.open(cfg.dataset.dataset_filename, mode="r")[
+                    "longitude"
+                ],
                 save_path="./model_package_{}".format(cfg.experiment_name),
                 readme="This is a model card for the global weather model.",
             )
