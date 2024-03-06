@@ -107,14 +107,14 @@ where `NUM_GPUS` is the number of GPUs you're training on. Pass also the
 
 ## Testing
 
-You can evaluate the model using out-of-sample data with the `test_diagnostic_precip.py`
+You can evaluate the model using out-of-sample data with the `eval_diagnostic_precip.py`
 script that uses the same config file as the training:
 
 ```bash
-python test_diagnostic_precip.py +training.load_epoch=latest
+python eval_diagnostic_precip.py +training.load_epoch=latest
 ```
 
 This performs the testing with the data in the `out_of_sample` directory. It computes
 the root-mean-square error for each point on the grid and saves the result in
 `scripts/results/rmse.npy`. You can add more metrics by following the example of
-`RMSECallback` in `test_diagnostic_precip.py`.
+`RMSECallback` in `eval_diagnostic_precip.py`.
