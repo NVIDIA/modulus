@@ -27,12 +27,12 @@ class PrecipNorm:
     ):
         self.epsilon = epsilon
 
-    @torch.no_grad
+    @torch.no_grad()
     @torch.compile
     def normalize(self, tp: Tensor) -> Tensor:
         return torch.log1p(tp / self.epsilon)
 
-    @torch.no_grad
+    @torch.no_grad()
     @torch.compile
     def denormalize(self, x: Tensor) -> Tensor:
         return torch.expm1(x) * self.epsilon
