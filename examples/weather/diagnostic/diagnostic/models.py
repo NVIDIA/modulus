@@ -36,12 +36,7 @@ def setup_model(
     model_kwargs = default_model_params[model_type].copy()
     model_kwargs.update(model_cfg)
 
-    model = Module.instantiate(
-        {
-            "__name__": model_type,
-            "__args__": model_kwargs
-        }
-    )
+    model = Module.instantiate({"__name__": model_type, "__args__": model_kwargs})
 
     if model_name is not None:
         model.meta.name = model_name
