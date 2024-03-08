@@ -84,3 +84,14 @@ training, run
 
 If running inside a docker container, you may need to include the
 `--allow-run-as-root` in the multi-GPU run command.
+
+## SFNO Training
+
+One of the showcased models available in the configs is [Spherical Fourier Neural Operators:
+Learning Stable Dynamics on the Sphere](https://arxiv.org/pdf/2306.03838.pdf).
+
+The config file can be modified to train the SFNO model by uncommenting all SFNO configs. Following the prior dataset fetching and 
+
+```python train.py```
+
+
