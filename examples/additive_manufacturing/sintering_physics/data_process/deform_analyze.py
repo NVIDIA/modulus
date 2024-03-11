@@ -22,6 +22,8 @@ import pyvista as pv
 import numpy as np
 import json
 
+from utils import get_solution_id, read_configs, get_solution_id
+
 import matplotlib.pyplot as plt
 
 
@@ -70,7 +72,7 @@ def read_sol_time(series_file):
 
 
 # plot
-def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0):
+def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, split_stages=False):
     # sol_list = [i for i in range(len(temp_list))]
     sol_list = key_list
 
@@ -93,81 +95,43 @@ def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0):
     x_lb = min(np.asarray(del_u + del_v + del_w))
     x_ub = max(np.asarray(del_u + del_v + del_w))
     x_lim = np.arange(x_lb, x_ub + 0.0005, 0.0005).tolist()
-    ax.fill_betweenx(
-        x_lim,
-        x1=stage_keys[5],
-        x2=stage_keys[6],
-        where=None,
-        step=None,
-        color="gainsboro",
-        interpolate=True,
-        label="stage-separation-1",
-    )
-    ax.fill_betweenx(
-        x_lim,
-        x1=stage_keys[7],
-        x2=stage_keys[8],
-        where=None,
-        step=None,
-        color="gainsboro",
-        interpolate=True,
-        label="stage-separation-2",
-    )
-    ax.fill_betweenx(
-        x_lim,
-        x1=stage_keys[9],
-        x2=max(sol_list),
-        where=None,
-        step=None,
-        color="gainsboro",
-        interpolate=True,
-        label="stage-separation-3",
+    
+    if split_stages:
+        ax.fill_betweenx(
+            x_lim,
+            x1=stage_keys[5],
+            x2=stage_keys[6],
+            where=None,
+            step=None,
+            color="gainsboro",
+            interpolate=True,
+            label="stage-separation-1",
+        )
+        ax.fill_betweenx(
+            x_lim,
+            x1=stage_keys[7],
+            x2=stage_keys[8],
+            where=None,
+            step=None,
+            color="gainsboro",
+            interpolate=True,
+            label="stage-separation-2",
+        )
+        ax.fill_betweenx(
+            x_lim,
+            x1=stage_keys[9],
+            x2=max(sol_list),
+            where=None,
+            step=None,
+            color="gainsboro",
+            interpolate=True,
+            label="stage-separation-3",
     )
 
     fig_name = "point_deform_curve_p" + str(pid)
     ax.set_title("p" + str(pid), fontsize=14)
     ax.legend(loc="lower right")
     fig.savefig(fig_name + ".jpg", format="png", dpi=100, bbox_inches="tight")
-
-    # plt.show()
-
-
-def plot_p_deform_simple(build_name, temp_list, key_list, del_u, del_v, del_w, pid=0):
-    # sol_list = [i for i in range(len(temp_list))]
-    sol_list = key_list
-
-    fig, ax = plt.subplots()
-    # ax.plot(sol_list, del_u, color="blue", marker=".")
-    ax.plot(sol_list, del_u, "b-", linewidth=2)
-    # ax.plot(sol_list, del_v, color="g", marker=".")
-    ax.plot(sol_list, del_v, "g-", linewidth=2)
-    ax.plot(sol_list, del_w, "y-", linewidth=2)
-    ax.set_xlabel("Solution index ", fontsize=14)
-    ax.set_ylabel("Sample point deformation (mm)", color="blue", fontsize=14)
-
-    # twin object for two different y-axis on the sample plot
-    ax2 = ax.twinx()
-    # make a plot with different y-axis using second axis object
-    ax2.plot(sol_list, temp_list, "r-", linewidth=2)
-    ax2.set_ylabel("Temperature", color="red", fontsize=14)
-
-    # plot cut-off regions
-    x_lb = min(np.asarray(del_u + del_v + del_w))
-    x_ub = max(np.asarray(del_u + del_v + del_w))
-    x_lim = np.arange(x_lb, x_ub + 0.0005, 0.0005).tolist()
-    # ax.fill_betweenx(x_lim, x1=stage_keys[5], x2=stage_keys[6],
-    #                  where=None, step=None, color="gainsboro", interpolate=True, label="stage-separation-1")
-    # ax.fill_betweenx(x_lim, x1=stage_keys[7], x2=stage_keys[8],
-    #                  where=None, step=None, color="gainsboro", interpolate=True, label="stage-separation-2")
-    # ax.fill_betweenx(x_lim, x1=stage_keys[9], x2=max(sol_list),
-    #                  where=None, step=None, color="gainsboro", interpolate=True, label="stage-separation-3")
-
-    fig_name = "point_deform_curve_p_" + build_name + "_" + str(pid)
-    ax.set_title("p" + str(pid), fontsize=14)
-    ax.legend(loc="lower right")
-    fig.savefig(fig_name + ".jpg", format="png", dpi=100, bbox_inches="tight")
-
-    # plt.show()
 
 
 # Read a point id-x, from each file in solution list, plot its uvw
@@ -190,10 +154,10 @@ def read_solutions_data_temp_anchor(
     """1st version"""
     build_path = os.path.join(raw_data_path, "out")
     solution_list = glob.glob(build_path + "/displacement-*.pvtu")
-    solution_list = sorted(solution_list, key=rawdata2tfrecord.get_solution_id)
+    solution_list = sorted(solution_list, key=get_solution_id)
 
     # read configs from params.prm only, bypass the solution.pvtu.series file
-    time_params, temp_curve_list = rawdata2tfrecord.read_configs(raw_data_path)
+    time_params, temp_curve_list = read_configs(raw_data_path)
 
     # For each build, read the displacement.pvtu.series file
     series_file = os.path.join(raw_data_path, "out", "displacement.pvtu.series")
@@ -212,7 +176,7 @@ def read_solutions_data_temp_anchor(
     for solution_idx, solution_path in enumerate(solution_list):
         # For each solution-*.pvtu file, get the solution-id, read data points
         # filter out the repeated data
-        solution_id = rawdata2tfrecord.get_solution_id(solution_path)
+        solution_id = get_solution_id(solution_path)
         solution_temp = rawdata2tfrecord.get_solution_temperature_customer(
             solution_path, dict_sol_time, temp_curve_list
         )
@@ -226,7 +190,7 @@ def read_solutions_data_temp_anchor(
             del_v.append(p_uvw[1])
             del_w.append(p_uvw[2])
 
-    plot_p_deform_simple(
+    plot_p_deform(
         build_name,
         temp_list,
         key_list=key_list,

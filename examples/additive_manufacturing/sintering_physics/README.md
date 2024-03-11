@@ -107,10 +107,10 @@ python inference.py
 - To generate your own tfrecord from Physical simulation output:
   
   - Run:
-  > python data_process/rawdata2tfrecord.py raw_data_dir, metadata_json_path, mode
+  > python data_process/rawdata2tfrecord.py
   
     i.e.
-- > python data_process/rawdata2tfrecord.py /home/VF-simulation-data data test
+- > python data_process/rawdata2tfrecord.py 
 
 Defition of step_context & methods tried:
 

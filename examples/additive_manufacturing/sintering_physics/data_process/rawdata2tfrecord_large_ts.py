@@ -38,13 +38,17 @@ import numpy as np
 import json
 import tensorflow as tf
 from sklearn import neighbors
+from natsort import natsorted
+import logging
+logging.basicConfig(filename='DS-retrain-2403.log', level=logging.DEBUG)
+
+import hydra
+from omegaconf import DictConfig
 
 import utils
 from utils import get_solution_id, time_diff
 
-from ..constants import Constants
 
-C = Constants()
 # Create a description of the features.
 _FEATURE_DESCRIPTION = {
     "position": tf.io.VarLenFeature(tf.string),
@@ -98,42 +102,53 @@ def get_data_position(data):
     """
     For the data read from one displacement-id.pvtu file,
     iterate each point data, filter out the points in existed physical xyz-location
-    store the non-repeating point's uvw_values in
+    store the non-repeating point's uvw_values
     Args:
-        data: data read from displacement-id.pvtu file
+        data: data read from displacement-id.pvtu file with pv.read
+            format: UnstructuredGrid i.e. (0x7f1636fe5520)
+                  N Cells:      21970
+                  N Points:     175760
+                  X Bounds:     -4.600e+01, 3.000e+00
+                  Y Bounds:     -4.500e+00, 4.500e+00
+                  Z Bounds:     0.000e+00, 1.300e+01
+                  N Arrays:     11
 
     Returns: array of non-repeating nodes' current physical location (original location + displacement)
-
+        pos_list -> np.array
+        index_list -> list of same size
     """
+    # each points' coordinate, and displacement, shape [# point, dim], i.e. (175760, 3)
+    points = data.points
+
+    uvw_values = data['u__v__w']
+
+    try:
+        points.shape == uvw_values.shape
+    except:
+        logging.error(f"pv.read solution file field failed {data['u__v__w']} dimension not matching ")
+        raise
+
     # Construct a dictionary, store physical location {xyz: boolean}
     arranged_data = {}
-
-    points = data.points
-    n_points = points.shape[0]
-
-    # uvw_values = data['displacement_U']
-    uvw_values = data["u__v__w"]
-    print("get_data_position read uvw_values: ", uvw_values.shape)
-
-    pos_list = []
+    position_list = []
     index_list = []
+    for point_index in range(points.shape[0]):
+        # Read coordinates of each point (x_coor, y_coor, z_coor)
+        # i.e.  point_index: 168395, point_coor = (-31.0, -1.5, 0.0)
+        point_coor = data.GetPoint(point_index)
 
-    for point_index in range(n_points):
-        point = data.GetPoint(point_index)
-        # point_array=points[point_index]
-        if point not in arranged_data:
+        # if there's not record of this point_coordinate, add; else skip to avoid duplicated points
+        if point_coor not in arranged_data:
+            # read displacement of this point
             uvw = uvw_values[point_index]
-
             # Compute the deformed physical location from original physical location
-            pos = point + uvw
+            pos = point_coor + uvw
 
             index_list.append(point_index)
+            position_list.append(pos)
+            arranged_data[point_coor] = True
 
-            pos_list.append(pos)
-
-            arranged_data[point] = True
-
-    return np.array(pos_list), index_list
+    return np.array(position_list), index_list
 
 
 def read_sol_time(series_file):
@@ -162,20 +177,14 @@ def read_temperature(temp_file):
         list of temperature value, corresponding to each solution file (sorted with time)
     """
     # reading csv file
-    print("read temperature file from path: ", temp_file)
-    with open(temp_file, "r") as csvfile:
+    logging.info(f"read temperature file from path: {temp_file}")
+    with open(temp_file, 'r') as csvfile:
         # creating a csv reader object
         csvreader = csv.reader(csvfile)
 
         # extracting each data row one by one
         for idx, row in enumerate(csvreader):
-            # print(row)
-            if row[0].find("temperature_curve") != -1:
-                print(
-                    "find sintering_temperature_curve: ",
-                    row[0],
-                    row[0].find("temperature_curve"),
-                )
+            if row[0].find('temperature_curve') != -1:
                 temp_row = row[1:]
                 break
 
@@ -187,9 +196,18 @@ def read_temperature(temp_file):
 def get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_list):
     """
     This function read each solution file, determine the time, Temperature of this file
+    Args:
+        solution_path: the solution.pvtu file to be processed
+        dict_sol_time: Dictionary contains the {solution_fname: simulation_time}
+        temp_curve_list: Read from the params file,
+         i.e. ['0', '0', '600', '20', '6000', '200', '18000', '400', '32400', '400', '38400', '600', '43800', '1050', '51000', '1050', '55140', '1395', '62340', '1395', '70680', '700']
+
+    Returns:
+        Temperature at the simulation time -> float
     """
     t_list = []
     temp_list = []
+    # Get the stage separation time-temperature pairs
     for idx in range(len(temp_curve_list) // 2):
         t_list.append(int(temp_curve_list[idx * 2]) / 3600)
         temp_list.append(int(temp_curve_list[idx * 2 + 1]))
@@ -221,7 +239,7 @@ def get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_l
         sol_time - start_time
     ) + start_temp
 
-    print("solname | soltime | temp: ", sol_name, sol_time, temp)
+    logging.info(f"solname {sol_name} | soltime {sol_time} | temp: {temp}")
     return temp
 
 
@@ -263,219 +281,236 @@ def _compute_connectivity(positions, radius):
 
     Args:
       positions: Positions of nodes in the graph. Shape:
-        [num_nodes_in_graph, num_dims].
-      radius: Radius of connectivity.
+        [num_nodes_in_graph, num_dims]. i.e. (10000, 3)
+      radius: Radius of connectivity. i.e. 1.2
 
     Returns:
       senders indices [num_edges_in_graph]
       receiver indices [num_edges_in_graph]
 
     """
+    # Construct tree from the points' positions
     tree = neighbors.KDTree(positions)
+
+    # For each point, get the list of nodes' indices within r
+    # return -> list[array(all connecting node indices)]
+    # i.e. receivers_list:  [array([ 300,    2,    0,    1,    4, 1371,  310])
+    #  array([  3, 301,   0,   1,   5, 311,   8])
+    #  array([1372,    6,    2,   24,  358,    3,    0]) ...
     receivers_list = tree.query_radius(positions, r=radius)
 
-    num_nodes = len(positions)
-    senders = np.repeat(range(num_nodes), [len(a) for a in receivers_list])
+    # For each node with sorted index, repeat its len(receiver-nodes) times, to form the matching sender indices array
+    senders = np.repeat(range(len(positions)), [len(a) for a in receivers_list])
     receivers = np.concatenate(receivers_list, axis=0)
+
+    try:
+        senders.shape == receivers.shape
+    except:
+        logging.error("Sender, receiver indices not match")
+        raise
+
     return senders, receivers
 
 
-def get_anchor_point(ds):
+def get_anchor_point(ds, index_list):
     """
     pvtu_file_name:
     with the given build files, return the index of point, that is the anchor point of the build
+    Query criteria: point xyz-displacement == 0
+    Ideally, should only exist 1 anchor point
+    Args:
+        data: data from pv.read
+            format: UnstructuredGrid i.e. (0x7f1636fe5520)
+                  N Cells:      21970
+                  N Points:     175760
+                  X Bounds:     -4.600e+01, 3.000e+00
+                  Y Bounds:     -4.500e+00, 4.500e+00
+                  Z Bounds:     0.000e+00, 1.300e+01
+                  N Arrays:     11
+        index_list: the non-duplicated point index
+
     Returns:
         anchor point index: int
     """
+
     # Read the Digital sintering software raw data, field version name: "u_v_w"
     ds1 = ds["u__v__w"]
-    ## return index of the anchor point
-    ds1_ax = np.where(ds1[:, 0] == 0)[0]
-    ds1_ay = np.where(ds1[:, 1] == 0)[0]
-    ds1_az = np.where(ds1[:, 2] == 0)[0]
 
+    ## return index of the anchor point
+    ds1_ax = np.where(uvw_values[:, 0] == 0)[0]
+    ds1_ay = np.where(uvw_values[:, 1] == 0)[0]
+    ds1_az = np.where(uvw_values[:, 2] == 0)[0]
+
+    # Intersect 3 array to get the point with xyz-displacement == 0
     listx_as_set = set(ds1_ax)
     intersection = listx_as_set.intersection(ds1_ay)
     anchor_pset = intersection.intersection(ds1_az)
 
-    assert len(anchor_pset) == 1, print(f"Find anchor point number {len(anchor_pset)}!")
-    return list(anchor_pset)[0]
+    # Intersect with the non-duplicated point index
+    anchor_point = anchor_pset.intersection(index_list)
+
+    try:
+        len(anchor_point) == 1
+    except:
+        logging.error(f"Find non-unique anchor points {len(anchor_point)}, id list: {anchor_point}!")
+        raise
+
+    # find the point id in the non-duplicated point list
+    p_idx = list(anchor_point)[0]
+    index_list_str = list(map(str, index_list))
+    p_i = index_list_str.index(str(p_idx))
+
+    return p_i
 
 
-def get_anchor_zplane(ds):
+def get_anchor_zplane(ds, index_list):
     """
     with the given build files, return the index of point that are on the anchor z-plane of the build
+    Query criteria: point z-position == 0, z-displacement == 0
+    Args:
+        data: data from pv.read
+            format: UnstructuredGrid i.e. (0x7f1636fe5520)
+                  N Cells:      21970
+                  N Points:     175760
+                  X Bounds:     -4.600e+01, 3.000e+00
+                  Y Bounds:     -4.500e+00, 4.500e+00
+                  Z Bounds:     0.000e+00, 1.300e+01
+                  N Arrays:     11
+        index_list: the non-duplicated point index
+
     Returns:
         anchor plane points index: List[int]
     """
-    print("find the anchor plane")
-    n_points = ds.points.shape[0]
+    # each points' coordinate, shape [# point, dim], i.e. (175760, 3)
+    n_points, _ = ds.points.shape
     uvw_values = ds["u__v__w"]
-    print("ds.points: ", ds.points.shape)
 
     z_plane = []
-    for ip in range(n_points):
-        point = ds.GetPoint(ip)
+    for i, p_idx in enumerate(index_list):
+        # for ip in range(n_points):
+        point = ds.GetPoint(p_idx)
+
+        # Filter the points on z==0 z-plane
         if point[2] == 0:
-            # for all the points fall on the z-plane
-            z_plane.append(ip)
-            uvw = uvw_values[ip]
+            # for all the points fall on the z-plane, collected the point id in the non-duplicated point list
+            z_plane.append(i)
+            uvw_ = uvw_values[p_idx]
 
-            # set non-0 threshold
-            threshold_z = 0.1
-            assert uvw[2] < threshold_z, "wrong anchor point: {} {}".format(ip, uvw[2])
+            # set non-0 threshold for corner-cases
+            threshold_z = 0.0002
+            try:
+                uvw_values[p_idx][2] < threshold_z
+            except:
+                logging.info(f"wrong anchor_zplane id: {p_idx} - z-displacement {uvw_}")
+                raise
 
-    z_plane = set(z_plane)
-    print("cnt of z anchor plane points:", len(z_plane))
-    return z_plane
+    return set(z_plane)
 
+def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
+    build_path = os.path.join(raw_data_path, 'out')
+    solution_list = glob.glob(build_path + '/volume-deformation-*.pvtu')
+    # solution_list = sorted(solution_list, key=get_solution_id)
+    solution_list = natsorted(solution_list)
 
-def read_solutions_data_temp_range(raw_data_path=None, init_idx=0, metadata=None):
-    """
-    Reads and processes simulation data, extracting relevant features and
-    connectivity for each time step.
-    """
-    build_path = os.path.join(raw_data_path, "out")
-    solution_list = glob.glob(build_path + "/solution-*.pvtu")
-    solution_list = sorted(solution_list, key=get_solution_id)
-    assert (
-        len(solution_list) >= 3
-    ), "Need to have at least 3 solution files as input to start prediction or analysis!"
+    try:
+        pv.read(solution_list[0])
+    except:
+        logging.error(f"solution_list not found from: {build_path}")
+        raise
 
     # For each build, read the displacement.pvtu.series file
-    series_file = os.path.join(raw_data_path, "out", "solution.pvtu.series")
-    # print("Find and read series file: ", series_file)
-    assert os.path.exists(series_file), "volume-deformation.pvtu.series not exists!"
-    dict_sol_time = read_sol_time(series_file)
+    # series_file = os.path.join(raw_data_path, 'out', "solution.pvtu.series")
+    series_file = os.path.join(raw_data_path, 'out', "volume-deformation.pvtu.series")
+    try:
+        dict_sol_time = read_sol_time(series_file)
+    except:
+        logging.error(f"solution.pvtu.series not exists!, {series_file}")
+        raise
 
     # For each build, read the temperature profile at every time step
     temp_profile_path = os.path.join(raw_data_path, "params.prm")
-    assert os.path.exists(
-        temp_profile_path
-    ), "Temperature profile file params.prm not exists!"
-    temp_curve_list = read_temperature(temp_profile_path)
-
-    # Get the stage separation time-temperature pairs
-    stage_t_list = []
-    stage_temp_list = []
-    for idx in range(len(temp_curve_list) // 2):
-        stage_t_list.append(int(temp_curve_list[idx * 2]))
-        stage_temp_list.append(int(temp_curve_list[idx * 2 + 1]))
+    try:
+        temp_curve_list = read_temperature(temp_profile_path)
+    except:
+        logging.error("Temperature profile file params.prm not exists!")
+        raise
+    logging.info(f"check temp_curve_list: {temp_curve_list}")
 
     # Record stage ids
     # For example, for an entire sintering duration of 3393 simulation steps, can choose the data process window
     # can either be the entire sintering duration, for process window for detailed accuracy
     # for the default sintering profile, there are 3393 simulation steps, with
-    #   stage 1: temperature increase window [0, 596],
-    #   stage 2: temperature stable window [596,1321]
+    #   stage 1: temperature increase window, start_index, end_index =[0, 596],
+    #   stage 2: temperature stable window, start_index, end_index = [596,1321]
     #   stage 3: T increase: [> 1325]
     #   if to consider the transition stage separately: [1200, 1700]
 
-    # set the start and end file index for data processing
-    start_index, end_index = 0, 3393
-
     particles_list = []
-    key_list = []
-
-    radius = 0
-    anchors = []
-    anchor_point = None
     temp_list = []
 
     # index for the step 100 model, 2 stages
-    step = 100
+    step = 5
 
-    solution_data_end = pv.read(solution_list[-1])
-    solution_data_begin = pv.read(solution_list[0])
+    # solution_data_end = pv.read(solution_list[-1])
+    solution_data_t0 = pv.read(solution_list[0])
+    radius_begin = utils.get_radius(solution_data_t0)
+    logging.info(f"get simulation radius: {radius_begin}")
 
-    radius_begin = utils.get_radius(solution_data_begin)
-    print("get simulation radius: ", radius_begin)  # i.e. radius: 1.2
+    # Get the non-duplicated points' start position, and the matching point index
+    pos_array_begin, index_list = get_data_position(solution_data_t0)
+    # Get the connecting points' matching sending-receiving indices
+    # return -> np.array of shape (#edges, )
+    senders_graph_t0, receivers_graph_t0 = _compute_connectivity(pos_array_begin, radius_begin)
+    logging.info(f"Computed the connected edges: {senders_graph_t0.shape}")
 
-    pos_array_begin, index_list = get_data_position(solution_data_begin)
-    senders_graph_i, receivers_graph_i = _compute_connectivity(
-        pos_array_begin, radius_begin
-    )
-    print("number of edge: ", senders_graph_i.shape[0])
+    # Proces each solution.pvtu file, with step / gap to skip
+    solution_step_list=solution_list[init_idx::step]
+    logging.info(f"process with start solution file idx: {init_idx}")
+    logging.info(f"solution list len: {len(solution_step_list)}")
 
-    if C.ADD_ANCHOR:
-        zplane_anchors = get_anchor_zplane(solution_data_end)
-        anchor_0 = get_anchor_point(solution_data_end)
-        # print("\n\nzplane_anchors: ", zplane_anchors)
-        print("anchor_0: ", anchor_0)
-
-        n_index = len(index_list)
-        for pi in range(n_index):
-            if index_list[pi] in zplane_anchors:
-                anchors.append(pi)
-            if index_list[pi] == anchor_0:
-                anchor_point = pi
-                print("anchor point: ", pi)
-
-        print("anchors: ", anchors, len(anchors))
-
-    solution_step_list = solution_list[init_idx::step]
-    print("\nprocess with start idx: ", init_idx)
-    print("solution list len: ", len(solution_step_list))
     for solution_path in solution_step_list:
         # For each displacement-*.pvtu file, get the displacement-id, read data points
         # filter out the repeated data
         time_ = int(dict_sol_time[os.path.basename(solution_path)][0])
 
-        solution_id = get_solution_id(solution_path)
-        if start_index <= solution_id <= end_index:
-            solution_temp = get_solution_temperature_customer(
-                solution_path, dict_sol_time, temp_curve_list
-            )
-            print(f"process {solution_path}, time: {time_}")
-            print(f"solution time: {time_}, solution_temp: {solution_temp}")
+        # if start_index <= solution_id <= end_index:
+        solution_temp = get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_list)
+        logging.info(f"process {solution_path}, time: {time_}, temp: {solution_temp}")
 
-            solution_data = pv.read(solution_path)
+        solution_data_ = pv.read(solution_path)
+        pos_array_, index_list_ = get_data_position(solution_data_)
+        # todo: assert index_list_ matches with index_list
 
-            pos_array, index_list = get_data_position(solution_data)
-            print("data type: ", pos_array.dtype)
+        particles_list.append(pos_array_)
+        temp_list.append(solution_temp)
 
-            if radius == 0:
-                radius = utils.get_radius(solution_data)
-                senders_graph_i, receivers_graph_i = _compute_connectivity(
-                    pos_array, radius
-                )
-                print("number of edge: ", senders_graph_i.shape[0])
-
-            particles_list.append(pos_array)
-            key_list.append(solution_id)
-            temp_list.append(solution_temp)
-
-    # ensure all sequences have same length
-    if init_idx != 0 and len(particles_list) != metadata["sequence_length"]:
+    # ensure the processed sequence window have same length, to confrom with other train data
+    # todo: move this outside
+    if init_idx != 0 and len(particles_list) != metadata['sequence_length']:
         skip = True
     else:
         skip = False
 
     return (
-        key_list,
         particles_list,
         temp_list,
-        senders_graph_i,
-        receivers_graph_i,
-        radius,
-        anchors,
-        anchor_point,
+        senders_graph_t0,
+        receivers_graph_t0,
+        radius_begin,
         skip,
     )
 
 
 def compute_metadata_stats(
-    metadata,
-    particles_list_builds,
-    velocity_list_builds,
-    acceleration_list_builds,
-    radius_list,
-    temp_list_builds,
+        metadata,
+        particles_list_builds,
+        velocity_list_builds,
+        acceleration_list_builds,
+        radius_list,
+        temp_list_builds
 ):
-    """
-    Calculates and updates metadata with statistical information like mean and
-    standard deviation for various features.
-    """
+    """Compute stats of the train dataset, to update metadata for normalization in data processing"""
+    # Compute position mean, std
     # todo: check why use different norm dimension
     # todo: change the pos stats to 3d as well
     position_stats_array = np.concatenate(particles_list_builds)
@@ -502,7 +537,6 @@ def compute_metadata_stats(
     # Compute temperature mean, std
     metadata["context_mean"] = [np.array(temp_list_builds).mean()]
     metadata["context_std"] = [np.array(temp_list_builds).std()]
-    print(np.array(temp_list_builds).shape)
     if np.array(temp_list_builds).ndim > 1:
         metadata["context_feat_len"] = np.array(temp_list_builds).shape[1]
     else:
@@ -513,8 +547,20 @@ def compute_metadata_stats(
 
 def write_tfrecord_entry(writer, features, particles_array, times_array):
     """
-    Writes a sequence of particle positions and times as a TFRecord entry using a
-    TensorFlow writer.
+    Write data into entry
+    Args:
+        writer:
+        features: contains context_features = {
+                    'particle_type': _bytes_feature(particles_type), particles_type dim=[#nodes, ], i.e. (26487,)
+                    'key': create_int_feature(key_i),
+                    'senders': _bytes_feature(senders_graph_i.tobytes()),
+                    'receivers': _bytes_feature(receivers_graph_i.tobytes()),
+                }
+        particles_array:
+        times_array: <class 'numpy.ndarray'> of float64, dim=[sim_steps,] i.e. (56,)
+
+    Returns:
+
     """
     tf_sequence_example = tf.train.SequenceExample(context=features)
     position_list = tf_sequence_example.feature_lists.feature_list["position"]
@@ -529,35 +575,37 @@ def write_tfrecord_entry(writer, features, particles_array, times_array):
     writer.write(tf_sequence_example.SerializeToString())
 
 
-def main(argv):
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
     """
     Args:
-        raw_data_dir:  raw data directory (direct output from the Physics simulation engine)
-        metadata_json_path: path of metadata.json (metadata computed from the train builds)
+        raw_data_dir:  raw data directory
+        metadata_json_path: path of metadata.json
         mode: there are three mode [train, test, stats]
+        i.e. data path on server to test 69 parts generalization:
     """
-    raw_data_dir, metadata_json_path, mode = argv
+    mode = cfg.data_options.mode
+    raw_data_dir= cfg.data_options.raw_data_dir
+    metadata_json_path = cfg.data_options.metadata_json_path
 
-    with open(os.path.join(metadata_json_path, "metadata.json"), "r") as f:
+    with open(os.path.join(metadata_json_path, "metadata.json"), 'r') as f:
         metadata = json.load(f)
-        print("meta: ", metadata)
+        logging.info(f"meta: {metadata}")
     if mode != "stats":
-        writer = tf.io.TFRecordWriter(
-            os.path.join(metadata_json_path, mode + ".tfrecord")
-        )
+        writer = tf.io.TFRecordWriter(os.path.join(metadata_json_path, mode+'.tfrecord'))
 
     # State the build names
-    # i.e. choose from ['busbar', 'USB_casing', 'pushing_grip', 'ExtrusionScrew' or other customize builds]
-    build_list = []
-    if mode == "train" or mode == "stats":
-        # sample build list data names
-        build_list = []
+    try:
+        mode in ['train', 'stats', "test"]
+    except:
+        logging.error("Mode not implemented, insert from [train|test|stats]")
+        raise
+
+    if mode in ['train', 'stats']:
+        # for expanded version data
+        build_list = cfg.data_options.builds_train
     elif mode == "test":
-        # test data for validation data - NVIDIA
-        build_list = ["busbar", "USB_casing", "pushing_grip", "ExtrusionScrew"]
-    else:
-        print("Mode not implemented")
-        exit(1)
+        build_list = cfg.data_options.builds_test
 
     key_i = 0
     n_steps = 0
@@ -565,29 +613,50 @@ def main(argv):
     particles_list_builds = []
     velocity_list_builds = []
     acceleration_list_builds = []
-
     radius_list = []
     # Read and process each build data set
     for build_name in build_list:
-        print("\n process build: ", build_name)
-        # Get information for each build, the params 100 as step size,
-        # 30 for sampling frequency is for testing purpose
-        for init_idx in range(0, 100, 30):
+        logging.info(f"\n\nProcess build: {build_name}")
+        # Get information for each build
+        #todo: move the compute anchor information outside
+        build_path = os.path.join(os.path.join(raw_data_dir, build_name), 'out')
+        solution_list = glob.glob(build_path + '/solution-*.pvtu')
+        # solution_list = sorted(solution_list, key=get_solution_id)
+        solution_list = natsorted(solution_list)
+        logging.info(f"computing points from : {solution_list[-1]}")
+        solution_data_end = pv.read(solution_list[-1])
+        _, index_list = get_data_position(solution_data_end)
+
+        if cfg.data_options.add_anchor:
+            # Compute the anchor points from the sinter-end data
+            zplane_anchors = get_anchor_zplane(solution_data_end, index_list)
+            logging.info(f"Found points on the z-plane, cnt= {len(zplane_anchors)}")
+            zplane_anchors = list(zplane_anchors)
+
+            anchor_point = get_anchor_point(solution_data_end, index_list)
+            logging.info(f"Found anchor point with 0-displacement, p_id: {anchor_point}")
+        else:
+            anchors = []
+            anchor_point = None
+
+        for init_idx in range(0, 4, 1):      # for testing purpose, need to cover start point (92, 93)
+            logging.info(f"\n\n process sequence with init_idx: {init_idx}")
             (
-                key_list,
                 particles_list,
                 temp_list,
                 senders_graph_i,
                 receivers_graph_i,
                 radius,
-                anchors,
-                anchor_point,
                 skip,
-            ) = read_solutions_data_temp_range(
+            ) = read_solutions_data(
                 os.path.join(raw_data_dir, build_name),
                 init_idx=init_idx,
                 metadata=metadata,
             )
+
+            if skip:
+                print("skip length different sequence ")
+                continue
 
             # Gather information across builds, prep for builds stats calculation
             particles_list_builds += particles_list
@@ -608,34 +677,29 @@ def main(argv):
 
             # particles_array.shape(num_time_steps, nodes_per_build, xyz-dim) i.e. (12, 1107, 3)
             particles_array = np.array(particles_list)
-            n_steps = particles_array.shape[0]
-            n_particles = particles_array.shape[1]
+            n_steps, n_particles, _ = particles_array.shape
+            logging.info(f"particles_array shape: {particles_array.shape}")
             if init_idx == 0:
-                metadata["sequence_length"] = n_steps
+                metadata['sequence_length'] = n_steps
 
-            # Write to TFRECORD
-            if mode == "train" or mode == "test" or mode == "generalization":
-                # Reshape: append all nodes in one timestep to same array, i.e. (12, 3321)
-                particles_array = particles_array.reshape((n_steps, -1)).astype(
-                    np.float64
-                )
+            key_i += 1
 
-                # normalize data
-                particles_mean = metadata["pos_mean"]
-                particles_std = metadata["pos_std"]
+            ##### Write to TFRECORD #####
+            if mode != 'stats':
+                # TODO: reshape reason
+                particles_array = particles_array.reshape((n_steps, -1)).astype(np.float64)
+
+                # # normalize data
+                particles_mean, particles_std = metadata['pos_mean'], metadata['pos_std']
                 particles_array = (particles_array - particles_mean) / particles_std
 
-                # set same particle type for now, can vary the type as an additional feature
-                # shape: num_particles, i.e. 1107
-                particles_type = np.repeat(2, n_particles)
-                # set the anchoring nodes particle type differently
-                if C.ADD_ANCHOR:
-                    particles_type[anchors] = 1
+                # TODO: Compute and add the boundary condition here
+                # for normal particles, assign value = 2
+                particles_type = np.repeat(2, n_particles)  # [5 5 5 ... 5 5 5] (1107,)
+                if cfg.data_options.add_anchor:
+                    particles_type[zplane_anchors] = 1
                     particles_type[anchor_point] = 0
                 particles_type = particles_type.tobytes()
-
-                # temperature array shape: (num_steps, ), i.e. (83,)
-                temps_array = np.array(temp_list)
 
                 # Add global features
                 context_features = {
@@ -645,23 +709,17 @@ def main(argv):
                     "receivers": utils._bytes_feature(receivers_graph_i.tobytes()),
                 }
 
-                key_i += 1
                 features = tf.train.Features(feature=context_features)
 
-                for idx_build in range(1):
-                    start_idx, end_idx = 0, particles_array.shape[0]
-                    print(f"write range: {start_idx}-{end_idx}")
-                    write_tfrecord_entry(
-                        writer,
-                        features,
-                        particles_array[start_idx:end_idx],
-                        temps_array[start_idx:end_idx],
-                    )
-
-                print("Finale feature shape: ", particles_array.shape)
+                # Write to tfrecord
+                start_idx, end_idx = 0, particles_array.shape[0]
+                logging.info(f"write range: {start_idx}-{end_idx}")
+                write_tfrecord_entry(writer, features, particles_array[start_idx: end_idx],
+                                     np.array(temp_list)[start_idx: end_idx])
+                logging.info(f"Finished writing to tfrecord, finale feature shape: {particles_array.shape}")
 
     # Write metadata file
-    if mode == "stats":
+    if mode == 'stats':
         metadata = compute_metadata_stats(
             metadata,
             particles_list_builds,
@@ -670,18 +728,27 @@ def main(argv):
             radius_list,
             temp_list_builds,
         )
-        metadata["sequence_length"] = n_steps - 1
-        metadata["dim"] = 3
 
-        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
+        metadata['sequence_length'] = n_steps - 1
+        metadata['dim'] = 3
+
+        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
             json.dump(metadata, f)
     elif mode == "test" or mode == "generalization":
-        print("Finale feature shape: ", particles_array.shape)
-        metadata["sequence_length"] = particles_array.shape[0] - 1
-        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
+        logging.info(f"Finale feature shape: {particles_array.shape}")
+        metadata['sequence_length'] = particles_array.shape[0] - 1
+        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
             json.dump(metadata, f)
 
 
-if __name__ == "__main__":
+"""
+    Perform data processing over all builds defined in the raw_dir_path.
+
+    Arguments:
+        cfg: Dictionary of parameters.
+
+    """
+if __name__ == '__main__':
     argv = sys.argv[1:]
-    main(argv)
+    main()
+

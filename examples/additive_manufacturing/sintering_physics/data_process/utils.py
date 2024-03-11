@@ -18,12 +18,9 @@
 import glob, re, os
 import numpy as np
 import csv
+from natsort import natsorted
 
 import tensorflow as tf
-
-from ..constants import Constants
-
-C = Constants()
 
 
 def read_raw_folder(data_dir):
@@ -34,7 +31,8 @@ def read_raw_folder(data_dir):
     """
     build_path = os.path.join(data_dir, "out")
     solution_list = glob.glob(build_path + "/volume-deformation-*.pvtu")
-    solution_list = sorted(solution_list, key=get_solution_id)
+    # solution_list = sorted(solution_list, key=get_solution_id)
+    solution_list = natsorted(solution_list)
     assert (
         len(solution_list) >= 3
     ), "Need to have at least 3 solution files as input to start prediction or analysis!"
@@ -57,7 +55,7 @@ def get_solution_id(solution_name):
 
 def time_diff(sequence_array):
     """
-    sequence_array: Position/ velosity/ acceleration numpy array,
+    sequence_array: Position/ velocity/ acceleration numpy array,
     return:  step-wise difference
     """
     return sequence_array[1:, :] - sequence_array[:-1, :]
@@ -78,16 +76,41 @@ def create_int_feature(values):
 
 def get_radius(data):
     """
-    From a pyvista read file, compute the radius between 2 points.
-        Get the maximum distance of XYZ-dim from the random cell (cell_id = 0)
-    return: computed radius
+    From data read from simulation path by pv.read, compute the radius by max(XYZ-distance) of a cell
+    Args:
+        data: data from pv.read
+            format: UnstructuredGrid i.e. (0x7f1636fe5520)
+                  N Cells:      21970
+                  N Points:     175760
+                  X Bounds:     -4.600e+01, 3.000e+00
+                  Y Bounds:     -4.500e+00, 4.500e+00
+                  Z Bounds:     0.000e+00, 1.300e+01
+                  N Arrays:     11
+    Returns:
+        float, i.e. 0.6 for meshsize=500
     """
+    # Cell: vtkHexahedron i.e. cell_0 (0x55f4e9928f20)
+        #   Debug: Off
+        #   Modified Time: 85931
+        #   Reference Count: 2
+        #   Registered Events: (none)
+        #   Number Of Points: 8
+        #   Bounds:
+        #     Xmin,Xmax: (-2.5, -2)
+        #     Ymin,Ymax: (4, 4.5)
+        #     Zmin,Zmax: (4, 4.5)
+        #     Point ids are: 0, 1, 3, 2, 4, 5, 7, 6
+        #   Merge Tolerance: 0.01
+        # ....
     cell_0 = data.GetCell(0)
+
     bounds = np.array((cell_0.GetBounds()))
 
+    # compute the distance of each xyz-dimension
     len_s = bounds[1::2] - bounds[0:-1:2]
     radius = 1.2 * np.max(len_s)
     return radius
+
 
 
 def get_data_position(data):
@@ -105,8 +128,8 @@ def get_data_position(data):
     n_points = points.shape[0]
 
     # uvw_values: the feature name storing voxel deformation,
-    # depend on physics engine version, could also be data['u__v__w']
-    uvw_values = data["displacement_U"]
+    # depend on physics engine version, could also be data['u__v__w'], or other version i.e. data["displacement_U"]
+    uvw_values = data["u__v__w"]
 
     pos_list = []
     index_list = []
