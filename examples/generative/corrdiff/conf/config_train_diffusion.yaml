@@ -34,5 +34,3 @@ task: diffusion
 ## I/O
 regression_checkpoint_path: checkpoints/regression.mdlus
   # Where to save the checkpoints
-
-

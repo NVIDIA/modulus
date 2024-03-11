@@ -17,27 +17,22 @@
 """Train diffusion-based generative model using the techniques described in the
 paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
+import json
 import os
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
-import json
-import re
-import warnings
-
 import hydra
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
-from training import training_loop
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
 
-warnings.filterwarnings(
-    "ignore", "Grad strides do not match bucket view strides"
-)  # False warning printed by PyTorch 1.12.
+from training import training_loop
+from datasets.dataset import init_dataset_from_config
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
@@ -60,14 +55,13 @@ def main(cfg: DictConfig) -> None:
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
-    data = getattr(cfg, "data", "./data")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
     precond = getattr(cfg, "precond", "unetregression")
 
     # parse hyperparameters
     duration = getattr(cfg, "duration", 200)
-    batch = getattr(cfg, "batch", 256)
-    batch_gpu = getattr(cfg, "batch_gpu", 2)
+    batch_size_global = getattr(cfg, "batch_size_global", 256)
+    batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -83,7 +77,6 @@ def main(cfg: DictConfig) -> None:
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
-    desc = getattr(cfg, "desc")
     tick = getattr(cfg, "tick", 1)
     snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
@@ -95,26 +88,12 @@ def main(cfg: DictConfig) -> None:
     c = EasyDict()
     c.task = task
     c.wandb_mode = wandb_mode
-    c.train_data_path = getattr(cfg, "train_data_path")
-    c.crop_size_x = getattr(cfg, "crop_size_x", 448)
-    c.crop_size_y = getattr(cfg, "crop_size_y", 448)
-    c.n_history = getattr(cfg, "n_history", 0)
-    c.in_channels = getattr(
-        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+    c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
+    c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    dataset_cfg = OmegaConf.to_container(cfg.dataset)
+    data_loader_kwargs = EasyDict(
+        pin_memory=True, num_workers=workers, prefetch_factor=2
     )
-    c.out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
-    c.img_shape_x = getattr(cfg, "img_shape_x", 448)
-    c.img_shape_y = getattr(cfg, "img_shape_y", 448)
-    c.roll = getattr(cfg, "roll", False)
-    c.add_grid = getattr(cfg, "add_grid", True)
-    c.ds_factor = getattr(cfg, "ds_factor", 1)
-    c.min_path = getattr(cfg, "min_path", None)
-    c.max_path = getattr(cfg, "max_path", None)
-    c.global_means_path = getattr(cfg, "global_means_path", None)
-    c.global_stds_path = getattr(cfg, "global_stds_path", None)
-    c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
-    c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
-    c.normalization = getattr(cfg, "normalization", "v2")
 
     # Initialize distributed manager.
     DistributedManager.initialize()
@@ -127,10 +106,6 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
 
     # Initialize config dict.
-    c.dataset_kwargs = EasyDict(path=data, xflip=False, cache=True, use_labels=False)
-    c.data_loader_kwargs = EasyDict(
-        pin_memory=True, num_workers=workers, prefetch_factor=2
-    )
     c.network_kwargs = EasyDict()
     c.loss_kwargs = EasyDict()
     c.optimizer_kwargs = EasyDict(
@@ -199,7 +174,10 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Preconditioning & loss function.
-    if precond == "edm":
+    if precond == "edmv2" or precond == "edm":
+        c.network_kwargs.class_name = "training.networks.EDMPrecondSRV2"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
+    elif precond == "edmv1":
         c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
@@ -221,32 +199,23 @@ def main(cfg: DictConfig) -> None:
     # Training options.
     c.total_kimg = max(int(duration * 1000), 1)
     c.ema_halflife_kimg = int(ema * 1000)
-    c.update(batch_size=batch, batch_gpu=batch_gpu)
+    c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
     c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
     # Random seed.
-    if seed is not None:
-        c.seed = seed
-    else:
+    if seed is None:
         seed = torch.randint(1 << 31, size=[], device=dist.device)
         if dist.distributed:
             torch.distributed.broadcast(seed, src=0)
-        c.seed = int(seed)
+        seed = int(seed)
 
     # Transfer learning and resume.
     if transfer is not None:
         c.resume_pkl = transfer
         c.ema_rampup_ratio = None
-
-    # Description string.
-    cond_str = "cond" if c.dataset_kwargs.use_labels else "uncond"
-    dtype_str = "fp16" if c.network_kwargs.use_fp16 else "fp32"
-    desc = f"{cond_str:s}-{arch:s}-{precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}"
-    if desc is not None:
-        desc += f"-{desc}"
 
     c.run_dir = outdir
 
@@ -258,12 +227,11 @@ def main(cfg: DictConfig) -> None:
     logger0.info("Training options:")
     logger0.info(json.dumps(c, indent=2))
     logger0.info(f"Output directory:        {c.run_dir}")
-    logger0.info(f"Dataset path:            {c.dataset_kwargs.path}")
-    logger0.info(f"Class-conditional:       {c.dataset_kwargs.use_labels}")
+    logger0.info(f"Dataset path:            {dataset_cfg['data_path']}")
     logger0.info(f"Network architecture:    {arch}")
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
-    logger0.info(f"Batch size:              {c.batch_size}")
+    logger0.info(f"Batch size:              {c.batch_size_global}")
     logger0.info(f"Mixed-precision:         {c.network_kwargs.use_fp16}")
 
     # Dry run?
@@ -277,14 +245,29 @@ def main(cfg: DictConfig) -> None:
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
-        # dnnlib.util.Logger(
-        #     file_name=os.path.join(c.run_dir, "log.txt"),
-        #     file_mode="a",
-        #     should_flush=True,
-        # )
+
+    (dataset, dataset_iterator) = init_dataset_from_config(
+        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
+    )
+
+    (img_shape_y, img_shape_x) = dataset.image_shape()
+    if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
+        c.patch_shape_x = img_shape_x
+    if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
+        c.patch_shape_y = img_shape_y
+    if c.patch_shape_x != c.patch_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a multiple of 32")
+    if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
+        logger0.info("Patch-based training enabled")
+    else:
+        logger0.info("Patch-based training disabled")
 
     # Train.
-    training_loop.training_loop(**c)
+    training_loop.training_loop(
+        training_loop.training_loop(dataset, dataset_iterator, **c)
+    )
 
 
 # ----------------------------------------------------------------------------

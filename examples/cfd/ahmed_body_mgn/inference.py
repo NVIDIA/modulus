@@ -14,38 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+from dgl import DGLGraph
+from dgl.dataloading import GraphDataLoader
 
-import torch
+import hydra
+from hydra.utils import to_absolute_path
+
 import numpy as np
-import wandb as wb
-from modulus.models.meshgraphnet import MeshGraphNet
+import pyvista as pv
+import torch
+
+from omegaconf import DictConfig
+
 from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
-from modulus.launch.utils import load_checkpoint
 from modulus.launch.logging import PythonLogger
+from modulus.launch.utils import load_checkpoint
+from modulus.models.meshgraphnet import MeshGraphNet
 
-from utils import compute_drag_coefficient, relative_lp_error
-from constants import Constants
-
-try:
-    from dgl.dataloading import GraphDataLoader
-    from dgl import DGLGraph
-except:
-    raise ImportError(
-        "Ahmed Body example requires the DGL library. Install the "
-        + "desired CUDA version at: \n https://www.dgl.ai/pages/start.html"
-    )
-
-try:
-    import pyvista as pv
-except:
-    raise ImportError(
-        "Ahmed Body Dataset requires the pyvista library. Install with "
-        + "pip install pyvista"
-    )
-
-
-C = Constants()
+from utils import relative_lp_error
 
 
 def dgl_to_pyvista(graph: DGLGraph):
@@ -106,37 +92,42 @@ def dgl_to_pyvista(graph: DGLGraph):
 class AhmedBodyRollout:
     """MGN inference on Ahmed Body dataset"""
 
-    def __init__(self, wb, logger):
+    def __init__(self, cfg: DictConfig, logger: PythonLogger):
         # set device
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.logger = logger
         logger.info(f"Using {self.device} device")
 
         # instantiate dataset
         self.dataset = AhmedBodyDataset(
             name="ahmed_body_test",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="test",
-            num_samples=C.num_test_samples,
+            num_samples=cfg.num_test_samples,
             compute_drag=True,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=False,
             drop_last=False,
         )
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.input_dim_nodes,
-            C.input_dim_edges,
-            C.output_dim,
-            aggregation=C.aggregation,
-            hidden_dim_node_encoder=C.hidden_dim_node_encoder,
-            hidden_dim_edge_encoder=C.hidden_dim_edge_encoder,
-            hidden_dim_node_decoder=C.hidden_dim_node_decoder,
+            cfg.input_dim_nodes,
+            cfg.input_dim_edges,
+            cfg.output_dim,
+            aggregation=cfg.aggregation,
+            hidden_dim_node_encoder=cfg.hidden_dim_node_encoder,
+            hidden_dim_edge_encoder=cfg.hidden_dim_edge_encoder,
+            hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
+            mlp_activation_fn="silu" if cfg.recompute_activation else "relu",
+            do_concat_trick=cfg.do_concat_trick,
+            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
+            recompute_activation=cfg.recompute_activation,
         )
         self.model = self.model.to(self.device)
 
@@ -144,8 +135,10 @@ class AhmedBodyRollout:
         self.model.eval()
 
         # load checkpoint
-        self.model.load(
-            os.path.join(C.ckpt_path, C.ckpt_name, "MeshGraphNet.0.499.mdlus")
+        load_checkpoint(
+            to_absolute_path(cfg.ckpt_path),
+            models=self.model,
+            device=self.device,
         )
 
     def predict(self, save_results=False):
@@ -171,7 +164,7 @@ class AhmedBodyRollout:
             areas = areas.to(self.device, torch.float32).squeeze()
             coeff = coeff.to(self.device, torch.float32).squeeze()
             sid = sid.item()
-            logger.info(f"Processing sample ID {sid}")
+            self.logger.info(f"Processing sample ID {sid}")
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph).detach()
 
             gt = graph.ndata["y"]
@@ -181,19 +174,23 @@ class AhmedBodyRollout:
             graph.ndata["wallShearStress"] = gt[:, 1:]
 
             error = relative_lp_error(pred, gt)
-            logger.info(f"Test error (%): {error}")
+            self.logger.info(f"Test error (%): {error}")
 
             if save_results:
                 # Convert DGL graph to PyVista graph and save it
-                os.makedirs(C.results_dir, exist_ok=True)
                 pv_graph = dgl_to_pyvista(graph.cpu())
-                pv_graph.save(os.path.join(C.results_dir, f"graph_{sid}.vtp"))
+                pv_graph.save(f"graph_{sid}.vtp")
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
     logger.info("Rollout started...")
-    rollout = AhmedBodyRollout(wb, logger)
+    rollout = AhmedBodyRollout(cfg, logger)
     rollout.predict(save_results=True)
+
+
+if __name__ == "__main__":
+    main()
