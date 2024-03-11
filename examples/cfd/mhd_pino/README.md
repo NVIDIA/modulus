@@ -14,13 +14,13 @@ phenomena, including black hole accretion and binary neutron star mergers.
 These equations are given by
 
 $$\begin{align}
-\partial_t \mathbf{u}+\mathbf{u} \cdot \nabla \mathbf{u} =
+\partial_t \mathbf{u}+\mathbf{u} \cdot \nabla \mathbf{u} &=
 -\nabla \left( p+\frac{B^2}{2} \right)/\rho_0 +\mathbf{B}
 \cdot \nabla \mathbf{B}+\nu \nabla^2 \mathbf{u}, \\
-\partial_t \mathbf{B}+\mathbf{u} \cdot \nabla \mathbf{B} =
+\partial_t \mathbf{B}+\mathbf{u} \cdot \nabla \mathbf{B} &=
 \mathbf{B} \cdot \nabla \mathbf{u}+\eta \nabla^2 \mathbf{B}, \\
-\nabla \cdot \mathbf{u} = 0, \\
-\nabla \cdot \mathbf{B} = 0,
+\nabla \cdot \mathbf{u} &= 0, \\
+\nabla \cdot \mathbf{B} &= 0,
 \end{align}$$
 
 where $\mathbf{u}$ is the velocity field, $p$ is
