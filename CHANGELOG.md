@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 - Warp neighbor search routine with a minimal example
+- Physics-Informed Magnetohydrodynamics example.
 
 ### Changed
 
