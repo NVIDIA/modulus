@@ -62,6 +62,7 @@ class MGNTrainer:
             data_dir=to_absolute_path(cfg.data_dir),
             split="train",
             num_samples=cfg.num_training_samples,
+            num_workers=cfg.num_dataset_workers,
         )
 
         # instantiate validation dataset
@@ -71,6 +72,7 @@ class MGNTrainer:
             data_dir=to_absolute_path(cfg.data_dir),
             split="validation",
             num_samples=cfg.num_validation_samples,
+            num_workers=cfg.num_dataset_workers,
         )
 
         # instantiate dataloader

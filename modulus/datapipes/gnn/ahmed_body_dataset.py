@@ -18,7 +18,7 @@ import concurrent.futures as cf
 import os
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -85,11 +85,11 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         The dataset split. Can be 'train', 'validation', or 'test', by default 'train'.
     num_samples: int, optional
         The number of samples to use, by default 10.
-    invar_keys: List[str], optional
+    invar_keys: Iterable[str], optional
         The input node features to consider. Default includes 'pos', 'velocity', 'reynolds_number', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
-    outvar_keys: List[str], optional
+    outvar_keys: Iterable[str], optional
         The output features to consider. Default includes 'p' and 'wallShearStress'.
-    normalize_keys List[str], optional
+    normalize_keys Iterable[str], optional
         The features to normalize. Default includes 'p', 'wallShearStress', 'velocity', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
     normalization_bound: Tuple[float, float], optional
         The lower and upper bounds for normalization. Default is (-1, 1).
@@ -101,6 +101,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         If True, enables verbose mode, by default False.
     compute_drag: bool, optional
         If True, also returns the coefficient and mesh area and normals that are required for computing the drag coefficient.
+    num_workers: int, optional
+        Number of dataset pre-loading workers. If None, will be chosen automatically.
     """
 
     def __init__(
@@ -137,6 +139,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         name: str = "dataset",
         verbose: bool = False,
         compute_drag: bool = False,
+        num_workers: Optional[int] = None,
     ):
         DGLDataset.__init__(
             self,
@@ -215,16 +218,18 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             self.coeff = [None] * self.length
 
         # create graphs from VTP files using multiprocessing.
-        def get_num_workers():
-            # Make sure we don't oversubscribe CPUs on a node.
-            # TODO(akamenev): this should be in DistributedManager.
-            local_node_size = max(
-                int(os.environ.get("OMPI_COMM_WORLD_LOCAL_SIZE", 1)), 1
-            )
-            num_workers = len(os.sched_getaffinity(0)) // local_node_size
-            return max(num_workers - 1, 1)
+        if num_workers is None or num_workers <= 0:
 
-        num_workers = get_num_workers()
+            def get_num_workers():
+                # Make sure we don't oversubscribe CPUs on a node.
+                # TODO(akamenev): this should be in DistributedManager.
+                local_node_size = max(
+                    int(os.environ.get("OMPI_COMM_WORLD_LOCAL_SIZE", 1)), 1
+                )
+                num_workers = len(os.sched_getaffinity(0)) // local_node_size
+                return max(num_workers - 1, 1)
+
+            num_workers = get_num_workers()
         with cf.ProcessPoolExecutor(
             max_workers=num_workers,
             mp_context=torch.multiprocessing.get_context("spawn"),
