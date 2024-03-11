@@ -50,3 +50,5 @@ num_processor_checkpoint_segments: 0
 recompute_activation: False
 
 wandb_mode: disabled
+
+checkpoint_save_freq: 50
