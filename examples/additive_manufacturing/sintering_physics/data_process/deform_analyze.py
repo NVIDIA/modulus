@@ -28,10 +28,10 @@ import matplotlib.pyplot as plt
 
 
 def plot_temperature_curve(temp_curve_list):
+    """Read from the list of sintering time-temp, visualize the sintering profile"""
     t_list = []
     temp_list = []
     for idx in range(len(temp_curve_list) // 2):
-        # t_list.append(int(temp_curve_list[idx*2]) / 3600)
         t_list.append(int(temp_curve_list[idx * 2]))
         temp_list.append(int(temp_curve_list[idx * 2 + 1]))
 
@@ -46,6 +46,7 @@ def plot_temperature_curve(temp_curve_list):
 
 
 def plot_temperature_curve2(key_list, temp_list):
+    """Read from the list of sintering step_idx-temp, visualize the sintering profile"""
     fig = plt.figure(figsize=(10, 6))
     plt.plot(key_list, temp_list, color="blue", marker=".")
     fig.savefig(
@@ -72,7 +73,10 @@ def read_sol_time(series_file):
 
 
 # plot
-def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, split_stages=False):
+def plot_p_deform(
+    temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, split_stages=False
+):
+    """Read from selected point-id deformation, visualize this point's deformation over the sintering profile"""
     # sol_list = [i for i in range(len(temp_list))]
     sol_list = key_list
 
@@ -95,7 +99,7 @@ def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, s
     x_lb = min(np.asarray(del_u + del_v + del_w))
     x_ub = max(np.asarray(del_u + del_v + del_w))
     x_lim = np.arange(x_lb, x_ub + 0.0005, 0.0005).tolist()
-    
+
     if split_stages:
         ax.fill_betweenx(
             x_lim,
@@ -126,7 +130,7 @@ def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, s
             color="gainsboro",
             interpolate=True,
             label="stage-separation-3",
-    )
+        )
 
     fig_name = "point_deform_curve_p" + str(pid)
     ax.set_title("p" + str(pid), fontsize=14)
@@ -136,6 +140,7 @@ def plot_p_deform(temp_list, key_list, stage_keys, del_u, del_v, del_w, pid=0, s
 
 # Read a point id-x, from each file in solution list, plot its uvw
 def read_point(file_name, p_id):
+    """Read the sintering point id value, with pv library, from path: file_name"""
     data = pv.read(file_name)
     points = data.points
     # uvw_values = data['u__v__w']

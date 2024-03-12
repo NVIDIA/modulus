@@ -31,17 +31,21 @@ import hydra
 from omegaconf import DictConfig
 
 import logging
-logging.basicConfig(filename='data_analysis.log', level=logging.DEBUG)
+
+logging.basicConfig(filename="data_analysis.log", level=logging.DEBUG)
 
 
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def main(cfg: DictConfig):
-    raw_data_dir= cfg.data_options.raw_data_dir
+    """The function to visualize and check the acceleration profile, builds to be analyzed are read from config"""
+    raw_data_dir = cfg.data_options.raw_data_dir
     # build_name = "2024-02-27-Overhangs_t3_theta0_V3-deformation"
 
     for build_name in cfg.data_options.builds_train:
         solution_list = read_raw_folder(os.path.join(raw_data_dir, build_name))
-        logging.info(f"\n\nRead solution files from {build_name}, cnt= {len(solution_list)}")
+        logging.info(
+            f"\n\nRead solution files from {build_name}, cnt= {len(solution_list)}"
+        )
 
         pos_list, pos_max_list, pos_mean_list = [], [], []
         step = cfg.data_options.step_size
@@ -85,6 +89,7 @@ def main(cfg: DictConfig):
         logging.info(f"Saved figure at {fig_name}. ")
 
         logging.info(f"Mean(acce) {np.mean(np.abs(acc_3d_mean), axis=0)}")
+
 
 """
 Perform data analyis on voxel moving speed, acceleration

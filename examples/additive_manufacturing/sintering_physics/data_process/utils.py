@@ -71,6 +71,7 @@ def _bytes_feature(value):
 
 
 def create_int_feature(values):
+    """Create/ convert tf.Int64 feature"""
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[values]))
 
 
@@ -90,18 +91,18 @@ def get_radius(data):
         float, i.e. 0.6 for meshsize=500
     """
     # Cell: vtkHexahedron i.e. cell_0 (0x55f4e9928f20)
-        #   Debug: Off
-        #   Modified Time: 85931
-        #   Reference Count: 2
-        #   Registered Events: (none)
-        #   Number Of Points: 8
-        #   Bounds:
-        #     Xmin,Xmax: (-2.5, -2)
-        #     Ymin,Ymax: (4, 4.5)
-        #     Zmin,Zmax: (4, 4.5)
-        #     Point ids are: 0, 1, 3, 2, 4, 5, 7, 6
-        #   Merge Tolerance: 0.01
-        # ....
+    #   Debug: Off
+    #   Modified Time: 85931
+    #   Reference Count: 2
+    #   Registered Events: (none)
+    #   Number Of Points: 8
+    #   Bounds:
+    #     Xmin,Xmax: (-2.5, -2)
+    #     Ymin,Ymax: (4, 4.5)
+    #     Zmin,Zmax: (4, 4.5)
+    #     Point ids are: 0, 1, 3, 2, 4, 5, 7, 6
+    #   Merge Tolerance: 0.01
+    # ....
     cell_0 = data.GetCell(0)
 
     bounds = np.array((cell_0.GetBounds()))
@@ -110,7 +111,6 @@ def get_radius(data):
     len_s = bounds[1::2] - bounds[0:-1:2]
     radius = 1.2 * np.max(len_s)
     return radius
-
 
 
 def get_data_position(data):

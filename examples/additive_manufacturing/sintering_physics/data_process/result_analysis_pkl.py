@@ -42,6 +42,7 @@ FLAGS = flags.FLAGS
 
 
 def plot_pkl(rollout_path, metadata):
+    """Compute the ground-truth acceleration, and prediction acceleration comparison"""
     if not rollout_path:
         raise ValueError("A `rollout_path` must be passed.")
     with open(rollout_path, "rb") as file:
@@ -78,6 +79,8 @@ def plot_pkl(rollout_path, metadata):
 
 
 def main(unused_argv):
+    """Visualize the ground-truth acceleration, and prediction acceleration comparison"""
+
     with open(os.path.join(FLAGS.meta_path, "metadata.json"), "r") as f:
         metadata = json.load(f)
 

@@ -38,6 +38,7 @@ log.basicConfig(
 
 
 def write(name, obj):
+    """Write output to vtk"""
     writer = vtk.vtkUnstructuredGridWriter()
     writer.SetFileName(name)
     writer.SetInputData(obj)
@@ -47,6 +48,7 @@ def write(name, obj):
 
 
 def resample(data_np, saveto):
+    """Resample"""
     resultMesh = vtk.vtkUnstructuredGrid()
     resultMesh.DeepCopy(basemesh)
     resultMesh.SetPoints(Compensated)
@@ -200,6 +202,7 @@ def write_output(basemesh_path, new_uvw_array, end_inference_index, outPath):
 def save_volume_deformation(
     basemesh_path, new_uvw_array, end_inference_index, outPath, core_id
 ):
+    """Save the predicted deformation"""
     uvw_vtk_array = vtk.vtkDoubleArray()
     uvw_vtk_array.SetNumberOfComponents(3)
     uvw_vtk_array.SetName("displacement_U")
@@ -239,6 +242,8 @@ def save_volume_deformation(
 
 
 def save_volume_deformation_master_record(outPath, vtu_list, end_inference_index):
+    """Save the predicted deformation master file"""
+
     print("process solution: ", vtu_list[0])
     master_path = os.path.join(
         outPath, "predicted-displacement-{}.pvtu".format(end_inference_index)

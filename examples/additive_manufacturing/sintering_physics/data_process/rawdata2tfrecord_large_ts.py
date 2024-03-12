@@ -40,7 +40,8 @@ import tensorflow as tf
 from sklearn import neighbors
 from natsort import natsorted
 import logging
-logging.basicConfig(filename='DS-retrain-2403.log', level=logging.DEBUG)
+
+logging.basicConfig(filename="DS-retrain-2403.log", level=logging.DEBUG)
 
 import hydra
 from omegaconf import DictConfig
@@ -120,12 +121,14 @@ def get_data_position(data):
     # each points' coordinate, and displacement, shape [# point, dim], i.e. (175760, 3)
     points = data.points
 
-    uvw_values = data['u__v__w']
+    uvw_values = data["u__v__w"]
 
     try:
         points.shape == uvw_values.shape
     except:
-        logging.error(f"pv.read solution file field failed {data['u__v__w']} dimension not matching ")
+        logging.error(
+            f"pv.read solution file field failed {data['u__v__w']} dimension not matching "
+        )
         raise
 
     # Construct a dictionary, store physical location {xyz: boolean}
@@ -178,13 +181,13 @@ def read_temperature(temp_file):
     """
     # reading csv file
     logging.info(f"read temperature file from path: {temp_file}")
-    with open(temp_file, 'r') as csvfile:
+    with open(temp_file, "r") as csvfile:
         # creating a csv reader object
         csvreader = csv.reader(csvfile)
 
         # extracting each data row one by one
         for idx, row in enumerate(csvreader):
-            if row[0].find('temperature_curve') != -1:
+            if row[0].find("temperature_curve") != -1:
                 temp_row = row[1:]
                 break
 
@@ -219,6 +222,7 @@ def get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_l
     sol_time = sol_time / 3600
 
     def find_nearest(array, value):
+        """Find the nearest value from the set of time lists"""
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx, array[idx]
@@ -352,7 +356,9 @@ def get_anchor_point(ds, index_list):
     try:
         len(anchor_point) == 1
     except:
-        logging.error(f"Find non-unique anchor points {len(anchor_point)}, id list: {anchor_point}!")
+        logging.error(
+            f"Find non-unique anchor points {len(anchor_point)}, id list: {anchor_point}!"
+        )
         raise
 
     # find the point id in the non-duplicated point list
@@ -406,9 +412,11 @@ def get_anchor_zplane(ds, index_list):
 
     return set(z_plane)
 
+
 def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
-    build_path = os.path.join(raw_data_path, 'out')
-    solution_list = glob.glob(build_path + '/volume-deformation-*.pvtu')
+    """From the raw simulation files, read the deformation value at every time-step for pre-processing"""
+    build_path = os.path.join(raw_data_path, "out")
+    solution_list = glob.glob(build_path + "/volume-deformation-*.pvtu")
     # solution_list = sorted(solution_list, key=get_solution_id)
     solution_list = natsorted(solution_list)
 
@@ -420,7 +428,7 @@ def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
 
     # For each build, read the displacement.pvtu.series file
     # series_file = os.path.join(raw_data_path, 'out', "solution.pvtu.series")
-    series_file = os.path.join(raw_data_path, 'out', "volume-deformation.pvtu.series")
+    series_file = os.path.join(raw_data_path, "out", "volume-deformation.pvtu.series")
     try:
         dict_sol_time = read_sol_time(series_file)
     except:
@@ -460,11 +468,13 @@ def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
     pos_array_begin, index_list = get_data_position(solution_data_t0)
     # Get the connecting points' matching sending-receiving indices
     # return -> np.array of shape (#edges, )
-    senders_graph_t0, receivers_graph_t0 = _compute_connectivity(pos_array_begin, radius_begin)
+    senders_graph_t0, receivers_graph_t0 = _compute_connectivity(
+        pos_array_begin, radius_begin
+    )
     logging.info(f"Computed the connected edges: {senders_graph_t0.shape}")
 
     # Proces each solution.pvtu file, with step / gap to skip
-    solution_step_list=solution_list[init_idx::step]
+    solution_step_list = solution_list[init_idx::step]
     logging.info(f"process with start solution file idx: {init_idx}")
     logging.info(f"solution list len: {len(solution_step_list)}")
 
@@ -474,7 +484,9 @@ def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
         time_ = int(dict_sol_time[os.path.basename(solution_path)][0])
 
         # if start_index <= solution_id <= end_index:
-        solution_temp = get_solution_temperature_customer(solution_path, dict_sol_time, temp_curve_list)
+        solution_temp = get_solution_temperature_customer(
+            solution_path, dict_sol_time, temp_curve_list
+        )
         logging.info(f"process {solution_path}, time: {time_}, temp: {solution_temp}")
 
         solution_data_ = pv.read(solution_path)
@@ -486,7 +498,7 @@ def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
 
     # ensure the processed sequence window have same length, to confrom with other train data
     # todo: move this outside
-    if init_idx != 0 and len(particles_list) != metadata['sequence_length']:
+    if init_idx != 0 and len(particles_list) != metadata["sequence_length"]:
         skip = True
     else:
         skip = False
@@ -502,12 +514,12 @@ def read_solutions_data(raw_data_path=None, init_idx=0, metadata=None):
 
 
 def compute_metadata_stats(
-        metadata,
-        particles_list_builds,
-        velocity_list_builds,
-        acceleration_list_builds,
-        radius_list,
-        temp_list_builds
+    metadata,
+    particles_list_builds,
+    velocity_list_builds,
+    acceleration_list_builds,
+    radius_list,
+    temp_list_builds,
 ):
     """Compute stats of the train dataset, to update metadata for normalization in data processing"""
     # Compute position mean, std
@@ -575,7 +587,7 @@ def write_tfrecord_entry(writer, features, particles_array, times_array):
     writer.write(tf_sequence_example.SerializeToString())
 
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig):
     """
     Args:
@@ -585,23 +597,25 @@ def main(cfg: DictConfig):
         i.e. data path on server to test 69 parts generalization:
     """
     mode = cfg.data_options.mode
-    raw_data_dir= cfg.data_options.raw_data_dir
+    raw_data_dir = cfg.data_options.raw_data_dir
     metadata_json_path = cfg.data_options.metadata_json_path
 
-    with open(os.path.join(metadata_json_path, "metadata.json"), 'r') as f:
+    with open(os.path.join(metadata_json_path, "metadata.json"), "r") as f:
         metadata = json.load(f)
         logging.info(f"meta: {metadata}")
     if mode != "stats":
-        writer = tf.io.TFRecordWriter(os.path.join(metadata_json_path, mode+'.tfrecord'))
+        writer = tf.io.TFRecordWriter(
+            os.path.join(metadata_json_path, mode + ".tfrecord")
+        )
 
     # State the build names
     try:
-        mode in ['train', 'stats', "test"]
+        mode in ["train", "stats", "test"]
     except:
         logging.error("Mode not implemented, insert from [train|test|stats]")
         raise
 
-    if mode in ['train', 'stats']:
+    if mode in ["train", "stats"]:
         # for expanded version data
         build_list = cfg.data_options.builds_train
     elif mode == "test":
@@ -618,9 +632,9 @@ def main(cfg: DictConfig):
     for build_name in build_list:
         logging.info(f"\n\nProcess build: {build_name}")
         # Get information for each build
-        #todo: move the compute anchor information outside
-        build_path = os.path.join(os.path.join(raw_data_dir, build_name), 'out')
-        solution_list = glob.glob(build_path + '/solution-*.pvtu')
+        # todo: move the compute anchor information outside
+        build_path = os.path.join(os.path.join(raw_data_dir, build_name), "out")
+        solution_list = glob.glob(build_path + "/solution-*.pvtu")
         # solution_list = sorted(solution_list, key=get_solution_id)
         solution_list = natsorted(solution_list)
         logging.info(f"computing points from : {solution_list[-1]}")
@@ -634,12 +648,16 @@ def main(cfg: DictConfig):
             zplane_anchors = list(zplane_anchors)
 
             anchor_point = get_anchor_point(solution_data_end, index_list)
-            logging.info(f"Found anchor point with 0-displacement, p_id: {anchor_point}")
+            logging.info(
+                f"Found anchor point with 0-displacement, p_id: {anchor_point}"
+            )
         else:
             anchors = []
             anchor_point = None
 
-        for init_idx in range(0, 4, 1):      # for testing purpose, need to cover start point (92, 93)
+        for init_idx in range(
+            0, 4, 1
+        ):  # for testing purpose, need to cover start point (92, 93)
             logging.info(f"\n\n process sequence with init_idx: {init_idx}")
             (
                 particles_list,
@@ -680,17 +698,22 @@ def main(cfg: DictConfig):
             n_steps, n_particles, _ = particles_array.shape
             logging.info(f"particles_array shape: {particles_array.shape}")
             if init_idx == 0:
-                metadata['sequence_length'] = n_steps
+                metadata["sequence_length"] = n_steps
 
             key_i += 1
 
             ##### Write to TFRECORD #####
-            if mode != 'stats':
+            if mode != "stats":
                 # TODO: reshape reason
-                particles_array = particles_array.reshape((n_steps, -1)).astype(np.float64)
+                particles_array = particles_array.reshape((n_steps, -1)).astype(
+                    np.float64
+                )
 
                 # # normalize data
-                particles_mean, particles_std = metadata['pos_mean'], metadata['pos_std']
+                particles_mean, particles_std = (
+                    metadata["pos_mean"],
+                    metadata["pos_std"],
+                )
                 particles_array = (particles_array - particles_mean) / particles_std
 
                 # TODO: Compute and add the boundary condition here
@@ -714,12 +737,18 @@ def main(cfg: DictConfig):
                 # Write to tfrecord
                 start_idx, end_idx = 0, particles_array.shape[0]
                 logging.info(f"write range: {start_idx}-{end_idx}")
-                write_tfrecord_entry(writer, features, particles_array[start_idx: end_idx],
-                                     np.array(temp_list)[start_idx: end_idx])
-                logging.info(f"Finished writing to tfrecord, finale feature shape: {particles_array.shape}")
+                write_tfrecord_entry(
+                    writer,
+                    features,
+                    particles_array[start_idx:end_idx],
+                    np.array(temp_list)[start_idx:end_idx],
+                )
+                logging.info(
+                    f"Finished writing to tfrecord, finale feature shape: {particles_array.shape}"
+                )
 
     # Write metadata file
-    if mode == 'stats':
+    if mode == "stats":
         metadata = compute_metadata_stats(
             metadata,
             particles_list_builds,
@@ -729,15 +758,15 @@ def main(cfg: DictConfig):
             temp_list_builds,
         )
 
-        metadata['sequence_length'] = n_steps - 1
-        metadata['dim'] = 3
+        metadata["sequence_length"] = n_steps - 1
+        metadata["dim"] = 3
 
-        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
+        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
             json.dump(metadata, f)
     elif mode == "test" or mode == "generalization":
         logging.info(f"Finale feature shape: {particles_array.shape}")
-        metadata['sequence_length'] = particles_array.shape[0] - 1
-        with open(os.path.join(metadata_json_path, "metadata.json"), 'w') as f:
+        metadata["sequence_length"] = particles_array.shape[0] - 1
+        with open(os.path.join(metadata_json_path, "metadata.json"), "w") as f:
             json.dump(metadata, f)
 
 
@@ -748,7 +777,6 @@ def main(cfg: DictConfig):
         cfg: Dictionary of parameters.
 
     """
-if __name__ == '__main__':
+if __name__ == "__main__":
     argv = sys.argv[1:]
     main()
-

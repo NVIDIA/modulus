@@ -24,6 +24,7 @@ This is the code to plot the error of Forward-projection model version , v.s. th
 directly from the /out folders
 """
 
+import os
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
