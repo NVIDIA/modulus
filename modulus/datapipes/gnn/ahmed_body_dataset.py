@@ -14,13 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import concurrent.futures as cf
 import os
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import yaml
 from torch import Tensor
 
 from modulus.datapipes.datapipe import Datapipe
@@ -48,6 +50,20 @@ except ImportError:
 
 
 @dataclass
+class FileInfo:
+    """VTP file info storage."""
+
+    velocity: float
+    reynolds_number: float
+    length: float
+    width: float
+    height: float
+    ground_clearance: float
+    slant_angle: float
+    fillet_radius: float
+
+
+@dataclass
 class MetaData(DatapipeMetaData):
     name: str = "AhmedBody"
     # Optimization
@@ -69,11 +85,11 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         The dataset split. Can be 'train', 'validation', or 'test', by default 'train'.
     num_samples: int, optional
         The number of samples to use, by default 10.
-    invar_keys: List[str], optional
+    invar_keys: Iterable[str], optional
         The input node features to consider. Default includes 'pos', 'velocity', 'reynolds_number', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
-    outvar_keys: List[str], optional
+    outvar_keys: Iterable[str], optional
         The output features to consider. Default includes 'p' and 'wallShearStress'.
-    normalize_keys List[str], optional
+    normalize_keys Iterable[str], optional
         The features to normalize. Default includes 'p', 'wallShearStress', 'velocity', 'length', 'width', 'height', 'ground_clearance', 'slant_angle', and 'fillet_radius'.
     normalization_bound: Tuple[float, float], optional
         The lower and upper bounds for normalization. Default is (-1, 1).
@@ -85,6 +101,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         If True, enables verbose mode, by default False.
     compute_drag: bool, optional
         If True, also returns the coefficient and mesh area and normals that are required for computing the drag coefficient.
+    num_workers: int, optional
+        Number of dataset pre-loading workers. If None, will be chosen automatically.
     """
 
     def __init__(
@@ -92,7 +110,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         data_dir: str,
         split: str = "train",
         num_samples: int = 10,
-        invar_keys: List[str] = [
+        invar_keys: Iterable[str] = (
             "pos",
             "velocity",
             "reynolds_number",
@@ -102,9 +120,9 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             "ground_clearance",
             "slant_angle",
             "fillet_radius",
-        ],
-        outvar_keys: List[str] = ["p", "wallShearStress"],
-        normalize_keys: List[str] = [
+        ),
+        outvar_keys: Iterable[str] = ("p", "wallShearStress"),
+        normalize_keys: Iterable[str] = (
             "p",
             "wallShearStress",
             "velocity",
@@ -115,12 +133,13 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             "ground_clearance",
             "slant_angle",
             "fillet_radius",
-        ],
+        ),
         normalization_bound: Tuple[float, float] = (-1.0, 1.0),
         force_reload: bool = False,
         name: str = "dataset",
         verbose: bool = False,
         compute_drag: bool = False,
+        num_workers: Optional[int] = None,
     ):
         DGLDataset.__init__(
             self,
@@ -136,8 +155,9 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         self.num_samples = num_samples
         self.data_dir = os.path.join(data_dir, self.split)
         self.info_dir = os.path.join(data_dir, self.split + "_info")
-        self.input_keys = invar_keys
-        self.output_keys = outvar_keys
+        self.input_keys = list(invar_keys)
+        self.output_keys = list(outvar_keys)
+        self.normalize_keys = list(normalize_keys)
         self.normalization_bound = normalization_bound
         self.compute_drag = compute_drag
 
@@ -191,83 +211,48 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 f"({self.num_samples})"
             )
 
-        self.graphs = []
+        self.graphs = [None] * self.length
         if self.compute_drag:
-            self.normals = []
-            self.areas = []
-            self.coeff = []
-        for i in range(self.length):
-            file_path = data_list[i]
-            info_path = info_list[i]
-            polydata = read_vtp_file(file_path)
-            graph = self._create_dgl_graph(polydata, outvar_keys, dtype=torch.int32)
-            (
-                velocity,
-                reynolds_number,
-                length,
-                width,
-                height,
-                ground_clearance,
-                slant_angle,
-                fillet_radius,
-            ) = self._read_info_file(info_path)
-            if "velocity" in invar_keys:
-                graph.ndata["velocity"] = velocity * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "reynolds_number" in invar_keys:
-                graph.ndata["reynolds_number"] = reynolds_number * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "length" in invar_keys:
-                graph.ndata["length"] = length * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "width" in invar_keys:
-                graph.ndata["width"] = width * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "height" in invar_keys:
-                graph.ndata["height"] = height * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "ground_clearance" in invar_keys:
-                graph.ndata["ground_clearance"] = ground_clearance * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "slant_angle" in invar_keys:
-                graph.ndata["slant_angle"] = slant_angle * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
-            if "fillet_radius" in invar_keys:
-                graph.ndata["fillet_radius"] = fillet_radius * torch.ones_like(
-                    graph.ndata["pos"][:, [0]]
-                )
+            self.normals = [None] * self.length
+            self.areas = [None] * self.length
+            self.coeff = [None] * self.length
 
-            if "normals" in invar_keys or self.compute_drag:
-                mesh = pv.read(file_path)
-                mesh.compute_normals(
-                    cell_normals=True, point_normals=False, inplace=True
+        # create graphs from VTP files using multiprocessing.
+        if num_workers is None or num_workers <= 0:
+
+            def get_num_workers():
+                # Make sure we don't oversubscribe CPUs on a node.
+                # TODO(akamenev): this should be in DistributedManager.
+                local_node_size = max(
+                    int(os.environ.get("OMPI_COMM_WORLD_LOCAL_SIZE", 1)), 1
                 )
-                if "normals" in invar_keys:
-                    graph.ndata["normals"] = torch.from_numpy(
-                        mesh.cell_data_to_point_data()["Normals"]
-                    )
+                num_workers = len(os.sched_getaffinity(0)) // local_node_size
+                return max(num_workers - 1, 1)
+
+            num_workers = get_num_workers()
+        with cf.ProcessPoolExecutor(
+            max_workers=num_workers,
+            mp_context=torch.multiprocessing.get_context("spawn"),
+        ) as executor:
+            for (i, graph, coeff, normal, area) in executor.map(
+                self.create_graph,
+                range(self.length),
+                data_list[: self.length],
+                info_list[: self.length],
+                chunksize=max(1, self.length // num_workers),
+            ):
+                self.graphs[i] = graph
                 if self.compute_drag:
-                    mesh = mesh.compute_cell_sizes()
-                    mesh = mesh.cell_data_to_point_data()
-                    frontal_area = width * height / 2 * (10 ** (-6))
-                    self.coeff.append(2.0 / ((velocity**2) * frontal_area))
-                    self.normals.append(torch.from_numpy(mesh["Normals"]))
-                    self.areas.append(torch.from_numpy(mesh["Area"]))
-            self.graphs.append(graph)
+                    self.coeff[i] = coeff
+                    self.normals[i] = normal
+                    self.areas[i] = area
 
         # add the edge features
         self.graphs = self.add_edge_features()
 
         # normalize the node and edge features
         if self.split == "train":
-            self.node_stats = self._get_node_stats(keys=normalize_keys)
+            self.node_stats = self._get_node_stats(keys=self.normalize_keys)
             self.edge_stats = self._get_edge_stats()
         else:
             if not os.path.exists("node_stats.json"):
@@ -283,6 +268,44 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         self.graphs = self.normalize_node()
         self.graphs = self.normalize_edge()
+
+    def create_graph(self, index: int, file_path: str, info_path: str) -> None:
+        """Creates a graph from VTP file.
+
+        This method is used in parallel loading of graphs.
+
+        Returns
+        -------
+            Tuple that contains graph index, graph, and optionally coeff, normal and area values.
+        """
+        polydata = read_vtp_file(file_path)
+        graph = self._create_dgl_graph(polydata, self.output_keys, dtype=torch.int32)
+        info = self._read_info_file(info_path)
+        for v in vars(info):
+            if v not in self.input_keys:
+                continue
+            graph.ndata[v] = getattr(info, v) * torch.ones_like(
+                graph.ndata["pos"][:, [0]]
+            )
+
+        coeff = None
+        normal = None
+        area = None
+        if "normals" in self.input_keys or self.compute_drag:
+            mesh = pv.read(file_path)
+            mesh.compute_normals(cell_normals=True, point_normals=False, inplace=True)
+            if "normals" in self.input_keys:
+                graph.ndata["normals"] = torch.from_numpy(
+                    mesh.cell_data_to_point_data()["Normals"]
+                )
+            if self.compute_drag:
+                mesh = mesh.compute_cell_sizes()
+                mesh = mesh.cell_data_to_point_data()
+                frontal_area = info.width * info.height / 2 * (10 ** (-6))
+                coeff = 2.0 / ((info.velocity**2) * frontal_area)
+                normal = torch.from_numpy(mesh["Normals"])
+                area = torch.from_numpy(mesh["Area"])
+        return index, graph, coeff, normal, area
 
     def __getitem__(self, idx):
         graph = self.graphs[idx]
@@ -501,9 +524,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         return stats
 
     @staticmethod
-    def _read_info_file(
-        file_path: str,
-    ) -> Tuple[float, float, float, float, float, float, float, float]:
+    def _read_info_file(file_path: str) -> FileInfo:
         """
         Parse the values of specific parameters from a given text file.
 
@@ -514,45 +535,21 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         Returns
         -------
-        tuple
-            A tuple containing values of velocity, reynolds number, length, width, height, ground clearance, slant angle, and fillet radius.
+        FileInfo
+            A FileInfo object.
         """
-        # Initialize variables to default value 0.0
-        velocity = (
-            reynolds_number
-        ) = (
-            length
-        ) = width = height = ground_clearance = slant_angle = fillet_radius = 0.0
-
-        with open(file_path, "r") as file:
-            for line in file:
-                if "Velocity" in line:
-                    velocity = float(line.split(":")[1].strip())
-                elif "Re" in line:
-                    reynolds_number = float(line.split(":")[1].strip())
-                elif "Length" in line:
-                    length = float(line.split(":")[1].strip())
-                elif "Width" in line:
-                    width = float(line.split(":")[1].strip())
-                elif "Height" in line:
-                    height = float(line.split(":")[1].strip())
-                elif "GroundClearance" in line:
-                    ground_clearance = float(line.split(":")[1].strip())
-                elif "SlantAngle" in line:
-                    slant_angle = float(line.split(":")[1].strip())
-                elif "FilletRadius" in line:
-                    fillet_radius = float(line.split(":")[1].strip())
-
-        return (
-            velocity,
-            reynolds_number,
-            length,
-            width,
-            height,
-            ground_clearance,
-            slant_angle,
-            fillet_radius,
-        )
+        with open(file_path, mode="rt", encoding="utf-8") as file:
+            info = yaml.safe_load(file)
+            return FileInfo(
+                info["Velocity"],
+                info["Re (based on length)"],
+                info["Length"],
+                info["Width"],
+                info["Height"],
+                info["GroundClearance"],
+                info["SlantAngle"],
+                info["FilletRadius"],
+            )
 
     @staticmethod
     def _create_dgl_graph(
