@@ -284,6 +284,8 @@ class Module(torch.nn.Module):
             Checkpoint file name
         map_location : Union[None, str, torch.device], optional
             Map location for loading the model weights, by default None will use model's device
+        strict: bool, optional
+            whether to strictly enforce that the keys in state_dict match, by default True
 
         Raises
         ------
