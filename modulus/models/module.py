@@ -271,7 +271,10 @@ class Module(torch.nn.Module):
                 )
 
     def load(
-        self, file_name: str, map_location: Union[None, str, torch.device] = None
+        self,
+        file_name: str,
+        map_location: Union[None, str, torch.device] = None,
+        strict: bool = True,
     ) -> None:
         """Simple utility for loading the model weights from checkpoint
 
@@ -309,7 +312,7 @@ class Module(torch.nn.Module):
             model_dict = torch.load(
                 local_path.joinpath("model.pt"), map_location=device
             )
-            self.load_state_dict(model_dict)
+            self.load_state_dict(model_dict, strict=strict)
 
     @classmethod
     def from_checkpoint(cls, file_name: str) -> "Module":
