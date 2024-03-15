@@ -379,13 +379,8 @@ class VortexSheddingDataset(DGLDataset):
 
     @staticmethod
     def _get_rollout_mask(node_type):
-        mask = torch.logical_or(
-            torch.eq(node_type, torch.zeros_like(node_type)),
-            torch.eq(
-                node_type,
-                torch.zeros_like(node_type) + 5,
-            ),
-        )
+        zeros = torch.zeros_like(node_type)
+        mask = torch.logical_or(torch.eq(node_type, zeros), torch.eq(node_type, zeros + 5))
         return mask
 
     @staticmethod
