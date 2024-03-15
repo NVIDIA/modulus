@@ -207,25 +207,19 @@ class VortexSheddingDataset(DGLDataset):
         return self.length
 
     def _get_edge_stats(self):
-        stats = {
-            "edge_mean": 0,
-            "edge_meansqr": 0,
-        }
+        edge_mean = 0
+        edge_meansqr = 0
         for i in range(self.num_samples):
-            stats["edge_mean"] += (
-                torch.mean(self.graphs[i].edata["x"], dim=0) / self.num_samples
-            )
-            stats["edge_meansqr"] += (
-                torch.mean(torch.square(self.graphs[i].edata["x"]), dim=0)
-                / self.num_samples
-            )
-        stats["edge_std"] = torch.sqrt(
-            stats["edge_meansqr"] - torch.square(stats["edge_mean"])
-        )
-        stats.pop("edge_meansqr")
-
-        # save to file
-        save_json(stats, "edge_stats.json")
+            edge_mean += torch.mean(self.graphs[i].edata["x"], dim=0)
+            edge_meansqr += torch.mean(torch.square(self.graphs[i].edata["x"]), dim=0)
+        edge_mean /= self.num_samples
+        edge_meansqr /= self.num_samples
+        edge_std = torch.sqrt(edge_meansqr - torch.square(edge_mean))
+        stats = {
+            "edge_mean": edge_mean,
+            "edge_std": edge_std,
+        }
+        save_json(stats, 'edge_stats.json')
         return stats
 
     def _get_node_stats(self):
