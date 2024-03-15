@@ -38,7 +38,7 @@ warnings.filterwarnings(
 )  # False warning printed by PyTorch 1.12.
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="config_train")
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_train_diffusion")
 def main(cfg: DictConfig) -> None:
     """Train diffusion-based generative model using the techniques described in the
     paper "Elucidating the Design Space of Diffusion-Based Generative Models".
@@ -100,6 +100,10 @@ def main(cfg: DictConfig) -> None:
     c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
     c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     c.normalization = getattr(cfg, "normalization", "v2")
+    c.tensor_core_mode = getattr(cfg, "tensor_core_mode", None)
+    if c.tensor_core_mode:
+        c.tensor_core_mode = c.tensor_core_mode.lower()
+    # fp16 = (c.tensor_core_mode == "fp16")
 
     # Initialize distributed manager.
     DistributedManager.initialize()

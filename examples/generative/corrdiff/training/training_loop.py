@@ -63,6 +63,7 @@ def training_loop(
     snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
+    tensor_core_mode=None, # What tensor core mode to use. None = disable
     train_data_path=None,
     crop_size_x=448,
     crop_size_y=448,
@@ -99,9 +100,15 @@ def training_loop(
     np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
     torch.backends.cudnn.benchmark = cudnn_benchmark
-    torch.backends.cudnn.allow_tf32 = False
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+    allow_tf32 = (tensor_core_mode.lower() == "tf32") if tensor_core_mode else False
+    if allow_tf32:
+        logger0.info("Enabling TF32 compute mode.")
+    torch.backends.cudnn.allow_tf32 = allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    allow_fp16 = (tensor_core_mode.lower() == "fp16") if tensor_core_mode else False
+    if allow_fp16:
+        logger0.info("Enabling FP16 compute mode.")
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = allow_fp16
 
     # Select batch size per GPU.
     batch_gpu_total = batch_size // dist.world_size

@@ -52,6 +52,8 @@ augment: 0.0
 ## Performance options
 fp16: false
   # Enable mixed-precision training
+tensor_core_mode: tf32
+  # Enable tensor cores. Options are None, tf32 and fp16
 ls: 1
   # Loss scaling
 bench: false
