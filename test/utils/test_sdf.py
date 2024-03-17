@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import numpy as np
+from modulus.utils.sdf import signed_distance_field
 
 
 def tet_verts(flip_x=1):
@@ -63,11 +64,11 @@ def tet_verts(flip_x=1):
     return tet
 
 
-def test_sdfw():
+def test_sdf():
 
     tet = tet_verts()
 
-    sdf_tet = sdfw.signed_distance_field(
+    sdf_tet = signed_distance_field(
         tet,
         np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
         np.array([1, 1, 1, 0.1, 0.1, 0.1], dtype=np.float64),
@@ -75,7 +76,7 @@ def test_sdfw():
     print("results:", sdf_tet)
     # np.testing.assert_allclose(sdf_tet, [ 1.15470052, -0.1       ], atol=1e-7)
 
-    sdf_tet = sdfw.signed_distance_field(
+    sdf_tet = signed_distance_field(
         tet,
         np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], dtype=np.int32),
         np.array([1, 1, 1, 0.12, 0.11, 0.1], dtype=np.float64),
