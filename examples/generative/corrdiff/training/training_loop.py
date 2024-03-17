@@ -38,28 +38,27 @@ from modulus.launch.logging import (
     initialize_wandb,
 )
 from modulus.utils.generative import (
-    InfiniteSampler,
     construct_class_by_name,
     ddp_sync,
     format_time,
 )
 
-from .dataset import get_zarr_dataset
-
 # ----------------------------------------------------------------------------
 
 
 def training_loop(
+    dataset,
+    dataset_iterator,
+    *,
     task,
     run_dir=".",  # Output directory.
-    data_loader_kwargs={},  # Options for torch.utils.data.DataLoader.
     network_kwargs={},  # Options for model and preconditioning.
     loss_kwargs={},  # Options for loss function.
     optimizer_kwargs={},  # Options for optimizer.
     augment_kwargs=None,  # Options for augmentation pipeline, None = disable.
     seed=0,  # Global random seed.
-    batch_size=512,  # Total batch size for one training iteration.
-    batch_gpu=None,  # Limit batch size per GPU, None = no limit.
+    batch_size_global=512,  # Total batch size for one training iteration.
+    batch_size_gpu=None,  # Limit batch size per GPU, None = no limit.
     total_kimg=200000,  # Training duration, measured in thousands of training images.
     ema_halflife_kimg=500,  # Half-life of the exponential moving average (EMA) of model weights.
     ema_rampup_ratio=0.05,  # EMA ramp-up coefficient, None = no rampup.
@@ -68,27 +67,9 @@ def training_loop(
     kimg_per_tick=50,  # Interval of progress prints.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
-    train_data_path=None,
-    crop_size_x=448,
-    crop_size_y=448,
-    n_history=0,
-    in_channels=[0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19],
-    out_channels=[0, 17, 18, 19],
-    img_shape_x=448,
-    img_shape_y=448,
     patch_shape_x=448,
     patch_shape_y=448,
     patch_num=1,
-    roll=False,
-    add_grid=True,
-    ds_factor=4,
-    min_path=None,
-    max_path=None,
-    global_means_path=None,
-    global_stds_path=None,
-    gridtype="sinusoidal",
-    N_grid_channels=4,
-    normalization="v1",
     wandb_mode="disabled",
     regression_checkpoint_path=None,
 ):
@@ -123,67 +104,24 @@ def training_loop(
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
     # Select batch size per GPU.
-    batch_gpu_total = batch_size // dist.world_size
-    logger0.info(f"batch_gpu: {batch_gpu}")
-    if batch_gpu is None or batch_gpu > batch_gpu_total:
-        batch_gpu = batch_gpu_total
-    num_accumulation_rounds = batch_gpu_total // batch_gpu
-    if batch_size != batch_gpu * num_accumulation_rounds * dist.world_size:
+    batch_gpu_total = batch_size_global // dist.world_size
+    logger0.info(f"batch_size_gpu: {batch_size_gpu}")
+    if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
+        batch_size_gpu = batch_gpu_total
+    num_accumulation_rounds = batch_gpu_total // batch_size_gpu
+    if batch_size_global != batch_size_gpu * num_accumulation_rounds * dist.world_size:
         raise ValueError(
-            "batch_size must be equal to batch_gpu * num_accumulation_rounds * dist.world_size"
+            "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
-    # Load dataset: weather
-    logger0.info("Loading dataset...")
-    dataset_obj = get_zarr_dataset(
-        path=train_data_path,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        img_shape_x=img_shape_x,
-        img_shape_y=img_shape_y,
-        crop_size_x=crop_size_x,
-        crop_size_y=crop_size_y,
-        roll=roll,
-        add_grid=add_grid,
-        ds_factor=ds_factor,
-        train=True,
-        all_times=False,  # TODO check if this should be False
-        n_history=n_history,
-        min_path=min_path,
-        max_path=max_path,
-        global_means_path=global_means_path,
-        global_stds_path=global_stds_path,
-        normalization=normalization,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
-    )
-    worker_init_fn = None
-
-    dataset_sampler = InfiniteSampler(
-        dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed
-    )
-    dataset_iterator = iter(
-        torch.utils.data.DataLoader(
-            dataset=dataset_obj,
-            sampler=dataset_sampler,
-            batch_size=batch_gpu,
-            worker_init_fn=worker_init_fn,
-            **data_loader_kwargs,
-        )
-    )
-
-    img_in_channels = len(in_channels)  # noise + low-res input
-    if img_shape_x != patch_shape_x or img_shape_y != patch_shape_y:
-        img_in_channels *= 2  # add global maps for patch-based model
-    if add_grid:
-        img_in_channels = img_in_channels + N_grid_channels
-
-    img_out_channels = len(out_channels)
+    img_in_channels = len(dataset.input_channels())  # noise + low-res input
+    (img_shape_y, img_shape_x) = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
 
     # Construct network.
     logger0.info("Constructing network...")
     interface_kwargs = dict(
-        img_resolution=crop_size_x,
+        img_resolution=img_shape_x,
         img_channels=img_out_channels,
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
@@ -316,12 +254,12 @@ def training_loop(
         ema_halflife_nimg = ema_halflife_kimg * 1000
         if ema_rampup_ratio is not None:
             ema_halflife_nimg = min(ema_halflife_nimg, cur_nimg * ema_rampup_ratio)
-        ema_beta = 0.5 ** (batch_size / max(ema_halflife_nimg, 1e-8))
+        ema_beta = 0.5 ** (batch_size_global / max(ema_halflife_nimg, 1e-8))
         for p_ema, p_net in zip(ema.parameters(), net.parameters()):
             p_ema.copy_(p_net.detach().lerp(p_ema, ema_beta))
 
         # Perform maintenance tasks once per tick.
-        cur_nimg += batch_size
+        cur_nimg += batch_size_global
         done = cur_nimg >= total_kimg * 1000
         if (
             (not done)

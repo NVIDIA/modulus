@@ -17,28 +17,23 @@
 """Train diffusion-based generative model using the techniques described in the
 paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
+import json
 import os
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
-import json
-import re
-import warnings
-
 import hydra
 from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
-from training import training_loop
 
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
 
-warnings.filterwarnings(
-    "ignore", "Grad strides do not match bucket view strides"
-)  # False warning printed by PyTorch 1.12.
+from training import training_loop
+from datasets.dataset import init_dataset_from_config
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
@@ -66,8 +61,8 @@ def main(cfg: DictConfig) -> None:
 
     # parse hyperparameters
     duration = getattr(cfg, "duration", 200)
-    batch = getattr(cfg, "batch", 256)
-    batch_gpu = getattr(cfg, "batch_gpu", 2)
+    batch_size_global = getattr(cfg, "batch_size_global", 256)
+    batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -83,7 +78,6 @@ def main(cfg: DictConfig) -> None:
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
-    desc = getattr(cfg, "desc")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
@@ -117,6 +111,12 @@ def main(cfg: DictConfig) -> None:
     c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
     c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
     c.normalization = getattr(cfg, "normalization", "v2")
+    c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
+    c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    dataset_cfg = OmegaConf.to_container(cfg.dataset)
+    data_loader_kwargs = EasyDict(
+        pin_memory=True, num_workers=workers, prefetch_factor=2
+    )
 
     # Initialize distributed manager.
     DistributedManager.initialize()
@@ -132,9 +132,6 @@ def main(cfg: DictConfig) -> None:
     logger.info(f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}")
 
     # Initialize config dict.
-    c.data_loader_kwargs = EasyDict(
-        pin_memory=True, num_workers=workers, prefetch_factor=2
-    )
     c.network_kwargs = EasyDict()
     c.loss_kwargs = EasyDict()
     c.optimizer_kwargs = EasyDict(
@@ -203,7 +200,10 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Preconditioning & loss function.
-    if precond == "edm":
+    if precond == "edmv2" or precond == "edm":
+        c.network_kwargs.class_name = "training.networks.EDMPrecondSRV2"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
+    elif precond == "edmv1":
         c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
@@ -221,47 +221,27 @@ def main(cfg: DictConfig) -> None:
     if augment > 0:
         raise NotImplementedError("Augmentation is not implemented")
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
-    if c.patch_shape_x != c.patch_shape_y:
-        raise NotImplementedError("Rectangular patch not supported yet")
-    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
-        raise ValueError("Patch shape needs to be a factor of 32")
-    if c.patch_shape_x > c.img_shape_x:
-        c.patch_shape_x = c.img_shape_x
-    if c.patch_shape_y > c.img_shape_y:
-        c.patch_shape_y = c.img_shape_y
-    if c.patch_shape_x != c.img_shape_x or c.patch_shape_y != c.img_shape_y:
-        logger0.info("Patch-based training enabled")
-    else:
-        logger0.info("Patch-based training disabled")
 
     # Training options.
     c.total_kimg = max(int(duration * 1000), 1)
     c.ema_halflife_kimg = int(ema * 1000)
-    c.update(batch_size=batch, batch_gpu=batch_gpu)
+    c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
     c.update(kimg_per_tick=tick, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
     # Random seed.
-    if seed is not None:
-        c.seed = seed
-    else:
+    if seed is None:
         seed = torch.randint(1 << 31, size=[], device=dist.device)
         if dist.distributed:
             torch.distributed.broadcast(seed, src=0)
-        c.seed = int(seed)
+        seed = int(seed)
 
     # Transfer learning and resume.
     if transfer is not None:
         c.resume_pkl = transfer
         c.ema_rampup_ratio = None
-
-    # Description string.
-    dtype_str = "fp16" if c.network_kwargs.use_fp16 else "fp32"
-    desc = f"{cond_str:s}-{arch:s}-{precond:s}-gpus{dist.world_size:d}-batch{c.batch_size:d}-{dtype_str:s}"
-    if desc is not None:
-        desc += f"-{desc}"
 
     c.run_dir = outdir
 
@@ -273,10 +253,11 @@ def main(cfg: DictConfig) -> None:
     logger0.info("Training options:")
     logger0.info(json.dumps(c, indent=2))
     logger0.info(f"Output directory:        {c.run_dir}")
+    logger0.info(f"Dataset path:            {dataset_cfg['data_path']}")
     logger0.info(f"Network architecture:    {arch}")
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
-    logger0.info(f"Batch size:              {c.batch_size}")
+    logger0.info(f"Batch size:              {c.batch_size_global}")
     logger0.info(f"Mixed-precision:         {c.network_kwargs.use_fp16}")
 
     # Dry run?
@@ -290,14 +271,29 @@ def main(cfg: DictConfig) -> None:
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
-        # dnnlib.util.Logger(
-        #     file_name=os.path.join(c.run_dir, "log.txt"),
-        #     file_mode="a",
-        #     should_flush=True,
-        # )
+
+    (dataset, dataset_iterator) = init_dataset_from_config(
+        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
+    )
+
+    (img_shape_y, img_shape_x) = dataset.image_shape()
+    if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
+        c.patch_shape_x = img_shape_x
+    if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
+        c.patch_shape_y = img_shape_y
+    if c.patch_shape_x != c.patch_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a multiple of 32")
+    if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
+        logger0.info("Patch-based training enabled")
+    else:
+        logger0.info("Patch-based training disabled")
 
     # Train.
-    training_loop.training_loop(**c)
+    training_loop.training_loop(
+        training_loop.training_loop(dataset, dataset_iterator, **c)
+    )
 
 
 # ----------------------------------------------------------------------------

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 - Warp neighbor search routine with a minimal example
+- Strict option for loading Modulus checkpoints.
 
 ### Changed
 
@@ -24,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In `models/diffusion/preconditioning.py` scale on `x`, leave `img_lr` unscaled.
 
 ### Deprecated
+
+- `modulus.models.diffusion.preconditioning.EDMPrecondSR`. Use `EDMPecondSRV2` instead.
 
 ### Removed
 
