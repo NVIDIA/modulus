@@ -69,7 +69,7 @@ dry-run: false
 ## Weather data options
 dataset:
   type: cwb
-  data_path: /data/data2/2023-01-24-cwb-4years.zarr
+  data_path: /data/cwb-diffusions/data2/2023-01-24-cwb-4years.zarr
   crop_size_x: 448
   crop_size_y: 448
   n_history: 0

@@ -45,7 +45,9 @@ def main(cfg: DictConfig) -> None:
     # Sanity check
     if not hasattr(cfg, "task"):
         raise ValueError(
-            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
+            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
+            For example, for regression training, run python train.py --config-name=config_train_regression.
+            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
         )
 
     # Dump the configs
@@ -53,9 +55,11 @@ def main(cfg: DictConfig) -> None:
     OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
 
     # Parse options
-    regression_checkpoint_path = getattr(cfg, to_absolute_path("regression_checkpoint_path"), None)
+    regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
+    if regression_checkpoint_path:
+        regression_checkpoint_path = to_absolute_path(regression_checkpoint_path)
     task = getattr(cfg, "task")
-    outdir = getattr(cfg, to_absolute_path("outdir"), "./output"))
+    outdir = getattr(cfg, "outdir", "./output")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
     precond = getattr(cfg, "precond", "unetregression")
 
@@ -88,31 +92,13 @@ def main(cfg: DictConfig) -> None:
     c = EasyDict()
     c.task = task
     c.wandb_mode = wandb_mode
-    c.train_data_path = getattr(cfg, to_absolute_path("train_data_path"))
-    c.crop_size_x = getattr(cfg, "crop_size_x", 448)
-    c.crop_size_y = getattr(cfg, "crop_size_y", 448)
-    c.n_history = getattr(cfg, "n_history", 0)
-    c.in_channels = getattr(
-        cfg, "in_channels", [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
-    )
-    c.out_channels = getattr(cfg, "out_channels", [0, 17, 18, 19])
-    c.img_shape_x = getattr(cfg, "img_shape_x", 448)
-    c.img_shape_y = getattr(cfg, "img_shape_y", 448)
-    c.patch_shape_x = getattr(cfg, "patch_shape_x", 448)
-    c.patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    c.patch_num = getattr(cfg, "patch_num", 1)
-    c.roll = getattr(cfg, "roll", False)
-    c.add_grid = getattr(cfg, "add_grid", True)
-    c.ds_factor = getattr(cfg, "ds_factor", 1)
-    c.min_path = getattr(cfg, "min_path", None)
-    c.max_path = getattr(cfg, "max_path", None)
-    c.global_means_path = getattr(cfg, to_absolute_path("global_means_path"), None)
-    c.global_stds_path = getattr(cfg, to_absolute_path("global_stds_path"), None)
-    c.gridtype = getattr(cfg, "gridtype", "sinusoidal")
-    c.N_grid_channels = getattr(cfg, "N_grid_channels", 4)
-    c.normalization = getattr(cfg, "normalization", "v2")
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
+    if hasattr(cfg, "global_means_path"):
+        cfg.global_means_path = to_absolute_path(cfg.global_means_path)
+    if hasattr(cfg, "global_stds_path"):
+        cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
@@ -129,7 +115,9 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
 
     # inform about the output
-    logger.info(f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}")
+    logger.info(
+        f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
+    )
 
     # Initialize config dict.
     c.network_kwargs = EasyDict()
