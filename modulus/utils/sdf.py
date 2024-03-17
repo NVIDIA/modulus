@@ -24,6 +24,22 @@ def bvh_query_distance(
     max_dist: wp.float32,
     sdf: wp.array(dtype=wp.float32),
 ):
+    """
+    Computes the signed distance from each point in the given array `points`
+    to the mesh represented by `mesh`,within the maximum distance `max_dist`,
+    and stores the result in the array `sdf`.
+
+    Parameters:
+        mesh (wp.uint64): The identifier of the mesh.
+        points (wp.array): An array of 3D points for which to compute the
+            signed distance.
+        max_dist (wp.float32): The maximum distance within which to search
+            for the closest point on the mesh.
+        sdf (wp.array): An array to store the computed signed distances.
+
+    Returns:
+        None
+    """
     tid = wp.tid()
 
     res = wp.mesh_query_point(mesh, points[tid], max_dist)
@@ -47,6 +63,23 @@ def signed_distance_field(
     include_hit_points=False,
     include_hit_points_and_id=False,
 ):
+    """
+    Computes the signed distance field (SDF) for a given mesh and input points.
+
+    Parameters:
+        mesh_vertices (list): List of vertices defining the mesh.
+        mesh_indices (list): List of indices defining the triangles of the mesh.
+        input_points (list): List of input points for which to compute the SDF.
+        max_dist (float, optional): Maximum distance within which to search for
+            the closest point on the mesh. Default is 1e8.
+        include_hit_points (bool, optional): Whether to include hit points in
+            the output. Default is False.
+        include_hit_points_and_id (bool, optional): Whether to include hit points
+            and their corresponding IDs in the output. Default is False.
+
+    Returns:
+        wp.array: An array containing the computed signed distance field.
+    """
     wp.init()
     mesh = wp.Mesh(
         wp.array(mesh_vertices, dtype=wp.vec3), wp.array(mesh_indices, dtype=wp.int32)
