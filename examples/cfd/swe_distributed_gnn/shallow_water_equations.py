@@ -43,7 +43,7 @@ class ShallowWaterSolver(nn.Module):
     SWE solver class. Interface inspired bu pyspharm and SHTns
     """
 
-    def __init__(self, nlat, nlon, dt, lmax=None, mmax=None, grid='legendre-gauss', radius=6.37122E6, \
+    def __init__(self, nlat, nlon, dt, lmax=None, mmax=None, grid='legendre-gauss', radius=6.37122E6,
                  omega=7.292E-5, gravity=9.80616, havg=10.e3, hamp=120.):
         super().__init__()
 
@@ -259,8 +259,6 @@ class ShallowWaterSolver(nn.Module):
         # ugrid = uamp * self.spec2grid(uspec[1])
         # vgrid = vamp * self.spec2grid(uspec[2])
         # ugrid = torch.stack((ugrid, vgrid))
-
-
 
         # # intial vorticity/divergence field
         # vrtdivspec = self.vrtdivspec(ugrid)

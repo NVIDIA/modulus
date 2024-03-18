@@ -38,10 +38,11 @@ from shallow_water_equations import ShallowWaterSolver
 class PdeDataset(torch.utils.data.Dataset):
     """Custom Dataset class for PDE training data"""
     def __init__(self, dt, nsteps, dims=(384, 768), pde='shallow water equations', initial_condition='random',
-                 num_examples=32, device=torch.device('cpu'), normalize=True, stream=None):
+                 num_examples=32, device=torch.device('cpu'), normalize=True, rank=0, stream=None):
         self.num_examples = num_examples
         self.device = device
         self.stream = stream
+        self.rank = rank
 
         self.nlat = dims[0]
         self.nlon = dims[1]
@@ -60,8 +61,11 @@ class PdeDataset(torch.utils.data.Dataset):
 
         self.set_initial_condition(ictype=initial_condition)
 
+        inp0, tar0 = self._get_sample()
+        self.inp_shape = inp0.shape
+        self.tar_shape = tar0.shape
+
         if self.normalize:
-            inp0, _ = self._get_sample()
             self.inp_mean = torch.mean(inp0, dim=(-1, -2)).reshape(-1, 1, 1)
             self.inp_var = torch.var(inp0, dim=(-1, -2)).reshape(-1, 1, 1)
 
@@ -89,27 +93,19 @@ class PdeDataset(torch.utils.data.Dataset):
         return inp, tar
 
     def __getitem__(self, index):
+        if self.rank == 0:
+            with torch.inference_mode():
+                with torch.no_grad():
+                    inp, tar = self._get_sample()
 
-        # if self.stream is None:
-        #     self.stream = torch.cuda.Stream()
+                    if self.normalize:
+                        inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
+                        tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
+                        inp = inp.clone()
+                        tar = tar.clone()
 
-        # with torch.cuda.stream(self.stream):
-        #     with torch.inference_mode():
-        #         with torch.no_grad():
-        #             inp, tar = self._get_sample()
+        else:
+            inp = torch.empty((3, self.nlat, self.nlon), device=self.device)
+            tar = torch.empty((3, self.nlat, self.nlon), device=self.device)
 
-        #             if self.normalize:
-        #                 inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
-        #                 tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
-
-        # self.stream.synchronize()
-
-        with torch.inference_mode():
-            with torch.no_grad():
-                inp, tar = self._get_sample()
-
-                if self.normalize:
-                    inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
-                    tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
-
-        return inp.clone(), tar.clone()
+        return inp, tar

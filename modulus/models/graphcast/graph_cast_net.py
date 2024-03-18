@@ -39,6 +39,7 @@ from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.utils.graphcast.data_utils import StaticData
 from modulus.utils.graphcast.graph import Graph
+from modulus.distributed import DistributedManager
 
 from .graph_cast_processor import GraphCastProcessor
 
@@ -118,12 +119,24 @@ class GraphCastNet(Module):
         Flag indicating whether the model expects the input to be already
         partitioned. This can be helpful e.g. in multi-step rollouts to avoid
         aggregating the output just to distribute it in the next step again.
+    global_features_on_rank_0 : bool, default=True,
+        Flag indicating whether the model expects the input to be present
+        in its "global" form only on group_rank 0. During the input preparation phase,
+        the model will take care of scattering the input accordingly onto all ranks
+        of the process group across which the graph is partitioned. Note that only either
+        this flag or expect_partitioned_input can be set at a time.
     produce_aggregated_output : bool, default=True,
         Flag indicating whether the model produces the aggregated output on each
-        rank of the progress group across which the graph is distributed or
+        rank of the procress group across which the graph is distributed or
         whether the output is kept distributed. This can be helpful e.g.
         in multi-step rollouts to avoid aggregating the output just to distribute
         it in the next step again.
+    produce_aggregated_output_on_all_ranks : bool, default=True
+        Flag indicating - if produce_aggregated_output is True - whether the model
+        produces the aggregated output on each rank of the process group across
+        which the group is distributed or only on group_rank 0. This can be helpful
+        for computing the loss using global targets only on a single rank which can
+        avoid either having to distribute the computation of a loss function.
 
     Note
     ----
@@ -161,15 +174,19 @@ class GraphCastNet(Module):
         partition_size: int = 1,
         partition_group_name: Optional[str] = None,
         expect_partitioned_input: bool = False,
+        global_features_on_rank_0: bool = True,
         produce_aggregated_output: bool = True,
+        produce_aggregated_output_on_all_ranks: bool = True,
     ):
         super().__init__(meta=MetaData())
-
         self.is_distributed = False
         if partition_size > 1:
             self.is_distributed = True
         self.expect_partitioned_input = expect_partitioned_input
+        self.global_features_on_rank_0 = global_features_on_rank_0
         self.produce_aggregated_output = produce_aggregated_output
+        self.produce_aggregated_output_on_all_ranks = produce_aggregated_output_on_all_ranks
+        self.partition_group_name = partition_group_name
 
         # create the lat_lon_grid
         self.latitudes = torch.linspace(-90, 90, steps=input_res[0])
@@ -618,16 +635,22 @@ class GraphCastNet(Module):
         self,
         grid_nfeat: Tensor,
     ) -> Tensor:
-        invar = self.prepare_input(grid_nfeat, self.expect_partitioned_input)
+        invar = self.prepare_input(grid_nfeat, self.expect_partitioned_input, self.global_features_on_rank_0)
         outvar = self.model_checkpoint_fn(
             self.custom_forward,
             invar,
             use_reentrant=False,
             preserve_rng_state=False,
         )
-        return self.prepare_output(outvar, self.produce_aggregated_output)
+        outvar = self.prepare_output(outvar, self.produce_aggregated_output, self.produce_aggregated_output_on_all_ranks)
+        return outvar
 
-    def prepare_input(self, invar: Tensor, expect_partitioned_input: bool) -> Tensor:
+    def prepare_input(
+        self, 
+        invar: Tensor, 
+        expect_partitioned_input: bool,
+        global_features_on_rank_0: bool,
+    ) -> Tensor:
         """Prepares the input to the model in the required shape.
 
         Parameters
@@ -638,30 +661,57 @@ class GraphCastNet(Module):
         expect_partitioned_input : bool
             flag indicating whether input is partioned according to graph partitioning scheme
 
+        global_features_on_rank_0 : bool
+            Flag indicating whether input is in its "global" form only on group_rank 0 which
+            requires a scatter operation beforehand. Note that only either this flag or
+            expect_partitioned_input can be set at a time.
+
         Returns
         -------
         Tensor
             Reshaped input.
         """
-        if expect_partitioned_input and self.is_distributed:
-            # partitioned input is [N, C, P] instead of [N, C, H, W]
-            if self.has_static_data:
-                invar = torch.concat((invar, self.static_data), dim=1)
-                invar = invar[0].permute(1, 0)
-        else:
+        if global_features_on_rank_0 and expect_partitioned_input:
+            raise ValueError("global_features_on_rank_0 and expect_partitioned_input cannot be set at the same time.")
+
+        if not self.is_distributed:
             if invar.size(0) != 1:
                 raise ValueError("GraphCast does not support batch size > 1")
             # concat static data
             if self.has_static_data:
                 invar = torch.concat((invar, self.static_data), dim=1)
             invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
-            if self.is_distributed:
-                # partition node features
-                invar = self.g2m_graph.get_src_node_features_in_partition(invar)
+            
+        else:
+            # is_distributed
+            if expect_partitioned_input:
+                # partitioned input is [N, C, P] instead of [N, C, H, W]
+                if self.has_static_data:
+                    invar = torch.concat((invar, self.static_data), dim=1)
+                    invar = invar[0].permute(1, 0)
+            else:
+                # global_features_on_rank_0
+                if invar.size(0) != 1:
+                    raise ValueError("GraphCast does not support batch size > 1")
+                # concat static data
+                if self.has_static_data:
+                    invar = torch.concat((invar, self.static_data), dim=1)
+                invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
+
+                # scatter global features
+                invar = self.g2m_graph.get_src_node_features_in_partition(
+                    invar,
+                    scatter_features=global_features_on_rank_0,
+                )
 
         return invar
 
-    def prepare_output(self, outvar: Tensor, produce_aggregated_output: bool) -> Tensor:
+    def prepare_output(
+        self, 
+        outvar: Tensor, 
+        produce_aggregated_output: bool,
+        produce_aggregated_output_on_all_ranks: bool = True,
+    ) -> Tensor:
         """Prepares the output of the model in the shape [N, C, H, W].
 
         Parameters
@@ -673,6 +723,11 @@ class GraphCastNet(Module):
             flag indicating whether output is gathered onto each rank
             or kept distributed
 
+        produce_aggregated_output_on_all_ranks : bool
+            flag indicating whether output is gatherered on each rank
+            or only gathered at group_rank 0, True by default and
+            only valid if produce_aggregated_output is set.
+
         Returns
         -------
         Tensor
@@ -681,7 +736,10 @@ class GraphCastNet(Module):
         if produce_aggregated_output or not self.is_distributed:
             # default case: output of shape [N, C, H, W]
             if self.is_distributed:
-                outvar = self.m2g_graph.get_global_dst_node_features(outvar)
+                outvar = self.m2g_graph.get_global_dst_node_features(
+                    outvar,
+                    get_on_all_ranks=produce_aggregated_output_on_all_ranks,
+                )
 
             outvar = outvar.permute(1, 0)
             outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)

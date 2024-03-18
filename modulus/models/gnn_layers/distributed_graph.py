@@ -225,8 +225,8 @@ def partition_graph_with_id_mapping(
 
     # create local graph structures
     for rank in range(partition_size):
-        offset_start = global_offsets[dst_nodes_in_each_partition[rank]].view(-1, 1)
-        offset_end = global_offsets[dst_nodes_in_each_partition[rank] + 1].view(-1, 1)
+        offset_start = global_offsets[dst_nodes_in_each_partition[rank]].view(-1)
+        offset_end = global_offsets[dst_nodes_in_each_partition[rank] + 1].view(-1)
         degree = offset_end - offset_start
         local_offsets = degree.view(-1).cumsum(dim=0)
         local_offsets = torch.cat(
@@ -238,17 +238,10 @@ def partition_graph_with_id_mapping(
             ]
         )
 
-        # create boolean mask to find contigouus sections of global_indices
-        # which are taken care of current rank without using loops
-        tmp = torch.arange(
-            global_indices.numel(),
-            dtype=global_indices.dtype,
-            device=global_indices.device,
-        )
-        mask = (offset_start <= tmp) & (tmp < offset_end)
-        mask = torch.any(mask, dim=0)
+        partition_indices = torch.cat([
+            global_indices[offset_start[i]:offset_end[i]].clone() for i in range(len(offset_start))
+        ])
 
-        partition_indices = global_indices[mask].detach().clone()
         global_src_ids_on_rank, inverse_mapping = partition_indices.unique(
             sorted=True, return_inverse=True
         )
