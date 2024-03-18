@@ -119,7 +119,7 @@ class GraphCastNet(Module):
         Flag indicating whether the model expects the input to be already
         partitioned. This can be helpful e.g. in multi-step rollouts to avoid
         aggregating the output just to distribute it in the next step again.
-    global_features_on_rank_0 : bool, default=True,
+    global_features_on_rank_0 : bool, default=False,
         Flag indicating whether the model expects the input to be present
         in its "global" form only on group_rank 0. During the input preparation phase,
         the model will take care of scattering the input accordingly onto all ranks
@@ -174,7 +174,7 @@ class GraphCastNet(Module):
         partition_size: int = 1,
         partition_group_name: Optional[str] = None,
         expect_partitioned_input: bool = False,
-        global_features_on_rank_0: bool = True,
+        global_features_on_rank_0: bool = False,
         produce_aggregated_output: bool = True,
         produce_aggregated_output_on_all_ranks: bool = True,
     ):
