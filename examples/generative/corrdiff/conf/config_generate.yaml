@@ -34,8 +34,10 @@ num_steps: 8
   # Number of sampling steps
 sample_res: "full"
   # Sampling resolution
-res_edm: true
-  # If residual-based edm is used
+regression_only: false
+  # regression only inference
+diffusion_only: false
+  # diffusion only inference
 sampling_method: deterministic
   # Sampling method ["stochastic", "deterministic"]
 seed_batch_size: 32
