@@ -39,7 +39,6 @@ from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.utils.graphcast.data_utils import StaticData
 from modulus.utils.graphcast.graph import Graph
-from modulus.distributed import DistributedManager
 
 from .graph_cast_processor import GraphCastProcessor
 
@@ -185,7 +184,9 @@ class GraphCastNet(Module):
         self.expect_partitioned_input = expect_partitioned_input
         self.global_features_on_rank_0 = global_features_on_rank_0
         self.produce_aggregated_output = produce_aggregated_output
-        self.produce_aggregated_output_on_all_ranks = produce_aggregated_output_on_all_ranks
+        self.produce_aggregated_output_on_all_ranks = (
+            produce_aggregated_output_on_all_ranks
+        )
         self.partition_group_name = partition_group_name
 
         # create the lat_lon_grid
@@ -635,19 +636,25 @@ class GraphCastNet(Module):
         self,
         grid_nfeat: Tensor,
     ) -> Tensor:
-        invar = self.prepare_input(grid_nfeat, self.expect_partitioned_input, self.global_features_on_rank_0)
+        invar = self.prepare_input(
+            grid_nfeat, self.expect_partitioned_input, self.global_features_on_rank_0
+        )
         outvar = self.model_checkpoint_fn(
             self.custom_forward,
             invar,
             use_reentrant=False,
             preserve_rng_state=False,
         )
-        outvar = self.prepare_output(outvar, self.produce_aggregated_output, self.produce_aggregated_output_on_all_ranks)
+        outvar = self.prepare_output(
+            outvar,
+            self.produce_aggregated_output,
+            self.produce_aggregated_output_on_all_ranks,
+        )
         return outvar
 
     def prepare_input(
-        self, 
-        invar: Tensor, 
+        self,
+        invar: Tensor,
         expect_partitioned_input: bool,
         global_features_on_rank_0: bool,
     ) -> Tensor:
@@ -672,7 +679,9 @@ class GraphCastNet(Module):
             Reshaped input.
         """
         if global_features_on_rank_0 and expect_partitioned_input:
-            raise ValueError("global_features_on_rank_0 and expect_partitioned_input cannot be set at the same time.")
+            raise ValueError(
+                "global_features_on_rank_0 and expect_partitioned_input cannot be set at the same time."
+            )
 
         if not self.is_distributed:
             if invar.size(0) != 1:
@@ -681,7 +690,7 @@ class GraphCastNet(Module):
             if self.has_static_data:
                 invar = torch.concat((invar, self.static_data), dim=1)
             invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
-            
+
         else:
             # is_distributed
             if expect_partitioned_input:
@@ -707,8 +716,8 @@ class GraphCastNet(Module):
         return invar
 
     def prepare_output(
-        self, 
-        outvar: Tensor, 
+        self,
+        outvar: Tensor,
         produce_aggregated_output: bool,
         produce_aggregated_output_on_all_ranks: bool = True,
     ) -> Tensor:

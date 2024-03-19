@@ -238,9 +238,12 @@ def partition_graph_with_id_mapping(
             ]
         )
 
-        partition_indices = torch.cat([
-            global_indices[offset_start[i]:offset_end[i]].clone() for i in range(len(offset_start))
-        ])
+        partition_indices = torch.cat(
+            [
+                global_indices[offset_start[i] : offset_end[i]].clone()
+                for i in range(len(offset_start))
+            ]
+        )
 
         global_src_ids_on_rank, inverse_mapping = partition_indices.unique(
             sorted=True, return_inverse=True

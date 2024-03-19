@@ -2,7 +2,7 @@
 
 # SPDX-FileCopyrightText: Copyright (c) 2022 The torch-harmonics Authors. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -35,10 +35,23 @@ from math import ceil
 
 from shallow_water_equations import ShallowWaterSolver
 
+
 class PdeDataset(torch.utils.data.Dataset):
     """Custom Dataset class for PDE training data"""
-    def __init__(self, dt, nsteps, dims=(384, 768), pde='shallow water equations', initial_condition='random',
-                 num_examples=32, device=torch.device('cpu'), normalize=True, rank=0, stream=None):
+
+    def __init__(
+        self,
+        dt,
+        nsteps,
+        dims=(384, 768),
+        pde="shallow water equations",
+        initial_condition="random",
+        num_examples=32,
+        device=torch.device("cpu"),
+        normalize=True,
+        rank=0,
+        stream=None,
+    ):
         self.num_examples = num_examples
         self.device = device
         self.stream = stream
@@ -51,11 +64,22 @@ class PdeDataset(torch.utils.data.Dataset):
         self.nsteps = nsteps
         self.normalize = normalize
 
-        if pde == 'shallow water equations':
-            lmax = ceil(self.nlat/3)
+        if pde == "shallow water equations":
+            lmax = ceil(self.nlat / 3)
             mmax = lmax
             dt_solver = dt / float(self.nsteps)
-            self.solver = ShallowWaterSolver(self.nlat, self.nlon, dt_solver, lmax=lmax, mmax=mmax, grid='equiangular').to(self.device).float()
+            self.solver = (
+                ShallowWaterSolver(
+                    self.nlat,
+                    self.nlon,
+                    dt_solver,
+                    lmax=lmax,
+                    mmax=mmax,
+                    grid="equiangular",
+                )
+                .to(self.device)
+                .float()
+            )
         else:
             raise NotImplementedError
 
@@ -70,25 +94,25 @@ class PdeDataset(torch.utils.data.Dataset):
             self.inp_var = torch.var(inp0, dim=(-1, -2)).reshape(-1, 1, 1)
 
     def __len__(self):
-        length = self.num_examples if self.ictype == 'random' else 1
+        length = self.num_examples if self.ictype == "random" else 1
         return length
 
-    def set_initial_condition(self, ictype='random'):
+    def set_initial_condition(self, ictype="random"):
         self.ictype = ictype
-    
+
     def set_num_examples(self, num_examples=32):
         self.num_examples = num_examples
 
     def _get_sample(self):
-        if self.ictype == 'random':
+        if self.ictype == "random":
             inp = self.solver.random_initial_condition(mach=0.2)
-        elif self.ictype == 'galewsky':
+        elif self.ictype == "galewsky":
             inp = self.solver.galewsky_initial_condition()
-            
+
         # solve pde for n steps to return the target
         tar = self.solver.timestep(inp, self.nsteps)
         inp = self.solver.spec2grid(inp)
-        tar = self.solver.spec2grid(tar)        
+        tar = self.solver.spec2grid(tar)
 
         return inp, tar
 

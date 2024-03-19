@@ -2,7 +2,7 @@
 
 # SPDX-FileCopyrightText: Copyright (c) 2022 The torch-harmonics Authors. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -59,7 +59,7 @@ torch.backends.cudnn.allow_tf32 = USE_TF32
 
 
 def l2loss_sphere(solver, prd, tar, relative=False, squared=True):
-    loss = ((prd - tar)**2).mean()
+    loss = ((prd - tar) ** 2).mean()
     return loss
 
 
@@ -68,15 +68,17 @@ def count_parameters(model):
 
 
 # rolls out the model and compares to the classical solver
-def autoregressive_inference(model,
-                             dataset,
-                             path_root,
-                             nsteps,
-                             dist_manager,
-                             autoreg_steps=10,
-                             nskip=1,
-                             plot_channel=1,
-                             nics=20):
+def autoregressive_inference(
+    model,
+    dataset,
+    path_root,
+    nsteps,
+    dist_manager,
+    autoreg_steps=10,
+    nskip=1,
+    plot_channel=1,
+    nics=20,
+):
     losses = np.zeros(nics)
     fno_times = np.zeros(nics)
     nwp_times = np.zeros(nics)
@@ -96,11 +98,16 @@ def autoregressive_inference(model,
 
         # ML model
         start_time = time.time()
-        for i in range(1, autoreg_steps+1):
+        for i in range(1, autoreg_steps + 1):
             # evaluate the ML model
             prd = model(prd)
 
-            if (dist_manager.rank == 0) and (iic == nics-1) and (nskip > 0) and (i % nskip == 0):
+            if (
+                (dist_manager.rank == 0)
+                and (iic == nics - 1)
+                and (nskip > 0)
+                and (i % nskip == 0)
+            ):
 
                 # do plotting
                 fig = plt.figure(figsize=(7.5, 6))
@@ -113,16 +120,20 @@ def autoregressive_inference(model,
         # classical model, not parallel so only on rank 0
         if dist_manager.rank == 0:
             start_time = time.time()
-            for i in range(1, autoreg_steps+1):
-                
+            for i in range(1, autoreg_steps + 1):
+
                 # advance classical model
                 uspec = dataset.solver.timestep(uspec, nsteps)
 
-                if iic == nics-1 and i % nskip == 0 and nskip > 0:
-                    ref = (dataset.solver.spec2grid(uspec) - inp_mean) / torch.sqrt(inp_var)
+                if iic == nics - 1 and i % nskip == 0 and nskip > 0:
+                    ref = (dataset.solver.spec2grid(uspec) - inp_mean) / torch.sqrt(
+                        inp_var
+                    )
 
                     fig = plt.figure(figsize=(7.5, 6))
-                    dataset.solver.plot_griddata(ref[plot_channel], fig, vmax=4, vmin=-4)
+                    dataset.solver.plot_griddata(
+                        ref[plot_channel], fig, vmax=4, vmin=-4
+                    )
                     plt.savefig(os.path.join(path_root, f"truth_{i//nskip}.png"))
                     plt.clf()
 
@@ -131,8 +142,9 @@ def autoregressive_inference(model,
             ref = dataset.solver.spec2grid(uspec)
             prd = prd * torch.sqrt(inp_var) + inp_mean
             losses[iic] = l2loss_sphere(dataset.solver, prd, ref, relative=True).item()
-        
+
     return losses, fno_times, nwp_times
+
 
 # convenience function for logging weights and gradients
 def log_weights_and_grads(model, iters=1):
@@ -141,30 +153,34 @@ def log_weights_and_grads(model, iters=1):
     """
     root_path = os.path.join(os.path.dirname(__file__), "weights_and_grads")
 
-    weights_and_grads_fname = os.path.join(root_path, f"weights_and_grads_step{iters:03d}.tar")
+    weights_and_grads_fname = os.path.join(
+        root_path, f"weights_and_grads_step{iters:03d}.tar"
+    )
     print(weights_and_grads_fname)
 
-    weights_dict = {k:v for k,v in model.named_parameters()}
-    grad_dict = {k:v.grad for k,v in model.named_parameters()}
+    weights_dict = {k: v for k, v in model.named_parameters()}
+    grad_dict = {k: v.grad for k, v in model.named_parameters()}
 
-    store_dict = {'iteration': iters, 'grads': grad_dict, 'weights': weights_dict}
+    store_dict = {"iteration": iters, "grads": grad_dict, "weights": weights_dict}
     torch.save(store_dict, weights_and_grads_fname)
 
 
 # training function
-def train_model(model,
-                dataloader,
-                optimizer,
-                gscaler,
-                dist_manager,
-                scheduler=None,
-                nepochs=10,
-                nfuture=0,
-                num_examples=512,
-                num_valid=8,
-                loss_fn='l2',
-                enable_amp=False,
-                log_grads=0):
+def train_model(
+    model,
+    dataloader,
+    optimizer,
+    gscaler,
+    dist_manager,
+    scheduler=None,
+    nepochs=10,
+    nfuture=0,
+    num_examples=512,
+    num_valid=8,
+    loss_fn="l2",
+    enable_amp=False,
+    log_grads=0,
+):
 
     train_start = time.time()
 
@@ -176,7 +192,7 @@ def train_model(model,
         # time each epoch
         epoch_start = time.time()
 
-        dataloader.dataset.set_initial_condition('random')
+        dataloader.dataset.set_initial_condition("random")
         dataloader.dataset.set_num_examples(num_examples)
 
         # get the solver for its convenience functions
@@ -208,7 +224,7 @@ def train_model(model,
 
         acc_loss = acc_loss / len(dataloader.dataset)
 
-        dataloader.dataset.set_initial_condition('random')
+        dataloader.dataset.set_initial_condition("random")
         dataloader.dataset.set_num_examples(num_valid)
 
         # perform validation
@@ -230,25 +246,43 @@ def train_model(model,
         epoch_time = time.time() - epoch_start
 
         if dist_manager.rank == 0:
-            print(f'--------------------------------------------------------------------------------')
-            print(f'Epoch {epoch} summary:')
-            print(f'time taken: {epoch_time}')
-            print(f'accumulated training loss: {acc_loss}')
-            print(f'relative validation loss: {valid_loss}')
+            print(
+                f"--------------------------------------------------------------------------------"
+            )
+            print(f"Epoch {epoch} summary:")
+            print(f"time taken: {epoch_time}")
+            print(f"accumulated training loss: {acc_loss}")
+            print(f"relative validation loss: {valid_loss}")
 
             if wandb.run is not None:
-                current_lr = optimizer.param_groups[0]['lr']
-                wandb.log({"loss": acc_loss, "validation loss": valid_loss, "learning rate": current_lr})
+                current_lr = optimizer.param_groups[0]["lr"]
+                wandb.log(
+                    {
+                        "loss": acc_loss,
+                        "validation loss": valid_loss,
+                        "learning rate": current_lr,
+                    }
+                )
 
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
-        print(f'--------------------------------------------------------------------------------')
-        print(f'done. Training took {train_time}.')
+        print(
+            f"--------------------------------------------------------------------------------"
+        )
+        print(f"done. Training took {train_time}.")
 
     return valid_loss
 
-def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=False, log_grads=0, short_run=False):
+
+def main(
+    train=True,
+    load_checkpoint=False,
+    save_checkpoint=False,
+    enable_amp=False,
+    log_grads=0,
+    short_run=False,
+):
     nepochs = 10 if not short_run else 2
     num_examples = 512 if not short_run else 4
     mesh_size = 7
@@ -275,32 +309,35 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
-    
+
     if dist_manager.rank == 0:
         wandb.login()
 
     model = GraphCastNet(
-            meshgraph_path=f"./icospheres_{mesh_size}.json",
-            static_dataset_path=None,
-            input_res=input_res,
-            input_dim_grid_nodes=3,
-            input_dim_mesh_nodes=3,
-            input_dim_edges=4,
-            output_dim_grid_nodes=3,
-            processor_layers=16,
-            hidden_dim=128,
-            partition_size=dist_manager.group_size(graph_partition_pg_name),
-            partition_group_name=graph_partition_pg_name,
-            expect_partitioned_input=False,
-            global_features_on_rank_0=True,
-            produce_aggregated_output=True,
-            produce_aggregated_output_on_all_ranks=False,
-        ).to(dist_manager.device)
+        meshgraph_path=f"./icospheres_{mesh_size}.json",
+        static_dataset_path=None,
+        input_res=input_res,
+        input_dim_grid_nodes=3,
+        input_dim_mesh_nodes=3,
+        input_dim_edges=4,
+        output_dim_grid_nodes=3,
+        processor_layers=16,
+        hidden_dim=128,
+        partition_size=dist_manager.group_size(graph_partition_pg_name),
+        partition_group_name=graph_partition_pg_name,
+        expect_partitioned_input=False,
+        global_features_on_rank_0=True,
+        produce_aggregated_output=True,
+        produce_aggregated_output_on_all_ranks=False,
+    ).to(dist_manager.device)
 
     # since model is "tensor-parallel" in graph-partition
     # mark model as "shared" which sets gradient hooks and
     # aggregates gradients in the backward pass accordingly
-    if dist_manager.is_initialized() and dist_manager.group_size(graph_partition_pg_name) > 1:
+    if (
+        dist_manager.is_initialized()
+        and dist_manager.group_size(graph_partition_pg_name) > 1
+    ):
         mark_module_as_shared(model, graph_partition_pg_name)
 
     # iterate over models and train each model
@@ -313,79 +350,111 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
     metrics = {}
 
     if dist_manager.rank == 0:
-        print(f'number of trainable params: {num_params}')
-    metrics['num_params'] = num_params
+        print(f"number of trainable params: {num_params}")
+    metrics["num_params"] = num_params
 
     if load_checkpoint:
-        model.load_state_dict(torch.load(os.path.join(root_path, "checkpoints", run_suffix, "model.pt")))
+        model.load_state_dict(
+            torch.load(os.path.join(root_path, "checkpoints", run_suffix, "model.pt"))
+        )
 
-    # 1 hour prediction steps    
-    dt = 1*3600
+    # 1 hour prediction steps
+    dt = 1 * 3600
     dt_solver = 150
-    nsteps = dt//dt_solver
-    dataset = PdeDataset(dt=dt, nsteps=nsteps, dims=input_res, device=dist_manager.device, normalize=True, rank=dist_manager.rank)
-    # There is still an issue with parallel dataloading. Do NOT use it at the moment     
+    nsteps = dt // dt_solver
+    dataset = PdeDataset(
+        dt=dt,
+        nsteps=nsteps,
+        dims=input_res,
+        device=dist_manager.device,
+        normalize=True,
+        rank=dist_manager.rank,
+    )
+    # There is still an issue with parallel dataloading. Do NOT use it at the moment
     # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, persistent_workers=False)
-
+    dataloader = DataLoader(
+        dataset, batch_size=1, shuffle=True, num_workers=0, persistent_workers=False
+    )
 
     # run the training
     if train:
         if dist_manager.rank == 0:
-            run = wandb.init(project="swe", group='SWE_GC', name='SWE_GC' + '_' + str(time.time()))
+            run = wandb.init(
+                project="swe", group="SWE_GC", name="SWE_GC" + "_" + str(time.time())
+            )
 
         # optimizer:
-        optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
         gscaler = amp.GradScaler(enabled=enable_amp)
 
         start_time = time.time()
 
         if dist_manager.rank == 0:
-            print(f'Training, single step')
+            print(f"Training, single step")
 
         train_model(
-            model, 
-            dataloader, 
-            optimizer, 
-            gscaler, 
-            dist_manager, 
-            scheduler=scheduler, 
+            model,
+            dataloader,
+            optimizer,
+            gscaler,
+            dist_manager,
+            scheduler=scheduler,
             num_examples=num_examples,
-            nepochs=nepochs, 
-            loss_fn='l2', 
-            enable_amp=enable_amp, 
-            log_grads=log_grads
+            nepochs=nepochs,
+            loss_fn="l2",
+            enable_amp=enable_amp,
+            log_grads=log_grads,
         )
 
         training_time = time.time() - start_time
 
         if dist_manager.rank == 0:
             os.makedirs(os.path.join(root_path, "figures", run_suffix), exist_ok=True)
-            os.makedirs(os.path.join(root_path, "output_data", run_suffix), exist_ok=True)
+            os.makedirs(
+                os.path.join(root_path, "output_data", run_suffix), exist_ok=True
+            )
             if save_checkpoint:
-                os.makedirs(os.path.join(root_path, "checkpoints", run_suffix), exist_ok=True)
-                torch.save(model.state_dict(), os.path.join(root_path, "checkpoints", run_suffix, "model.pt"))
+                os.makedirs(
+                    os.path.join(root_path, "checkpoints", run_suffix), exist_ok=True
+                )
+                torch.save(
+                    model.state_dict(),
+                    os.path.join(root_path, "checkpoints", run_suffix, "model.pt"),
+                )
 
     # set seed
     torch.manual_seed(333)
     torch.cuda.manual_seed(333)
 
     with torch.inference_mode():
-        losses, fno_times, nwp_times = autoregressive_inference(model, dataset, os.path.join(root_path, "figures", run_suffix), dist_manager=dist_manager, nsteps=nsteps, autoreg_steps=10)
-        metrics['loss_mean'] = np.mean(losses)
-        metrics['loss_std'] = np.std(losses)
-        metrics['fno_time_mean'] = np.mean(fno_times)
-        metrics['fno_time_std'] = np.std(fno_times)
-        metrics['nwp_time_mean'] = np.mean(nwp_times)
-        metrics['nwp_time_std'] = np.std(nwp_times)
+        losses, fno_times, nwp_times = autoregressive_inference(
+            model,
+            dataset,
+            os.path.join(root_path, "figures", run_suffix),
+            dist_manager=dist_manager,
+            nsteps=nsteps,
+            autoreg_steps=10,
+        )
+        metrics["loss_mean"] = np.mean(losses)
+        metrics["loss_std"] = np.std(losses)
+        metrics["fno_time_mean"] = np.mean(fno_times)
+        metrics["fno_time_std"] = np.std(fno_times)
+        metrics["nwp_time_mean"] = np.mean(nwp_times)
+        metrics["nwp_time_std"] = np.std(nwp_times)
         if train:
-            metrics['training_time'] = training_time
-            metrics[f'max_memory_allocated_gib'] = torch.cuda.max_memory_allocated() * 1.0 / (1024 ** 3)
-            metrics[f'max_memory_reserved_gib'] = torch.cuda.max_memory_reserved() * 1.0 / (1024 ** 3)
+            metrics["training_time"] = training_time
+            metrics[f"max_memory_allocated_gib"] = (
+                torch.cuda.max_memory_allocated() * 1.0 / (1024**3)
+            )
+            metrics[f"max_memory_reserved_gib"] = (
+                torch.cuda.max_memory_reserved() * 1.0 / (1024**3)
+            )
 
     if dist_manager.rank == 0:
-        with open(os.path.join(root_path, "output_data", run_suffix, "metrics.json"), 'w') as f:
+        with open(
+            os.path.join(root_path, "output_data", run_suffix, "metrics.json"), "w"
+        ) as f:
             json.dump(metrics, f)
         if train:
             run.finish()
@@ -394,10 +463,11 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
 
 
 if __name__ == "__main__":
-    main(train=True,
-         load_checkpoint=False,
-         save_checkpoint=True,
-         enable_amp=False,
-         log_grads=0,
-         short_run=False,
+    main(
+        train=True,
+        load_checkpoint=False,
+        save_checkpoint=True,
+        enable_amp=False,
+        log_grads=0,
+        short_run=False,
     )
