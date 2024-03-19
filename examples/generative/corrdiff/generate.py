@@ -224,7 +224,7 @@ def main(cfg: DictConfig) -> None:
             logger0.info(f"seeds: {sample_seeds}")
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    image_mean = generate(
+                    image_reg = generate(
                         net=net_reg,
                         img_lr=image_lr_patch,
                         seed_batch_size=1,
@@ -250,11 +250,11 @@ def main(cfg: DictConfig) -> None:
                         **sampler_kwargs,
                     )
             if regression_only:
-                image_out = image_mean
+                image_out = image_reg
             elif diffusion_only:
                 image_out = image_res
             else:
-                image_out = image_mean + image_res
+                image_out = image_reg + image_res
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
             if sample_res != "full":
