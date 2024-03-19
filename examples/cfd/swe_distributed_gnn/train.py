@@ -105,7 +105,7 @@ def autoregressive_inference(model,
                 # do plotting
                 fig = plt.figure(figsize=(7.5, 6))
                 dataset.solver.plot_griddata(prd[0, plot_channel], fig, vmax=4, vmin=-4)
-                plt.savefig(path_root+'_pred_'+str(i//nskip)+'.png')
+                plt.savefig(os.path.join(path_root, f"pred_{i//nskip}.png"))
                 plt.clf()
 
         fno_times[iic] = time.time() - start_time
@@ -123,7 +123,7 @@ def autoregressive_inference(model,
 
                     fig = plt.figure(figsize=(7.5, 6))
                     dataset.solver.plot_griddata(ref[plot_channel], fig, vmax=4, vmin=-4)
-                    plt.savefig(path_root+'_truth_'+str(i//nskip)+'.png')
+                    plt.savefig(os.path.join(path_root, f"truth_{i//nskip}.png"))
                     plt.clf()
 
             nwp_times[iic] = time.time() - start_time
@@ -249,6 +249,11 @@ def train_model(model,
     return valid_loss
 
 def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=False, log_grads=0, short_run=False):
+    nepochs = 10 if not short_run else 2
+    num_examples = 512 if not short_run else 4
+    mesh_size = 7
+    input_res = (256, 512)
+
     torch.manual_seed(333)
     torch.cuda.manual_seed(333)
 
@@ -259,14 +264,14 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
     if DistributedManager().distributed:
         graph_partition_pg_name = "graph_partition"
         world_size = torch.distributed.get_world_size()
-        suffix = f"mg_{world_size}"
+        run_suffix = f"mg_{world_size}"
         DistributedManager.create_process_subgroup(
             name=graph_partition_pg_name,
             size=world_size,
             verbose=True,
         )
     else:
-        suffix = "sg"
+        run_suffix = "sg"
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
@@ -274,29 +279,15 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
     if dist_manager.rank == 0:
         wandb.login()
 
-    # 1 hour prediction steps
-    nepochs = 10 if not short_run else 1
-    num_examples = 512 if not short_run else 4
-    dt = 1*3600
-    dt_solver = 150
-    nsteps = dt//dt_solver
-    dataset = PdeDataset(dt=dt, nsteps=nsteps, dims=(256, 512), device=dist_manager.device, normalize=True, rank=dist_manager.rank)
-    # There is still an issue with parallel dataloading. Do NOT use it at the moment     
-    # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, persistent_workers=False)
-
-    # prepare dicts containing models and corresponding metrics
-    metrics = {}
-
     model = GraphCastNet(
-            meshgraph_path="./icospheres.json",
+            meshgraph_path=f"./icospheres_{mesh_size}.json",
             static_dataset_path=None,
-            input_res=(256, 512),
+            input_res=input_res,
             input_dim_grid_nodes=3,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
             output_dim_grid_nodes=3,
-            processor_layers=8,
+            processor_layers=16,
             hidden_dim=128,
             partition_size=dist_manager.group_size(graph_partition_pg_name),
             partition_group_name=graph_partition_pg_name,
@@ -318,12 +309,25 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
         print(model)
 
     num_params = count_parameters(model)
+    # prepare dicts containing models and corresponding metrics
+    metrics = {}
+
     if dist_manager.rank == 0:
         print(f'number of trainable params: {num_params}')
     metrics['num_params'] = num_params
 
     if load_checkpoint:
-        model.load_state_dict(torch.load(os.path.join(root_path, f'checkpoints_{suffix}')))
+        model.load_state_dict(torch.load(os.path.join(root_path, "checkpoints", run_suffix, "model.pt")))
+
+    # 1 hour prediction steps    
+    dt = 1*3600
+    dt_solver = 150
+    nsteps = dt//dt_solver
+    dataset = PdeDataset(dt=dt, nsteps=nsteps, dims=input_res, device=dist_manager.device, normalize=True, rank=dist_manager.rank)
+    # There is still an issue with parallel dataloading. Do NOT use it at the moment     
+    # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, persistent_workers=False)
+
 
     # run the training
     if train:
@@ -332,14 +336,14 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
 
         # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-        scheduler = None
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
         gscaler = amp.GradScaler(enabled=enable_amp)
 
         start_time = time.time()
 
         if dist_manager.rank == 0:
             print(f'Training, single step')
+
         train_model(
             model, 
             dataloader, 
@@ -357,18 +361,18 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
         training_time = time.time() - start_time
 
         if dist_manager.rank == 0:
-            os.makedirs(os.path.join(root_path, f'checkpoints_{suffix}'), exist_ok=True)
-            os.makedirs(os.path.join(root_path, f'figures_{suffix}'), exist_ok=True)
-            os.makedirs(os.path.join(root_path, f'output_data_{suffix}'), exist_ok=True)
+            os.makedirs(os.path.join(root_path, "figures", run_suffix), exist_ok=True)
+            os.makedirs(os.path.join(root_path, "output_data", run_suffix), exist_ok=True)
             if save_checkpoint:
-                torch.save(model.state_dict(), os.path.join(root_path, 'checkpoints'))
+                os.makedirs(os.path.join(root_path, "checkpoints", run_suffix), exist_ok=True)
+                torch.save(model.state_dict(), os.path.join(root_path, "checkpoints", run_suffix, "model.pt"))
 
     # set seed
     torch.manual_seed(333)
     torch.cuda.manual_seed(333)
 
     with torch.inference_mode():
-        losses, fno_times, nwp_times = autoregressive_inference(model, dataset, os.path.join(root_path,f'figures_{suffix}/'), dist_manager=dist_manager, nsteps=nsteps, autoreg_steps=10)
+        losses, fno_times, nwp_times = autoregressive_inference(model, dataset, os.path.join(root_path, "figures", run_suffix), dist_manager=dist_manager, nsteps=nsteps, autoreg_steps=10)
         metrics['loss_mean'] = np.mean(losses)
         metrics['loss_std'] = np.std(losses)
         metrics['fno_time_mean'] = np.mean(fno_times)
@@ -381,7 +385,7 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
             metrics[f'max_memory_reserved_gib'] = torch.cuda.max_memory_reserved() * 1.0 / (1024 ** 3)
 
     if dist_manager.rank == 0:
-        with open(os.path.join(root_path, f'output_data_{suffix}/metrics.json'), 'w') as f:
+        with open(os.path.join(root_path, "output_data", run_suffix, "metrics.json"), 'w') as f:
             json.dump(metrics, f)
         if train:
             run.finish()
@@ -390,4 +394,10 @@ def main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=Fa
 
 
 if __name__ == "__main__":
-    main(train=True, load_checkpoint=False, save_checkpoint=False, enable_amp=False, log_grads=0, short_run=False)
+    main(train=True,
+         load_checkpoint=False,
+         save_checkpoint=True,
+         enable_amp=False,
+         log_grads=0,
+         short_run=False,
+    )

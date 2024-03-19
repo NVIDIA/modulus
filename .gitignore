@@ -168,3 +168,6 @@ checkpoints/
 outputs/
 multirun/
 .hydra/
+
+# SWE example
+icospheres_*.json
