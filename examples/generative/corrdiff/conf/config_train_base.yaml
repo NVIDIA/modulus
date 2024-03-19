@@ -16,14 +16,8 @@
 
 hydra:
   job:
-    chdir: False
+    chdir: True
 
-
-## Main options
-checkpoint_dir: checkpoints
-  # Where to save the checkpoints
-data: 2023-01-24-cwb-4years.zarr
-  # Path to the dataset
 
 ## Hyperparameters
 duration: 200
@@ -57,12 +51,12 @@ workers: 4
 
 
 ## I/O-related options
+checkpoint_dir: checkpoints
+  # Where to save the checkpoints
 wandb_mode: offline
   # Wights & biases mode [online, ofline, disabled]
 tick: 1
   # How often to print progress
-snap: 1
-  # How often to save snapshots
 dump: 500
   # How often to dump state
 seed: null  # TODO check
