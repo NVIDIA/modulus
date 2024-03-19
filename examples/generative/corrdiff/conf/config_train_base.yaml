@@ -65,6 +65,8 @@ transfer: null  # TODO check
   # Transfer learning from network pickle
 dry-run: false
   # Print training options and exit
+log_code: true
+  # whether to log the Modulus source and training code
 
 ## Weather data options
 dataset:
