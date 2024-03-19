@@ -16,7 +16,7 @@
 
 hydra:
   job:
-    chdir: False
+    chdir: True
 
 
 defaults:
