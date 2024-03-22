@@ -56,8 +56,9 @@ use_torch_compile: True
 ## Data options
 patch_shape_x: 448
 patch_shape_y: 448
-overlap_pix: 4 
-boundary_pix: 2
+overlap_pix: 0 
+boundary_pix: 0
+hr_mean_conditioning: false
 times:
   - 2021-02-02T00:00:00
   - 2021-03-02T00:00:00
@@ -86,9 +87,10 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  gridtype: "sinusoidal"
-  N_grid_channels: 4
+  gridtype: "learnable"
+  N_grid_channels: 100
   normalization: "v1"
+  
 
 ## Deterministic sampler options
 sigma_min: null
