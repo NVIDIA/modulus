@@ -149,6 +149,8 @@ class SongUNet(Module):
         encoder_type: str = "standard",
         decoder_type: str = "standard",
         resample_filter: List[int] = [1, 1],
+        gridtype: str = "sinusoidal",
+        task: str = 'regression',
     ):
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
@@ -169,6 +171,13 @@ class SongUNet(Module):
             )
 
         super().__init__(meta=MetaData())
+        if (gridtype[:9] == "learnable"):
+            pos_dim = int(gridtype[10:])
+            print("learnable %s positional embedding"%gridtype[10:])
+            self.pos_embd = torch.nn.Parameter(torch.randn(img_resolution,img_resolution,pos_dim)) #shape: (448,448,100)
+        # for old model
+        elif (task == "diffusion"):
+            self.pos_embd = torch.nn.Parameter(torch.randn(img_resolution,img_resolution,100)) #shape: (448,448,100)
         self.label_dropout = label_dropout
         self.embedding_type = embedding_type
         emb_channels = model_channels * channel_mult_emb
