@@ -126,20 +126,20 @@ class Trainer():
         self.train_graph = None
         self.eval_graph = None
 
-        if torch.distributed.is_initialized():
+        # for status bars
+        self.print_to_screen = self.dist.rank == 0
 
+        if self.dist.device.type == "cuda":
             capture_stream = torch.cuda.Stream()
-            with torch.cuda.stream(capture_stream):
-                self.model = DDP(self.model,
-                                 device_ids = [self.device.index],
-                                 output_device = [self.device.index],
-                                 broadcast_buffers = True,
-                                 find_unused_parameters = False,
-                                 gradient_as_bucket_view = True)
-                capture_stream.synchronize()
-
-            # for status bars
-            self.print_to_screen = self.dist.rank == 0
+            if torch.distributed.is_initialized():
+                with torch.cuda.stream(capture_stream):
+                    self.model = DDP(self.model,
+                                    device_ids = [self.device.index],
+                                    output_device = [self.device.index],
+                                    broadcast_buffers = True,
+                                    find_unused_parameters = False,
+                                    gradient_as_bucket_view = True)
+                    capture_stream.synchronize()
 
             # capture graph if requested
             if graph_mode in ["train", "train_eval"]:
@@ -276,7 +276,7 @@ class Trainer():
         iteration: int, optional
             Current iteration number
         epochs_since_improved: int, optional
-            Number of epochs that have seen improvement in validaiton error
+            Number of epochs that have seen improvement in validation error
         """
         best_validation_error = validation_error
         for epoch in range(epoch, self.max_epochs):
@@ -289,7 +289,7 @@ class Trainer():
             training_step = 0
             self.model.train()
             for inputs, target in (pbar := tqdm(self.dataloader_train, disable=(not self.print_to_screen))):
-                pbar.set_description(f"Training   epoch {epoch+1}/{self.max_epochs}")
+                pbar.set_description(f"Training   epoch {epoch}/{self.max_epochs}")
 
                 # Trach epoch in tensorboard
                 if self.dist.rank == 0:
@@ -367,7 +367,7 @@ class Trainer():
                 validation_stats = torch.zeros((2+len(self.output_variables)), dtype=torch.float32,
                                                device=self.device)
                 for inputs, target in (pbar := tqdm(self.dataloader_valid, disable=(not self.print_to_screen))):
-                    pbar.set_description(f"Validation epoch {epoch+1}/{self.max_epochs}")
+                    pbar.set_description(f"Validation epoch {epoch}/{self.max_epochs}")
                     inputs = [x.to(device=self.device) for x in inputs]
                     target = target.to(device=self.device)
                     bsize = float(target.shape[0])
@@ -447,7 +447,7 @@ class Trainer():
                     target=write_checkpoint,
                     args=(self.model.module if torch.distributed.is_initialized() else self.model,
                           self.optimizer,
-                          self.lr_scheduler, epoch+1,
+                          self.lr_scheduler, epoch,
                           iteration,
                           validation_error,
                           epochs_since_improved,
