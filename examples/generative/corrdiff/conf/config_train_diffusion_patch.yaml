@@ -44,7 +44,11 @@ batch_size_gpu: 20
 patch_shape_x: 64
 patch_shape_y: 64
 patch_num: 10
+hr_mean_conditioning: True
 
-gridtype: "sinusoidal"
-N_grid_channels: 4
-normalization: "v1"
+## Weather data options
+dataset:
+  gridtype: "learnable"
+    # can be either linear, sinusoidal, or learnable (to be done)
+  N_grid_channels: 100
+  
