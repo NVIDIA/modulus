@@ -17,7 +17,7 @@
 
 import numpy as np
 import torch
-
+import warnings 
 
 def reshape_fields(
     img,
@@ -90,13 +90,9 @@ def reshape_fields(
                 y = np.meshgrid(np.linspace(-1, 1, img_shape_y))
                 grid_x, grid_y = np.meshgrid(y, x)
                 grid = np.stack((grid_x, grid_y), axis=0)
-            elif gridtype == "sinusoidal":
+            else:
                 # print('sinusuidal grid added ......')
-                if N_grid_channels != 4:
-                    raise ValueError(
-                        "N_grid_channels must be set to 4 for gridtype sinusoidal"
-                    )
-                n_channels = n_channels + N_grid_channels
+                n_channels = n_channels + 4
                 x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_x)))
                 x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, img_shape_x)))
                 y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, img_shape_y)))
@@ -106,6 +102,22 @@ def reshape_fields(
                 grid = np.expand_dims(
                     np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
                 )
+                if N_grid_channels != 4 and gridtype == 'sinusoidal':
+                    warnings.warn('N_grid_channels is not 4. Keep original 4 embedding for the pretrained regression model.') 
+                    if (N_grid_channels % 4 != 0):
+                        raise ValueError(
+                            "N_grid_channels must be a factor of 4"
+                        )
+                    n_channels = n_channels + N_grid_channels
+                    num_freq = N_grid_channels//4
+                    freq_bands = 2. ** np.linspace(0., num_freq, num=num_freq)    
+                    grid_list = [grid]
+                    grid_x, grid_y = np.meshgrid(np.linspace(0, 2 * np.pi, img_shape_x), np.linspace(0, 2 * np.pi, img_shape_y))
+                    for freq in freq_bands:
+                        for p_fn in [np.sin, np.cos]:
+                            grid_list.append(p_fn(grid_x[np.newaxis,np.newaxis,] * freq))    
+                            grid_list.append(p_fn(grid_y[np.newaxis,np.newaxis,] * freq)) 
+                    grid = np.concatenate(grid_list, axis=1)                     
             img = np.concatenate((img, grid), axis=1)
 
     if roll:
