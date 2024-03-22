@@ -156,4 +156,5 @@ class UNetDecoder(th.nn.Module):
     def reset(self):
         """Resets the state of the decoder layers"""
         for layer in self.decoder:
-            layer["recurrent"].reset()
+            if layer["recurrent"] is not None:
+                layer["recurrent"].reset()

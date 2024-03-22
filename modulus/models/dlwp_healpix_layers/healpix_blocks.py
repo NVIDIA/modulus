@@ -212,7 +212,7 @@ class ConvNeXtBlock(th.nn.Module):
 
         # Instantiate 1x1 conv to increase/decrease channel depth if necessary
         if in_channels == out_channels:
-            self.skip_module = lambda x: x  # Identity-function required in forward pass
+            self.skip_module = (lambda x: x)  # Identity-function required in forward pass
         else:
             self.skip_module = geometry_layer(
                 layer=torch.nn.Conv2d,
@@ -484,7 +484,7 @@ class SymmetricConvNeXtBlock(th.nn.Module):
         super().__init__()
 
         if in_channels == int(latent_channels):
-            self.skip_module = lambda x: x  # Identity-function required in forward pass
+            self.skip_module = (lambda x: x)  # Identity-function required in forward pass
         else:
             self.skip_module = geometry_layer(
                 layer=torch.nn.Conv2d,
@@ -638,45 +638,6 @@ class AvgPool(th.nn.Module):
 #
 # UPSAMPLING BLOCKS
 #
-
-
-class InterpolationUpsample(th.nn.Module):
-    """This class provides a wrapper for a HEALPix (or other) tensor data
-    around Interpolation
-
-    Parameters
-    ----------
-    geometry_layer: torch.nn.Module, optional
-        The wrapper for the geometry of the tensor being passed to MaxPool2d
-    mode: str, optional
-        The mode used for interpolation upsampling, passed to MaxPool2d
-    upsampling: int, optional
-        Size used for upsampling
-    enable_nhwc: bool, optional
-        Enable nhwc format, passed to wrapper
-    enable_healpixpad: bool, optional
-        If HEALPixPadding should be enabled, passed to wrapper
-    """
-
-    def __init__(
-        self,
-        geometry_layer: th.nn.Module = HEALPixLayer,
-        mode: str = "nearest",
-        upsampling: int = 2,
-        enable_nhwc: bool = False,
-        enable_healpixpad: bool = False,
-    ):
-        super().__init__()
-        self.upsampler = geometry_layer(
-            layer=Interpolate,
-            scale_factor=upsampling,
-            mode=mode,
-            enable_nhwc=enable_nhwc,
-            enable_healpixpad=enable_healpixpad,
-        )
-
-    def forward(self, x):
-        return self.upsampler(x)
 
 
 class TransposedConvUpsample(th.nn.Module):

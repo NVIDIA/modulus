@@ -79,7 +79,7 @@ def test_MSE_SSIM(device):
         match="Number of time steps in prediction must equal to model output time dim, or model output time dime divided by model input time dim",
     ):
         mse_ssim_loss(ones, ones, model)
-
+    
     shape = [1, 1, 2, 12, 128, 128]
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
@@ -89,6 +89,17 @@ def test_MSE_SSIM(device):
 
     invar = torch.ones(shape).to(device)
     invar[0, 0, 1, ...] = zeros[0, 0, 0, ...]
+    assert mse_ssim_loss(invar, zeros, model) == 0.5
+
+    # test with SSIM and 1 SSIM variable and 1 non SSIM variable
+    ssim_variables = ['t2m', 'u10m']
+    ssim_params = {
+        'window_size':11,
+        'padding_mode':'constant',
+        'time_series_forecasting':True,
+    }
+    mse_ssim_loss = MSE_SSIM(ssim_variables=ssim_variables,ssim_params=ssim_params)
+    
     assert mse_ssim_loss(invar, zeros, model) == 0.5
 
     # test providing all params
@@ -118,12 +129,12 @@ def test_MSE_SSIM(device):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_SSIM(device):
     """Test SSIM loss in loss"""
-    # Test fail cases
     ssim_loss = SSIM(time_series_forecasting = False)
 
     four_dim_var = torch.randn([2,2,2,2]).to(device)
     six_dim_var = torch.randn([2,2,2,2,2,2]).to(device)
 
+    # Test fail cases
     # dimensions don't match
     with pytest.raises(
         AssertionError, match="Predicted and target tensor need to have the same number of dimensions"
@@ -160,9 +171,17 @@ def test_SSIM(device):
     # test for opposite
     assert ssim_loss(ones, zeros) < 1.0e-4
 
+    # test mask
+    mask = torch.ones([1, 1, 2, 2, 360, 360], dtype=int)
+
+    ssim_rand = ssim_loss(rand, ones)
+    ssim_rand_mask = ssim_loss(rand, ones, mask)
+
+    assert ssim_rand != ssim_rand_mask
+
     # Test window
     # Since SSIM looks over a window rolling will only cause a small dropoff
-    ssim_loss = SSIM()
+    ssim_loss = SSIM(mse=True)
     eye = torch.eye(720).to(device)
     eye = eye[None, None, ...]
 

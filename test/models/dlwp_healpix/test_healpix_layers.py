@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ruff: noqa: E402
 
 import common
 import numpy as np
@@ -36,9 +35,14 @@ class MulX(torch.nn.Module):
     def forward(self, x):
         return x * self.multiplier
 
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixFoldFaces_initialization(device):
+    fold_func = HEALPixFoldFaces()
+    assert isinstance(fold_func, HEALPixFoldFaces)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces(device):
+def test_HEALPixFoldFaces_forward(device):
     fold_func = HEALPixFoldFaces()
 
     tensor_size = torch.randint(low=2, high=4, size=(5,)).tolist()
@@ -53,18 +57,21 @@ def test_HEALPixFoldFaces(device):
     assert fold_func(invar).stride() != outvar.stride() 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUnfoldFaces(device):
+def test_HEALPixUnfoldFaces_initialization(device):
+    unfold_func = HEALPixUnfoldFaces()
+    assert isinstance(unfold_func, HEALPixUnfoldFaces)
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixUnfoldFaces_forward(device):
     num_faces = 12
     unfold_func = HEALPixUnfoldFaces()
 
     tensor_size = torch.randint(low=1, high=4, size=(4,)).tolist()
     output_size = (tensor_size[0], num_faces, *tensor_size[1:])
+    
     # first dim is B * num_faces
     tensor_size[0] *= num_faces
     invar = torch.ones(*tensor_size, device=device)
-    print(
-        f"tensor size {tensor_size} output size {output_size} invar shape {invar.shape}"
-    )
 
     outvar = unfold_func(invar)
     assert outvar.shape == output_size
@@ -79,17 +86,20 @@ HEALPixPadding_testdata = [
     ("cpu", 4),
 ]
 
+@pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
+def test_HEALPixPadding_initialization(device, padding):
+    pad_func = HEALPixPadding(padding)
+    assert isinstance(pad_func, HEALPixPadding)
 
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
-def test_HEALPixPadding(device, padding):
-    print(f"TESTING padding {padding}")
+def test_HEALPixPadding_forward(device, padding):
     num_faces = 12  # standard for healpix
     batch_size = 2
     pad_func = HEALPixPadding(padding)
 
     # test invalid padding size
     with pytest.raises(
-        AssertionError, match=("invalid value for 'padding', expected int > 0 but got {padding}")
+        ValueError, match=("invalid value for 'padding', expected int > 0 but got 0")
     ):
         pad_func = HEALPixPadding(0)
     
@@ -120,9 +130,13 @@ HEALPixLayer_testdata = [
     ("cpu", 4),
 ]
 
+@pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
+def test_HEALPixLayer_initialization(device, multiplier):
+    layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
+    assert isinstance(layer, HEALPixLayer)
 
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
-def test_HEALPixLayer(device, multiplier):
+def test_HEALPixLayer_forward(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 
     tensor_size = torch.randint(low=2, high=4, size=(1,)).tolist()

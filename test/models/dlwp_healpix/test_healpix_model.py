@@ -1,0 +1,260 @@
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import common
+import numpy as np
+import pytest
+import torch
+
+from omegaconf import DictConfig
+from graphcast.utils import create_random_input, fix_random_seeds
+
+from modulus.models.dlwp_healpix import HEALPixRecUNet
+
+from modulus.models.dlwp_healpix_layers import (
+    UNetEncoder,
+    UNetDecoder,
+    MaxPool, # for downsampling
+    TransposedConvUpsample, # for upsampling
+    ConvNeXtBlock, # for convolutional layer
+    BasicConvBlock, # for the output layer
+    ConvGRUBlock, # for the recurrent layer
+)
+
+@pytest.fixture
+def conv_next_block_dict(in_channels=3, out_channels=1):
+    conv_block = {
+        "_target_":"modulus.models.dlwp_healpix_layers.ConvNeXtBlock",
+        "in_channels":in_channels,
+        "out_channels":out_channels,
+        "kernel_size": 3,
+        "dilation": 1,
+        "upscale_factor": 4,
+    }
+    return conv_block
+
+@pytest.fixture
+def down_sampling_block_dict():
+    down_sampling_block = {
+       "_target_":"modulus.models.dlwp_healpix_layers.AvgPool",
+       "pooling":2,
+    }
+    return down_sampling_block
+
+@pytest.fixture
+def encoder_dict(conv_next_block_dict, down_sampling_block_dict):
+    encoder = {
+        "_target_":"modulus.models.dlwp_healpix_layers.UNetEncoder",
+        "conv_block": conv_next_block_dict,
+        "down_sampling_block": down_sampling_block_dict,
+        "recurrent_block": recurrent_block_dict,
+        "_recursive_": False,
+    }
+    return encoder
+
+@pytest.fixture
+def up_sampling_block_dict(in_channels=3, out_channels=1):
+    up_sampling_block = {
+       "_target_":"modulus.models.dlwp_healpix_layers.TransposedConvUpsample",
+       "in_channels":in_channels,
+       "out_channels":out_channels,
+       "upsampling":2,
+    }
+    return DictConfig(up_sampling_block)
+
+@pytest.fixture
+def output_layer_dict(in_channels=3, out_channels=2):
+    output_layer = {
+        "_target_":"modulus.models.dlwp_healpix_layers.BasicConvBlock",
+        "in_channels": in_channels,
+        "out_channels": out_channels,
+        "kernel_size": 1,
+        "dilation": 1,
+        "n_layers": 1,
+    }
+    return DictConfig(output_layer)
+
+@pytest.fixture
+def recurrent_block_dict(in_channels=3):
+    recurrent_block = {
+        "_target_":"modulus.models.dlwp_healpix_layers.ConvGRUBlock",
+        "in_channels":in_channels,
+        "kernel_size":1,
+    }
+    return DictConfig(recurrent_block)
+
+@pytest.fixture
+def decoder_dict(conv_next_block_dict, up_sampling_block_dict, output_layer_dict, recurrent_block_dict):
+    decoder = {
+        "_target_":"modulus.models.dlwp_healpix_layers.UNetDecoder",
+        "conv_block": conv_next_block_dict,
+        "up_sampling_block": up_sampling_block_dict,
+        "recurrent_block": recurrent_block_dict,
+        "output_layer": output_layer_dict,
+        "_recursive_": False,
+    }
+    return DictConfig(decoder)
+
+@pytest.fixture
+def test_data():
+    # create dummy data
+    def generate_test_data(batch_size=2, time_dim=1, channels=7, img_size=16, device="cpu"):
+        test_data = torch.randn(batch_size, 12, time_dim, channels, img_size, img_size)
+
+        return test_data.to(device)
+
+    return generate_test_data
+
+@pytest.fixture
+def constant_data():
+    # create dummy data
+    def generate_data(channels=2, img_size=16, device="cpu"):
+        constants = torch.randn(12, channels, img_size, img_size)
+
+        return constants.to(device)
+
+    return generate_data
+
+@pytest.fixture
+def insolation_data():
+    # create dummy data
+    def generate_data(batch_size=2, time_dim=1, img_size=16, device="cpu"):
+        insolation = torch.randn(batch_size, 12, time_dim, 1, img_size, img_size)
+
+        return insolation.to(device)
+
+    return generate_data
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
+    in_channels = 7
+    out_channels = 7
+    n_constants = 1
+    decoder_input_channels = 1
+    input_time_dim = 2
+    output_time_dim = 4
+
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = n_constants,
+        decoder_input_channels = decoder_input_channels,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+    ).to(device)
+    assert isinstance(model, HEALPixRecUNet)
+
+    # test fail case for bad input and output time dims
+    with pytest.raises(
+        ValueError, match=(f"'output_time_dim' must be a multiple of 'input_time_dim'")
+    ):
+        model = HEALPixRecUNet(
+            encoder = encoder_dict,
+            decoder = decoder_dict,
+            input_channels = in_channels,
+            output_channels = out_channels,
+            n_constants = n_constants,
+            decoder_input_channels = decoder_input_channels,
+            input_time_dim = 2,
+            output_time_dim = 3,
+        ).to(device)
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
+    in_channels = 2
+    out_channels = 2
+    n_constants = 1
+    decoder_input_channels = 0
+    input_time_dim = 2
+    output_time_dim = 4
+
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = n_constants,
+        decoder_input_channels = decoder_input_channels,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+    ).to(device)
+
+    assert (model.integration_steps == output_time_dim // input_time_dim)
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixRecUNet_reset(device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data):
+    in_channels = 2
+    out_channels = 2
+    n_constants = 2
+    decoder_input_channels = 1
+    input_time_dim = 2
+    output_time_dim = 4
+    size = 16
+
+    fix_random_seeds(seed=42)
+    x = test_data(time_dim=input_time_dim, channels=in_channels, img_size=size, device=device)
+    decoder_inputs = insolation_data(time_dim=input_time_dim+output_time_dim, img_size=size, device=device)
+    constants = constant_data(channels=n_constants, img_size=size, device=device)
+    inputs=[x, decoder_inputs, constants]
+
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = n_constants,
+        decoder_input_channels = decoder_input_channels,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+        delta_time = "3h",
+    ).to(device)
+
+    out_var = model(inputs)
+    model.reset()
+
+    assert isinstance(model, HEALPixRecUNet)
+    assert common.compare_output(out_var, model(x))
+
+
+# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+# def test_HEALPixRecUNet_forward(device, encoder_dict, decoder_dict):
+#     in_channels = 2
+#     out_channels = 2
+#     n_constants = 1
+#     decoder_input_channels = 0
+#     input_time_dim = 2
+#     output_time_dim = 4
+
+#     size = (12, 16, 16)
+
+#     fix_random_seeds(seed=42)
+
+#     x = create_random_input(size, in_channels).to(device)
+
+#     model = HEALPixRecUNet(
+#         encoder = encoder_dict,
+#         decoder = decoder_dict,
+#         input_channels = in_channels,
+#         output_channels = out_channels,
+#         n_constants = n_constants,
+#         decoder_input_channels = decoder_input_channels,
+#         input_time_dim = input_time_dim,
+#         output_time_dim = output_time_dim,
+#     ).to(device)
+
+#     print(f'shape {x.shape}')
+#     assert common.validate_forward_accuracy(model, (x,), rtol=1e-2)

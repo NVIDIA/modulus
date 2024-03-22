@@ -15,7 +15,6 @@
 # System modules
 import logging
 import os
-import shutil
 import time
 from typing import DefaultDict, Optional, Sequence, Union
 
@@ -29,7 +28,6 @@ from modulus.distributed import DistributedManager
 import xarray as xr
 
 # Internal modules
-from .coupled_timeseries_dataset import CoupledTimeSeriesDataset
 from dask.diagnostics import ProgressBar
 
 # External modules
@@ -37,6 +35,8 @@ from omegaconf import DictConfig
 from .timeseries_dataset import TimeSeriesDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +184,14 @@ def open_time_series_dataset_classic_prebuilt(
     -------
     xr.Dataset: The opened dataset
     """
+
+    ds_path = Path(directory, dataset_name + ".zarr")
+
+    if not ds_path.exists():
+        raise FileNotFoundError(f"Dataset doesn't appear to exist at {ds_path}")
+
     result = xr.open_zarr(
-        os.path.join(directory, dataset_name + ".zarr"), chunks={"time": batch_size}
+       ds_path, chunks={"time": batch_size}
     )
     return result
 
@@ -195,7 +201,7 @@ def create_time_series_dataset_classic(
     dst_directory: str,
     dataset_name: str,
     input_variables: Sequence,
-    output_variables: Optional[Sequence],
+    output_variables: Optional[Sequence] = None,
     constants: Optional[DefaultDict] = None,
     prefix: Optional[str] = None,
     suffix: Optional[str] = None,
@@ -235,8 +241,9 @@ def create_time_series_dataset_classic(
     -------
     xr.Dataset: The merged dataset
     """
-    file_exists = os.path.exists(os.path.join(dst_directory, dataset_name + ".zarr"))
-
+    dst_zarr = os.path.join(dst_directory, dataset_name + ".zarr")
+    file_exists = os.path.exists(dst_zarr)
+    
     if file_exists and not overwrite:
         logger.info("opening input datasets")
         return open_time_series_dataset_classic_prebuilt(
@@ -244,8 +251,6 @@ def create_time_series_dataset_classic(
             dataset_name=dataset_name,
             constants=constants is not None,
         )
-    elif file_exists and overwrite:
-        shutil.rmtree(os.path.join(dst_directory, dataset_name + ".zarr"))
 
     output_variables = output_variables or input_variables
     all_variables = np.union1d(input_variables, output_variables)
@@ -287,7 +292,8 @@ def create_time_series_dataset_classic(
             pass
         # Apply log scaling lazily
         if (
-            variable in scaling
+            scaling
+            and variable in scaling
             and scaling[variable].get("log_epsilon", None) is not None
         ):
             ds[variable] = np.log(
@@ -333,13 +339,12 @@ def create_time_series_dataset_classic(
 
     # writing out
     def write_zarr(data, path):
-        # write_job = data.to_netcdf(path, compute=False)
-        write_job = data.to_zarr(path, compute=False)
+        write_job = data.to_zarr(path, compute=False, mode='w')
         with ProgressBar():
             logger.info(f"writing dataset to {path}")
             write_job.compute()
 
-    write_zarr(data=result, path=os.path.join(dst_directory, dataset_name + ".zarr"))
+    write_zarr(data=result, path=dst_zarr)
 
     return result
 
@@ -372,7 +377,7 @@ class TimeSeriesDataModule:
         Whether to drop the last batch if it is smaller than batch_size, it is
         recommended to set this to true to avoid issues with mismatched sizes, default True
     input_variables: Sequence, optional
-        List of input variable names, to be found in data file name, default None
+        List of input variable names, to be found in data file name, default "t2m"
     output_variables: Sequence, optional
         List of output variables names. If None, defaults to `input_variables`. default None
     constants: DictConfig, optional
@@ -429,7 +434,7 @@ class TimeSeriesDataModule:
         data_format: str = "classic",
         batch_size: int = 32,
         drop_last: bool = False,
-        input_variables: Optional[Sequence] = None,
+        input_variables: Optional[Sequence] = ["t2m"],
         output_variables: Optional[Sequence] = None,
         constants: Optional[DictConfig] = None,
         scaling: Optional[DictConfig] = None,
@@ -766,306 +771,3 @@ class TimeSeriesDataModule:
         )
 
         return loader, sampler
-
-
-class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
-    """
-    Extension of TimeSeriesDataModule, designed for coupled models that take input from other
-    earth system components.
-
-    Parameters
-    ----------
-    src_directory: str, optional
-        The directory containing data files per variable, default "."
-    dst_directory: str, optional
-        The directory containing joint data files, default "."
-    dataset_name: str, optional
-        The name of the dataset, default "dataset"
-    prefix: str, optional
-        Prefix appended to all data files, default None
-    suffix: str, optional
-        Suffix appended to all data files, default None
-    data_format: str, optional
-        str indicating data schema.
-        'classic': use classic DLWP file types. Loads .nc files, assuming
-        dimensions [sample, varlev, face, height, width] and
-        data variables 'predictors', 'lat', and 'lon'.
-    batch_size: int, optional
-        Size of batches to draw from data, default 32
-    drop_last: bool, optional
-        Whether to drop the last batch if it is smaller than batch_size, it is
-        recommended to set this to true to avoid issues with mismatched sizes, default True
-    input_variables: Sequence, optional
-        List of input variable names, to be found in data file name, default None
-    output_variables: Sequence, optional
-        List of output variables names. If None, defaults to `input_variables`. default None
-    constants: DictConfig, optional
-        Dictionary with {key: value} corresponding to {constant_name: variable name in file}.
-        default None
-    scaling: DictConfig, optional
-        Dictionary containing scaling parameters for data variables, default None
-    splits: DictConfig, optional
-        Dictionary with train/validation/test set start/end dates. If not provided, loads the entire
-        data time series as the test set. default None
-    presteps: int, optional
-        Number of time steps to initialize recurrent hidden states. default 0
-    input_time_dim: int, optional
-        Number of time steps in the input array, default 1
-    output_time_dim: int, optional
-        Number of time steps in the output array, default 1
-    data_time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3h"
-    time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6h"
-    gap: Union[int, str], optional
-        either integer hours or a str interpretable by pandas: time step between the last input time and
-        the first output time. Defaults to `time_step`.
-    shuffle: bool, optional
-        Option to shuffle the training data, default True
-    add_insolation: bool, optional
-        Option to add prescribed insolation as a decoder input feature, default True
-    cube_dim: int, optional
-        Number of points on the side of a cube face. Not currently used.
-    num_workers: int, optional
-        Number of parallel data loading workers, default 4
-    pin_memory: bool, optional
-        Whether pinned (page locked) memory should be used to store the tensors, improves GPU I/O, default True
-    prebuilt_dataset: bool, optional
-        Create a custom dataset for training. If False, the variables are gathered on the fly, default True
-    forecast_init_times: Sequence, optional
-        A Sequence of pandas Timestamps dictating the specific initialization times
-        to produce inputs for.  default None
-        Note that:
-            - this is only applied to the test dataloader
-            - providing this parameter configures the data loader to only produce this number of samples, and
-                NOT produce any target array.
-    couplings: Sequence, optional
-        A Sequence of dictionaries that define the mechanics of couplings with other earth system
-        components, default None
-    """
-
-    def __init__(
-        self,
-        src_directory: str = ".",
-        dst_directory: str = ".",
-        dataset_name: str = "dataset",
-        prefix: Optional[str] = None,
-        suffix: Optional[str] = None,
-        data_format: str = "classic",
-        batch_size: int = 32,
-        drop_last: bool = False,
-        input_variables: Optional[Sequence] = None,
-        output_variables: Optional[Sequence] = None,
-        constants: Optional[DictConfig] = None,
-        scaling: Optional[DictConfig] = None,
-        splits: Optional[DictConfig] = None,
-        presteps: int = 0,
-        input_time_dim: int = 1,
-        output_time_dim: int = 1,
-        data_time_step: Union[int, str] = "3h",
-        time_step: Union[int, str] = "6h",
-        gap: Union[int, str, None] = None,
-        shuffle: bool = True,
-        add_insolation: bool = False,
-        cube_dim: int = 64,
-        num_workers: int = 4,
-        pin_memory: bool = True,
-        prebuilt_dataset: bool = True,
-        forecast_init_times: Optional[Sequence] = None,
-        couplings: Sequence = None,
-    ):
-        self.couplings = couplings
-        super().__init__(
-            src_directory,
-            dst_directory,
-            dataset_name,
-            prefix,
-            suffix,
-            data_format,
-            batch_size,
-            drop_last,
-            input_variables,
-            output_variables,
-            constants,
-            scaling,
-            splits,
-            presteps,
-            input_time_dim,
-            output_time_dim,
-            data_time_step,
-            time_step,
-            gap,
-            shuffle,
-            add_insolation,
-            cube_dim,
-            num_workers,
-            pin_memory,
-            prebuilt_dataset,
-            forecast_init_times,
-        )
-
-    def _get_coupled_vars(self):
-        coupled_variables = []
-        for d in self.couplings:
-            coupled_variables = coupled_variables + d["params"]["variables"]
-        return coupled_variables
-
-    def setup(self) -> None:
-        """Setup the datasets used for this DataModule"""
-        if self.data_format == "classic":
-            create_fn = create_time_series_dataset_classic
-            open_fn = (
-                open_time_series_dataset_classic_prebuilt
-                if self.prebuilt_dataset
-                else open_time_series_dataset_classic_on_the_fly
-            )
-        else:
-            raise ValueError("'data_format' must be one of ['classic']")
-
-        # Initialize distributed manager
-        DistributedManager.initialize()
-        dist = DistributedManager()
-
-        coupled_variables = self._get_coupled_vars()
-        if torch.distributed.is_initialized():
-            if self.prebuilt_dataset:
-                if dist.rank == 0:
-                    create_fn(
-                        src_directory=self.src_directory,
-                        dst_directory=self.dst_directory,
-                        dataset_name=self.dataset_name,
-                        input_variables=self.input_variables + coupled_variables,
-                        output_variables=self.output_variables,
-                        constants=self.constants,
-                        prefix=self.prefix,
-                        suffix=self.suffix,
-                        batch_size=self.dataset_batch_size,
-                        scaling=self.scaling,
-                        overwrite=False,
-                    )
-
-                # wait for rank 0 to complete, because then the files are guaranteed to exist
-                torch.distributed.barrier()
-
-                dataset = open_fn(
-                    directory=self.dst_directory,
-                    dataset_name=self.dataset_name,
-                    constants=self.constants is not None,
-                    batch_size=self.batch_size,
-                )
-
-            else:
-                dataset = open_fn(
-                    input_variables=self.input_variables + coupled_variables,
-                    output_variables=self.output_variables,
-                    directory=self.dst_directory,
-                    constants=self.constants,
-                    prefix=self.prefix,
-                    batch_size=self.batch_size,
-                )
-        else:
-            if self.prebuilt_dataset:
-                create_fn(
-                    src_directory=self.src_directory,
-                    dst_directory=self.dst_directory,
-                    dataset_name=self.dataset_name,
-                    input_variables=self.input_variables + coupled_variables,
-                    output_variables=self.output_variables,
-                    constants=self.constants,
-                    prefix=self.prefix,
-                    suffix=self.suffix,
-                    batch_size=self.dataset_batch_size,
-                    scaling=self.scaling,
-                    overwrite=False,
-                )
-
-                dataset = open_fn(
-                    directory=self.dst_directory,
-                    dataset_name=self.dataset_name,
-                    constants=self.constants is not None,
-                    batch_size=self.batch_size,
-                )
-            else:
-                dataset = open_fn(
-                    input_variables=self.input_variables + coupled_variables,
-                    output_variables=self.output_variables,
-                    directory=self.dst_directory,
-                    constants=self.constants,
-                    prefix=self.prefix,
-                    batch_size=self.batch_size,
-                )
-
-        if self.splits is not None and self.forecast_init_times is None:
-            self.train_dataset = CoupledTimeSeriesDataset(
-                dataset.sel(
-                    time=slice(
-                        self.splits["train_date_start"], self.splits["train_date_end"]
-                    )
-                ),
-                scaling=self.scaling,
-                input_variables=self.input_variables,
-                input_time_dim=self.input_time_dim,
-                output_time_dim=self.output_time_dim,
-                data_time_step=self.data_time_step,
-                time_step=self.time_step,
-                gap=self.gap,
-                batch_size=self.dataset_batch_size,
-                drop_last=self.drop_last,
-                add_insolation=self.add_insolation,
-                couplings=self.couplings,
-            )
-            self.val_dataset = CoupledTimeSeriesDataset(
-                dataset.sel(
-                    time=slice(
-                        self.splits["val_date_start"], self.splits["val_date_end"]
-                    )
-                ),
-                scaling=self.scaling,
-                input_variables=self.input_variables,
-                input_time_dim=self.input_time_dim,
-                output_time_dim=self.output_time_dim,
-                data_time_step=self.data_time_step,
-                time_step=self.time_step,
-                gap=self.gap,
-                batch_size=self.dataset_batch_size,
-                # drop_last=False,
-                drop_last=self.drop_last,
-                add_insolation=self.add_insolation,
-                couplings=self.couplings,
-            )
-            self.test_dataset = CoupledTimeSeriesDataset(
-                dataset.sel(
-                    time=slice(
-                        self.splits["test_date_start"], self.splits["test_date_end"]
-                    )
-                ),
-                scaling=self.scaling,
-                input_variables=self.input_variables,
-                input_time_dim=self.input_time_dim,
-                output_time_dim=self.output_time_dim,
-                data_time_step=self.data_time_step,
-                time_step=self.time_step,
-                gap=self.gap,
-                batch_size=self.dataset_batch_size,
-                drop_last=False,
-                add_insolation=self.add_insolation,
-                couplings=self.couplings,
-            )
-        else:
-            self.test_dataset = CoupledTimeSeriesDataset(
-                dataset,
-                scaling=self.scaling,
-                input_variables=self.input_variables,
-                input_time_dim=self.input_time_dim,
-                output_time_dim=self.output_time_dim,
-                data_time_step=self.data_time_step,
-                time_step=self.time_step,
-                gap=self.gap,
-                batch_size=self.dataset_batch_size,
-                drop_last=False,
-                add_insolation=self.add_insolation,
-                forecast_init_times=self.forecast_init_times,
-                couplings=self.couplings,
-            )
