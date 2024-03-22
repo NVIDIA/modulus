@@ -49,6 +49,6 @@ hr_mean_conditioning: True
 ## Weather data options
 dataset:
   gridtype: "learnable"
-    # can be either linear, sinusoidal, or learnable (to be done)
+    # can be either linear, sinusoidal, or learnable
   N_grid_channels: 100
   
