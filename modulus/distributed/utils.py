@@ -335,6 +335,7 @@ def all_gather_v_bwd_wrapper(
         for _ in range(comm_size)
     ]
     scatter_list = list(torch.split(tensor, sizes, dim=dim))
+    scatter_list = [t.contiguous() for t in scatter_list]
 
     dist.all_to_all(tmp, scatter_list, group=group)
     stack_dim = tensor.dim()
@@ -473,7 +474,7 @@ def scatter_v_wrapper(
     rank = dist.get_rank(group=group)
     if len(sizes) != comm_size:
         raise ValueError()
-    if dim >= tensor.dim():
+    if dist.get_rank(group=group) == 0 and dim >= tensor.dim():
         raise ValueError()
     if not (0 <= src < comm_size):
         raise ValueError()
@@ -491,6 +492,7 @@ def scatter_v_wrapper(
     scatter_list = None
     if rank == src:
         scatter_list = torch.split(tensor, sizes, dim=dim)
+        scatter_list = [t.contiguous() for t in scatter_list]
         req_list = [None] * comm_size
         for r in range(comm_size):
             tensor_to_scatter_to_r = scatter_list[r]

@@ -119,6 +119,7 @@ class CuGraphCSC:
             raise AssertionError(
                 "DistributedGraph does not support mapping CSC-indices to COO-indices."
             )
+
         self.dist_graph = DistributedGraph(
             self.offsets,
             self.indices,
@@ -126,6 +127,7 @@ class CuGraphCSC:
             partition_group_name,
             graph_partition=graph_partition,
         )
+
         # overwrite graph information with local graph after distribution
         self.offsets = self.dist_graph.graph_partition.local_offsets
         self.indices = self.dist_graph.graph_partition.local_indices
