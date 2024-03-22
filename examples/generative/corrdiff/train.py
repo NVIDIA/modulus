@@ -24,7 +24,6 @@ import os
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
 import hydra
-from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
@@ -45,9 +44,7 @@ def main(cfg: DictConfig) -> None:
     # Sanity check
     if not hasattr(cfg, "task"):
         raise ValueError(
-            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
-            For example, for regression training, run python train.py --config-name=config_train_regression.
-            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
+            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
         )
 
     # Dump the configs
@@ -56,8 +53,6 @@ def main(cfg: DictConfig) -> None:
 
     # Parse options
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
-    if regression_checkpoint_path:
-        regression_checkpoint_path = to_absolute_path(regression_checkpoint_path)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
@@ -83,6 +78,7 @@ def main(cfg: DictConfig) -> None:
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     tick = getattr(cfg, "tick", 1)
+    snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
@@ -94,30 +90,23 @@ def main(cfg: DictConfig) -> None:
     c.wandb_mode = wandb_mode
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
-    cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
-    if hasattr(cfg, "global_means_path"):
-        cfg.global_means_path = to_absolute_path(cfg.global_means_path)
-    if hasattr(cfg, "global_stds_path"):
-        cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
-
+    c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
+    c.N_grid_channels = dataset_cfg['N_grid_channels']   
+    c.gridtype = dataset_cfg['gridtype']
+    c.in_channel = len(dataset_cfg['in_channels'] )
     # Initialize distributed manager.
     DistributedManager.initialize()
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(".logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
-
-    # inform about the output
-    logger.info(
-        f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
-    )
+    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
 
     # Initialize config dict.
     c.network_kwargs = EasyDict()
@@ -215,7 +204,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
+    c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -253,18 +242,8 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Dry run; exiting.")
         return
 
-    # Create output directory.
-    logger0.info("Creating output directory...")
-    if dist.rank == 0:
-        os.makedirs(c.run_dir, exist_ok=True)
-        with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
-            json.dump(c, f, indent=2)
-
-    (dataset, dataset_iterator) = init_dataset_from_config(
-        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
-    )
-
-    (img_shape_y, img_shape_x) = dataset.image_shape()
+    img_shape_x = dataset_cfg['img_shape_x']
+    img_shape_y = dataset_cfg['img_shape_y']   
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
         c.patch_shape_x = img_shape_x
     if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
@@ -275,8 +254,21 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("Patch shape needs to be a multiple of 32")
     if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
         logger0.info("Patch-based training enabled")
+        dataset_cfg['patch'] = True
     else:
         logger0.info("Patch-based training disabled")
+        dataset_cfg['patch'] = False
+  
+    # Create output directory.
+    logger0.info("Creating output directory...")
+    if dist.rank == 0:
+        os.makedirs(c.run_dir, exist_ok=True)
+        with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
+            json.dump(c, f, indent=2)
+
+    (dataset, dataset_iterator) = init_dataset_from_config(
+        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
+    )
 
     # Train.
     training_loop.training_loop(
