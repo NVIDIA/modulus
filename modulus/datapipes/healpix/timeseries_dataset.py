@@ -16,6 +16,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Optional, Sequence, Union
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -68,7 +69,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
         Size of batches to draw from data, default 32
     drop_last: bool, optional
         Whether to drop the last batch if it is smaller than batch_size, it is
-        recommended to set this to true to avoid issues with mismatched sizes, default True
+        recommended to set this to true to avoid issues with mismatched sizes, default False
     add_insolation: bool, optional
         Option to add prescribed insolation as a decoder input feature, default True
     forecast_init_times: Sequence, optional
@@ -82,7 +83,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
     def __init__(
         self,
         dataset: xr.Dataset,
-        scaling: DictConfig,
+        scaling: DictConfig = None,
         input_time_dim: int = 1,
         output_time_dim: int = 1,
         data_time_step: Union[int, str] = "3h",
@@ -98,7 +99,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
             meta=MetaData(),
         )
         self.ds = dataset
-        self.scaling = OmegaConf.to_object(scaling)
+        self.scaling = OmegaConf.to_object(scaling) if scaling else None
         self.input_time_dim = input_time_dim
         self.output_time_dim = output_time_dim
         self.data_time_step = self._convert_time_step(data_time_step)
@@ -127,7 +128,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
         if self.forecast_mode:
             if self.batch_size != 1:
                 self.batch_size = 1
-                logger.warning(
+                warnings.warn(
                     "providing 'forecast_init_times' to TimeSeriesDataset requires `batch_size=1`; "
                     "setting it now"
                 )
@@ -180,7 +181,8 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         self.input_scaling = None
         self.target_scaling = None
-        self._get_scaling_da()
+        if self.scaling:
+            self._get_scaling_da()
 
     def get_constants(self):
         """Returns the constants used in this dataset
@@ -280,8 +282,6 @@ class TimeSeriesDataset(Dataset, Datapipe):
         return self.ds.time[slice(*time_index)].values
 
     def __getitem__(self, item):
-        # return self.inputs_result, self.target
-
         # start range
         torch.cuda.nvtx.range_push("TimeSeriesDataset:__getitem__")
 
@@ -365,7 +365,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
         if "constants" in self.ds.data_vars:
             # Add the constants as [F, C, H, W]
             inputs_result.append(np.swapaxes(self.ds.constants.values, 0, 1))
-            # inputs_result.append(self.ds.constants.values)
+
         logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
         torch.cuda.nvtx.range_pop()
 

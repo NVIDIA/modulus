@@ -95,7 +95,9 @@ class MSE_SSIM(torch.nn.Module):
             (prediction.shape[1] == model.output_time_dim)
             or (prediction.shape[1] == model.output_time_dim // model.input_time_dim)
         ):
-            raise AssertionError("Number of time steps in prediction must equal to model output time dim, or model output time dime divided by model input time dim")
+            raise AssertionError(
+                "Number of time steps in prediction must equal to model output time dim, or model output time dime divided by model input time dim"
+            )
 
         # store the location of output and target tensors
         device = prediction.device
@@ -202,14 +204,22 @@ class SSIM(torch.nn.Module):
         """
 
         if predicted.ndim != target.ndim:
-            raise AssertionError("Predicted and target tensor need to have the same number of dimensions")
-        if not self.time_series_forecasting and not(predicted.ndim == 4 or predicted.ndim == 5):
-            raise AssertionError("Need 4 or 5 dimensions when not using time series forecasting")
-        if self.time_series_forecasting and not(predicted.ndim == 5 or predicted.ndim == 6):
-            raise AssertionError("Need 5 or 6 dimensions when using time series forecasting")
-        # if predicted.ndim != 4 and predicted.ndim != 5:
-        #     raise AssertionError("Expected 4 or 5 dimensions in input")  
-        
+            raise AssertionError(
+                "Predicted and target tensor need to have the same number of dimensions"
+            )
+        if not self.time_series_forecasting and not (
+            predicted.ndim == 4 or predicted.ndim == 5
+        ):
+            raise AssertionError(
+                "Need 4 or 5 dimensions when not using time series forecasting"
+            )
+        if self.time_series_forecasting and not (
+            predicted.ndim == 5 or predicted.ndim == 6
+        ):
+            raise AssertionError(
+                "Need 5 or 6 dimensions when using time series forecasting"
+            )
+
         predicted = predicted.transpose(dim0=2, dim1=3)
         target = target.transpose(dim0=2, dim1=3)
         if self.time_series_forecasting:
@@ -227,9 +237,16 @@ class SSIM(torch.nn.Module):
         """
         Computes a Gaussian over the size of the window to weigh distant pixels less.
 
-        :param window_size: The size of the patches
-        :param sigma: The width of the Gaussian curve
-        :return: A tensor representing the weights for each pixel in the window or patch
+        Parameters
+        ----------
+        window_size: int
+            The size of the patches
+        sigma: float
+            The width of the Gaussian curve
+
+        Returns
+        -------
+        torch.Tensor: A tensor representing the weights for each pixel in the window or patch
         """
         x = torch.arange(0, window_size) - window_size // 2
         gauss = torch.exp(-((x.div(2 * sigma)) ** 2))
@@ -239,8 +256,16 @@ class SSIM(torch.nn.Module):
         """
         Creates the weights of the window or patches.
 
-        :param window_size: The size of the patches
-        :param sigma: The width of the Gaussian curve
+        Parameters
+        ----------
+        window_size: int
+            The size of the patches
+        sigma: float, optional default 1.5
+            The width of the Gaussian curve
+
+        Returns
+        -------
+            torch.Tensor: The weights of the window
         """
         _1D_window = self._gaussian(window_size, sigma).unsqueeze(-1)
         _2D_window = _1D_window.mm(_1D_window.t()).unsqueeze(0).unsqueeze(0)
@@ -257,12 +282,22 @@ class SSIM(torch.nn.Module):
         """
         Computes the SSIM loss between two image tensors
 
-        :param _predicted: The predicted image tensor
-        :param _target: The target image tensor
-        :param window: The weights for each pixel in the window over which the SSIM is computed
-        :param mask: Mask for excluding pixels
-        :param epoch: The current epoch
-        :return: The SSIM between predicted and target
+        Parameters
+        ----------
+        _predicted: torch.Tensor
+            The predicted image tensor
+        _target: torch.Tensor
+            The target image tensor
+        window: torch.Tensor
+            The weights for each pixel in the window over which the SSIM is computed
+        mask: torch.Tensor, optional default None
+            Mask for excluding pixels
+        epoch: int, optional default 0
+            The current epoch
+
+        Returns
+        -------
+        torch.Tensor The SSIM between predicted and target
         """
         if epoch < self.mse_epochs:
             # If specified, the MSE is used for the first self.mse_epochs epochs

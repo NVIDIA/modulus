@@ -19,7 +19,6 @@ from .healpix_blocks import (
     ConvNeXtBlock,
     DoubleConvNeXtBlock,
     Interpolate,
-    InterpolationUpsample,
     MaxPool,
     SymmetricConvNeXtBlock,
     TransposedConvUpsample,
