@@ -33,4 +33,6 @@ from .preconditioning import (
     VEPrecond,
     VPPrecond,
     iDDPMPrecond,
+    VEPrecond_dfsr_cond,
+    VEPrecond_dfsr,
 )

@@ -977,3 +977,257 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
             sigma_max=sigma_max,
             sigma_data=sigma_data,
         )
+
+class VEPrecond_dfsr(torch.nn.Module):
+    """
+    Preconditioning corresponding to the variance exploding (VE) formulation.
+
+    Parameters
+    ----------
+    img_resolution : int
+        Image resolution.
+    img_channels : int
+        Number of color channels.
+    label_dim : int
+        Number of class labels, 0 = unconditional, by default 0.
+    use_fp16 : bool
+        Execute the underlying model at FP16 precision?, by default False.
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+    model_type :str
+        Class name of the underlying model, by default "SongUNet".
+    **model_kwargs : dict
+        Keyword arguments for the underlying model.
+
+    Note
+    ----
+    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+    """
+
+    def __init__(
+        self,
+        img_resolution: int,
+        img_channels: int,
+        label_dim: int = 0,
+        use_fp16: bool = False,
+        sigma_min: float = 0.02,
+        sigma_max: float = 100.0,
+        dataset_mean: float = 5.85e-05,
+        dataset_scale: float = 4.79,
+        model_type: str = "SongUNet",
+        **model_kwargs: dict,
+    ):
+        super().__init__()
+        self.img_resolution = img_resolution
+        self.img_channels = img_channels
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.model = globals()[model_type](
+            img_resolution=img_resolution,
+            in_channels=self.img_channels,
+            out_channels=img_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )  # TODO needs better handling
+
+    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        # print("sigma: ", sigma)
+        class_labels = (
+            None
+            if self.label_dim == 0
+            else torch.zeros([1, self.label_dim], device=x.device)
+            if class_labels is None
+            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+        )
+        dtype = (
+            torch.float16
+            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            else torch.float32
+        )
+
+        c_skip = 1
+        c_out = sigma
+        c_in = 1
+        c_noise = sigma # Change the definitation of c_noise to avoid -inf values for zero sigma
+
+        F_x = self.model(
+            (c_in * x).to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            **model_kwargs,
+        )
+        
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
+        return F_x
+
+
+class VEPrecond_dfsr_cond(torch.nn.Module):
+    """
+    Preconditioning corresponding to the variance exploding (VE) formulation.
+
+    Parameters
+    ----------
+    img_resolution : int
+        Image resolution.
+    img_channels : int
+        Number of color channels.
+    label_dim : int
+        Number of class labels, 0 = unconditional, by default 0.
+    use_fp16 : bool
+        Execute the underlying model at FP16 precision?, by default False.
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+    model_type :str
+        Class name of the underlying model, by default "SongUNet".
+    **model_kwargs : dict
+        Keyword arguments for the underlying model.
+
+    Note
+    ----
+    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+    """
+
+    def __init__(
+        self,
+        img_resolution: int,
+        img_channels: int,
+        label_dim: int = 0,
+        use_fp16: bool = False,
+        sigma_min: float = 0.02,
+        sigma_max: float = 100.0,
+        dataset_mean: float = 5.85e-05,
+        dataset_scale: float = 4.79,
+        model_type: str = "SongUNet",
+        **model_kwargs: dict,
+    ):
+        super().__init__()
+        self.img_resolution = img_resolution
+        self.img_channels = img_channels
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.model = globals()[model_type](
+            img_resolution=img_resolution,
+            in_channels=model_kwargs['model_channels']*2,
+            out_channels=img_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )  # TODO needs better handling
+
+        # modules to embed residual loss
+        self.conv_in = torch.nn.Conv2d(img_channels,
+                                       model_kwargs['model_channels'],
+                                       kernel_size=3,
+                                       stride=1,
+                                       padding=1, padding_mode='circular')
+        self.emb_conv = torch.nn.Sequential(
+            torch.nn.Conv2d(img_channels, model_kwargs['model_channels'], kernel_size=1, stride=1, padding=0),
+            torch.nn.GELU(),
+            torch.nn.Conv2d(model_kwargs['model_channels'], model_kwargs['model_channels'], kernel_size=3, stride=1, padding=1, padding_mode='circular')
+        )
+        self.dataset_mean = dataset_mean
+        self.dataset_scale = dataset_scale
+
+    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        class_labels = (
+            None
+            if self.label_dim == 0
+            else torch.zeros([1, self.label_dim], device=x.device)
+            if class_labels is None
+            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+        )
+        dtype = (
+            torch.float16
+            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            else torch.float32
+        )
+
+        c_skip = 1
+        c_out = sigma
+        c_in = 1
+        c_noise = sigma
+
+        # Compute physics-informed conditioning information using vorticity residual
+        dx = self.voriticity_residual((x*self.dataset_scale + self.dataset_mean)) / self.dataset_scale
+        x = self.conv_in(x)
+        cond_emb = self.emb_conv(dx)
+        x = torch.cat((x, cond_emb), dim=1)
+        
+        F_x = self.model(
+            (c_in * x).to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            **model_kwargs,
+        )
+
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+        return F_x
+
+    def voriticity_residual(self, w, re=1000.0, dt=1/32):
+        # w [b t h w]
+        batchsize = w.size(0)
+        w = w.clone()
+        w.requires_grad_(True)
+        nx = w.size(2)
+        ny = w.size(3)
+        device = w.device
+
+        w_h = torch.fft.fft2(w[:, 1:-1], dim=[2, 3])
+        # Wavenumbers in y-direction
+        k_max = nx//2
+        N = nx
+        k_x = torch.cat((torch.arange(start=0, end=k_max, step=1, device=device),
+                         torch.arange(start=-k_max, end=0, step=1, device=device)), 0).\
+            reshape(N, 1).repeat(1, N).reshape(1,1,N,N)
+        k_y = torch.cat((torch.arange(start=0, end=k_max, step=1, device=device),
+                         torch.arange(start=-k_max, end=0, step=1, device=device)), 0).\
+            reshape(1, N).repeat(N, 1).reshape(1,1,N,N)
+        # Negative Laplacian in Fourier space
+        lap = (k_x ** 2 + k_y ** 2)
+        lap[..., 0, 0] = 1.0
+        psi_h = w_h / lap
+
+        u_h = 1j * k_y * psi_h
+        v_h = -1j * k_x * psi_h
+        wx_h = 1j * k_x * w_h
+        wy_h = 1j * k_y * w_h
+        wlap_h = -lap * w_h
+
+        u = torch.fft.irfft2(u_h[..., :, :k_max + 1], dim=[2, 3])
+        v = torch.fft.irfft2(v_h[..., :, :k_max + 1], dim=[2, 3])
+        wx = torch.fft.irfft2(wx_h[..., :, :k_max + 1], dim=[2, 3])
+        wy = torch.fft.irfft2(wy_h[..., :, :k_max + 1], dim=[2, 3])
+        wlap = torch.fft.irfft2(wlap_h[..., :, :k_max + 1], dim=[2, 3])
+        advection = u*wx + v*wy
+
+        wt = (w[:, 2:, :, :] - w[:, :-2, :, :]) / (2 * dt)
+
+        # establish forcing term
+        x = torch.linspace(0, 2*np.pi, nx + 1, device=device)
+        x = x[0:-1]
+        X, Y = torch.meshgrid(x, x)
+        f = -4*torch.cos(4*Y)
+
+        residual = wt + (advection - (1.0 / re) * wlap + 0.1*w[:, 1:-1]) - f
+        residual_loss = (residual**2).mean()
+        dw = torch.autograd.grad(residual_loss, w)[0]
+        
+        return dw
