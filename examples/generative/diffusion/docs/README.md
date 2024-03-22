@@ -26,7 +26,7 @@ Datasets used for model training and sampling can be downloaded via the followin
 
 
 ## Running the Experiments
-Download the high res and low res data and save the data files to the subdirectory ``./Kolmogorov_2D_data/``.
+Download the high res and low res data and save the data files to the subdirectory ``modulus/examples/generative/diffusion/Kolmogorov_2D_data/``.
 
 <!--
 More details about how to run the experiments are coming soon.
@@ -34,7 +34,7 @@ More details about how to run the experiments are coming soon.
 
 <b>Step 1 - Model Training</b>
 
-In directory ``./modulus/examples/generative/diffusion/``, run:
+In directory ``modulus/examples/generative/diffusion/``, run:
 (without physics-informed conditioning)
 ``
 python train.py --config conf/config_dfsr_train.yaml
@@ -49,7 +49,7 @@ python train.py --config conf/config_dfsr_cond_train.yaml
 
 <b>Step 2 - Super-resolution</b>
 
-In directory ``./modulus/examples/generative/diffusion/``, run:
+In directory ``modulus/examples/generative/diffusion/``, run:
 (without physics-informed conditioning)
 ``
 python train.py --config conf/config_dfsr_generate.yaml
