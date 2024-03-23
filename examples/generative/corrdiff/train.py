@@ -254,10 +254,6 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("Patch shape needs to be a multiple of 32")
     if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
         logger0.info("Patch-based training enabled")
-        dataset_cfg['patch'] = True
-    else:
-        logger0.info("Patch-based training disabled")
-        dataset_cfg['patch'] = False
   
     # Create output directory.
     logger0.info("Creating output directory...")
