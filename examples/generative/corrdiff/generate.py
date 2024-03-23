@@ -158,7 +158,7 @@ def main(cfg: DictConfig) -> None:
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
         if (sampling_method == "deterministic"):
-            raise NotImplementedError("patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. ")
+            raise NotImplementedError("Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. ")
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
