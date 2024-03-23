@@ -129,9 +129,6 @@ def training_loop(
     if img_shape_x != patch_shape_x:
         img_in_channels += in_channel 
 
-    if N_grid_channels!=4 or gridtype!="sinusoidal":
-        img_in_channels += 4
-
     # Construct network.
     logger0.info("Constructing network...")
     interface_kwargs = dict(
