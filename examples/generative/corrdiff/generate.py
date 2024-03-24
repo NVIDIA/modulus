@@ -39,7 +39,7 @@ from modulus.utils.generative import (
     parse_int_list,
     StackedRandomGenerator,
 )
-from module import Module  # TODO import from Core once the kwargs issue is fixed
+from modulus import Module
 
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
