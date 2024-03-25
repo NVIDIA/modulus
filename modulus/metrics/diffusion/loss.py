@@ -495,9 +495,9 @@ class ResLoss:
             self.img_shape_x != self.patch_shape_x
             or self.img_shape_y != self.patch_shape_y
         ):
-            patched_train =  True
+            patched_train = True
         else:
-            patched_train =  False
+            patched_train = False
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
@@ -524,25 +524,29 @@ class ResLoss:
         if not patched_train:
             if self.hr_mean_conditioning:
                 y_lr = torch.cat((y_mean, y_lr), dim=1).contiguous()
-            if self.gridtype == "learnable":               
-                pos_embd = torch.permute(net.module.model.pos_embd, (2, 1, 0)).expand(img_lr.shape[0], -1, -1, -1)          
-                y_lr = torch.cat((y_lr, pos_embd),dim=1) 
+            if self.gridtype == "learnable":
+                pos_embd = torch.permute(net.module.model.pos_embd, (2, 1, 0)).expand(
+                    img_lr.shape[0], -1, -1, -1
+                )
+                y_lr = torch.cat((y_lr, pos_embd), dim=1)
         # patchified training
         else:
-            #channels of img_lr: variables, position embeds for regression, position embeds for diffusion
-            if (self.pos_embed != 4):
+            # channels of img_lr: variables, position embeds for regression, position embeds for diffusion
+            if self.pos_embed != 4:
                 y_lr = torch.cat(
                     (
-                        img_lr[:,0:12],
-                        img_lr[:,16:],
-                    ), 
+                        img_lr[:, 0:12],
+                        img_lr[:, 16:],
+                    ),
                     axis=1,
                 )
 
-            #add learnable embedding from the network parameter
-            if self.gridtype == "learnable":               
-                pos_embd = torch.permute(net.module.model.pos_embd, (2, 1, 0)).expand(img_lr.shape[0], -1, -1, -1)          
-                y_lr = torch.cat((y_lr, pos_embd),dim=1) 
+            # add learnable embedding from the network parameter
+            if self.gridtype == "learnable":
+                pos_embd = torch.permute(net.module.model.pos_embd, (2, 1, 0)).expand(
+                    img_lr.shape[0], -1, -1, -1
+                )
+                y_lr = torch.cat((y_lr, pos_embd), dim=1)
 
             b = y.shape[0]
             c_in = y_lr.shape[1]
@@ -557,7 +561,7 @@ class ResLoss:
 
             # global interpolation
             input_interp = torch.nn.functional.interpolate(
-                img_lr[:, 0 : 12],
+                img_lr[:, 0:12],
                 (self.patch_shape_x, self.patch_shape_y),
                 mode="bilinear",
             )
@@ -579,10 +583,10 @@ class ResLoss:
             )
             if self.hr_mean_conditioning:
                 y_mean_new = torch.zeros(
-                    b * self.patch_num, 
-                    c_out, 
-                    self.patch_shape_x, 
-                    self.patch_shape_y, 
+                    b * self.patch_num,
+                    c_out,
+                    self.patch_shape_x,
+                    self.patch_shape_y,
                     device=img_clean.device,
                 )
             for i in range(self.patch_num):
@@ -591,9 +595,9 @@ class ResLoss:
                 if self.hr_mean_conditioning:
                     y_mean_new[b * i : b * (i + 1),] = y_mean[
                         :,
-                        :, 
-                        rnd_x: rnd_x+self.patch_shape_x, 
-                        rnd_y: rnd_y+self.patch_shape_y,
+                        :,
+                        rnd_x : rnd_x + self.patch_shape_x,
+                        rnd_y : rnd_y + self.patch_shape_y,
                     ]
                 y_new[b * i : b * (i + 1),] = y[
                     :,

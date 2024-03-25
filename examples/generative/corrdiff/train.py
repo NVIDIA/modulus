@@ -95,9 +95,9 @@ def main(cfg: DictConfig) -> None:
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
     c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
-    c.N_grid_channels = dataset_cfg['N_grid_channels']   
-    c.gridtype = dataset_cfg['gridtype']
-    c.in_channel = len(dataset_cfg['in_channels'] )
+    c.N_grid_channels = dataset_cfg["N_grid_channels"]
+    c.gridtype = dataset_cfg["gridtype"]
+    c.in_channel = len(dataset_cfg["in_channels"])
     # Initialize distributed manager.
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -242,8 +242,8 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Dry run; exiting.")
         return
 
-    img_shape_x = dataset_cfg['img_shape_x']
-    img_shape_y = dataset_cfg['img_shape_y']   
+    img_shape_x = dataset_cfg["img_shape_x"]
+    img_shape_y = dataset_cfg["img_shape_y"]
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
         c.patch_shape_x = img_shape_x
     if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
@@ -254,7 +254,7 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("Patch shape needs to be a multiple of 32")
     if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
         logger0.info("Patch-based training enabled")
-  
+
     # Create output directory.
     logger0.info("Creating output directory...")
     if dist.rank == 0:

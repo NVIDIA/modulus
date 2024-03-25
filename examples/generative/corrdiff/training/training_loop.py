@@ -127,7 +127,7 @@ def training_loop(
 
     # interpolated global channel if patch-based model is used
     if img_shape_x != patch_shape_x:
-        img_in_channels += in_channel 
+        img_in_channels += in_channel
 
     # Construct network.
     logger0.info("Constructing network...")
@@ -137,7 +137,7 @@ def training_loop(
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
         label_dim=0,
-        gridtype=gridtype+"-"+str(N_grid_channels),
+        gridtype=gridtype + "-" + str(N_grid_channels),
     )  # weather
     merged_args = {**network_kwargs, **interface_kwargs}
     net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
@@ -257,15 +257,15 @@ def training_loop(
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
-            if (patch_shape_x != img_shape_x):
-                g['lr'] *= 0.8**((cur_nimg - lr_rampup_kimg * 1000)//4e6)
+            if patch_shape_x != img_shape_x:
+                g["lr"] *= 0.8 ** ((cur_nimg - lr_rampup_kimg * 1000) // 4e6)
             wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        if (patch_shape_x != img_shape_x):
+        if patch_shape_x != img_shape_x:
             grad_norm = torch.nn.utils.clip_grad_norm_(net.parameters(), 1e5)
         optimizer.step()
 
