@@ -69,7 +69,7 @@ def main(cfg: DictConfig) -> None:
     use_torch_compile = getattr(cfg, "use_torch_compile", True)
     regression_only = getattr(cfg, "regression_only", False)
     diffusion_only = getattr(cfg, "diffusion_only", False)
-    
+
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
     sigma_max = getattr(cfg, "sigma_max", None)
@@ -186,10 +186,12 @@ def main(cfg: DictConfig) -> None:
         net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
             net_res.use_fp16 = True
-            
+
     # load regression network, move to device, change precision
     if not diffusion_only:
-         net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
+        logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
+        net_reg = Module.from_checkpoint(reg_ckpt_filename)
+        net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
             net_reg.use_fp16 = True
 
@@ -230,7 +232,7 @@ def main(cfg: DictConfig) -> None:
             logger0.info(f"seeds: {sample_seeds}")
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    image_reg  = generate(
+                    image_reg = generate(
                         net=net_reg,
                         img_lr=image_lr_patch[:, 0:16],
                         seed_batch_size=1,
