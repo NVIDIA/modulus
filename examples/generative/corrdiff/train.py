@@ -45,7 +45,7 @@ def main(cfg: DictConfig) -> None:
     # Sanity check
     if not hasattr(cfg, "task"):
         raise ValueError(
-                       """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
+            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
             For example, for regression training, run python train.py --config-name=config_train_regression.
             And for diffusion training, run python train.py --config-name=config_train_diffusion."""
         )
@@ -283,17 +283,6 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Patch-based training enabled")
     else:
         logger0.info("Patch-based training disabled")
-        
-    # Create output directory.
-    logger0.info("Creating output directory...")
-    if dist.rank == 0:
-        os.makedirs(c.run_dir, exist_ok=True)
-        with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
-            json.dump(c, f, indent=2)
-
-    (dataset, dataset_iterator) = init_dataset_from_config(
-        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
-    )
 
     # Train.
     training_loop.training_loop(
