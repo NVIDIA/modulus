@@ -87,8 +87,8 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  gridtype: "learnable"
-  N_grid_channels: 100
+  gridtype: "sinusoidal"
+  N_grid_channels: 4
   normalization: "v1"
   
 
