@@ -38,7 +38,7 @@ defaults:
   # Model
   - model/tiny_afno
   #- model/afno
-  #- model/graphcastnet # Example of changing model to graphcastnet
+  #- model/graphcastnet
 
   # Training
   - training/afno
