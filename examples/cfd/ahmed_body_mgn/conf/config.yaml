@@ -44,9 +44,16 @@ lr_decay_rate: 0.99985
 use_apex: True
 amp: False
 jit: False
+
+# number of workers used by data loader during training.
 num_dataloader_workers: 4
+# number of workers used by dataset during pre-loading (null - auto-select).
+num_dataset_workers: null
+
 do_concat_trick: False
 num_processor_checkpoint_segments: 0
 recompute_activation: False
 
 wandb_mode: disabled
+
+checkpoint_save_freq: 50

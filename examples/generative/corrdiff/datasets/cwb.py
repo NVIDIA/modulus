@@ -22,30 +22,13 @@ import random
 import cftime
 import cv2
 import numpy as np
-import torch
 import zarr
 
+from .base import ChannelMetadata, DownscalingDataset
 from .img_utils import reshape_fields
+from .norm import denormalize, normalize
 
 logger = logging.getLogger(__file__)
-
-
-def normalize(x, center, scale):
-    """Normalize input data 'x' using center and scale values."""
-    center = np.asarray(center)
-    scale = np.asarray(scale)
-    if not (center.ndim == 1 and scale.ndim == 1):
-        raise ValueError("center and scale must be 1D arrays")
-    return (x - center[:, np.newaxis, np.newaxis]) / scale[:, np.newaxis, np.newaxis]
-
-
-def denormalize(x, center, scale):
-    """Denormalize input data 'x' using center and scale values."""
-    center = np.asarray(center)
-    scale = np.asarray(scale)
-    if not (center.ndim == 1 and scale.ndim == 1):
-        raise ValueError("center and scale must be 1D arrays")
-    return x * scale[:, np.newaxis, np.newaxis] + center[:, np.newaxis, np.newaxis]
 
 
 def get_target_normalizations_v1(group):
@@ -69,7 +52,7 @@ def get_target_normalizations_v2(group):
     return center, scale
 
 
-class _ZarrDataset(torch.utils.data.Dataset):
+class _ZarrDataset(DownscalingDataset):
     """A Dataset for loading paired training data from a Zarr-file
 
     This dataset should not be modified to add image processing contributions.
@@ -115,9 +98,8 @@ class _ZarrDataset(torch.utils.data.Dataset):
         input = self.group["era5"][idx_to_load]
         label = 0
 
-        input = normalize(input, self.group["era5_center"], self.group["era5_scale"])
-        args = self.get_target_normalization(self.group)
-        target = normalize(target, *args)
+        target = self.normalize_output(target[None, ...])[0]
+        input = self.normalize_input(input[None, ...])[0]
 
         return target, input, label
 
@@ -129,17 +111,22 @@ class _ZarrDataset(torch.utils.data.Dataset):
         """The latitude. useful for plotting"""
         return self.group["XLAT"]
 
+    def _get_channel_meta(self, variable, level):
+        if np.isnan(level):
+            level = ""
+        return ChannelMetadata(name=variable, level=str(level))
+
     def input_channels(self):
         """Metadata for the input channels. A list of dictionaries, one for each channel"""
         variable = self.group["era5_variable"]
         level = self.group["era5_pressure"]
-        return [{"variable": v, "pressure": lev} for v, lev in zip(variable, level)]
+        return [self._get_channel_meta(*v) for v in zip(variable, level)]
 
     def output_channels(self):
         """Metadata for the output channels. A list of dictionaries, one for each channel"""
         variable = self.group["cwb_variable"]
         level = self.group["cwb_pressure"]
-        return [{"variable": v, "pressure": lev} for v, lev in zip(variable, level)]
+        return [self._get_channel_meta(*v) for v in zip(variable, level)]
 
     def _read_time(self):
         """The vector of time coordinate has length (self)"""
@@ -152,6 +139,42 @@ class _ZarrDataset(torch.utils.data.Dataset):
         """The vector of time coordinate has length (self)"""
         time = self._read_time()
         return time[self.valid_times].tolist()
+
+    def image_shape(self):
+        """Get the shape of the image (same for input and output)."""
+        return self.group["cwb"].shape[-2:]
+
+    def _select_norm_channels(self, means, stds, channels):
+        if channels is not None:
+            means = means[channels]
+            stds = stds[channels]
+        return (means, stds)
+
+    def normalize_input(self, x, channels=None):
+        """Convert input from physical units to normalized data."""
+        norm = self._select_norm_channels(
+            self.group["era5_center"], self.group["era5_scale"], channels
+        )
+        return normalize(x, *norm)
+
+    def denormalize_input(self, x, channels=None):
+        """Convert input from normalized data to physical units."""
+        norm = self._select_norm_channels(
+            self.group["era5_center"], self.group["era5_scale"], channels
+        )
+        return denormalize(x, *norm)
+
+    def normalize_output(self, x, channels=None):
+        """Convert output from physical units to normalized data."""
+        norm = self.get_target_normalization(self.group)
+        norm = self._select_norm_channels(*norm, channels)
+        return normalize(x, *norm)
+
+    def denormalize_output(self, x, channels=None):
+        """Convert output from normalized data to physical units."""
+        norm = self.get_target_normalization(self.group)
+        norm = self._select_norm_channels(*norm, channels)
+        return denormalize(x, *norm)
 
     def info(self):
         return {
@@ -166,7 +189,7 @@ class _ZarrDataset(torch.utils.data.Dataset):
         return self.valid_times.sum()
 
 
-class FilterTime(torch.utils.data.Dataset):
+class FilterTime(DownscalingDataset):
     """Filter a time dependent dataset"""
 
     def __init__(self, dataset, filter_fn):
@@ -203,6 +226,26 @@ class FilterTime(torch.utils.data.Dataset):
         """Get information about the dataset."""
         return self._dataset.info()
 
+    def image_shape(self):
+        """Get the shape of the image (same for input and output)."""
+        return self._dataset.image_shape()
+
+    def normalize_input(self, x, channels=None):
+        """Convert input from physical units to normalized data."""
+        return self._dataset.normalize_input(x, channels=channels)
+
+    def denormalize_input(self, x, channels=None):
+        """Convert input from normalized data to physical units."""
+        return self._dataset.denormalize_input(x, channels=channels)
+
+    def normalize_output(self, x, channels=None):
+        """Convert output from physical units to normalized data."""
+        return self._dataset.normalize_output(x, channels=channels)
+
+    def denormalize_output(self, x, channels=None):
+        """Convert output from normalized data to physical units."""
+        return self._dataset.denormalize_output(x, channels=channels)
+
     def __getitem__(self, idx):
         return self._dataset[self._indices[idx]]
 
@@ -220,7 +263,7 @@ def is_not_2021(time):
     return not is_2021(time)
 
 
-class ZarrDataset(torch.utils.data.Dataset):
+class ZarrDataset(DownscalingDataset):
     """A Dataset for loading paired training data from a Zarr-file with the
     following schema::
 
@@ -299,25 +342,25 @@ class ZarrDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         dataset,
-        in_channels,
-        out_channels,
-        img_shape_x,
-        img_shape_y,
-        crop_size_x,
-        crop_size_y,
-        roll,
-        add_grid,
-        ds_factor,
-        train,
-        all_times,
-        n_history,
-        min_path,
-        max_path,
-        global_means_path,
-        global_stds_path,
-        normalization,
-        gridtype,
-        N_grid_channels,
+        in_channels=(0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19),
+        out_channels=(0, 17, 18, 19),
+        img_shape_x=448,
+        img_shape_y=448,
+        crop_size_x=448,
+        crop_size_y=448,
+        roll=False,
+        add_grid=True,
+        ds_factor=1,
+        train=True,
+        all_times=False,
+        n_history=0,
+        min_path=None,
+        max_path=None,
+        global_means_path=None,
+        global_stds_path=None,
+        normalization="v1",
+        gridtype="sinusoidal",
+        N_grid_channels=4,
     ):
         if not all_times:
             self._dataset = (
@@ -352,7 +395,7 @@ class ZarrDataset(torch.utils.data.Dataset):
         return self._dataset.info()
 
     def __getitem__(self, idx):
-        target, input, label = self._dataset[idx]
+        (target, input, _) = self._dataset[idx]
         # crop and downsamples
         # rolling
         if self.train and self.roll:
@@ -375,51 +418,35 @@ class ZarrDataset(torch.utils.data.Dataset):
         if self.ds_factor > 1:
             target = self._create_lowres_(target, factor=self.ds_factor)
 
+        reshape_args = (
+            self.crop_size_x,
+            self.crop_size_y,
+            rnd_x,
+            rnd_y,
+            y_roll,
+            self.train,
+            self.n_history,
+            self.in_channels,
+            self.out_channels,
+            self.min_path,
+            self.max_path,
+            self.global_means_path,
+            self.global_stds_path,
+            self.normalization,
+            self.gridtype,
+            self.N_grid_channels,
+            self.roll,
+        )
         # SR
         input = reshape_fields(
             input,
             "inp",
-            self.crop_size_x,
-            self.crop_size_y,
-            rnd_x,
-            rnd_y,
-            y_roll,
-            self.train,
-            self.n_history,
-            self.in_channels,
-            self.out_channels,
-            self.min_path,
-            self.max_path,
-            self.global_means_path,
-            self.global_stds_path,
-            self.normalization,
-            self.gridtype,
-            self.N_grid_channels,
-            self.roll,
+            *reshape_args,
             normalize=False,
             grid=self.grid,
         )  # 3x720x1440
         target = reshape_fields(
-            target,
-            "tar",
-            self.crop_size_x,
-            self.crop_size_y,
-            rnd_x,
-            rnd_y,
-            y_roll,
-            self.train,
-            self.n_history,
-            self.in_channels,
-            self.out_channels,
-            self.min_path,
-            self.max_path,
-            self.global_means_path,
-            self.global_stds_path,
-            self.normalization,
-            self.gridtype,
-            self.N_grid_channels,
-            self.roll,
-            normalize=False,
+            target, "tar", *reshape_args, normalize=False
         )  # 3x720x1440
 
         return target, input, idx
@@ -427,7 +454,12 @@ class ZarrDataset(torch.utils.data.Dataset):
     def input_channels(self):
         """Metadata for the input channels. A list of dictionaries, one for each channel"""
         in_channels = self._dataset.input_channels()
-        return [in_channels[i] for i in self.in_channels]
+        in_channels = [in_channels[i] for i in self.in_channels]
+        in_channels.extend(
+            ChannelMetadata(name=f"grid{i}", auxiliary=True)
+            for i in range(self.N_grid_channels)
+        )
+        return in_channels
 
     def output_channels(self):
         """Metadata for the output channels. A list of dictionaries, one for each channel"""
@@ -439,15 +471,43 @@ class ZarrDataset(torch.utils.data.Dataset):
 
     def longitude(self):
         """Get longitude values from the dataset."""
-        return self._dataset.longitude()
+        lon = self._dataset.longitude()
+        return lon if self.train else lon[..., : self.crop_size_y, : self.crop_size_x]
 
     def latitude(self):
         """Get latitude values from the dataset."""
-        return self._dataset.latitude()
+        lat = self._dataset.latitude()
+        return lat if self.train else lat[..., : self.crop_size_y, : self.crop_size_x]
 
     def time(self):
         """Get time values from the dataset."""
         return self._dataset.time()
+
+    def image_shape(self):
+        """Get the shape of the image (same for input and output)."""
+        return (self.crop_size_y, self.crop_size_x)
+
+    def normalize_input(self, x):
+        """Convert input from physical units to normalized data."""
+        x_norm = self._dataset.normalize_input(
+            x[:, : -self.N_grid_channels], channels=self.in_channels
+        )
+        return np.concatenate((x_norm, x[:, -self.N_grid_channels :]), axis=1)
+
+    def denormalize_input(self, x):
+        """Convert input from normalized data to physical units."""
+        x_denorm = self._dataset.denormalize_input(
+            x[:, : -self.N_grid_channels], channels=self.in_channels
+        )
+        return np.concatenate((x_denorm, x[:, -self.N_grid_channels :]), axis=1)
+
+    def normalize_output(self, x):
+        """Convert output from physical units to normalized data."""
+        return self._dataset.normalize_output(x, channels=self.out_channels)
+
+    def denormalize_output(self, x):
+        """Convert output from normalized data to physical units."""
+        return self._dataset.denormalize_output(x, channels=self.out_channels)
 
     def _create_highres_(self, x, shape):
         # downsample the high res imag
@@ -471,54 +531,16 @@ class ZarrDataset(torch.utils.data.Dataset):
         return x
 
 
-def get_zarr_dataset(
-    path,
-    n_history,
-    in_channels,
-    out_channels,
-    img_shape_x,
-    img_shape_y,
-    crop_size_x,
-    crop_size_y,
-    roll,
-    add_grid,
-    train,
-    ds_factor,
-    min_path,
-    max_path,
-    global_means_path,
-    global_stds_path,
-    gridtype,
-    N_grid_channels,
-    normalization="v1",
-    all_times=False,
-):
+def get_zarr_dataset(*, data_path, normalization="v1", all_times=False, **kwargs):
     """Get a Zarr dataset for training or evaluation."""
     get_target_normalization = {
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,
     }[normalization]
     logger.info(f"Normalization: {normalization}")
-    zdataset = _ZarrDataset(path, get_target_normalization=get_target_normalization)
+    zdataset = _ZarrDataset(
+        data_path, get_target_normalization=get_target_normalization
+    )
     return ZarrDataset(
-        dataset=zdataset,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        img_shape_x=img_shape_x,
-        img_shape_y=img_shape_y,
-        crop_size_x=crop_size_x,
-        crop_size_y=crop_size_y,
-        roll=roll,
-        add_grid=add_grid,
-        ds_factor=ds_factor,
-        train=train,
-        all_times=all_times,
-        n_history=n_history,
-        min_path=min_path,
-        max_path=max_path,
-        global_means_path=global_means_path,
-        global_stds_path=global_stds_path,
-        normalization=normalization,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
+        dataset=zdataset, normalization=normalization, all_times=all_times, **kwargs
     )

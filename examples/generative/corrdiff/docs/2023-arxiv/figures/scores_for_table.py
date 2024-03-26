@@ -30,18 +30,18 @@
 
 # %%
 scores = {}
-scores[
-    "ResDiff"
-] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/generations/era5-cwb-v3/validation_big/scores.nc"
-scores[
-    "Reg"
-] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/regression/era5-cwb-v3/validation_big/scores.nc"
-scores[
-    "RF"
-] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/rf/era5-cwb-v3/validation_big/scores.nc"
-scores[
-    "ERA5"
-] = "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/era5/era5-cwb-v3/validation_big/scores.nc"
+scores["ResDiff"] = (
+    "/lustre/fsw/nvresearch/nbrenowitz/diffusions/generations/era5-cwb-v3/validation_big/scores.nc"
+)
+scores["Reg"] = (
+    "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/regression/era5-cwb-v3/validation_big/scores.nc"
+)
+scores["RF"] = (
+    "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/rf/era5-cwb-v3/validation_big/scores.nc"
+)
+scores["ERA5"] = (
+    "/lustre/fsw/nvresearch/nbrenowitz/diffusions/baselines/era5/era5-cwb-v3/validation_big/scores.nc"
+)
 
 # %%
 import matplotlib.pyplot as plt
