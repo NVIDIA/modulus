@@ -46,8 +46,8 @@ patch_shape_y: 64
   # Patch size. Patch-based training will be utilized if these dimensions differ from 
   # img_shape_x and img_shape_y
 patch_num: 10
-  # Number of patches extracted from a sample. The total number of patches is defined 
-  # as patch_num * batch_size_global
+  # Number of patches extracted from a single sample. The total number of patches is 
+  # defined as patch_num * batch_size_global
 hr_mean_conditioning: True
   # High-res mean (regression's output) as additional condition
   
