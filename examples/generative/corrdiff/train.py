@@ -19,6 +19,7 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
+import shutil
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
@@ -87,6 +88,7 @@ def main(cfg: DictConfig) -> None:
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
     dry_run = getattr(cfg, "dry_run", False)
+    log_code = getattr(cfg, "log_code", True)
 
     # Parse weather data options
     c = EasyDict()
@@ -103,6 +105,16 @@ def main(cfg: DictConfig) -> None:
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
+
+    # log the code
+    if log_code:
+        destination_directory = "logged_code"
+        directories = ["../../../modulus", "training", "datasets"]
+        for directory in directories:
+            source = to_absolute_path(directory)
+            dest = os.path.join(destination_directory, os.path.basename(directory))
+            shutil.copytree(source, dest, dirs_exist_ok=True)
+        shutil.copy(to_absolute_path("train.py"), destination_directory)
 
     # Initialize distributed manager.
     DistributedManager.initialize()
