@@ -88,8 +88,8 @@ def main(cfg: DictConfig) -> None:
     patch_size = getattr(cfg, "patch_size", 448)
     patch_shape_x = getattr(cfg, "patch_shape_x", 448)
     patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    overlap_pix = getattr(cfg, "overlap_pix", 0)
-    boundary_pix = getattr(cfg, "boundary_pix", 2)
+    overlap_pix = getattr(cfg, "overlap_pixels", 0)
+    boundary_pix = getattr(cfg, "boundary_pixels", 0)
     hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
 
     if times_range is not None:
