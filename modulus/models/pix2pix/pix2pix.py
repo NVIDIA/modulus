@@ -96,7 +96,7 @@ class Pix2Pix(Module):
     in_channels : int
         Number of input channels
     out_channels: Union[int, Any], optional
-        Number of outout channels
+        Number of output channels
     dimension : int
         Model dimensionality (supports 1, 2, 3).
     conv_layer_size : int, optional
