@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # Virtual Foundary GraphNet
 
 ## Setup with Modulus package
@@ -63,8 +65,7 @@ Change the params in constants.py for testing:
 - output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
 
-
-Then run: 
+Then run:
 
 ```bash
 python train.py
@@ -80,19 +81,20 @@ python train.py
 python render_rollout.py
 ```
 
-## Inference 
+## Inference
 
 Change the params in constants.py for inference run:
 
-(model tested with spliting the entire sintering profile into 2 stages, can combine the entire sintering profile inferencing according to train schema)
+(model tested with spliting the entire sintering profile into 2 stages,
+can combine the entire sintering profile inferencing according to train schema)
+
 - mode: "rollout"
-- eval_split: "inference"  # name of the tfrecord dataset 
+- eval_split: "inference"  # name of the tfrecord dataset
 - noise_std: 0
 - batch_size: 1
 - ckpt_path_vfgn={path to model trained ckpt}, i.e. "models/ckpt/models/ckpt/model_loss-4.17E-06_step-1113000.pt"
 - output_path: {path to store outputs}, i.e. "rollouts/test24"
 - data_path: {preprocessed test data tfrecord}, i.e. "./data/test_validation"
-
 
 ```bash
 python inference.py
@@ -110,7 +112,7 @@ python inference.py
   > python data_process/rawdata2tfrecord.py
   
     i.e.
-- > python data_process/rawdata2tfrecord.py 
+- > python data_process/rawdata2tfrecord.py
 
 Defition of step_context & methods tried:
 

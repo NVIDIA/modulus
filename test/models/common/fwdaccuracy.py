@@ -116,7 +116,6 @@ def validate_forward_accuracy(
     file_name = (
         Path(__file__).parents[1].resolve() / Path("data") / Path(file_name.lower())
     )
-
     # If file does not exist, we will create it then error
     # Model should then reproduce it on next pytest run
     if not file_name.exists():
@@ -130,6 +129,5 @@ def validate_forward_accuracy(
         output_target = tuple(
             [value.to(model.device) for value in tensor_dict.values()]
         )
-        print("output target: ", output_target)
 
         return compare_output(output, output_target, rtol, atol)
