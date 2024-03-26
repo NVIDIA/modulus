@@ -14,37 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-experiment_name: "Unified-Training"
-experiment_desc: "unified training recipe for global weather models"
-run_desc: "unified training recipe for global weather models"
+nr_input_steps: 1
 
-# Get defaults
-defaults:
+optimizer:
+  name: FusedAdam
+  args:
+    lr: 1e-3
+    betas: [0.9, 0.999]
 
-  # Dataset
-  - dataset/tiny_6hr_subsample
-  #- dataset/6hr_subsample # uncomment for full dataset
-
-  # Curated Dataset
-  - curated_dataset/tiny_7_var
-  #- curated_dataset/7_var # uncomment for full dataset
-  
-  # Transform
-  - transform/trim_lat720
-
-  # Filesystem
-  - filesystem/local
-
-  # Model
-  - model/tiny_afno
-  #- model/afno
-  #- model/graphcastnet
-  #- model/sfno
-
-  # Training
-  - training/afno
-  #- training/graphcastnet
-  #- training/sfno
-
-  # Validation
-  - validation/afno
+stages:
+  - name: "Step LR"
+    max_iterations: .inf
+    num_epochs: 500
+    unroll_steps: 1
+    batch_size: 4 # 64 for 8 GPUs
+    lr_scheduler_name: StepLR
+    args:
+      scheduler_T_max: 70
+      scheduler_factor: 0.1
+      scheduler_patience: 10
+      scheduler_step_size: 100
+      scheduler_gamma: 0.5
+      lr_warmup_steps: 0

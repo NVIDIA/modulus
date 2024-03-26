@@ -51,9 +51,10 @@ from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 
 from seq_zarr_datapipe import SeqZarrDatapipe
+from model_packages import save_inference_model_package
 
 
-def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+def batch_normalized_mse(pred, target) -> float:
     """Calculates batch-wise normalized mse error between two tensors."""
 
     pred_flat = pred.reshape(pred.size(0), -1)
@@ -432,6 +433,20 @@ def main(cfg: DictConfig) -> None:
 
         # Finish training
         if dist.rank == 0:
+            # Save model card
+            logger.info("Saving model card")
+            save_inference_model_package(
+                model,
+                cfg,
+                predicted_variable_normalizer=predicted_batch_norm,
+                unpredicted_variable_normalizer=unpredicted_batch_norm,
+                latitude=zarr.open(cfg.dataset.dataset_filename, mode="r")["latitude"],
+                longitude=zarr.open(cfg.dataset.dataset_filename, mode="r")[
+                    "longitude"
+                ],
+                save_path="./model_package_{}".format(cfg.experiment_name),
+                readme="This is a model card for the global weather model.",
+            )
             logger.info("Finished training!")
 
 
