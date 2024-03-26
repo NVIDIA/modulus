@@ -576,3 +576,233 @@ class ResLoss:
         loss = weight * ((D_yn - y) ** 2)
 
         return loss
+
+class VELoss_dfsr:
+    """
+    Loss function corresponding to the variance exploding (VE) formulation.
+
+    Parameters
+    ----------
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+
+    Note:
+    -----
+    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+    """
+
+    def __init__(self, sigma_min: float = 0.02, sigma_max: float = 100.0):
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+
+        # scheduler for diffusion:
+        self.beta_schedule = 'linear'
+        self.beta_start = 0.0001
+        self.beta_end = 0.02
+        self.num_diffusion_timesteps = 1000 # Might need to be changed to 500 later to match SDEdit
+        betas = self.get_beta_schedule(
+            beta_schedule=self.beta_schedule,
+            beta_start=self.beta_start,
+            beta_end=self.beta_end,
+            num_diffusion_timesteps=self.num_diffusion_timesteps,
+        )
+        self.betas = torch.from_numpy(betas).float()
+        self.num_timesteps = betas.shape[0]
+
+    def get_beta_schedule(self, beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
+        def sigmoid(x):
+            return 1 / (np.exp(-x) + 1)
+
+        if beta_schedule == "quad":
+            betas = (
+                    np.linspace(
+                        beta_start ** 0.5,
+                        beta_end ** 0.5,
+                        num_diffusion_timesteps,
+                        dtype=np.float64,
+                    )
+                    ** 2
+            )
+        elif beta_schedule == "linear":
+            betas = np.linspace(
+                beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "const":
+            betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
+        elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
+            betas = 1.0 / np.linspace(
+                num_diffusion_timesteps, 1, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "sigmoid":
+            betas = np.linspace(-6, 6, num_diffusion_timesteps)
+            betas = sigmoid(betas) * (beta_end - beta_start) + beta_start
+        else:
+            raise NotImplementedError(beta_schedule)
+        assert betas.shape == (num_diffusion_timesteps,)
+        return betas
+
+    def __call__(self, net, images, labels, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the variance exploding (VE)
+        formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'sigma_min' and 'sigma_max' and random values. The calculated loss is weighted
+        based on the inverse of 'sigma^2'.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
+        t = torch.randint(
+            low=0, high=self.num_timesteps, size=(images.size(0) // 2 + 1,)
+            ).to(images.device)
+        t = torch.cat([t, self.num_timesteps - t - 1], dim=0)[:images.size(0)]
+        e = torch.randn_like(images)
+        b = self.betas.to(images.device)
+        a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
+        x = images * a.sqrt() + e * (1.0 - a).sqrt()
+        num_diffusion_timesteps = b.shape[0]
+        
+        output = net(x, t, labels)
+        loss = (e - output).square()
+        
+        return loss
+
+class VELoss_dfsr_cond:
+    """
+    Loss function corresponding to the variance exploding (VE) formulation.
+
+    Parameters
+    ----------
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+
+    Note:
+    -----
+    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+    """
+
+    def __init__(self, sigma_min: float = 0.02, sigma_max: float = 100.0):
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+
+        # scheduler for diffusion:
+        self.beta_schedule = 'linear'
+        self.beta_start = 0.0001
+        self.beta_end = 0.02
+        self.num_diffusion_timesteps = 1000 # Might need to be changed to 500 later to match SDEdit
+        betas = self.get_beta_schedule(
+            beta_schedule=self.beta_schedule,
+            beta_start=self.beta_start,
+            beta_end=self.beta_end,
+            num_diffusion_timesteps=self.num_diffusion_timesteps,
+        )
+        self.betas = torch.from_numpy(betas).float()
+        self.num_timesteps = betas.shape[0]
+
+    def get_beta_schedule(self, beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
+        def sigmoid(x):
+            return 1 / (np.exp(-x) + 1)
+
+        if beta_schedule == "quad":
+            betas = (
+                    np.linspace(
+                        beta_start ** 0.5,
+                        beta_end ** 0.5,
+                        num_diffusion_timesteps,
+                        dtype=np.float64,
+                    )
+                    ** 2
+            )
+        elif beta_schedule == "linear":
+            betas = np.linspace(
+                beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "const":
+            betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
+        elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
+            betas = 1.0 / np.linspace(
+                num_diffusion_timesteps, 1, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "sigmoid":
+            betas = np.linspace(-6, 6, num_diffusion_timesteps)
+            betas = sigmoid(betas) * (beta_end - beta_start) + beta_start
+        else:
+            raise NotImplementedError(beta_schedule)
+        assert betas.shape == (num_diffusion_timesteps,)
+        return betas
+
+    def __call__(self, net, images, labels, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the variance exploding (VE)
+        formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the input images.
+        The noise level is determined by 'sigma', which is computed as a function of
+        'sigma_min' and 'sigma_max' and random values. The calculated loss is weighted
+        based on the inverse of 'sigma^2'.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input images to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
+        e = torch.randn_like(images)
+        b = self.betas.to(images.device)
+        t = torch.randint(
+            low=0, high=self.num_timesteps, size=(images.size(0) // 2 + 1,)
+            ).to(images.device)
+        t = torch.cat([t, self.num_timesteps - t - 1], dim=0)[:images.size(0)]
+        a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
+        x = images * a.sqrt() + e * (1.0 - a).sqrt()
+        num_diffusion_timesteps = b.shape[0]
+        
+        output = net(x, t, labels)
+        loss = (e - output).square()
+        
+        return loss
