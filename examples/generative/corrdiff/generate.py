@@ -88,8 +88,9 @@ def main(cfg: DictConfig) -> None:
     patch_size = getattr(cfg, "patch_size", 448)
     patch_shape_x = getattr(cfg, "patch_shape_x", 448)
     patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    overlap_pix = getattr(cfg, "overlap_pix", 0)
-    boundary_pix = getattr(cfg, "boundary_pix", 2)
+    overlap_pix = getattr(cfg, "overlap_pixels", 0)
+    boundary_pix = getattr(cfg, "boundary_pixels", 0)
+    hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
 
     if times_range is not None:
         times = []
@@ -111,6 +112,7 @@ def main(cfg: DictConfig) -> None:
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     (img_shape_y, img_shape_x) = dataset.image_shape()
 
+    in_variable_num = len(dataset_cfg["in_channels"])
     # Sampler kwargs
     if sampling_method == "stochastic":
         sampler_kwargs = {
@@ -118,6 +120,8 @@ def main(cfg: DictConfig) -> None:
             "patch_shape": patch_shape_x,
             "overlap_pix": overlap_pix,
             "boundary_pix": boundary_pix,
+            "gridtype": dataset_cfg["gridtype"],
+            "in_variable_num": in_variable_num,
         }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
@@ -155,6 +159,10 @@ def main(cfg: DictConfig) -> None:
     if patch_shape_y > img_shape_y:
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
+        if sampling_method == "deterministic":
+            raise NotImplementedError(
+                "Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. "
+            )
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
@@ -226,7 +234,7 @@ def main(cfg: DictConfig) -> None:
                 with nvtx.annotate("regression_model", color="yellow"):
                     image_reg = generate(
                         net=net_reg,
-                        img_lr=image_lr_patch,
+                        img_lr=image_lr_patch[:, 0:16],
                         seed_batch_size=1,
                         seeds=[
                             0,
@@ -234,7 +242,10 @@ def main(cfg: DictConfig) -> None:
                         pretext="reg",
                         class_idx=class_idx,
                     )
+                    
             if net_res:
+                if hr_mean_conditioning and sampling_method == "stochastic":
+                    sampler_kwargs.update({"mean_hr": image_mean[0:1]})
                 with nvtx.annotate("diffusion model", color="purple"):
                     image_res = generate(
                         net=net_res,
@@ -662,6 +673,9 @@ def save_images(
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
             writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
+            # skip learnable positional embedding
+            if channel_idx == image_lr2.shape[1] - 1:
+                break
 
 
 class NetCDFWriter:

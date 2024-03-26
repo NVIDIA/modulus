@@ -497,7 +497,7 @@ class ZarrDataset(DownscalingDataset):
     def denormalize_input(self, x):
         """Convert input from normalized data to physical units."""
         x_denorm = self._dataset.denormalize_input(
-            x[:, : -self.N_grid_channels], channels=self.in_channels
+            x[:, : len(self.in_channels)], channels=self.in_channels
         )
         return np.concatenate((x_denorm, x[:, -self.N_grid_channels :]), axis=1)
 

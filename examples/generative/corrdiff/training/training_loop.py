@@ -72,6 +72,10 @@ def training_loop(
     patch_num=1,
     wandb_mode="disabled",
     regression_checkpoint_path=None,
+    hr_mean_conditioning=False,
+    N_grid_channels=4,
+    gridtype="sinusoidal",
+    in_channel=12,
 ):
     """CorrDiff training loop"""
 
@@ -117,6 +121,12 @@ def training_loop(
     img_in_channels = len(dataset.input_channels())  # noise + low-res input
     (img_shape_y, img_shape_x) = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
+    if hr_mean_conditioning:
+        img_in_channels += img_out_channels
+
+    # interpolated global channel if patch-based model is used
+    if img_shape_x != patch_shape_x:
+        img_in_channels += in_channel
 
     # Construct network.
     logger0.info("Constructing network...")
@@ -126,6 +136,7 @@ def training_loop(
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
         label_dim=0,
+        gridtype=gridtype + "-" + str(N_grid_channels),
     )  # weather
     merged_args = {**network_kwargs, **interface_kwargs}
     net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
@@ -147,6 +158,9 @@ def training_loop(
             patch_shape_x=patch_shape_x,
             patch_shape_y=patch_shape_y,
             patch_num=patch_num,
+            hr_mean_conditioning=hr_mean_conditioning,
+            pos_embed=N_grid_channels,
+            gridtype=gridtype,
         )
         logger0.success("Loaded the pre-trained regression network")
     else:
@@ -242,12 +256,16 @@ def training_loop(
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
+            if patch_shape_x != img_shape_x:
+                g["lr"] *= 0.8 ** ((cur_nimg - lr_rampup_kimg * 1000) // 4e6)
             wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
+        if patch_shape_x != img_shape_x:
+            grad_norm = torch.nn.utils.clip_grad_norm_(net.parameters(), 1e5)
         optimizer.step()
 
         # Update EMA.

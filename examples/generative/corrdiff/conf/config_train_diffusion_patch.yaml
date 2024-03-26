@@ -43,8 +43,17 @@ batch_size_gpu: 20
 
 patch_shape_x: 64
 patch_shape_y: 64
+  # Patch size. Patch-based training will be utilized if these dimensions differ from 
+  # img_shape_x and img_shape_y
 patch_num: 10
-
-gridtype: "sinusoidal"
-N_grid_channels: 4
-normalization: "v1"
+  # Number of patches extracted from a single sample. The total number of patches is 
+  # defined as patch_num * batch_size_global
+hr_mean_conditioning: True
+  # High-res mean (regression's output) as additional condition
+  
+## Weather data options
+dataset:
+  gridtype: "learnable"
+    # can be either linear, sinusoidal, or learnable
+  N_grid_channels: 100
+  
