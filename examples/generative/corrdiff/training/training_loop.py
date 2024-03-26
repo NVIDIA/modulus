@@ -227,7 +227,9 @@ def training_loop(
                 continue
 
     try:
+        logger0.success(f"Loading network states from {max_index_file}")
         net.load(os.path.join(run_dir, max_index_file))
+        logger0.success(f"Loading optimizer states from {max_index_file_optimizer}")
         optimizer_state_dict = torch.load(
             os.path.join(run_dir, max_index_file_optimizer)
         )
