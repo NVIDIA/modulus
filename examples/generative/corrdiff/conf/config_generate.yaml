@@ -94,6 +94,7 @@ dataset:
   global_means_path: null
   global_stds_path: null
   gridtype: "sinusoidal"
+    # can be either linear, sinusoidal, or learnable
   N_grid_channels: 4
   normalization: "v1"
   
