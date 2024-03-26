@@ -56,9 +56,15 @@ use_torch_compile: True
 ## Data options
 patch_shape_x: 448
 patch_shape_y: 448
-overlap_pix: 0 
-boundary_pix: 0
+  # The shape of patch. Patch-based sampling will be used if these numbers are different 
+  # from img_shape_x and img_shape_y
+overlap_pixels: 0 
+  # Number of overlapping pixels between adjacent patches
+boundary_pixels: 0
+  # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
+  # artifact.
 hr_mean_conditioning: false
+  # High-res mean (regression's output) as additional condition
 times:
   - 2021-02-02T00:00:00
   - 2021-03-02T00:00:00
