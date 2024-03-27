@@ -18,12 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warp neighbor search routine with a minimal example.
 - Warp SDF routine.
 - Strict option for loading Modulus checkpoints.
+- Regression only or diffusion only inference for CorrDiff.
 
 ### Changed
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
 - Added more config options to FCN AFNO example.
-- In `models/diffusion/preconditioning.py` scale on `x`, leave `img_lr` unscaled.
 
 ### Deprecated
 
