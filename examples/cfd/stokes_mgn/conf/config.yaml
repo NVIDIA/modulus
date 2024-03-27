@@ -17,18 +17,43 @@
 hydra:
   job:
     chdir: True
+  run:
+    dir: ./outputs/
+  
+ckpt_path: "./checkpoints"
+ckpt_name: "./stokes.pt"
+data_dir: "./dataset"
+results_dir: "./results"
 
+input_dim_nodes: 7
+input_dim_edges: 3
+output_dim: 3
+hidden_dim_node_encoder: 256
+hidden_dim_edge_encoder: 256
+hidden_dim_node_decoder: 256
 
-defaults:
-  - config_train_base
+aggregation: "sum"
+batch_size: 1
+epochs: 500
 
-## Main options
-outdir: "./output_regression"   
-  # Where to save the results
-arch: ddpmpp-cwb-v0-regression
-  # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: unetregression
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: regression
-  # Which model to train [regression, diffusion]
+num_training_samples: 500
+num_validation_samples: 10
+num_test_samples: 10
 
+lr: 1e-4
+lr_decay_rate: 0.99985
+
+amp: False
+jit: False
+wandb_mode: "disabled"
+
+# Physics-informed constants
+graph_path: "graph_7.vtp"
+
+mlp_hidden_dim: 256
+mlp_num_layers: 6
+mlp_input_dim: 2
+mlp_output_dim: 3
+
+pi_iters: 10000
+pi_lr: 0.001

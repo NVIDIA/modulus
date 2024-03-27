@@ -14,21 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: True
+name: AFNO
+nr_input_channels: ${eval:'(${training.nr_input_steps} * (${curated_dataset.nr_predicted_variables} + ${curated_dataset.nr_unpredicted_variables}))'}
+nr_output_channels: ${curated_dataset.nr_predicted_variables}
+input_shape: ${transform.transformed_shape}
 
-
-defaults:
-  - config_train_base
-
-## Main options
-outdir: "./output_regression"   
-  # Where to save the results
-arch: ddpmpp-cwb-v0-regression
-  # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: unetregression
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: regression
-  # Which model to train [regression, diffusion]
-
+args:
+  inp_shape: ${model.input_shape}
+  in_channels: ${model.nr_input_channels}
+  out_channels: ${model.nr_output_channels}
+  patch_size: [8, 8]
+  embed_dim: 128
+  depth: 12
+  mlp_ratio: 4
+  drop_rate: 0.0
+  num_blocks: 8
+  sparsity_threshold: 0.01
+  hard_thresholding_fraction: 1.0

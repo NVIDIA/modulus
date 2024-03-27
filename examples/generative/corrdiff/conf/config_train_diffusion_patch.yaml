@@ -36,9 +36,9 @@ regression_checkpoint_path: checkpoints/regression.mdlus
   # Where to save the checkpoints
 
 ## Hyperparameters
-batch: 2560
+batch_size_global: 2560
   # Total batch size
-batch_gpu: 20
+batch_size_gpu: 20
   # Limit batch size per GPU
 
 patch_shape_x: 64
