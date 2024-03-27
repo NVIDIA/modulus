@@ -37,6 +37,7 @@ from modulus.models.vfgn.graph_network_modules import (
 from . import common
 
 
+@pytest.mark.skip(reason="Skipping, these tests need better dependency management")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_mlpnet_forward(device):
     """Test MLP-NET forward pass"""
