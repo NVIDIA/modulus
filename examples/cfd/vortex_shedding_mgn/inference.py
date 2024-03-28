@@ -84,7 +84,7 @@ class MGNRollout:
             models=self.model,
             device=self.device,
         )
-        
+
         self.var_identifier = {"u": 0, "v": 1, "p": 2}
 
     def predict(self):
@@ -160,8 +160,8 @@ class MGNRollout:
         self.pred_i = [var[:, idx] for var in self.pred]
         self.exact_i = [var[:, idx] for var in self.exact]
 
-        return(self.graphs, self.faces, self.pred_i, self.exact_i)
-    
+        return (self.graphs, self.faces, self.pred_i, self.exact_i)
+
     def init_animation(self, idx):
         self.pred_i = [var[:, idx] for var in self.pred]
         self.exact_i = [var[:, idx] for var in self.exact]
@@ -218,6 +218,7 @@ class MGNRollout:
         )
         return self.fig
 
+
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main")  # General python logger
@@ -226,7 +227,7 @@ def main(cfg: DictConfig) -> None:
     rollout = MGNRollout(cfg, logger)
     idx = [rollout.var_identifier[k] for k in cfg.viz_vars]
     rollout.predict()
-    
+
     for i in idx:
         rollout.init_animation(i)
         ani = animation.FuncAnimation(

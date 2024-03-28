@@ -36,14 +36,15 @@ class Point2D(Geometry):
         curves = [pt_1]
 
         # calculate SDF
-        sdf = ((x - point[0])**2 + (y - point[1])**2)**0.5 * sign(x - point[0])
+        sdf = ((x - point[0]) ** 2 + (y - point[1]) ** 2) ** 0.5 * sign(x - point[0])
 
         # calculate bounds
         bounds = Bounds(
             {
                 Parameter("x"): (point[0], point[0]),
-                Parameter("y"): (point[1], point[1])
-            }, parameterization=parameterization
+                Parameter("y"): (point[1], point[1]),
+            },
+            parameterization=parameterization,
         )
 
         # initialize
