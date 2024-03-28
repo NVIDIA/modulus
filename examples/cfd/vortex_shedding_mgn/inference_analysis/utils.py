@@ -1,5 +1,4 @@
 import numpy as np
-import modulus.sym
 import pyvista as pv
 from scipy.interpolate import griddata
 from numpy.fft import fft, fftfreq

@@ -160,7 +160,7 @@ class MGNRollout:
         self.pred_i = [var[:, idx] for var in self.pred]
         self.exact_i = [var[:, idx] for var in self.exact]
 
-        return (self.graphs, self.faces, self.pred_i, self.exact_i)
+        return self.graphs, self.faces, self.pred_i, self.exact_i
 
     def init_animation(self, idx):
         self.pred_i = [var[:, idx] for var in self.pred]
