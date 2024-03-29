@@ -980,7 +980,9 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
 
 class VEPrecond_dfsr(torch.nn.Module):
     """
-    Preconditioning corresponding to the variance exploding (VE) formulation.
+    Preconditioning for dfsr model, modified from class VEPrecond, where the input 
+    argument 'sigma' in forward propagation function is used to receive the timestep 
+    of the backward diffusion process. 
 
     Parameters
     ----------
@@ -1003,9 +1005,8 @@ class VEPrecond_dfsr(torch.nn.Module):
 
     Note
     ----
-    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
-    Poole, B., 2020. Score-based generative modeling through stochastic differential
-    equations. arXiv preprint arXiv:2011.13456.
+    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models. 
+    Advances in neural information processing systems. 2020;33:6840-51.
     """
 
     def __init__(
@@ -1073,7 +1074,12 @@ class VEPrecond_dfsr(torch.nn.Module):
 
 class VEPrecond_dfsr_cond(torch.nn.Module):
     """
-    Preconditioning corresponding to the variance exploding (VE) formulation.
+    Preconditioning for dfsr model with physics-informed conditioning input, modified 
+    from class VEPrecond, where the input argument 'sigma' in forward propagation function 
+    is used to receive the timestep of the backward diffusion process. The gradient of PDE 
+    residual with respect to the vorticity in the governing Navier-Stokes equation is computed 
+    as the physics-informed conditioning variable and is combined with the backward diffusion 
+    timestep before being sent to the underlying model for noise prediction.
 
     Parameters
     ----------
@@ -1096,9 +1102,12 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
 
     Note
     ----
-    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Reference: 
+    [1] Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
+    [2] Shu D, Li Z, Farimani AB. A physics-informed diffusion model for high-fidelity 
+    flow field reconstruction. Journal of Computational Physics. 2023 Apr 1;478:111972.
     """
 
     def __init__(
@@ -1182,6 +1191,26 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         return F_x
 
     def voriticity_residual(self, w, re=1000.0, dt=1/32):
+        """
+        Compute the gradient of PDE residual with respect to a given vorticity w using the 
+        spectrum method.
+
+        Parameters
+        ----------
+        w: torch.Tensor
+            The fluid flow data sample (vorticity).
+        re: float
+            The value of Reynolds number used in the governing Navier-Stokes equation.
+        dt: float
+            Time step used to compute the time-derivative of vorticity included in the governing 
+            Navier-Stokes equation. 
+
+        Returns
+        -------
+        torch.Tensor
+            The computed vorticity gradient.
+        """
+
         # w [b t h w]
         batchsize = w.size(0)
         w = w.clone()

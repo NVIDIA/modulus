@@ -209,7 +209,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg.precond == "dfsr_cond":
         # Configure model for physics-informed conditional fluid data super-resolution 
         c.network_kwargs.class_name = "modulus.models.diffusion.VEPrecond_dfsr_cond"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr_cond"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr"
 
     # Network options.
     if cfg.cbase is not None:
@@ -311,18 +311,6 @@ def main(cfg: DictConfig) -> None:
 # ----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config",
-        type=str,
-        nargs="?",
-        help="directory to load configuration file",
-    )
-    args = parser.parse_args()
-    loaded_config = OmegaConf.load(args.config)
-    if loaded_config:
-        main(loaded_config)
-    else:
-        main()
+    main()
 
 # ----------------------------------------------------------------------------
