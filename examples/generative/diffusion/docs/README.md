@@ -35,7 +35,7 @@ In directory ``modulus/examples/generative/diffusion/``, run:
 (without physics-informed conditioning)
 
 ``
-python train.py --config conf/config_dfsr_train.yaml
+python train.py --config-name=config_dfsr_train
 ``
 
 or 
@@ -43,7 +43,7 @@ or
 (with physics-informed conditioning)
 
 ``
-python train.py --config conf/config_dfsr_cond_train.yaml
+python train.py --config-name=config_dfsr_cond_train
 ``
 
 <b>Step 2 - Super-resolution</b>
@@ -53,7 +53,7 @@ In directory ``modulus/examples/generative/diffusion/``, run:
 (without physics-informed conditioning)
 
 ``
-python train.py --config conf/config_dfsr_generate.yaml
+python train.py --config-name=config_dfsr_generate
 ``
 
 or 
@@ -61,7 +61,7 @@ or
 (with physics-informed conditioning)
 
 ``
-python train.py --config conf/config_dfsr_cond_generate.yaml
+python train.py --config-name=config_dfsr_cond_generate
 ``
 
 This implementation is based on / inspired by:
