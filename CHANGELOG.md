@@ -10,15 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- configuration files for diffusion model for fluid data super-resolution (dfsr) (location: ``modulus/examples/generative/diffusion/conf/``).
-- script file for dfsr data generation (filename: ``modulus/examples/generative/diffusion/generate_dfsr.py``)
-
-### Changed
-
-- files for diffusion model training (filename: ``modulus/examples/generative/diffusion/train.py``, ``modulus/examples/generative/diffusion/training_loop.py``)
-- dataset files for diffusion (filename: ``modulus/examples/generative/diffusion/dataset/__init__.py``, ``modulus/examples/generative/diffusion/dataset/dataset.py``)
-- loss function files for diffusion (filename: ``modulus/modulus/metrics/diffusion/__init__.py``, ``modulus/modulus/metrics/diffusion/loss.py``)
-- files to compute the diffusion process (filename: ``modulus/modulus/models/diffusion/__init__.py``, ``modulus/modulus/models/diffusion/preconditioning.py``)
+- An example of diffusion model for fluid data super-resolution (dfsr)
 
 ## [0.6.0a0] - 2024-04-XX
 
