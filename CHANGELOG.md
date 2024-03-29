@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2024-03-21
+
+### Added
+
+- An example of diffusion model for fluid data super-resolution (dfsr)
+
 ## [0.6.0a0] - 2024-04-XX
 
 ### Added
@@ -23,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
 - Added more config options to FCN AFNO example.
-- In `models/diffusion/preconditioning.py` scale on `x`, leave `img_lr` unscaled.
 
 ### Deprecated
 
