@@ -355,7 +355,7 @@ def training_loop(
         if dataset == "dfsr":
             done = cur_nimg >= total_kimg
             if cur_nimg / batch_size % 500 == 0:
-                print("Progress in training iterations: loss: {}, iter: {}, cur_nimg: {}, \
+                logger0.info("Progress in training iterations: loss: {}, iter: {}, cur_nimg: {}, \
                     cur_tick: {}, dist.rank: {}, nimg: {}/{}".format(loss_sample, cur_nimg / batch_size, 
                         cur_nimg, cur_tick, dist.rank, cur_nimg, total_kimg))
         else:
@@ -427,7 +427,7 @@ def training_loop(
         # Save network snapshot.
         if (snapshot_ticks is not None) and (done or cur_tick % snapshot_ticks == 0):
             if dataset == "dfsr":
-                print("Saving network snapshot.")
+                logger0.info("Saving network snapshot.")
             data = dict(
                 ema=ema,
                 loss_fn=loss_fn,
@@ -462,7 +462,7 @@ def training_loop(
 
         if save_full_dump:
             # if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and dist.get_rank() == 0:
-            print("Saving full dump of the training state.")
+            logger0.info("Saving full dump of the training state.")
             torch.save(
                 dict(net=net, optimizer_state=optimizer.state_dict()),
                 os.path.join(run_dir, f"training-state-{cur_nimg//1000:06d}.pt"),
