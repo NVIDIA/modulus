@@ -81,15 +81,15 @@ class MLPNet(Module):
 
     Example
     -------
-    >>> #Use MLPNet to encode the features
-    >>> model = modulus.models.graph_network.MLPNet(
-    ... mlp_hidden_size=128,
-    ... mlp_num_hidden_layers=2,
-    ... output_size=128)
-    >>> input = torch.randn([5193, 128]) #(N, C)
-    >>> output = model(input)
-    >>> output.size()
-    torch.Size([5193, 128])
+    # # Use MLPNet to encode the features
+    # >>> model = modulus.models.graph_network.MLPNet(
+    # ... mlp_hidden_size=128,
+    # ... mlp_num_hidden_layers=2,
+    # ... output_size=128)
+    # >>> input = torch.randn([5193, 128]) #(N, C)
+    # >>> output = model(input)
+    # >>> output.size()
+    # torch.Size([5193, 128])
     ----
     """
 
@@ -205,15 +205,15 @@ class EdgeBlock(Module):
 
     Example
     -------
-    >>> #2D convolutional encoder decoder
-    >>> model = modulus.models.graph_network.EdgeBlock(
-    ... mlp_hidden_size=128,
-    ... mlp_num_hidden_layers=2,
-    ... latent_size=128,
-    ... node_dim=0)
-    >>> input = (node_attr, edge_attr, receiver_list, sender_list)
-    >>> output = node_attr, updated_edge_attr, receiver_list, sender_list
-    >>> output.size()
+    # >>> #2D convolutional encoder decoder
+    # >>> model = modulus.models.graph_network.EdgeBlock(
+    # ... mlp_hidden_size=128,
+    # ... mlp_num_hidden_layers=2,
+    # ... latent_size=128,
+    # ... node_dim=0)
+    # >>> input = (node_attr, edge_attr, receiver_list, sender_list)
+    # >>> output = node_attr, updated_edge_attr, receiver_list, sender_list
+    # >>> output.size()
 
     """
 
@@ -272,17 +272,17 @@ class NodeBlock(Module):
     use_sender_nodes : bool, optional, default = True
         whether to take the sender-node's edges atrributes into compute
 
-    Example
-    -------
-    >>> #2D convolutional encoder decoder
-    >>> model = modulus.models.graph_network.NodeBlock(
-    ... mlp_hidden_size=128,
-    ... mlp_num_hidden_layers=2,
-    ... latent_size=128,
-    ... node_dim=0)
-    >>> input = (node_attr, edge_attr, receiver_list, sender_list)
-    >>> output = updated_node_attr, edge_attr, receiver_list, sender_list
-    >>> output.size()
+    # Example
+    # -------
+    # >>> #2D convolutional encoder decoder
+    # >>> model = modulus.models.graph_network.NodeBlock(
+    # ... mlp_hidden_size=128,
+    # ... mlp_num_hidden_layers=2,
+    # ... latent_size=128,
+    # ... node_dim=0)
+    # >>> input = (node_attr, edge_attr, receiver_list, sender_list)
+    # >>> output = updated_node_attr, edge_attr, receiver_list, sender_list
+    # >>> output.size()
 
     """
 
@@ -469,24 +469,23 @@ class EncodeProcessDecode(Module):
     device_list : list[str], optional
         device to execute the computation
 
-    Example
-    -------
-    >>> #Use EncodeProcessDecode to update the node, edge features
-    >>> model = modulus.models.graph_network.EncodeProcessDecode(
-    ... latent_size=128,
-    ... mlp_hidden_size=128,
-    ... mlp_num_hidden_layers=2,
-    ... num_message_passing_steps=10,
-    ... output_size=3)
-    >>> node_attr = torch.randn([1394, 61]) #(node_cnt, node_feat_sizes)
-    >>> edge_attr = torch.randn([5193, 4]) #(edge_cnt, edge_feat_sizes)
-    >>> invar_receivers = torch.Size([5193]) : int # node index list
-    >>> invar_senders = torch.Size([5193]) : int # node index list
-    >>> invar = (node_attr, edge_attr, invar_receivers, invar_senders)
-    >>> output = model(*invar, )
-    >>> output.size()
-    torch.Size([1394, 3])    #(node_cnt, output_size)
-
+    # Example
+    # -------
+    # >>> #Use EncodeProcessDecode to update the node, edge features
+    # >>> model = modulus.models.graph_network.EncodeProcessDecode(
+    # ... latent_size=128,
+    # ... mlp_hidden_size=128,
+    # ... mlp_num_hidden_layers=2,
+    # ... num_message_passing_steps=10,
+    # ... output_size=3)
+    # >>> node_attr = torch.randn([1394, 61]) #(node_cnt, node_feat_sizes)
+    # >>> edge_attr = torch.randn([5193, 4]) #(edge_cnt, edge_feat_sizes)
+    # >>> invar_receivers = torch.Size([5193]) : int # node index list
+    # >>> invar_senders = torch.Size([5193]) : int # node index list
+    # >>> invar = (node_attr, edge_attr, invar_receivers, invar_senders)
+    # >>> output = model(*invar, )
+    # >>> output.size()
+    # torch.Size([1394, 3])    #(node_cnt, output_size)
     """
 
     def __init__(
@@ -595,15 +594,15 @@ class LearnedSimulator(Module):
 
     Example
     -------
-    >>> model = modulus.models.graph_network.LearnedSimulator(
-    ... num_dimensions=3*5, # metadata['dim'] * PREDICT_LENGTH
-    ... num_seq=2,
-    ... boundaries=128)
+    # >>> model = modulus.models.graph_network.LearnedSimulator(
+    # ... num_dimensions=3*5, # metadata['dim'] * PREDICT_LENGTH
+    # ... num_seq=2,
+    # ... boundaries=128)
 
-    >>> input = torch.randn([5193, 128]) #(N, C)
-    >>> output = model(input)
-    >>> output.size()
-    torch.Size([5193, 128])
+    # >>> input = torch.randn([5193, 128]) #(N, C)
+    # >>> output = model(input)
+    # >>> output.size()
+    # torch.Size([5193, 128])
     ----
     """
 
