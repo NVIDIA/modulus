@@ -36,7 +36,7 @@ class Sequence_Model(torch.nn.Module):
     dropout_rate: float
         Dropout value for attention decoder, by default 2
     num_layers_decoder: int
-        Number of sub-decoder-layers in the attention decoderm by default 3
+        Number of sub-decoder-layers in the attention decoder by default 3
     num_heads: int
         Number of heads in the attention decoder, by default 8
     dim_feedforward_scale: int

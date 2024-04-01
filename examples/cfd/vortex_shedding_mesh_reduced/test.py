@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
-
+    # initialize loggers
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     logger.file_logging()

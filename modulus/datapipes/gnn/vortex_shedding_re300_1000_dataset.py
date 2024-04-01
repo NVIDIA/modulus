@@ -25,6 +25,30 @@ from .utils import load_json, save_json
 
 
 class LatentDataset(DGLDataset):
+    """In-memory Mesh-Reduced-Transformer Dataset in the latent space.
+    Notes:
+        - Set produce_latents = True when first use this dataset.
+
+    Parameters
+    ----------
+    name : str, optional
+        Name of the dataset, by default "dataset"
+    data_dir : _type_, optional
+        Specifying the directory that stores the raw data in .TFRecord format., by default None
+    split : str, optional
+        Dataset split ["train", "eval", "test"], by default "train"
+    produce_latents : bool, optional
+        Specifying whether to use the trained Encoder to compress the graph into latent space and save the restuls, by default True
+    Encoder: torch.nn.Module, optioanl
+        The trained model used for encoding, by default None
+    position_mesh: torch.Tensor, optioanl
+        The postions for all meshes, by default None
+    position_pivotal: torch.Tensor, optioanl
+        The postions for all pivotal positions+
+        , by default None
+    verbose : bool, optional
+        verbose, by default False
+    """
     def __init__(
         self,
         name="dataset",
@@ -110,6 +134,22 @@ class LatentDataset(DGLDataset):
 
 
 class VortexSheddingRe300To1000Dataset(DGLDataset):
+    """In-memory Mesh-Reduced-Transformer Dataset for stationary mesh.
+    Notes:
+        - A single adj matrix is used for each transient simulation.
+            Do not use with adaptive mesh or remeshing
+
+    Parameters
+    ----------
+    name : str, optional
+        Name of the dataset, by default "dataset"
+    data_dir : _type_, optional
+        Specifying the directory that stores the raw data in .TFRecord format., by default None
+    split : str, optional
+        Dataset split ["train", "eval", "test"], by default "train"
+    verbose : bool, optional
+        verbose, by default False
+    """
     def __init__(
         self, name="dataset", data_dir="dataset", split="train", verbose=False
     ):

@@ -40,25 +40,7 @@ if __name__ == "__main__":
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # save constants to JSON file
-    if dist.rank == 0:
-        os.makedirs(C.ckpt_sequence_path, exist_ok=True)
-        with open(
-            os.path.join(
-                C.ckpt_sequence_path, C.ckpt_sequence_name.replace(".pt", ".json")
-            ),
-            "w",
-        ) as json_file:
-            json_file.write(C.json(indent=4))
-
     # initialize loggers
-    initialize_wandb(
-        project="Modulus-Launch",
-        entity="Modulus",
-        name="Vortex_Shedding-Training",
-        group="Vortex_Shedding-DDP-Group",
-        mode=C.wandb_mode,
-    )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     logger.file_logging()

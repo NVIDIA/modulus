@@ -26,10 +26,14 @@ from torch.nn import functional as F
 class TransformerDecoder(Module):
     r"""TransformerDecoder is a stack of N decoder layers
 
-    Args:
-        decoder_layer: an instance of the TransformerDecoderLayer() class (required).
-        num_layers: the number of sub-decoder-layers in the decoder (required).
-        norm: the layer normalization component (optional).
+    Parameters
+    ----------:
+        decoder_layer: torch.nn.Module
+            Layer used for the doceder
+        num_layers: int
+            Number of sub-decoder-layers in the decoder.
+        norm: str 
+            Layer normalization component.
     """
     __constants__ = ["norm"]
 
@@ -48,19 +52,6 @@ class TransformerDecoder(Module):
         tgt_is_causal: Optional[bool] = None,
     ) -> Tensor:
         """Pass the inputs (and mask) through the decoder layer in turn.
-
-        Args:
-            tgt: the sequence to the decoder (required).
-            tgt_mask: the mask for the tgt sequence (optional).
-            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
-            tgt_is_causal: If specified, applies a causal mask as ``tgt mask``.
-                Default: ``None``; try to detect a causal mask.
-                Warning:
-                ``tgt_is_causal`` provides a hint that ``tgt_mask`` is
-                the causal mask. Providing incorrect hints can result in
-                incorrect execution, including forward and backward
-                compatibility.
-
         """
         output = tgt
 
@@ -83,19 +74,27 @@ class TransformerDecoder(Module):
 class DecoderOnlyLayer(Module):
     r"""
 
-    Args:
-        d_model: the number of expected features in the input (required).
-        nhead: the number of heads in the multiheadattention models (required).
-        dim_feedforward: the dimension of the feedforward network model (default=2048).
-        dropout: the dropout value (default=0.1).
-        activation: the activation function of the intermediate layer, can be a string
-            ("relu" or "gelu") or a unary callable. Default: relu
-        layer_norm_eps: the eps value in layer normalization components (default=1e-5).
-        batch_first: If ``True``, then the input and output tensors are provided
-            as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
-        norm_first: if ``True``, layer norm is done prior to self attention, multihead
-            attention and feedforward operations, respectively. Otherwise it's done after.
-            Default: ``False`` (after).
+    Parameters
+    ----------
+        d_model: int
+            Number of expected features in the input.
+        nhead: int
+            Number of heads in the multiheadattention models.
+        dim_feedforward: int
+            Dimension of the feedforward network model, by default 2048.
+        dropout: float
+            The dropout value, by default 0.1.
+        activation: str
+            The activation function of the intermediate layer, by default 'relu'.
+        layer_norm_eps: float
+            The eps value in layer normalization components, by default 1e-5.
+        batch_first: Bool
+            If ``True``, then the input and output tensors are provided
+            as (batch, seq, feature), by default ``False`` (seq, batch, feature).
+        norm_first: Bool
+            If ``True``, layer norm is done prior to self attention, multihead
+            attention and feedforward operations, respectively. Otherwise it's done after,
+            by default ``False`` (after).
         bias: If set to ``False``, ``Linear`` and ``LayerNorm`` layers will not learn an additive
             bias. Default: ``True``.
 
@@ -166,31 +165,8 @@ class DecoderOnlyLayer(Module):
         tgt_is_causal: bool = False,
     ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer.
-
-        Args:
-            tgt: the sequence to the decoder layer (required).
-            tgt_mask: the mask for the tgt sequence (optional).
-            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
-            memory_key_padding_mask: the mask for the memory keys per batch (optional).
-            tgt_is_causal: If specified, applies a causal mask as ``tgt mask``.
-                Default: ``False``.
-                Warning:
-                ``tgt_is_causal`` provides a hint that ``tgt_mask`` is
-                the causal mask. Providing incorrect hints can result in
-                incorrect execution, including forward and backward
-                compatibility.
-            memory_is_causal: If specified, applies a causal mask as
-                ``memory mask``.
-                Default: ``False``.
-                Warning:
-                ``memory_is_causal`` provides a hint that
-                ``memory_mask`` is the causal mask. Providing incorrect
-                hints can result in incorrect execution, including
-                forward and backward compatibility.
-
-        Shape:
-            see the docs in Transformer class.
         """
+
         # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
 
         x = tgt
