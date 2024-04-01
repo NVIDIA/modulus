@@ -41,9 +41,11 @@ def plot_channels(group, time_idx: int):
     num_channels = len(group.variables)
     ncols = 4
     fig, axs = plt.subplots(
-        nrows=num_channels // ncols
-        if num_channels % ncols == 0
-        else num_channels // ncols + 1,
+        nrows=(
+            num_channels // ncols
+            if num_channels % ncols == 0
+            else num_channels // ncols + 1
+        ),
         ncols=ncols,
         sharex=True,
         sharey=True,
