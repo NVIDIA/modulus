@@ -140,6 +140,8 @@ class HEALPixPaddingv2(th.nn.Module):
     ----------
     padding: int
         The padding size
+
+    TODO: Missing library to use this class. Need to see if we can get it, if not needs to be removed
     """
 
     def __init__(self, padding: int):  # pragma: no cover
@@ -565,34 +567,25 @@ class HEALPixLayer(th.nn.Module):
             enable_healpixpad = False
 
         # Define a HEALPixPadding layer if the given layer is a convolution layer
-        try:
+        if (
+            layer.__bases__[0] is th.nn.modules.conv._ConvNd
+            and kwargs["kernel_size"] > 1
+        ):
+            kwargs["padding"] = 0  # Disable native padding
+            kernel_size = 3 if "kernel_size" not in kwargs else kwargs["kernel_size"]
+            dilation = 1 if "dilation" not in kwargs else kwargs["dilation"]
+            padding = ((kernel_size - 1) // 2) * dilation
             if (
-                layer.__bases__[0] is th.nn.modules.conv._ConvNd
-                and kwargs["kernel_size"] > 1
-            ):
-                kwargs["padding"] = 0  # Disable native padding
-                kernel_size = (
-                    3 if "kernel_size" not in kwargs else kwargs["kernel_size"]
-                )
-                dilation = 1 if "dilation" not in kwargs else kwargs["dilation"]
-                padding = ((kernel_size - 1) // 2) * dilation
-                print(f'padding {padding} kernel size {kernel_size} {dilation}')
-                if (
-                    enable_healpixpad
-                    and have_healpixpad
-                    and th.cuda.is_available()
-                    and not enable_nhwc
-                ):  #pragma: no cover
-                    layers.append(HEALPixPaddingv2(padding=padding))
-                else:
-                    layers.append(
-                        HEALPixPadding(padding=padding, enable_nhwc=enable_nhwc)
-                    )
-        except AttributeError:
-            print(
-                f"Could not determine the base class of the given layer '{layer}'. No padding layer was added, "
-                "which may not be an issue if the specified layer does not require a previous padding."
-            )
+                enable_healpixpad
+                and have_healpixpad
+                and th.cuda.is_available()
+                and not enable_nhwc
+            ):  # pragma: no cover
+                # TODO: missing library, need to decide if we can get library
+                # or if this needs to be removed
+                layers.append(HEALPixPaddingv2(padding=padding))
+            else:
+                layers.append(HEALPixPadding(padding=padding, enable_nhwc=enable_nhwc))
 
         layers.append(layer(**kwargs))
         self.layers = th.nn.Sequential(*layers)
