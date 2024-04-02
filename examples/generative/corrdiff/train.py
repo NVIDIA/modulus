@@ -19,6 +19,7 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
+import copy
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
@@ -84,6 +85,7 @@ def main(cfg: DictConfig) -> None:
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
+    validation_dump = getattr(cfg, "validation_dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
     dry_run = getattr(cfg, "dry_run", False)
@@ -215,7 +217,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
+    c.update(kimg_per_tick=tick, state_dump_ticks=dump, valid_dump_ticks=validation_dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -260,10 +262,20 @@ def main(cfg: DictConfig) -> None:
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
 
+    # create a training dataset
     (dataset, dataset_iterator) = init_dataset_from_config(
         dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
     )
-
+    
+    # create a valiadtion dataset
+    validation_dataset_cfg = copy.deepcopy(dataset_cfg)
+    validation_dataset_cfg['all_times'] = False
+    validation_dataset_cfg['train'] = False
+    (validation_dataset, validation_dataset_iterator) = init_dataset_from_config(
+        validation_dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
+    )
+    
+    
     (img_shape_y, img_shape_x) = dataset.image_shape()
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
         c.patch_shape_x = img_shape_x
@@ -280,7 +292,7 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(dataset, dataset_iterator, **c)
+        training_loop.training_loop(dataset, dataset_iterator, validation_dataset, validation_dataset_iterator, **c)
     )
 
 

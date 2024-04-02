@@ -27,7 +27,7 @@ import numpy as np
 import psutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
-from . import training_stats
+from . import training_stats, module
 
 sys.path.append("../")
 from modulus import Module
@@ -49,6 +49,8 @@ from modulus.utils.generative import (
 def training_loop(
     dataset,
     dataset_iterator,
+    validation_dataset,
+    validation_dataset_iterator,
     *,
     task,
     run_dir=".",  # Output directory.
@@ -71,7 +73,11 @@ def training_loop(
     patch_shape_y=448,
     patch_num=1,
     wandb_mode="disabled",
+    wandb_project="diffusion",
+    wandb_group="nv-research-climate",
+    wandb_name="CorrDiff",
     regression_checkpoint_path=None,
+    valid_dump_ticks = 5000,
 ):
     """CorrDiff training loop"""
 
@@ -86,10 +92,10 @@ def training_loop(
 
     # wandb logger
     initialize_wandb(
-        project="Modulus-Generative",
-        entity="Modulus",
+        project="diffusion",
+        entity="nv-research-climate",
         name="CorrDiff",
-        group="CorrDiff-DDP-Group",
+        group="nv-research-climate",
         mode=wandb_mode,
     )
 
@@ -138,7 +144,7 @@ def training_loop(
             raise FileNotFoundError(
                 "Need to specify regression_checkpoint_path for training the diffusion model"
             )
-        net_reg = Module.from_checkpoint(regression_checkpoint_path)
+        net_reg = module.Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
         interface_kwargs = dict(
             regression_net=net_reg,
@@ -212,6 +218,7 @@ def training_loop(
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
+        valid_loss_accum = 0
         for round_idx in range(num_accumulation_rounds):
             with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
@@ -231,11 +238,34 @@ def training_loop(
                     labels=labels,
                     augment_pipe=augment_pipe,
                 )
-                training_stats.report("Loss/loss", loss)
+                training_stats.report("Loss/training loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss
                 loss.backward()
+                
+                # here I am trying to add a validation loss 
+                if cur_tick % valid_dump_ticks == 0:
+                    img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
+
+                    # Normalization: weather (normalized already in the dataset)
+                    img_clean_valid = (
+                        img_clean_valid.to(device).to(torch.float32).contiguous()
+                    )  # [-4.5, +4.5]
+                    img_lr_valid = img_lr_valid.to(device).to(torch.float32).contiguous()
+                    labels_valid = labels_valid.to(device).contiguous()
+                    loss_valid = loss_fn(
+                        net=ddp,
+                        img_clean=img_clean_valid,
+                        img_lr=img_lr_valid,
+                        labels=labels_valid,
+                        augment_pipe=augment_pipe,
+                    )
+                    training_stats.report("Loss/ validation loss", loss_valid)
+                    loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
+                    valid_loss_accum += loss_valid
+                    
         wb.log({"loss": loss_accum}, step=cur_nimg)
+        wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
