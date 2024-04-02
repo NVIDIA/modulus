@@ -34,13 +34,19 @@ from modulus.models.dlwp_healpix_layers import (
 
 @pytest.fixture
 def conv_next_block_dict(in_channels=3, out_channels=1):
+    activation_block = {
+        "_target_":"modulus.models.layers.activations.CappedGELU",
+        "cap_value": 10,
+    }
     conv_block = {
         "_target_":"modulus.models.dlwp_healpix_layers.ConvNeXtBlock",
         "in_channels":in_channels,
         "out_channels":out_channels,
+        "activation":activation_block,
         "kernel_size": 3,
         "dilation": 1,
         "upscale_factor": 4,
+        "_recursive_": True
     }
     return conv_block
 
@@ -53,22 +59,29 @@ def down_sampling_block_dict():
     return down_sampling_block
 
 @pytest.fixture
-def encoder_dict(conv_next_block_dict, down_sampling_block_dict):
+def encoder_dict(conv_next_block_dict, down_sampling_block_dict, recurrent_block_dict):
     encoder = {
         "_target_":"modulus.models.dlwp_healpix_layers.UNetEncoder",
         "conv_block": conv_next_block_dict,
         "down_sampling_block": down_sampling_block_dict,
         "recurrent_block": recurrent_block_dict,
         "_recursive_": False,
+        "n_channels": [136, 68, 34],
+        "dilations": [1,2,4]
     }
     return encoder
 
 @pytest.fixture
 def up_sampling_block_dict(in_channels=3, out_channels=1):
+    activation_block = {
+        "_target_":"modulus.models.layers.activations.CappedGELU",
+        "cap_value": 10,
+    }
     up_sampling_block = {
        "_target_":"modulus.models.dlwp_healpix_layers.TransposedConvUpsample",
        "in_channels":in_channels,
        "out_channels":out_channels,
+       "activation": activation_block,
        "upsampling":2,
     }
     return DictConfig(up_sampling_block)
@@ -91,6 +104,7 @@ def recurrent_block_dict(in_channels=3):
         "_target_":"modulus.models.dlwp_healpix_layers.ConvGRUBlock",
         "in_channels":in_channels,
         "kernel_size":1,
+        "_recursive_": False,
     }
     return DictConfig(recurrent_block)
 
@@ -103,13 +117,15 @@ def decoder_dict(conv_next_block_dict, up_sampling_block_dict, output_layer_dict
         "recurrent_block": recurrent_block_dict,
         "output_layer": output_layer_dict,
         "_recursive_": False,
+        "n_channels": [34, 68, 136],
+        "dilations": [4,2,1],
     }
     return DictConfig(decoder)
 
 @pytest.fixture
 def test_data():
     # create dummy data
-    def generate_test_data(batch_size=2, time_dim=1, channels=7, img_size=16, device="cpu"):
+    def generate_test_data(batch_size=8, time_dim=1, channels=7, img_size=16, device="cpu"):
         test_data = torch.randn(batch_size, 12, time_dim, channels, img_size, img_size)
 
         return test_data.to(device)
@@ -119,22 +135,22 @@ def test_data():
 @pytest.fixture
 def constant_data():
     # create dummy data
-    def generate_data(channels=2, img_size=16, device="cpu"):
+    def generate_constant_data(channels=2, img_size=16, device="cpu"):
         constants = torch.randn(12, channels, img_size, img_size)
 
         return constants.to(device)
 
-    return generate_data
+    return generate_constant_data
 
 @pytest.fixture
 def insolation_data():
     # create dummy data
-    def generate_data(batch_size=2, time_dim=1, img_size=16, device="cpu"):
+    def generate_insolation_data(batch_size=8, time_dim=1, img_size=16, device="cpu"):
         insolation = torch.randn(batch_size, 12, time_dim, 1, img_size, img_size)
 
         return insolation.to(device)
 
-    return generate_data
+    return generate_insolation_data
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -173,6 +189,53 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
             output_time_dim = 3,
         ).to(device)
 
+    # test fail case for couplings with no constants or decoder input channels
+    with pytest.raises(
+        NotImplementedError, match=(f"support for coupled models with no constant field")
+    ):
+        model = HEALPixRecUNet(
+            encoder = encoder_dict,
+            decoder = decoder_dict,
+            input_channels = in_channels,
+            output_channels = out_channels,
+            input_time_dim = 2,
+            output_time_dim = 3,
+            decoder_input_channels = 2,
+            n_constants = 0,
+            couplings = ['t2m', 'v10m'],
+            
+        ).to(device)
+
+    with pytest.raises(
+        NotImplementedError, match=(f"support for coupled models with no decoder")
+    ):
+        model = HEALPixRecUNet(
+            encoder = encoder_dict,
+            decoder = decoder_dict,
+            input_channels = in_channels,
+            output_channels = out_channels,
+            input_time_dim = 2,
+            output_time_dim = 3,
+            decoder_input_channels = 0,
+            n_constants = 2,
+            couplings = ['t2m', 'v10m'],
+        ).to(device)
+        
+
+    with pytest.raises(
+        NotImplementedError, match=(f"support for models with no constant fields and no decoder")
+    ):
+        model = HEALPixRecUNet(
+            encoder = encoder_dict,
+            decoder = decoder_dict,
+            input_channels = in_channels,
+            output_channels = out_channels,
+            input_time_dim = 2,
+            output_time_dim = 3,
+            decoder_input_channels = 0,
+            n_constants = 0,
+        ).to(device)
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
     in_channels = 2
@@ -197,8 +260,9 @@ def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_reset(device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data):
-    in_channels = 2
-    out_channels = 2
+    # create a smaller version of the dlwp healpix model
+    in_channels = 3
+    out_channels = 3
     n_constants = 2
     decoder_input_channels = 1
     input_time_dim = 2
@@ -206,8 +270,8 @@ def test_HEALPixRecUNet_reset(device, encoder_dict, decoder_dict, test_data, ins
     size = 16
 
     fix_random_seeds(seed=42)
-    x = test_data(time_dim=input_time_dim, channels=in_channels, img_size=size, device=device)
-    decoder_inputs = insolation_data(time_dim=input_time_dim+output_time_dim, img_size=size, device=device)
+    x = test_data(time_dim=2*input_time_dim, channels=in_channels, img_size=size, device=device)
+    decoder_inputs = insolation_data(time_dim=2*output_time_dim, img_size=size, device=device)
     constants = constant_data(channels=n_constants, img_size=size, device=device)
     inputs=[x, decoder_inputs, constants]
 
@@ -220,41 +284,103 @@ def test_HEALPixRecUNet_reset(device, encoder_dict, decoder_dict, test_data, ins
         decoder_input_channels = decoder_input_channels,
         input_time_dim = input_time_dim,
         output_time_dim = output_time_dim,
-        delta_time = "3h",
+        enable_healpixpad=True,
+        delta_time = "6h",
     ).to(device)
 
     out_var = model(inputs)
     model.reset()
 
-    assert isinstance(model, HEALPixRecUNet)
-    assert common.compare_output(out_var, model(x))
+    assert common.compare_output(out_var, model(inputs))
 
 
-# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-# def test_HEALPixRecUNet_forward(device, encoder_dict, decoder_dict):
-#     in_channels = 2
-#     out_channels = 2
-#     n_constants = 1
-#     decoder_input_channels = 0
-#     input_time_dim = 2
-#     output_time_dim = 4
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_HEALPixRecUNet_forward(device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data):
+    # create a smaller version of the dlwp healpix model
+    in_channels = 3
+    out_channels = 3
+    n_constants = 2
+    decoder_input_channels = 1
+    input_time_dim = 2
+    output_time_dim = 4
+    size = 16
 
-#     size = (12, 16, 16)
+    fix_random_seeds(seed=42)
+    x = test_data(time_dim=2*input_time_dim, channels=in_channels, img_size=size, device=device)
+    decoder_inputs = insolation_data(time_dim=2*output_time_dim, img_size=size, device=device)
+    constants = constant_data(channels=n_constants, img_size=size, device=device)
+    inputs=[x, decoder_inputs, constants]
 
-#     fix_random_seeds(seed=42)
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = n_constants,
+        decoder_input_channels = decoder_input_channels,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+        enable_healpixpad=True,
+        delta_time = "6h",
+        reset_cycle = "6h",
+    ).to(device)
 
-#     x = create_random_input(size, in_channels).to(device)
+    # one forward step to initialize recurrent states
+    model(inputs)
+    
+    assert common.validate_forward_accuracy(
+        model,
+        (inputs,),
+        file_name="dlwp_healpix.pth",
+        rtol=1e-2,
+    )
 
-#     model = HEALPixRecUNet(
-#         encoder = encoder_dict,
-#         decoder = decoder_dict,
-#         input_channels = in_channels,
-#         output_channels = out_channels,
-#         n_constants = n_constants,
-#         decoder_input_channels = decoder_input_channels,
-#         input_time_dim = input_time_dim,
-#         output_time_dim = output_time_dim,
-#     ).to(device)
+    # no decoder inputs
+    inputs=[x, constants]
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = n_constants,
+        decoder_input_channels = 0,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+        enable_healpixpad=True,
+        delta_time = "6h",
+    ).to(device)
 
-#     print(f'shape {x.shape}')
-#     assert common.validate_forward_accuracy(model, (x,), rtol=1e-2)
+    # one forward step to initialize recurrent states
+    model(inputs)
+    
+    assert common.validate_forward_accuracy(
+        model,
+        (inputs,),
+        file_name="dlwp_healpix_const.pth",
+        rtol=1e-2,
+    )
+
+    # no constants
+    inputs=[x, decoder_inputs]
+    model = HEALPixRecUNet(
+        encoder = encoder_dict,
+        decoder = decoder_dict,
+        input_channels = in_channels,
+        output_channels = out_channels,
+        n_constants = 0,
+        decoder_input_channels = decoder_input_channels,
+        input_time_dim = input_time_dim,
+        output_time_dim = output_time_dim,
+        enable_healpixpad=True,
+        delta_time = "6h",
+    ).to(device)
+
+    # one forward step to initialize recurrent states
+    model(inputs)
+    
+    assert common.validate_forward_accuracy(
+        model,
+        (inputs,),
+        file_name="dlwp_healpix_decoder.pth",
+        rtol=1e-2,
+    )

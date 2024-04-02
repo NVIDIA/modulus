@@ -16,6 +16,7 @@
 import logging
 import os
 import time
+from pathlib import Path
 from typing import DefaultDict, Optional, Sequence, Union
 
 # numpy
@@ -23,8 +24,6 @@ import numpy as np
 
 # distributed stuff
 import torch
-from modulus.distributed import DistributedManager
-
 import xarray as xr
 
 # Internal modules
@@ -32,11 +31,12 @@ from dask.diagnostics import ProgressBar
 
 # External modules
 from omegaconf import DictConfig
-from .timeseries_dataset import TimeSeriesDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from pathlib import Path
+from modulus.distributed import DistributedManager
+
+from .timeseries_dataset import TimeSeriesDataset
 
 logger = logging.getLogger(__name__)
 
@@ -190,9 +190,7 @@ def open_time_series_dataset_classic_prebuilt(
     if not ds_path.exists():
         raise FileNotFoundError(f"Dataset doesn't appear to exist at {ds_path}")
 
-    result = xr.open_zarr(
-       ds_path, chunks={"time": batch_size}
-    )
+    result = xr.open_zarr(ds_path, chunks={"time": batch_size})
     return result
 
 
@@ -243,7 +241,7 @@ def create_time_series_dataset_classic(
     """
     dst_zarr = os.path.join(dst_directory, dataset_name + ".zarr")
     file_exists = os.path.exists(dst_zarr)
-    
+
     if file_exists and not overwrite:
         logger.info("opening input datasets")
         return open_time_series_dataset_classic_prebuilt(
@@ -339,7 +337,7 @@ def create_time_series_dataset_classic(
 
     # writing out
     def write_zarr(data, path):
-        write_job = data.to_zarr(path, compute=False, mode='w')
+        write_job = data.to_zarr(path, compute=False, mode="w")
         with ProgressBar():
             logger.info(f"writing dataset to {path}")
             write_job.compute()

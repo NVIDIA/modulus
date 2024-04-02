@@ -104,6 +104,21 @@ class HEALPixRecUNet(Module):
         self.channel_dim = 2  # Now 2 with [B, F, T*C, H, W]. Was 1 in old data format with [B, T*C, F, H, W]
 
         self.input_channels = input_channels
+
+        if n_constants == 0 and decoder_input_channels == 0:
+            raise NotImplementedError(
+                "support for models with no constant fields and no decoder inputs (TOA insolation) is not available at this time."
+            )
+        if len(couplings) > 0:
+            if n_constants == 0:
+                raise NotImplementedError(
+                    "support for coupled models with no constant fields is not available at this time."
+                )
+            if decoder_input_channels == 0:
+                raise NotImplementedError(
+                    "support for coupled models with no decoder inputs (TOA insolation) is not available at this time."
+                )
+
         # add coupled fields to input channels for model initialization
         self.coupled_channels = self._compute_coupled_channels(couplings)
         self.couplings = couplings
@@ -184,22 +199,6 @@ class HEALPixRecUNet(Module):
         """
 
         if len(self.couplings) > 0:
-            if not (self.n_constants > 0 or self.decoder_input_channels > 0):
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.n_constants == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.decoder_input_channels == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-is not available at this time."
-                )
-
             result = [
                 inputs[0].flatten(
                     start_dim=self.channel_dim, end_dim=self.channel_dim + 1
@@ -350,12 +349,14 @@ is not available at this time."
 
     def forward(self, inputs: Sequence, output_only_last=False) -> th.Tensor:
         """
-        Forward pass of the
+        Forward pass of the HEALPixUnet
 
         Parameters
         ----------
         inputs: Sequence
-            Inputs to the model
+            Inputs to the model, of the form [prognostics|TISR|constants]
+            [B, F, T, C, H, W] is the format for prognostics and TISR
+            [F, C, H, W] is the format for constants
         output_only_last: bool, optional
             If only the last dimension of the outputs should be returned
 

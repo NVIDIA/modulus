@@ -14,9 +14,7 @@
 
 from typing import Sequence
 
-import numpy as np
 import torch as th
-import xarray as xr
 
 """
 Custom dlwp compatible loss classes that allow for more sophisticated training optimization.
