@@ -19,11 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict option for loading Modulus checkpoints.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
+- Support for patch-based CorrDiff training and generation (stochastic sampling only)
+- Leanable positional embedding for CorrDiff
+- Regression output as additional conditioning for CorrDiff
 
 ### Changed
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
 - Added more config options to FCN AFNO example.
+- Moved posiitonal embedding in CorrDiff from the dataloader to network architecture
 
 ### Deprecated
 
