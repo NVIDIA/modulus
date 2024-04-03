@@ -370,15 +370,17 @@ class SongUNet(Module):
                         x = torch.cat([x, skips.pop()], dim=1)
                     x = block(x, emb)
         return aux
-    
+
     def positionalEmbedding(self):
         if self.gridtype == "learnable":
-            grid = torch.nn.Parameter(torch.randn(self.N_grid_channels, self.img_resolution, self.img_resolution))
+            grid = torch.nn.Parameter(
+                torch.randn(
+                    self.N_grid_channels, self.img_resolution, self.img_resolution
+                )
+            )
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
-                raise ValueError(
-                    "N_grid_channels must be set to 2 for gridtype linear"
-                )
+                raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
             x = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
             y = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
             grid_x, grid_y = np.meshgrid(y, x)
@@ -392,23 +394,42 @@ class SongUNet(Module):
             y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_resolution)))
             grid_x1, grid_y1 = np.meshgrid(y1, x1)
             grid_x2, grid_y2 = np.meshgrid(y2, x2)
-            grid = torch.from_numpy(np.expand_dims(
-                np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
-            ))
+            grid = torch.from_numpy(
+                np.expand_dims(
+                    np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
+                )
+            )
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels != 4:
-            if (self.N_grid_channels % 4 != 0):
-                raise ValueError(
-                    "N_grid_channels must be a factor of 4"
-                )
-            num_freq = self.N_grid_channels//4
-            freq_bands = 2. ** torch.linspace(0., num_freq, num=num_freq)    
+            if self.N_grid_channels % 4 != 0:
+                raise ValueError("N_grid_channels must be a factor of 4")
+            num_freq = self.N_grid_channels // 4
+            freq_bands = 2.0 ** torch.linspace(0.0, num_freq, num=num_freq)
             grid_list = []
-            grid_x, grid_y = torch.meshgrid(torch.linspace(0, 2 * torch.pi, self.img_resolution), torch.linspace(0, 2 * torch.pi, self.img_resolution))
+            grid_x, grid_y = torch.meshgrid(
+                torch.linspace(0, 2 * torch.pi, self.img_resolution),
+                torch.linspace(0, 2 * torch.pi, self.img_resolution),
+            )
             for freq in freq_bands:
                 for p_fn in [torch.sin, torch.cos]:
-                    grid_list.append(p_fn(grid_x[torch.newaxis,torch.newaxis,] * freq))    
-                    grid_list.append(p_fn(grid_y[torch.newaxis,torch.newaxis,] * freq)) 
-            grid = np.concatenate(grid_list, axis=1)        
-            grid.requires_grad = False             
+                    grid_list.append(
+                        p_fn(
+                            grid_x[
+                                torch.newaxis,
+                                torch.newaxis,
+                            ]
+                            * freq
+                        )
+                    )
+                    grid_list.append(
+                        p_fn(
+                            grid_y[
+                                torch.newaxis,
+                                torch.newaxis,
+                            ]
+                            * freq
+                        )
+                    )
+            grid = np.concatenate(grid_list, axis=1)
+            grid.requires_grad = False
         return grid

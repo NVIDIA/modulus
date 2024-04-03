@@ -120,7 +120,9 @@ def training_loop(
             "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
-    img_in_channels = len(dataset.input_channels()) + N_grid_channels  # noise + low-res input
+    img_in_channels = (
+        len(dataset.input_channels()) + N_grid_channels
+    )  # noise + low-res input
     (img_shape_y, img_shape_x) = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
     if hr_mean_conditioning:
@@ -128,7 +130,7 @@ def training_loop(
 
     # interpolated global channel if patch-based model is used
     if img_shape_x != patch_shape_x:
-        img_in_channels += in_channel 
+        img_in_channels += in_channel
 
     # Construct network.
     logger0.info("Constructing network...")
@@ -257,16 +259,18 @@ def training_loop(
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
-            if (patch_shape_x != img_shape_x):
-                g['lr'] *= lr_decay**((cur_nimg - lr_rampup_kimg * 1000)//5e6)
+            if patch_shape_x != img_shape_x:
+                g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
             wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        if (patch_shape_x != img_shape_x):
-            grad_norm = torch.nn.utils.clip_grad_norm_(net.parameters(), grad_clip_threshold)
+        if patch_shape_x != img_shape_x:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                net.parameters(), grad_clip_threshold
+            )
         optimizer.step()
 
         # Update EMA.

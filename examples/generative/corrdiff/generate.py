@@ -156,8 +156,10 @@ def main(cfg: DictConfig) -> None:
     if patch_shape_y > img_shape_y:
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
-        if (sampling_method == "deterministic"):
-            raise NotImplementedError("Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. ")
+        if sampling_method == "deterministic":
+            raise NotImplementedError(
+                "Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. "
+            )
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
@@ -585,7 +587,7 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
     )  # t_N = 0
 
     # conditioning
-    x_lr = torch.cat((img_lr, net.model.pos_embd.to(device=latents.device)),dim=1)
+    x_lr = torch.cat((img_lr, net.model.pos_embd.to(device=latents.device)), dim=1)
 
     # Main sampling loop.
     x_hat = latents.to(torch.float64) * t_steps[0]
@@ -667,7 +669,7 @@ def save_images(
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
             writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
-            if (channel_idx == image_lr2.shape[1]-1):
+            if channel_idx == image_lr2.shape[1] - 1:
                 break
 
 

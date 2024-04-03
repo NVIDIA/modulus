@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
     c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
-    c.in_channel = len(dataset_cfg['in_channels'] )
+    c.in_channel = len(dataset_cfg["in_channels"])
     # Initialize distributed manager.
     DistributedManager.initialize()
     dist = DistributedManager()

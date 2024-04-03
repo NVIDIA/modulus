@@ -18,6 +18,7 @@
 import numpy as np
 import torch
 
+
 def reshape_fields(
     img,
     inp_or_tar,
@@ -58,7 +59,7 @@ def reshape_fields(
         means = np.load(global_means_path)[:, channels]
         stds = np.load(global_stds_path)[:, channels]
 
-    img = img[:, :,  : img_shape_x,  : img_shape_y]
+    img = img[:, :, :img_shape_x, :img_shape_y]
 
     if normalize and train:
         if normalization == "minmax":

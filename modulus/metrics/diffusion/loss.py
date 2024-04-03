@@ -501,8 +501,10 @@ class ResLoss:
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
-        pos_embd = self.unet.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(device=img_clean.device)          
-        y_lr_res = torch.cat((y_lr, pos_embd),dim=1)
+        pos_embd = self.unet.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+            device=img_clean.device
+        )
+        y_lr_res = torch.cat((y_lr, pos_embd), dim=1)
 
         # form residual
         y_mean = self.unet(
@@ -515,9 +517,11 @@ class ResLoss:
 
         y = y - y_mean
 
-        # add positional embedding          
-        pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(device=img_clean.device)             
-        y_lr = torch.cat((y_lr, pos_embd),dim=1)
+        # add positional embedding
+        pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+            device=img_clean.device
+        )
+        y_lr = torch.cat((y_lr, pos_embd), dim=1)
         if self.hr_mean_conditioning:
             y_lr = torch.cat((y_mean, y_lr), dim=1).contiguous()
 
