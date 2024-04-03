@@ -17,7 +17,6 @@
 
 import numpy as np
 import torch
-import warnings 
 
 def reshape_fields(
     img,
