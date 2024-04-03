@@ -117,7 +117,12 @@ def main(cfg: DictConfig) -> None:
     os.makedirs("logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
+
+    # inform about the output
+    logger.info(
+        f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
+    )
 
     # Initialize config dict.
     c.network_kwargs = EasyDict()
