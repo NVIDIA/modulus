@@ -40,6 +40,8 @@ batch_size_global: 2560
   # Total batch size
 batch_size_gpu: 20
   # Limit batch size per GPU
+grad_clip_threshold: 1e5
+lr_decay: 0.7
 
 patch_shape_x: 64
 patch_shape_y: 64
@@ -50,10 +52,8 @@ patch_num: 10
   # defined as patch_num * batch_size_global
 hr_mean_conditioning: True
   # High-res mean (regression's output) as additional condition
-  
-## Weather data options
-dataset:
-  gridtype: "learnable"
-    # can be either linear, sinusoidal, or learnable
-  N_grid_channels: 100
+gridtype: "learnable"
+  # can be either linear, sinusoidal, or learnable
+N_grid_channels: 100
+
   
