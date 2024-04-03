@@ -54,11 +54,18 @@ use_torch_compile: True
   # but will significantly speed up subsequent inference runs
 
 ## Data options
+## Data options
 patch_shape_x: 64
 patch_shape_y: 64
-overlap_pix: 4 
-boundary_pix: 2
+  # Patch size. Patch-based sampling will be utilized if these dimensions differ from 
+  # img_shape_x and img_shape_y
+overlap_pixels: 4 
+  # Number of overlapping pixels between adjacent patches
+boundary_pixels: 2
+  # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
+  # artifact.
 hr_mean_conditioning: true
+  # High-res mean (regression's output) as additional condition
 gridtype: "learnable"
 N_grid_channels: 100
 times:
