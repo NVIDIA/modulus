@@ -65,6 +65,9 @@ boundary_pixels: 0
   # artifact.
 hr_mean_conditioning: false
   # High-res mean (regression's output) as additional condition
+gridtype: "sinusoidal"
+  # can be either linear, sinusoidal, or learnable
+N_grid_channels: 4
 times:
   - 2021-02-02T00:00:00
   - 2021-03-02T00:00:00
@@ -93,9 +96,6 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  gridtype: "sinusoidal"
-    # can be either linear, sinusoidal, or learnable
-  N_grid_channels: 4
   normalization: "v1"
   
 
