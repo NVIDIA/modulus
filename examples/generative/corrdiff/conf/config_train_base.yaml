@@ -74,7 +74,7 @@ dry-run: false
 ## Weather data options
 dataset:
   type: cwb
-  data_path: /data/2023-01-24-cwb-4years.zarr
+  data_path: /data/data2/2023-01-24-cwb-4years.zarr
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
