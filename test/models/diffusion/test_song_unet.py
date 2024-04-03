@@ -92,12 +92,23 @@ def test_song_unet_constructor(device):
         channel_mult_noise=2,
         encoder_type="residual",
         resample_filter=[1, 3, 3, 1],
+        gridtype="learnable",
+        N_grid_channels=100,
     ).to(device)
     noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
     input_image = torch.ones([1, 2, 16, 16]).to(device)
     output_image = model(input_image, noise_labels, class_labels)
     assert output_image.shape == (1, out_channels, img_resolution, img_resolution)
+    assert model.pos_embd.shape == (100, img_resolution, img_resolution)
+
+    model = UNet(
+        img_resolution=img_resolution,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        N_grid_channels=40,
+    ).to(device)
+    assert model.pos_embd.shape == (40, img_resolution, img_resolution)
 
     # Also test failure cases
     try:
@@ -128,6 +139,41 @@ def test_song_unet_constructor(device):
             in_channels=in_channels,
             out_channels=out_channels,
             decoder_type=None,
+        ).to(device)
+        raise AssertionError("Failed to error for invalid argument")
+    except ValueError:
+        pass
+
+    try:
+        model = UNet(
+            img_resolution=img_resolution,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            gridtype=None,
+        ).to(device)
+        raise AssertionError("Failed to error for invalid argument")
+    except ValueError:
+        pass
+
+    try:
+        model = UNet(
+            img_resolution=img_resolution,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            gridtype="linear",
+            N_grid_channels=20,
+        ).to(device)
+        raise AssertionError("Failed to error for invalid argument")
+    except ValueError:
+        pass
+
+    try:
+        model = UNet(
+            img_resolution=img_resolution,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            gridtype="sinusoidal",
+            N_grid_channels=11,
         ).to(device)
         raise AssertionError("Failed to error for invalid argument")
     except ValueError:
