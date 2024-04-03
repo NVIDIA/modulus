@@ -24,6 +24,7 @@ import os
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
 import hydra
+from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
@@ -44,7 +45,9 @@ def main(cfg: DictConfig) -> None:
     # Sanity check
     if not hasattr(cfg, "task"):
         raise ValueError(
-            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
+            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
+            For example, for regression training, run python train.py --config-name=config_train_regression.
+            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
         )
 
     # Dump the configs
@@ -53,6 +56,8 @@ def main(cfg: DictConfig) -> None:
 
     # Parse options
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
+    if regression_checkpoint_path:
+        regression_checkpoint_path = to_absolute_path(regression_checkpoint_path)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
@@ -78,7 +83,6 @@ def main(cfg: DictConfig) -> None:
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     tick = getattr(cfg, "tick", 1)
-    snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
@@ -90,6 +94,11 @@ def main(cfg: DictConfig) -> None:
     c.wandb_mode = wandb_mode
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
+    if hasattr(cfg, "global_means_path"):
+        cfg.global_means_path = to_absolute_path(cfg.global_means_path)
+    if hasattr(cfg, "global_stds_path"):
+        cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
     c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", 1e5)
     c.lr_decay = getattr(cfg, "lr_decay", 0.8)
     c.N_grid_channels = getattr(cfg, "N_grid_channels")
@@ -105,7 +114,7 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs(".logs", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
@@ -206,7 +215,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
+    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -244,19 +253,6 @@ def main(cfg: DictConfig) -> None:
         logger0.info("Dry run; exiting.")
         return
 
-    img_shape_x = dataset_cfg['img_shape_x']
-    img_shape_y = dataset_cfg['img_shape_y']   
-    if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
-        c.patch_shape_x = img_shape_x
-    if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
-        c.patch_shape_y = img_shape_y
-    if c.patch_shape_x != c.patch_shape_y:
-        raise NotImplementedError("Rectangular patch not supported yet")
-    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
-        raise ValueError("Patch shape needs to be a multiple of 32")
-    if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
-        logger0.info("Patch-based training enabled")
-  
     # Create output directory.
     logger0.info("Creating output directory...")
     if dist.rank == 0:
@@ -267,6 +263,20 @@ def main(cfg: DictConfig) -> None:
     (dataset, dataset_iterator) = init_dataset_from_config(
         dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
     )
+
+    (img_shape_y, img_shape_x) = dataset.image_shape()  
+    if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
+        c.patch_shape_x = img_shape_x
+    if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
+        c.patch_shape_y = img_shape_y
+    if c.patch_shape_x != c.patch_shape_y:
+        raise NotImplementedError("Rectangular patch not supported yet")
+    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+        raise ValueError("Patch shape needs to be a multiple of 32")
+    if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
+        logger0.info("Patch-based training enabled")
+    else:
+        logger0.info("Patch-based training disabled")
 
     # Train.
     training_loop.training_loop(
