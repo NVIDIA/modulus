@@ -68,6 +68,12 @@ makani = [
     "tensorly-torch>=0.4.0",
 ]
 
+tpunet = [
+    "jaxtyping>=0.2",
+    "torch_scatter>=2.1",
+    "webdataset>=0.2",
+]
+
 all = [
     "h5py>=3.7.0",
     "netcdf4>=1.6.3",

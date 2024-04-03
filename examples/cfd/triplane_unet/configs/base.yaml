@@ -1,0 +1,42 @@
+# Define learning rate yaml
+lr: 0.001
+num_epochs: 100
+batch_size: 4
+
+# Logger
+logger_types: ["tensorboard"] # ["tensorboard", "wandb"]
+log_dir: "logs/"
+eval_interval: 5 # epoch
+project_name: "car-cfd"
+run_name: "default"
+entity: "nvr-ai-algo"
+# dataset
+data_path: "car-dataset"
+data_module: "CFDDataModule"
+
+# TODO: update
+train_ratio: 0.8
+val_ratio: 0.1
+test_ratio: 0.1
+
+# default model
+model: "GNO"
+
+# optimizer
+opt:
+  scheduler: "StepLR"
+  step_size: 50
+  gamma: 0.5
+
+# Plot
+test_plot_interval: 20 # save image for every N'th test data
+test_print_interval: 20 # print every N'th test data
+
+# does the gt label need to be normalized during training. This will call datamodule.encode or datamodule.normalize on the label before calling the loss
+normalize_label: false
+train_print_interval: 200 # save image for every N'th train data
+
+# save model
+save_interval: 1 # save model for every N'th epoch
+log_pointcloud: false # save pointclouds
+num_checkpoints: 2 # number of checkpoints to save

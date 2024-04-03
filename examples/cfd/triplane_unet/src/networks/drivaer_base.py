@@ -1,0 +1,182 @@
+from typing import Callable, Dict
+
+import matplotlib
+import numpy as np
+import torch
+
+matplotlib.use("Agg")  # use non-interactive backend
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+from src.data.mesh_utils import compute_drag_coefficient
+from src.utils.visualization import fig_to_numpy
+
+
+def rel_l2(pred, gt):
+    return torch.norm(pred - gt, p=2) / torch.norm(gt, p=2)
+
+
+class DrivAerBase:
+    dir_movement = torch.tensor([-1.0, 0.0, 0.0])
+
+    def data_dict_to_input(self, data_dict):
+        vertices = data_dict["cell_centers"].squeeze(0).float()  # (n_in, 3)
+
+        # center vertices
+        vertices_max = vertices.max(0)[0]
+        vertices_min = vertices.min(0)[0]
+        vertices_center = (vertices_max + vertices_min) / 2.0
+        vertices = vertices - vertices_center
+
+        return vertices.to(self.device)
+
+    def drag(self, pred_pressure, air_coeff, data_dict):
+        coeff = air_coeff / data_dict["proj_area_x"].item()
+        poly_normals = data_dict["cell_normals"].squeeze(0).float().to(self.device)
+        poly_area = data_dict["cell_areas"].squeeze(0).float().to(self.device)
+        poly_pressure = pred_pressure.squeeze().float().to(self.device)
+        poly_wss = data_dict["time_avg_wall_shear_stress"].squeeze(0).float().to(self.device)
+
+        # Compute coefficients
+        # -x direction is the movement direction so
+        c_p = -coeff * torch.dot(poly_normals[:, 0], poly_area * poly_pressure)
+        c_f = coeff * torch.dot(poly_wss[:, 0], poly_area)
+
+        # Compute total drag coefficients
+        return c_p + c_f
+
+    @torch.no_grad()
+    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs):
+        vertices = self.data_dict_to_input(data_dict)
+        normalized_pred = self(vertices).reshape(1, -1)
+        if loss_fn is None:
+            loss_fn = self.loss
+        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        out_dict = {"l2": loss_fn(normalized_pred, normalized_gt)}
+
+        pred = datamodule.decode(normalized_pred.clone())
+        gt = data_dict["time_avg_pressure"].to(self.device).reshape(1, -1)
+        out_dict["l2_decoded"] = loss_fn(pred, gt)
+        out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
+
+        # compute relative difference
+        gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
+        out_dict["c_d_computed"] = gt_drag.item()
+        out_dict["c_d_pred"] = pred_drag.item()
+        out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
+        out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
+
+        return out_dict
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices = self.data_dict_to_input(data_dict)
+        normalized_pred = self(vertices)
+        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+
+        return_dict = {}
+        if loss_fn is None:
+            loss_fn = self.loss
+        return_dict["pressure_loss"] = loss_fn(
+            normalized_pred.view(1, -1), normalized_gt.view(1, -1).to(self.device)
+        )
+
+        # compute drag loss
+        gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
+        return_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
+
+        return return_dict
+
+    def image_pointcloud_dict(self, data_dict, datamodule):
+        vertices = self.data_dict_to_input(data_dict)
+        noramlized_pred = self(vertices).detach().cpu().squeeze()
+        # denormalize
+        pred = datamodule.decode(noramlized_pred)
+        gt_pressure = data_dict["time_avg_pressure"].cpu().squeeze()
+        vertices = vertices.cpu().squeeze()
+
+        # Plot
+        fig = plt.figure(figsize=(21, 10))  # width, height in inches
+
+        def create_subplot(ax, vertices, data, title):
+            # Flip along x axis
+            vertices = vertices.clone()
+            vertices[:, 0] = -vertices[:, 0]
+
+            sc = ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis")
+            # Make the colorbar smaller
+            # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+            # Show the numbers on the colorbar
+            cbar = plt.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+            cbar.set_label(title, rotation=270, labelpad=20)
+
+            ax.set_xlabel("X")
+            ax.set_ylabel("Y")
+            ax.set_zlabel("Z")
+            ax.set_aspect("equal")
+            # remove grid and background
+            ax.grid(False)
+            # ax.xaxis.pane.set_edgecolor('black')
+            # ax.yaxis.pane.set_edgecolor('black')
+            # remove bounding wireframe
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+
+            # remove all ticks
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+
+            # ax.set_facecolor("white")
+            # ax.set_title(title)
+
+        ax = fig.add_subplot(131, projection="3d")
+        create_subplot(ax, vertices, pred.numpy(), title="Pressure Prediction")
+        ax = fig.add_subplot(132, projection="3d")
+        create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
+        ax = fig.add_subplot(133, projection="3d")
+        create_subplot(ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference")
+
+        # figure to numpy image
+        fig.set_tight_layout(True)
+        # set the background to white
+        fig.patch.set_facecolor("white")
+        im = fig_to_numpy(fig)
+        return {"vis": im}, {}
+
+        # Point cloud visualization
+        # Normalize the pressure values using max and min values from both pred and gt_pressure
+        # pressures = torch.cat((pred.view(-1), gt_pressure.view(-1))).cpu()
+        # min_press = pressures.min()
+        # max_press = pressures.max()
+        # norm_pred = (pred - min_press) / (max_press - min_press)
+        # norm_gt = (gt_pressure - min_press) / (max_press - min_press)
+
+        # # Map normalized pressures to colors
+        # colormap = plt.cm.viridis
+        # norm_pred_colors = colormap(norm_pred.numpy())
+        # norm_gt_colors = colormap(norm_gt.numpy())
+        # norm_diff_colors = colormap(np.abs((norm_pred - norm_gt).numpy()))
+
+        # # wrap it back with tensor
+        # norm_pred_colors = torch.from_numpy(norm_pred_colors)
+        # norm_gt_colors = torch.from_numpy(norm_gt_colors)
+        # norm_diff_colors = torch.from_numpy(norm_diff_colors)
+
+        # # Convert the colors to range 0-255 and remove alpha
+        # norm_pred_colors = norm_pred_colors[:, :3] * 255
+        # norm_gt_colors = norm_gt_colors[:, :3] * 255
+        # norm_diff_colors = norm_diff_colors[:, :3] * 255
+
+        # # concatenate vertices and colors into Nx6 matrix
+        # pred_points = torch.cat((vertices, norm_pred_colors), dim=1)
+        # gt_points = torch.cat((vertices, norm_gt_colors), dim=1)
+        # diff_points = torch.cat((vertices, norm_diff_colors), dim=1)
+
+        # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}

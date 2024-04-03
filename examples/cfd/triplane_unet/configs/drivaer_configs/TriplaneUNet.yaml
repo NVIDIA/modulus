@@ -1,0 +1,25 @@
+base: !include ../base.yaml
+
+batch_size: 1
+
+# Model
+model: "PointFeatureToGridGroupUNetDrivAer"
+hidden_channels:
+  - 86
+  - 86
+  - 86
+  - 86
+num_levels: 3
+use_rel_pos_embed: true
+reductions: ["mean"]
+
+# Loggers
+logger_types: ["wandb", "tensorboard"] # ["tensorboard", "wandb"]
+project_name: "drivaer"
+entity: "nvr-ai-algo"
+run_name: "PointFeatureToGridGroupUNet"
+
+# dataset
+data_module: "DrivAerDataModule"
+# every_n_data: 10  # downsample 1/10
+loss_name: "MSELoss"
