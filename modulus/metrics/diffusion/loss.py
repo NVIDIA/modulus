@@ -407,7 +407,7 @@ class RegressionLoss:
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         # add positional embedding
-        pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+        pos_embd = net.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
             device=img_clean.device
         )
         y_lr = torch.cat((y_lr, pos_embd), dim=1)
