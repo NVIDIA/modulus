@@ -218,7 +218,6 @@ def training_loop(
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
-        valid_loss_accum = 0
         for round_idx in range(num_accumulation_rounds):
             with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
@@ -242,9 +241,26 @@ def training_loop(
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss
                 loss.backward()
-                
-                # here I am trying to add a validation loss 
-                if cur_tick % valid_dump_ticks == 0:
+        wb.log({"loss": loss_accum}, step=cur_nimg)
+
+        # Update weights.
+        for g in optimizer.param_groups:
+            g["lr"] = optimizer_kwargs["lr"] * min(
+                cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
+            )  # TODO better handling (potential bug)
+            wb.log({"lr": g["lr"]}, step=cur_nimg)
+        for param in net.parameters():
+            if param.grad is not None:
+                torch.nan_to_num(
+                    param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
+                )
+        optimizer.step()
+        # here I am trying to add a validation loss 
+        valid_loss_accum = 0
+        num_validation_steps  = 10
+        if cur_tick % valid_dump_ticks == 0:
+            with torch.no_grad():  # Disable gradient calculation
+                for _ in range(num_validation_steps):
                     img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
 
                     # Normalization: weather (normalized already in the dataset)
@@ -263,22 +279,7 @@ def training_loop(
                     training_stats.report("Loss/ validation loss", loss_valid)
                     loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
                     valid_loss_accum += loss_valid
-                    
-        wb.log({"loss": loss_accum}, step=cur_nimg)
         wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
-
-        # Update weights.
-        for g in optimizer.param_groups:
-            g["lr"] = optimizer_kwargs["lr"] * min(
-                cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
-            )  # TODO better handling (potential bug)
-            wb.log({"lr": g["lr"]}, step=cur_nimg)
-        for param in net.parameters():
-            if param.grad is not None:
-                torch.nan_to_num(
-                    param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
-                )
-        optimizer.step()
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
