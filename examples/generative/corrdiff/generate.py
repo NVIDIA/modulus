@@ -39,7 +39,8 @@ from modulus.utils.generative import (
     parse_int_list,
     StackedRandomGenerator,
 )
-from modulus import Module
+from module import Module  # TODO import from Core once the kwargs issue is fixed
+from modulus.models.module import Module as Module_res # TODO import from Core once the kwargs issue is fixed
 
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
@@ -63,12 +64,11 @@ def main(cfg: DictConfig) -> None:
     class_idx = getattr(cfg, "class_idx", None)  # TODO: is this needed?
     num_steps = getattr(cfg, "num_steps", 18)
     sample_res = getattr(cfg, "sample_res", "full")
+    res_edm = getattr(cfg, "res_edm", True)
     sampling_method = getattr(cfg, "sampling_method", "stochastic")
     seed_batch_size = getattr(cfg, "seed_batch_size", 1)
     force_fp16 = getattr(cfg, "force_fp16", False)
     use_torch_compile = getattr(cfg, "use_torch_compile", True)
-    regression_only = getattr(cfg, "regression_only", False)
-    diffusion_only = getattr(cfg, "diffusion_only", False)
 
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
@@ -88,8 +88,8 @@ def main(cfg: DictConfig) -> None:
     patch_size = getattr(cfg, "patch_size", 448)
     patch_shape_x = getattr(cfg, "patch_shape_x", 448)
     patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    overlap_pix = getattr(cfg, "overlap_pixels", 0)
-    boundary_pix = getattr(cfg, "boundary_pixels", 0)
+    overlap_pix = getattr(cfg, "overlap_pix", 0)
+    boundary_pix = getattr(cfg, "boundary_pix", 2)
     hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
 
     if times_range is not None:
@@ -112,7 +112,6 @@ def main(cfg: DictConfig) -> None:
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     (img_shape_y, img_shape_x) = dataset.image_shape()
 
-    in_variable_num = len(dataset_cfg["in_channels"])
     # Sampler kwargs
     if sampling_method == "stochastic":
         sampler_kwargs = {
@@ -120,8 +119,6 @@ def main(cfg: DictConfig) -> None:
             "patch_shape": patch_shape_x,
             "overlap_pix": overlap_pix,
             "boundary_pix": boundary_pix,
-            "gridtype": dataset_cfg["gridtype"],
-            "in_variable_num": in_variable_num,
         }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
@@ -143,7 +140,6 @@ def main(cfg: DictConfig) -> None:
     # Initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
-    device = dist.device
 
     # Initialize logger
     logger = PythonLogger("generate")  # General python logger
@@ -159,41 +155,38 @@ def main(cfg: DictConfig) -> None:
     if patch_shape_y > img_shape_y:
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
-        if sampling_method == "deterministic":
-            raise NotImplementedError(
-                "Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. "
-            )
+        if (sampling_method == "deterministic"):
+            raise NotImplementedError("Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. ")
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
 
     logger0.info(f"torch.__version__: {torch.__version__}")
 
-    # Sanity check for the type of requested inference
-    if regression_only and diffusion_only:
-        raise ValueError(
-            "Both regression_only and diffusion_only cannot be set to True."
-        )
-    if regression_only:
-        net_res = None
-    if diffusion_only:
-        net_reg = None
+    # Load diffusion network
+    logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
+    net_res = Module_res.from_checkpoint(res_ckpt_filename)
 
-    # Load diffusion network, move to device, change precision
-    if not regression_only:
-        logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
-        net_res = Module.from_checkpoint(res_ckpt_filename)
-        net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
-        if force_fp16:
-            net_res.use_fp16 = True
-
-    # load regression network, move to device, change precision
-    if not diffusion_only:
+    # load regression network
+    if res_edm:
         logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
         net_reg = Module.from_checkpoint(reg_ckpt_filename)
-        net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
-        if force_fp16:
-            net_reg.use_fp16 = True
+    else:
+        net_reg = None
+
+    # move to device
+    device = dist.device
+    net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
+    net_reg = (
+        net_reg.eval().to(device).to(memory_format=torch.channels_last)
+        if net_reg
+        else None
+    )
+
+    # change precision if needed
+    if force_fp16:
+        net_reg.use_fp16 = True
+        net_res.use_fp16 = True
 
     # Reset since we are using a different mode.
     if use_torch_compile:
@@ -201,8 +194,7 @@ def main(cfg: DictConfig) -> None:
         compile_mode = "reduce-overhead"
         # Only compile residual network
         # Overhead of compiling regression network outweights any benefits
-        if net_res:
-            net_res = torch.compile(net_res, mode=compile_mode)
+        net_res = torch.compile(net_res, mode=compile_mode)
 
     def generate_fn(image_lr):
         """Function to generate an image
@@ -232,7 +224,7 @@ def main(cfg: DictConfig) -> None:
             logger0.info(f"seeds: {sample_seeds}")
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    image_reg = generate(
+                    image_mean = generate(
                         net=net_reg,
                         img_lr=image_lr_patch[:, 0:16],
                         seed_batch_size=1,
@@ -242,12 +234,12 @@ def main(cfg: DictConfig) -> None:
                         pretext="reg",
                         class_idx=class_idx,
                     )
-                    
-            if net_res:
+
                 if hr_mean_conditioning and sampling_method == "stochastic":
                     sampler_kwargs.update({"mean_hr": image_mean[0:1]})
+
                 with nvtx.annotate("diffusion model", color="purple"):
-                    image_res = generate(
+                    image_out = image_mean + generate(
                         net=net_res,
                         img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
                             memory_format=torch.channels_last
@@ -260,12 +252,20 @@ def main(cfg: DictConfig) -> None:
                         num_steps=num_steps,
                         **sampler_kwargs,
                     )
-            if regression_only:
-                image_out = image_reg
-            elif diffusion_only:
-                image_out = image_res
+
             else:
-                image_out = image_reg + image_res
+                with nvtx.annotate("diffusion model", color="purple"):
+                    image_out = generate(
+                        net=net_res,
+                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1),
+                        seed_batch_size=seed_batch_size,
+                        sampling_method=sampling_method,
+                        seeds=sample_seeds,
+                        pretext="gen",
+                        class_idx=class_idx,
+                        num_steps=num_steps,
+                        **sampler_kwargs,
+                    )
 
             # reshape: (1*9*9)x3x50x50  --> 1x3x450x450
             if sample_res != "full":
@@ -591,12 +591,12 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
     )  # t_N = 0
 
     # conditioning
-    x_lr = img_lr
+    x_lr = torch.cat((img_lr, net.model.pos_embd.to(device=latents.device)),dim=1)
 
     # Main sampling loop.
     x_hat = latents.to(torch.float64) * t_steps[0]
     t_hat = torch.tensor(1.0).to(torch.float64).cuda()
-
+    
     # Run regression on just a single batch element and then repeat
     x_next = net(x_hat[0:1], x_lr, t_hat, class_labels).to(torch.float64)
     if x_hat.shape[0] > 1:
@@ -673,8 +673,7 @@ def save_images(
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
             writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
-            # skip learnable positional embedding
-            if channel_idx == image_lr2.shape[1] - 1:
+            if (channel_idx == image_lr2.shape[1]-1):
                 break
 
 
