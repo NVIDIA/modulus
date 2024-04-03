@@ -27,7 +27,7 @@ import numpy as np
 import psutil
 import torch
 from torch.nn.parallel import DistributedDataParallel
-from . import training_stats, module
+from . import training_stats
 
 sys.path.append("../")
 from modulus import Module
@@ -144,7 +144,7 @@ def training_loop(
             raise FileNotFoundError(
                 "Need to specify regression_checkpoint_path for training the diffusion model"
             )
-        net_reg = module.Module.from_checkpoint(regression_checkpoint_path)
+        net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
         interface_kwargs = dict(
             regression_net=net_reg,
