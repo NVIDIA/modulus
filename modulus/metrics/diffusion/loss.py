@@ -406,6 +406,11 @@ class RegressionLoss:
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
+        # add positional embedding
+        pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+            device=img_clean.device
+        )
+        y_lr = torch.cat((y_lr, pos_embd), dim=1)
         input = torch.zeros_like(y, device=img_clean.device)
         D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
