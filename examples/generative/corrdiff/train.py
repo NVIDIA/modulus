@@ -269,7 +269,7 @@ def main(cfg: DictConfig) -> None:
         dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
     )
 
-    (img_shape_y, img_shape_x) = dataset.image_shape()  
+    (img_shape_y, img_shape_x) = dataset.image_shape()
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
         c.patch_shape_x = img_shape_x
     if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
