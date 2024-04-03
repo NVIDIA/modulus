@@ -69,7 +69,7 @@ def main(cfg: DictConfig) -> None:
     use_torch_compile = getattr(cfg, "use_torch_compile", True)
     regression_only = getattr(cfg, "regression_only", False)
     diffusion_only = getattr(cfg, "diffusion_only", False)
-    
+
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
     sigma_max = getattr(cfg, "sigma_max", None)
