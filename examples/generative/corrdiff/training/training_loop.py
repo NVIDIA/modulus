@@ -278,7 +278,7 @@ def training_loop(
                     training_stats.report("Loss/validation loss", loss_valid)
                     loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
                     valid_loss_accum += loss_valid/num_validation_evals
-        wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
+                wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
