@@ -73,8 +73,8 @@ def training_loop(
     patch_shape_y=448,
     patch_num=1,
     wandb_mode="disabled",
-    wandb_project="diffusion",
-    wandb_group="nv-research-climate",
+    wandb_project="Modulus-Generative",
+    wandb_group="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
     regression_checkpoint_path=None,
     valid_dump_ticks = 5000,
@@ -92,10 +92,10 @@ def training_loop(
 
     # wandb logger
     initialize_wandb(
-        project="diffusion",
-        entity="nv-research-climate",
+        project="Modulus-Generative",
+        entity="Modulus",
         name="CorrDiff",
-        group="nv-research-climate",
+        group="CorrDiff-DDP-Group",
         mode=wandb_mode,
     )
 
@@ -241,7 +241,7 @@ def training_loop(
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss/num_accumulation_rounds
                 loss.backward()
-        wb.log({"loss": loss_accum}, step=cur_nimg)
+        wb.log({"training loss": loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
@@ -255,15 +255,13 @@ def training_loop(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
         optimizer.step()
-        # here I am trying to add a validation loss 
         valid_loss_accum = 0
         num_validation_steps  = 10
         if cur_tick % valid_dump_ticks == 0:
-            with torch.no_grad():  # Disable gradient calculation
+            with torch.no_grad():
                 for _ in range(num_validation_steps):
                     img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
 
-                    # Normalization: weather (normalized already in the dataset)
                     img_clean_valid = (
                         img_clean_valid.to(device).to(torch.float32).contiguous()
                     )  # [-4.5, +4.5]
