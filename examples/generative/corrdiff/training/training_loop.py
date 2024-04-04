@@ -75,9 +75,11 @@ def training_loop(
     wandb_mode="disabled",
     wandb_project="Modulus-Generative",
     wandb_group="CorrDiff-DDP-Group",
+    wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
     regression_checkpoint_path=None,
     valid_dump_ticks = 5000,
+    num_validation_evals = 10,
 ):
     """CorrDiff training loop"""
 
@@ -92,10 +94,10 @@ def training_loop(
 
     # wandb logger
     initialize_wandb(
-        project="Modulus-Generative",
-        entity="Modulus",
-        name="CorrDiff",
-        group="CorrDiff-DDP-Group",
+        project=wandb_project,
+        entity=wandb_entity,
+        name=wandb_name,
+        group=wandb_group,
         mode=wandb_mode,
     )
 
@@ -237,7 +239,7 @@ def training_loop(
                     labels=labels,
                     augment_pipe=augment_pipe,
                 )
-                training_stats.report("Loss/training loss", loss)
+                training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss/num_accumulation_rounds
                 loss.backward()
@@ -256,10 +258,9 @@ def training_loop(
                 )
         optimizer.step()
         valid_loss_accum = 0
-        num_validation_steps  = 10
         if cur_tick % valid_dump_ticks == 0:
             with torch.no_grad():
-                for _ in range(num_validation_steps):
+                for _ in range(num_validation_evals):
                     img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
 
                     img_clean_valid = (
@@ -276,7 +277,7 @@ def training_loop(
                     )
                     training_stats.report("Loss/validation loss", loss_valid)
                     loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
-                    valid_loss_accum += loss_valid/num_validation_steps
+                    valid_loss_accum += loss_valid/num_validation_evals
         wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.

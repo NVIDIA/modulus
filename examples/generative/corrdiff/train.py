@@ -83,9 +83,14 @@ def main(cfg: DictConfig) -> None:
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
+    wandb_project = getattr(cfg, "wandb_project", "Modulus-Generative")
+    wandb_group = getattr(cfg, "wandb_group", "CorrDiff-DDP-Group")
+    wandb_entity = getattr(cfg, "wandb_entity", "CorrDiff-DDP-Group")
+    wandb_name = getattr(cfg, "wandb_name", "CorrDiff")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
     validation_dump = getattr(cfg, "validation_dump", 500)
+    validation_steps = getattr(cfg, "validation_steps", 10)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
     dry_run = getattr(cfg, "dry_run", False)
@@ -94,6 +99,10 @@ def main(cfg: DictConfig) -> None:
     c = EasyDict()
     c.task = task
     c.wandb_mode = wandb_mode
+    c.wandb_project = wandb_project
+    c.wandb_group = wandb_group
+    c.wandb_entity = wandb_entity
+    c.wandb_name = wandb_name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
     cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
@@ -217,7 +226,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, state_dump_ticks=dump, valid_dump_ticks=validation_dump)
+    c.update(kimg_per_tick=tick, state_dump_ticks=dump, valid_dump_ticks=validation_dump, num_validation_evals=validation_steps)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
