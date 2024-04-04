@@ -126,6 +126,7 @@ class ClimateDataSourceSpec:
         aux_variables: Union[Mapping[str, Callable], None] = None,
         num_steps: int = 1,
         stride: int = 1,
+        backend_kwargs: Union[dict, None] = None,
     ):
         self.data_dir = Path(data_dir)
         self.name = name
@@ -142,6 +143,7 @@ class ClimateDataSourceSpec:
         self.aux_variables = aux_variables if aux_variables is not None else {}
         self.num_steps = num_steps
         self.stride = stride
+        self.backend_kwargs = {} if backend_kwargs is None else backend_kwargs
         self.logger = PythonLogger()
 
         if file_type == "netcdf4" and not variables:
@@ -246,7 +248,6 @@ class ClimateDataSourceSpec:
         self.total_length = self.n_years * self.num_samples_per_year
 
         # Sanity checks
-        print(self.channels, dataset_shape)
         if max(self.channels) >= dataset_shape[1]:
             raise ValueError(
                 f"Provided channel has indexes greater than the number \
@@ -280,7 +281,7 @@ class ClimateDataSourceSpec:
         # If no stats files we just skip loading the stats
         if self.stats_files is None:
             self.mu = None
-            self.std = None
+            self.sd = None
             return
         # load normalisation values
         if set(self.stats_files) == {"mean", "std"}:  # use mean and std files
@@ -672,6 +673,7 @@ class ClimateDaliExternalSource(ABC):
         shuffle: bool = True,
         process_rank: int = 0,
         world_size: int = 1,
+        backend_kwargs: Union[dict, None] = None,
     ):
         self.data_paths = list(data_paths)
         # Will be populated later once each worker starts running in its own process.
@@ -688,6 +690,7 @@ class ClimateDaliExternalSource(ABC):
         self.num_samples_per_year = num_samples_per_year
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.backend_kwargs = {} if backend_kwargs is None else backend_kwargs
 
         self.last_epoch = None
 
@@ -777,9 +780,17 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             # so there is no need to explicitly close the files - this will be done
             # when corresponding pipeline/dataset is destroyed
             # Lazy opening avoids unnecessary file open ops when sharding.
-            # NOTE: The SciPy NetCDF reader is used because the netCDF4 library
-            # was prone to crashing after many reads.
-            self.data_files[year_idx] = scipy.io.netcdf_file(self.data_paths[year_idx])
+            # NOTE: The SciPy NetCDF reader can be used if the netCDF4 library
+            # causes crashes.
+            reader = self.backend_kwargs.get("reader", "netcdf4")
+            if reader == "scipy":
+                self.data_files[year_idx] = scipy.io.netcdf_file(
+                    self.data_paths[year_idx]
+                )
+            elif reader == "netcdf4":
+                self.data_files[year_idx] = nc.Dataset(self.data_paths[year_idx], "r")
+                self.data_files[year_idx].set_auto_maskandscale(False)
+
         return self.data_files[year_idx]
 
     def _load_sequence(self, year_idx: int, idx: int) -> np.array:
@@ -789,9 +800,12 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
         # TODO: this can be optimized to do the NetCDF scale/offset on GPU
         output = np.empty(shape, dtype=np.float32)
         for (i, var) in enumerate(self.variables):
-            output[:, i] = data_file.variables[var][
+            v = data_file.variables[var]
+            output[:, i] = v[
                 idx : idx + self.num_steps * self.stride : self.stride
             ].copy()  # .copy() avoids hanging references
-            output[:, i] *= data_file.variables[var].scale_factor
-            output[:, i] += data_file.variables[var].add_offset
+            if hasattr(v, "scale_factor"):
+                output[:, i] *= v.scale_factor
+            if hasattr(v, "add_offset"):
+                output[:, i] += v.add_offset
         return output
