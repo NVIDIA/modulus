@@ -239,7 +239,7 @@ def training_loop(
                 )
                 training_stats.report("Loss/training loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
-                loss_accum += loss
+                loss_accum += loss/num_accumulation_rounds
                 loss.backward()
         wb.log({"loss": loss_accum}, step=cur_nimg)
 
@@ -276,9 +276,9 @@ def training_loop(
                         labels=labels_valid,
                         augment_pipe=augment_pipe,
                     )
-                    training_stats.report("Loss/ validation loss", loss_valid)
+                    training_stats.report("Loss/validation loss", loss_valid)
                     loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
-                    valid_loss_accum += loss_valid
+                    valid_loss_accum += loss_valid/num_validation_steps
         wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
