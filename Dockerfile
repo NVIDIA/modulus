@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:23.12-py3
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.03-py3
 FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
@@ -78,12 +78,12 @@ RUN pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheel
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
 # Forcing numpy update to over ride numba 0.56.4 max numpy constraint
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_x86_64.whl" ]; then \
         echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_x86_64.whl; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_aarch64.whl" ]; then \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_x86_64.whl; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_aarch64.whl" ]; then \
         echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.15.1-cp310-cp310-linux_aarch64.whl; \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_aarch64.whl; \
     else \
         echo "No custom wheel present, skipping" && \
         pip install --no-cache-dir "numpy==1.22.4"; \
