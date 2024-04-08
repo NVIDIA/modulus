@@ -418,7 +418,6 @@ class SongUNet(Module):
                 for p_fn in [np.sin, np.cos]:
                     grid_list.append(p_fn(grid_x * freq))
                     grid_list.append(p_fn(grid_y * freq))
-                print(freq, (grid_x * freq)[12, 12], p_fn(grid_x * freq)[12, 12])
             grid = torch.from_numpy(np.stack(grid_list, axis=0))
             grid.requires_grad = False
         else:
