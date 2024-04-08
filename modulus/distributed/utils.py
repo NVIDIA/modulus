@@ -181,8 +181,9 @@ def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     if dist.get_world_size(group=group) == 1:
         return input_
 
-    # All-reduce.
-    if use_fp32:
+    # All-reduce, use_fp32 only relevant for lower precisions
+    # if input is already in double precision, nothing changes
+    if use_fp32 and (input_.dtype.itemsize < 4) and input_.dtype.is_floating_point:
         dtype = input_.dtype
         inputf_ = input_.float()
         dist.all_reduce(inputf_, group=group)
@@ -306,7 +307,8 @@ def all_gather_v_bwd_wrapper(
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     use_fp32 : bool, optional
-        flag to specify FP32 precision for the redcution, by default True
+        flag to specify reduction taking place at least in FP32 precision, by default True
+        only acts on floating point inputs in lower precision
     group : Optional[dist.ProcessGroup], optional
         process group along which global tensor is shared, by default None
 
@@ -341,7 +343,7 @@ def all_gather_v_bwd_wrapper(
     stack_dim = tensor.dim()
     tmp = torch.stack(tmp, dim=stack_dim)
 
-    if use_fp32:
+    if use_fp32 and (tmp.dtype.itemsize < 4) and tmp.dtype.is_floating_point:
         # cast to float before sum and return float, then cast back
         output = tmp.sum(dim=stack_dim, dtype=torch.float32)
         output = output.to(dtype=tensor.dtype)
@@ -605,7 +607,8 @@ def indexed_all_to_all_v_wrapper_bwd(
         size of original local tensor along specified dimension,
         i.e. from the corresponding forward pass
     use_fp32 : bool, optional
-        flag to specify FP32 precision, by default True
+        flag to specify reduction taking place at least in FP32 precision, by default True
+        only acts on floating point inputs in lower precision
     dim : int, optional
         dimension along with global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -645,7 +648,7 @@ def indexed_all_to_all_v_wrapper_bwd(
     # care of precision handling as specified
     # by boolean flag
     tensor_shape[dim] = tensor_size_along_dim
-    if use_fp32:
+    if use_fp32 and (tensor.dtype.itemsize < 4) and tensor.dtype.is_floating_point:
         out = torch.zeros(
             tensor_shape,
             dtype=torch.float32,
@@ -660,7 +663,8 @@ def indexed_all_to_all_v_wrapper_bwd(
         )
 
     out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
-    if use_fp32:
+
+    if out.dtype != tensor.dtype:
         out = out.to(tensor.dtype)
 
     return out
@@ -690,7 +694,7 @@ def mark_module_as_shared(
         as having shared parameters.
     use_fp32_reduction : bool, default=True
         Flag indicating whether the reduction for accumulating gradients
-        will be done in FP32 or the native datatype.
+        will be done in at least FP32 or the native datatype.
     """
 
     group = DistributedManager().group(process_group)

@@ -32,6 +32,7 @@
 import os
 import time
 
+import argparse
 import torch
 from torch.utils.data import DataLoader
 from torch.cuda import amp
@@ -56,11 +57,20 @@ import wandb
 USE_TF32 = False
 torch.backends.cuda.matmul.allow_tf32 = USE_TF32
 torch.backends.cudnn.allow_tf32 = USE_TF32
+torch.set_float32_matmul_precision("highest")
+torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 def l2loss_sphere(solver, prd, tar, relative=False, squared=True):
-    loss = ((prd - tar) ** 2).mean()
-    return loss
+    loss = solver.integrate_grid((prd - tar)**2, dimensionless=True).sum(dim=-1)
+    if relative:
+        loss = loss / solver.integrate_grid(tar**2, dimensionless=True).sum(dim=-1)
+    
+    if not squared:
+        loss = torch.sqrt(loss)
+    loss = loss.mean()
+
+    return loss 
 
 
 def count_parameters(model):
@@ -181,7 +191,6 @@ def train_model(
     enable_amp=False,
     log_grads=0,
 ):
-
     train_start = time.time()
 
     # count iterations
@@ -207,7 +216,6 @@ def train_model(
                 prd = model(inp)
                 for _ in range(nfuture):
                     prd = model(prd)
-
                 loss = l2loss_sphere(solver, prd, tar, relative=False)
 
             acc_loss += loss.item() * inp.size(0)
@@ -275,21 +283,19 @@ def train_model(
     return valid_loss
 
 
-def main(
-    train=True,
-    load_checkpoint=False,
-    save_checkpoint=False,
-    enable_amp=False,
-    log_grads=0,
-    short_run=False,
-):
-    nepochs = 10 if not short_run else 2
-    num_examples = 512 if not short_run else 4
-    mesh_size = 7
+def main(mesh_size: int = 6, dummy_dataset: bool = False, short_run: bool = False, seed: int = 1234):
+    train = True
+    load_checkpoint = False
+    save_checkpoint = False
+    enable_amp = False
+    log_grads = 0
+
+    nepochs = 10 if not short_run else 64
+    num_examples = 512 if not short_run else 1
     input_res = (256, 512)
 
-    torch.manual_seed(333)
-    torch.cuda.manual_seed(333)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
     # initialize DistributedManager and define process group
     # across which graph is partitioned and model is parallel across
@@ -298,14 +304,14 @@ def main(
     if DistributedManager().distributed:
         graph_partition_pg_name = "graph_partition"
         world_size = torch.distributed.get_world_size()
-        run_suffix = f"mg_{world_size}"
+        run_suffix = f"mg_{world_size}_mesh{mesh_size}_dummy{dummy_dataset}_seed{seed}"
         DistributedManager.create_process_subgroup(
             name=graph_partition_pg_name,
             size=world_size,
             verbose=True,
         )
     else:
-        run_suffix = "sg"
+        run_suffix = f"sg_mesh{mesh_size}_dummy{dummy_dataset}_seed{seed}"
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
@@ -329,7 +335,7 @@ def main(
         global_features_on_rank_0=True,
         produce_aggregated_output=True,
         produce_aggregated_output_on_all_ranks=False,
-    ).to(dist_manager.device)
+    ).to(device=dist_manager.device)
 
     # since model is "tensor-parallel" in graph-partition
     # mark model as "shared" which sets gradient hooks and
@@ -342,8 +348,6 @@ def main(
 
     # iterate over models and train each model
     root_path = os.path.dirname(__file__)
-    if dist_manager.rank == 0:
-        print(model)
 
     num_params = count_parameters(model)
     # prepare dicts containing models and corresponding metrics
@@ -369,6 +373,7 @@ def main(
         device=dist_manager.device,
         normalize=True,
         rank=dist_manager.rank,
+        dummy_dataset=dummy_dataset,
     )
     # There is still an issue with parallel dataloading. Do NOT use it at the moment
     # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
@@ -385,7 +390,7 @@ def main(
 
         # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 8], gamma=0.5)
         gscaler = amp.GradScaler(enabled=enable_amp)
 
         start_time = time.time()
@@ -424,8 +429,8 @@ def main(
                 )
 
     # set seed
-    torch.manual_seed(333)
-    torch.cuda.manual_seed(333)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
     with torch.inference_mode():
         losses, fno_times, nwp_times = autoregressive_inference(
@@ -463,11 +468,16 @@ def main(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mesh_size", type=int, default=6)
+    parser.add_argument("--dummy_data", action="store_true")
+    parser.add_argument("--short_run", action="store_true")
+    parser.add_argument("--seed", type=int, default=1234)
+    args = parser.parse_args()
+
     main(
-        train=True,
-        load_checkpoint=False,
-        save_checkpoint=True,
-        enable_amp=False,
-        log_grads=0,
-        short_run=False,
+        mesh_size=args.mesh_size,
+        dummy_data=args.dummy_data, 
+        short_run=args.short_run,
+        seed=args.seed
     )
