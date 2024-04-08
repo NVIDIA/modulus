@@ -29,18 +29,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import argparse
+import json
 import os
 import time
+from typing import Optional
 
-import argparse
 import torch
 from torch.utils.data import DataLoader
 from torch.cuda import amp
 
 import numpy as np
-
-import json
-
 import matplotlib.pyplot as plt
 
 from pde_dataset import PdeDataset
@@ -156,25 +155,6 @@ def autoregressive_inference(
     return losses, fno_times, nwp_times
 
 
-# convenience function for logging weights and gradients
-def log_weights_and_grads(model, iters=1):
-    """
-    Helper routine intended for debugging purposes
-    """
-    root_path = os.path.join(os.path.dirname(__file__), "weights_and_grads")
-
-    weights_and_grads_fname = os.path.join(
-        root_path, f"weights_and_grads_step{iters:03d}.tar"
-    )
-    print(weights_and_grads_fname)
-
-    weights_dict = {k: v for k, v in model.named_parameters()}
-    grad_dict = {k: v.grad for k, v in model.named_parameters()}
-
-    store_dict = {"iteration": iters, "grads": grad_dict, "weights": weights_dict}
-    torch.save(store_dict, weights_and_grads_fname)
-
-
 # training function
 def train_model(
     model,
@@ -221,10 +201,6 @@ def train_model(
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=False)
             gscaler.scale(loss).backward()
-
-            if (dist_manager.rank == 0) and log_grads and (iters % log_grads == 0):
-                log_weights_and_grads(model, iters=iters)
-
             gscaler.step(optimizer)
             gscaler.update()
 
@@ -288,6 +264,7 @@ def main(
     dummy_dataset: bool = False,
     short_run: bool = False,
     seed: int = 1234,
+    root_path: Optional[str] = None,
 ):
     train = True
     load_checkpoint = False
@@ -352,7 +329,8 @@ def main(
         mark_module_as_shared(model, graph_partition_pg_name)
 
     # iterate over models and train each model
-    root_path = os.path.dirname(__file__)
+    if root_path is None:
+        root_path = os.path.dirname(__file__)
 
     num_params = count_parameters(model)
     # prepare dicts containing models and corresponding metrics
@@ -480,11 +458,16 @@ if __name__ == "__main__":
     parser.add_argument("--dummy_data", action="store_true")
     parser.add_argument("--short_run", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--root_path", type=str, default=None)
     args = parser.parse_args()
+
+    for k, v in vars(args):
+        print(f"{k}: {v}")
 
     main(
         mesh_size=args.mesh_size,
         dummy_data=args.dummy_data,
         short_run=args.short_run,
         seed=args.seed,
+        root_path=args.root_path,
     )
