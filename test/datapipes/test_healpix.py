@@ -42,8 +42,7 @@ from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
 
 @pytest.fixture
 def data_dir():
-    path = "/data/nfs/modulus-data/datasets/"
-    path = "/datasets/"
+    path = "/data/nfs/modulus-data/datasets/healpix/"
     return path
 
 @pytest.fixture
@@ -53,8 +52,7 @@ def dataset_name():
 
 @pytest.fixture
 def create_path():
-    path = "/data/nfs/modulus-data/datasets/healpix_merge/"
-    path = "~/scratch/test_create/"
+    path = "/data/nfs/modulus-data/datasets/healpix/merge"
     return path
 
 
@@ -86,7 +84,7 @@ def scaling_double_dict():
     }
     return DictConfig(scaling)
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_open_time_series_on_the_fly(create_path):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
@@ -105,7 +103,7 @@ def test_open_time_series_on_the_fly(create_path):
 
     assert ds_var.equals(base[test_var])
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_open_time_series(data_dir, dataset_name):
     # check for failure of non-existant dataset
     with pytest.raises(
@@ -116,7 +114,7 @@ def test_open_time_series(data_dir, dataset_name):
     ds = open_time_series_dataset_classic_prebuilt(data_dir, dataset_name)
     assert isinstance(ds, xr.Dataset)
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_create_time_series(data_dir, dataset_name, create_path):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
@@ -162,7 +160,7 @@ def test_create_time_series(data_dir, dataset_name, create_path):
     )
     assert (const_ds[const] == ds.constants[0]).any()
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
@@ -251,7 +249,7 @@ def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict):
     )
     assert isinstance(timeseries_ds, TimeSeriesDataset)
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataset_get_constants(data_dir, dataset_name, scaling_dict):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
@@ -270,7 +268,7 @@ def test_TimeSeriesDataset_get_constants(data_dir, dataset_name, scaling_dict):
         outvar,
     )
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
@@ -308,7 +306,7 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict):
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataset_get(data_dir, dataset_name, scaling_double_dict):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
@@ -404,8 +402,7 @@ def test_TimeSeriesDataset_get(data_dir, dataset_name, scaling_double_dict):
     )
     assert len(inputs) ==  (len(timeseries_ds[0]) + 1)
 
-
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataModule_initialization(data_dir, create_path, dataset_name, scaling_double_dict):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
@@ -484,7 +481,7 @@ def test_TimeSeriesDataModule_initialization(data_dir, create_path, dataset_name
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataModule_get_constants(data_dir, create_path, dataset_name, scaling_double_dict):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
@@ -543,7 +540,7 @@ def test_TimeSeriesDataModule_get_constants(data_dir, create_path, dataset_name,
         expected,
     )
 
-#@nfsdata_or_fail
+@nfsdata_or_fail
 def test_TimeSeriesDataModule_get_dataloaders(data_dir, create_path, dataset_name, scaling_double_dict):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
