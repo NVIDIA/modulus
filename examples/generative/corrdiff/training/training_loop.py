@@ -71,6 +71,7 @@ def training_loop(
     patch_shape_y=448,
     patch_num=1,
     wandb_mode="disabled",
+    fp_mode="fp32",  # which floating point mode to use
     regression_checkpoint_path=None,
 ):
     """CorrDiff training loop"""
@@ -224,13 +225,16 @@ def training_loop(
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
 
-                loss = loss_fn(
-                    net=ddp,
-                    img_clean=img_clean,
-                    img_lr=img_lr,
-                    labels=labels,
-                    augment_pipe=augment_pipe,
-                )
+                with torch.autocast(
+                    "cuda", dtype=torch.bfloat16, enabled=(fp_mode == "amp")
+                ):
+                    loss = loss_fn(
+                        net=ddp,
+                        img_clean=img_clean,
+                        img_lr=img_lr,
+                        labels=labels,
+                        augment_pipe=augment_pipe,
+                    )
                 training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss
