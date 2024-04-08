@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warp neighbor search routine with a minimal example
 - Strict option for loading Modulus checkpoints.
 - Regression only or diffusion only inference for CorrDiff.
+- Support for organization level model files on NGC file system
 
 ### Changed
 
