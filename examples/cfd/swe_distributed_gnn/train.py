@@ -461,12 +461,12 @@ if __name__ == "__main__":
     parser.add_argument("--root_path", type=str, default=None)
     args = parser.parse_args()
 
-    for k, v in vars(args):
+    for k, v in vars(args).items():
         print(f"{k}: {v}")
 
     main(
         mesh_size=args.mesh_size,
-        dummy_data=args.dummy_data,
+        dummy_dataset=args.dummy_data,
         short_run=args.short_run,
         seed=args.seed,
         root_path=args.root_path,
