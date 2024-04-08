@@ -19,7 +19,6 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
-import copy
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
@@ -34,7 +33,7 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
 
 from training import training_loop
-from datasets.dataset import init_dataset_from_config
+from datasets.dataset import init_dual_dataset_from_config
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
@@ -68,6 +67,7 @@ def main(cfg: DictConfig) -> None:
     duration = getattr(cfg, "duration", 200)
     batch_size_global = getattr(cfg, "batch_size_global", 256)
     batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
+    train_test_split = getattr(cfg, "train_test_split", False)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -271,19 +271,13 @@ def main(cfg: DictConfig) -> None:
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
 
-    # create a training dataset
-    (dataset, dataset_iterator) = init_dataset_from_config(
-        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
-    )
-    
-    # create a valiadtion dataset
-    validation_dataset_cfg = copy.deepcopy(dataset_cfg)
-    validation_dataset_cfg['all_times'] = False
-    validation_dataset_cfg['train'] = False
-    (validation_dataset, validation_dataset_iterator) = init_dataset_from_config(
-        validation_dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
-    )
-    
+    dataset, dataset_iter, valid_dataset, valid_dataset_iter = init_dual_dataset_from_config(
+        dataset_cfg,
+        data_loader_kwargs,
+        batch_size=batch_size_gpu,
+        seed=seed,
+        train_test_split = train_test_split,
+        )
     
     (img_shape_y, img_shape_x) = dataset.image_shape()
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
@@ -301,7 +295,7 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(dataset, dataset_iterator, validation_dataset, validation_dataset_iterator, **c)
+        training_loop.training_loop(dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c)
     )
 
 

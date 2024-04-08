@@ -257,28 +257,29 @@ def training_loop(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
         optimizer.step()
-        valid_loss_accum = 0
-        if cur_tick % valid_dump_ticks == 0:
-            with torch.no_grad():
-                for _ in range(num_validation_evals):
-                    img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
+        if validation_dataset_iterator is not None:
+            valid_loss_accum = 0
+            if cur_tick % valid_dump_ticks == 0:
+                with torch.no_grad():
+                    for _ in range(num_validation_evals):
+                        img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
 
-                    img_clean_valid = (
-                        img_clean_valid.to(device).to(torch.float32).contiguous()
-                    )  # [-4.5, +4.5]
-                    img_lr_valid = img_lr_valid.to(device).to(torch.float32).contiguous()
-                    labels_valid = labels_valid.to(device).contiguous()
-                    loss_valid = loss_fn(
-                        net=ddp,
-                        img_clean=img_clean_valid,
-                        img_lr=img_lr_valid,
-                        labels=labels_valid,
-                        augment_pipe=augment_pipe,
-                    )
-                    training_stats.report("Loss/validation loss", loss_valid)
-                    loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
-                    valid_loss_accum += loss_valid/num_validation_evals
-                wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
+                        img_clean_valid = (
+                            img_clean_valid.to(device).to(torch.float32).contiguous()
+                        )  # [-4.5, +4.5]
+                        img_lr_valid = img_lr_valid.to(device).to(torch.float32).contiguous()
+                        labels_valid = labels_valid.to(device).contiguous()
+                        loss_valid = loss_fn(
+                            net=ddp,
+                            img_clean=img_clean_valid,
+                            img_lr=img_lr_valid,
+                            labels=labels_valid,
+                            augment_pipe=augment_pipe,
+                        )
+                        training_stats.report("Loss/validation loss", loss_valid)
+                        loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
+                        valid_loss_accum += loss_valid/num_validation_evals
+                    wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
