@@ -522,7 +522,15 @@ class ResLoss:
 
         y = y - y_mean
 
-        # add positional embedding
+        # add positional embedding. Load embedding from ddp or model
+        if "module" in net:
+            pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+                device=img_clean.device
+            )
+        else:
+            pos_embd = net.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
+                device=img_clean.device
+            )
         pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
             device=img_clean.device
         )
