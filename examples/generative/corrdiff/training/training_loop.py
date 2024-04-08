@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from modulus import Module
+from module import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -164,6 +164,7 @@ def training_loop(
             patch_shape_y=patch_shape_y,
             patch_num=patch_num,
             hr_mean_conditioning=hr_mean_conditioning,
+            ddp=(dist.world_size>1)
         )
         logger0.success("Loaded the pre-trained regression network")
     else:

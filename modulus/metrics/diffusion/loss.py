@@ -452,6 +452,7 @@ class ResLoss:
         sigma_data: float = 0.5,
         pos_embed: int = 4,
         hr_mean_conditioning: bool = False,
+        ddp: bool = True,
     ):
         self.unet = regression_net
         self.P_mean = P_mean
@@ -464,6 +465,7 @@ class ResLoss:
         self.patch_num = patch_num
         self.pos_embed = pos_embed
         self.hr_mean_conditioning = hr_mean_conditioning
+        self.ddp = ddp
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
@@ -523,7 +525,7 @@ class ResLoss:
         y = y - y_mean
 
         # add positional embedding. Load embedding from ddp or model
-        if "module" in net:
+        if self.ddp:
             pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
                 device=img_clean.device
             )
@@ -531,9 +533,6 @@ class ResLoss:
             pos_embd = net.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
                 device=img_clean.device
             )
-        pos_embd = net.module.model.pos_embd.expand(img_lr.shape[0], -1, -1, -1).to(
-            device=img_clean.device
-        )
         y_lr = torch.cat((y_lr, pos_embd), dim=1)
         if self.hr_mean_conditioning:
             y_lr = torch.cat((y_mean, y_lr), dim=1).contiguous()
