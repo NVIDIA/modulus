@@ -62,15 +62,15 @@ torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 def l2loss_sphere(solver, prd, tar, relative=False, squared=True):
-    loss = solver.integrate_grid((prd - tar)**2, dimensionless=True).sum(dim=-1)
+    loss = solver.integrate_grid((prd - tar) ** 2, dimensionless=True).sum(dim=-1)
     if relative:
         loss = loss / solver.integrate_grid(tar**2, dimensionless=True).sum(dim=-1)
-    
+
     if not squared:
         loss = torch.sqrt(loss)
     loss = loss.mean()
 
-    return loss 
+    return loss
 
 
 def count_parameters(model):
@@ -283,7 +283,12 @@ def train_model(
     return valid_loss
 
 
-def main(mesh_size: int = 6, dummy_dataset: bool = False, short_run: bool = False, seed: int = 1234):
+def main(
+    mesh_size: int = 6,
+    dummy_dataset: bool = False,
+    short_run: bool = False,
+    seed: int = 1234,
+):
     train = True
     load_checkpoint = False
     save_checkpoint = False
@@ -390,7 +395,9 @@ def main(mesh_size: int = 6, dummy_dataset: bool = False, short_run: bool = Fals
 
         # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 8], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=[4, 8], gamma=0.5
+        )
         gscaler = amp.GradScaler(enabled=enable_amp)
 
         start_time = time.time()
@@ -477,7 +484,7 @@ if __name__ == "__main__":
 
     main(
         mesh_size=args.mesh_size,
-        dummy_data=args.dummy_data, 
+        dummy_data=args.dummy_data,
         short_run=args.short_run,
-        seed=args.seed
+        seed=args.seed,
     )

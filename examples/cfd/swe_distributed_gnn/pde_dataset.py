@@ -123,8 +123,12 @@ class PdeDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         if self.dummy_dataset:
-            inp = torch.randn((3, self.nlat, self.nlon), device=self.device, dtype=self.dtype)
-            tar = torch.randn((3, self.nlat, self.nlon), device=self.device, dtype=self.dtype)
+            inp = torch.randn(
+                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+            )
+            tar = torch.randn(
+                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+            )
 
         else:
             if self.rank == 0:
@@ -143,7 +147,11 @@ class PdeDataset(torch.utils.data.Dataset):
                     tar = tar.to(dtype=self.dtype)
 
             else:
-                inp = torch.empty((3, self.nlat, self.nlon), device=self.device, dtype=self.dtype)
-                tar = torch.empty((3, self.nlat, self.nlon), device=self.device, dtype=self.dtype)
+                inp = torch.empty(
+                    (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+                )
+                tar = torch.empty(
+                    (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+                )
 
         return inp, tar
