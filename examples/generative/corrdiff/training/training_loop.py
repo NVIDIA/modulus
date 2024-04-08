@@ -208,8 +208,10 @@ def training_loop(
 
     try:
         net.load(os.path.join(run_dir, max_index_file))
+        #load state directly to each gpu to reduce memory usage
+        map_location = {'cuda:%d' % 0: 'cuda:%d' % int(dist.local_rank)} 
         optimizer_state_dict = torch.load(
-            os.path.join(run_dir, max_index_file_optimizer)
+            os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
         )
         optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
