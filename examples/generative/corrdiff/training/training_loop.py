@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from module import Module
+from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
