@@ -269,10 +269,9 @@ def training_loop(
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        if patch_shape_x != img_shape_x:
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                net.parameters(), grad_clip_threshold
-            )
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            net.parameters(), grad_clip_threshold
+        )
         optimizer.step()
 
         # Update EMA.
