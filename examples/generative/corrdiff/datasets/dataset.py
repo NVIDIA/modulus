@@ -28,13 +28,13 @@ from . import base, cwb
 known_datasets = {"cwb": cwb.get_zarr_dataset}
 
 
-def init_dual_dataset_from_config(
+def init_train_valid_datasets_from_config(
     dataset_cfg: dict,
     dataloader_cfg: Union[dict, None] = None,
     batch_size: int = 1,
     seed: int = 0,
     train_test_split: str = True,
-) -> Tuple[base.DownscalingDataset, Iterable]:
+) -> Tuple[base.DownscalingDataset, Iterable, base.DownscalingDataset, Iterable]:
     """
     A wrapper function for managing the train-test split for the CWB dataset.
 

@@ -33,7 +33,7 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
 
 from training import training_loop
-from datasets.dataset import init_dual_dataset_from_config
+from datasets.dataset import init_train_valid_datasets_from_config
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
@@ -67,7 +67,7 @@ def main(cfg: DictConfig) -> None:
     duration = getattr(cfg, "duration", 200)
     batch_size_global = getattr(cfg, "batch_size_global", 256)
     batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
-    train_test_split = getattr(cfg, "train_test_split", False)
+    train_test_split = getattr(cfg.dataset, "train_test_split", False)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -271,7 +271,7 @@ def main(cfg: DictConfig) -> None:
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
 
-    dataset, dataset_iter, valid_dataset, valid_dataset_iter = init_dual_dataset_from_config(
+    dataset, dataset_iter, valid_dataset, valid_dataset_iter = init_train_valid_datasets_from_config(
         dataset_cfg,
         data_loader_kwargs,
         batch_size=batch_size_gpu,

@@ -100,3 +100,4 @@ dataset:
   gridtype: "sinusoidal"
   N_grid_channels: 4
   normalization: "v1"
+  train_test_split: false
