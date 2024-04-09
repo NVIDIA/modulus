@@ -22,7 +22,7 @@ hydra:
 # Main options
 outdir: ./results_cond_02 #./results_cond_01 #./results_01 #./results       # Where to save the results
 data: ./Kolmogorov_2D_data/kf_2d_re1000_256_40seed.npy            # Path to the dataset
-cond: true              # Train class-conditional model
+cond: false              # Train class-conditional model
 arch: dfsr            # Network architecture
 precond: dfsr_cond #dfsr #dfsr_cond #edm            # Preconditioning & loss function
 dataset: 'dfsr'

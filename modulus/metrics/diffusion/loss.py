@@ -22,6 +22,7 @@ import random
 from typing import Callable, Optional, Union
 
 import torch
+import numpy as np
 
 
 class VPLoss:

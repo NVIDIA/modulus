@@ -191,18 +191,19 @@ def training_loop(
     else:
         ddp = net
 
-    if dist.rank == 0:
-        with torch.no_grad():
-            images = torch.zeros(
-                [batch_gpu, net.img_channels, net.img_resolution, net.img_resolution],
-                device=device,
-            )
-            # img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
-            # img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
-            sigma = torch.ones([batch_gpu], device=device)
-            labels = torch.zeros([batch_gpu, net.label_dim], device=device)
-            # print_module_summary(net, [img_clean, img_lr, sigma, labels], max_nesting=2)
-            print_module_summary(net, [images, sigma, labels], max_nesting=2)
+    if not network_kwargs.class_name == 'modulus.models.diffusion.VEPrecond_dfsr_cond':
+        if dist.rank == 0:
+            with torch.no_grad():
+                images = torch.zeros(
+                    [batch_gpu, net.img_channels, net.img_resolution, net.img_resolution],
+                    device=device,
+                )
+                # img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
+                # img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
+                sigma = torch.ones([batch_gpu], device=device)
+                labels = torch.zeros([batch_gpu, net.label_dim], device=device)
+                # print_module_summary(net, [img_clean, img_lr, sigma, labels], max_nesting=2)
+                print_module_summary(net, [images, sigma, labels], max_nesting=2)
 
     # import pdb; pdb.set_trace()
     # breakpoint()
