@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for patch-based CorrDiff training and generation (stochastic sampling only)
 - Leanable positional embedding for CorrDiff
 - Regression output as additional conditioning for CorrDiff
+=======
+- Augmentation pipeline for CorrDiff.
+- Code logging for CorrDiff via wandb
+
 
 ### Changed
 
@@ -39,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Consistent handling of single GPU runs in DistributedManager
 - Output location of objects downloaded with NGC file system
+- Bug in scaling the conditional input in CorrDiff deterministic sampler
 
 ### Security
 
