@@ -19,14 +19,17 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
+import shutil
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
 import hydra
+from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
+import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
@@ -44,7 +47,9 @@ def main(cfg: DictConfig) -> None:
     # Sanity check
     if not hasattr(cfg, "task"):
         raise ValueError(
-            "Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>"
+            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
+            For example, for regression training, run python train.py --config-name=config_train_regression.
+            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
         )
 
     # Dump the configs
@@ -53,6 +58,8 @@ def main(cfg: DictConfig) -> None:
 
     # Parse options
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
+    if regression_checkpoint_path:
+        regression_checkpoint_path = to_absolute_path(regression_checkpoint_path)
     task = getattr(cfg, "task")
     outdir = getattr(cfg, "outdir", "./output")
     arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
@@ -78,7 +85,6 @@ def main(cfg: DictConfig) -> None:
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     tick = getattr(cfg, "tick", 1)
-    snap = getattr(cfg, "snap", 1)
     dump = getattr(cfg, "dump", 500)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
@@ -90,6 +96,11 @@ def main(cfg: DictConfig) -> None:
     c.wandb_mode = wandb_mode
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
+    if hasattr(cfg, "global_means_path"):
+        cfg.global_means_path = to_absolute_path(cfg.global_means_path)
+    if hasattr(cfg, "global_stds_path"):
+        cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
@@ -100,10 +111,21 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize logger.
-    os.makedirs(".logs", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/train_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
+
+    # Save a copy of the Modulus source code
+    if dist.rank == 0:
+        shutil.copytree(
+            os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
+        )
+
+    # inform about the output
+    logger.info(
+        f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
+    )
 
     # Initialize config dict.
     c.network_kwargs = EasyDict()
@@ -192,8 +214,21 @@ def main(cfg: DictConfig) -> None:
         c.network_kwargs.model_channels = cbase
     # if cres is not None:
     #    c.network_kwargs.channel_mult = cres
-    if augment > 0:
-        raise NotImplementedError("Augmentation is not implemented")
+    if augment:
+        if augment < 0 or augment > 1:
+            raise ValueError("Augment probability should be within [0,1].")
+        # import augmentation pipe
+        try:
+            from edmss import AugmentPipe
+        except ImportError:
+            raise ImportError(
+                "Please get the augmentation pipe  by running: pip install git+https://github.com/mnabian/edmss.git"
+            )
+        c.augment_kwargs = EasyDict(class_name="edmss.AugmentPipe", p=augment)
+        c.augment_kwargs.update(
+            xflip=1e8, yflip=1, scale=1, rotate_frac=1, aniso=1, translate_frac=1
+        )
+        c.network_kwargs.augment_dim = 9
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
 
     # Training options.
@@ -201,7 +236,7 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, snapshot_ticks=snap, state_dump_ticks=dump)
+    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 

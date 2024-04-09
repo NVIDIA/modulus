@@ -26,11 +26,13 @@ import wandb as wb
 import numpy as np
 import psutil
 import torch
+
+from hydra.utils import to_absolute_path
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from module import Module
+from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -65,7 +67,6 @@ def training_loop(
     lr_rampup_kimg=10000,  # Learning rate ramp-up duration.
     loss_scaling=1,  # Loss scaling factor for reducing FP16 under/overflows.
     kimg_per_tick=50,  # Interval of progress prints.
-    snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     patch_shape_x=448,
@@ -83,7 +84,7 @@ def training_loop(
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
 
     # wandb logger
     initialize_wandb(
@@ -92,6 +93,13 @@ def training_loop(
         name="CorrDiff",
         group="CorrDiff-DDP-Group",
         mode=wandb_mode,
+        save_code=True,
+    )
+
+    # log code
+    wb.run.log_code(
+        to_absolute_path("."),
+        exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
     )
 
     # Initialize.
@@ -160,7 +168,7 @@ def training_loop(
         construct_class_by_name(**augment_kwargs)
         if augment_kwargs is not None
         else None
-    )  # training.augment.AugmentPipe
+    )
     if dist.world_size > 1:
         ddp = DistributedDataParallel(
             net,
