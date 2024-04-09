@@ -93,11 +93,14 @@ def training_loop(
         name="CorrDiff",
         group="CorrDiff-DDP-Group",
         mode=wandb_mode,
-        save_code=True
+        save_code=True,
     )
 
     # log code
-    wb.run.log_code(to_absolute_path("."), exclude_fn=lambda path: ('outputs' in path) and (os.getcwd() not in path))
+    wb.run.log_code(
+        to_absolute_path("."),
+        exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
+    )
 
     # Initialize.
     start_time = time.time()
