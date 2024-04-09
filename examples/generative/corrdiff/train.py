@@ -19,6 +19,7 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
+import shutil
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
@@ -28,6 +29,7 @@ from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
+import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
@@ -113,6 +115,12 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger(name="train")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
+
+    # Save a copy of the Modulus source code
+    if dist.rank == 0:
+        shutil.copytree(
+            os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
+        )
 
     # inform about the output
     logger.info(
