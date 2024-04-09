@@ -108,6 +108,9 @@ $\sigma_{min} = 0.002$. We adopt the rest of hyperparamaters from [EDM](https://
 
 ## Getting Started
 
+To explore the pre-trained model over Taiwan, use the
+[CorrDiff inference package](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/models/corrdiff_inference_package).
+
 To train the regression model on a single GPU, run
 
 ```bash
