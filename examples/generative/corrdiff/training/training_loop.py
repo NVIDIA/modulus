@@ -128,7 +128,7 @@ def training_loop(
     if hr_mean_conditioning:
         img_in_channels += img_out_channels
 
-    # interpolated global channel if patch-based model is used
+    # interpolate global channel if patch-based model is used
     if img_shape_x != patch_shape_x:
         img_in_channels += in_channel
 

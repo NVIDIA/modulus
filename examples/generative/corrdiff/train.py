@@ -146,7 +146,7 @@ def main(cfg: DictConfig) -> None:
 
     if arch == "ddpmpp-cwb":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="positional",
             encoder_type="standard",
             decoder_type="standard",
@@ -161,7 +161,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="zero",
             encoder_type="standard",
             decoder_type="standard",
@@ -176,7 +176,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ncsnpp":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="fourier",
             encoder_type="residual",
             decoder_type="standard",

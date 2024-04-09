@@ -40,7 +40,6 @@ from modulus.utils.generative import (
     StackedRandomGenerator,
 )
 from modulus import Module
-
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
 from training.time import convert_datetime_to_cftime, time_range
@@ -187,7 +186,7 @@ def main(cfg: DictConfig) -> None:
     # load regression network, move to device, change precision
     if not diffusion_only:
         logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
-        net_reg = Module.from_checkpoint(reg_ckpt_filename)
+        net_reg = Module_reg.from_checkpoint(reg_ckpt_filename)
         net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
             net_reg.use_fp16 = True
@@ -241,7 +240,7 @@ def main(cfg: DictConfig) -> None:
                     )
             if net_res:
                 if hr_mean_conditioning and sampling_method == "stochastic":
-                    sampler_kwargs.update({"mean_hr": image_mean[0:1]})
+                    sampler_kwargs.update({"mean_hr": image_reg[0:1]})
                 with nvtx.annotate("diffusion model", color="purple"):
                     image_res = generate(
                         net=net_res,
@@ -586,8 +585,7 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
         [net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])]
     )  # t_N = 0
 
-    # conditioning
-    x_lr = torch.cat((img_lr, net.model.pos_embd.to(device=latents.device)), dim=1)
+    x_lr = img_lr
 
     # Main sampling loop.
     x_hat = latents.to(torch.float64) * t_steps[0]
