@@ -326,7 +326,6 @@ class SongUNet(Module):
                 .expand((x.shape[0], -1, -1, -1))
             )
         else:
-            print(global_index.shape)
             B = x.shape[0]
             X = x.shape[2]
             Y = x.shape[3]
