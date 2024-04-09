@@ -42,6 +42,7 @@ augment: 0.0
 ## Performance options
 fp_mode: fp32
   # Floating point mode, one of ["fp32", "fp16", "amp"]
+  # "amp" activates Automatic Mixed Precision (AMP) with bfloat16
 ls: 1
   # Loss scaling
 bench: false
