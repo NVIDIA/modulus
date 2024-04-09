@@ -50,14 +50,14 @@ def init_train_valid_datasets_from_config(
     """
 
     config = copy.deepcopy(dataset_cfg)
-    config.pop('train_test_split', None)
+    config.pop("train_test_split", None)
     (dataset, dataset_iter) = init_dataset_from_config(
         config, dataloader_cfg, batch_size=batch_size, seed=seed
     )
     if train_test_split:
         validation_dataset_cfg = copy.deepcopy(config)
-        validation_dataset_cfg['all_times'] = False
-        validation_dataset_cfg['train'] = False
+        validation_dataset_cfg["all_times"] = False
+        validation_dataset_cfg["train"] = False
         (valid_dataset, valid_dataset_iter) = init_dataset_from_config(
             validation_dataset_cfg, dataloader_cfg, batch_size=batch_size, seed=seed
         )
@@ -85,7 +85,7 @@ def init_dataset_from_config(
     dataset_sampler = InfiniteSampler(
         dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed
     )
-    
+
     dataset_iterator = iter(
         torch.utils.data.DataLoader(
             dataset=dataset_obj,

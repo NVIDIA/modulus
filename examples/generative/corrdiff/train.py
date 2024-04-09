@@ -226,7 +226,12 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, state_dump_ticks=dump, valid_dump_ticks=validation_dump, num_validation_evals=validation_steps)
+    c.update(
+        kimg_per_tick=tick,
+        state_dump_ticks=dump,
+        valid_dump_ticks=validation_dump,
+        num_validation_evals=validation_steps,
+    )
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -271,14 +276,19 @@ def main(cfg: DictConfig) -> None:
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
 
-    dataset, dataset_iter, valid_dataset, valid_dataset_iter = init_train_valid_datasets_from_config(
+    (
+        dataset,
+        dataset_iter,
+        valid_dataset,
+        valid_dataset_iter,
+    ) = init_train_valid_datasets_from_config(
         dataset_cfg,
         data_loader_kwargs,
         batch_size=batch_size_gpu,
         seed=seed,
-        train_test_split = train_test_split,
-        )
-    
+        train_test_split=train_test_split,
+    )
+
     (img_shape_y, img_shape_x) = dataset.image_shape()
     if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
         c.patch_shape_x = img_shape_x
@@ -295,7 +305,9 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c)
+        training_loop.training_loop(
+            dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
+        )
     )
 
 

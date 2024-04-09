@@ -78,8 +78,8 @@ def training_loop(
     wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
     regression_checkpoint_path=None,
-    valid_dump_ticks = 5000,
-    num_validation_evals = 10,
+    valid_dump_ticks=5000,
+    num_validation_evals=10,
 ):
     """CorrDiff training loop"""
 
@@ -241,7 +241,7 @@ def training_loop(
                 )
                 training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
-                loss_accum += loss/num_accumulation_rounds
+                loss_accum += loss / num_accumulation_rounds
                 loss.backward()
         wb.log({"training loss": loss_accum}, step=cur_nimg)
 
@@ -262,12 +262,16 @@ def training_loop(
             if cur_tick % valid_dump_ticks == 0:
                 with torch.no_grad():
                     for _ in range(num_validation_evals):
-                        img_clean_valid, img_lr_valid, labels_valid = next(validation_dataset_iterator)
+                        img_clean_valid, img_lr_valid, labels_valid = next(
+                            validation_dataset_iterator
+                        )
 
                         img_clean_valid = (
                             img_clean_valid.to(device).to(torch.float32).contiguous()
                         )  # [-4.5, +4.5]
-                        img_lr_valid = img_lr_valid.to(device).to(torch.float32).contiguous()
+                        img_lr_valid = (
+                            img_lr_valid.to(device).to(torch.float32).contiguous()
+                        )
                         labels_valid = labels_valid.to(device).contiguous()
                         loss_valid = loss_fn(
                             net=ddp,
@@ -277,8 +281,10 @@ def training_loop(
                             augment_pipe=augment_pipe,
                         )
                         training_stats.report("Loss/validation loss", loss_valid)
-                        loss_valid = loss_valid.sum().mul(loss_scaling / batch_gpu_total)
-                        valid_loss_accum += loss_valid/num_validation_evals
+                        loss_valid = loss_valid.sum().mul(
+                            loss_scaling / batch_gpu_total
+                        )
+                        valid_loss_accum += loss_valid / num_validation_evals
                     wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
