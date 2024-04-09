@@ -26,6 +26,8 @@ import wandb as wb
 import numpy as np
 import psutil
 import torch
+
+from hydra.utils import to_absolute_path
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
@@ -91,6 +93,13 @@ def training_loop(
         name="CorrDiff",
         group="CorrDiff-DDP-Group",
         mode=wandb_mode,
+        save_code=True,
+    )
+
+    # log code
+    wb.run.log_code(
+        to_absolute_path("."),
+        exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
     )
 
     # Initialize.
@@ -159,7 +168,7 @@ def training_loop(
         construct_class_by_name(**augment_kwargs)
         if augment_kwargs is not None
         else None
-    )  # training.augment.AugmentPipe
+    )
     if dist.world_size > 1:
         ddp = DistributedDataParallel(
             net,
