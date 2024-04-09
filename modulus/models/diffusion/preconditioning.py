@@ -763,7 +763,14 @@ class EDMPrecondSR(Module):
 
     @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
+        self,
+        x,
+        img_lr,
+        sigma,
+        class_labels=None,
+        global_index=None,
+        force_fp32=False,
+        **model_kwargs,
     ):
         # Concatenate input channels
         x = torch.cat((x, img_lr), dim=1)
@@ -792,6 +799,7 @@ class EDMPrecondSR(Module):
             (c_in * x).to(dtype),
             c_noise.flatten(),
             class_labels=class_labels,
+            global_index=global_index,
             **model_kwargs,
         )
 
@@ -853,6 +861,7 @@ class _ConditionalPrecond(torch.nn.Module):
         sigma,
         class_labels=None,
         condition=None,
+        global_index=None,
         force_fp32=False,
         **model_kwargs,
     ):
@@ -885,7 +894,11 @@ class _ConditionalPrecond(torch.nn.Module):
             arg = torch.cat([c_in * x, condition], dim=1)
 
         F_x = self.model(
-            arg.to(dtype), c_noise.flatten(), class_labels=class_labels, **model_kwargs
+            arg.to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            global_index=global_index,
+            **model_kwargs,
         )
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x

@@ -314,7 +314,37 @@ class SongUNet(Module):
                 )
 
     @nvtx.annotate(message="SongUNet", color="blue")
-    def forward(self, x, noise_labels, class_labels, augment_labels=None):
+    def forward(
+        self, x, noise_labels, class_labels, global_index=None, augment_labels=None
+    ):
+        if global_index is None:
+            selected_pos_embd = (
+                self.pos_embd.to(x.dtype)
+                .to(x.device)[
+                    None,
+                ]
+                .expand((x.shape[0], -1, -1, -1))
+            )
+        else:
+            print(global_index.shape)
+            B = x.shape[0]
+            X = x.shape[2]
+            Y = x.shape[3]
+            global_index = torch.reshape(
+                torch.permute(global_index, (1, 0, 2, 3)), (2, -1)
+            )  # (B, 2, X, Y) to (2, B*X*Y)
+            selected_pos_embd = self.pos_embd.to(x.device)[
+                :, global_index[0], global_index[1]
+            ]  # (N_pe, B*X*Y)
+            selected_pos_embd = (
+                torch.permute(
+                    torch.reshape(selected_pos_embd, (self.pos_embd.shape[0], B, X, Y)),
+                    (1, 0, 2, 3),
+                )
+                .to(x.device)
+                .to(x.dtype)
+            )  # (B, N_pe, X, Y)
+        x = torch.cat((x, selected_pos_embd), dim=1)
         if self.embedding_type != "zero":
             # Mapping.
             emb = self.map_noise(noise_labels)

@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from module import Module
+from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -164,7 +164,6 @@ def training_loop(
             patch_shape_y=patch_shape_y,
             patch_num=patch_num,
             hr_mean_conditioning=hr_mean_conditioning,
-            ddp=(dist.world_size>1)
         )
         logger0.success("Loaded the pre-trained regression network")
     else:
@@ -209,8 +208,8 @@ def training_loop(
 
     try:
         net.load(os.path.join(run_dir, max_index_file))
-        #load state directly to each gpu to reduce memory usage
-        map_location = {'cuda:%d' % 0: 'cuda:%d' % int(dist.local_rank)} 
+        # load state directly to each gpu to reduce memory usage
+        map_location = {"cuda:%d" % 0: "cuda:%d" % int(dist.local_rank)}
         optimizer_state_dict = torch.load(
             os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
         )

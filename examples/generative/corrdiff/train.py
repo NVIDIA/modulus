@@ -94,6 +94,7 @@ def main(cfg: DictConfig) -> None:
     c.wandb_mode = wandb_mode
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    c.patch_num = getattr(cfg, "patch_num", 1)
     cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
     if hasattr(cfg, "global_means_path"):
         cfg.global_means_path = to_absolute_path(cfg.global_means_path)
