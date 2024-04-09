@@ -168,7 +168,7 @@ def training_loop(
         construct_class_by_name(**augment_kwargs)
         if augment_kwargs is not None
         else None
-    )  # training.augment.AugmentPipe
+    )
     if dist.world_size > 1:
         ddp = DistributedDataParallel(
             net,

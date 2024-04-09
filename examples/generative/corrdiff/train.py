@@ -214,8 +214,21 @@ def main(cfg: DictConfig) -> None:
         c.network_kwargs.model_channels = cbase
     # if cres is not None:
     #    c.network_kwargs.channel_mult = cres
-    if augment > 0:
-        raise NotImplementedError("Augmentation is not implemented")
+    if augment:
+        if augment < 0 or augment > 1:
+            raise ValueError("Augment probability should be within [0,1].")
+        # import augmentation pipe
+        try:
+            from edmss import AugmentPipe
+        except ImportError:
+            raise ImportError(
+                "Please get the augmentation pipe  by running: pip install git+https://github.com/mnabian/edmss.git"
+            )
+        c.augment_kwargs = EasyDict(class_name="edmss.AugmentPipe", p=augment)
+        c.augment_kwargs.update(
+            xflip=1e8, yflip=1, scale=1, rotate_frac=1, aniso=1, translate_frac=1
+        )
+        c.network_kwargs.augment_dim = 9
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
 
     # Training options.
