@@ -41,6 +41,28 @@ from .timeseries_dataset import TimeSeriesDataset
 logger = logging.getLogger(__name__)
 
 
+def _get_file_name(path, prefix, var, suffix):
+    """
+    Helper that returns a fully formed path for a given variable
+
+    Parameters
+    ----------
+    path: str
+        The base path where the file is located
+    prefix: str
+        The prefix used for the filename
+    var: str
+        The variable stored in the file
+    suffix: str
+        The suffix used for the files
+
+    Returns
+    -------
+    str: The fully formed path
+    """
+    return os.path.join(path, f"{prefix}{var}{suffix}.nc")
+
+
 def open_time_series_dataset_classic_on_the_fly(
     directory: str,
     input_variables: Sequence,
@@ -85,16 +107,13 @@ def open_time_series_dataset_classic_on_the_fly(
     prefix = prefix or ""
     suffix = suffix or ""
 
-    def get_file_name(path, var):
-        return os.path.join(path, f"{prefix}{var}{suffix}.nc")
-
     merge_time = time.time()
     logger.info("merging input datasets")
 
     datasets = []
     remove_attrs = ["mean", "std"] if "LL" in prefix else ["varlev", "mean", "std"]
     for variable in all_variables:
-        file_name = get_file_name(directory, variable)
+        file_name = _get_file_name(directory, prefix, variable, suffix)
         logger.debug("open nc dataset %s", file_name)
 
         ds = xr.open_dataset(file_name, chunks={"sample": batch_size}, autoclose=True)
@@ -149,7 +168,7 @@ def open_time_series_dataset_classic_on_the_fly(
         for name, var in constants.items():
             constants_ds.append(
                 xr.open_dataset(
-                    get_file_name(directory, name), autoclose=True
+                    _get_file_name(directory, prefix, name, suffix), autoclose=True
                 ).set_coords(["lat", "lon"])[var]
             )
         constants_ds = xr.merge(constants_ds, compat="override")
@@ -255,16 +274,13 @@ def create_time_series_dataset_classic(
     prefix = prefix or ""
     suffix = suffix or ""
 
-    def get_file_name(path, var):
-        return os.path.join(path, f"{prefix}{var}{suffix}.nc")
-
     merge_time = time.time()
     logger.info("merging input datasets")
 
     datasets = []
     remove_attrs = ["varlev", "mean", "std"]
     for variable in all_variables:
-        file_name = get_file_name(src_directory, variable)
+        file_name = _get_file_name(src_directory, prefix, variable, suffix)
         logger.debug("open nc dataset %s", file_name)
         if "sample" in list(xr.open_dataset(file_name).dims.keys()):
             ds = xr.open_dataset(file_name, chunks={"sample": batch_size}).rename(
@@ -322,7 +338,7 @@ def create_time_series_dataset_classic(
         constants_ds = []
         for name, var in constants.items():
             constants_ds.append(
-                xr.open_dataset(get_file_name(src_directory, name))
+                xr.open_dataset(_get_file_name(src_directory, prefix, name, suffix))
                 .set_coords(["lat", "lon"])[var]
                 .astype(np.float32)
             )
@@ -351,75 +367,6 @@ class TimeSeriesDataModule:
     """pytorch-lightning module for complete model train, validation, and test data loading. Uses
     dlwp.data.data_loading.TimeSeriesDataset under-the-hood. Loaded data files follow the naming scheme
     {directory}/{prefix}{variable/constant}{suffix}{[.nc, .zarr]}
-
-    Parameters
-    ----------
-    src_directory: str, optional
-        The directory containing data files per variable, default "."
-    dst_directory: str, optional
-        The directory containing joint data files, default "."
-    dataset_name: str, optional
-        The name of the dataset, default "dataset"
-    prefix: str, optional
-        Prefix appended to all data files, default None
-    suffix: str, optional
-        Suffix appended to all data files, default None
-    data_format: str, optional
-        str indicating data schema.
-        'classic': use classic DLWP file types. Loads .nc files, assuming
-        dimensions [sample, varlev, face, height, width] and
-        data variables 'predictors', 'lat', and 'lon'.
-    batch_size: int, optional
-        Size of batches to draw from data, defualt 32
-    drop_last: bool, optional
-        Whether to drop the last batch if it is smaller than batch_size, it is
-        recommended to set this to true to avoid issues with mismatched sizes, default True
-    input_variables: Sequence, optional
-        List of input variable names, to be found in data file name, default "t2m"
-    output_variables: Sequence, optional
-        List of output variables names. If None, defaults to `input_variables`. default None
-    constants: DictConfig, optional
-        Dictionary with {key: value} corresponding to {constant_name: variable name in file}.
-        default None
-    scaling: DictConfig, optional
-        Dictionary containing scaling parameters for data variables, default None
-    splits: DictConfig, optional
-        Dictionary with train/validation/test set start/end dates. If not provided, loads the entire
-        data time series as the test set. default None
-    presteps: int, optional
-        Number of time steps to initialize recurrent hidden states. default 0
-    input_time_dim: int, optional
-        Number of time steps in the input array, default 1
-    output_time_dim: int, optional
-        Number of time steps in the output array, default 1
-    data_time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3h"
-    time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6h"
-    gap: Union[int, str], optional
-        either integer hours or a str interpretable by pandas: time step between the last input time and
-        the first output time. Defaults to `time_step`.
-    shuffle: bool, optional
-        Option to shuffle the training data, default True
-    add_insolation: bool, optional
-        Option to add prescribed insolation as a decoder input feature, default True
-    cube_dim: int, optional
-        Number of points on the side of a cube face. Not currently used.
-    num_workers: int, optional
-        Number of parallel data loading workers, default 4
-    pin_memory: bool, optional
-        Whether pinned (page locked) memory should be used to store the tensors, improves GPU I/O, default True
-    prebuilt_dataset: bool, optional
-        Create a custom dataset for training. If False, the variables are gathered on the fly, default True
-    forecast_init_times: Sequence, optional
-        A Sequence of pandas Timestamps dictating the specific initialization times
-        to produce inputs for. default None
-        Note:
-            - this is only applied to the test dataloader
-            - providing this parameter configures the data loader to only produce this number of samples, and
-                NOT produce any target array.
     """
 
     def __init__(
@@ -451,6 +398,76 @@ class TimeSeriesDataModule:
         prebuilt_dataset: bool = True,
         forecast_init_times: Optional[Sequence] = None,
     ):
+        """
+        Parameters
+        ----------
+        src_directory: str, optional
+            The directory containing data files per variable, default "."
+        dst_directory: str, optional
+            The directory containing joint data files, default "."
+        dataset_name: str, optional
+            The name of the dataset, default "dataset"
+        prefix: str, optional
+            Prefix appended to all data files, default None
+        suffix: str, optional
+            Suffix appended to all data files, default None
+        data_format: str, optional
+            str indicating data schema.
+            'classic': use classic DLWP file types. Loads .nc files, assuming
+            dimensions [sample, varlev, face, height, width] and
+            data variables 'predictors', 'lat', and 'lon'.
+        batch_size: int, optional
+            Size of batches to draw from data, defualt 32
+        drop_last: bool, optional
+            Whether to drop the last batch if it is smaller than batch_size, it is
+            recommended to set this to true to avoid issues with mismatched sizes, default True
+        input_variables: Sequence, optional
+            List of input variable names, to be found in data file name, default "t2m"
+        output_variables: Sequence, optional
+            List of output variables names. If None, defaults to `input_variables`. default None
+        constants: DictConfig, optional
+            Dictionary with {key: value} corresponding to {constant_name: variable name in file}.
+            default None
+        scaling: DictConfig, optional
+            Dictionary containing scaling parameters for data variables, default None
+        splits: DictConfig, optional
+            Dictionary with train/validation/test set start/end dates. If not provided, loads the entire
+            data time series as the test set. default None
+        presteps: int, optional
+            Number of time steps to initialize recurrent hidden states. default 0
+        input_time_dim: int, optional
+            Number of time steps in the input array, default 1
+        output_time_dim: int, optional
+            Number of time steps in the output array, default 1
+        data_time_step: Union[int, str], optional
+            Either integer hours or a str interpretable by pandas: time between steps in the
+            original data time series, default "3h"
+        time_step: Union[int, str], optional
+            Either integer hours or a str interpretable by pandas: desired time between effective model
+            time steps, default "6h"
+        gap: Union[int, str], optional
+            either integer hours or a str interpretable by pandas: time step between the last input time and
+            the first output time. Defaults to `time_step`.
+        shuffle: bool, optional
+            Option to shuffle the training data, default True
+        add_insolation: bool, optional
+            Option to add prescribed insolation as a decoder input feature, default True
+        cube_dim: int, optional
+            Number of points on the side of a cube face. Not currently used.
+        num_workers: int, optional
+            Number of parallel data loading workers, default 4
+        pin_memory: bool, optional
+            Whether pinned (page locked) memory should be used to store the tensors, improves GPU I/O, default True
+        prebuilt_dataset: bool, optional
+            Create a custom dataset for training. If False, the variables are gathered on the fly, default True
+        forecast_init_times: Sequence, optional
+            A Sequence of pandas Timestamps dictating the specific initialization times
+            to produce inputs for. default None
+            Note:
+                - this is only applied to the test dataloader
+                - providing this parameter configures the data loader to only produce this number of samples, and
+                    NOT produce any target array.
+        """
         super().__init__()
         self.src_directory = src_directory
         self.dst_directory = dst_directory

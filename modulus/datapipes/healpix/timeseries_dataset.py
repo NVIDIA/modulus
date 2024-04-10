@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MetaData(DatapipeMetaData):
+    """Metadata for this datapipe"""
+
     name: str = "TimeSeries"
     # Optimization
     auto_device: bool = False
@@ -45,39 +47,6 @@ class MetaData(DatapipeMetaData):
 class TimeSeriesDataset(Dataset, Datapipe):
     """
     Dataset for sampling from continuous time-series data, compatible with pytorch data loading.
-
-    Parameters
-    ----------
-    dataset: xr.Dataset
-        xarray Dataset produced by one of the `open_*` methods herein
-    scaling: DictConfig
-        Dictionary containing scaling parameters for data variables
-    input_time_dim: int, optional
-        Number of time steps in the input array, default 1
-    output_time_dim: int, optional
-        Number of time steps in the output array, default 1
-    data_time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: time between steps in the
-        original data time series, default "3h"
-    time_step: Union[int, str], optional
-        Either integer hours or a str interpretable by pandas: desired time between effective model
-        time steps, default "6h"
-    gap: Union[int, str], optional
-        either integer hours or a str interpretable by pandas: time step between the last input time and
-        the first output time. Defaults to `time_step`.
-    batch_size: int, optional
-        Size of batches to draw from data, default 32
-    drop_last: bool, optional
-        Whether to drop the last batch if it is smaller than batch_size, it is
-        recommended to set this to true to avoid issues with mismatched sizes, default False
-    add_insolation: bool, optional
-        Option to add prescribed insolation as a decoder input feature, default True
-    forecast_init_times: Sequence, optional
-        A Sequence of pandas Timestamps dictating the specific initialization times
-        to produce inputs for.  default None
-        Note that:
-            - providing this parameter configures the data loader to only produce this number of samples, and
-                NOT produce any target array.
     """
 
     def __init__(
@@ -94,6 +63,40 @@ class TimeSeriesDataset(Dataset, Datapipe):
         add_insolation: bool = False,
         forecast_init_times: Optional[Sequence] = None,
     ):
+        """
+        Parameters
+        ----------
+        dataset: xr.Dataset
+            xarray Dataset produced by one of the `open_*` methods herein
+        scaling: DictConfig
+            Dictionary containing scaling parameters for data variables
+        input_time_dim: int, optional
+            Number of time steps in the input array, default 1
+        output_time_dim: int, optional
+            Number of time steps in the output array, default 1
+        data_time_step: Union[int, str], optional
+            Either integer hours or a str interpretable by pandas: time between steps in the
+            original data time series, default "3h"
+        time_step: Union[int, str], optional
+            Either integer hours or a str interpretable by pandas: desired time between effective model
+            time steps, default "6h"
+        gap: Union[int, str], optional
+            either integer hours or a str interpretable by pandas: time step between the last input time and
+            the first output time. Defaults to `time_step`.
+        batch_size: int, optional
+            Size of batches to draw from data, default 32
+        drop_last: bool, optional
+            Whether to drop the last batch if it is smaller than batch_size, it is
+            recommended to set this to true to avoid issues with mismatched sizes, default False
+        add_insolation: bool, optional
+            Option to add prescribed insolation as a decoder input feature, default True
+        forecast_init_times: Sequence, optional
+            A Sequence of pandas Timestamps dictating the specific initialization times
+            to produce inputs for.  default None
+            Note that:
+                - providing this parameter configures the data loader to only produce this number of samples, and
+                    NOT produce any target array.
+        """
         Datapipe.__init__(
             self,
             meta=MetaData(),
@@ -202,9 +205,22 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
     @staticmethod
     def _convert_time_step(dt):  # pylint: disable=invalid-name
+        """convert time step to Timedelta
+
+        Parameters
+        ----------
+        dt: int or sequence
+            Timestep as tuple or int
+
+        Returns
+        -------
+        pd.Timedelta
+            The dt as a Timedelta
+        """
         return pd.Timedelta(hours=dt) if isinstance(dt, int) else pd.Timedelta(dt)
 
     def _get_scaling_da(self):
+        """Setup the scaling values for this dataset"""
         scaling_df = pd.DataFrame.from_dict(self.scaling).T
         scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
         scaling_da = scaling_df.to_xarray().astype("float32")
@@ -246,6 +262,12 @@ class TimeSeriesDataset(Dataset, Datapipe):
             )
 
     def __len__(self):
+        """Get number of samples in the dataset
+        Returns
+        -------
+        int
+            Number of samples available
+        """
         if self.forecast_mode:
             return len(self._forecast_init_indices)
         length = (self.ds.sizes["time"] - self._window_length + 1) / self.batch_size
@@ -254,6 +276,17 @@ class TimeSeriesDataset(Dataset, Datapipe):
         return int(np.ceil(length))
 
     def _get_time_index(self, item):
+        """Get the indices for the specified sample
+
+        Parameters
+        ----------
+        item: int
+            The smaple number for which indices are requested
+
+        Returns
+        -------
+        tuple[tuple[int, int], int]
+        """
         start_index = (
             self._forecast_init_indices[item]
             if self.forecast_mode
@@ -272,6 +305,19 @@ class TimeSeriesDataset(Dataset, Datapipe):
         return (start_index, max_index), batch_size
 
     def _get_forecast_sol_times(self, item):
+        """Get the inoslation time for a specified sample
+
+        Parameters
+        ----------
+        item: int
+            The sample # for which to calculate insolation time
+
+        Returns
+        -------
+        np.array
+            The list of times for the specified sample
+        """
+        item
         time_index, _ = self._get_time_index(item)
         if self.forecast_mode:
             timedeltas = (
@@ -282,6 +328,21 @@ class TimeSeriesDataset(Dataset, Datapipe):
         return self.ds.time[slice(*time_index)].values
 
     def __getitem__(self, item):
+        """Returns the requested sample
+
+        Parameters
+        ----------
+        item: int
+            The sample number
+
+        Returns
+        -------
+        torch.Tensor or tuple[torch.Tensor, torch.Tensor]
+            The requsted sample
+            If in forecast mode only a target tensor is returned
+            If in training mode an input and target tensor are returned
+
+        """
         # start range
         torch.cuda.nvtx.range_push("TimeSeriesDataset:__getitem__")
 

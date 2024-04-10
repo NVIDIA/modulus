@@ -512,7 +512,6 @@ class ResLoss:
             self.img_shape_x != self.patch_shape_x
             or self.img_shape_y != self.patch_shape_y
         ):
-
             b = y.shape[0]
             c_in = y_lr.shape[1]
             c_out = y.shape[1]

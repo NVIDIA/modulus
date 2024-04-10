@@ -50,15 +50,15 @@ except ImportError:
 
 
 class HEALPixFoldFaces(th.nn.Module):
-    """Class that folds the faces of a HealPIX tensor
-
-    Parameters
-    ----------
-    enable_nhwc: bool, optional
-        Use nhwc format instead of nchw format
-    """
+    """Class that folds the faces of a HealPIX tensor"""
 
     def __init__(self, enable_nhwc: bool = False):
+        """
+        Parameters
+        ----------
+        enable_nhwc: bool, optional
+            Use nhwc format instead of nchw format
+        """
         super().__init__()
         self.enable_nhwc = enable_nhwc
 
@@ -88,17 +88,17 @@ class HEALPixFoldFaces(th.nn.Module):
 
 
 class HEALPixUnfoldFaces(th.nn.Module):
-    """Class that unfolds the faces of a HealPIX tensor
-
-    Parameters
-    ----------
-    num_faces: int, optional
-        The number of faces on the grid, default 12
-    enable_nhwc: bool, optional
-        If nhwc format is being used, default False
-    """
+    """Class that unfolds the faces of a HealPIX tensor"""
 
     def __init__(self, num_faces=12, enable_nhwc=False):
+        """
+        Parameters
+        ----------
+        num_faces: int, optional
+            The number of faces on the grid, default 12
+        enable_nhwc: bool, optional
+            If nhwc format is being used, default False
+        """
         super().__init__()
         self.num_faces = num_faces
         self.enable_nhwc = enable_nhwc
@@ -136,21 +136,36 @@ class HEALPixPaddingv2(th.nn.Module):
 
     Orientation and arrangement of the HEALPix faces are outlined above.
 
-    Parameters
-    ----------
-    padding: int
-        The padding size
-
     TODO: Missing library to use this class. Need to see if we can get it, if not needs to be removed
     """
 
     def __init__(self, padding: int):  # pragma: no cover
+        """
+        Parameters
+        ----------
+        padding: int
+            The padding size
+        """
         super().__init__()
         self.unfold = HEALPixUnfoldFaces(num_faces=12)
         self.fold = HEALPixFoldFaces()
         self.padding = HEALPixPad(padding=padding)
 
     def forward(self, x):  # pragma: no cover
+        """
+        Pad each face consistently with its according neighbors in the HEALPix (see ordering and neighborhoods above).
+        Assumes the Tensor is folded
+
+        Parmaters
+        ---------
+        data: torch.Tensor
+            The input tensor of shape [..., F, H, W] where each face is to be padded in its HPX context
+
+        Returns
+        -------
+        torch.Tensor
+            The padded tensor where each face's height and width are increased by 2*p
+        """
         torch.cuda.nvtx.range_push("HEALPixPaddingv2:forward")
 
         x = self.unfold(x)
@@ -171,16 +186,17 @@ class HEALPixPadding(th.nn.Module):
     - The last four indices in the faces dimension [8, 9, 10, 11] are the faces on the southern hemisphere
 
     Orientation and arrangement of the HEALPix faces are outlined above.
-
-    Parameters
-    ----------
-    padding: int
-        The padding size
-    enable_nhwc: bool, optional
-        If nhwc format is being used, default False
     """
 
     def __init__(self, padding: int, enable_nhwc: bool = False):
+        """
+        Parameters
+        ----------
+        padding: int
+            The padding size
+        enable_nhwc: bool, optional
+            If nhwc format is being used, default False
+        """
         super().__init__()
         self.p = padding
         self.d = [-2, -1]
@@ -541,16 +557,17 @@ class HEALPixPadding(th.nn.Module):
 class HEALPixLayer(th.nn.Module):
     """Pytorch module for applying any base torch Module on a HEALPix tensor. Expects all input/output tensors to have a
     shape [..., 12, H, W], where 12 is the dimension of the faces.
-
-    Parameters
-    ----------
-    layer: torch.nn.Module
-        Any torch layer function, e.g., th.nn.Conv2d
-    kwargs:
-        The arguments that are passed to the torch layer function, e.g., kernel_size
     """
 
     def __init__(self, layer, **kwargs):
+        """
+        Parameters
+        ----------
+        layer: torch.nn.Module
+            Any torch layer function, e.g., th.nn.Conv2d
+        kwargs:
+            The arguments that are passed to the torch layer function, e.g., kernel_size
+        """
         super().__init__()
         layers = []
 

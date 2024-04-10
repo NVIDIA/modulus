@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MetaData(ModelMetaData):
-    name: str = "DWLP_HEALPixRec"
+    """Metadata for the DLWP HEALPix Model"""
+
+    name: str = "DLWP_HEALPixRec"
     # Optimization
     jit: bool = False
     cuda_graphs: bool = True
@@ -45,43 +47,7 @@ class MetaData(ModelMetaData):
 
 
 class HEALPixRecUNet(Module):
-    """Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh.
-
-    Parameters
-    ----------
-    encoder: DictConfig
-        dictionary of instantiable parameters for the U-net encoder
-    decoder: DictConfig
-        dictionary of instantiable parameters for the U-net decoder
-    input_channels: int
-        number of input channels expected in the input array schema. Note this should be the
-        number of input variables in the data, NOT including data reshaping for the encoder part.
-    output_channels: int
-        number of output channels expected in the output array schema, or output variables
-    n_constants: int
-        number of optional constants expected in the input arrays. If this is zero, no constants
-        should be provided as inputs to `forward`.
-    decoder_input_channels: int
-        number of optional prescribed variables expected in the decoder input array
-        for both inputs and outputs. If this is zero, no decoder inputs should be provided as inputs to `forward`.
-    input_time_dim: int
-        number of time steps in the input array
-    output_time_dim: int
-        number of time steps in the output array
-    delta_time: str, optional
-        hours between two consecutive data points
-    reset_cycle: str, optional
-        hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
-        to never reset the hidden states.
-    presteps: int, optional
-        number of model steps to initialize recurrent states.
-    enable_nhwc: bool, optional
-        Model with [N, H, W, C] instead of [N, C, H, W]
-    enable_healpixpad: bool, optional
-        Enable CUDA HEALPixPadding if installed
-    couplings: list, optional
-        sequence of dictionaries that describe coupling mechanisms
-    """
+    """Deep Learning Weather Prediction (DLWP) recurrent UNet model on the HEALPix mesh."""
 
     def __init__(
         self,
@@ -100,6 +66,42 @@ class HEALPixRecUNet(Module):
         enable_healpixpad: bool = False,
         couplings: list = [],
     ):
+        """
+        Parameters
+        ----------
+        encoder: DictConfig
+            dictionary of instantiable parameters for the U-net encoder
+        decoder: DictConfig
+            dictionary of instantiable parameters for the U-net decoder
+        input_channels: int
+            number of input channels expected in the input array schema. Note this should be the
+            number of input variables in the data, NOT including data reshaping for the encoder part.
+        output_channels: int
+            number of output channels expected in the output array schema, or output variables
+        n_constants: int
+            number of optional constants expected in the input arrays. If this is zero, no constants
+            should be provided as inputs to `forward`.
+        decoder_input_channels: int
+            number of optional prescribed variables expected in the decoder input array
+            for both inputs and outputs. If this is zero, no decoder inputs should be provided as inputs to `forward`.
+        input_time_dim: int
+            number of time steps in the input array
+        output_time_dim: int
+            number of time steps in the output array
+        delta_time: str, optional
+            hours between two consecutive data points
+        reset_cycle: str, optional
+            hours after which the recurrent states are reset to zero and re-initialized. Set np.infty
+            to never reset the hidden states.
+        presteps: int, optional
+            number of model steps to initialize recurrent states.
+        enable_nhwc: bool, optional
+            Model with [N, H, W, C] instead of [N, C, H, W]
+        enable_healpixpad: bool, optional
+            Enable CUDA HEALPixPadding if installed
+        couplings: list, optional
+            sequence of dictionaries that describe coupling mechanisms
+        """
         super().__init__()
         self.channel_dim = 2  # Now 2 with [B, F, T*C, H, W]. Was 1 in old data format with [B, T*C, F, H, W]
 
@@ -161,9 +163,11 @@ class HEALPixRecUNet(Module):
 
     @property
     def integration_steps(self):
+        """Number of integration steps"""
         return max(self.output_time_dim // self.input_time_dim, 1)
 
     def _compute_input_channels(self) -> int:
+        """Calculate total number of input channels in the model"""
         return (
             self.input_time_dim * (self.input_channels + self.decoder_input_channels)
             + self.n_constants
@@ -171,6 +175,13 @@ class HEALPixRecUNet(Module):
         )
 
     def _compute_coupled_channels(self, couplings):
+        """Get number of coupled channels
+
+        Returns
+        -------
+        int
+            The number of coupled channels
+        """
         c_channels = 0
         for c in couplings:
             c_channels += len(c["params"]["variables"]) * len(
@@ -179,6 +190,7 @@ class HEALPixRecUNet(Module):
         return c_channels
 
     def _compute_output_channels(self) -> int:
+        """Compute the total number of output channels in the model"""
         return (1 if self.is_diagnostic else self.input_time_dim) * self.output_channels
 
     def _reshape_inputs(self, inputs: Sequence, step: int = 0) -> th.Tensor:
@@ -281,6 +293,20 @@ class HEALPixRecUNet(Module):
         return res
 
     def _reshape_outputs(self, outputs: th.Tensor) -> th.Tensor:
+        """Returns a maultiple tensors to from the model decoder.
+        Splits the time/channel dimensions.
+
+        Parameters
+        ----------
+        inputs: Sequence
+            list of expected input tensors (inputs, decoder_inputs, constants)
+        step: int, optional
+            step number in the sequence of integration_steps
+
+        Returns
+        -------
+        torch.Tensor: reshaped Tensor in expected shape for model outputs
+        """
         # unfold:
         outputs = self.unfold(outputs)
 
@@ -302,6 +328,17 @@ class HEALPixRecUNet(Module):
     def _initialize_hidden(
         self, inputs: Sequence, outputs: Sequence, step: int
     ) -> None:
+        """Initialize the hidden layers
+
+        Parameters
+        ----------
+        inputs: Sequence
+            Inputs to use to initialize the hideen layers
+        outputs: Sequence
+            Outputs to use to initialize the hideen layers
+        step: int
+            Current step number of the initialization
+        """
         self.reset()
         for prestep in range(self.presteps):
             if step < self.presteps:

@@ -37,6 +37,7 @@ class BaseMSE(th.nn.MSELoss):
     def __init__(
         self,
     ):
+        """Constructer for BaseMSE"""
         super().__init__()
         self.device = None
 

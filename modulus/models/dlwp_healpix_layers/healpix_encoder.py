@@ -20,30 +20,7 @@ from omegaconf import DictConfig
 
 
 class UNetEncoder(th.nn.Module):
-    """Generic UNetEncoder that can be applied to arbitrary meshes.
-
-    Parameters
-    ----------
-    conv_block: DictConfig
-        dictionary of instantiable parameters for the convolutional block
-    down_sampling_block: DictConfig
-        dictionary of instantiable parameters for the downsample block
-    recurrent_block: DictConfig, optional
-        dictionary of instantiable parameters for the recurrent block
-        recurrent blocks are not used if this is None
-    input_channels: int, optional
-        Number of input channels
-    n_channels: Sequence, optional
-        The number of channels in each encoder layer
-    n_layers:, Sequence, optional
-        Number of layers to use for the convolutional blocks
-    dilations: list, optional
-        List of dialtions to use for the the convolutional blocks
-    enable_nhwc: bool, optional
-        If channel last format should be used
-    enable_healpixpad, bool, optional
-        If the healpixpad library should be used (if installed)
-    """
+    """Generic UNetEncoder that can be applied to arbitrary meshes."""
 
     def __init__(
         self,
@@ -57,6 +34,29 @@ class UNetEncoder(th.nn.Module):
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
     ):
+        """
+        Parameters
+        ----------
+        conv_block: DictConfig
+            dictionary of instantiable parameters for the convolutional block
+        down_sampling_block: DictConfig
+            dictionary of instantiable parameters for the downsample block
+        recurrent_block: DictConfig, optional
+            dictionary of instantiable parameters for the recurrent block
+            recurrent blocks are not used if this is None
+        input_channels: int, optional
+            Number of input channels
+        n_channels: Sequence, optional
+            The number of channels in each encoder layer
+        n_layers:, Sequence, optional
+            Number of layers to use for the convolutional blocks
+        dilations: list, optional
+            List of dialtions to use for the the convolutional blocks
+        enable_nhwc: bool, optional
+            If channel last format should be used
+        enable_healpixpad, bool, optional
+            If the healpixpad library should be used (if installed)
+        """
         super().__init__()
         self.n_channels = n_channels
 
