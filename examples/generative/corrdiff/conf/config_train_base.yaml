@@ -74,7 +74,7 @@ wandb_project:  "Modulus-Generative"
 wandb_group: "CorrDiff-DDP-Group"
  # Wights & biases group
 wandb_entity: "CorrDiff-DDP-Group"
- # Wights & biases entity (a workspace, personal or a team workspace)
+ # Wights & biases entity (i.e. a workspace, personal or a team workspace)
 wandb_name: "CorrDiff"
  # Wights & biases name
 
