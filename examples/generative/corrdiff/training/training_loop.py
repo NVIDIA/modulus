@@ -71,7 +71,7 @@ def training_loop(
     patch_shape_y=448,
     patch_num=1,
     wandb_mode="disabled",
-    fp_mode="fp32",  # which floating point mode to use
+    fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
 ):
     """CorrDiff training loop"""
@@ -93,6 +93,9 @@ def training_loop(
         group="CorrDiff-DDP-Group",
         mode=wandb_mode,
     )
+
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     # Initialize.
     start_time = time.time()
@@ -225,9 +228,7 @@ def training_loop(
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
 
-                with torch.autocast(
-                    "cuda", dtype=torch.bfloat16, enabled=(fp_mode == "amp")
-                ):
+                with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
                     loss = loss_fn(
                         net=ddp,
                         img_clean=img_clean,
