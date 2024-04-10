@@ -1,0 +1,2 @@
+_target_: src.losses.TruncatedMSELoss
+reduction: mean

@@ -1,0 +1,23 @@
+_target_: src.networks.PointFeatureToGridGroupUNetDrivAer
+_convert_: all
+
+in_channels: 1
+out_channels: 1
+kernel_size: 3
+hidden_channels:
+  - 86
+  - 86
+  - 86
+  - 86
+num_levels: 3
+num_down_blocks: 1
+use_rel_pos_encode: true
+neighbor_search_type: radius
+
+resolution_memory_format_pairs:
+  - ${res_mem_pair:xc_y_z, [  4, 120, 80]}
+  - ${res_mem_pair:yc_x_z, [200,   3, 80]}
+  - ${res_mem_pair:zc_x_y, [200, 120,  2]}
+
+reductions:
+  - mean

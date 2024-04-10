@@ -71,6 +71,7 @@ makani = [
 tpunet = [
     "jaxtyping>=0.2",
     "torch_scatter>=2.1",
+    "torchinfo>=1.8",
     "webdataset>=0.2",
 ]
 

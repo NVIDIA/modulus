@@ -1,9 +1,13 @@
+from collections.abc import Mapping
+
 import matplotlib as mpl
 
 mpl.use("Agg")  # Set the backend to Agg for headless environments
 import os
 import unittest
 import warnings
+
+from hydra.core.hydra_config import HydraConfig
 
 from jaxtyping import Float, Int
 from torch import Tensor
@@ -13,14 +17,12 @@ try:
 except ImportError:
     warnings.warn("wandb is not installed. wandb logger is not available.")
 
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from PIL import Image
 from torch.utils.tensorboard import SummaryWriter
 
 from .visualization import fig_to_numpy
@@ -127,7 +129,19 @@ class WandBLogger(Logger):
         )
         # log config to wandb
         if config is not None and resume != "must":
-            wandb.config.update(config, allow_val_change=True)
+            wandb.config.update(flatten_dict(config, sep="."), allow_val_change=True)
+
+        # Save config.
+        wandb.save(
+            os.path.join(
+                config.output,
+                HydraConfig.get().output_subdir,
+                "config.yaml"
+            ),
+            base_path=config.output,
+            policy="now",
+        )
+
 
     def log_scalar(self, tag: str, value: float, step: int):
         wandb.log({tag: value}, step=step)
@@ -209,20 +223,17 @@ class Loggers(Logger):
             logger.log_pointcloud(tag, vertices, colors, step)
 
 
-def init_logger(config: dict, prefix: str = "") -> Logger:
+def init_logger(config: dict) -> Logger:
     loggers = []
-    datetime = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-    log_dir = Path(config["log_dir"]) / datetime
-    log_dir.mkdir(parents=True, exist_ok=True)
 
-    for logger_type in config["logger_types"]:
+    for logger_type, logger_cfg in config.loggers.items():
         if logger_type == "tensorboard":
-            loggers.append(TensorBoardLogger(log_dir=log_dir))
+            loggers.append(TensorBoardLogger(log_dir=config.log_dir))
         elif logger_type == "wandb":
             # Check if the path exists and has at least one checkpoint
             resume = False
             wandb_id = None
-            output_dir = config["output"]
+            output_dir = config.output
             checkpoints = []
             if output_dir is not None:
                 output_dir = Path(output_dir)
@@ -242,11 +253,11 @@ def init_logger(config: dict, prefix: str = "") -> Logger:
 
             loggers.append(
                 WandBLogger(
-                    config["project_name"],
-                    config["run_name"],
-                    entity=config["entity"],
-                    group=config["group_name"],
-                    log_dir=log_dir,
+                    logger_cfg.project_name,
+                    logger_cfg.run_name,
+                    entity=logger_cfg.entity,
+                    group=logger_cfg.group_name,
+                    log_dir=config.log_dir,
                     config=config,
                     resume=resume,
                     wandb_id=wandb_id,
@@ -256,6 +267,26 @@ def init_logger(config: dict, prefix: str = "") -> Logger:
             raise ValueError(f"Unknown logger type: {logger_type}")
 
     return Loggers(loggers)
+
+
+def flatten_dict(
+    d: Mapping[str, Any],
+    parent_key: str = "",
+    sep: str = "_",
+    no_sep_keys: tuple[str] = ("base",),
+) -> dict[str, Any]:
+    items = []
+    for k, v in d.items():
+        # Do not expand parent key if it is "base"
+        if parent_key in no_sep_keys:
+            new_key = k
+        else:
+            new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, Mapping):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 
 class TestLoggers(unittest.TestCase):

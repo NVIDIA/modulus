@@ -1,0 +1,3 @@
+lploss:
+  _target_: src.losses.LpLoss
+  size_average: true

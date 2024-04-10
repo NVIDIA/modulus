@@ -1,42 +1,57 @@
-# Define learning rate yaml
-lr: 0.001
-num_epochs: 100
-batch_size: 4
+hydra:
+  run:
+    dir: ${output}
+  output_subdir: hydra
 
-# Logger
-logger_types: ["tensorboard"] # ["tensorboard", "wandb"]
-log_dir: "logs/"
-eval_interval: 5 # epoch
-project_name: "car-cfd"
-run_name: "default"
-entity: "nvr-ai-algo"
-# dataset
-data_path: "car-dataset"
-data_module: "CFDDataModule"
+train:
+  num_epochs: 100
+  batch_size: 4
+  save_interval: 1 # save model for every N'th epoch
+  num_checkpoints: 2 # number of checkpoints to save
+  time_limit: null
+  resume: false
+  print_interval: 200 # save image for every N'th train data
 
-# TODO: update
-train_ratio: 0.8
-val_ratio: 0.1
-test_ratio: 0.1
+eval:
+  loss: null
+  interval: 5 # epoch
+  batch_size: 1
+  plot_interval: 20 # save image for every N'th test data
+  print_interval: 20 # print every N'th test data
 
-# default model
-model: "GNO"
+device: cuda
 
-# optimizer
-opt:
-  scheduler: "StepLR"
-  step_size: 50
-  gamma: 0.5
+seed: null
 
-# Plot
-test_plot_interval: 20 # save image for every N'th test data
-test_print_interval: 20 # print every N'th test data
+# The loss should be set in the experiment.
+loss: ???
 
-# does the gt label need to be normalized during training. This will call datamodule.encode or datamodule.normalize on the label before calling the loss
-normalize_label: false
-train_print_interval: 200 # save image for every N'th train data
+# The optimizer should be set in the experiment.
+optimizer: ???
 
-# save model
-save_interval: 1 # save model for every N'th epoch
+# Scheduler should be set in the experiment.
+lr_scheduler: ???
+
+amp:
+  enabled: false
+  autocast:
+    dtype: torch.float16
+  scaler:
+    _target_: torch.cuda.amp.GradScaler
+    enabled: ${..enabled}
+  clip_grad: false
+  grad_max_norm: 2.0
+
+output: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Loggers.
+log_dir: null
+loggers:
+  tensorboard: {}
+  wandb:
+    project_name: car-cfd
+    run_name: default
+    entity: modulus # nvr-ai-algo
+    group_name:
+
 log_pointcloud: false # save pointclouds
-num_checkpoints: 2 # number of checkpoints to save

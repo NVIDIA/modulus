@@ -392,16 +392,6 @@ class DrivAerDataModule(BaseDataModule):
         return DataLoader(self.test_dataset, collate_fn=collate_fn, **kwargs)
 
 
-class DrivAerNoSpoilerDataModule(DrivAerDataModule):
-    def __init__(self, data_path: Union[Path, str], every_n_data: Optional[int] = None) -> None:
-        super().__init__(data_path, ["nospoiler"], every_n_data)
-
-
-class DrivAerSpoilerDataModule(DrivAerDataModule):
-    def __init__(self, data_path: Union[Path, str], every_n_data: Optional[int] = None) -> None:
-        super().__init__(data_path, ["spoiler"], every_n_data)
-
-
 def convert_to_webdataset(
     data_path: str,
     out_path: Optional[str] = "~/datasets/drivaer_webdataset",

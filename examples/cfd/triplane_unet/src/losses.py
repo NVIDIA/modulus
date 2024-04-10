@@ -68,16 +68,3 @@ class TruncatedMSELoss(nn.Module):
             return loss.sum()
         else:
             return loss
-
-
-def get_loss(loss_name: str = "LpLoss"):
-    if loss_name == "LpLoss":
-        return LpLoss(size_average=True)
-    elif loss_name == "MSELoss":
-        return nn.MSELoss(reduction="mean")
-    elif loss_name == "TruncatedMSELoss":
-        return TruncatedMSELoss(reduction="mean")
-    elif loss_name == "HuberLoss":
-        return nn.HuberLoss(reduction="mean")
-    else:
-        raise NotImplementedError(f"Loss {loss_name} not implemented")

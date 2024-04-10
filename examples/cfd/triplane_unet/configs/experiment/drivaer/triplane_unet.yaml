@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - /data: drivaer
+  - /model: triplane_unet_drivaer
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+train:
+  batch_size: 1
+
+# data:
+#   every_n_data: 10
+
+loggers:
+  wandb:
+    project_name: drivaer
+    entity: nvr-ai-algo
+    run_name: PointFeatureToGridGroupUNet

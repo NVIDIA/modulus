@@ -1,38 +1,21 @@
-import sys
-
-import matplotlib
-
-matplotlib.use("Agg")  # Set the backend to Agg
-
-import os
 from contextlib import suppress
-from pathlib import Path
+from functools import partial
+import os
+import sys
 from timeit import default_timer
-from typing import List, Tuple, Union
+
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from hydra.utils import instantiate, to_absolute_path
+from omegaconf import DictConfig, OmegaConf
 
 import torch
-import yaml
-from torch.cuda import amp
+import torchinfo
 
-from config_parser import load_config, parse_args
-from src.data import instantiate_datamodule
-from src.losses import get_loss
-from src.networks import instantiate_network
-from src.optim.schedulers import instantiate_scheduler
 from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
-
-
-def save_config(config: dict):
-    with open(os.path.join(config.output, "config.yml"), "w") as f:
-        yaml.dump(dict(config), f)
-
-    if "wandb" in config.logger_types:
-        import wandb
-
-        wandb.config.update(config)
-        wandb.save(os.path.join(config.output, "config.yml"), policy="now")
+from src.networks.point_feature_ops import GridFeaturesMemoryFormat
 
 
 def _delete_previous_checkpoints(config):
@@ -41,7 +24,7 @@ def _delete_previous_checkpoints(config):
         if f.startswith("model_") and f.endswith(".pth"):
             checkpoints_to_delete.append(f)
     checkpoints_to_delete.sort()
-    checkpoints_to_delete = checkpoints_to_delete[: -config.num_checkpoints]
+    checkpoints_to_delete = checkpoints_to_delete[: -config.train.num_checkpoints]
     print(f"Deleting {len(checkpoints_to_delete)} checkpoints")
     for f in checkpoints_to_delete:
         try:
@@ -80,7 +63,7 @@ def get_autocast(precision: str = None):
 @torch.no_grad()
 def eval(model, datamodule, config, loss_fn=None):
     model.eval()
-    test_loader = datamodule.test_dataloader(batch_size=config.batch_size, num_workers=0)
+    test_loader = datamodule.test_dataloader(batch_size=config.eval.batch_size, num_workers=0)
     eval_meter = AverageMeterDict()
     visualize_data_dicts = []
     eval_timer = Timer()
@@ -89,9 +72,9 @@ def eval(model, datamodule, config, loss_fn=None):
         out_dict = model.eval_dict(data_dict, loss_fn=loss_fn, datamodule=datamodule)
         out_dict["inference_time"] = eval_timer.toc()
         eval_meter.update(out_dict)
-        if i % config.test_plot_interval == 0:
+        if i % config.eval.plot_interval == 0:
             visualize_data_dicts.append(data_dict)
-        if i % config.test_print_interval == 0:
+        if i % config.eval.print_interval == 0:
             # Print eval dict
             print(f"Eval {i}: {eval_meter.avg}")
 
@@ -117,40 +100,50 @@ def eval(model, datamodule, config, loss_fn=None):
     return eval_meter.avg, merged_image_dict, merged_point_cloud_dict
 
 
-def train(config, device: Union[torch.device, str] = "cuda:0"):
+def train(config: DictConfig):
     # Initialize the device
-    if isinstance(device, str):
-        device = torch.device(device)
+    device = torch.device(config.device)
+
+    # Initialize the loggers first.
+    loggers = init_logger(config)
+
+    print(OmegaConf.to_yaml(config, sort_keys=True))
 
     # Initialize the model
-    model = instantiate_network(config)
-    # if model.device == torch.device("cpu"):
+    model = instantiate(config.model)
     model = model.to(device)
+    # Print model summary (structure and parmeter count).
+    print(torchinfo.summary(model, verbose=0))
 
     # Initialize the dataloaders
-    datamodule = instantiate_datamodule(config)
-    train_loader = datamodule.train_dataloader(batch_size=config.batch_size, shuffle=True)
+    datamodule = instantiate(config.data)
+    train_loader = datamodule.train_dataloader(batch_size=config.train.batch_size, shuffle=True)
 
-    # Initialize the optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=1e-4)
-    scheduler = instantiate_scheduler(optimizer, config)
-    # Initialize the loss function
-    loss_fn = get_loss(config.loss_name)
-    if config.eval_loss_name is None:
+    # Initialize the optimizer and scheduler.
+    optimizer = instantiate(config.optimizer, model.parameters())
+    scheduler = instantiate(config.lr_scheduler, optimizer)
+
+    # Initialize the loss function.
+    loss_fn = instantiate(config.loss)
+    if config.eval.loss is None:
         eval_loss_fn = loss_fn
     else:
-        eval_loss_fn = get_loss(config.eval_loss_name)
-    scaler = amp.GradScaler()
+        eval_loss_fn = instantiate(config.eval.loss)
 
-    # AMP precision
-    autocast = get_autocast(config.amp_precision)
+    # Initialize AMP.
+    scaler = instantiate(config.amp.scaler)
+    autocast = partial(
+        torch.cuda.amp.autocast,
+        enabled=config.amp.enabled,
+        dtype=hydra.utils.get_object(config.amp.autocast.dtype),
+    )
 
     # If time_limit is set, break the training loop before the time limit
     average_epoch_time = 0
-    if config.time_limit is not None:
+    if config.train.time_limit is not None:
         # time limit is the form hh:mm:ss
         time_limit = sum(
-            int(x) * 60**i for i, x in enumerate(reversed(config.time_limit.split(":")))
+            int(x) * 60**i for i, x in enumerate(reversed(config.train.time_limit.split(":")))
         )
         print(f"Time limit: {time_limit} seconds")
         start_time = default_timer()
@@ -160,7 +153,7 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
     # Resume if resume is True
     start_epoch = 0
     tot_iter = 0
-    if config.resume and os.path.exists(config.output):
+    if config.train.resume and os.path.exists(config.output):
         print(f"Resuming from {config.output}")
         # Find the latest checkpoint
         checkpoints = []
@@ -183,12 +176,7 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
             start_epoch = checkpoint["epoch"] + 1
             tot_iter = checkpoint["tot_iter"]
 
-    # Initialize the logger first to access experiment status
-    loggers = init_logger(config)
-
-    # N_sample = 1000
-    save_config(config)
-    for ep in range(start_epoch, config.num_epochs):
+    for ep in range(start_epoch, config.train.num_epochs):
         model.train()
         t1 = default_timer()
         train_l2_meter = AverageMeter()
@@ -209,15 +197,15 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
             # Assert loss is valid
             assert torch.isfinite(loss).all(), f"Loss is not finite: {loss}"
 
-            if config.amp_precision:
+            if config.amp.enabled:
                 scaler.scale(loss).backward()
 
-                if config.amp_clip_grad:
+                if config.amp.clip_grad:
                     # Unscales the gradients of optimizer's assigned params in-place
                     scaler.unscale_(optimizer)
 
                     # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.amp_grad_max_norm)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.amp.grad_max_norm)
 
                     # optimizer's gradients are already unscaled, so scaler.step does not unscale them,
                     # although it still skips optimizer.step() if the gradients contain infs or NaNs.
@@ -234,7 +222,7 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
             loggers.log_scalar("train/iter_loss", loss.item(), tot_iter)
             for k, v in loss_dict.items():
                 loggers.log_scalar(f"train/{k}", v.item(), tot_iter)
-            if tot_iter % config.train_print_interval == 0:
+            if tot_iter % config.train.print_interval == 0:
                 print(f"Iter {tot_iter} loss: {loss.item():.4f}")
 
             tot_iter += 1
@@ -246,7 +234,7 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
         loggers.log_scalar("train/epoch_train_l2", train_l2_meter.avg, tot_iter)
         loggers.log_scalar("train/train_epoch_duration", t2 - t1, tot_iter)
 
-        if ep % config.eval_interval == 0 or ep == config.num_epochs - 1:
+        if ep % config.eval.interval == 0 or ep == config.train.num_epochs - 1:
             eval_dict, eval_images, eval_point_clouds = eval(
                 model, datamodule, config, eval_loss_fn
             )
@@ -260,7 +248,7 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
                     loggers.log_pointcloud(f"eval_vis/{k}", v[..., :3], v[..., 3:], tot_iter)
 
         # Save the weights, optimization state, and scheduler state into one file
-        if ep % config.save_interval == 0:
+        if ep % config.train.save_interval == 0:
             # save the model
             save_state(model, optimizer, scheduler, ep, tot_iter, config)
 
@@ -282,35 +270,38 @@ def train(config, device: Union[torch.device, str] = "cuda:0"):
                 sys.exit(0)
 
     # Save the final model
-    save_state(model, optimizer, scheduler, config.num_epochs - 1, tot_iter, config)
+    save_state(model, optimizer, scheduler, config.train.num_epochs - 1, tot_iter, config)
     # Write the status to the output directory to status.txt file
     with open(os.path.join(config.output, "status.txt"), "w") as f:
         f.write("finished")
 
 
-if __name__ == "__main__":
-    args = parse_args()
-    # print command line args
-    print(args)
-    config = load_config(args.config)
+@hydra.main(version_base="1.3", config_path="configs", config_name="base")
+def main(config: DictConfig):
+    # Hydra config contains properly resolved absolute path.
+    config.output = HydraConfig.get().runtime.output_dir
+    if config.log_dir is None:
+        config.log_dir = config.output
+    else:
+        config.log_dir = to_absolute_path(config.log_dir)
 
-    # Update config with command line arguments
-    for key, value in vars(args).items():
-        if key != "config" and value is not None:
-            config[key] = value
-
-    # pretty print the config
-    for key, value in config.items():
-        print(f"{key}: {value}")
-
-    # Set the random seed
+    # Set the random seed.
     if config.seed is not None:
         set_seed(config.seed)
 
-    if config.output is None:
-        config.output = config.log_dir
+    train(config)
 
-    out_path = Path(config.output)
-    out_path.mkdir(parents=True, exist_ok=True)
 
-    train(config, device=args.device)
+def _init_hydra_resolvers():
+    def res_mem_pair(
+        fmt: str, dims: list[int, int, int]
+    ) -> tuple[GridFeaturesMemoryFormat, tuple[int, int, int]]:
+        return getattr(GridFeaturesMemoryFormat, fmt), tuple(dims)
+
+    OmegaConf.register_new_resolver("res_mem_pair", res_mem_pair)
+
+
+if __name__ == "__main__":
+    _init_hydra_resolvers()
+
+    main()
