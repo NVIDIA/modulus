@@ -496,12 +496,20 @@ class EncodeProcessDecode(Module):
         mlp_num_hidden_layers,
         num_message_passing_steps,
         output_size,
+        device_list=None,
     ):
         if not (latent_size > 0 and mlp_hidden_size > 0 and mlp_num_hidden_layers > 0):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         if not (num_message_passing_steps > 0):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         super().__init__(meta=MetaData(name="vfgn_encoderprocess_decode"))
+
+        # TODO:
+        # CHECK
+        if device_list is None:
+            self.device_list = ['cpu']
+        else:
+            self.device_list = device_list
 
         self._encoder_network = EncoderNet(
             mlp_hidden_size, mlp_num_hidden_layers, latent_size
@@ -531,14 +539,17 @@ class EncodeProcessDecode(Module):
         receivers/ senders:
             Torch tensor, list of node indexes, shape: (batch_size,  edge_list_size:[list of node indexes])
         """
-        self.device_list = x.device.type  # decide the device type
+        # todo: uncomment
+        # self.device_list = x.device.type  # decide the device type
         x, edge_attr = self._encoder_network(x, edge_attr)
 
         pre_x = x
         pre_edge_attr = edge_attr
 
         n_steps = len(self._processor_networks)
-        n_inter = int(n_steps)  # prevent divide by zero
+        # n_inter = int(n_steps)  # prevent divide by zero
+        # todo: check the multi-gpus
+        n_inter = int(n_steps / len(self.device_list))
 
         i = 0
         j = 0
@@ -546,7 +557,9 @@ class EncodeProcessDecode(Module):
         origin_device = x.device
 
         for processor_network_k in self._processor_networks:
-            p_device = self.device_list  # [j]
+            # todo: device_list
+            # p_device = self.device_list  # [j]
+            p_device = self.device_list[j]
             processor_network_k = processor_network_k.to(p_device)
             pre_x = pre_x.to(p_device)
             pre_edge_attr = pre_edge_attr.to(p_device)

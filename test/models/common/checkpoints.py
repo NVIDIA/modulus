@@ -74,6 +74,7 @@ def validate_checkpoint(
     # Now test forward passes
     output_1 = model_1.forward(*in_args)
     output_2 = model_2.forward(*in_args)
+    print("output_1: ", output_1)
 
     # Model outputs should initially be different
     assert not compare_output(
@@ -86,12 +87,16 @@ def validate_checkpoint(
 
     # Forward with loaded checkpoint
     output_2 = model_2.forward(*in_args)
+    print("output_2: ", output_2, output_2.shape)
     loaded_checkpoint = compare_output(output_1, output_2, rtol, atol)
+    print("loaded_checkpoint: ", loaded_checkpoint)
 
     # Restore checkpoint with from_checkpoint, checks initialization of model directly from checkpoint
     model_2 = modulus.Module.from_checkpoint("checkpoint.mdlus").to(model_1.device)
     output_2 = model_2.forward(*in_args)
+    print("output_2: ", output_2, output_2.shape)
     restored_checkpoint = compare_output(output_1, output_2, rtol, atol)
+    print("restored_checkpoint: ", restored_checkpoint)
 
     # Delete checkpoint file (it should exist!)
     Path("checkpoint.mdlus").unlink(missing_ok=False)

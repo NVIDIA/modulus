@@ -105,11 +105,6 @@ def test_mlpnet_checkpoint(device):
         output_size=3,
     ).to(device)
 
-    # bsize = random.randint(1, 4)
-    # invar = torch.randn(bsize, 2, 8).to(device)
-    # bsize = 2
-    # node_size = random.randint(10, 10000)
-    # feat_size = random.randint(10, 100)
     bsize = 2
     node_size = 1000
     feat_size = 3

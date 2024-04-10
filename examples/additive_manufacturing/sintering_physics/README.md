@@ -36,7 +36,7 @@ Change the params in constants.py for training:
 - ckpt_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
 - data_path: {data path for the pre-processed data in tfrecord}, i.e. "./data/test_validation"
 - noise_std: i.e.1e-9
-- loss: i.e. me loss # options: ['standard', 'anchor', 'me', 'correlation', 'anchor_me']
+- loss: i.e. me loss # options: ['standard', 'anchor', 'me', 'weighted', '''correlation', 'anchor_me']
 
 Then run:
 

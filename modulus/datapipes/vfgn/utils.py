@@ -99,6 +99,8 @@ def weighted_square_error(y_pre, y, device):
     by sorting and applying diminishing weights.
     """
     k = y_pre - y
+    print("weighted_square_error k shape: ", k.shape)
+
     k = k.view(-1)
     k = torch.square(k)
     sorted, indices = torch.sort(k, descending=True)
@@ -113,9 +115,11 @@ def weighted_square_error(y_pre, y, device):
     weights = torch.FloatTensor(weights).to(device)
 
     out = weights * sorted
+    print("weighted_square_error out shape: ", out.shape)
 
-    out = torch.sum(out)
-    print("weighted_square_error out: ", out)
+    out = torch.mean(out)
+    # out = torch.sum(out)
+    print("mean out: ", out, out.shape)
     return out
 
 

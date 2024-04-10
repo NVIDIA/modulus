@@ -84,9 +84,6 @@ class Stats:
 
 device = "cpu"
 
-INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
-PREDICT_LENGTH = 1  # [options: 5]
-
 NUM_PARTICLE_TYPES = 3
 KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
 METAL_PARTICLE_ID = 2  # refers to normal particles
@@ -141,8 +138,8 @@ def Train(rank_zero_logger, dist):
         "context": context_stats,
     }
     model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-        num_seq=INPUT_SEQUENCE_LENGTH,
+        num_dimensions=metadata["dim"] * C.pred_len,
+        num_seq=C.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
         num_particle_types=NUM_PARTICLE_TYPES,
         particle_type_embedding_size=16,
@@ -208,7 +205,7 @@ def Train(rank_zero_logger, dist):
             n_edges_per_example=features["n_edges_per_example"].to(device),
             senders=features["senders"].to(device),
             receivers=features["receivers"].to(device),
-            predict_length=PREDICT_LENGTH,
+            predict_length=C.pred_len,
             particle_types=features["particle_type"].to(device),
             global_context=features.get("step_context").to(device),
         )
@@ -248,12 +245,13 @@ def Train(rank_zero_logger, dist):
         loss = (pred_acceleration - target_acceleration) ** 2
 
         decay_fators_1 = torch.DoubleTensor(
-            [math.pow(C.loss_decay_factor, i) for i in range(PREDICT_LENGTH)]
+            [math.pow(C.loss_decay_factor, i) for i in range(C.pred_len)]
         ).to(device)
         decay_fators_3 = torch.repeat_interleave(decay_fators_1, repeats=3)
 
         loss = loss * decay_fators_3  # torch.Size([num_nodes, input_dim])
         loss = torch.sum(loss, dim=-1)  # torch.Size([num_nodes])
+        print("overall loss: ", loss.shape, loss)
 
         if C.loss.startswith("anchor"):
             rank_zero_logger.info("processing anchor loss\n\n")
@@ -371,16 +369,21 @@ def Train(rank_zero_logger, dist):
                 pred_acceleration, target_acceleration
             )
             loss_l1 = loss_l1 * decay_fators_3
+            print("loss_l1 shape: ", loss_l1.shape)
             loss_l1 = torch.sum(loss_l1, dim=-1)
+            print("loss_l1 shape: sum ", loss_l1.shape, loss_l1)
 
             non_kinematic_mask = non_kinematic_mask.to(torch.bool).to(device)
             num_non_kinematic = torch.sum(non_kinematic_mask)
+            print("non_kinematic_mask/ num_non_kinematic: ",
+                  non_kinematic_mask.shape, num_non_kinematic, num_non_kinematic.shape)
             loss = torch.where(
                 non_kinematic_mask,
                 loss,
                 torch.zeros(loss.shape, dtype=loss.dtype).to(device),
             )
             loss = torch.sum(loss) / torch.sum(num_non_kinematic)
+            print("loss shape: sum ", loss.shape, loss)
 
             loss = loss + C.l_me * loss_l1
 
@@ -436,7 +439,7 @@ def Train(rank_zero_logger, dist):
                         n_edges_per_example=features["n_edges_per_example"].to(device),
                         senders=features["senders"].to(device),
                         receivers=features["receivers"].to(device),
-                        predict_length=PREDICT_LENGTH,
+                        predict_length=C.pred_len,
                         particle_types=features["particle_type"].to(device),
                         global_context=features.get("step_context").to(device),
                     )
@@ -454,7 +457,7 @@ def Train(rank_zero_logger, dist):
                         n_edges_per_example=features["n_edges_per_example"].to(device),
                         senders=features["senders"].to(device),
                         receivers=features["receivers"].to(device),
-                        predict_length=PREDICT_LENGTH,
+                        predict_length=C.pred_len,
                         particle_types=features["particle_type"].to(device),
                         global_context=features.get("step_context").to(device),
                     )
@@ -525,8 +528,8 @@ def Test(rank_zero_logger, dist):
     }
 
     model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-        num_seq=INPUT_SEQUENCE_LENGTH,
+        num_dimensions=metadata["dim"] * C.pred_len,
+        num_seq=C.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
         num_particle_types=NUM_PARTICLE_TYPES,
         particle_type_embedding_size=16,
@@ -549,7 +552,7 @@ def Test(rank_zero_logger, dist):
 
                 model.inference(
                     position_sequence=features["position"][
-                        :, 0:INPUT_SEQUENCE_LENGTH
+                        :, 0:C.input_seq_len
                     ].to(device),
                     n_particles_per_example=features["n_particles_per_example"].to(
                         device
@@ -557,13 +560,13 @@ def Test(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=PREDICT_LENGTH,
+                    predict_length=C.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
 
                 # Loading the pretrained model from model ckpt_path_vfgn
-                # For provided ckpt with missing keys, ignore
+                # For provided ckpt with missing keys, ignore with strict=False
                 model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
@@ -574,10 +577,10 @@ def Test(rank_zero_logger, dist):
                 model.eval()
                 loaded = True
 
-            initial_positions = features["position"][:, :INPUT_SEQUENCE_LENGTH].to(
+            initial_positions = features["position"][:, :C.input_seq_len].to(
                 device
             )
-            ground_truth_positions = features["position"][:, INPUT_SEQUENCE_LENGTH:].to(
+            ground_truth_positions = features["position"][:, C.input_seq_len:].to(
                 device
             )
             global_context = features["step_context"].to(device)
@@ -601,7 +604,7 @@ def Test(rank_zero_logger, dist):
                 if global_context is None:
                     global_context_step = None
                 else:
-                    read_step_context = global_context[: step + INPUT_SEQUENCE_LENGTH]
+                    read_step_context = global_context[: step + C.input_seq_len]
                     zero_pad = torch.zeros(
                         [global_context.shape[0] - read_step_context.shape[0] - 1, 1],
                         dtype=features["step_context"].dtype,
@@ -618,7 +621,7 @@ def Test(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=PREDICT_LENGTH,
+                    predict_length=C.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )

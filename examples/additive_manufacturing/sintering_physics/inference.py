@@ -82,7 +82,7 @@ class Stats:
         return self
 
 
-device = "cpu"
+# device = "cpu"
 
 INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
 PREDICT_LENGTH = 1  # [options: 5]
@@ -151,7 +151,7 @@ def Inference(rank_zero_logger, dist):
 
     loaded = False
     example_index = 0
-    device = "cpu"
+    # device = "cpu"
     with torch.no_grad():
         for features, targets in tqdm(dataset):
             if loaded is False:
