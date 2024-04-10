@@ -20,6 +20,8 @@ import torch
 import xarray as xr
 import numpy as np
 import random
+import shutil
+from pathlib import Path
 
 from pytest_utils import nfsdata_or_fail
 
@@ -55,6 +57,11 @@ def create_path():
     path = "/data/nfs/modulus-data/datasets/healpix/merge"
     return path
 
+def delete_dataset(create_path, dataset_name):
+    """Helper that deletes a requested dataset at the specified location"""
+    dataset_path = f'{create_path}/{dataset_name}.zarr'
+    if Path(dataset_path).exists():
+        shutil.rmtree(dataset_path)
 
 @pytest.fixture
 def scaling_dict():
@@ -98,7 +105,7 @@ def test_open_time_series_on_the_fly(create_path, pytestconfig):
     assert isinstance(ds, xr.Dataset)
 
     test_var = variables[0]
-    base = xr.open_dataset(create_path + test_var + ".nc")
+    base = xr.open_dataset(create_path + "/" + test_var + ".nc")
     ds_var = ds.inputs.sel(channel_in=test_var)
 
     assert ds_var.equals(base[test_var])
@@ -131,7 +138,7 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
     # create new dataset
     # open a base dataset to compare against
     test_var = list(scaling.keys())[0]
-    base = xr.open_dataset(create_path + test_var + ".nc")
+    base = xr.open_dataset(create_path + "/" + test_var + ".nc")
     # scale our test variable
     base[test_var]= np.log(
                 base[test_var] + scaling[test_var]["log_epsilon"]
@@ -147,9 +154,12 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
 
     assert ds_var.equals(base[test_var])
 
+    # delete the created file so we have a clean test for next time
+    delete_dataset(create_path, dataset_name)
+
     # and with constants
     const = list(constants.keys())[0]
-    const_ds = xr.open_dataset(create_path + const + ".nc")
+    const_ds = xr.open_dataset(create_path + "/" + const + ".nc")
     ds = create_time_series_dataset_classic(
         src_directory=create_path,
         dst_directory=create_path,
@@ -159,6 +169,9 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
         constants = constants,
     )
     assert (const_ds[const] == ds.constants[0]).any()
+
+    # delete the created file so we have a clean test for next time
+    delete_dataset(create_path, dataset_name)
 
 @nfsdata_or_fail
 def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict, pytestconfig):
