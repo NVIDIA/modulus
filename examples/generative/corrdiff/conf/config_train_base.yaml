@@ -53,8 +53,6 @@ workers: 4
 ## I/O-related options
 checkpoint_dir: checkpoints
   # Where to save the checkpoints
-wandb_mode: offline
-  # Wights & biases mode [online, ofline, disabled]
 tick: 1
   # How often to print progress
 dump: 500
@@ -65,6 +63,21 @@ transfer: null  # TODO check
   # Transfer learning from network pickle
 dry-run: false
   # Print training options and exit
+validation_dump: 50
+  # how often to record the validation loss
+validation_steps: 10
+  # how many loss evaluations are used to compute the validation loss per checkpoint
+wandb_mode: online
+  # Wights & biases mode [online, ofline, disabled]
+wandb_project:  "Modulus-Generative"
+ # Wights & biases project
+wandb_group: "CorrDiff-DDP-Group"
+ # Wights & biases group
+wandb_entity: "CorrDiff-DDP-Group"
+ # Wights & biases entity (i.e. a workspace, personal or a team workspace)
+wandb_name: "CorrDiff"
+ # Wights & biases name
+
 
 ## Weather data options
 dataset:
@@ -87,3 +100,4 @@ dataset:
   gridtype: "sinusoidal"
   N_grid_channels: 4
   normalization: "v1"
+  train_test_split: false
