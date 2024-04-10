@@ -58,10 +58,6 @@ reflectivity - a surrogate of expect precipitation.
 Notably, the radar reflectivity channel is not present in the input data and needs to
 be predicted based on the other channels, making its prediction strictly generative.
 
-To avoid over-fitting we divide the data into training and testing sets. Three years of
-data 2018-2020 are used for training (2,4154 samples total). For testing we use the
-full fourth year, 2021, as well as the first four months (January to April) of 2022.
-
 The Zarr dataset used for training and testing the CorrDiff model is available for
 non-commercial use under the [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
 and can be downloaded from https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset.
