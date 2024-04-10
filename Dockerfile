@@ -73,7 +73,22 @@ ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
-RUN pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html
+# TODO: this is a workaround as dgl is not yet shipping arm compatible wheels for CUDA 12.x: https://github.com/NVIDIA/modulus/issues/432
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-2.0.0-cp310-cp310-linux_aarch64.whl" ]; then \
+        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
+        pip install --no-cache-dir --no-deps /modulus/deps/dgl-2.0.0-cp310-cp310-linux_aarch64.whl; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        echo "Installing DGL for: $TARGETPLATFORM" && \
+        pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; \
+    else \
+        echo "Installing DGL for: $TARGETPLATFORM from source" && \
+        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
+        DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
+        cd python && \
+        python setup.py install && \
+        python setup.py build_ext --inplace && \
+        cd ../../ && rm -r /workspace/dgl; \
+    fi
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
