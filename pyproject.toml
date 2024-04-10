@@ -72,6 +72,7 @@ tpunet = [
     "jaxtyping>=0.2",
     "torch_scatter>=2.1",
     "torchinfo>=1.8",
+    "warp-lang>=1.0",
     "webdataset>=0.2",
 ]
 
