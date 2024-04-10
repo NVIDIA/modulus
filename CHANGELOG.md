@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
+- Warp neighbor search routine with a minimal example
+- Strict option for loading Modulus checkpoints.
+- Regression only or diffusion only inference for CorrDiff.
+- The Virtual Foundary GraphNet (VFGN) model.
 
 ### Changed
 
@@ -22,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added more config options to FCN AFNO example.
 
 ### Deprecated
+
+- `modulus.models.diffusion.preconditioning.EDMPrecondSR`. Use `EDMPecondSRV2` instead.
 
 ### Removed
 

@@ -48,9 +48,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-from modulus.datapipes.vfgn import utils
-from modulus.datapipes.vfgn.utils import _read_metadata
-from modulus.models.vfgn.graph_dataset import GraphDataset
+from utils import _read_metadata, _combine_std, get_kinematic_mask
+from graph_dataset import GraphDataset
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
@@ -120,17 +119,15 @@ def Inference(rank_zero_logger, dist):
     metadata = _read_metadata(C.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(
-            utils._combine_std(cast(metadata["context_std"]), C.noise_std)
-        ),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
     )
 
     normalization_stats = {
@@ -246,7 +243,7 @@ def Inference(rank_zero_logger, dist):
                 )
 
                 kinematic_mask = (
-                    utils.get_kinematic_mask(features["particle_type"])
+                    get_kinematic_mask(features["particle_type"])
                     .to(torch.bool)
                     .to(device)
                 )

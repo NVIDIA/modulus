@@ -14,5 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .graph_dataset import GraphDataset
 from .graph_network_modules import LearnedSimulator

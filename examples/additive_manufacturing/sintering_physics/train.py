@@ -48,9 +48,16 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-from modulus.datapipes.vfgn import utils
-from modulus.datapipes.vfgn.utils import _read_metadata
-from modulus.models.vfgn.graph_dataset import GraphDataset
+from utils import (
+    _read_metadata,
+    _combine_std,
+    get_metal_mask,
+    get_anchor_z_mask,
+    get_kinematic_mask,
+    weighted_square_error,
+)
+
+from graph_dataset import GraphDataset
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
@@ -82,7 +89,7 @@ class Stats:
         return self
 
 
-device = "cpu"
+# device = "cpu"
 
 NUM_PARTICLE_TYPES = 3
 KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
@@ -119,17 +126,15 @@ def Train(rank_zero_logger, dist):
     metadata = _read_metadata(C.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(
-            utils._combine_std(cast(metadata["context_std"]), C.noise_std)
-        ),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
     )
 
     normalization_stats = {
@@ -168,12 +173,12 @@ def Train(rank_zero_logger, dist):
             rank_zero_logger.info("Compute noise_mask...")
             # if C.loss == 'anchor':
 
-            non_kinematic_mask = utils.get_metal_mask(features["particle_type"])
+            non_kinematic_mask = get_metal_mask(features["particle_type"])
             noise_mask = (
                 non_kinematic_mask.to(sampled_noise.dtype).unsqueeze(-1).unsqueeze(-1)
             )
 
-            anchor_plane_mask = utils.get_anchor_z_mask(features["particle_type"])
+            anchor_plane_mask = get_anchor_z_mask(features["particle_type"])
             noise_anchor_plane_mask = (
                 anchor_plane_mask.to(sampled_noise.dtype).unsqueeze(-1).unsqueeze(-1)
             )
@@ -189,7 +194,7 @@ def Train(rank_zero_logger, dist):
 
         else:
             non_kinematic_mask = torch.logical_not(
-                utils.get_kinematic_mask(particle_types).bool()
+                get_kinematic_mask(particle_types).bool()
             )
             noise_mask = (
                 non_kinematic_mask.to(sampled_noise.dtype).unsqueeze(-1).unsqueeze(-1)
@@ -258,7 +263,7 @@ def Train(rank_zero_logger, dist):
             # print("processing anchor loss\n\n")
             # omit anchor point in loss
             non_kinematic_mask = (
-                torch.logical_not(utils.get_kinematic_mask(particle_types))
+                torch.logical_not(get_kinematic_mask(particle_types))
                 .to(torch.bool)
                 .to(device)
             )
@@ -300,9 +305,7 @@ def Train(rank_zero_logger, dist):
                 loss = loss + C.l_me * loss_l1
 
         elif C.loss.startswith("weighted"):
-            loss = utils.weighted_square_error(
-                pred_acceleration, target_acceleration, device
-            )
+            loss = weighted_square_error(pred_acceleration, target_acceleration, device)
 
             if C.loss == "weighted_anchor":
                 loss_plane = pred_acceleration[..., 2] ** 2
@@ -508,17 +511,15 @@ def Test(rank_zero_logger, dist):
     metadata = _read_metadata(C.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(utils._combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(
-            utils._combine_std(cast(metadata["context_std"]), C.noise_std)
-        ),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
     )
 
     normalization_stats = {
@@ -627,7 +628,7 @@ def Test(rank_zero_logger, dist):
                 )
 
                 kinematic_mask = (
-                    utils.get_kinematic_mask(features["particle_type"])
+                    get_kinematic_mask(features["particle_type"])
                     .to(torch.bool)
                     .to(device)
                 )
