@@ -19,6 +19,7 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import json
 import os
+import shutil
 
 # ruff: noqa: E402
 os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
@@ -28,6 +29,7 @@ from hydra.utils import to_absolute_path
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
+import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
@@ -121,6 +123,12 @@ def main(cfg: DictConfig) -> None:
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
 
+    # Save a copy of the Modulus source code
+    if dist.rank == 0:
+        shutil.copytree(
+            os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
+        )
+
     # inform about the output
     logger.info(
         f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
@@ -213,8 +221,21 @@ def main(cfg: DictConfig) -> None:
         c.network_kwargs.model_channels = cbase
     # if cres is not None:
     #    c.network_kwargs.channel_mult = cres
-    if augment > 0:
-        raise NotImplementedError("Augmentation is not implemented")
+    if augment:
+        if augment < 0 or augment > 1:
+            raise ValueError("Augment probability should be within [0,1].")
+        # import augmentation pipe
+        try:
+            from edmss import AugmentPipe
+        except ImportError:
+            raise ImportError(
+                "Please get the augmentation pipe  by running: pip install git+https://github.com/mnabian/edmss.git"
+            )
+        c.augment_kwargs = EasyDict(class_name="edmss.AugmentPipe", p=augment)
+        c.augment_kwargs.update(
+            xflip=1e8, yflip=1, scale=1, rotate_frac=1, aniso=1, translate_frac=1
+        )
+        c.network_kwargs.augment_dim = 9
     c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
 
     # Training options.
