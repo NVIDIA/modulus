@@ -82,7 +82,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-2.0.0-cp
         pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; \
     else \
         echo "Installing DGL for: $TARGETPLATFORM from source" && \
-        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/2.0.0 && git submodule update --init --recursive && \
+        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
         DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
         cd python && \
         python setup.py install && \
