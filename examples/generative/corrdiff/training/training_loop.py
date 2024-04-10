@@ -352,7 +352,7 @@ def training_loop(
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
-            net.save(os.path.join(run_dir, filename))
+            net.save(os.path.join(run_dir, filename), verbose=True)
             logger0.info(f"Saved model in the {run_dir} directory")
 
             filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"
