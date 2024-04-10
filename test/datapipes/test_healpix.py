@@ -85,7 +85,7 @@ def scaling_double_dict():
     return DictConfig(scaling)
 
 @nfsdata_or_fail
-def test_open_time_series_on_the_fly(create_path):
+def test_open_time_series_on_the_fly(create_path, pytestconfig):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
 
@@ -104,7 +104,7 @@ def test_open_time_series_on_the_fly(create_path):
     assert ds_var.equals(base[test_var])
 
 @nfsdata_or_fail
-def test_open_time_series(data_dir, dataset_name):
+def test_open_time_series(data_dir, dataset_name, pytestconfig):
     # check for failure of non-existant dataset
     with pytest.raises(
         FileNotFoundError, match=("Dataset doesn't appear to exist at")
@@ -115,7 +115,7 @@ def test_open_time_series(data_dir, dataset_name):
     assert isinstance(ds, xr.Dataset)
 
 @nfsdata_or_fail
-def test_create_time_series(data_dir, dataset_name, create_path):
+def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
     scaling = {"z500":{"log_epsilon":2}}
@@ -161,7 +161,7 @@ def test_create_time_series(data_dir, dataset_name, create_path):
     assert (const_ds[const] == ds.constants[0]).any()
 
 @nfsdata_or_fail
-def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict):
+def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict, pytestconfig):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -250,7 +250,7 @@ def test_TimeSeriesDataset_initialization(data_dir, dataset_name, scaling_dict):
     assert isinstance(timeseries_ds, TimeSeriesDataset)
 
 @nfsdata_or_fail
-def test_TimeSeriesDataset_get_constants(data_dir, dataset_name, scaling_dict):
+def test_TimeSeriesDataset_get_constants(data_dir, dataset_name, scaling_dict, pytestconfig):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -269,7 +269,7 @@ def test_TimeSeriesDataset_get_constants(data_dir, dataset_name, scaling_dict):
     )
 
 @nfsdata_or_fail
-def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict):
+def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfig):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -307,7 +307,7 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict):
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
 
 @nfsdata_or_fail
-def test_TimeSeriesDataset_get(data_dir, dataset_name, scaling_double_dict):
+def test_TimeSeriesDataset_get(data_dir, dataset_name, scaling_double_dict, pytestconfig):
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -403,7 +403,7 @@ def test_TimeSeriesDataset_get(data_dir, dataset_name, scaling_double_dict):
     assert len(inputs) ==  (len(timeseries_ds[0]) + 1)
 
 @nfsdata_or_fail
-def test_TimeSeriesDataModule_initialization(data_dir, create_path, dataset_name, scaling_double_dict):
+def test_TimeSeriesDataModule_initialization(data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
     splits = {
@@ -482,7 +482,7 @@ def test_TimeSeriesDataModule_initialization(data_dir, create_path, dataset_name
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
 
 @nfsdata_or_fail
-def test_TimeSeriesDataModule_get_constants(data_dir, create_path, dataset_name, scaling_double_dict):
+def test_TimeSeriesDataModule_get_constants(data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
     
@@ -541,7 +541,7 @@ def test_TimeSeriesDataModule_get_constants(data_dir, create_path, dataset_name,
     )
 
 @nfsdata_or_fail
-def test_TimeSeriesDataModule_get_dataloaders(data_dir, create_path, dataset_name, scaling_double_dict):
+def test_TimeSeriesDataModule_get_dataloaders(data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig):
     variables = ["z500","z1000"]
     constants = {"lsm":"lsm"}
     splits = {
