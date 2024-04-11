@@ -110,11 +110,9 @@ python inference.py
 
 - To generate your own tfrecord from Physical simulation output:
   
-  - Run:
-  > python data_process/rawdata2tfrecord.py
-  
-    i.e.
-- > python data_process/rawdata2tfrecord.py
+```bash
+python data_process/rawdata2tfrecord.py
+```
 
 Defition of step_context & methods tried:
 
@@ -138,7 +136,8 @@ Defition of step_context & methods tried:
 
 ## Reference
 
-Learning to Simulate Complex Physics with Graph Networks -- `https://arxiv.org/abs/2002.09405`
+[Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405)
+
 
 ```text
 @inproceedings{sanchezgonzalez2020learning,

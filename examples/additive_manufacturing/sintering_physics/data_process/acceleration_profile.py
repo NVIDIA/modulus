@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# © Copyright 2023 HP Development Company, L.P.
 
 """
 File to visualize and check the acceleration profile
@@ -93,10 +92,6 @@ def main(cfg: DictConfig):
 
 """
 Perform data analyis on voxel moving speed, acceleration
-
-Arguments:
-    cfg: Dictionary of parameters.
-
 """
 if __name__ == "__main__":
     main()
