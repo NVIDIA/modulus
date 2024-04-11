@@ -25,7 +25,6 @@ import importlib
 import inspect
 import io
 import os
-import pickle
 import re
 import shutil
 import sys
@@ -207,15 +206,6 @@ def get_dtype_and_ctype(type_obj: Any) -> Tuple[np.dtype, Any]:  # pragma: no co
         )
 
     return my_dtype, my_ctype
-
-
-def is_pickleable(obj: Any) -> bool:  # TODO remove  # pragma: no cover
-    try:
-        with io.BytesIO() as stream:
-            pickle.dump(obj, stream)
-        return True
-    except:
-        return False
 
 
 # Functionality to import modules/objects by name, and call functions by name
