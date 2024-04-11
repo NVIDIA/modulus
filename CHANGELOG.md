@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Pickle dependency for CorrDiff.
+
 ### Fixed
 
 - Consistent handling of single GPU runs in DistributedManager
