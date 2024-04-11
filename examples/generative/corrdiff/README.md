@@ -20,7 +20,7 @@ the potential of end-to-end, global-to- km-scales machine learning weather predi
 Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more details.
 
 <p align="center">
-<img src="../../../docs/img/corrdiff_demo.gif" />
+<img src="../../../docs/img/corrdiff_cold_front.png"/>
 </p>
 
 
