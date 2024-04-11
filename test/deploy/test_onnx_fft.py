@@ -46,14 +46,11 @@ def check_ort_version():
             True,
             reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
         )
-    elif ort.__version__ != "1.18.0":
+    elif ort.__version__ != "1.15.1":
         return pytest.mark.skipif(
             True,
-            reason="Must install ORT 1.18.0. Other versions might work, but are not \
-        tested. If using other versions, ensure that the fix here \
-        https://github.com/microsoft/onnxruntime/pull/15662 is present. \
-        If the onnxruntime-gpu wheel is not available, please build from source. \
-        For 1.18.0, one can use https://github.com/microsoft/onnxruntime/commit/4ea54b82f9debd70e46ea0a789e7aafe05d5b983",
+            reason="Must install custom ORT 1.15.1. Other versions do not work \
+        due to bug in IRFFT: https://github.com/microsoft/onnxruntime/issues/13236",
         )
     else:
         return pytest.mark.skipif(False, reason="")
