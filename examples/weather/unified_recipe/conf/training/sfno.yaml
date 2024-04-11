@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+amp_supported: !!bool False
 nr_input_steps: 1
 
 optimizer:
-  name: FusedAdam
+  framework: torch
+  name: Adam
   args:
     lr: 1e-3
     betas: [0.9, 0.999]
@@ -27,12 +29,8 @@ stages:
     max_iterations: .inf
     num_epochs: 500
     unroll_steps: 1
-    batch_size: 4 # 64 for 8 GPUs
+    batch_size: 2
     lr_scheduler_name: StepLR
     args:
-      scheduler_T_max: 70
-      scheduler_factor: 0.1
-      scheduler_patience: 10
-      scheduler_step_size: 100
-      scheduler_gamma: 0.5
-      lr_warmup_steps: 0
+      step_size: 100
+      gamma: 0.5
