@@ -74,7 +74,7 @@ def training_loop(
     patch_shape_x=448,
     patch_shape_y=448,
     patch_num=1,
-    wandb_mode="disabled",  
+    wandb_mode="disabled",
     wandb_project="Modulus-Generative",
     wandb_group="CorrDiff-DDP-Group",
     wandb_entity="CorrDiff-DDP-Group",
