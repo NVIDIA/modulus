@@ -125,13 +125,13 @@ Defition of step_context & methods tried:
 - appending previous sequence of global context / (sequence of sinter temperature)
 
   ```bash
-    >  tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'][:-1], [1, -1])
+    tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'][:-1], [1, -1])
   ```
 
 - appending the entire sequence of sintering profile
 
   ```bash
-    > tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'],[1, -1])
+    tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'],[1, -1])
   ```
 
 ## Reference

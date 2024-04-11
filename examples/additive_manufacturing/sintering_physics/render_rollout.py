@@ -32,26 +32,26 @@ It may require installing Tkinter with `sudo apt-get install python3.7-tk`.
 
 """
 
-import os, json
-import numpy as np
-from absl import app
+import json
+import os
 
+import hydra
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d.axes3d as p3
+import numpy as np
+from absl import app
+from hydra import compose, initialize
 from matplotlib import animation
+from omegaconf import DictConfig, OmegaConf
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
-    initialize_wandb,
-    initialize_mlflow,
     RankZeroLoggingWrapper,
+    initialize_mlflow,
+    initialize_wandb,
 )
-
-import hydra
-from hydra import initialize, compose
-from omegaconf import DictConfig, OmegaConf
 
 
 def compute_accuracy_percent(rollout_data_tuple, trajectory_len):

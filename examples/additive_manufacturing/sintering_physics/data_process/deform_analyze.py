@@ -17,14 +17,15 @@
 # © Copyright 2023 HP Development Company, L.P.
 
 
-import sys, os, glob
-import pyvista as pv
-import numpy as np
+import glob
 import json
-
-from utils import get_solution_id, read_configs, get_solution_id
+import os
+import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pyvista as pv
+from utils import get_solution_id, read_configs
 
 
 def plot_temperature_curve(temp_curve_list):

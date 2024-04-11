@@ -22,12 +22,11 @@ directly from the /out folders
 """
 
 import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
-import matplotlib.pyplot as plt
-
-from utils import read_raw_folder, get_data_position
-
+from utils import get_data_position, read_raw_folder
 
 # read solution files from solver-only
 solution_list_solver = read_raw_folder(physics_solver_path)

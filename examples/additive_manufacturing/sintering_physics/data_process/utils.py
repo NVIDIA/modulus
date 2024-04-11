@@ -15,12 +15,14 @@
 # limitations under the License.
 
 
-import glob, re, os
-import numpy as np
 import csv
-from natsort import natsorted
+import glob
+import os
+import re
 
+import numpy as np
 import tensorflow as tf
+from natsort import natsorted
 
 
 def read_raw_folder(data_dir):

@@ -21,14 +21,17 @@ This file takes the predicted output stored in /rollouts
 convert into the .vtu format, that can be processed by simulation software
 """
 
-import os, glob, time, sys
-import numpy as np
-import vtk
+import glob
 import logging as log
-import pyvista as pv
-from rawdata2tfrecord_large_ts import read_configs, get_solution_id
+import os
 import pickle
+import sys
+import time
 
+import numpy as np
+import pyvista as pv
+import vtk
+from rawdata2tfrecord_large_ts import get_solution_id, read_configs
 
 log.basicConfig(
     format="%(asctime)s - %(levelname)s\t%(message)s",

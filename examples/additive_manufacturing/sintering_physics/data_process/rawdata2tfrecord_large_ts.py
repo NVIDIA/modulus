@@ -31,24 +31,25 @@ python rawdata2tfrecord.py "/home/rachel_chen/dataset/Virtual-Foundry" "./"
 python rawdata2tfrecord.py "/home/lopezca/repos/sintervox-models/dl-models"
 """
 
-import sys, os, glob
 import csv
-import pyvista as pv
-import numpy as np
+import glob
 import json
-import tensorflow as tf
-from sklearn import neighbors
-from natsort import natsorted
 import logging
+import os
+import sys
+
+import numpy as np
+import pyvista as pv
+import tensorflow as tf
+from natsort import natsorted
+from sklearn import neighbors
 
 logging.basicConfig(filename="DS-retrain-2403.log", level=logging.DEBUG)
 
 import hydra
-from omegaconf import DictConfig
-
 import utils
+from omegaconf import DictConfig
 from utils import get_solution_id, time_diff
-
 
 # Create a description of the features.
 _FEATURE_DESCRIPTION = {

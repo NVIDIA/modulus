@@ -19,17 +19,15 @@
 File to visualize and check the acceleration profile
 """
 
+import logging
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import pyvista as pv
-
-from utils import read_raw_folder, time_diff, get_data_position
 
 import hydra
+import matplotlib.pyplot as plt
+import numpy as np
+import pyvista as pv
 from omegaconf import DictConfig
-
-import logging
+from utils import get_data_position, read_raw_folder, time_diff
 
 logging.basicConfig(filename="data_analysis.log", level=logging.DEBUG)
 

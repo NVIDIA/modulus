@@ -16,13 +16,15 @@
 # limitations under the License.
 
 
-import os, json
+import ast
+import json
+import math
+import os
 import random
 import time
-from tqdm import tqdm
+
 import numpy as np
-import math
-import ast
+from tqdm import tqdm
 
 try:
     import tensorflow as tf
@@ -40,33 +42,30 @@ except:
     # Invalid device or cannot modify virtual devices once initialized.
     pass
 
+import hydra
 import torch
+from graph_dataset import GraphDataset
+from hydra import compose, initialize
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.tensorboard import SummaryWriter
-
-from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 from utils import (
-    _read_metadata,
     _combine_std,
-    get_metal_mask,
+    _read_metadata,
     get_anchor_z_mask,
     get_kinematic_mask,
+    get_metal_mask,
     weighted_square_error,
 )
-
-from graph_dataset import GraphDataset
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
+    RankZeroLoggingWrapper,
     # initialize_wandb,
     initialize_mlflow,
-    RankZeroLoggingWrapper,
 )
-
-import hydra
-from hydra import initialize, compose
-from omegaconf import DictConfig, OmegaConf
+from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 
 
 class Stats:

@@ -20,16 +20,16 @@
 This is the code to plot the error from the rollout.pkl files
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-import glob, re, os
+import glob
 import json
-from natsort import natsorted
+import os
 import pickle
+import re
 
-from absl import app
-from absl import flags
-
+import matplotlib.pyplot as plt
+import numpy as np
+from absl import app, flags
+from natsort import natsorted
 
 flags.DEFINE_string("rollout_path", None, help="Path to rollout pickle file")
 flags.DEFINE_string("rollout_folder_path", None, help="Path to rollout pickle file")

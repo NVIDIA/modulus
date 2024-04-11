@@ -32,8 +32,8 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
-from utils import _read_metadata, tf2torch
 from reading_utils import parse_serialized_simulation_example, split_trajectory
+from utils import _read_metadata, tf2torch
 
 INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
 PREDICT_LENGTH = 1  # [options: 5]
