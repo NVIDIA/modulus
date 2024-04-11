@@ -69,15 +69,15 @@ validation_dump: 50
 validation_steps: 10
   # how many loss evaluations are used to compute the validation loss per checkpoint
 wandb_mode: online
-  # Wights & biases mode [online, ofline, disabled]
+  # Weights & biases mode [online, ofline, disabled]
 wandb_project:  "Modulus-Generative"
- # Wights & biases project
+ # Weights & biases project
 wandb_group: "CorrDiff-DDP-Group"
- # Wights & biases group
+ # Weights & biases group
 wandb_entity: "CorrDiff-DDP-Group"
- # Wights & biases entity (i.e. a workspace, personal or a team workspace)
+ # Weights & biases entity (i.e. a workspace, personal or a team workspace)
 wandb_name: "CorrDiff"
- # Wights & biases name
+ # Weights & biases name
 
 
 ## Weather data options
