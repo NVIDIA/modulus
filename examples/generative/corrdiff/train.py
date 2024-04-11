@@ -78,7 +78,13 @@ def main(cfg: DictConfig) -> None:
     augment = getattr(cfg, "augment", 0.0)
 
     # Parse performance options
-    fp16 = getattr(cfg, "fp16", False)
+    if hasattr(cfg, "fp_optimizations"):
+        fp_optimizations = cfg.fp_optimizations
+        fp16 = fp_optimizations == "fp16"
+    else:
+        # look for legacy "fp16" parameter
+        fp16 = getattr(cfg, "fp16", False)
+        fp_optimizations = "fp16" if fp16 else "fp32"
     ls = getattr(cfg, "ls", 1)
     bench = getattr(cfg, "bench", True)
     workers = getattr(cfg, "workers", 4)
@@ -100,6 +106,7 @@ def main(cfg: DictConfig) -> None:
     # Parse weather data options
     c = EasyDict()
     c.task = task
+    c.fp_optimizations = fp_optimizations
     c.wandb_mode = wandb_mode
     c.wandb_project = wandb_project
     c.wandb_group = wandb_group
@@ -283,7 +290,7 @@ def main(cfg: DictConfig) -> None:
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
     logger0.info(f"Batch size:              {c.batch_size_global}")
-    logger0.info(f"Mixed-precision:         {c.network_kwargs.use_fp16}")
+    logger0.info(f"Mixed-precision:         {c.fp_optimizations}")
 
     # Dry run?
     if dry_run:

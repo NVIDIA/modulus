@@ -79,6 +79,7 @@ def training_loop(
     wandb_group="CorrDiff-DDP-Group",
     wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
+    fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
     valid_dump_ticks=5000,
     num_validation_evals=10,
@@ -109,6 +110,9 @@ def training_loop(
         to_absolute_path("."),
         exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
     )
+
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     # Initialize.
     start_time = time.time()
@@ -241,13 +245,14 @@ def training_loop(
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
 
-                loss = loss_fn(
-                    net=ddp,
-                    img_clean=img_clean,
-                    img_lr=img_lr,
-                    labels=labels,
-                    augment_pipe=augment_pipe,
-                )
+                with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
+                    loss = loss_fn(
+                        net=ddp,
+                        img_clean=img_clean,
+                        img_lr=img_lr,
+                        labels=labels,
+                        augment_pipe=augment_pipe,
+                    )
                 training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss / num_accumulation_rounds
