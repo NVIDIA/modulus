@@ -23,7 +23,6 @@ import datetime
 import fnmatch
 import importlib
 import inspect
-import io
 import os
 import re
 import shutil
