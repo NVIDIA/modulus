@@ -36,7 +36,6 @@ from .utils import (
     get_obj_by_name,
     get_obj_from_module,
     get_top_level_function_name,
-    is_pickleable,
     is_top_level_function,
     list_dir_recursively_with_ignore,
     named_params_and_buffers,
