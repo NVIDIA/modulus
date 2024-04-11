@@ -149,7 +149,7 @@ class VPPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -322,7 +322,7 @@ class VEPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -468,7 +468,7 @@ class iDDPMPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -633,7 +633,7 @@ class EDMPrecond(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -795,7 +795,7 @@ class EDMPrecondSR(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
