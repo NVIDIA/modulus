@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for organization level model files on NGC file system
 - Augmentation pipeline for CorrDiff.
 - Code logging for CorrDiff via wandb
+- Physics-Informed Magnetohydrodynamics example.
 
 ### Changed
 
