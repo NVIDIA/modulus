@@ -49,10 +49,9 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 
-from constants import Constants
-
-
-C = Constants()
+import hydra
+from hydra import initialize, compose
+from omegaconf import DictConfig, OmegaConf
 
 
 def compute_accuracy_percent(rollout_data_tuple, trajectory_len):
@@ -242,7 +241,7 @@ def plot_3Danime(rollout_data, pred_denorm, save_name):
     plt.close()
 
 
-def plot_mean_error(rollout_data_tuple, metadata, plot_steps, build_name):
+def plot_mean_error(rollout_data_tuple, metadata, plot_steps, rollout_path, build_name):
     (init_position, gt_position, pred_position) = rollout_data_tuple
 
     pos_mean = metadata["pos_mean"]
@@ -306,7 +305,7 @@ def plot_mean_error(rollout_data_tuple, metadata, plot_steps, build_name):
     # plt.title("Mean error as compare to VF  " + build_name)
     plt.savefig(
         os.path.join(
-            os.path.dirname(C.rollout_path), "mean_error_" + build_name + ".png"
+            os.path.dirname(rollout_path), "mean_error_" + build_name + ".png"
         )
     )
     plt.close()
@@ -314,7 +313,7 @@ def plot_mean_error(rollout_data_tuple, metadata, plot_steps, build_name):
     return rollout_list, rollout_uvw
 
 
-def plot_mean_error_temperature(rollout_data, metadata, plot_steps, build_name):
+def plot_mean_error_temperature(rollout_data, metadata, plot_steps, rollout_path, build_name):
     gt_position = rollout_data["ground_truth_rollout"]
     pred_position = rollout_data["predicted_rollout"]
     temperatures = rollout_data["global_context"][3:]
@@ -375,7 +374,7 @@ def plot_mean_error_temperature(rollout_data, metadata, plot_steps, build_name):
     plt.title("Mean error as compare to VF  " + build_name)
     plt.savefig(
         os.path.join(
-            os.path.dirname(C.rollout_path), "mean_error_wtemp" + build_name + ".png"
+            os.path.dirname(rollout_path), "mean_error_wtemp" + build_name + ".png"
         )
     )
     plt.close()
@@ -383,7 +382,8 @@ def plot_mean_error_temperature(rollout_data, metadata, plot_steps, build_name):
     return rollout_list, rollout_uvw
 
 
-def main(unused_argv):
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     """
     Read from the prediction output, which is saved in rollout_path, i.e. rollouts/rollout_test_0.json
         initial_positions.shape:(time_Step_size for init input, partical_size, dim), i.e.(5, 1394, 3)
@@ -395,12 +395,12 @@ def main(unused_argv):
     dist = DistributedManager()
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
-    if not C.rollout_path:
+    if not cfg.test_options.rollout_path:
         raise ValueError("A `rollout_path` must be passed.")
-    with open(C.rollout_path, "rb") as file:
+    with open(cfg.test_options.rollout_path, "rb") as file:
         rollout_data = json.load(file)
 
-    metadata_path_json = os.path.join(C.metadata_path, "metadata.json")
+    metadata_path_json = os.path.join(cfg.test_options.metadata_path, "metadata.json")
     rank_zero_logger.info(f"load metadata from path: {metadata_path_json}")
     print("load metadata from path: ", metadata_path_json)
     with open(metadata_path_json, "r") as f:
@@ -466,25 +466,25 @@ def main(unused_argv):
     # If plot tolerance range
     print("Compute percentage rollout \n\n")
     rollout_data_tuple = (initial_positions, ground_truth_rollout, predicted_rollout)
-    if C.plot_tolerance_range:
+    if cfg.test_options.plot_tolerance_range:
         percentage_rollout_list, percent_uvw = compute_accuracy_percent(
             rollout_data_tuple, n
         )
         plot_rollout_percentage(
             percentage_rollout_list,
             percent_uvw,
-            os.path.dirname(C.rollout_path),
+            os.path.dirname(cfg.test_options.rollout_path),
             "rollout_acc_percent",
-            build_name=C.test_build,
+            build_name=cfg.test_options.test_build_name,
         )
 
     print("\n\n plot mean error")
-    plot_mean_error(rollout_data_tuple, metadata, n, C.test_build)
+    plot_mean_error(rollout_data_tuple, metadata, n, cfg.test_options.rollout_path, cfg.test_options.test_build_name)
 
-    if C.plot_3d:
+    if cfg.test_options.plot_3d:
         # Plot 3D visualization
         pred_denorm = predicted_rollout * pos_std + pos_mean
-        plot_3Danime(rollout_data, pred_denorm, C.rollout_path[:-4])
+        plot_3Danime(rollout_data, pred_denorm, cfg.test_options.rollout_path[:-4])
 
 
 if __name__ == "__main__":
@@ -492,4 +492,4 @@ if __name__ == "__main__":
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
-    app.run(main)
+    main()

@@ -18,7 +18,7 @@
 
 - for logging:
   - pip install wandb
-  - pip3 install mlflow
+  - pip install mlflow
 
 - For training with mixed precision:
   - `https://github.com/NVIDIA/apex`
@@ -29,10 +29,12 @@ simulation data files
 
   - install pytest
   - pip install importlib-metadata
+  - pip install hydra-core --upgrade
+
 
 ## Train
 
-Change the params in constants.py for training:
+Change the params in conf/config.yaml for training:
 
 - mode: "train"
 - ckpt_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
@@ -55,7 +57,7 @@ Currently default params:
 
 ## Test (with the provided sample data)
 
-Change the params in constants.py for testing:
+Change the params in conf/config.yaml for testing:
 
 - mode: "eval_rollout"
 - eval_split: "test"
@@ -71,11 +73,11 @@ Then run:
 python train.py
 ```
 
-## To generate visualization of the test result
+## To generate visualization of the test result, change the params in conf/config.yaml 
 
 - rollout_path={selected_prediction_output.json}, i.e. "rollouts/rollout_test_0.json"
 - metadata_path={metadata path}, i.e. "./data/test_validation"
-- test_build={test file name}, i.e. "test0"
+- test_build_name={test file name}, i.e. "test0"
 
 ```bash
 python render_rollout.py
@@ -83,7 +85,7 @@ python render_rollout.py
 
 ## Inference
 
-Change the params in constants.py for inference run:
+Change the params in conf/config.yaml for inference run:
 
 (model tested with spliting the entire sintering profile into 2 stages,
 can combine the entire sintering profile inferencing according to train schema)

@@ -93,6 +93,7 @@ def get_input_fn(data_path, batch_size, prefetch_buffer_size, mode, split):
         metadata = _read_metadata(data_path)
 
         # Create a tf.data.Dataset from the TFRecord.
+        # todo: try data exists
         ds = tf.data.TFRecordDataset([os.path.join(data_path, f"{split}.tfrecord")])
         ds = ds.map(
             functools.partial(parse_serialized_simulation_example, metadata=metadata)

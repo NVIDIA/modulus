@@ -20,13 +20,9 @@
 
 
 import os, json
-from absl import app
-import random
 import time
 from tqdm import tqdm
 import numpy as np
-import math
-import ast
 
 try:
     import tensorflow as tf
@@ -60,11 +56,12 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 
-from constants import Constants
+import hydra
+from hydra import initialize, compose
+from omegaconf import DictConfig, OmegaConf
 
-C = Constants()
 
-
+# todo: move stats class to data / utils file
 class Stats:
     """
     Represents statistical attributes with methods for device transfer.
@@ -81,21 +78,10 @@ class Stats:
         return self
 
 
-# device = "cpu"
-
-INPUT_SEQUENCE_LENGTH = 5  # calculate the last 5 velocities. [options: 5, 10]
-PREDICT_LENGTH = 1  # [options: 5]
-
-NUM_PARTICLE_TYPES = 3
-KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
-METAL_PARTICLE_ID = 2  # refers to normal particles
-ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
-
-
 cast = lambda v: np.array(v, dtype=np.float64)
+device = "cpu"
 
-
-def Inference(rank_zero_logger, dist):
+def Inference(rank_zero_logger, dist, cfg):
     """
     Executes the testing phase for a graph-based model, generating and
     storing predictions.
@@ -108,26 +94,26 @@ def Inference(rank_zero_logger, dist):
     dataset = GraphDataset(
         # size=C.num_steps,
         mode="rollout",
-        split=C.eval_split,
-        data_path=C.data_path,
-        batch_size=C.batch_size,
+        split=cfg.general.eval_split,
+        data_path=cfg.data_options.data_path,
+        batch_size=cfg.train_options.batch_size,
     )
     rank_zero_logger.info(
         f"Initialized inference dataset with mode {dataset.mode}, dataset size {dataset.size}..."
     )
 
-    metadata = _read_metadata(C.data_path)
+    metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
     )
 
     normalization_stats = {
@@ -137,10 +123,10 @@ def Inference(rank_zero_logger, dist):
     }
 
     model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * PREDICT_LENGTH,
-        num_seq=INPUT_SEQUENCE_LENGTH,
+        num_dimensions=metadata["dim"] * cfg.train_options.pred_len,
+        num_seq=cfg.train_options.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
-        num_particle_types=NUM_PARTICLE_TYPES,
+        num_particle_types=cfg.data_options.NUM_PARTICLE_TYPES,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
     )
@@ -148,7 +134,9 @@ def Inference(rank_zero_logger, dist):
 
     loaded = False
     example_index = 0
-    # device = "cpu"
+    device = "cpu"
+    # device = torch.device(cfg.general.device if torch.cuda.is_available() else "cpu")
+
     with torch.no_grad():
         for features, targets in tqdm(dataset):
             if loaded is False:
@@ -162,7 +150,7 @@ def Inference(rank_zero_logger, dist):
 
                 model.inference(
                     position_sequence=features["position"][
-                        :, 0:INPUT_SEQUENCE_LENGTH
+                        :, 0:cfg.train_options.input_seq_len
                     ].to(device),
                     n_particles_per_example=features["n_particles_per_example"].to(
                         device
@@ -170,18 +158,18 @@ def Inference(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=PREDICT_LENGTH,
+                    predict_length=cfg.train_options.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
 
                 # Loading the pretrained model from model ckpt_path_vfgn
                 # For provided ckpt with missing keys, ignore
-                model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
+                model.load_state_dict(torch.load(cfg.data_options.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
                 rank_zero_logger.info(
-                    f"Loaded model from ckpt path: {C.ckpt_path_vfgn}"
+                    f"Loaded model from ckpt path: {cfg.data_options.ckpt_path_vfgn}"
                 )
 
                 # config optimizer
@@ -191,7 +179,7 @@ def Inference(rank_zero_logger, dist):
                 model.eval()
                 loaded = True
 
-            initial_positions = features["position"][:, :INPUT_SEQUENCE_LENGTH].to(
+            initial_positions = features["position"][:, :cfg.train_options.input_seq_len].to(
                 device
             )
 
@@ -205,7 +193,7 @@ def Inference(rank_zero_logger, dist):
             )
 
             # num_steps = ground_truth_positions.shape[1]
-            num_steps = global_context.shape[0] - INPUT_SEQUENCE_LENGTH
+            num_steps = global_context.shape[0] - cfg.train_options.input_seq_len
             rank_zero_logger.info(f"\n Start prediction for {num_steps} steps...... ")
 
             current_positions = initial_positions
@@ -220,7 +208,7 @@ def Inference(rank_zero_logger, dist):
                     global_context_step = None
                     rank_zero_logger.info(f"global_context_step is None")
                 else:
-                    read_step_context = global_context[: step + INPUT_SEQUENCE_LENGTH]
+                    read_step_context = global_context[: step + cfg.train_options.input_seq_len]
                     zero_pad = torch.zeros(
                         [global_context.shape[0] - read_step_context.shape[0] - 1, 1],
                         dtype=features["step_context"].dtype,
@@ -237,7 +225,7 @@ def Inference(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=PREDICT_LENGTH,
+                    predict_length=cfg.train_options.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
@@ -290,10 +278,10 @@ def Inference(rank_zero_logger, dist):
             # rollout_op = tree.map_structure(lambda x: x.numpy(), rollout_op)
 
             rollout_op["metadata"] = metadata
-            filename = f"rollout_{C.eval_split}_{example_index}.json"
-            filename = os.path.join(C.output_path, filename)
-            if not os.path.exists(C.output_path):
-                os.makedirs(C.output_path)
+            filename = f"rollout_{cfg.general.eval_split}_{example_index}.json"
+            filename = os.path.join(cfg.data_options.output_path, filename)
+            if not os.path.exists(cfg.data_options.output_path):
+                os.makedirs(cfg.data_options.output_path)
             with open(filename, "w") as file_object:
                 json.dump(rollout_op, file_object)
 
@@ -301,7 +289,8 @@ def Inference(rank_zero_logger, dist):
             rank_zero_logger.info(f"prediction time: {time.time()-start_time}\n")
 
 
-def main(_):
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     """
     Triggers the train or test phase based on the configuration.
     """
@@ -311,8 +300,8 @@ def main(_):
 
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
-    if C.mode == "rollout":
-        Inference(rank_zero_logger, dist)
+    if cfg.general.mode == "rollout":
+        Inference(rank_zero_logger, dist, cfg)
     else:
         raise NotImplementedError("Mode not implemented ")
 
@@ -323,4 +312,4 @@ if __name__ == "__main__":
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
-    app.run(main)
+    main()

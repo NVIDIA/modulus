@@ -20,7 +20,6 @@
 
 
 import os, json
-from absl import app
 import random
 import time
 from tqdm import tqdm
@@ -63,14 +62,14 @@ from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
-    initialize_wandb,
+    # initialize_wandb,
     initialize_mlflow,
     RankZeroLoggingWrapper,
 )
 
-from constants import Constants
-
-C = Constants()
+import hydra
+from hydra import initialize, compose
+from omegaconf import DictConfig, OmegaConf
 
 
 class Stats:
@@ -88,53 +87,45 @@ class Stats:
         self.std = self.std.to(device)
         return self
 
-
-# device = "cpu"
-
-NUM_PARTICLE_TYPES = 3
-KINEMATIC_PARTICLE_ID = 0  # refers to anchor point
-METAL_PARTICLE_ID = 2  # refers to normal particles
-ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
-
-
 cast = lambda v: np.array(v, dtype=np.float64)
 
 
-def Train(rank_zero_logger, dist):
+def Train(rank_zero_logger, dist, cfg: DictConfig):
     """
     Trains a graph-based model, evaluating and saving its performance periodically.
     """
+
     # config dataset
     dataset = GraphDataset(
-        size=C.num_steps,
-        data_path=C.data_path,
-        batch_size=C.batch_size,
-        prefetch_buffer_size=C.prefetch_buffer_size,
+        size=cfg.train_options.num_steps,
+        data_path=cfg.data_options.data_path,
+        batch_size=cfg.train_options.batch_size,
+        prefetch_buffer_size=cfg.train_options.prefetch_buffer_size,
     )
     rank_zero_logger.info(
         f"Initialized train dataset with mode {dataset.mode}, dataset size {dataset.size}..."
     )
 
     testDataset = GraphDataset(
-        size=C.num_steps, split="test", data_path=C.data_path, batch_size=C.batch_size
+        size=cfg.train_options.num_steps, split="test", data_path=cfg.data_options.data_path, batch_size=cfg.train_options.batch_size
     )
     rank_zero_logger.info(
         f"Initialized testDataset with mode {testDataset.mode}, dataset size {testDataset.size}..."
     )
 
     # config model
-    metadata = _read_metadata(C.data_path)
+    metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
     )
 
     normalization_stats = {
@@ -143,17 +134,18 @@ def Train(rank_zero_logger, dist):
         "context": context_stats,
     }
     model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * C.pred_len,
-        num_seq=C.input_seq_len,
+        num_dimensions=metadata["dim"] * cfg.train_options.pred_len,
+        num_seq=cfg.train_options.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
-        num_particle_types=NUM_PARTICLE_TYPES,
+        num_particle_types=cfg.data_options.NUM_PARTICLE_TYPES,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
     )
 
-    writer = SummaryWriter(log_dir=C.ckpt_path_vfgn)
+    writer = SummaryWriter(log_dir=cfg.data_options.ckpt_path_vfgn)
 
     optimizer = None
+    # todo : check device
     device = "cpu"
     step = 0
     running_loss = 0.0
@@ -167,11 +159,10 @@ def Train(rank_zero_logger, dist):
         particle_types = features["particle_type"]
 
         sampled_noise = model.get_random_walk_noise_for_position_sequence(
-            inputs, noise_std_last_step=C.noise_std
+            inputs, noise_std_last_step=cfg.data_options.noise_std
         )
-        if C.loss.startswith("anchor"):
+        if cfg.train_options.loss.startswith("anchor"):
             rank_zero_logger.info("Compute noise_mask...")
-            # if C.loss == 'anchor':
 
             non_kinematic_mask = get_metal_mask(features["particle_type"])
             noise_mask = (
@@ -210,24 +201,24 @@ def Train(rank_zero_logger, dist):
             n_edges_per_example=features["n_edges_per_example"].to(device),
             senders=features["senders"].to(device),
             receivers=features["receivers"].to(device),
-            predict_length=C.pred_len,
+            predict_length=cfg.train_options.pred_len,
             particle_types=features["particle_type"].to(device),
             global_context=features.get("step_context").to(device),
         )
 
         if optimizer is None:
             # first data need to inference the feature size
-            device = torch.device(C.device if torch.cuda.is_available() else "cpu")
+            device = torch.device(cfg.general.device if torch.cuda.is_available() else "cpu")
             rank_zero_logger.info(
                 f"*******************device: {device} ****************"
             )
             # print("*******************device: {} ****************".format(device))
             # config optimizer
-            message_passing_devices = ast.literal_eval(C.message_passing_devices)
+            message_passing_devices = ast.literal_eval(cfg.general.message_passing_devices)
             model.setMessagePassingDevices(message_passing_devices)
             model = model.to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-            if C.fp16:
+            if cfg.general.fp16:
                 # double check if amp installed
                 try:
                     from apex import amp
@@ -250,7 +241,7 @@ def Train(rank_zero_logger, dist):
         loss = (pred_acceleration - target_acceleration) ** 2
 
         decay_fators_1 = torch.DoubleTensor(
-            [math.pow(C.loss_decay_factor, i) for i in range(C.pred_len)]
+            [math.pow(cfg.train_options.loss_decay_factor, i) for i in range(cfg.train_options.pred_len)]
         ).to(device)
         decay_fators_3 = torch.repeat_interleave(decay_fators_1, repeats=3)
 
@@ -258,7 +249,9 @@ def Train(rank_zero_logger, dist):
         loss = torch.sum(loss, dim=-1)  # torch.Size([num_nodes])
         print("overall loss: ", loss.shape, loss)
 
-        if C.loss.startswith("anchor"):
+        # todo: check device
+
+        if cfg.train_options.loss.startswith("anchor"):
             rank_zero_logger.info("processing anchor loss\n\n")
             # print("processing anchor loss\n\n")
             # omit anchor point in loss
@@ -279,7 +272,7 @@ def Train(rank_zero_logger, dist):
             # compute the loss in z-axis of anchor plane points
             loss_plane = pred_acceleration[..., 2] ** 2
             decay_fator = torch.DoubleTensor(
-                [math.pow(C.loss_decay_factor, i) for i in range(1)]
+                [math.pow(cfg.train_options.loss_decay_factor, i) for i in range(1)]
             ).to(device)
             loss_plane = loss_plane * decay_fator
 
@@ -294,20 +287,20 @@ def Train(rank_zero_logger, dist):
             loss_plane = torch.sum(loss_plane) / torch.sum(num_anchor_plane)
             rank_zero_logger.info(f"loss: {loss}, loss_plane: {loss_plane}")
 
-            loss = loss + C.l_plane * loss_plane
+            loss = loss + cfg.train_options.l_plane * loss_plane
 
-            if C.loss == "anchor_me":
+            if cfg.train_options.loss == "anchor_me":
                 loss_l1 = torch.nn.functional.l1_loss(
                     pred_acceleration * decay_fators_3,
                     target_acceleration * decay_fators_3,
                 )
 
-                loss = loss + C.l_me * loss_l1
+                loss = loss + cfg.train_options.l_me * loss_l1
 
-        elif C.loss.startswith("weighted"):
+        elif cfg.train_options.loss.startswith("weighted"):
             loss = weighted_square_error(pred_acceleration, target_acceleration, device)
 
-            if C.loss == "weighted_anchor":
+            if cfg.train_options.loss == "weighted_anchor":
                 loss_plane = pred_acceleration[..., 2] ** 2
 
                 anchor_plane_mask = anchor_plane_mask.to(torch.bool).to(device)
@@ -320,9 +313,9 @@ def Train(rank_zero_logger, dist):
 
                 loss_plane = torch.sum(loss_plane) / torch.sum(num_anchor_plane)
                 rank_zero_logger.info(f"loss: {loss}, loss_plane: {loss_plane}")
-                loss = loss + C.l_plane * loss_plane
+                loss = loss + cfg.train_options.l_plane * loss_plane
 
-        elif C.loss == "correlation":
+        elif cfg.train_options.loss == "correlation":
             """
             Compute the correlation of random neighboring point pairs
             to be optimized:
@@ -365,8 +358,8 @@ def Train(rank_zero_logger, dist):
 
             loss = loss + (loss_corr_factor * loss_corr)
 
-        elif C.loss == "me":
-            # adding the L1 loss component with weight defined by "C.l_me"
+        elif cfg.train_options.loss == "me":
+            # adding the L1 loss component with weight defined by "cfg.train_options.l_me"
             rank_zero_logger.info("processing ME loss\n\n")
             loss_l1 = torch.nn.functional.l1_loss(
                 pred_acceleration, target_acceleration
@@ -388,7 +381,7 @@ def Train(rank_zero_logger, dist):
             loss = torch.sum(loss) / torch.sum(num_non_kinematic)
             print("loss shape: sum ", loss.shape, loss)
 
-            loss = loss + C.l_me * loss_l1
+            loss = loss + cfg.train_options.l_me * loss_l1
 
         else:
             # standard loss with applying mask
@@ -404,7 +397,7 @@ def Train(rank_zero_logger, dist):
         rank_zero_logger.info(f"loss: {loss}")
         # back propogation
         optimizer.zero_grad()
-        if C.fp16:
+        if cfg.general.fp16:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
         else:
@@ -430,7 +423,7 @@ def Train(rank_zero_logger, dist):
             with torch.no_grad():
                 test_loss = 0.0
                 position_loss = 0.0
-                for j in range(C.eval_steps):
+                for j in range(cfg.train_options.eval_steps):
                     features, targets = next(testDataset)
                     # test inference features.get('step_context') shape:  torch.Size([2, 5])
 
@@ -442,7 +435,7 @@ def Train(rank_zero_logger, dist):
                         n_edges_per_example=features["n_edges_per_example"].to(device),
                         senders=features["senders"].to(device),
                         receivers=features["receivers"].to(device),
-                        predict_length=C.pred_len,
+                        predict_length=cfg.train_options.pred_len,
                         particle_types=features["particle_type"].to(device),
                         global_context=features.get("step_context").to(device),
                     )
@@ -460,7 +453,7 @@ def Train(rank_zero_logger, dist):
                         n_edges_per_example=features["n_edges_per_example"].to(device),
                         senders=features["senders"].to(device),
                         receivers=features["receivers"].to(device),
-                        predict_length=C.pred_len,
+                        predict_length=cfg.train_options.pred_len,
                         particle_types=features["particle_type"].to(device),
                         global_context=features.get("step_context").to(device),
                     )
@@ -480,7 +473,7 @@ def Train(rank_zero_logger, dist):
                     torch.save(
                         model.state_dict(),
                         os.path.join(
-                            C.ckpt_path_vfgn,
+                            cfg.data_options.ckpt_path_vfgn,
                             "model_loss-{:.2E}_step-{}.pt".format(test_loss, step),
                         ),
                     )
@@ -490,7 +483,7 @@ def Train(rank_zero_logger, dist):
     writer.close()
 
 
-def Test(rank_zero_logger, dist):
+def Test(rank_zero_logger, dist, cfg):
     """
     Executes the testing phase for a graph-based model, generating and
     storing predictions.
@@ -503,23 +496,23 @@ def Test(rank_zero_logger, dist):
     dataset = GraphDataset(
         # size=C.num_steps,
         mode="rollout",
-        split=C.eval_split,
-        data_path=C.data_path,
-        batch_size=C.batch_size,
+        split=cfg.general.eval_split,
+        data_path=cfg.data_options.data_path,
+        batch_size=cfg.train_options.batch_size,
     )
 
-    metadata = _read_metadata(C.data_path)
+    metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), C.noise_std)),
+        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
     )
 
     normalization_stats = {
@@ -529,10 +522,10 @@ def Test(rank_zero_logger, dist):
     }
 
     model = LearnedSimulator(
-        num_dimensions=metadata["dim"] * C.pred_len,
-        num_seq=C.input_seq_len,
+        num_dimensions=metadata["dim"] * cfg.train_options.pred_len,
+        num_seq=cfg.train_options.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
-        num_particle_types=NUM_PARTICLE_TYPES,
+        num_particle_types=cfg.data_options.NUM_PARTICLE_TYPES,
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
     )
@@ -553,7 +546,7 @@ def Test(rank_zero_logger, dist):
 
                 model.inference(
                     position_sequence=features["position"][
-                        :, 0:C.input_seq_len
+                        :, 0:cfg.train_options.input_seq_len
                     ].to(device),
                     n_particles_per_example=features["n_particles_per_example"].to(
                         device
@@ -561,14 +554,14 @@ def Test(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=C.pred_len,
+                    predict_length=cfg.train_options.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
 
                 # Loading the pretrained model from model ckpt_path_vfgn
                 # For provided ckpt with missing keys, ignore with strict=False
-                model.load_state_dict(torch.load(C.ckpt_path_vfgn), strict=False)
+                model.load_state_dict(torch.load(cfg.data_options.ckpt_path_vfgn), strict=False)
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
                 # config optimizer
@@ -578,10 +571,10 @@ def Test(rank_zero_logger, dist):
                 model.eval()
                 loaded = True
 
-            initial_positions = features["position"][:, :C.input_seq_len].to(
+            initial_positions = features["position"][:, :cfg.train_options.input_seq_len].to(
                 device
             )
-            ground_truth_positions = features["position"][:, C.input_seq_len:].to(
+            ground_truth_positions = features["position"][:, cfg.train_options.input_seq_len:].to(
                 device
             )
             global_context = features["step_context"].to(device)
@@ -605,7 +598,7 @@ def Test(rank_zero_logger, dist):
                 if global_context is None:
                     global_context_step = None
                 else:
-                    read_step_context = global_context[: step + C.input_seq_len]
+                    read_step_context = global_context[: step + cfg.train_options.input_seq_len]
                     zero_pad = torch.zeros(
                         [global_context.shape[0] - read_step_context.shape[0] - 1, 1],
                         dtype=features["step_context"].dtype,
@@ -622,7 +615,7 @@ def Test(rank_zero_logger, dist):
                     n_edges_per_example=features["n_edges_per_example"].to(device),
                     senders=features["senders"].to(device),
                     receivers=features["receivers"].to(device),
-                    predict_length=C.pred_len,
+                    predict_length=cfg.train_options.pred_len,
                     particle_types=features["particle_type"].to(device),
                     global_context=global_context_step.to(device),
                 )
@@ -647,7 +640,7 @@ def Test(rank_zero_logger, dist):
                 )
 
                 updated_predictions.append(next_position)
-                if C.rollout_refine is False:
+                if cfg.test_options.rollout_refine is False:
                     # False: rollout the predictions
                     current_positions = torch.cat(
                         [current_positions[:, 1:], next_position.unsqueeze(1)], axis=1
@@ -686,10 +679,10 @@ def Test(rank_zero_logger, dist):
             # rollout_op = tree.map_structure(lambda x: x.numpy(), rollout_op)
 
             rollout_op["metadata"] = metadata
-            filename = f"rollout_{C.eval_split}_{example_index}.json"
-            filename = os.path.join(C.output_path, filename)
-            if not os.path.exists(C.output_path):
-                os.makedirs(C.output_path)
+            filename = f"rollout_{cfg.general.eval_split}_{example_index}.json"
+            filename = os.path.join(cfg.data_options.output_path, filename)
+            if not os.path.exists(cfg.data_options.output_path):
+                os.makedirs(cfg.data_options.output_path)
             with open(filename, "w") as file_object:
                 json.dump(rollout_op, file_object)
 
@@ -697,7 +690,8 @@ def Test(rank_zero_logger, dist):
             rank_zero_logger.info(f"Prediction time: {time.time()-start_time}\n")
 
 
-def main(_):
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     """
     Triggers the train or test phase based on the configuration.
     """
@@ -716,11 +710,11 @@ def main(_):
     #         json_file.write(C.json(indent=4))
 
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-
-    if C.mode == "train":
-        Train(rank_zero_logger, dist)
-    elif C.mode == "eval_rollout":
-        Test(rank_zero_logger, dist)
+    print("check cfg loading: ", cfg)
+    if cfg.general.mode == "train":
+        Train(rank_zero_logger, dist, cfg)
+    elif cfg.general.mode == "eval_rollout":
+        Test(rank_zero_logger, dist, cfg)
     else:
         raise NotImplementedError("Mode not implemented ")
 
@@ -731,4 +725,4 @@ if __name__ == "__main__":
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
-    app.run(main)
+    main()
