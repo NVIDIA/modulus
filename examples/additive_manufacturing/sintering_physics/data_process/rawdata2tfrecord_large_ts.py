@@ -49,7 +49,7 @@ logging.basicConfig(filename="DS-retrain-2403.log", level=logging.DEBUG)
 import hydra
 import utils
 from omegaconf import DictConfig
-from utils import get_solution_id, time_diff
+from utils import time_diff
 
 # Create a description of the features.
 _FEATURE_DESCRIPTION = {
@@ -342,9 +342,9 @@ def get_anchor_point(ds, index_list):
     ds1 = ds["u__v__w"]
 
     ## return index of the anchor point
-    ds1_ax = np.where(uvw_values[:, 0] == 0)[0]
-    ds1_ay = np.where(uvw_values[:, 1] == 0)[0]
-    ds1_az = np.where(uvw_values[:, 2] == 0)[0]
+    ds1_ax = np.where(ds1[:, 0] == 0)[0]
+    ds1_ay = np.where(ds1[:, 1] == 0)[0]
+    ds1_az = np.where(ds1[:, 2] == 0)[0]
 
     # Intersect 3 array to get the point with xyz-displacement == 0
     listx_as_set = set(ds1_ax)
@@ -653,7 +653,6 @@ def main(cfg: DictConfig):
                 f"Found anchor point with 0-displacement, p_id: {anchor_point}"
             )
         else:
-            anchors = []
             anchor_point = None
 
         for init_idx in range(

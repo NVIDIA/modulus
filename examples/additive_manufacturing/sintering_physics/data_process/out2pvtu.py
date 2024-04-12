@@ -26,12 +26,11 @@ import logging as log
 import os
 import pickle
 import sys
-import time
 
 import numpy as np
 import pyvista as pv
 import vtk
-from rawdata2tfrecord_large_ts import get_solution_id, read_configs
+from rawdata2tfrecord_large_ts import get_solution_id
 
 log.basicConfig(
     format="%(asctime)s - %(levelname)s\t%(message)s",
@@ -48,14 +47,6 @@ def write(name, obj):
     writer.Update()
     writer.Write()
     log.info(f"Saved {name}")
-
-
-def resample(data_np, saveto):
-    """Resample"""
-    resultMesh = vtk.vtkUnstructuredGrid()
-    resultMesh.DeepCopy(basemesh)
-    resultMesh.SetPoints(Compensated)
-    write(str(saveto), resultMesh)
 
 
 def pv_get_data_position(data):

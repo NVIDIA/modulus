@@ -70,7 +70,7 @@ def main(cfg: DictConfig):
 
         # Visualize
         fig, ax = plt.subplots()
-        logging.info(f"Plot Mean(acce) ......... ")
+        logging.info("Plot Mean(acce) ......... ")
         sol_index = [i for i in range(acc_3d_mean.shape[0])]
         ax.plot(sol_index, acc_3d_mean[:, 0], "b-", linewidth=1, label="x-dim velocity")
         ax.plot(sol_index, acc_3d_mean[:, 1], "y-", linewidth=1, label="y-dim velocity")

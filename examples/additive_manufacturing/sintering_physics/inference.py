@@ -45,18 +45,14 @@ except:
 import hydra
 import torch
 from graph_dataset import GraphDataset
-from hydra import compose, initialize
-from omegaconf import DictConfig, OmegaConf
-from torch.utils.tensorboard import SummaryWriter
-from utils import _combine_std, _read_metadata, get_kinematic_mask
+from omegaconf import DictConfig
+from utils import _combine_std, _read_metadata
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_mlflow,
-    initialize_wandb,
 )
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
 
@@ -78,7 +74,8 @@ class Stats:
         return self
 
 
-cast = lambda v: np.array(v, dtype=np.float64)
+def cast(v):
+    return np.array(v, dtype=np.float64)
 device = "cpu"
 
 def Inference(rank_zero_logger, dist, cfg):
@@ -87,7 +84,7 @@ def Inference(rank_zero_logger, dist, cfg):
     storing predictions.
     """
     rank_zero_logger.info(
-        f"\n\n.......... Start calling model inference with defined data path ........\n\n"
+        "\n\n.......... Start calling model inference with defined data path ........\n\n"
     )
 
     # config test dataset
@@ -130,7 +127,7 @@ def Inference(rank_zero_logger, dist, cfg):
         particle_type_embedding_size=16,
         normalization_stats=normalization_stats,
     )
-    rank_zero_logger.info(f"Initialized model with LearnedSimulator")
+    rank_zero_logger.info("Initialized model with LearnedSimulator")
 
     loaded = False
     example_index = 0
@@ -206,7 +203,7 @@ def Inference(rank_zero_logger, dist, cfg):
                 rank_zero_logger.info(f"start predictiong step: {step}")
                 if global_context is None:
                     global_context_step = None
-                    rank_zero_logger.info(f"global_context_step is None")
+                    rank_zero_logger.info("global_context_step is None")
                 else:
                     read_step_context = global_context[: step + cfg.train_options.input_seq_len]
                     zero_pad = torch.zeros(
@@ -230,11 +227,11 @@ def Inference(rank_zero_logger, dist, cfg):
                     global_context=global_context_step.to(device),
                 )
 
-                kinematic_mask = (
-                    get_kinematic_mask(features["particle_type"])
-                    .to(torch.bool)
-                    .to(device)
-                )
+                # kinematic_mask = (
+                #     get_kinematic_mask(features["particle_type"])
+                #     .to(torch.bool)
+                #     .to(device)
+                # )
 
                 predict_positions = predict_positions[:, 0].squeeze(1)
 

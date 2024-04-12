@@ -25,6 +25,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+import rawdata2tfrecord_large_ts as rawdata2tfrecord
 from utils import get_solution_id, read_configs
 
 
@@ -143,10 +144,7 @@ def plot_p_deform(
 def read_point(file_name, p_id):
     """Read the sintering point id value, with pv library, from path: file_name"""
     data = pv.read(file_name)
-    points = data.points
-    # uvw_values = data['u__v__w']
     uvw_values = data["displacement_U"]
-    #     print("uvw shape: ", uvw_values.shape)
 
     p_xyz = data.GetPoint(p_id)
     p_uvw = uvw_values[p_id, ...]

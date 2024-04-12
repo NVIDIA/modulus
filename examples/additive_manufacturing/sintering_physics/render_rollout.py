@@ -37,20 +37,15 @@ import os
 
 import hydra
 import matplotlib.pyplot as plt
-import mpl_toolkits.mplot3d.axes3d as p3
 import numpy as np
-from absl import app
-from hydra import compose, initialize
 from matplotlib import animation
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_mlflow,
-    initialize_wandb,
 )
 
 
@@ -132,7 +127,6 @@ def plot_rollout_percentage(
         "plot_rollout_percentage, num of rollout steps: ", len(percentage_rollout_list)
     )
     n = len(percentage_rollout_list)
-    fig = plt.figure(figsize=(20, 5))
 
     # creating the bar plot, plot the mean accuracy across uvw 3-channels
     # x-axis: rollout timsteps, y-axis: accuracy
@@ -271,7 +265,6 @@ def plot_mean_error(rollout_data_tuple, metadata, plot_steps, rollout_path, buil
     print("rollout_uvw shape :", np.array(rollout_uvw).shape)
 
     ########## Plot ##########
-    fig = plt.figure(figsize=(20, 9))
     # x-axis: rollout timsteps, y-axis: accuracy
     name_list = [str(x) for x in range(len(rollout_list))]
     name_values = [x for x in range(len(rollout_list))]
@@ -421,7 +414,6 @@ def main(cfg: DictConfig) -> None:
     ground_truth_rollout = np.transpose(ground_truth_rollout, [1, 0, 2])
 
     # metadata recorded sequence_length = len(initial_positions) + len(predicted_rollout) -1
-    seq_len = metadata["sequence_length"]
     rank_zero_logger.info(f"initial steps #= {len(initial_positions)}")
     rank_zero_logger.info(f"pred steps #= {len(predicted_rollout)}")
     n = len(predicted_rollout)
@@ -461,8 +453,6 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger.info(f"rollout shape: {gt_seq.shape}, total me: {me}")
 
     ############ PLOT ############
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-
     # If plot tolerance range
     print("Compute percentage rollout \n\n")
     rollout_data_tuple = (initial_positions, ground_truth_rollout, predicted_rollout)

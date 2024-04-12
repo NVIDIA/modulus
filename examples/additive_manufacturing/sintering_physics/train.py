@@ -34,19 +34,10 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
-physical_devices = tf.config.list_physical_devices("GPU")
-try:
-    for device_ in physical_devices:
-        tf.config.experimental.set_memory_growth(device_, True)
-except:
-    # Invalid device or cannot modify virtual devices once initialized.
-    pass
-
 import hydra
 import torch
 from graph_dataset import GraphDataset
-from hydra import compose, initialize
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from torch.utils.tensorboard import SummaryWriter
 from utils import (
     _combine_std,
@@ -62,10 +53,16 @@ from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
-    # initialize_wandb,
-    initialize_mlflow,
 )
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
+
+physical_devices = tf.config.list_physical_devices("GPU")
+try:
+    for device_ in physical_devices:
+        tf.config.experimental.set_memory_growth(device_, True)
+except:
+    # Invalid device or cannot modify virtual devices once initialized.
+    pass
 
 
 class Stats:
@@ -83,7 +80,8 @@ class Stats:
         self.std = self.std.to(device)
         return self
 
-cast = lambda v: np.array(v, dtype=np.float64)
+def cast(v):
+    return np.array(v, dtype=np.float64)
 
 
 def Train(rank_zero_logger, dist, cfg: DictConfig):
@@ -485,7 +483,7 @@ def Test(rank_zero_logger, dist, cfg):
     storing predictions.
     """
     rank_zero_logger.info(
-        f"\n\n.......... Start Testing model with defined data path ........\n\n"
+        "\n\n.......... Start Testing model with defined data path ........\n\n"
     )
 
     # config test dataset
