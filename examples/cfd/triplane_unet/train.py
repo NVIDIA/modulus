@@ -1,5 +1,7 @@
 from contextlib import suppress
 from functools import partial
+import logging
+import logging.config
 import os
 import sys
 from timeit import default_timer
@@ -12,10 +14,15 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 import torchinfo
 
+from modulus.distributed import DistributedManager
+
 from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
 from src.networks.point_feature_ops import GridFeaturesMemoryFormat
+
+# Will be set from config in main.
+logger: logging.Logger = None
 
 
 def _delete_previous_checkpoints(config):
@@ -25,7 +32,7 @@ def _delete_previous_checkpoints(config):
             checkpoints_to_delete.append(f)
     checkpoints_to_delete.sort()
     checkpoints_to_delete = checkpoints_to_delete[: -config.train.num_checkpoints]
-    print(f"Deleting {len(checkpoints_to_delete)} checkpoints")
+    logger.info(f"Deleting {len(checkpoints_to_delete)} checkpoints")
     for f in checkpoints_to_delete:
         try:
             os.remove(os.path.join(config.output, f))
@@ -35,7 +42,7 @@ def _delete_previous_checkpoints(config):
 
 def save_state(model, optimizer, scheduler, epoch, tot_iter, config):
     save_path = os.path.join(config.output, f"model_{epoch:05d}.pth")
-    print(f"Saving model at epoch {epoch} to {save_path}")
+    logger.info(f"Saving model at epoch {epoch} to {save_path}")
     state_dict = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -46,18 +53,6 @@ def save_state(model, optimizer, scheduler, epoch, tot_iter, config):
     # Save the file with 0000X format
     torch.save(state_dict, save_path)
     _delete_previous_checkpoints(config)
-
-
-def get_autocast(precision: str = None):
-    if precision == "amp":
-        print("Using amp autocast")
-        return torch.cuda.amp.autocast
-    elif precision == "amp_bfloat16" or precision == "amp_bf16":
-        # amp_bfloat16 is more stable than amp float16 for clip training
-        print("Using amp autocast with bfloat16")
-        return lambda: torch.cuda.amp.autocast(dtype=torch.bfloat16)
-    else:
-        return suppress
 
 
 @torch.no_grad()
@@ -76,7 +71,7 @@ def eval(model, datamodule, config, loss_fn=None):
             visualize_data_dicts.append(data_dict)
         if i % config.eval.print_interval == 0:
             # Print eval dict
-            print(f"Eval {i}: {eval_meter.avg}")
+            logger.info(f"Eval {i}: {eval_meter.avg}")
 
     # Merge all dictionaries
     merged_image_dict = {}
@@ -107,13 +102,13 @@ def train(config: DictConfig):
     # Initialize the loggers first.
     loggers = init_logger(config)
 
-    print(OmegaConf.to_yaml(config, sort_keys=True))
+    logger.info(f"Config summary:\n{OmegaConf.to_yaml(config, sort_keys=True)}")
 
     # Initialize the model
     model = instantiate(config.model)
     model = model.to(device)
     # Print model summary (structure and parmeter count).
-    print(torchinfo.summary(model, verbose=0))
+    logger.info(f"Model summary:\n{torchinfo.summary(model, verbose=0)}")
 
     # Initialize the dataloaders
     datamodule = instantiate(config.data)
@@ -145,7 +140,7 @@ def train(config: DictConfig):
         time_limit = sum(
             int(x) * 60**i for i, x in enumerate(reversed(config.train.time_limit.split(":")))
         )
-        print(f"Time limit: {time_limit} seconds")
+        logger.info(f"Time limit: {time_limit} seconds")
         start_time = default_timer()
     else:
         time_limit = None
@@ -154,7 +149,7 @@ def train(config: DictConfig):
     start_epoch = 0
     tot_iter = 0
     if config.train.resume and os.path.exists(config.output):
-        print(f"Resuming from {config.output}")
+        logger.info(f"Resuming from {config.output}")
         # Find the latest checkpoint
         checkpoints = []
         for f in os.listdir(config.output):
@@ -163,10 +158,10 @@ def train(config: DictConfig):
         checkpoints.sort()
         # Load if there is a checkpoint
         if len(checkpoints) == 0:
-            print("No checkpoints found")
+            logger.info("No checkpoints found")
         else:
-            print(f"Found {len(checkpoints)} checkpoints")
-            print(f"Loading {checkpoints[-1]}")
+            logger.info(f"Found {len(checkpoints)} checkpoints")
+            logger.info(f"Loading {checkpoints[-1]}")
             checkpoint_path = os.path.join(config.output, checkpoints[-1])
             checkpoint = torch.load(checkpoint_path)
 
@@ -223,14 +218,14 @@ def train(config: DictConfig):
             for k, v in loss_dict.items():
                 loggers.log_scalar(f"train/{k}", v.item(), tot_iter)
             if tot_iter % config.train.print_interval == 0:
-                print(f"Iter {tot_iter} loss: {loss.item():.4f}")
+                logger.info(f"Iter {tot_iter} loss: {loss.item():.4f}")
 
             tot_iter += 1
             torch.cuda.empty_cache()
 
         scheduler.step()
         t2 = default_timer()
-        print(f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2 loss: {train_l2_meter.avg:.4f}")
+        logger.info(f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2 loss: {train_l2_meter.avg:.4f}")
         loggers.log_scalar("train/epoch_train_l2", train_l2_meter.avg, tot_iter)
         loggers.log_scalar("train/train_epoch_duration", t2 - t1, tot_iter)
 
@@ -239,7 +234,7 @@ def train(config: DictConfig):
                 model, datamodule, config, eval_loss_fn
             )
             for k, v in eval_dict.items():
-                print(f"Epoch: {ep} {k}: {v:.4f}")
+                logger.info(f"Epoch: {ep} {k}: {v:.4f}")
                 loggers.log_scalar(f"eval/{k}", v, tot_iter)
             for k, v in eval_images.items():
                 loggers.log_image(f"eval_vis/{k}", v, tot_iter)
@@ -261,7 +256,7 @@ def train(config: DictConfig):
         # Break the training loop if the time limit is reached
         if time_limit is not None:
             if default_timer() - start_time + 2 * average_epoch_time > time_limit:
-                print(f"Time limit {time_limit} seconds reached. Breaking the training loop.")
+                logger.info(f"Time limit {time_limit} seconds reached. Breaking the training loop.")
                 # Save model
                 save_state(model, optimizer, scheduler, ep, tot_iter, config)
                 # Write the status to the output directory to status.txt file
@@ -285,6 +280,22 @@ def main(config: DictConfig):
     else:
         config.log_dir = to_absolute_path(config.log_dir)
 
+    # Set up Python loggers.
+    if (pylog_cfg := OmegaConf.select(config, "logging.python")):
+        pylog_cfg.output = config.output
+        pylog_cfg.rank = DistributedManager().rank
+        # Enable logging only on rank 0.
+        if pylog_cfg.rank != 0:
+            pylog_cfg.handlers = {}
+            pylog_cfg.loggers.tpunet.handlers = []
+        # Configure logging.
+        logging.config.dictConfig(
+            OmegaConf.to_container(pylog_cfg, resolve=True)
+        )
+
+    global logger
+    logger = logging.getLogger("tpunet")
+
     # Set the random seed.
     if config.seed is not None:
         set_seed(config.seed)
@@ -302,6 +313,8 @@ def _init_hydra_resolvers():
 
 
 if __name__ == "__main__":
+    DistributedManager.initialize()
+
     _init_hydra_resolvers()
 
     main()

@@ -1,7 +1,13 @@
+defaults:
+  - /logging:
+    - python
+  - override hydra/job_logging: disabled  # We use rank-aware logger configuration instead.
+  - _self_
+
 hydra:
   run:
     dir: ${output}
-  output_subdir: hydra
+  output_subdir: hydra  # Default is .hydra which causes files not being uploaded in W&B.
 
 train:
   num_epochs: 100
