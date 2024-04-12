@@ -36,16 +36,16 @@ defaults:
   #- transform/downsample
 
   # Model
-  #- model/tiny_afno
+  - model/tiny_afno
   #- model/afno
   #- model/graphcastnet
-  - model/tiny_sfno
+  #- model/tiny_sfno
   #- model/sfno
 
   # Training
-  #- training/afno
+  - training/afno
   #- training/graphcastnet
-  - training/sfno
+  #- training/sfno
 
   # Validation
   - validation/afno
