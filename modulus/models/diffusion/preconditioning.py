@@ -149,7 +149,7 @@ class VPPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -322,7 +322,7 @@ class VEPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -468,7 +468,7 @@ class iDDPMPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -633,7 +633,7 @@ class EDMPrecond(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -765,10 +765,10 @@ class EDMPrecondSR(Module):
     def forward(
         self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
     ):
-        x = x.to(torch.float32)
-        # Apply scaling to x
-        x = (1 / (self.sigma_data**2 + sigma**2).sqrt()) * x
+        # Concatenate input channels
+        x = torch.cat((x, img_lr), dim=1)
 
+        x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
             None
@@ -788,8 +788,6 @@ class EDMPrecondSR(Module):
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
 
-        x = torch.cat((x, img_lr), dim=1)
-
         F_x = self.model(
             (c_in * x).to(dtype),
             c_noise.flatten(),
@@ -797,7 +795,7 @@ class EDMPrecondSR(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )

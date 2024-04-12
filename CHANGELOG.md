@@ -16,12 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 - Warp neighbor search routine with a minimal example
+- Strict option for loading Modulus checkpoints.
+- Regression only or diffusion only inference for CorrDiff.
+- Support for organization level model files on NGC file system
+- Augmentation pipeline for CorrDiff.
+- Code logging for CorrDiff via wandb
+- Physics-Informed Magnetohydrodynamics example.
 
 ### Changed
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
 - Added more config options to FCN AFNO example.
-- In `models/diffusion/preconditioning.py` scale on `x`, leave `img_lr` unscaled.
 
 ### Deprecated
 
@@ -33,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Consistent handling of single GPU runs in DistributedManager
 - Output location of objects downloaded with NGC file system
+- Bug in scaling the conditional input in CorrDiff deterministic sampler
 
 ### Security
 

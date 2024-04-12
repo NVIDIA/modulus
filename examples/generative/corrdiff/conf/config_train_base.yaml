@@ -16,21 +16,15 @@
 
 hydra:
   job:
-    chdir: False
+    chdir: True
 
-
-## Main options
-checkpoint_dir: checkpoints
-  # Where to save the checkpoints
-data: 2023-01-24-cwb-4years.zarr
-  # Path to the dataset
 
 ## Hyperparameters
 duration: 200
   # Training duration
-batch: 256
+batch_size_global: 256
   # Total batch size
-batch_gpu: 2
+batch_size_gpu: 2
   # Limit batch size per GPU
 cbase: null  # TODO check
   # Channel multiplier
@@ -46,8 +40,9 @@ augment: 0.0
   # Augment probability
 
 ## Performance options
-fp16: false
-  # Enable mixed-precision training
+fp_optimizations: fp32
+  # Floating point mode, one of ["fp32", "fp16", "amp-fp16", "amp-bf16"]
+  # "amp-{fp16,bf16}" activates Automatic Mixed Precision (AMP) with {float16,bfloat16}
 ls: 1
   # Loss scaling
 bench: false
@@ -57,14 +52,10 @@ workers: 4
 
 
 ## I/O-related options
-wandb_mode: offline
-  # Wights & biases mode [online, ofline, disabled]
-desc: ''
-  # String to include in result dir name
+checkpoint_dir: checkpoints
+  # Where to save the checkpoints
 tick: 1
   # How often to print progress
-snap: 1
-  # How often to save snapshots
 dump: 500
   # How often to dump state
 seed: null  # TODO check
@@ -73,26 +64,41 @@ transfer: null  # TODO check
   # Transfer learning from network pickle
 dry-run: false
   # Print training options and exit
+validation_dump: 50
+  # how often to record the validation loss
+validation_steps: 10
+  # how many loss evaluations are used to compute the validation loss per checkpoint
+wandb_mode: online
+  # Weights & biases mode [online, ofline, disabled]
+wandb_project:  "Modulus-Generative"
+ # Weights & biases project
+wandb_group: "CorrDiff-DDP-Group"
+ # Weights & biases group
+wandb_entity: "CorrDiff-DDP-Group"
+ # Weights & biases entity (i.e. a workspace, personal or a team workspace)
+wandb_name: "CorrDiff"
+ # Weights & biases name
+
 
 ## Weather data options
-train_data_path: /data/cwb-diffusions/data2/2023-01-24-cwb-4years.zarr
-crop_size_x: 448
-crop_size_y: 448
-n_history: 0
-in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
-out_channels: [0, 17, 18, 19]
-img_shape_x: 448
-img_shape_y: 448
-patch_shape_x: 448
-patch_shape_y: 448
-patch_num: 1
-roll: false
-add_grid: true
-ds_factor: 4
-min_path: null
-max_path: null
-global_means_path: null
-global_stds_path: null
-gridtype: "sinusoidal"
-N_grid_channels: 4
-normalization: "v1"
+dataset:
+  type: cwb
+  data_path: /data/data2/2023-01-24-cwb-4years.zarr
+  crop_size_x: 448
+  crop_size_y: 448
+  n_history: 0
+  in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+  out_channels: [0, 17, 18, 19]
+  img_shape_x: 448
+  img_shape_y: 448
+  roll: false
+  add_grid: true
+  ds_factor: 4
+  min_path: null
+  max_path: null
+  global_means_path: null
+  global_stds_path: null
+  gridtype: "sinusoidal"
+  N_grid_channels: 4
+  normalization: "v1"
+  train_test_split: false
