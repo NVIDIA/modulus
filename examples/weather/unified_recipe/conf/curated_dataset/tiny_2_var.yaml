@@ -19,8 +19,8 @@ val_dataset_filename: val_7var_${transform.name}.zarr
 
 dt: 6
 
-train_years: ["1979-01-01", "1979-02-01"]
-val_years: ["1979-02-01", "1979-03-01"]
+train_years: ["1979-01-01", "2015-12-31"]
+val_years: ["2016-01-01", "2016-12-31"]
 
 nr_predicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.predicted_variables}])'}
 nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.unpredicted_variables}])'}
@@ -32,8 +32,3 @@ unpredicted_variables:
 predicted_variables:
   - "2m_temperature"
   - "total_column_water_vapour"
-  - "100m_u_component_of_wind"
-  - "100m_v_component_of_wind"
-  - "10m_u_component_of_wind"
-  - "10m_v_component_of_wind"
-  - "mean_sea_level_pressure"
