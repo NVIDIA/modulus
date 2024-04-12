@@ -16,7 +16,6 @@
 
 import os
 import time
-from typing import Union
 
 import fsspec
 import hydra
@@ -56,7 +55,7 @@ from seq_zarr_datapipe import SeqZarrDatapipe
 from model_packages import save_inference_model_package
 
 
-def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+def batch_normalized_mse(pred: Tensor, target: Tensor) -> Tensor:
     """Calculates batch-wise normalized mse error between two tensors."""
 
     pred_flat = pred.reshape(pred.size(0), -1)
