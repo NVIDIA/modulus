@@ -1,6 +1,5 @@
 defaults:
-  - /logging:
-    - python
+  - /logging/python: default
   - override hydra/job_logging: disabled  # We use rank-aware logger configuration instead.
   - _self_
 

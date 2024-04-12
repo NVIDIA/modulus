@@ -3,6 +3,7 @@ from functools import partial
 import logging
 import logging.config
 import os
+import pprint
 import sys
 from timeit import default_timer
 
@@ -71,7 +72,7 @@ def eval(model, datamodule, config, loss_fn=None):
             visualize_data_dicts.append(data_dict)
         if i % config.eval.print_interval == 0:
             # Print eval dict
-            logger.info(f"Eval {i}: {eval_meter.avg}")
+            logger.info(f"Eval {i}:\n{pprint.pformat(eval_meter.avg)}")
 
     # Merge all dictionaries
     merged_image_dict = {}
@@ -108,7 +109,7 @@ def train(config: DictConfig):
     model = instantiate(config.model)
     model = model.to(device)
     # Print model summary (structure and parmeter count).
-    logger.info(f"Model summary:\n{torchinfo.summary(model, verbose=0)}")
+    logger.info(f"Model summary:\n{torchinfo.summary(model, verbose=0)}\n")
 
     # Initialize the dataloaders
     datamodule = instantiate(config.data)
