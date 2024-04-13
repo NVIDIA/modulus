@@ -14,24 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dataset_filename: "./tiny_arco_era5.zarr"
+amp_supported: !!bool False
+nr_input_steps: 1
 
-dt: 6
+optimizer:
+  framework: torch
+  name: Adam
+  args:
+    lr: 1e-3
+    betas: [0.9, 0.999]
 
-years: ["1979-01-01", "2024-01-01"]
-
-chunking: [1, 1, 721, 1440]
-
-single_threaded: False
-
-single_level_variables:
-  - "latitude"
-  - "longitude"
-  - "time"
-  - "level"
-  - "land_sea_mask"
-  - "toa_incident_solar_radiation"
-  - "total_column_water_vapour"
-  - "2m_temperature"
-
-pressure_level_variables:
+stages:
+  - name: "Step LR"
+    max_iterations: .inf
+    num_epochs: 500
+    unroll_steps: 1
+    batch_size: 2
+    lr_scheduler_name: StepLR
+    args:
+      step_size: 100
+      gamma: 0.5
