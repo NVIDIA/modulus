@@ -1,4 +1,20 @@
-from typing import Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -8,13 +24,9 @@ from torch import Tensor
 
 from src.networks.point_feature_conv import PointFeatureConv, PointFeatureTransform
 from src.networks.point_feature_grid_conv import (
-    GridFeatureConv2dBlock,
     GridFeatureMemoryFormatConverter,
-    GridFeaturePadToMatch,
-    GridFeatureTransform,
 )
 from src.networks.point_feature_ops import (
-    GridFeatures,
     GridFeaturesMemoryFormat,
     PointFeatures,
     VerticesToPointFeatures,
@@ -29,10 +41,9 @@ from .grid_feature_group import (
     GridFeatureGroup,
     GridFeatureGroupPadToMatch,
     GridFeatureGroupToPoint,
-    GridFeatureGroupTransform,
 )
 from .grid_feature_unet import memory_format_to_axis_index
-from .point_feature_grid_ops import GridFeatureToPoint, PointFeatureToGrid
+from .point_feature_grid_ops import PointFeatureToGrid
 
 
 class PointFeatureToGridGroupUNet(BaseModel):
