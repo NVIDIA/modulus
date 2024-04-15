@@ -1,19 +1,9 @@
 import unittest
 from typing import Literal, Optional, Union
 
-# TODO(akamenev): migration
-# import open3d.ml.torch as ml3d
 import torch
 from jaxtyping import Float, Int
 from torch import Tensor
-
-try:
-    import pylibraft.config
-
-    pylibraft.config.set_output_as("torch")  # All compute APIs will return torch tensors
-    from pylibraft.neighbors.brute_force import knn as raft_knn
-except ImportError:
-    print("pylibraft not installed.")
 
 from .components.reductions import REDUCTION_TYPES, row_reduction
 from .net_utils import MLP
@@ -21,8 +11,6 @@ from .warp_neighbor_search import radius_search_warp
 
 
 class NeighborSearchReturn:
-    """Wrapper for the open3d.ml3d fixed radius search result."""
-
     # N is the total number of neighbors for all M queries
     _neighbors_index: Int[Tensor, "N"]  # noqa: F821
     # M is the number of queries
@@ -58,7 +46,7 @@ def neighbor_radius_search(
     inp_positions: Int[Tensor, "N 3"],
     out_positions: Int[Tensor, "M 3"],
     radius: float,
-    search_method: Literal["warp", "open3d"] = "warp",
+    search_method: Literal["warp"] = "warp",
 ) -> NeighborSearchReturn:
     """
     inp_positions: [N,3]
@@ -70,19 +58,18 @@ def neighbor_radius_search(
     if inp_positions.is_cuda:
         torch.cuda.set_device(inp_positions.device)
     assert inp_positions.device == out_positions.device
-    if search_method == "open3d":
-        neighbors = ml3d.layers.FixedRadiusSearch()(inp_positions, out_positions, radius)
-        # Wrap the result for easier manipulation
-        neighbors = NeighborSearchReturn(neighbors)
-    elif search_method == "warp":
+    if search_method == "warp":
         neighbor_index, neighbor_distance, neighbor_split = radius_search_warp(
             inp_positions, out_positions, radius
         )
-        neighbors = NeighborSearchReturn(neighbor_index, neighbor_split)
+    else:
+        raise ValueError(f"search_method {search_method} not supported.")
+    neighbors = NeighborSearchReturn(neighbor_index, neighbor_split)
     return neighbors
 
 
-def chunked_knn_search(
+@torch.no_grad()
+def _chunked_knn_search(
     inp_positions: Int[Tensor, "N 3"],
     out_positions: Int[Tensor, "M 3"],
     k: int,
@@ -102,11 +89,12 @@ def chunked_knn_search(
     return torch.concatenate(neighbors_index, dim=0)
 
 
+@torch.no_grad()
 def neighbor_knn_search(
     inp_positions: Int[Tensor, "N 3"],
     out_positions: Int[Tensor, "M 3"],
     k: int,
-    search_method: Literal["raft", "open3d", "chunk"] = "chunk",
+    search_method: Literal["chunk"] = "chunk",
 ) -> Int[Tensor, "M K"]:
     """
     inp_positions: [N,3]
@@ -116,23 +104,13 @@ def neighbor_knn_search(
     """
     assert k > 0
     assert k < inp_positions.shape[0]
-    assert search_method in ["raft", "open3d", "chunk"]
+    assert search_method in ["chunk"]
     # Critical for multi GPU
     if inp_positions.is_cuda:
         torch.cuda.set_device(inp_positions.device)
     assert inp_positions.device == out_positions.device
-    if search_method == "open3d":
-        # Only support CPU search
-        device = inp_positions.device
-        neighbors = ml3d.layers.KnnSearch()(inp_positions.cpu(), out_positions.cpu(), k)
-        neighbors_index = neighbors.neighbors_index.long().to(device)
-        # neighbors_row_splits = neighbors.neighbors_row_splits.long().to(device)
-        neighbors_index = neighbors_index.view(-1, k)
-    elif search_method == "raft":
-        # distances, neighbors = knn(dataset, queries, k)
-        _, neighbors_index = raft_knn(inp_positions, out_positions, k)
-    elif search_method == "chunk":
-        neighbors_index = chunked_knn_search(inp_positions, out_positions, k)
+    if search_method == "chunk":
+        neighbors_index = _chunked_knn_search(inp_positions, out_positions, k)
     else:
         raise ValueError(f"search_method {search_method} not supported.")
     return neighbors_index
@@ -142,11 +120,9 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
     def __init__(
         self,
         radius: Optional[float] = None,
-        search_method: Literal["warp", "open3d"] = "warp",
     ):
         super().__init__()
         self.radius = radius
-        self.search_method = search_method
 
     @torch.no_grad()
     def forward(
@@ -157,7 +133,7 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
     ) -> NeighborSearchReturn:
         if radius is None:
             radius = self.radius
-        return neighbor_radius_search(inp_positions, out_positions, radius, self.search_method)
+        return neighbor_radius_search(inp_positions, out_positions, radius)
 
 
 class NeighborPoolingLayer(torch.nn.Module):
