@@ -111,6 +111,8 @@ def rel_errors(y_true, y_pred, norm):
 
 
 class Normalizer:
+    """Normalizer."""
+
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std

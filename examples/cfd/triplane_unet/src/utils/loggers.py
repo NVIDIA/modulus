@@ -45,6 +45,8 @@ from .visualization import fig_to_numpy
 
 
 class Logger:
+    """Base logger class."""
+
     def __init__(self):
         pass
 
@@ -73,6 +75,8 @@ class Logger:
 
 
 class TensorBoardLogger(Logger):
+    """TensorBoard logger."""
+
     def __init__(self, log_dir: str):
         super().__init__()
         self.writer = SummaryWriter(log_dir)
@@ -110,6 +114,8 @@ class TensorBoardLogger(Logger):
 
 
 class WandBLogger(Logger):
+    """Weights & Biases logger."""
+
     def __init__(
         self,
         project_name: str,
@@ -307,6 +313,8 @@ def flatten_dict(
 
 
 class TestLoggers(unittest.TestCase):
+    """Loggers unit tests class."""
+
     def setUp(self) -> None:
         # Generate some example data
         X = np.arange(-5, 5, 0.25)

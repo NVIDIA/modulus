@@ -56,6 +56,8 @@ memory_format_to_axis_index = {
 
 
 class GridFeatureUNet(BaseModel):
+    """GridFeatureUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -116,6 +118,8 @@ class GridFeatureUNet(BaseModel):
 
 
 class GridFeature3DUNet(BaseModel):
+    """GridFeature3DUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -213,6 +217,8 @@ class GridFeature3DUNet(BaseModel):
 
 
 class PointFeatureToGrid3DUNet(GridFeature3DUNet):
+    """PointFeatureToGrid3DUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -284,6 +290,8 @@ class PointFeatureToGrid3DUNet(GridFeature3DUNet):
 
 
 class PointFeatureToGrid3DUNetAhmedBody(AhmedBodyBase, PointFeatureToGrid3DUNet):
+    """PointFeatureToGrid3DUNetAhmedBody."""
+
     def __init__(
         self,
         in_channels: int,
@@ -374,6 +382,8 @@ class PointFeatureToGrid3DUNetAhmedBody(AhmedBodyBase, PointFeatureToGrid3DUNet)
 
 
 class PointFeatureToGrid3DUNetDrivAer(DrivAerBase, PointFeatureToGrid3DUNet):
+    """PointFeatureToGrid3DUNetDrivAer."""
+
     def __init__(
         self,
         in_channels: int,
@@ -441,6 +451,8 @@ class PointFeatureToGrid3DUNetDrivAer(DrivAerBase, PointFeatureToGrid3DUNet):
 
 
 class PointFeatureToGridUNet(BaseModel):
+    """PointFeatureToGridUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -570,7 +582,8 @@ class PointFeatureToGridUNet(BaseModel):
 
 
 class PointFeatureToGridUNets(BaseModel):
-    # Three PointFeatureToGridUNet with different resolutions
+    """Three PointFeatureToGridUNet with different resolutions."""
+
     def __init__(
         self,
         in_channels: int,
@@ -649,6 +662,8 @@ class PointFeatureToGridUNets(BaseModel):
 
 
 class PointFeatureToGridUNetsDrivAer(DrivAerBase, PointFeatureToGridUNets):
+    """PointFeatureToGridUNetsDrivAer."""
+
     def __init__(
         # Same as the PointFeatureToGridUNets
         self,
@@ -734,6 +749,8 @@ class PointFeatureToGridUNetsDrivAer(DrivAerBase, PointFeatureToGridUNets):
 
 
 class PointFeatureToGridUNetsAhmedBody(AhmedBodyBase, PointFeatureToGridUNets):
+    """PointFeatureToGridUNetsAhmedBody."""
+
     def __init__(
         # Same as the PointFeatureToGridUNets
         self,
@@ -831,6 +848,8 @@ class PointFeatureToGridUNetsAhmedBody(AhmedBodyBase, PointFeatureToGridUNets):
 
 
 class PointFeatureUNetWithGridUNets(BaseModel):
+    """PointFeatureUNetWithGridUNets."""
+
     def __init__(
         self,
         in_channels: int,

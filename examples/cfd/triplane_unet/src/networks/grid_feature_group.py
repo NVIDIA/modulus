@@ -193,6 +193,8 @@ class GridFeatureGroupIntraCommunications(nn.Module):
 
 
 class GridFeatureGroupConv2dNorm(BaseModule):
+    """GridFeatureGroupConv2dNorm."""
+
     def __init__(
         self,
         in_channels: int,
@@ -229,6 +231,8 @@ class GridFeatureGroupConv2dNorm(BaseModule):
 
 
 class GridFeatureGroupTransform(BaseModule):
+    """GridFeatureGroupTransform."""
+
     def __init__(self, transform: nn.Module, in_place: bool = True) -> None:
         super().__init__()
         self.transform = transform
@@ -245,6 +249,8 @@ class GridFeatureGroupTransform(BaseModule):
 
 
 class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
+    """GridFeatureConv2DBlocksAndIntraCommunication."""
+
     def __init__(
         self,
         in_channels: int,
@@ -299,6 +305,8 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
 
 
 class GridFeatureGroupCat(BaseModule):
+    """GridFeatureGroupCat."""
+
     def __init__(self):
         super().__init__()
         self.grid_cat = GridFeatureCat()
@@ -313,6 +321,8 @@ class GridFeatureGroupCat(BaseModule):
 
 
 class GridFeatureGroupPadToMatch(BaseModule):
+    """GridFeatureGroupPadToMatch."""
+
     def __init__(self) -> None:
         super().__init__()
         self.match = GridFeaturePadToMatch()
@@ -332,6 +342,8 @@ class GridFeatureGroupPadToMatch(BaseModule):
 
 
 class GridFeatureGroupToPoint(BaseModule):
+    """GridFeatureGroupToPoint."""
+
     def __init__(
         self,
         grid_in_channels: int,

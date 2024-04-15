@@ -47,6 +47,8 @@ from .point_feature_grid_ops import PointFeatureToGrid
 
 
 class PointFeatureToGridGroupUNet(BaseModel):
+    """PointFeatureToGridGroupUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -232,6 +234,8 @@ class PointFeatureToGridGroupUNet(BaseModel):
 
 
 class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNet):
+    """PointFeatureToGridGroupUNetDrivAer."""
+
     def __init__(
         self,
         in_channels: int,
@@ -311,6 +315,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
 
 
 class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGroupUNet):
+    """PointFeatureToGridGroupUNetAhmedBody."""
+
     def __init__(
         self,
         in_channels: int,

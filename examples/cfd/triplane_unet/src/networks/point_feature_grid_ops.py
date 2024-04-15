@@ -40,6 +40,8 @@ from .point_feature_ops import (
 
 
 class AABBGridFeatures(GridFeatures):
+    """AABBGridFeatures."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -55,6 +57,8 @@ class AABBGridFeatures(GridFeatures):
 
 
 class PointFeatureToGrid(nn.Module):
+    """PointFeatureToGrid."""
+
     def __init__(
         self,
         in_channels: int,
@@ -123,6 +127,8 @@ class PointFeatureToGrid(nn.Module):
 
 
 class GridFeatureToPoint(nn.Module):
+    """GridFeatureToPoint."""
+
     def __init__(
         self,
         grid_in_channels: int,
@@ -179,6 +185,8 @@ class GridFeatureToPoint(nn.Module):
 
 
 class GridFeatureToPointGraphConv(nn.Module):
+    """GridFeatureToPointGraphConv."""
+
     def __init__(
         self,
         grid_in_channels: int,
@@ -231,6 +239,8 @@ class GridFeatureToPointGraphConv(nn.Module):
 
 
 class GridFeatureToPointInterp(nn.Module):
+    """GridFeatureToPointInterp."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -279,6 +289,8 @@ class GridFeatureToPointInterp(nn.Module):
 
 
 class PointFeatureToDistanceGridFeature(BaseModule):
+    """PointFeatureToDistanceGridFeature."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -349,6 +361,8 @@ class PointFeatureToDistanceGridFeature(BaseModule):
 
 
 class GridFeatureToPointFeature(BaseModule):
+    """GridFeatureToPointFeature."""
+
     def __init__(
         self,
         in_channels: int,
@@ -401,6 +415,8 @@ class GridFeatureToPointFeature(BaseModule):
 
 
 class GridFeatureCat(BaseModule):
+    """GridFeatureCat."""
+
     def forward(
         self, grid_features: GridFeatures, other_grid_features: GridFeatures
     ) -> GridFeatures:
@@ -424,6 +440,8 @@ class GridFeatureCat(BaseModule):
 
 
 class GridFeatureFNO(BaseModule):
+    """GridFeatureFNO."""
+
     def __init__(
         self,
         in_channels: int,

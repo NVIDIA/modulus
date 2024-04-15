@@ -34,6 +34,8 @@ from .net_utils import MLP, PositionalEncoding
 
 
 def grid_init(bb_max, bb_min, resolution):
+    """grid_init."""
+
     # Define grid points
     grid = torch.meshgrid(
         torch.linspace(bb_min[0], bb_max[0], resolution[0]),
@@ -45,6 +47,8 @@ def grid_init(bb_max, bb_min, resolution):
 
 
 class PointFeatures:
+    """PointFeatures."""
+
     _shape_hint = None  # default value
     vertices: Float[Tensor, "N 3"]
     features: Float[Tensor, "N C"]
@@ -170,6 +174,8 @@ def convert_from_x_y_z_c(tensor, to_memory_format):
 
 
 class GridFeatures(PointFeatures):
+    """GridFeatures."""
+
     memory_format: GridFeaturesMemoryFormat
 
     def __init__(
@@ -385,6 +391,8 @@ class GridFeatures(PointFeatures):
 
 
 class DownSampleLayer(BaseModule):
+    """DownSampleLayer."""
+
     def __init__(self, voxel_size):
         super().__init__()
         self.voxel_size = voxel_size
@@ -402,6 +410,8 @@ class DownSampleLayer(BaseModule):
 
 
 class VerticesToPointFeatures(BaseModule):
+    """VerticesToPointFeatures."""
+
     def __init__(
         self,
         embed_dim: int,
@@ -424,6 +434,8 @@ class VerticesToPointFeatures(BaseModule):
 
 
 class ToGrid(nn.Module):
+    """ToGrid."""
+
     def __init__(
         self,
         resolution: Union[Int[Tensor, "3"], List[int]],
@@ -485,6 +497,8 @@ class ToGrid(nn.Module):
 
 
 class ToGridWithDist(nn.Module):
+    """ToGridWithDist."""
+
     def __init__(
         self,
         resolution: Union[Int[Tensor, "3"], List[int]],
@@ -560,6 +574,8 @@ class ToGridWithDist(nn.Module):
 
 
 class FromGrid(nn.Module):
+    """FromGrid."""
+
     def __init__(self, voxel_size, num_channels):
         super().__init__()
         self.num_channels = num_channels
@@ -590,6 +606,8 @@ class FromGrid(nn.Module):
 
 
 class FromGridNeighborConv(nn.Module):
+    """FromGridNeighborConv."""
+
     def __init__(
         self, grid_channels: int, point_channels: int, out_channels: int, radius: float
     ):

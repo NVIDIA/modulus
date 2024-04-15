@@ -51,6 +51,8 @@ def to_ntuple(val: Union[int, Iterable[int]], n: int) -> Tuple[int, ...]:
 
 
 class GridFeaturePadToMatch(nn.Module):
+    """GridFeaturePadToMatch."""
+
     def forward(self, ref_grid: GridFeatures, x_grid: GridFeatures) -> GridFeatures:
         assert ref_grid.memory_format == x_grid.memory_format
         assert x_grid.memory_format != GridFeaturesMemoryFormat.x_y_z_c
@@ -106,6 +108,8 @@ class GridFeaturePadToMatch(nn.Module):
 
 
 class GridFeatureConv2d(nn.Module):
+    """GridFeatureConv2d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -178,6 +182,8 @@ class GridFeatureConv2d(nn.Module):
 
 
 class GridFeatureFFTConv2d(nn.Module):
+    """GridFeatureFFTConv2d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -222,6 +228,8 @@ class GridFeatureFFTConv2d(nn.Module):
 
 
 class LayerNorm2d(nn.LayerNorm):
+    """LayerNorm2d."""
+
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 3, 1)
         x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
@@ -230,6 +238,8 @@ class LayerNorm2d(nn.LayerNorm):
 
 
 class LayerNorm3d(nn.LayerNorm):
+    """LayerNorm3d."""
+
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 3, 4, 1)
         x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
@@ -238,6 +248,8 @@ class LayerNorm3d(nn.LayerNorm):
 
 
 class GridFeatureTransform(BaseModule):
+    """GridFeatureTransform."""
+
     def __init__(self, transform: nn.Module) -> None:
         super().__init__()
         self.feature_transform = transform
@@ -266,6 +278,8 @@ class GridFeatureTransform(BaseModule):
 
 
 class GridFeatureConv2dBlock(nn.Module):
+    """GridFeatureConv2dBlock."""
+
     def __init__(
         self,
         in_channels: int,
@@ -345,6 +359,8 @@ class GridFeatureConv2dBlock(nn.Module):
 
 
 class GridFeatureMemoryFormatConverter(BaseModule):
+    """GridFeatureMemoryFormatConverter."""
+
     def __init__(self, memory_format: GridFeaturesMemoryFormat) -> None:
         super().__init__()
         self.memory_format = memory_format
@@ -358,6 +374,8 @@ class GridFeatureMemoryFormatConverter(BaseModule):
 
 # 3D Operations
 class GridFeatureConv3d(nn.Module):
+    """GridFeatureConv3d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -421,6 +439,8 @@ class GridFeatureConv3d(nn.Module):
 
 
 class GridFeatureConv3dBlock(nn.Module):
+    """GridFeatureConv3dBlock."""
+
     def __init__(
         self,
         in_channels: int,

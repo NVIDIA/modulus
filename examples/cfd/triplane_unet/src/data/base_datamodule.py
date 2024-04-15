@@ -18,6 +18,8 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class BaseDataModule:
+    """Base data module."""
+
     @property
     def train_dataset(self) -> Dataset:
         raise NotImplementedError

@@ -19,6 +19,8 @@ import torch.nn as nn
 
 
 class BaseModule(nn.Module):
+    """Base module for models."""
+
     def __init__(self):
         super().__init__()
         self.device_indicator_param = nn.Parameter(torch.empty(0))
@@ -30,6 +32,8 @@ class BaseModule(nn.Module):
 
 
 class BaseModel(BaseModule):
+    """Base model class."""
+
     def data_dict_to_input(self, data_dict, **kwargs):
         """Convert data dictionary to appropriate input for the model."""
         raise NotImplementedError

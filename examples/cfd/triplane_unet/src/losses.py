@@ -20,6 +20,8 @@ import torch.nn as nn
 
 # loss function with rel/abs Lp loss
 class LpLoss:
+    """L_p loss."""
+
     def __init__(self, d=2, p=2, size_average=True, reduction=True):
         super().__init__()
 
@@ -70,6 +72,8 @@ class LpLoss:
 
 
 class TruncatedMSELoss(nn.Module):
+    """Truncated MSR loss."""
+
     def __init__(self, reduction="mean", threshold=1.0):
         super().__init__()
         self.reduction = reduction

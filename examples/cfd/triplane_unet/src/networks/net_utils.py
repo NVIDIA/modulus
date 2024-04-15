@@ -19,8 +19,9 @@ import torch
 import torch.nn as nn
 
 
-# A simple feedforward neural network
 class MLP(torch.nn.Module):
+    """A simple feedforward neural network."""
+
     def __init__(self, layers, nonlinearity, out_nonlinearity=None, normalize=False):
         super().__init__()
 
@@ -49,6 +50,8 @@ class MLP(torch.nn.Module):
 
 
 class MLPBlock(nn.Module):
+    """MLPBlock."""
+
     def __init__(
         self,
         in_channels,
@@ -78,6 +81,8 @@ class MLPBlock(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
+    """PositionalEncoding."""
+
     def __init__(self, num_channels: int, data_range: float = 2):
         super().__init__()
         assert (
@@ -100,6 +105,8 @@ class PositionalEncoding(nn.Module):
 
 
 class AdaIN(nn.Module):
+    """AdaIN."""
+
     def __init__(self, embed_dim, in_channels, mlp=None, eps=1e-5):
         super().__init__()
         self.in_channels = in_channels
@@ -122,6 +129,8 @@ class AdaIN(nn.Module):
         return self.device_indicator_param.device
 
     def update_embeddding(self, x):
+        """update_embeddding."""
+
         self.embedding = x.reshape(
             self.embed_dim,
         ).to(self.device)

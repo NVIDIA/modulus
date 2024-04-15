@@ -37,6 +37,8 @@ def normalize_aabb(pts, aabb_min, aabb_max):
 
 
 class PointFeatureTransform(BaseModule):
+    """PointFeatureTransform."""
+
     def __init__(
         self,
         feature_transform: nn.Module,
@@ -51,6 +53,8 @@ class PointFeatureTransform(BaseModule):
 
 
 class PointFeatureCat(BaseModule):
+    """PointFeatureCat."""
+
     def forward(
         self,
         point_features: PointFeatures["N C1"],
@@ -63,6 +67,8 @@ class PointFeatureCat(BaseModule):
 
 
 class PointFeatureMLP(PointFeatureTransform):
+    """PointFeatureMLP."""
+
     def __init__(
         self,
         in_channels: int,
@@ -84,6 +90,8 @@ class PointFeatureMLP(PointFeatureTransform):
 
 
 class PointFeatureConv(BaseModule):
+    """PointFeatureConv."""
+
     def __init__(
         self,
         radius: float,

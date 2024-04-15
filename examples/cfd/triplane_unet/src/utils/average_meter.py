@@ -20,6 +20,8 @@ import numpy as np
 
 
 class AverageMeter:
+    """Average meter."""
+
     def __init__(self):
         self.reset()
 
@@ -30,14 +32,16 @@ class AverageMeter:
         self.count = 0
 
     def update(self, val, n=1):
+        """update"""
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
 
 
-# Average Meter with dictionary values
 class AverageMeterDict:
+    """Average Meter with dictionary values."""
+
     def __init__(self):
         self.reset()
 
@@ -49,6 +53,7 @@ class AverageMeterDict:
         self.max = {}
 
     def update(self, val, n=1):
+        """update"""
         for k, v in val.items():
             if k not in self.val:
                 self.val[k] = 0
@@ -63,6 +68,8 @@ class AverageMeterDict:
 
 
 class Timer:
+    """Timer."""
+
     def __init__(self):
         self.tot_time = 0
         self.num_calls = 0

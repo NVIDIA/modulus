@@ -106,6 +106,8 @@ def read_vtp(path: str) -> Tuple[dict, dict]:
 
 
 class AhmedBodyDataset(Dataset):
+    """Ahmed body dataset."""
+
     def __init__(self, data_path: Union[str, Path], transform=None):
         if isinstance(data_path, str):
             data_path = Path(data_path)
@@ -177,12 +179,16 @@ AHMED_MAPPING = {
 
 
 class AhmedBodyDatumTransform:
+    """Ahmed body item transform."""
+
     def __init__(self, info: Optional[dict] = None):
         if info is None:
             info = {}
         self.info = info
 
     def update_info(self, info: dict):
+        """Updates info."""
+
         self.info.update(info)
 
     def __call__(self, datum: dict) -> dict:
@@ -198,6 +204,8 @@ class AhmedBodyDatumTransform:
 
 
 class AhmedBodyDataModule(BaseDataModule):
+    """Ahmed body data module."""
+
     def __init__(
         self,
         data_dir: Union[Path, str],

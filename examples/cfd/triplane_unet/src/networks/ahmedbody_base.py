@@ -32,6 +32,8 @@ def rel_l2(pred, gt):
 
 
 class AhmedBodyBase:
+    """Ahmed body base class"""
+
     def __init__(
         self,
         use_uniformized_velocity: bool = True,

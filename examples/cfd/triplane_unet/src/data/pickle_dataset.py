@@ -20,6 +20,8 @@ from typing import Dict, Optional, Union
 
 
 class PickleDataset:
+    """Dataset wrapper for Python pickle files."""
+
     def __init__(
         self,
         root_path: Union[str, Path],

@@ -36,6 +36,8 @@ class CallablePreprocessBase:
 
 
 class NumpyPreprocess(CallablePreprocessBase):
+    """numpy preprocessor."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.np_ext = kwargs.get("np_ext", "npz")
@@ -46,6 +48,8 @@ class NumpyPreprocess(CallablePreprocessBase):
 
 
 class Webdataset(IterableDataset):
+    """Webdataset-based dataset."""
+
     def __init__(
         self,
         paths: Union[str, List[str]],

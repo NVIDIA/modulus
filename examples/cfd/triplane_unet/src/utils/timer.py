@@ -18,6 +18,8 @@ import time
 
 
 class Timer:
+    """Timer."""
+
     def __init__(self, name=""):
         self.name = name
         self.start = 0
@@ -37,6 +39,8 @@ class Timer:
 
 
 class MinTimer(Timer):
+    """MinTimer."""
+
     def __init__(self, name=""):
         super().__init__(name=name)
         self.min_time = float("inf")

@@ -161,6 +161,8 @@ def neighbor_knn_search(
 
 
 class NeighborRadiusSearchLayer(torch.nn.Module):
+    """NeighborRadiusSearchLayer."""
+
     def __init__(
         self,
         radius: Optional[float] = None,
@@ -185,6 +187,8 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
 
 
 class NeighborPoolingLayer(torch.nn.Module):
+    """NeighborPoolingLayer."""
+
     def __init__(self, reduction: REDUCTION_TYPES = "mean"):
         super().__init__()
         self.reduction = reduction
@@ -204,6 +208,8 @@ class NeighborPoolingLayer(torch.nn.Module):
 
 
 class NeighborMLPConvLayer(torch.nn.Module):
+    """NeighborMLPConvLayer."""
+
     def __init__(
         self,
         mlp: torch.nn.Module = None,
@@ -253,6 +259,8 @@ class NeighborMLPConvLayer(torch.nn.Module):
 
 
 class TestNeighborSearch(unittest.TestCase):
+    """Unit tests class."""
+
     def setUp(self) -> None:
         self.N = 10000
         self.device = "cuda:0"
