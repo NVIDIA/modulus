@@ -95,7 +95,9 @@ def _radius_search_warp(
     result_count_torch = wp.to_torch(result_count)
     torch.cumsum(result_count_torch, dim=0, out=torch_offset[1:])
     total_count = torch_offset[-1].item()
-    assert total_count < 2**31 - 1, f"Total result count is too large: {total_count} > 2**31 - 1"
+    assert (
+        total_count < 2**31 - 1
+    ), f"Total result count is too large: {total_count} > 2**31 - 1"
 
     result_point_idx = wp.zeros(shape=(total_count,), dtype=wp.int32)
     result_point_dist = wp.zeros(shape=(total_count,), dtype=wp.float32)
@@ -124,7 +126,9 @@ def radius_search_warp(
     radius: float,
     grid_dim: Union[int, Tuple[int, int, int]] = (128, 128, 128),
     device: str = "cuda",
-) -> Tuple[Float[Tensor, "Q"], Float[Tensor, "Q"], Float[Tensor, "M + 1"]]:  # noqa: F821
+) -> Tuple[
+    Float[Tensor, "Q"], Float[Tensor, "Q"], Float[Tensor, "M + 1"]
+]:  # noqa: F821
     """
     Args:
         points: [N, 3]
@@ -139,6 +143,8 @@ def radius_search_warp(
         neighbor_split: [M + 1]
     """
     # Convert from warp to torch
+    assert points.is_contiguous(), "points must be contiguous"
+    assert queries.is_contiguous(), "queries must be contiguous"
     points_wp = wp.from_torch(points, dtype=wp.vec3)
     queries_wp = wp.from_torch(queries, dtype=wp.vec3)
 
@@ -158,7 +164,10 @@ def radius_search_warp(
     return result_point_idx, result_point_dist, torch_offset
 
 
-wp.init()
+_WARP_NEIGHBOR_SEARCH_INIT = False
+if not _WARP_NEIGHBOR_SEARCH_INIT:
+    wp.init()
+    _WARP_NEIGHBOR_SEARCH_INIT = True
 
 
 if __name__ == "__main__":
