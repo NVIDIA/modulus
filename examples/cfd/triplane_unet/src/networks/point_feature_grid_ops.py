@@ -1,6 +1,7 @@
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
+
 # TODO(akamenev): migration
 # import open3d as o3d
 # import open3d.ml.torch as ml3d
@@ -32,7 +33,9 @@ class AABBGridFeatures(GridFeatures):
         pos_encode_dim: int = 32,
     ):
         grid = grid_init(aabb_max, aabb_min, resolution)
-        feat = PositionalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(grid)
+        feat = PositionalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
+            grid
+        )
         super().__init__(grid, feat.view(*resolution, -1))
 
 
@@ -151,7 +154,9 @@ class GridFeatureToPoint(nn.Module):
         else:
             raise NotImplementedError
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         out_point_features = self.conv(grid_features, point_features)
         if self.sample_method == "interp":
             out_point_features = self.transform(out_point_features)
@@ -190,7 +195,9 @@ class GridFeatureToPointGraphConv(nn.Module):
             reductions=reductions,
         )
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         resolution = grid_features.resolution
         # Find per axis scaler that scales the vertices to [0, resolution[0]] x [0, resolution[1]] x [0, resolution[2]]
         vertices_scaler = torch.FloatTensor(
@@ -226,7 +233,9 @@ class GridFeatureToPointInterp(nn.Module):
         self.aabb_min = self.aabb_min.to(*args, **kwargs)
         return super().to(*args, **kwargs)
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
         grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
         xyz = point_features.vertices  # N x 3
@@ -340,9 +349,13 @@ class GridFeatureToPointFeature(BaseModule):
 
     @property
     def num_channels(self):
-        return self.in_channels + (self.pos_encode_dim * 3 if self.pos_encode_point else 0)
+        return self.in_channels + (
+            self.pos_encode_dim * 3 if self.pos_encode_point else 0
+        )
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
         assert grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z
         batch_grid_features = grid_features.batch_features  # B x C x X x Y x Z
@@ -384,7 +397,9 @@ class GridFeatureCat(BaseModule):
         other_grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
         cat_grid_features = GridFeatures(
             vertices=grid_features.vertices,
-            features=torch.cat([grid_features.features, other_grid_features.features], dim=0),
+            features=torch.cat(
+                [grid_features.features, other_grid_features.features], dim=0
+            ),
             memory_format=grid_features.memory_format,
             grid_shape=grid_features.grid_shape,
             num_channels=grid_features.num_channels + other_grid_features.num_channels,

@@ -99,7 +99,9 @@ class PointFeatureToGridGroupUNet(BaseModel):
             self.point_feature_to_grids.append(to_grid)
             # Compute voxel size
             voxel_size = self.aabb_length / torch.tensor(res)
-            self.min_voxel_edge_length = torch.min(self.min_voxel_edge_length, voxel_size)
+            self.min_voxel_edge_length = torch.min(
+                self.min_voxel_edge_length, voxel_size
+            )
 
         self.down_blocks = nn.ModuleList()
         self.up_blocks = nn.ModuleList()
@@ -196,7 +198,9 @@ class PointFeatureToGridGroupUNet(BaseModel):
             down_grid_feature_groups.append(out_features)
 
         for level in reversed(range(self.num_levels)):
-            up_grid_features = self.up_blocks[level](down_grid_feature_groups[level + 1])
+            up_grid_features = self.up_blocks[level](
+                down_grid_feature_groups[level + 1]
+            )
             padded_down_features = self.pad_to_match(
                 up_grid_features, down_grid_feature_groups[level]
             )
@@ -406,7 +410,9 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
         point_feature = PointFeatures(vertices, features)
         point_feature = self.first_conv(point_feature)
         # Downsample points
-        down_point_feature = point_feature.voxel_down_sample(self.min_voxel_edge_length.min())
+        down_point_feature = point_feature.voxel_down_sample(
+            self.min_voxel_edge_length.min()
+        )
         # TriplaneUNet
         grid_features = self._grid_forward(down_point_feature)
         out_point_feature = self.to_point(grid_features, point_feature)

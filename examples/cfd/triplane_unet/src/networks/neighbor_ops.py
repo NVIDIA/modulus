@@ -10,7 +10,9 @@ from torch import Tensor
 try:
     import pylibraft.config
 
-    pylibraft.config.set_output_as("torch")  # All compute APIs will return torch tensors
+    pylibraft.config.set_output_as(
+        "torch"
+    )  # All compute APIs will return torch tensors
     from pylibraft.neighbors.brute_force import knn as raft_knn
 except ImportError:
     print("pylibraft not installed.")
@@ -38,7 +40,9 @@ class NeighborSearchReturn:
             self._neighbors_index = args[0].neighbors_index.long()
             self._neighbors_row_splits = args[0].neighbors_row_splits.long()
         else:
-            raise ValueError("NeighborSearchReturn must be initialized with 1 or 2 arguments")
+            raise ValueError(
+                "NeighborSearchReturn must be initialized with 1 or 2 arguments"
+            )
 
     @property
     def neighbors_index(self):
@@ -71,7 +75,9 @@ def neighbor_radius_search(
         torch.cuda.set_device(inp_positions.device)
     assert inp_positions.device == out_positions.device
     if search_method == "open3d":
-        neighbors = ml3d.layers.FixedRadiusSearch()(inp_positions, out_positions, radius)
+        neighbors = ml3d.layers.FixedRadiusSearch()(
+            inp_positions, out_positions, radius
+        )
         # Wrap the result for easier manipulation
         neighbors = NeighborSearchReturn(neighbors)
     elif search_method == "warp":
@@ -157,7 +163,9 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
     ) -> NeighborSearchReturn:
         if radius is None:
             radius = self.radius
-        return neighbor_radius_search(inp_positions, out_positions, radius, self.search_method)
+        return neighbor_radius_search(
+            inp_positions, out_positions, radius, self.search_method
+        )
 
 
 class NeighborPoolingLayer(torch.nn.Module):
@@ -211,7 +219,10 @@ class NeighborMLPConvLayer(torch.nn.Module):
             neighbors = NeighborSearchReturn(
                 neighbors["neighbors_index"], neighbors["neighbors_row_splits"]
             )
-        assert in_features.shape[1] + out_features.shape[1] == self.mlp.layers[0].in_features
+        assert (
+            in_features.shape[1] + out_features.shape[1]
+            == self.mlp.layers[0].in_features
+        )
         rep_features = in_features[neighbors.neighbors_index.long()]
         rs = neighbors.neighbors_row_splits
         num_reps = rs[1:] - rs[:-1]
@@ -244,7 +255,9 @@ class TestNeighborSearch(unittest.TestCase):
         inp_positions = torch.randn([self.N, 3]).to(self.device) * 10
         out_positions = inp_positions
 
-        neighbors = neighbor_knn_search(inp_positions, out_positions, 10, search_method="raft")
+        neighbors = neighbor_knn_search(
+            inp_positions, out_positions, 10, search_method="raft"
+        )
         # N x K int64
         self.assertEqual(neighbors.shape, (self.N, 10))
 

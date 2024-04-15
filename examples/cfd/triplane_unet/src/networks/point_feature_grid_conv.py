@@ -3,6 +3,7 @@ from typing import Iterable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 # TODO(akamenev): migration
 # from fft_conv_pytorch import fft_conv
 from torch import Tensor
@@ -277,8 +278,12 @@ class GridFeatureConv2dBlock(nn.Module):
             compressed_spatial_dim=compressed_spatial_dim,
             up_stride=None,
         )
-        self.norm1 = GridFeatureTransform(LayerNorm2d(out_channels * compressed_spatial_dim))
-        self.norm2 = GridFeatureTransform(LayerNorm2d(out_channels * compressed_spatial_dim))
+        self.norm1 = GridFeatureTransform(
+            LayerNorm2d(out_channels * compressed_spatial_dim)
+        )
+        self.norm2 = GridFeatureTransform(
+            LayerNorm2d(out_channels * compressed_spatial_dim)
+        )
         self.apply_nonlinear_at_end = apply_nonlinear_at_end
 
         if up_stride is None:

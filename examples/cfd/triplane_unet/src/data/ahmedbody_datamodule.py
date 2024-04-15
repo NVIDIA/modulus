@@ -172,9 +172,9 @@ class AhmedBodyDatumTransform:
 
     def __call__(self, datum: dict) -> dict:
         # Normalize the pressure --> 0 mean 1 std normal distribution
-        datum["normalized_pressure"] = (datum["pressure"] - self.info["mean_p"]) / self.info[
-            "std_p"
-        ]
+        datum["normalized_pressure"] = (
+            datum["pressure"] - self.info["mean_p"]
+        ) / self.info["std_p"]
         # Uniform the velocity --> [0, 1] range
         datum["uniformized_velocity"] = (datum["velocity"] - self.info["min_vel"]) / (
             self.info["max_vel"] - self.info["min_vel"]

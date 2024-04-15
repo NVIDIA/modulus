@@ -188,7 +188,9 @@ class GridFeature3DUNet(BaseModel):
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](down_grid_features[level + 1])
             # PAD or CROP
-            padded_down_features = self.pad_to_match(up_grid_features, down_grid_features[level])
+            padded_down_features = self.pad_to_match(
+                up_grid_features, down_grid_features[level]
+            )
             up_grid_features = up_grid_features + padded_down_features
             down_grid_features[level] = up_grid_features
         return self.projection(down_grid_features[0])
@@ -541,7 +543,9 @@ class PointFeatureToGridUNet(BaseModel):
 
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](down_grid_features[level + 1])
-            padded_down_features = self.pad_to_match(up_grid_features, down_grid_features[level])
+            padded_down_features = self.pad_to_match(
+                up_grid_features, down_grid_features[level]
+            )
             up_grid_features = up_grid_features + padded_down_features
             down_grid_features[level] = up_grid_features
 
@@ -851,7 +855,9 @@ class PointFeatureUNetWithGridUNets(BaseModel):
 
         for level in range(num_levels):
             # num_levels 3 then the down_voxel_size are 1/4, 1/2, 1
-            down_voxel_size = unit_voxel_size / inter_level_voxel_ratio ** (num_levels - 1 - level)
+            down_voxel_size = unit_voxel_size / inter_level_voxel_ratio ** (
+                num_levels - 1 - level
+            )
             radius_size = down_voxel_size * radius_to_voxel_ratio
             print(f"Level {level} down voxel size: {down_voxel_size}")
             down_block = PointFeatureConvBlock(

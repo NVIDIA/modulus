@@ -64,7 +64,9 @@ class TensorBoardLogger(Logger):
     def log_scalar(self, tag: str, value: float, step: int):
         self.writer.add_scalar(tag, value, step)
 
-    def log_image(self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int):
+    def log_image(
+        self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int
+    ):
         if isinstance(img, torch.Tensor):
             img = img.numpy()
         # if img has three axes, assert the last channel has size 3
@@ -133,20 +135,17 @@ class WandBLogger(Logger):
 
         # Save config.
         wandb.save(
-            os.path.join(
-                config.output,
-                HydraConfig.get().output_subdir,
-                "config.yaml"
-            ),
+            os.path.join(config.output, HydraConfig.get().output_subdir, "config.yaml"),
             base_path=config.output,
             policy="now",
         )
 
-
     def log_scalar(self, tag: str, value: float, step: int):
         wandb.log({tag: value}, step=step)
 
-    def log_image(self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int):
+    def log_image(
+        self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int
+    ):
         if isinstance(img, torch.Tensor):
             img = img.numpy()
         if img.dtype != np.uint8:
@@ -178,7 +177,9 @@ class WandBLogger(Logger):
 
         for i in range(vertices.shape[0]):
             vertices_colors = torch.cat((vertices[i], colors[i].float()), dim=-1)
-            wandb.log({f"{tag}_{i}": wandb.Object3D(vertices_colors.cpu().numpy())}, step=step)
+            wandb.log(
+                {f"{tag}_{i}": wandb.Object3D(vertices_colors.cpu().numpy())}, step=step
+            )
 
 
 class Loggers(Logger):
@@ -324,7 +325,9 @@ class TestLoggers(unittest.TestCase):
         logger.log_figure("test", fig, 0)
 
     def test_loggers(self):
-        loggers = Loggers([TensorBoardLogger("test"), WandBLogger("test", "test", "test")])
+        loggers = Loggers(
+            [TensorBoardLogger("test"), WandBLogger("test", "test", "test")]
+        )
         loggers.log_scalar("test", 1.0, 0)
         loggers.log_image("test", torch.rand(64, 64, 3), 0)
         loggers.log_time("test", 1.0, 0)

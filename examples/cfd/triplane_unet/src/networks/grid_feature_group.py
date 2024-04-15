@@ -103,8 +103,13 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
         with torch.no_grad():
             for i in range(len(grid_features_group)):
                 vertices = grid_features_group[i].vertices
-                if grid_features_group[i].vertices.shape[:3] != orig_features[i].shape[1:]:
-                    vertices = grid_features_group[i].strided_vertices(orig_features[i].shape[1:])
+                if (
+                    grid_features_group[i].vertices.shape[:3]
+                    != orig_features[i].shape[1:]
+                ):
+                    vertices = grid_features_group[i].strided_vertices(
+                        orig_features[i].shape[1:]
+                    )
 
                 xyz = vertices.flatten(0, 2)
                 xyz_min = torch.min(xyz, dim=1, keepdim=True)[0]
@@ -147,13 +152,17 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
 class GridFeatureGroupIntraCommunications(nn.Module):
     """Multiple communication types e.g. ["sum", "mul"]"""
 
-    def __init__(self, communication_types: List[Literal["sum", "mul"]] = ["sum"]) -> None:
+    def __init__(
+        self, communication_types: List[Literal["sum", "mul"]] = ["sum"]
+    ) -> None:
         super().__init__()
         self.intra_communications = nn.ModuleList()
         self.grid_cat = GridFeatureGroupCat()
         for communication_type in communication_types:
             self.intra_communications.append(
-                GridFeaturesGroupIntraCommunication(communication_type=communication_type)
+                GridFeaturesGroupIntraCommunication(
+                    communication_type=communication_type
+                )
             )
 
     def forward(self, grid_features_group: GridFeatureGroup) -> GridFeatureGroup:
@@ -280,9 +289,13 @@ class GridFeatureGroupCat(BaseModule):
         super().__init__()
         self.grid_cat = GridFeatureCat()
 
-    def forward(self, group1: GridFeatureGroup, group2: GridFeatureGroup) -> GridFeatureGroup:
+    def forward(
+        self, group1: GridFeatureGroup, group2: GridFeatureGroup
+    ) -> GridFeatureGroup:
         assert len(group1) == len(group2)
-        return GridFeatureGroup([self.grid_cat(g1, g2) for g1, g2 in zip(group1, group2)])
+        return GridFeatureGroup(
+            [self.grid_cat(g1, g2) for g1, g2 in zip(group1, group2)]
+        )
 
 
 class GridFeatureGroupPadToMatch(BaseModule):
