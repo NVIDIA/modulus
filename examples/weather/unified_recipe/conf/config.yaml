@@ -26,22 +26,26 @@ defaults:
   #- dataset/6hr_subsample # uncomment for full dataset
 
   # Curated Dataset
-  - curated_dataset/tiny_7_var
-  #- curated_dataset/7_var # uncomment for full dataset
+  - curated_dataset/tiny_2_var
+  #- curated_dataset/healpix_19_var
+  #- curated_dataset/34_var
   
   # Transform
   - transform/trim_lat720
-
-  # Filesystem
-  - filesystem/local
+  #- transform/healpix
+  #- transform/downsample
 
   # Model
   - model/tiny_afno
   #- model/afno
-  #- model/graphcastnet # Example of changing model to graphcastnet
+  #- model/graphcastnet
+  #- model/tiny_sfno
+  #- model/sfno
 
   # Training
   - training/afno
+  #- training/graphcastnet
+  #- training/sfno
 
   # Validation
   - validation/afno

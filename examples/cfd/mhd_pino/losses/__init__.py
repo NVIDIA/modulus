@@ -14,24 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dataset_filename: "./tiny_arco_era5.zarr"
-
-dt: 6
-
-years: ["1979-01-01", "2024-01-01"]
-
-chunking: [1, 1, 721, 1440]
-
-single_threaded: False
-
-single_level_variables:
-  - "latitude"
-  - "longitude"
-  - "time"
-  - "level"
-  - "land_sea_mask"
-  - "toa_incident_solar_radiation"
-  - "total_column_water_vapour"
-  - "2m_temperature"
-
-pressure_level_variables:
+from .losses import LpLoss
+from .loss_mhd import LossMHD
+from .loss_mhd_vec_pot import LossMHDVecPot
+from .loss_mhd_modulus import LossMHD_Modulus
+from .loss_mhd_vec_pot_modulus import LossMHDVecPot_Modulus

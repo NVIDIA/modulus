@@ -43,7 +43,11 @@ class PythonLogger:
     def file_logging(self, file_name: str = "launch.log"):
         """Log to file"""
         if os.path.exists(file_name):
-            os.remove(file_name)
+            try:
+                os.remove(file_name)
+            except FileNotFoundError:
+                # ignore if already removed (can happen with multiple processes)
+                pass
         formatter = logging.Formatter(
             "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
             datefmt="%H:%M:%S",
