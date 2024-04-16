@@ -22,6 +22,8 @@ import torch
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
+from .base_model import BaseModel
+
 from src.utils.visualization import fig_to_numpy
 
 
@@ -29,10 +31,10 @@ def rel_l2(pred, gt):
     return torch.norm(pred - gt, p=2) / torch.norm(gt, p=2)
 
 
-class DrivAerBase:
+class DrivAerBase(BaseModel):
     dir_movement = torch.tensor([-1.0, 0.0, 0.0])
 
-    def data_dict_to_input(self, data_dict):
+    def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].squeeze(0).float()  # (n_in, 3)
 
         # center vertices
@@ -43,7 +45,7 @@ class DrivAerBase:
 
         return vertices.to(self.device)
 
-    def drag(self, pred_pressure, air_coeff, data_dict):
+    def drag(self, pred_pressure, air_coeff, data_dict) -> float:
         coeff = air_coeff / data_dict["proj_area_x"].item()
         poly_normals = data_dict["cell_normals"].squeeze(0).float().to(self.device)
         poly_area = data_dict["cell_areas"].squeeze(0).float().to(self.device)
@@ -61,7 +63,7 @@ class DrivAerBase:
         return c_p + c_f
 
     @torch.no_grad()
-    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs):
+    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
         normalized_pred = self(vertices).reshape(1, -1)
         if loss_fn is None:
@@ -107,7 +109,7 @@ class DrivAerBase:
 
         return return_dict
 
-    def image_pointcloud_dict(self, data_dict, datamodule):
+    def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices = self.data_dict_to_input(data_dict)
         noramlized_pred = self(vertices).detach().cpu().squeeze()
         # denormalize
@@ -203,3 +205,18 @@ class DrivAerBase:
         # diff_points = torch.cat((vertices, norm_diff_colors), dim=1)
 
         # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}
+
+
+class DrivAerDragRegressionBase(DrivAerBase):
+    """
+    Base class for drag regression networks
+    """
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices = self.data_dict_to_input(data_dict)
+        pred_drag = self(vertices)
+        gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        return {"drag_loss": loss_fn(pred_drag, gt_drag)}
+
+    def image_pointcloud_dict(self, data_dict, datamodule):
+        return {}

@@ -18,3 +18,4 @@ from .grid_feature_group_unet import (
     PointFeatureToGridGroupUNetAhmedBody,
     PointFeatureToGridGroupUNetDrivAer,
 )
+from .dgcnn import DGCNNDrivAer, DGCNNAhmedBody

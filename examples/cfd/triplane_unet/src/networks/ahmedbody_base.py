@@ -23,6 +23,8 @@ import torch
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
+from .base_model import BaseModel
+
 from src.networks.net_utils import SinusoidalEncoding
 from src.utils.visualization import fig_to_numpy
 
@@ -31,7 +33,7 @@ def rel_l2(pred, gt):
     return torch.norm(pred - gt, p=2) / torch.norm(gt, p=2)
 
 
-class AhmedBodyBase:
+class AhmedBodyBase(BaseModel):
     """Ahmed body base class"""
 
     def __init__(
@@ -156,7 +158,7 @@ class AhmedBodyBase:
         )
         return return_dict
 
-    def image_pointcloud_dict(self, data_dict, datamodule):
+    def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices, features = self.data_dict_to_input(data_dict)
         pred = self(vertices, features).detach().cpu().squeeze()
         gt_pressure = data_dict["normalized_pressure"].squeeze()
@@ -247,3 +249,14 @@ class AhmedBodyBase:
     def pressure_drag(self, pressure, normals, areas, wall_shear_stress=None):
         weight = normals[:, 0].view(-1) * areas.view(-1)
         return torch.dot(pressure.view(-1), weight.to(pressure))
+
+
+class AhmedBodyDragRegressionBase(AhmedBodyBase):
+    """
+    Base class for Ahmed body drag regression model.
+    """
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices, features = self.data_dict_to_input(data_dict)
+        pred_drag = self(vertices, features)
+        return {"drag_loss": loss_fn(pred_drag, data_dict["drag"])}
