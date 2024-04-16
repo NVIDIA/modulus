@@ -69,7 +69,6 @@ def main(cfg: DictConfig) -> None:
     duration = getattr(cfg, "duration", 200)
     batch_size_global = getattr(cfg, "batch_size_global", 256)
     batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
-    train_test_split = getattr(cfg.dataset, "train_test_split", False)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -114,12 +113,12 @@ def main(cfg: DictConfig) -> None:
     c.wandb_name = wandb_name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
-    cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
-    if hasattr(cfg, "global_means_path"):
-        cfg.global_means_path = to_absolute_path(cfg.global_means_path)
-    if hasattr(cfg, "global_stds_path"):
-        cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
+    validation_dataset_cfg = (
+        OmegaConf.to_container(cfg.validation_dataset)
+        if hasattr(cfg, "validation_dataset")
+        else None
+    )
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
@@ -285,7 +284,8 @@ def main(cfg: DictConfig) -> None:
     logger0.info("Training options:")
     logger0.info(json.dumps(c, indent=2))
     logger0.info(f"Output directory:        {c.run_dir}")
-    logger0.info(f"Dataset path:            {dataset_cfg['data_path']}")
+    if "data_path" in dataset_cfg:
+        logger0.info(f"Dataset path:            {dataset_cfg['data_path']}")
     logger0.info(f"Network architecture:    {arch}")
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
@@ -314,7 +314,7 @@ def main(cfg: DictConfig) -> None:
         data_loader_kwargs,
         batch_size=batch_size_gpu,
         seed=seed,
-        train_test_split=train_test_split,
+        validation_dataset_cfg=validation_dataset_cfg,
     )
 
     (img_shape_y, img_shape_x) = dataset.image_shape()

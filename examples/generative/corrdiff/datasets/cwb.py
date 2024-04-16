@@ -21,6 +21,7 @@ import random
 
 import cftime
 import cv2
+from hydra.utils import to_absolute_path
 import numpy as np
 import zarr
 
@@ -384,8 +385,16 @@ class ZarrDataset(DownscalingDataset):
         self.n_history = n_history
         self.min_path = min_path
         self.max_path = max_path
-        self.global_means_path = global_means_path
-        self.global_stds_path = global_stds_path
+        self.global_means_path = (
+            to_absolute_path(global_means_path)
+            if (global_means_path is not None)
+            else None
+        )
+        self.global_stds_path = (
+            to_absolute_path(global_stds_path)
+            if (global_stds_path is not None)
+            else None
+        )
         self.normalization = normalization
         self.gridtype = gridtype
         self.N_grid_channels = N_grid_channels
@@ -533,6 +542,7 @@ class ZarrDataset(DownscalingDataset):
 
 def get_zarr_dataset(*, data_path, normalization="v1", all_times=False, **kwargs):
     """Get a Zarr dataset for training or evaluation."""
+    data_path = to_absolute_path(data_path)
     get_target_normalization = {
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,
