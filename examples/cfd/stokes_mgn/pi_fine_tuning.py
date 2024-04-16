@@ -18,7 +18,11 @@ import torch
 import numpy as np
 
 import time, os
-import wandb as wb
+import wandb
+
+import hydra
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
 
 try:
     import apex
@@ -42,12 +46,8 @@ from modulus.launch.logging import (
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from utils import relative_lp_error, get_dataset
-from constants import Constants
 
 from collections import OrderedDict
-
-# Instantiate constants
-C = Constants()
 
 from sympy import Symbol, Function, Number
 from modulus.sym.eq.pde import PDE
@@ -213,7 +213,6 @@ class PhysicsInformedFineTuner:
 
     def __init__(
         self,
-        wb,
         device,
         gnn_u,
         gnn_v,
@@ -228,7 +227,6 @@ class PhysicsInformedFineTuner:
     ):
         super(PhysicsInformedFineTuner, self).__init__()
 
-        self.wb = wb
         self.device = device
         self.nu = nu
 
@@ -306,14 +304,17 @@ class PhysicsInformedFineTuner:
         return u, v
 
     def loss(self):
+        # inflow points
         x_in, y_in = self.coords_inflow[:, 0:1], self.coords_inflow[:, 1:2]
         results_inflow = self.graph_full.forward({"x": x_in, "y": y_in})
         pred_u_in, pred_v_in = results_inflow["u"], results_inflow["v"]
 
+        # no-slip points
         x_no_slip, y_no_slip = self.coords_noslip[:, 0:1], self.coords_noslip[:, 1:2]
         results_noslip = self.graph_full.forward({"x": x_no_slip, "y": y_no_slip})
         pred_u_noslip, pred_v_noslip = results_noslip["u"], results_noslip["v"]
 
+        # interior points
         x_int, y_int = self.coords[:, 0:1], self.coords[:, 1:2]
         results_int = self.graph_full.forward({"x": x_int, "y": y_int})
         pred_mom_u, pred_mom_v, pred_cont = (
@@ -424,7 +425,7 @@ class PhysicsInformedFineTuner:
             error_p = torch.linalg.norm(self.ref_p - pred_p) / torch.linalg.norm(
                 self.ref_p
             )
-            self.wb.log(
+            wandb.log(
                 {
                     "test_u_error (%)": error_u.detach().cpu().numpy(),
                     "test_v_error (%)": error_v.detach().cpu().numpy(),
@@ -434,7 +435,8 @@ class PhysicsInformedFineTuner:
             return error_u, error_v, error_p
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     # CUDA support
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -447,14 +449,14 @@ if __name__ == "__main__":
         entity="Modulus",
         name="Stokes-Physics-Informed-Fine-Tuning",
         group="Stokes-DDP-Group",
-        mode=C.wandb_mode,
+        mode=cfg.wandb_mode,
     )
 
     logger = PythonLogger("main")  # General python logger
     logger.file_logging()
 
     # Get dataset
-    path = os.path.join(C.results_dir, C.graph_path)
+    path = os.path.join(to_absolute_path(cfg.results_dir), cfg.graph_path)
 
     # get_dataset() function here provides the true values (ref_*) and the gnn
     # predictions (gnn_*) along with other data required for the PINN training.
@@ -476,7 +478,6 @@ if __name__ == "__main__":
 
     # Initialize model
     pi_fine_tuner = PhysicsInformedFineTuner(
-        wb,
         device,
         gnn_u,
         gnn_v,
@@ -491,7 +492,7 @@ if __name__ == "__main__":
     )
 
     logger.info("Inference (with physics-informed training for fine-tuning) started...")
-    for iters in range(C.pi_iters):
+    for iters in range(cfg.pi_iters):
         # Start timing the iteration
         start_iter_time = time.time()
 
@@ -564,3 +565,7 @@ if __name__ == "__main__":
         polydata.save(path)
 
     logger.info("Inference completed!")
+
+
+if __name__ == "__main__":
+    main()

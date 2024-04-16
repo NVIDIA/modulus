@@ -111,7 +111,7 @@ Once the model is trained, run
 python inference.py
 ```
 
-This will save the predictions for the test dataset in `.vtp` format in the `results`
+This will save the predictions for the test dataset in `.vtp` format in the `outputs`
 directory. Use Paraview to open and explore the results.
 
 ## References
