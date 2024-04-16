@@ -120,8 +120,7 @@ def test_song_unet_position_embedding(device):
     ).to(device)
     assert model.pos_embd.shape == (40, img_resolution, img_resolution)
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_fails_if_grid_is_invalid(device):
+def test_fails_if_grid_is_invalid():
     """Test the positional embedding options. "linear" gridtype only support 2 channels, and N_grid_channels in "sinusoidal" should be a factor of 4 """
     img_resolution = 16
     in_channels = 2
@@ -134,7 +133,7 @@ def test_fails_if_grid_is_invalid(device):
             out_channels=out_channels,
             gridtype="linear",
             N_grid_channels=20,
-        ).to(device)
+        )
 
     with pytest.raises(ValueError):
         model = UNet(
@@ -143,7 +142,7 @@ def test_fails_if_grid_is_invalid(device):
             out_channels=out_channels,
             gridtype="sinusoidal",
             N_grid_channels=11,
-        ).to(device)
+        )
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
