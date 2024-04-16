@@ -22,31 +22,23 @@ import torch.nn as nn
 class MLP(torch.nn.Module):
     """A simple feedforward neural network."""
 
-    def __init__(self, layers, nonlinearity, out_nonlinearity=None, normalize=False):
+    def __init__(self, channels: list, nonlinearity: nn.Module = nn.ReLU):
         super().__init__()
 
-        self.n_layers = len(layers) - 1
+        n_layers = len(channels) - 1
+        assert n_layers >= 1, "MLP must have at least 2 layers"
 
-        assert self.n_layers >= 1
+        # Create the MLP
+        layers = []
+        for layer_idx in range(n_layers - 1):
+            layers.append(nn.Linear(channels[layer_idx], channels[layer_idx + 1]))
+            layers.append(nonlinearity())
+        layers.append(nn.Linear(channels[-2], channels[-1]))
 
-        self.layers = nn.ModuleList()
-
-        for j in range(self.n_layers):
-            self.layers.append(nn.Linear(layers[j], layers[j + 1]))
-
-            if j != self.n_layers - 1:
-                if normalize:
-                    self.layers.append(nn.BatchNorm1d(layers[j + 1]))
-
-                self.layers.append(nonlinearity())
-
-        if out_nonlinearity is not None:
-            self.layers.append(out_nonlinearity())
+        self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
-        for _, l in enumerate(self.layers):
-            x = l(x)
-        return x
+        return self.layers(x)
 
 
 class MLPBlock(nn.Module):
@@ -54,9 +46,9 @@ class MLPBlock(nn.Module):
 
     def __init__(
         self,
-        in_channels,
-        hidden_channels=None,
-        out_channels=None,
+        in_channels: int,
+        hidden_channels: int = None,
+        out_channels: int = None,
         activation=nn.GELU,
     ):
         super().__init__()
@@ -80,10 +72,10 @@ class MLPBlock(nn.Module):
         return out
 
 
-class PositionalEncoding(nn.Module):
+class SinusoidalEncoding(nn.Module):
     """PositionalEncoding."""
 
-    def __init__(self, num_channels: int, data_range: float = 2):
+    def __init__(self, num_channels: int, data_range: float = 2.0):
         super().__init__()
         assert (
             num_channels % 2 == 0
@@ -102,46 +94,3 @@ class PositionalEncoding(nn.Module):
         x = x * freqs
         x = torch.cat([x.cos(), x.sin()], dim=-1).flatten(start_dim=-2)
         return x
-
-
-class AdaIN(nn.Module):
-    """AdaIN."""
-
-    def __init__(self, embed_dim, in_channels, mlp=None, eps=1e-5):
-        super().__init__()
-        self.in_channels = in_channels
-        self.embed_dim = embed_dim
-        self.eps = eps
-
-        if mlp is None:
-            mlp = nn.Sequential(
-                nn.Linear(embed_dim, 512), nn.GELU(), nn.Linear(512, 2 * in_channels)
-            )
-        self.mlp = mlp
-
-        self.embedding = None
-        # to keep track of which device the nn.Module is on
-        self.device_indicator_param = nn.Parameter(torch.empty(0))
-
-    @property
-    def device(self):
-        """Returns the device that the model is on."""
-        return self.device_indicator_param.device
-
-    def update_embeddding(self, x):
-        """update_embeddding."""
-
-        self.embedding = x.reshape(
-            self.embed_dim,
-        ).to(self.device)
-
-    def forward(self, x):
-        assert (
-            self.embedding is not None
-        ), "AdaIN: update embeddding before running forward"
-
-        weight, bias = torch.split(
-            self.mlp(self.embedding.to(self.device)), self.in_channels, dim=0
-        )
-
-        return nn.functional.group_norm(x, self.in_channels, weight, bias, eps=self.eps)

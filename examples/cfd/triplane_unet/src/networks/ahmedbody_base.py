@@ -23,7 +23,7 @@ import torch
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
-from src.networks.net_utils import PositionalEncoding
+from src.networks.net_utils import SinusoidalEncoding
 from src.utils.visualization import fig_to_numpy
 
 
@@ -56,7 +56,7 @@ class AhmedBodyBase:
         self.vertices_purturb_offset = torch.tensor(vertices_purturb_range) / 2.0
         self.pos_encode_dim = pos_encode_dim
         self.pos_encode_range = pos_encode_range
-        self.pos_encoder = PositionalEncoding(
+        self.pos_encoder = SinusoidalEncoding(
             num_channels=self.pos_encode_dim, data_range=self.pos_encode_range
         )
 

@@ -27,6 +27,10 @@ from .warp_neighbor_search import radius_search_warp
 
 
 class NeighborSearchReturn:
+    """
+    Wrapper for the output of a neighbor search operation.
+    """
+
     # N is the total number of neighbors for all M queries
     _neighbors_index: Int[Tensor, "N"]  # noqa: F821
     # M is the number of queries
@@ -86,49 +90,70 @@ def neighbor_radius_search(
     return neighbors
 
 
+def knn_search(
+    ref_positions: Int[Tensor, "N 3"],
+    query_positions: Int[Tensor, "M 3"],
+    k: int,
+) -> Int[Tensor, "M K"]:
+    """Perform knn search using the open3d backend."""
+    assert k > 0
+    assert k < ref_positions.shape[0]
+    assert ref_positions.device == query_positions.device
+    # Critical for multi GPU
+    if ref_positions.is_cuda:
+        torch.cuda.set_device(ref_positions.device)
+    # Use topk to get the top k indices from distances
+    dists = torch.cdist(query_positions, ref_positions)
+    _, neighbors_index = torch.topk(dists, k, dim=1, largest=False)
+    return neighbors_index
+
+
 @torch.no_grad()
 def _chunked_knn_search(
-    inp_positions: Int[Tensor, "N 3"],
-    out_positions: Int[Tensor, "M 3"],
+    ref_positions: Int[Tensor, "N 3"],
+    query_positions: Int[Tensor, "M 3"],
     k: int,
     chunk_size: int = 4096,
 ):
     """Divide the out_positions into chunks and perform knn search."""
     assert k > 0
-    assert k < inp_positions.shape[0]
+    assert k < ref_positions.shape[0]
     assert chunk_size > 0
     neighbors_index = []
-    for i in range(0, out_positions.shape[0], chunk_size):
-        chunk_out_positions = out_positions[i : i + chunk_size]
-        # Get the top k indices from distances
-        dists = torch.cdist(chunk_out_positions, inp_positions)
-        _, chunk_neighbors_index = torch.topk(dists, k, dim=1, largest=False)
+    for i in range(0, query_positions.shape[0], chunk_size):
+        chunk_out_positions = query_positions[i : i + chunk_size]
+        chunk_neighbors_index = knn_search(ref_positions, chunk_out_positions, k)
         neighbors_index.append(chunk_neighbors_index)
     return torch.concatenate(neighbors_index, dim=0)
 
 
 @torch.no_grad()
 def neighbor_knn_search(
-    inp_positions: Int[Tensor, "N 3"],
-    out_positions: Int[Tensor, "M 3"],
+    ref_positions: Int[Tensor, "N 3"],
+    query_positions: Int[Tensor, "M 3"],
     k: int,
     search_method: Literal["chunk"] = "chunk",
+    chunck_size: int = 4096,
 ) -> Int[Tensor, "M K"]:
     """
-    inp_positions: [N,3]
-    out_positions: [M,3]
+    ref_positions: [N,3]
+    query_positions: [M,3]
     k: int
-    search_method: Literal["raft", "open3d"]
     """
     assert k > 0
-    assert k < inp_positions.shape[0]
+    assert k < ref_positions.shape[0]
     assert search_method in ["chunk"]
     # Critical for multi GPU
-    if inp_positions.is_cuda:
-        torch.cuda.set_device(inp_positions.device)
-    assert inp_positions.device == out_positions.device
+    if ref_positions.is_cuda:
+        torch.cuda.set_device(ref_positions.device)
+    assert ref_positions.device == query_positions.device
     if search_method == "chunk":
-        neighbors_index = _chunked_knn_search(inp_positions, out_positions, k)
+        if query_positions.shape[0] < chunck_size:
+            neighbors_index = knn_search(ref_positions, query_positions, k)
+        else:
+            neighbors_index = _chunked_knn_search(
+                ref_positions, query_positions, k, chunck_size=chunck_size
+            )
     else:
         raise ValueError(f"search_method {search_method} not supported.")
     return neighbors_index
@@ -147,15 +172,13 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
     @torch.no_grad()
     def forward(
         self,
-        inp_positions: Int[Tensor, "N 3"],
-        out_positions: Int[Tensor, "M 3"],
+        ref_positions: Int[Tensor, "N 3"],
+        query_positions: Int[Tensor, "M 3"],
         radius: Optional[float] = None,
     ) -> NeighborSearchReturn:
         if radius is None:
             radius = self.radius
-        return neighbor_radius_search(
-            inp_positions, out_positions, radius, self.search_method
-        )
+        return neighbor_radius_search(ref_positions, query_positions, radius)
 
 
 class NeighborPoolingLayer(torch.nn.Module):
@@ -174,7 +197,7 @@ class NeighborPoolingLayer(torch.nn.Module):
         """
         rep_features = in_features[neighbors.neighbors_index.long()]
         out_features = row_reduction(
-            rep_features, neighbors.neighbors_row_splits, reduce=self.reduction
+            rep_features, neighbors.neighbors_row_splits, reduction=self.reduction
         )
         return out_features
 
@@ -225,7 +248,7 @@ class NeighborMLPConvLayer(torch.nn.Module):
         agg_features = torch.cat([rep_features, self_features], dim=1)
         rep_features = self.mlp(agg_features)
         out_features = row_reduction(
-            rep_features, neighbors.neighbors_row_splits, reduce=self.reduction
+            rep_features, neighbors.neighbors_row_splits, reduction=self.reduction
         )
         return out_features
 
@@ -248,14 +271,13 @@ class TestNeighborSearch(unittest.TestCase):
         out_features = pool(inp_features, neighbors)
 
     def test_knn_search(self):
-        inp_positions = torch.randn([self.N, 3]).to(self.device) * 10
-        out_positions = inp_positions
+        ref_positions = torch.randn([self.N, 3]).to(self.device) * 10
+        query_positions = torch.randn([1003, 3]).to(self.device) * 10
 
-        neighbors = neighbor_knn_search(
-            inp_positions, out_positions, 10, search_method="raft"
-        )
+        neighbors = neighbor_knn_search(ref_positions, query_positions, 10)
         # N x K int64
-        self.assertEqual(neighbors.shape, (self.N, 10))
+        self.assertEqual(neighbors.shape[0], query_positions.shape[0])
+        self.assertEqual(neighbors.shape[1], 10)
 
     def test_mlp_conv(self):
         out_N = 1000
