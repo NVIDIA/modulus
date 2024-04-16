@@ -768,7 +768,6 @@ class EDMPrecondSR(Module):
         img_lr,
         sigma,
         class_labels=None,
-        global_index=None,
         force_fp32=False,
         **model_kwargs,
     ):
@@ -799,7 +798,6 @@ class EDMPrecondSR(Module):
             (c_in * x).to(dtype),
             c_noise.flatten(),
             class_labels=class_labels,
-            global_index=global_index,
             **model_kwargs,
         )
 
@@ -861,7 +859,6 @@ class _ConditionalPrecond(torch.nn.Module):
         sigma,
         class_labels=None,
         condition=None,
-        global_index=None,
         force_fp32=False,
         **model_kwargs,
     ):
@@ -897,7 +894,6 @@ class _ConditionalPrecond(torch.nn.Module):
             arg.to(dtype),
             c_noise.flatten(),
             class_labels=class_labels,
-            global_index=global_index,
             **model_kwargs,
         )
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
