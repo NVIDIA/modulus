@@ -1,14 +1,27 @@
-from typing import Callable, Dict
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import Dict
 
 import matplotlib
-import numpy as np
 import torch
 
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
-from src.data.mesh_utils import compute_drag_coefficient
 from src.utils.visualization import fig_to_numpy
 
 
@@ -35,7 +48,9 @@ class DrivAerBase:
         poly_normals = data_dict["cell_normals"].squeeze(0).float().to(self.device)
         poly_area = data_dict["cell_areas"].squeeze(0).float().to(self.device)
         poly_pressure = pred_pressure.squeeze().float().to(self.device)
-        poly_wss = data_dict["time_avg_wall_shear_stress"].squeeze(0).float().to(self.device)
+        poly_wss = (
+            data_dict["time_avg_wall_shear_stress"].squeeze(0).float().to(self.device)
+        )
 
         # Compute coefficients
         # -x direction is the movement direction so
@@ -51,7 +66,9 @@ class DrivAerBase:
         normalized_pred = self(vertices).reshape(1, -1)
         if loss_fn is None:
             loss_fn = self.loss
-        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        normalized_gt = (
+            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        )
         out_dict = {"l2": loss_fn(normalized_pred, normalized_gt)}
 
         pred = datamodule.decode(normalized_pred.clone())
@@ -72,7 +89,9 @@ class DrivAerBase:
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
         normalized_pred = self(vertices)
-        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        normalized_gt = (
+            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        )
 
         return_dict = {}
         if loss_fn is None:
@@ -104,7 +123,9 @@ class DrivAerBase:
             vertices = vertices.clone()
             vertices[:, 0] = -vertices[:, 0]
 
-            sc = ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis")
+            sc = ax.scatter(
+                vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
+            )
             # Make the colorbar smaller
             # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
             # Show the numbers on the colorbar
@@ -141,7 +162,9 @@ class DrivAerBase:
         ax = fig.add_subplot(132, projection="3d")
         create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
         ax = fig.add_subplot(133, projection="3d")
-        create_subplot(ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference")
+        create_subplot(
+            ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference"
+        )
 
         # figure to numpy image
         fig.set_tight_layout(True)

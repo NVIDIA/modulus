@@ -1,4 +1,20 @@
-from typing import Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import List, Literal, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -40,6 +56,8 @@ memory_format_to_axis_index = {
 
 
 class GridFeatureUNet(BaseModel):
+    """GridFeatureUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -100,6 +118,8 @@ class GridFeatureUNet(BaseModel):
 
 
 class GridFeature3DUNet(BaseModel):
+    """GridFeature3DUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -188,13 +208,17 @@ class GridFeature3DUNet(BaseModel):
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](down_grid_features[level + 1])
             # PAD or CROP
-            padded_down_features = self.pad_to_match(up_grid_features, down_grid_features[level])
+            padded_down_features = self.pad_to_match(
+                up_grid_features, down_grid_features[level]
+            )
             up_grid_features = up_grid_features + padded_down_features
             down_grid_features[level] = up_grid_features
         return self.projection(down_grid_features[0])
 
 
 class PointFeatureToGrid3DUNet(GridFeature3DUNet):
+    """PointFeatureToGrid3DUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -266,6 +290,8 @@ class PointFeatureToGrid3DUNet(GridFeature3DUNet):
 
 
 class PointFeatureToGrid3DUNetAhmedBody(AhmedBodyBase, PointFeatureToGrid3DUNet):
+    """PointFeatureToGrid3DUNetAhmedBody."""
+
     def __init__(
         self,
         in_channels: int,
@@ -356,6 +382,8 @@ class PointFeatureToGrid3DUNetAhmedBody(AhmedBodyBase, PointFeatureToGrid3DUNet)
 
 
 class PointFeatureToGrid3DUNetDrivAer(DrivAerBase, PointFeatureToGrid3DUNet):
+    """PointFeatureToGrid3DUNetDrivAer."""
+
     def __init__(
         self,
         in_channels: int,
@@ -423,6 +451,8 @@ class PointFeatureToGrid3DUNetDrivAer(DrivAerBase, PointFeatureToGrid3DUNet):
 
 
 class PointFeatureToGridUNet(BaseModel):
+    """PointFeatureToGridUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -541,7 +571,9 @@ class PointFeatureToGridUNet(BaseModel):
 
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](down_grid_features[level + 1])
-            padded_down_features = self.pad_to_match(up_grid_features, down_grid_features[level])
+            padded_down_features = self.pad_to_match(
+                up_grid_features, down_grid_features[level]
+            )
             up_grid_features = up_grid_features + padded_down_features
             down_grid_features[level] = up_grid_features
 
@@ -550,7 +582,8 @@ class PointFeatureToGridUNet(BaseModel):
 
 
 class PointFeatureToGridUNets(BaseModel):
-    # Three PointFeatureToGridUNet with different resolutions
+    """Three PointFeatureToGridUNet with different resolutions."""
+
     def __init__(
         self,
         in_channels: int,
@@ -629,6 +662,8 @@ class PointFeatureToGridUNets(BaseModel):
 
 
 class PointFeatureToGridUNetsDrivAer(DrivAerBase, PointFeatureToGridUNets):
+    """PointFeatureToGridUNetsDrivAer."""
+
     def __init__(
         # Same as the PointFeatureToGridUNets
         self,
@@ -714,6 +749,8 @@ class PointFeatureToGridUNetsDrivAer(DrivAerBase, PointFeatureToGridUNets):
 
 
 class PointFeatureToGridUNetsAhmedBody(AhmedBodyBase, PointFeatureToGridUNets):
+    """PointFeatureToGridUNetsAhmedBody."""
+
     def __init__(
         # Same as the PointFeatureToGridUNets
         self,
@@ -811,6 +848,8 @@ class PointFeatureToGridUNetsAhmedBody(AhmedBodyBase, PointFeatureToGridUNets):
 
 
 class PointFeatureUNetWithGridUNets(BaseModel):
+    """PointFeatureUNetWithGridUNets."""
+
     def __init__(
         self,
         in_channels: int,
@@ -851,7 +890,9 @@ class PointFeatureUNetWithGridUNets(BaseModel):
 
         for level in range(num_levels):
             # num_levels 3 then the down_voxel_size are 1/4, 1/2, 1
-            down_voxel_size = unit_voxel_size / inter_level_voxel_ratio ** (num_levels - 1 - level)
+            down_voxel_size = unit_voxel_size / inter_level_voxel_ratio ** (
+                num_levels - 1 - level
+            )
             radius_size = down_voxel_size * radius_to_voxel_ratio
             print(f"Level {level} down voxel size: {down_voxel_size}")
             down_block = PointFeatureConvBlock(

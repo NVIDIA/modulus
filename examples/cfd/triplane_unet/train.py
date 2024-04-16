@@ -1,4 +1,19 @@
-from contextlib import suppress
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import partial
 import logging
 import logging.config
@@ -59,7 +74,9 @@ def save_state(model, optimizer, scheduler, epoch, tot_iter, config):
 @torch.no_grad()
 def eval(model, datamodule, config, loss_fn=None):
     model.eval()
-    test_loader = datamodule.test_dataloader(batch_size=config.eval.batch_size, num_workers=0)
+    test_loader = datamodule.test_dataloader(
+        batch_size=config.eval.batch_size, num_workers=0
+    )
     eval_meter = AverageMeterDict()
     visualize_data_dicts = []
     eval_timer = Timer()
@@ -88,7 +105,9 @@ def eval(model, datamodule, config, loss_fn=None):
                 merged_point_cloud_dict[f"{k}_{i}"] = v
     elif hasattr(model, "image_dict"):
         for i, data_dict in enumerate(visualize_data_dicts):
-            image_dict, pointcloud_dict = model.image_dict(data_dict, datamodule=datamodule)
+            image_dict, pointcloud_dict = model.image_dict(
+                data_dict, datamodule=datamodule
+            )
             for k, v in image_dict.items():
                 merged_image_dict[f"{k}_{i}"] = v
 
@@ -113,7 +132,9 @@ def train(config: DictConfig):
 
     # Initialize the dataloaders
     datamodule = instantiate(config.data)
-    train_loader = datamodule.train_dataloader(batch_size=config.train.batch_size, shuffle=True)
+    train_loader = datamodule.train_dataloader(
+        batch_size=config.train.batch_size, shuffle=True
+    )
 
     # Initialize the optimizer and scheduler.
     optimizer = instantiate(config.optimizer, model.parameters())
@@ -139,7 +160,8 @@ def train(config: DictConfig):
     if config.train.time_limit is not None:
         # time limit is the form hh:mm:ss
         time_limit = sum(
-            int(x) * 60**i for i, x in enumerate(reversed(config.train.time_limit.split(":")))
+            int(x) * 60**i
+            for i, x in enumerate(reversed(config.train.time_limit.split(":")))
         )
         logger.info(f"Time limit: {time_limit} seconds")
         start_time = default_timer()
@@ -181,12 +203,17 @@ def train(config: DictConfig):
             optimizer.zero_grad()
 
             with autocast():
-                loss_dict = model.loss_dict(data_dict, loss_fn=loss_fn, datamodule=datamodule)
+                loss_dict = model.loss_dict(
+                    data_dict, loss_fn=loss_fn, datamodule=datamodule
+                )
 
             loss = 0
             for k, v in loss_dict.items():
                 weight_name = k + "_weight"
-                if hasattr(config, weight_name) and getattr(config, weight_name) is not None:
+                if (
+                    hasattr(config, weight_name)
+                    and getattr(config, weight_name) is not None
+                ):
                     v = v * getattr(config, weight_name)
                 loss = loss + v.mean()
 
@@ -201,7 +228,9 @@ def train(config: DictConfig):
                     scaler.unscale_(optimizer)
 
                     # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.amp.grad_max_norm)
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(), config.amp.grad_max_norm
+                    )
 
                     # optimizer's gradients are already unscaled, so scaler.step does not unscale them,
                     # although it still skips optimizer.step() if the gradients contain infs or NaNs.
@@ -226,7 +255,9 @@ def train(config: DictConfig):
 
         scheduler.step()
         t2 = default_timer()
-        logger.info(f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2 loss: {train_l2_meter.avg:.4f}")
+        logger.info(
+            f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2 loss: {train_l2_meter.avg:.4f}"
+        )
         loggers.log_scalar("train/epoch_train_l2", train_l2_meter.avg, tot_iter)
         loggers.log_scalar("train/train_epoch_duration", t2 - t1, tot_iter)
 
@@ -241,7 +272,9 @@ def train(config: DictConfig):
                 loggers.log_image(f"eval_vis/{k}", v, tot_iter)
             if config.log_pointcloud:
                 for k, v in eval_point_clouds.items():
-                    loggers.log_pointcloud(f"eval_vis/{k}", v[..., :3], v[..., 3:], tot_iter)
+                    loggers.log_pointcloud(
+                        f"eval_vis/{k}", v[..., :3], v[..., 3:], tot_iter
+                    )
 
         # Save the weights, optimization state, and scheduler state into one file
         if ep % config.train.save_interval == 0:
@@ -257,7 +290,9 @@ def train(config: DictConfig):
         # Break the training loop if the time limit is reached
         if time_limit is not None:
             if default_timer() - start_time + 2 * average_epoch_time > time_limit:
-                logger.info(f"Time limit {time_limit} seconds reached. Breaking the training loop.")
+                logger.info(
+                    f"Time limit {time_limit} seconds reached. Breaking the training loop."
+                )
                 # Save model
                 save_state(model, optimizer, scheduler, ep, tot_iter, config)
                 # Write the status to the output directory to status.txt file
@@ -266,14 +301,15 @@ def train(config: DictConfig):
                 sys.exit(0)
 
     # Save the final model
-    save_state(model, optimizer, scheduler, config.train.num_epochs - 1, tot_iter, config)
+    save_state(
+        model, optimizer, scheduler, config.train.num_epochs - 1, tot_iter, config
+    )
     # Write the status to the output directory to status.txt file
     with open(os.path.join(config.output, "status.txt"), "w") as f:
         f.write("finished")
 
 
-@hydra.main(version_base="1.3", config_path="configs", config_name="base")
-def main(config: DictConfig):
+def _init_python_logging(config: DictConfig):
     # Hydra config contains properly resolved absolute path.
     config.output = HydraConfig.get().runtime.output_dir
     if config.log_dir is None:
@@ -282,7 +318,7 @@ def main(config: DictConfig):
         config.log_dir = to_absolute_path(config.log_dir)
 
     # Set up Python loggers.
-    if (pylog_cfg := OmegaConf.select(config, "logging.python")):
+    if pylog_cfg := OmegaConf.select(config, "logging.python"):
         pylog_cfg.output = config.output
         pylog_cfg.rank = DistributedManager().rank
         # Enable logging only on rank 0.
@@ -290,12 +326,15 @@ def main(config: DictConfig):
             pylog_cfg.handlers = {}
             pylog_cfg.loggers.tpunet.handlers = []
         # Configure logging.
-        logging.config.dictConfig(
-            OmegaConf.to_container(pylog_cfg, resolve=True)
-        )
+        logging.config.dictConfig(OmegaConf.to_container(pylog_cfg, resolve=True))
 
     global logger
     logger = logging.getLogger("tpunet")
+
+
+@hydra.main(version_base="1.3", config_path="configs", config_name="base")
+def main(config: DictConfig):
+    _init_python_logging(config)
 
     # Set the random seed.
     if config.seed is not None:

@@ -1,3 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from collections.abc import Mapping
 
 import matplotlib as mpl
@@ -29,6 +45,8 @@ from .visualization import fig_to_numpy
 
 
 class Logger:
+    """Base logger class."""
+
     def __init__(self):
         pass
 
@@ -57,6 +75,8 @@ class Logger:
 
 
 class TensorBoardLogger(Logger):
+    """TensorBoard logger."""
+
     def __init__(self, log_dir: str):
         super().__init__()
         self.writer = SummaryWriter(log_dir)
@@ -64,7 +84,9 @@ class TensorBoardLogger(Logger):
     def log_scalar(self, tag: str, value: float, step: int):
         self.writer.add_scalar(tag, value, step)
 
-    def log_image(self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int):
+    def log_image(
+        self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int
+    ):
         if isinstance(img, torch.Tensor):
             img = img.numpy()
         # if img has three axes, assert the last channel has size 3
@@ -92,6 +114,8 @@ class TensorBoardLogger(Logger):
 
 
 class WandBLogger(Logger):
+    """Weights & Biases logger."""
+
     def __init__(
         self,
         project_name: str,
@@ -133,20 +157,17 @@ class WandBLogger(Logger):
 
         # Save config.
         wandb.save(
-            os.path.join(
-                config.output,
-                HydraConfig.get().output_subdir,
-                "config.yaml"
-            ),
+            os.path.join(config.output, HydraConfig.get().output_subdir, "config.yaml"),
             base_path=config.output,
             policy="now",
         )
 
-
     def log_scalar(self, tag: str, value: float, step: int):
         wandb.log({tag: value}, step=step)
 
-    def log_image(self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int):
+    def log_image(
+        self, tag: str, img: Union[Float[Tensor, "H W C"], np.ndarray], step: int
+    ):
         if isinstance(img, torch.Tensor):
             img = img.numpy()
         if img.dtype != np.uint8:
@@ -178,7 +199,9 @@ class WandBLogger(Logger):
 
         for i in range(vertices.shape[0]):
             vertices_colors = torch.cat((vertices[i], colors[i].float()), dim=-1)
-            wandb.log({f"{tag}_{i}": wandb.Object3D(vertices_colors.cpu().numpy())}, step=step)
+            wandb.log(
+                {f"{tag}_{i}": wandb.Object3D(vertices_colors.cpu().numpy())}, step=step
+            )
 
 
 class Loggers(Logger):
@@ -290,6 +313,8 @@ def flatten_dict(
 
 
 class TestLoggers(unittest.TestCase):
+    """Loggers unit tests class."""
+
     def setUp(self) -> None:
         # Generate some example data
         X = np.arange(-5, 5, 0.25)
@@ -324,7 +349,9 @@ class TestLoggers(unittest.TestCase):
         logger.log_figure("test", fig, 0)
 
     def test_loggers(self):
-        loggers = Loggers([TensorBoardLogger("test"), WandBLogger("test", "test", "test")])
+        loggers = Loggers(
+            [TensorBoardLogger("test"), WandBLogger("test", "test", "test")]
+        )
         loggers.log_scalar("test", 1.0, 0)
         loggers.log_image("test", torch.rand(64, 64, 3), 0)
         loggers.log_time("test", 1.0, 0)

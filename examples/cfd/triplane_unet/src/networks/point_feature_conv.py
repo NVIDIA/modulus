@@ -1,11 +1,27 @@
-from typing import Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import numpy as np
+from typing import List, Literal, Optional
+
+
 # TODO(akamenev): migration
 # import open3d.ml.torch as ml3d
 import torch
 import torch.nn as nn
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from torch import Tensor
 
 from .base_model import BaseModule
@@ -21,6 +37,8 @@ def normalize_aabb(pts, aabb_min, aabb_max):
 
 
 class PointFeatureTransform(BaseModule):
+    """PointFeatureTransform."""
+
     def __init__(
         self,
         feature_transform: nn.Module,
@@ -35,6 +53,8 @@ class PointFeatureTransform(BaseModule):
 
 
 class PointFeatureCat(BaseModule):
+    """PointFeatureCat."""
+
     def forward(
         self,
         point_features: PointFeatures["N C1"],
@@ -47,6 +67,8 @@ class PointFeatureCat(BaseModule):
 
 
 class PointFeatureMLP(PointFeatureTransform):
+    """PointFeatureMLP."""
+
     def __init__(
         self,
         in_channels: int,
@@ -68,6 +90,8 @@ class PointFeatureMLP(PointFeatureTransform):
 
 
 class PointFeatureConv(BaseModule):
+    """PointFeatureConv."""
+
     def __init__(
         self,
         radius: float,
@@ -126,7 +150,9 @@ class PointFeatureConv(BaseModule):
             assert (
                 downsample_voxel_size is None
             ), "downsample_voxel_size is only used for downsample"
-            assert provided_in_channels is None, "provided_in_channels must be None for same type"
+            assert (
+                provided_in_channels is None
+            ), "provided_in_channels must be None for same type"
         if downsample_voxel_size is not None and downsample_voxel_size > radius:
             raise ValueError(
                 f"downsample_voxel_size {downsample_voxel_size} must be <= radius {radius}"
@@ -150,7 +176,9 @@ class PointFeatureConv(BaseModule):
             raise ValueError(
                 f"neighbor_search_type must be radius or knn, got {neighbor_search_type}"
             )
-        self.positional_encoding = PositionalEncoding(pos_encode_dim, data_range=pos_encode_range)
+        self.positional_encoding = PositionalEncoding(
+            pos_encode_dim, data_range=pos_encode_range
+        )
         # When down voxel size is not None, there will be out_point_features will be provided as an additional input
         if provided_in_channels is None:
             provided_in_channels = in_channels
@@ -200,7 +228,9 @@ class PointFeatureConv(BaseModule):
             ), "out_point_features must be provided for the provided type"
         elif self.out_point_feature_type == "downsample":
             assert out_point_features is None
-            out_point_features = in_point_features.voxel_down_sample(self.downsample_voxel_size)
+            out_point_features = in_point_features.voxel_down_sample(
+                self.downsample_voxel_size
+            )
         elif self.out_point_feature_type == "same":
             assert out_point_features is None
             out_point_features = in_point_features
@@ -218,17 +248,22 @@ class PointFeatureConv(BaseModule):
             neighbor_search_vertices_scaler = self.neighbor_search_vertices_scaler
         if neighbor_search_vertices_scaler is not None:
             in_vertices = in_vertices * neighbor_search_vertices_scaler.to(in_vertices)
-            out_vertices = out_vertices * neighbor_search_vertices_scaler.to(out_vertices)
+            out_vertices = out_vertices * neighbor_search_vertices_scaler.to(
+                out_vertices
+            )
 
         if self.neighbor_search_type == "knn":
             # Only support CPU search
             device = in_vertices.device
-            neighbors_index = neighbor_knn_search(in_vertices, out_vertices, self.radius_or_k)
+            neighbors_index = neighbor_knn_search(
+                in_vertices, out_vertices, self.radius_or_k
+            )
             # M x K index
             neighbors_index = neighbors_index.long().to(device).view(-1)
             # M row splits
             neighbors_row_splits = (
-                torch.arange(0, out_vertices.shape[0] + 1, device=device) * self.radius_or_k
+                torch.arange(0, out_vertices.shape[0] + 1, device=device)
+                * self.radius_or_k
             )
             rep_in_features = in_point_features.features[neighbors_index]
             num_reps = self.radius_or_k
@@ -248,13 +283,19 @@ class PointFeatureConv(BaseModule):
                 f"neighbor_search_type must be radius or knn, got {self.neighbor_search_type}"
             )
         # repeat the self features using num_reps
-        self_features = torch.repeat_interleave(out_point_features.features, num_reps, dim=0)
+        self_features = torch.repeat_interleave(
+            out_point_features.features, num_reps, dim=0
+        )
         edge_features = [rep_in_features, self_features]
         if self.use_rel_pos or self.use_rel_pos_encode:
             in_rep_vertices = in_point_features.vertices[neighbors_index]
-            self_vertices = torch.repeat_interleave(out_point_features.vertices, num_reps, dim=0)
+            self_vertices = torch.repeat_interleave(
+                out_point_features.vertices, num_reps, dim=0
+            )
             if self.use_rel_pos_encode:
-                edge_features.append(self.positional_encoding(in_rep_vertices - self_vertices))
+                edge_features.append(
+                    self.positional_encoding(in_rep_vertices - self_vertices)
+                )
             elif self.use_rel_pos:
                 edge_features.append(in_rep_vertices - self_vertices)
         edge_features = torch.cat(edge_features, dim=1)
@@ -347,7 +388,9 @@ class PointFeatureConvBlock(BaseModule):
             out = self.conv1(in_point_features, out_point_features)
         elif self.out_point_feature_type == "downsample":
             assert out_point_features is None
-            out_point_features = in_point_features.voxel_down_sample(self.downsample_voxel_size)
+            out_point_features = in_point_features.voxel_down_sample(
+                self.downsample_voxel_size
+            )
             out = self.conv1(in_point_features)
         elif self.out_point_feature_type == "same":
             assert out_point_features is None

@@ -1,8 +1,25 @@
-from typing import Iterable, List, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import Iterable, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 # TODO(akamenev): migration
 # from fft_conv_pytorch import fft_conv
 from torch import Tensor
@@ -34,6 +51,8 @@ def to_ntuple(val: Union[int, Iterable[int]], n: int) -> Tuple[int, ...]:
 
 
 class GridFeaturePadToMatch(nn.Module):
+    """GridFeaturePadToMatch."""
+
     def forward(self, ref_grid: GridFeatures, x_grid: GridFeatures) -> GridFeatures:
         assert ref_grid.memory_format == x_grid.memory_format
         assert x_grid.memory_format != GridFeaturesMemoryFormat.x_y_z_c
@@ -89,6 +108,8 @@ class GridFeaturePadToMatch(nn.Module):
 
 
 class GridFeatureConv2d(nn.Module):
+    """GridFeatureConv2d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -161,6 +182,8 @@ class GridFeatureConv2d(nn.Module):
 
 
 class GridFeatureFFTConv2d(nn.Module):
+    """GridFeatureFFTConv2d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -205,6 +228,8 @@ class GridFeatureFFTConv2d(nn.Module):
 
 
 class LayerNorm2d(nn.LayerNorm):
+    """LayerNorm2d."""
+
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 3, 1)
         x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
@@ -213,6 +238,8 @@ class LayerNorm2d(nn.LayerNorm):
 
 
 class LayerNorm3d(nn.LayerNorm):
+    """LayerNorm3d."""
+
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 3, 4, 1)
         x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
@@ -221,6 +248,8 @@ class LayerNorm3d(nn.LayerNorm):
 
 
 class GridFeatureTransform(BaseModule):
+    """GridFeatureTransform."""
+
     def __init__(self, transform: nn.Module) -> None:
         super().__init__()
         self.feature_transform = transform
@@ -249,6 +278,8 @@ class GridFeatureTransform(BaseModule):
 
 
 class GridFeatureConv2dBlock(nn.Module):
+    """GridFeatureConv2dBlock."""
+
     def __init__(
         self,
         in_channels: int,
@@ -277,8 +308,12 @@ class GridFeatureConv2dBlock(nn.Module):
             compressed_spatial_dim=compressed_spatial_dim,
             up_stride=None,
         )
-        self.norm1 = GridFeatureTransform(LayerNorm2d(out_channels * compressed_spatial_dim))
-        self.norm2 = GridFeatureTransform(LayerNorm2d(out_channels * compressed_spatial_dim))
+        self.norm1 = GridFeatureTransform(
+            LayerNorm2d(out_channels * compressed_spatial_dim)
+        )
+        self.norm2 = GridFeatureTransform(
+            LayerNorm2d(out_channels * compressed_spatial_dim)
+        )
         self.apply_nonlinear_at_end = apply_nonlinear_at_end
 
         if up_stride is None:
@@ -324,6 +359,8 @@ class GridFeatureConv2dBlock(nn.Module):
 
 
 class GridFeatureMemoryFormatConverter(BaseModule):
+    """GridFeatureMemoryFormatConverter."""
+
     def __init__(self, memory_format: GridFeaturesMemoryFormat) -> None:
         super().__init__()
         self.memory_format = memory_format
@@ -337,6 +374,8 @@ class GridFeatureMemoryFormatConverter(BaseModule):
 
 # 3D Operations
 class GridFeatureConv3d(nn.Module):
+    """GridFeatureConv3d."""
+
     def __init__(
         self,
         in_channels: int,
@@ -400,6 +439,8 @@ class GridFeatureConv3d(nn.Module):
 
 
 class GridFeatureConv3dBlock(nn.Module):
+    """GridFeatureConv3dBlock."""
+
     def __init__(
         self,
         in_channels: int,

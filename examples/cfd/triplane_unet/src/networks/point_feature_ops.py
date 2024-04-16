@@ -1,7 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import enum
-from typing import Dict, List, NewType, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
+
 # TODO(akamenev): migration
 # import open3d as o3d
 # import open3d.ml.torch as ml3d
@@ -17,6 +34,8 @@ from .net_utils import MLP, PositionalEncoding
 
 
 def grid_init(bb_max, bb_min, resolution):
+    """grid_init."""
+
     # Define grid points
     grid = torch.meshgrid(
         torch.linspace(bb_min[0], bb_max[0], resolution[0]),
@@ -28,6 +47,8 @@ def grid_init(bb_max, bb_min, resolution):
 
 
 class PointFeatures:
+    """PointFeatures."""
+
     _shape_hint = None  # default value
     vertices: Float[Tensor, "N 3"]
     features: Float[Tensor, "N C"]
@@ -67,7 +88,9 @@ class PointFeatures:
     def voxel_down_sample(self, voxel_size: float):
         int_coords = torch.floor((self.vertices) / voxel_size).int()
         # use unique to get the index of the in coord torch.unique(int_coords, dim=0, return_inverse=True)
-        _, unique_indices = np.unique(int_coords.cpu().numpy(), axis=0, return_index=True)
+        _, unique_indices = np.unique(
+            int_coords.cpu().numpy(), axis=0, return_index=True
+        )
         unique_indices = torch.from_numpy(unique_indices).to(self.vertices.device)
         down_vertices = self.vertices[unique_indices]
         down_features = self.features[unique_indices]
@@ -151,6 +174,8 @@ def convert_from_x_y_z_c(tensor, to_memory_format):
 
 
 class GridFeatures(PointFeatures):
+    """GridFeatures."""
+
     memory_format: GridFeaturesMemoryFormat
 
     def __init__(
@@ -176,7 +201,9 @@ class GridFeatures(PointFeatures):
             self.memory_format = memory_format
 
     @staticmethod
-    def from_conv_output(conv_output, vertices, memory_format, grid_shape, num_channels):
+    def from_conv_output(
+        conv_output, vertices, memory_format, grid_shape, num_channels
+    ):
         """Initialize GridFeatures from the output of a convolutional layer.
 
         Args:
@@ -266,7 +293,9 @@ class GridFeatures(PointFeatures):
         if self.memory_format == GridFeaturesMemoryFormat.c_x_y_z:
             permuted_features = self.features.permute(1, 2, 3, 0)
             # TODO: merge with the code below for x_y_z_c
-            return PointFeatures(self.vertices.reshape(-1, 3), permuted_features.flatten(0, 2))
+            return PointFeatures(
+                self.vertices.reshape(-1, 3), permuted_features.flatten(0, 2)
+            )
 
         assert self.memory_format == GridFeaturesMemoryFormat.x_y_z_c
         # TODO: provide better fix
@@ -277,7 +306,9 @@ class GridFeatures(PointFeatures):
             or self.features.shape[1] > grid_shape[1]
             or self.features.shape[2] > grid_shape[2]
         ):
-            self.features = self.features[: grid_shape[0], : grid_shape[1], : grid_shape[2]]
+            self.features = self.features[
+                : grid_shape[0], : grid_shape[1], : grid_shape[2]
+            ]
 
         return PointFeatures(
             self.vertices.reshape(-1, 3),
@@ -288,7 +319,9 @@ class GridFeatures(PointFeatures):
     def resolution(self) -> Tuple[int, int, int]:
         return self.vertices.shape[:3]
 
-    def to(self, device=None, memory_format: GridFeaturesMemoryFormat = None):  # -> GridFeatures
+    def to(
+        self, device=None, memory_format: GridFeaturesMemoryFormat = None
+    ):  # -> GridFeatures
         assert device is not None or memory_format is not None
         if device is not None:
             self.vertices = self.vertices.to(device)
@@ -358,6 +391,8 @@ class GridFeatures(PointFeatures):
 
 
 class DownSampleLayer(BaseModule):
+    """DownSampleLayer."""
+
     def __init__(self, voxel_size):
         super().__init__()
         self.voxel_size = voxel_size
@@ -375,6 +410,8 @@ class DownSampleLayer(BaseModule):
 
 
 class VerticesToPointFeatures(BaseModule):
+    """VerticesToPointFeatures."""
+
     def __init__(
         self,
         embed_dim: int,
@@ -397,6 +434,8 @@ class VerticesToPointFeatures(BaseModule):
 
 
 class ToGrid(nn.Module):
+    """ToGrid."""
+
     def __init__(
         self,
         resolution: Union[Int[Tensor, "3"], List[int]],
@@ -434,9 +473,15 @@ class ToGrid(nn.Module):
         grid_max = bb_center + grid_size / 2.0
         # Define grid points using grid_min, grid_max
         grid = torch.meshgrid(
-            torch.linspace(grid_min[0], grid_max[0], self.resolution_list[0]).to(device),
-            torch.linspace(grid_min[1], grid_max[1], self.resolution_list[1]).to(device),
-            torch.linspace(grid_min[2], grid_max[2], self.resolution_list[2]).to(device),
+            torch.linspace(grid_min[0], grid_max[0], self.resolution_list[0]).to(
+                device
+            ),
+            torch.linspace(grid_min[1], grid_max[1], self.resolution_list[1]).to(
+                device
+            ),
+            torch.linspace(grid_min[2], grid_max[2], self.resolution_list[2]).to(
+                device
+            ),
         )
         grid = torch.stack(grid, dim=-1)  # (n_x, n_y, n_z, 3)
 
@@ -452,6 +497,8 @@ class ToGrid(nn.Module):
 
 
 class ToGridWithDist(nn.Module):
+    """ToGridWithDist."""
+
     def __init__(
         self,
         resolution: Union[Int[Tensor, "3"], List[int]],
@@ -507,7 +554,9 @@ class ToGridWithDist(nn.Module):
         grid_coord_dists = torch.cat(
             (
                 grid,
-                dists.view(self.resolution[0], self.resolution[1], self.resolution[2], 1),
+                dists.view(
+                    self.resolution[0], self.resolution[1], self.resolution[2], 1
+                ),
             ),
             dim=-1,
         )
@@ -525,6 +574,8 @@ class ToGridWithDist(nn.Module):
 
 
 class FromGrid(nn.Module):
+    """FromGrid."""
+
     def __init__(self, voxel_size, num_channels):
         super().__init__()
         self.num_channels = num_channels
@@ -555,7 +606,11 @@ class FromGrid(nn.Module):
 
 
 class FromGridNeighborConv(nn.Module):
-    def __init__(self, grid_channels: int, point_channels: int, out_channels: int, radius: float):
+    """FromGridNeighborConv."""
+
+    def __init__(
+        self, grid_channels: int, point_channels: int, out_channels: int, radius: float
+    ):
         super().__init__()
         self.radius = radius
         self.conv = NeighborMLPConvLayer(

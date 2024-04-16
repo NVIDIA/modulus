@@ -1,5 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import warnings
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 try:
     import vtk
@@ -12,7 +28,6 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-import torch
 from torch.utils.data import Dataset, Subset
 
 from src.data.base_datamodule import BaseDataModule
@@ -91,6 +106,8 @@ def read_vtp(path: str) -> Tuple[dict, dict]:
 
 
 class AhmedBodyDataset(Dataset):
+    """Ahmed body dataset."""
+
     def __init__(self, data_path: Union[str, Path], transform=None):
         if isinstance(data_path, str):
             data_path = Path(data_path)
@@ -162,19 +179,23 @@ AHMED_MAPPING = {
 
 
 class AhmedBodyDatumTransform:
+    """Ahmed body item transform."""
+
     def __init__(self, info: Optional[dict] = None):
         if info is None:
             info = {}
         self.info = info
 
     def update_info(self, info: dict):
+        """Updates info."""
+
         self.info.update(info)
 
     def __call__(self, datum: dict) -> dict:
         # Normalize the pressure --> 0 mean 1 std normal distribution
-        datum["normalized_pressure"] = (datum["pressure"] - self.info["mean_p"]) / self.info[
-            "std_p"
-        ]
+        datum["normalized_pressure"] = (
+            datum["pressure"] - self.info["mean_p"]
+        ) / self.info["std_p"]
         # Uniform the velocity --> [0, 1] range
         datum["uniformized_velocity"] = (datum["velocity"] - self.info["min_vel"]) / (
             self.info["max_vel"] - self.info["min_vel"]
@@ -183,6 +204,8 @@ class AhmedBodyDatumTransform:
 
 
 class AhmedBodyDataModule(BaseDataModule):
+    """Ahmed body data module."""
+
     def __init__(
         self,
         data_dir: Union[Path, str],

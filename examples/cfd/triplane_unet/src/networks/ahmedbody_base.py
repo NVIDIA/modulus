@@ -1,4 +1,20 @@
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import Dict, Tuple
 
 import matplotlib
 import numpy as np
@@ -6,7 +22,6 @@ import torch
 
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 from src.networks.net_utils import PositionalEncoding
 from src.utils.visualization import fig_to_numpy
@@ -17,6 +32,8 @@ def rel_l2(pred, gt):
 
 
 class AhmedBodyBase:
+    """Ahmed body base class"""
+
     def __init__(
         self,
         use_uniformized_velocity: bool = True,
@@ -58,14 +75,18 @@ class AhmedBodyBase:
         vertices = data_dict["cell_centers"].squeeze(0)  # (n_in, 3)
         # If train and random_purturb_train, add random perturbation to the vertices
         if self.random_purturb_train and self.training:
-            vertices += torch.rand(3) * self.vertices_purturb_range - self.vertices_purturb_offset
+            vertices += (
+                torch.rand(3) * self.vertices_purturb_range
+                - self.vertices_purturb_offset
+            )
 
         vel = data_dict["velocity"].squeeze(0)  # (1)
         if self.use_uniformized_velocity:
             vel = data_dict["uniformized_velocity"].squeeze(0)  # (1)
         if self.random_purturb_train and self.training:
             vel = vel + (
-                torch.rand(1) * self.velocity_purturb_range - self.velocity_purturb_range / 2.0
+                torch.rand(1) * self.velocity_purturb_range
+                - self.velocity_purturb_range / 2.0
             )
 
         # replite the velocity to match the number of vertices
@@ -103,7 +124,9 @@ class AhmedBodyBase:
             out_dict["pressure_drag_loss"] = loss_fn(pred_drag, gt_drag)
 
             # compute relative difference
-            out_dict["drag_rel_diff"] = torch.abs(pred_drag - gt_drag) / torch.abs(gt_drag)
+            out_dict["drag_rel_diff"] = torch.abs(pred_drag - gt_drag) / torch.abs(
+                gt_drag
+            )
             out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
 
         return out_dict
@@ -148,7 +171,9 @@ class AhmedBodyBase:
             if isinstance(vertices, torch.Tensor):
                 vertices = vertices.numpy()
 
-            sc = ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis")
+            sc = ax.scatter(
+                vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
+            )
             fig.colorbar(sc, ax=ax, shrink=0.5, aspect=5)
             ax.set_xlabel("X")
             ax.set_ylabel("Y")
@@ -165,7 +190,9 @@ class AhmedBodyBase:
         ax = fig.add_subplot(132, projection="3d")
         create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
         ax = fig.add_subplot(133, projection="3d")
-        create_subplot(ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference")
+        create_subplot(
+            ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference"
+        )
 
         # figure to numpy image
         fig.set_tight_layout(True)

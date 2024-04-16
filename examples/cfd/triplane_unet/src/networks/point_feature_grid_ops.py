@@ -1,19 +1,35 @@
-from typing import Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
+
 # TODO(akamenev): migration
 # import open3d as o3d
 # import open3d.ml.torch as ml3d
 import torch
 import torch.nn as nn
-from jaxtyping import Float, Int
+from jaxtyping import Int
 from torch import Tensor
 from torch.nn import functional as F
 
 from .base_model import BaseModule
 from .components.reductions import REDUCTION_TYPES
-from .neighbor_ops import NeighborMLPConvLayer, NeighborRadiusSearchLayer
-from .net_utils import MLP, PositionalEncoding
+from .net_utils import PositionalEncoding
 from .point_feature_conv import PointFeatureCat, PointFeatureConv, PointFeatureTransform
 from .point_feature_ops import (
     GridFeatures,
@@ -24,6 +40,8 @@ from .point_feature_ops import (
 
 
 class AABBGridFeatures(GridFeatures):
+    """AABBGridFeatures."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -32,11 +50,15 @@ class AABBGridFeatures(GridFeatures):
         pos_encode_dim: int = 32,
     ):
         grid = grid_init(aabb_max, aabb_min, resolution)
-        feat = PositionalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(grid)
+        feat = PositionalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
+            grid
+        )
         super().__init__(grid, feat.view(*resolution, -1))
 
 
 class PointFeatureToGrid(nn.Module):
+    """PointFeatureToGrid."""
+
     def __init__(
         self,
         in_channels: int,
@@ -105,6 +127,8 @@ class PointFeatureToGrid(nn.Module):
 
 
 class GridFeatureToPoint(nn.Module):
+    """GridFeatureToPoint."""
+
     def __init__(
         self,
         grid_in_channels: int,
@@ -151,7 +175,9 @@ class GridFeatureToPoint(nn.Module):
         else:
             raise NotImplementedError
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         out_point_features = self.conv(grid_features, point_features)
         if self.sample_method == "interp":
             out_point_features = self.transform(out_point_features)
@@ -159,6 +185,8 @@ class GridFeatureToPoint(nn.Module):
 
 
 class GridFeatureToPointGraphConv(nn.Module):
+    """GridFeatureToPointGraphConv."""
+
     def __init__(
         self,
         grid_in_channels: int,
@@ -190,7 +218,9 @@ class GridFeatureToPointGraphConv(nn.Module):
             reductions=reductions,
         )
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         resolution = grid_features.resolution
         # Find per axis scaler that scales the vertices to [0, resolution[0]] x [0, resolution[1]] x [0, resolution[2]]
         vertices_scaler = torch.FloatTensor(
@@ -209,6 +239,8 @@ class GridFeatureToPointGraphConv(nn.Module):
 
 
 class GridFeatureToPointInterp(nn.Module):
+    """GridFeatureToPointInterp."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -226,7 +258,9 @@ class GridFeatureToPointInterp(nn.Module):
         self.aabb_min = self.aabb_min.to(*args, **kwargs)
         return super().to(*args, **kwargs)
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
         grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
         xyz = point_features.vertices  # N x 3
@@ -255,6 +289,8 @@ class GridFeatureToPointInterp(nn.Module):
 
 
 class PointFeatureToDistanceGridFeature(BaseModule):
+    """PointFeatureToDistanceGridFeature."""
+
     def __init__(
         self,
         aabb_max: Tuple[float, float, float],
@@ -325,6 +361,8 @@ class PointFeatureToDistanceGridFeature(BaseModule):
 
 
 class GridFeatureToPointFeature(BaseModule):
+    """GridFeatureToPointFeature."""
+
     def __init__(
         self,
         in_channels: int,
@@ -340,9 +378,13 @@ class GridFeatureToPointFeature(BaseModule):
 
     @property
     def num_channels(self):
-        return self.in_channels + (self.pos_encode_dim * 3 if self.pos_encode_point else 0)
+        return self.in_channels + (
+            self.pos_encode_dim * 3 if self.pos_encode_point else 0
+        )
 
-    def forward(self, grid_features: GridFeatures, point_features: PointFeatures) -> PointFeatures:
+    def forward(
+        self, grid_features: GridFeatures, point_features: PointFeatures
+    ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
         assert grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z
         batch_grid_features = grid_features.batch_features  # B x C x X x Y x Z
@@ -373,6 +415,8 @@ class GridFeatureToPointFeature(BaseModule):
 
 
 class GridFeatureCat(BaseModule):
+    """GridFeatureCat."""
+
     def forward(
         self, grid_features: GridFeatures, other_grid_features: GridFeatures
     ) -> GridFeatures:
@@ -384,7 +428,9 @@ class GridFeatureCat(BaseModule):
         other_grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
         cat_grid_features = GridFeatures(
             vertices=grid_features.vertices,
-            features=torch.cat([grid_features.features, other_grid_features.features], dim=0),
+            features=torch.cat(
+                [grid_features.features, other_grid_features.features], dim=0
+            ),
             memory_format=grid_features.memory_format,
             grid_shape=grid_features.grid_shape,
             num_channels=grid_features.num_channels + other_grid_features.num_channels,
@@ -394,6 +440,8 @@ class GridFeatureCat(BaseModule):
 
 
 class GridFeatureFNO(BaseModule):
+    """GridFeatureFNO."""
+
     def __init__(
         self,
         in_channels: int,

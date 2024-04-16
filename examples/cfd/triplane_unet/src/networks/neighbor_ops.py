@@ -1,3 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 from typing import Literal, Optional, Union
 
@@ -26,7 +42,9 @@ class NeighborSearchReturn:
             self._neighbors_index = args[0].neighbors_index.long()
             self._neighbors_row_splits = args[0].neighbors_row_splits.long()
         else:
-            raise ValueError("NeighborSearchReturn must be initialized with 1 or 2 arguments")
+            raise ValueError(
+                "NeighborSearchReturn must be initialized with 1 or 2 arguments"
+            )
 
     @property
     def neighbors_index(self):
@@ -117,6 +135,8 @@ def neighbor_knn_search(
 
 
 class NeighborRadiusSearchLayer(torch.nn.Module):
+    """NeighborRadiusSearchLayer."""
+
     def __init__(
         self,
         radius: Optional[float] = None,
@@ -133,10 +153,14 @@ class NeighborRadiusSearchLayer(torch.nn.Module):
     ) -> NeighborSearchReturn:
         if radius is None:
             radius = self.radius
-        return neighbor_radius_search(inp_positions, out_positions, radius)
+        return neighbor_radius_search(
+            inp_positions, out_positions, radius, self.search_method
+        )
 
 
 class NeighborPoolingLayer(torch.nn.Module):
+    """NeighborPoolingLayer."""
+
     def __init__(self, reduction: REDUCTION_TYPES = "mean"):
         super().__init__()
         self.reduction = reduction
@@ -156,6 +180,8 @@ class NeighborPoolingLayer(torch.nn.Module):
 
 
 class NeighborMLPConvLayer(torch.nn.Module):
+    """NeighborMLPConvLayer."""
+
     def __init__(
         self,
         mlp: torch.nn.Module = None,
@@ -187,7 +213,10 @@ class NeighborMLPConvLayer(torch.nn.Module):
             neighbors = NeighborSearchReturn(
                 neighbors["neighbors_index"], neighbors["neighbors_row_splits"]
             )
-        assert in_features.shape[1] + out_features.shape[1] == self.mlp.layers[0].in_features
+        assert (
+            in_features.shape[1] + out_features.shape[1]
+            == self.mlp.layers[0].in_features
+        )
         rep_features = in_features[neighbors.neighbors_index.long()]
         rs = neighbors.neighbors_row_splits
         num_reps = rs[1:] - rs[:-1]
@@ -202,6 +231,8 @@ class NeighborMLPConvLayer(torch.nn.Module):
 
 
 class TestNeighborSearch(unittest.TestCase):
+    """Unit tests class."""
+
     def setUp(self) -> None:
         self.N = 10000
         self.device = "cuda:0"
@@ -220,7 +251,9 @@ class TestNeighborSearch(unittest.TestCase):
         inp_positions = torch.randn([self.N, 3]).to(self.device) * 10
         out_positions = inp_positions
 
-        neighbors = neighbor_knn_search(inp_positions, out_positions, 10, search_method="raft")
+        neighbors = neighbor_knn_search(
+            inp_positions, out_positions, 10, search_method="raft"
+        )
         # N x K int64
         self.assertEqual(neighbors.shape, (self.N, 10))
 

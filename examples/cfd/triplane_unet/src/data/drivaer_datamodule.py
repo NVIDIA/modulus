@@ -1,9 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import tarfile
 import uuid
 from collections import defaultdict
 from multiprocessing import Pool, set_start_method
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 
 # TODO(akamenev): migration
 # import fire
@@ -17,7 +33,9 @@ from torch.utils.data import DataLoader, Dataset
 try:
     import ensightreader
 except ImportError:
-    print("Could not import ensightreader. Please install it from `pip install ensight-reader`")
+    print(
+        "Could not import ensightreader. Please install it from `pip install ensight-reader`"
+    )
 
 # Add parent's parent directory to path
 if __name__ == "__main__":
@@ -70,7 +88,9 @@ class DrivAerDataset(Dataset):
             data_path = Path(data_path)
         data_path = data_path.expanduser()
         self.data_path = data_path  # Path that contains data_set_A and data_set_B
-        assert isinstance(has_spoiler, bool), f"has_spoiler should be a boolean, got {has_spoiler}"
+        assert isinstance(
+            has_spoiler, bool
+        ), f"has_spoiler should be a boolean, got {has_spoiler}"
         assert phase in [
             "train",
             "val",
@@ -95,7 +115,9 @@ class DrivAerDataset(Dataset):
             self.TRAIN_INDS = np.array(range(280))
 
         # Load parameters
-        parameters = pd.read_csv(self.data_path / "ParameterFile.txt", delim_whitespace=True)
+        parameters = pd.read_csv(
+            self.data_path / "ParameterFile.txt", delim_whitespace=True
+        )
         self.phase = phase
         if phase == "train":
             self.indices = self.TRAIN_INDS
@@ -169,15 +191,21 @@ class DrivAerDataset(Dataset):
             # Check if the data is consistent
             for k, v in variable_data.items():
                 # The last item is the current part
-                assert len(v[-1]) == part_mesh.n_faces_strict, f"Length of {k} is not consistent"
+                assert (
+                    len(v[-1]) == part_mesh.n_faces_strict
+                ), f"Length of {k} is not consistent"
 
         # Combine parts into one mesh
-        mesh = pv.MultiBlock(pv_parts).combine(merge_points=True).extract_surface().clean()
+        mesh = (
+            pv.MultiBlock(pv_parts).combine(merge_points=True).extract_surface().clean()
+        )
 
         # Concatenate the variable_data
         for k, v in variable_data.items():
             variable_data[k] = np.concatenate(v).squeeze()
-            assert len(variable_data[k]) == mesh.n_faces_strict, f"Length of {k} is not consistent"
+            assert (
+                len(variable_data[k]) == mesh.n_faces_strict
+            ), f"Length of {k} is not consistent"
 
         # Estimate normals
         mesh.compute_normals(
@@ -191,7 +219,9 @@ class DrivAerDataset(Dataset):
         cell_sizes = np.array(cell_sizes.cell_data["Area"])
 
         # Normalize cell normals
-        cell_normals = cell_normals / np.linalg.norm(cell_normals, axis=1)[:, np.newaxis]
+        cell_normals = (
+            cell_normals / np.linalg.norm(cell_normals, axis=1)[:, np.newaxis]
+        )
 
         # Get the idx'th row from pandas dataframe
         curr_params = self.parameters.iloc[idx]
@@ -240,7 +270,9 @@ class DrivAerToWebdataset:
 
     def save(self, num_processes: int = 1):
         # Save each item in as a numpy file in parallel
-        assert num_processes > 0, f"num_processes should be greater than 0, got {num_processes}"
+        assert (
+            num_processes > 0
+        ), f"num_processes should be greater than 0, got {num_processes}"
         if num_processes < 2:
             for idx in range(len(self.dataset)):
                 print(f"Saving item {idx}/{len(self.dataset)}")
@@ -287,7 +319,9 @@ class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
         if "Snapshot" in np_dict:
             # array('EnSightXXX', dtype='<U10')
             # Convert it to an integer
-            np_dict["Snapshot"] = int(np.char.replace(np_dict["Snapshot"], "EnSight", ""))
+            np_dict["Snapshot"] = int(
+                np.char.replace(np_dict["Snapshot"], "EnSight", "")
+            )
 
         # Compute drag coefficient using area, normal, pressure and wall shear stress
         drag_coef = compute_drag_coefficient(
@@ -306,7 +340,9 @@ class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
 
 
 class DrivAerWebdataset(Webdataset):
-    def __init__(self, paths: str | List[str], preprocessor_kwargs: Optional[dict] = None) -> None:
+    def __init__(
+        self, paths: str | List[str], preprocessor_kwargs: Optional[dict] = None
+    ) -> None:
         if isinstance(paths, str):
             paths = [paths]
         if preprocessor_kwargs is None:
@@ -381,7 +417,9 @@ class DrivAerDataModule(BaseDataModule):
         # Remove shuffle from kwargs
         kwargs.pop("shuffle", None)
         buffer_size = kwargs.pop("buffer_size", 100)
-        return DataLoader(self.train_dataset.shuffle(buffer_size), collate_fn=collate_fn, **kwargs)
+        return DataLoader(
+            self.train_dataset.shuffle(buffer_size), collate_fn=collate_fn, **kwargs
+        )
 
     def val_dataloader(self, **kwargs) -> DataLoader:
         collate_fn = getattr(self, "collate_fn", None)

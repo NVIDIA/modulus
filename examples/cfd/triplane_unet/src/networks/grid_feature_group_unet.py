@@ -1,4 +1,20 @@
-from typing import Dict, List, Literal, Optional, Tuple, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -8,13 +24,9 @@ from torch import Tensor
 
 from src.networks.point_feature_conv import PointFeatureConv, PointFeatureTransform
 from src.networks.point_feature_grid_conv import (
-    GridFeatureConv2dBlock,
     GridFeatureMemoryFormatConverter,
-    GridFeaturePadToMatch,
-    GridFeatureTransform,
 )
 from src.networks.point_feature_ops import (
-    GridFeatures,
     GridFeaturesMemoryFormat,
     PointFeatures,
     VerticesToPointFeatures,
@@ -29,13 +41,14 @@ from .grid_feature_group import (
     GridFeatureGroup,
     GridFeatureGroupPadToMatch,
     GridFeatureGroupToPoint,
-    GridFeatureGroupTransform,
 )
 from .grid_feature_unet import memory_format_to_axis_index
-from .point_feature_grid_ops import GridFeatureToPoint, PointFeatureToGrid
+from .point_feature_grid_ops import PointFeatureToGrid
 
 
 class PointFeatureToGridGroupUNet(BaseModel):
+    """PointFeatureToGridGroupUNet."""
+
     def __init__(
         self,
         in_channels: int,
@@ -99,7 +112,9 @@ class PointFeatureToGridGroupUNet(BaseModel):
             self.point_feature_to_grids.append(to_grid)
             # Compute voxel size
             voxel_size = self.aabb_length / torch.tensor(res)
-            self.min_voxel_edge_length = torch.min(self.min_voxel_edge_length, voxel_size)
+            self.min_voxel_edge_length = torch.min(
+                self.min_voxel_edge_length, voxel_size
+            )
 
         self.down_blocks = nn.ModuleList()
         self.up_blocks = nn.ModuleList()
@@ -196,7 +211,9 @@ class PointFeatureToGridGroupUNet(BaseModel):
             down_grid_feature_groups.append(out_features)
 
         for level in reversed(range(self.num_levels)):
-            up_grid_features = self.up_blocks[level](down_grid_feature_groups[level + 1])
+            up_grid_features = self.up_blocks[level](
+                down_grid_feature_groups[level + 1]
+            )
             padded_down_features = self.pad_to_match(
                 up_grid_features, down_grid_feature_groups[level]
             )
@@ -217,6 +234,8 @@ class PointFeatureToGridGroupUNet(BaseModel):
 
 
 class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNet):
+    """PointFeatureToGridGroupUNetDrivAer."""
+
     def __init__(
         self,
         in_channels: int,
@@ -296,6 +315,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
 
 
 class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGroupUNet):
+    """PointFeatureToGridGroupUNetAhmedBody."""
+
     def __init__(
         self,
         in_channels: int,
@@ -406,7 +427,9 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
         point_feature = PointFeatures(vertices, features)
         point_feature = self.first_conv(point_feature)
         # Downsample points
-        down_point_feature = point_feature.voxel_down_sample(self.min_voxel_edge_length.min())
+        down_point_feature = point_feature.voxel_down_sample(
+            self.min_voxel_edge_length.min()
+        )
         # TriplaneUNet
         grid_features = self._grid_forward(down_point_feature)
         out_point_feature = self.to_point(grid_features, point_feature)
