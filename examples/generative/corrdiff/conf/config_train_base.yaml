@@ -43,6 +43,9 @@ hr_mean_conditioning: False
 gridtype: "sinusoidal"
   # can be either linear, sinusoidal, or learnable
 N_grid_channels: 4
+grad_clip_threshold: 1e20
+  # sufficiently large value for defualt non-patch-based training
+lr_decay: 1
 
 ## Performance options
 fp_optimizations: fp32
