@@ -33,7 +33,7 @@ def test_song_unet_forward(device):
     torch.manual_seed(0)
     N_pos = 4
     # Construct the DDM++ UNet model
-    model = UNet(img_resolution=64, in_channels=2+N_pos, out_channels=2).to(device)
+    model = UNet(img_resolution=64, in_channels=2 + N_pos, out_channels=2).to(device)
     input_image = torch.ones([1, 2, 64, 64]).to(device)
     noise_labels = noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
@@ -49,7 +49,7 @@ def test_song_unet_forward(device):
     # Construct the NCSN++ UNet model
     model = UNet(
         img_resolution=64,
-        in_channels=2+N_pos,
+        in_channels=2 + N_pos,
         out_channels=2,
         embedding_type="fourier",
         channel_mult_noise=2,
@@ -76,7 +76,7 @@ def test_song_unet_constructor(device):
     N_pos = 4
     model = UNet(
         img_resolution=img_resolution,
-        in_channels=in_channels+N_pos,
+        in_channels=in_channels + N_pos,
         out_channels=out_channels,
     ).to(device)
     noise_labels = torch.randn([1]).to(device)
@@ -88,7 +88,7 @@ def test_song_unet_constructor(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_position_embedding(device):
-    # build unet  
+    # build unet
     img_resolution = 16
     in_channels = 2
     out_channels = 2
@@ -96,7 +96,7 @@ def test_song_unet_position_embedding(device):
     N_pos = 100
     model = UNet(
         img_resolution=img_resolution,
-        in_channels=in_channels+N_pos,
+        in_channels=in_channels + N_pos,
         out_channels=out_channels,
         embedding_type="fourier",
         channel_mult_noise=2,
@@ -120,14 +120,15 @@ def test_song_unet_position_embedding(device):
     ).to(device)
     assert model.pos_embd.shape == (40, img_resolution, img_resolution)
 
+
 def test_fails_if_grid_is_invalid():
-    """Test the positional embedding options. "linear" gridtype only support 2 channels, and N_grid_channels in "sinusoidal" should be a factor of 4 """
+    """Test the positional embedding options. "linear" gridtype only support 2 channels, and N_grid_channels in "sinusoidal" should be a factor of 4"""
     img_resolution = 16
     in_channels = 2
     out_channels = 2
 
     with pytest.raises(ValueError):
-        model = UNet(
+        UNet(
             img_resolution=img_resolution,
             in_channels=in_channels,
             out_channels=out_channels,
@@ -136,7 +137,7 @@ def test_fails_if_grid_is_invalid():
         )
 
     with pytest.raises(ValueError):
-        model = UNet(
+        UNet(
             img_resolution=img_resolution,
             in_channels=in_channels,
             out_channels=out_channels,
