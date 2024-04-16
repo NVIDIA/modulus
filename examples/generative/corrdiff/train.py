@@ -120,7 +120,7 @@ def main(cfg: DictConfig) -> None:
         cfg.global_means_path = to_absolute_path(cfg.global_means_path)
     if hasattr(cfg, "global_stds_path"):
         cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
-    c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", 1e5)
+    c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", None)
     c.lr_decay = getattr(cfg, "lr_decay", 0.8)
     c.N_grid_channels = getattr(cfg, "N_grid_channels")
     c.gridtype = getattr(cfg, "gridtype")

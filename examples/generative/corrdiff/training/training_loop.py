@@ -85,7 +85,7 @@ def training_loop(
     N_grid_channels=4,
     gridtype="sinusoidal",
     in_channel=12,
-    grad_clip_threshold=1e5,
+    grad_clip_threshold=None,
     lr_decay=0.8,
     valid_dump_ticks=5000,
     num_validation_evals=10,
@@ -290,9 +290,10 @@ def training_loop(
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            net.parameters(), grad_clip_threshold
-        )
+        if grad_clip_threshold is not None:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                net.parameters(), grad_clip_threshold
+            )
         optimizer.step()
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
