@@ -66,6 +66,36 @@ def test_song_unet_forward(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_song_unet_global_indexing(device):
+    torch.manual_seed(0)
+    N_pos = 2
+    batch_shape_x = 32
+    batch_shape_y = 64
+    # Construct the DDM++ UNet model
+    model = UNet(
+        img_resolution=128,
+        in_channels=2 + N_pos,
+        out_channels=2,
+        gridtype="test",
+        N_grid_channels=N_pos,
+    ).to(device)
+    input_image = torch.ones([1, 2, batch_shape_x, batch_shape_y]).to(device)
+    noise_labels = noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+    idx_x = torch.arange(45, 45 + batch_shape_x)
+    idx_y = torch.arange(12, 12 + batch_shape_y)
+    mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
+    global_index = torch.stack((mesh_x, mesh_y), dim=0)[
+        None,
+    ].to(device)
+
+    output_image = model(input_image, noise_labels, class_labels, global_index)
+    pos_embed = model.positional_embedding_indexing(input_image, global_index)
+    assert output_image.shape == (1, 2, batch_shape_x, batch_shape_y)
+    assert torch.equal(pos_embed, global_index)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_constructor(device):
     """Test the Song UNet constructor options"""
 
