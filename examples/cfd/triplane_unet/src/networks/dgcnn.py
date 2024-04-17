@@ -18,12 +18,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base_model import BaseModel
 from .ahmedbody_base import AhmedBodyDragRegressionBase
 from .drivaer_base import DrivAerDragRegressionBase
 from .neighbor_ops import neighbor_knn_search
 
 
-def batched_self_knn(x, k, chunk_size=4096):
+def batched_self_knn(x, k: int, chunk_size: int = 4096):
     """
     Compute the k-nearest neighbors for each point in a batch of point clouds.
     :param x: (B, N, D) input point cloud
@@ -32,9 +33,8 @@ def batched_self_knn(x, k, chunk_size=4096):
     """
     neighbor_index = []
     for i in range(x.size(0)):
-        neighbor_index.append(
-            neighbor_knn_search(x[i], x[i], k, chunck_size=chunk_size)
-        )
+        x_NC = x[i].transpose(0, 1)
+        neighbor_index.append(neighbor_knn_search(x_NC, x_NC, k, chunk_size=chunk_size).unsqueeze(0)
     return torch.cat(neighbor_index, dim=0)
 
 
@@ -67,7 +67,7 @@ def get_graph_feature(x, k=20, idx=None):
     return feature
 
 
-class DGCNN(nn.Module):
+class DGCNN(BaseModel):
     def __init__(
         self,
         in_channels: int = 3,
@@ -87,7 +87,7 @@ class DGCNN(nn.Module):
         self.bn5 = nn.BatchNorm1d(emb_dims)
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=1, bias=False),
+            nn.Conv2d(in_channels * 2, 64, kernel_size=1, bias=False),
             self.bn1,
             nn.LeakyReLU(negative_slope=0.2),
         )
@@ -165,14 +165,14 @@ class DGCNNDrivAer(DrivAerDragRegressionBase, DGCNN):
 
         DGCNN.__init__(
             self,
-            knn_k,
-            emb_dims,
-            dropout,
             in_channels=3,
             out_channels=1,
+            knn_k=knn_k,
+            emb_dims=emb_dims,
+            dropout=dropout,
             knn_search_chunk_size=knn_search_chunk_size,
         )
 
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"]
-        return vertices.to(self.device)
+        return vertices.float().to(self.device).transpose(1, 2)  # B, 3, N

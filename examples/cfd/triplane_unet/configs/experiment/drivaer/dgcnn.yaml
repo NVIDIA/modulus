@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,8 +16,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .grid_feature_group_unet import (
-    PointFeatureToGridGroupUNetAhmedBody,
-    PointFeatureToGridGroupUNetDrivAer,
-)
-from .dgcnn import DGCNNDrivAer
+defaults:
+  - /data: drivaer
+  - /model: dgcnn_drivaer
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+train:
+  batch_size: 1
+
+# data:
+#   every_n_data: 10
+
+loggers:
+  wandb:
+    project_name: drivaer
+    entity: nvr-ai-algo
+    run_name: DGCNN

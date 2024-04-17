@@ -133,7 +133,7 @@ def neighbor_knn_search(
     query_positions: Int[Tensor, "M 3"],
     k: int,
     search_method: Literal["chunk"] = "chunk",
-    chunck_size: int = 4096,
+    chunk_size: int = 4096,
 ) -> Int[Tensor, "M K"]:
     """
     ref_positions: [N,3]
@@ -147,11 +147,11 @@ def neighbor_knn_search(
         torch.cuda.set_device(ref_positions.device)
     assert ref_positions.device == query_positions.device
     if search_method == "chunk":
-        if query_positions.shape[0] < chunck_size:
+        if query_positions.shape[0] < chunk_size:
             neighbors_index = knn_search(ref_positions, query_positions, k)
         else:
             neighbors_index = _chunked_knn_search(
-                ref_positions, query_positions, k, chunck_size=chunck_size
+                ref_positions, query_positions, k, chunk_size=chunk_size
             )
     else:
         raise ValueError(f"search_method {search_method} not supported.")

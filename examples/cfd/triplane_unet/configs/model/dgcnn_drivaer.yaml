@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .grid_feature_group_unet import (
-    PointFeatureToGridGroupUNetAhmedBody,
-    PointFeatureToGridGroupUNetDrivAer,
-)
-from .dgcnn import DGCNNDrivAer
+_target_: src.networks.DGCNNDrivAer
+_convert_: all
+
+knn_k: 4
+knn_search_chunk_size: 8192
