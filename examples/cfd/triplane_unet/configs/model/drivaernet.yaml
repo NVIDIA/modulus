@@ -14,8 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .grid_feature_group_unet import (
-    PointFeatureToGridGroupUNetAhmedBody,
-    PointFeatureToGridGroupUNetDrivAer,
-)
-from .dgcnn import DrivAerNet
+_target_: src.networks.DrivAerNet
+_convert_: all
+
+conv_channels:
+  - 256
+  - 512
+  - 512
+  - 1024
+pre_mlp_channels: 512
+mlp_channels:
+  - 128
+  - 64
+  - 32
+  - 16
+
+# EdgeConv params
+knn_k: 4
+knn_search_chunk_size: 8192
+
+# Num points per mesh
+point_cloud_sample_size: 5000

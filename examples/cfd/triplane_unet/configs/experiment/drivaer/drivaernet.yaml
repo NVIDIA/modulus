@@ -18,19 +18,21 @@
 
 defaults:
   - /data: drivaer
-  - /model: dgcnn_drivaer
+  - /model: drivaernet
   - /loss: mseloss
   - /optimizer: adam
   - /lr_scheduler: steplr
 
 train:
-  batch_size: 1
+  num_epochs: 100
+  batch_size: 32
 
-# data:
-#   every_n_data: 10
+# For faster permutation of point cloud
+data:
+  every_n_data: 100
 
 loggers:
   wandb:
     project_name: drivaer
     entity: nvr-ai-algo
-    run_name: DGCNN
+    run_name: DrivAerNet

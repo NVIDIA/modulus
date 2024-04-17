@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import List, Dict, Any, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,33 +42,90 @@ def batched_self_knn(x, k: int, chunk_size: int = 4096):
     return torch.cat(neighbor_index, dim=0)
 
 
-def get_graph_feature(x, k=20, idx=None):
+class EdgeConv(nn.Module):
     """
-    Return KNN neighbor features
+    EdgeConv layer that collects features from the KNN neighbors and applying MLP using kernel size 1 convolution.
     """
-    batch_size = x.size(0)
-    num_points = x.size(2)
-    x = x.view(batch_size, -1, num_points)
-    if idx is None:
-        idx = batched_self_knn(x, k=k)  # (batch_size, num_points, k)
-    device = torch.device("cuda")
-    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
-    idx = idx + idx_base
-    idx = idx.view(-1)
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        negative_slope: float = 0.2,
+        knn_k: int = 4,
+    ):
+        super(EdgeConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels * 2, out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(negative_slope=negative_slope),
+        )
+        self.knn_k = knn_k
 
-    _, num_dims, _ = x.size()
+    def get_graph_feature(self, x, k=20, idx=None):
+        """
+        Return KNN neighbor features
+        """
+        batch_size = x.size(0)
+        num_points = x.size(2)
+        x = x.view(batch_size, -1, num_points)
+        if idx is None:
+            idx = batched_self_knn(x, k=k)  # (batch_size, num_points, k)
+        device = torch.device("cuda")
+        idx_base = (
+            torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+        )
 
-    x = x.transpose(
-        2, 1
-    ).contiguous()  # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
-    feature = x.view(batch_size * num_points, -1)[idx, :]
-    feature = feature.view(batch_size, num_points, k, num_dims)
-    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
+        idx = idx + idx_base
+        idx = idx.view(-1)
 
-    feature = torch.cat((feature - x, x), dim=3).permute(0, 3, 1, 2).contiguous()
+        _, num_dims, _ = x.size()
 
-    return feature
+        x = x.transpose(2, 1).contiguous()
+        # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
+        feature = x.view(batch_size * num_points, -1)[idx, :]
+        feature = feature.view(batch_size, num_points, k, num_dims)
+        x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
+
+        feature = torch.cat((feature - x, x), dim=3).permute(0, 3, 1, 2).contiguous()
+
+        return feature
+
+    def forward(self, x: torch.Tensor, idx: Optional[torch.Tensor] = None):
+        """
+        Forward pass
+
+        :param x: input features (B, C, N)
+        :param idx: indices of the k-nearest neighbors (B, N, k)
+        """
+        x = self.get_graph_feature(x, k=self.knn_k, idx=idx)
+        x = self.conv(x)
+        return x.max(dim=-1, keepdim=False)[0]
+
+
+class LinearBlock(nn.Module):
+    """
+    Simple linear block with ReLU and dropout
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, dropout: float = 0.5):
+        """
+        :param in_channels: input channels
+        :param out_channels: output channels
+        :param dropout: dropout rate
+        """
+        super(LinearBlock, self).__init__()
+        self.block = nn.Sequential(
+            nn.Linear(in_channels, out_channels, bias=False),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+        )
+
+    def forward(self, x):
+        """
+        Forward pass
+        """
+        return self.block(x)
 
 
 class DGCNN(BaseModel):
@@ -74,107 +133,96 @@ class DGCNN(BaseModel):
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        knn_k: int = 8,
-        emb_dims: int = 1024,
+        conv_channels: List[int] = [256, 512, 512, 1024],
+        pre_mlp_channels: int = 512,
+        mlp_channels: List[int] = [128, 64, 32, 16],
+        knn_k: int = 4,
         dropout: float = 0.5,
         knn_search_chunk_size: int = 4096,
     ):
         super(DGCNN, self).__init__()
         self.k = knn_k
         self.knn_search_chunk_size = knn_search_chunk_size
-        self.bn1 = nn.BatchNorm2d(64)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.bn3 = nn.BatchNorm2d(128)
-        self.bn4 = nn.BatchNorm2d(256)
-        self.bn5 = nn.BatchNorm1d(emb_dims)
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels * 2, 64, kernel_size=1, bias=False),
-            self.bn1,
-            nn.LeakyReLU(negative_slope=0.2),
-        )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(64 * 2, 64, kernel_size=1, bias=False),
-            self.bn2,
-            nn.LeakyReLU(negative_slope=0.2),
-        )
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(64 * 2, 128, kernel_size=1, bias=False),
-            self.bn3,
-            nn.LeakyReLU(negative_slope=0.2),
-        )
-        self.conv4 = nn.Sequential(
-            nn.Conv2d(128 * 2, 256, kernel_size=1, bias=False),
-            self.bn4,
-            nn.LeakyReLU(negative_slope=0.2),
-        )
-        self.conv5 = nn.Sequential(
-            nn.Conv1d(512, emb_dims, kernel_size=1, bias=False),
-            self.bn5,
-            nn.LeakyReLU(negative_slope=0.2),
-        )
-        self.linear1 = nn.Linear(emb_dims * 2, 512, bias=False)
-        self.bn6 = nn.LayerNorm(512)
-        self.dp1 = nn.Dropout(p=dropout)
-        self.linear2 = nn.Linear(512, 256)
-        self.bn7 = nn.LayerNorm(256)
-        self.dp2 = nn.Dropout(p=dropout)
-        self.linear3 = nn.Linear(256, out_channels)
+        self.convs = nn.ModuleList()
+        self.convs.append(EdgeConv(in_channels, conv_channels[0], knn_k=knn_k))
+        for i in range(1, len(conv_channels)):
+            self.convs.append(
+                EdgeConv(conv_channels[i - 1], conv_channels[i], knn_k=knn_k)
+            )
+
+        self.pre_mlp = nn.Conv1d(sum(conv_channels), pre_mlp_channels, kernel_size=1)
+
+        self.mlp = nn.ModuleList()
+        self.mlp.append(LinearBlock(pre_mlp_channels, mlp_channels[0], dropout=dropout))
+        for i in range(1, len(mlp_channels)):
+            self.mlp.append(
+                LinearBlock(mlp_channels[i - 1], mlp_channels[i], dropout=dropout)
+            )
+        self.final = nn.Linear(mlp_channels[-1], out_channels)
 
     def forward(self, x):
         batch_size = x.size(0)
         idx = batched_self_knn(x, k=self.k, chunk_size=self.knn_search_chunk_size)
-        x = get_graph_feature(x, k=self.k, idx=idx)
-        x = self.conv1(x)
-        x1 = x.max(dim=-1, keepdim=False)[0]
 
-        x = get_graph_feature(x1, k=self.k, idx=idx)
-        x = self.conv2(x)
-        x2 = x.max(dim=-1, keepdim=False)[0]
+        conv_outs = []
+        for conv in self.convs:
+            x = conv(x, idx)
+            conv_outs.append(x)
 
-        x = get_graph_feature(x2, k=self.k, idx=idx)
-        x = self.conv3(x)
-        x3 = x.max(dim=-1, keepdim=False)[0]
+        x = torch.cat(conv_outs, dim=1)
+        x = self.pre_mlp(x)
+        x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
 
-        x = get_graph_feature(x3, k=self.k, idx=idx)
-        x = self.conv4(x)
-        x4 = x.max(dim=-1, keepdim=False)[0]
+        for mlp in self.mlp:
+            x = mlp(x)
 
-        x = torch.cat((x1, x2, x3, x4), dim=1)
-
-        x = self.conv5(x)
-        x1 = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
-        x2 = F.adaptive_avg_pool1d(x, 1).view(batch_size, -1)
-        x = torch.cat((x1, x2), 1)
-
-        x = F.leaky_relu(self.bn6(self.linear1(x)), negative_slope=0.2)
-        x = self.dp1(x)
-        x = F.leaky_relu(self.bn7(self.linear2(x)), negative_slope=0.2)
-        x = self.dp2(x)
-        x = self.linear3(x)
-        return x
+        return self.final(x)
 
 
-class DGCNNDrivAer(DrivAerDragRegressionBase, DGCNN):
+class DrivAerNet(DrivAerDragRegressionBase, DGCNN):
+    """
+    DrivAerNet from https://arxiv.org/abs/2403.08055
+
+    This network is a DGCNN with a few modifications to the architecture such as
+    network depth, channel sizes.
+    """
+
     def __init__(
         self,
-        knn_k: int,
-        emb_dims: int = 1024,
+        in_channels: int = 3,
+        out_channels: int = 1,
+        conv_channels: List[int] = [256, 512, 512, 1024],
+        pre_mlp_channels: int = 512,
+        mlp_channels: List[int] = [128, 64, 32, 16],
+        knn_k: int = 4,
         dropout: float = 0.5,
+        point_cloud_sample_size: int = 5000,
         knn_search_chunk_size: int = 4096,
     ):
         DrivAerDragRegressionBase.__init__(self)
 
         DGCNN.__init__(
             self,
-            in_channels=3,
-            out_channels=1,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            conv_channels=conv_channels,
+            pre_mlp_channels=pre_mlp_channels,
+            mlp_channels=mlp_channels,
             knn_k=knn_k,
-            emb_dims=emb_dims,
             dropout=dropout,
             knn_search_chunk_size=knn_search_chunk_size,
         )
 
+        self.point_cloud_sample_size = point_cloud_sample_size
+
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"]
-        return vertices.float().to(self.device).transpose(1, 2)  # B, 3, N
+
+        # Sample N random points
+        sampled_verts = torch.empty(vertices.size(0), self.point_cloud_sample_size, 3)
+        for i in range(vertices.size(0)):
+            perm_vert = vertices[i][:, torch.randperm(vertices.size(2))]
+            sampled_verts[i] = perm_vert[: self.point_cloud_sample_size]
+
+        return sampled_verts.float().to(self.device).transpose(1, 2)  # B, 3, N
