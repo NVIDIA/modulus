@@ -37,8 +37,7 @@ from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
 from src.networks.point_feature_ops import GridFeaturesMemoryFormat
 
-# Will be set from config in main.
-logger: logging.Logger = None
+logger = logging.getLogger("tpunet")
 
 
 def _delete_previous_checkpoints(config):
@@ -327,9 +326,6 @@ def _init_python_logging(config: DictConfig):
             pylog_cfg.loggers.tpunet.handlers = []
         # Configure logging.
         logging.config.dictConfig(OmegaConf.to_container(pylog_cfg, resolve=True))
-
-    global logger
-    logger = logging.getLogger("tpunet")
 
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="base")
