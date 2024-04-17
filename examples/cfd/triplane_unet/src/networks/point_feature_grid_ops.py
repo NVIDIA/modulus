@@ -29,7 +29,7 @@ from torch.nn import functional as F
 
 from .base_model import BaseModule
 from .components.reductions import REDUCTION_TYPES
-from .net_utils import PositionalEncoding
+from .net_utils import SinusoidalEncoding
 from .point_feature_conv import PointFeatureCat, PointFeatureConv, PointFeatureTransform
 from .point_feature_ops import (
     GridFeatures,
@@ -50,7 +50,7 @@ class AABBGridFeatures(GridFeatures):
         pos_encode_dim: int = 32,
     ):
         grid = grid_init(aabb_max, aabb_min, resolution)
-        feat = PositionalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
+        feat = SinusoidalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
             grid
         )
         super().__init__(grid, feat.view(*resolution, -1))
@@ -304,7 +304,7 @@ class PointFeatureToDistanceGridFeature(BaseModule):
         super().__init__()
         self.aabb_max = aabb_max
         self.aabb_min = aabb_min
-        self.pos_encoding = PositionalEncoding(
+        self.pos_encoding = SinusoidalEncoding(
             pos_encode_dim,
             data_range=aabb_max[0] - aabb_min[0],
         )
@@ -372,7 +372,7 @@ class GridFeatureToPointFeature(BaseModule):
     ):
         super().__init__()
         self.in_channels = in_channels
-        self.encoder = PositionalEncoding(pos_encode_dim, data_range=pos_encode_range)
+        self.encoder = SinusoidalEncoding(pos_encode_dim, data_range=pos_encode_range)
         self.pos_encode_point = pos_encode_point
         self.pos_encode_dim = pos_encode_dim
 

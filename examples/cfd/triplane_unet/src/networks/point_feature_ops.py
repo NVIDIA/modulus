@@ -30,7 +30,7 @@ from torch import Tensor
 
 from .base_model import BaseModule
 from .neighbor_ops import NeighborMLPConvLayer, neighbor_radius_search
-from .net_utils import MLP, PositionalEncoding
+from .net_utils import MLP, SinusoidalEncoding
 
 
 def grid_init(bb_max, bb_min, resolution):
@@ -420,7 +420,7 @@ class VerticesToPointFeatures(BaseModule):
         pos_embed_range: Optional[float] = 2.0,
     ) -> None:
         super().__init__()
-        self.pos_embed = PositionalEncoding(embed_dim, pos_embed_range)
+        self.pos_embed = SinusoidalEncoding(embed_dim, pos_embed_range)
         self.use_mlp = use_mlp
         if self.use_mlp:
             self.mlp = MLP([3 * embed_dim, out_features], torch.nn.GELU)
@@ -512,7 +512,7 @@ class ToGridWithDist(nn.Module):
         self.resolution = resolution
         self.embed_dim = embed_dim
         self.bbox_buffer_ratio = bbox_buffer_ratio
-        self.pos_embed = PositionalEncoding(embed_dim)
+        self.pos_embed = SinusoidalEncoding(embed_dim)
         self.conv = NeighborMLPConvLayer(
             mlp=MLP([hidden_channel + 4 * embed_dim, hidden_channel], torch.nn.GELU)
         )

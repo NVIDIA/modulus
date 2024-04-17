@@ -27,7 +27,7 @@ from torch import Tensor
 from .base_model import BaseModule
 from .components.reductions import REDUCTION_TYPES, row_reduction
 from .neighbor_ops import neighbor_knn_search, neighbor_radius_search
-from .net_utils import MLPBlock, PositionalEncoding
+from .net_utils import MLPBlock, SinusoidalEncoding
 from .point_feature_ops import PointFeatures
 
 
@@ -176,7 +176,7 @@ class PointFeatureConv(BaseModule):
             raise ValueError(
                 f"neighbor_search_type must be radius or knn, got {neighbor_search_type}"
             )
-        self.positional_encoding = PositionalEncoding(
+        self.positional_encoding = SinusoidalEncoding(
             pos_encode_dim, data_range=pos_encode_range
         )
         # When down voxel size is not None, there will be out_point_features will be provided as an additional input

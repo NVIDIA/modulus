@@ -159,6 +159,8 @@ def radius_search_warp(
         neighbor_split: [M + 1]
     """
     # Convert from warp to torch
+    assert points.is_contiguous(), "points must be contiguous"
+    assert queries.is_contiguous(), "queries must be contiguous"
     points_wp = wp.from_torch(points, dtype=wp.vec3)
     queries_wp = wp.from_torch(queries, dtype=wp.vec3)
 
@@ -178,7 +180,10 @@ def radius_search_warp(
     return result_point_idx, result_point_dist, torch_offset
 
 
-wp.init()
+_WARP_NEIGHBOR_SEARCH_INIT = False
+if not _WARP_NEIGHBOR_SEARCH_INIT:
+    wp.init()
+    _WARP_NEIGHBOR_SEARCH_INIT = True
 
 
 if __name__ == "__main__":
