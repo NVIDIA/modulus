@@ -140,8 +140,7 @@ def neighbor_knn_search(
     query_positions: [M,3]
     k: int
     """
-    assert k > 0
-    assert k < ref_positions.shape[0]
+    assert 0 < k < ref_positions.shape[0]
     assert search_method in ["chunk"]
     # Critical for multi GPU
     if ref_positions.is_cuda:
