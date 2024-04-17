@@ -34,7 +34,9 @@ def batched_self_knn(x, k: int, chunk_size: int = 4096):
     neighbor_index = []
     for i in range(x.size(0)):
         x_NC = x[i].transpose(0, 1)
-        neighbor_index.append(neighbor_knn_search(x_NC, x_NC, k, chunk_size=chunk_size).unsqueeze(0)
+        neighbor_index.append(
+            neighbor_knn_search(x_NC, x_NC, k, chunk_size=chunk_size).unsqueeze(0)
+        )
     return torch.cat(neighbor_index, dim=0)
 
 
@@ -112,10 +114,10 @@ class DGCNN(BaseModel):
             nn.LeakyReLU(negative_slope=0.2),
         )
         self.linear1 = nn.Linear(emb_dims * 2, 512, bias=False)
-        self.bn6 = nn.BatchNorm1d(512)
+        self.bn6 = nn.LayerNorm(512)
         self.dp1 = nn.Dropout(p=dropout)
         self.linear2 = nn.Linear(512, 256)
-        self.bn7 = nn.BatchNorm1d(256)
+        self.bn7 = nn.LayerNorm(256)
         self.dp2 = nn.Dropout(p=dropout)
         self.linear3 = nn.Linear(256, out_channels)
 
