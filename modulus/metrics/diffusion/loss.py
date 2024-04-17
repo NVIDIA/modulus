@@ -445,6 +445,7 @@ class ResLoss:
         P_mean: float = 0.0,
         P_std: float = 1.2,
         sigma_data: float = 0.5,
+        hr_mean_conditioning: bool = False,
     ):
         self.unet = regression_net
         self.P_mean = P_mean
@@ -455,6 +456,7 @@ class ResLoss:
         self.patch_shape_x = patch_shape_x
         self.patch_shape_y = patch_shape_y
         self.patch_num = patch_num
+        self.hr_mean_conditioning = hr_mean_conditioning
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
@@ -484,6 +486,7 @@ class ResLoss:
             A tensor representing the loss calculated based on the network's
             predictions.
         """
+
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
@@ -495,11 +498,20 @@ class ResLoss:
         )
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+        y_lr_res = y_lr
+
+        # global index
+        b = y.shape[0]
+        Nx = torch.arange(self.img_shape_x).int()
+        Ny = torch.arange(self.img_shape_y).int()
+        grid = torch.stack(torch.meshgrid(Nx, Ny, indexing="ij"), dim=0)[
+            None,
+        ].expand(b, -1, -1, -1)
 
         # form residual
         y_mean = self.unet(
             torch.zeros_like(y, device=img_clean.device),
-            y_lr,
+            y_lr_res,
             sigma,
             labels,
             augment_labels=augment_labels,
@@ -507,13 +519,15 @@ class ResLoss:
 
         y = y - y_mean
 
+        if self.hr_mean_conditioning:
+            y_lr = torch.cat((y_mean, y_lr), dim=1).contiguous()
+        global_index = None
         # patchified training
+        # conditioning: cat(y_mean, y_lr, input_interp, pos_embd), 4+12+100+4
         if (
             self.img_shape_x != self.patch_shape_x
             or self.img_shape_y != self.patch_shape_y
         ):
-
-            b = y.shape[0]
             c_in = y_lr.shape[1]
             c_out = y.shape[1]
             rnd_normal = torch.randn(
@@ -526,7 +540,7 @@ class ResLoss:
 
             # global interpolation
             input_interp = torch.nn.functional.interpolate(
-                img_lr[:, 0 : c_in - 4],
+                img_lr,
                 (self.patch_shape_x, self.patch_shape_y),
                 mode="bilinear",
             )
@@ -546,10 +560,24 @@ class ResLoss:
                 self.patch_shape_y,
                 device=img_clean.device,
             )
+            global_index = torch.zeros(
+                b * self.patch_num,
+                2,
+                self.patch_shape_x,
+                self.patch_shape_y,
+                dtype=torch.int,
+                device=img_clean.device,
+            )
             for i in range(self.patch_num):
                 rnd_x = random.randint(0, self.img_shape_x - self.patch_shape_x)
                 rnd_y = random.randint(0, self.img_shape_y - self.patch_shape_y)
                 y_new[b * i : b * (i + 1),] = y[
+                    :,
+                    :,
+                    rnd_x : rnd_x + self.patch_shape_x,
+                    rnd_y : rnd_y + self.patch_shape_y,
+                ]
+                global_index[b * i : b * (i + 1),] = grid[
                     :,
                     :,
                     rnd_x : rnd_x + self.patch_shape_x,
@@ -567,12 +595,17 @@ class ResLoss:
                     ),
                     1,
                 )
-
             y = y_new
             y_lr = y_lr_new
-
         latent = y + torch.randn_like(y) * sigma
-        D_yn = net(latent, y_lr, sigma, labels, augment_labels=augment_labels)
+        D_yn = net(
+            latent,
+            y_lr,
+            sigma,
+            labels,
+            global_index=global_index,
+            augment_labels=augment_labels,
+        )
         loss = weight * ((D_yn - y) ** 2)
 
         return loss
