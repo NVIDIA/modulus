@@ -339,9 +339,7 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(
-            dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
-        )
+        dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
     )
 
 
