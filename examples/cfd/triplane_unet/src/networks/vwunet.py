@@ -19,7 +19,7 @@ from typing import List, Dict, Any, Optional
 from .base_model import BaseModel
 from .drivaer_base import DrivAerDragRegressionBase
 
-
+import unittest
 from enum import Enum
 import torch
 from torch import nn as nn
@@ -142,16 +142,22 @@ class UNetEncoderBlock(nn.Module):
     A single U-Net encoder block
     """
 
-    def __init__(self, channels: int, dilation: int = 1, padding: int = 1):
+    def __init__(
+        self, in_channels: int, out_channels: int, dilation: int = 1, padding: int = 1
+    ):
         super(UNetEncoderBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ReLU(),
-            ChannelSpatialSELayer3D(channels),
+            ChannelSpatialSELayer3D(in_channels),
             nn.Conv3d(
-                channels, channels, kernel_size=3, dilation=dilation, padding=padding
+                in_channels,
+                out_channels,
+                kernel_size=3,
+                dilation=dilation,
+                padding=padding,
             ),
             nn.MaxPool3d(kernel_size=2, stride=2),
-            nn.BatchNorm3d(channels),
+            nn.BatchNorm3d(out_channels),
         )
 
     def forward(self, x):
@@ -163,19 +169,39 @@ class UNetDecoderBlock(nn.Module):
     A single U-Net decoder block
     """
 
-    def __init__(self, channels: int, dilation: int = 1, padding: int = 1):
+    def __init__(self, in_channels: int, out_channels: int, padding: int = 1):
         super(UNetDecoderBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ReLU(),
-            ChannelSpatialSELayer3D(channels),
+            ChannelSpatialSELayer3D(in_channels),
             nn.ConvTranspose3d(
-                channels, channels, kernel_size=3, padding=padding, stride=2
+                in_channels, out_channels, kernel_size=3, padding=padding, stride=2
             ),
-            nn.BatchNorm3d(channels),
+            nn.BatchNorm3d(out_channels),
         )
 
     def forward(self, x):
         return self.block(x)
+
+
+def pad_to_match(x, y):
+    """
+    Pad the input tensor x to match the spatial dimensions of the input tensor y
+    """
+    if x.size(2) == y.size(2) and x.size(3) == y.size(3) and x.size(4) == y.size(4):
+        return x
+
+    new_x = torch.zeros(
+        x.size(0),
+        x.size(1),
+        y.size(2),
+        y.size(3),
+        y.size(4),
+        device=x.device,
+        dtype=x.dtype,
+    )
+    new_x[:, :, : x.size(2), : x.size(3), : x.size(4)] = x
+    return new_x
 
 
 class VWUNet(BaseModel):
@@ -212,11 +238,15 @@ class VWUNet(BaseModel):
             nn.Conv3d(in_channels, encoder_channels[0], kernel_size=3, padding=1)
         )
         for i in range(1, len(encoder_channels)):
-            self.encoder.append(UNetEncoderBlock(encoder_channels[i - 1]))
+            self.encoder.append(
+                UNetEncoderBlock(encoder_channels[i - 1], encoder_channels[i])
+            )
 
         self.decoder = nn.ModuleList()
-        for i in range(len(decoder_channels)):
-            self.decoder.append(UNetDecoderBlock(decoder_channels[i]))
+        for i in range(1, len(decoder_channels)):
+            self.decoder.append(
+                UNetDecoderBlock(decoder_channels[i - 1], decoder_channels[i])
+            )
 
         self.final_decoder = nn.Sequential(
             nn.Conv3d(decoder_channels[-1], out_velocity_channels, kernel_size=1),
@@ -236,7 +266,7 @@ class VWUNet(BaseModel):
         self.final_mlp = nn.Linear(drag_mlp_channels[-1], out_channels)
 
     def forward(self, x):
-        encoder_outs = []
+        encoder_outs = [x]
         for encoder in self.encoder:
             x = encoder(x)
             encoder_outs.append(x)
@@ -246,9 +276,28 @@ class VWUNet(BaseModel):
             drag_x = mlp(drag_x)
 
         for decoder, encoder_out in zip(self.decoder, encoder_outs[::-1]):
+            x = pad_to_match(x, encoder_out)
             x = decoder(x + encoder_out)
 
+        x = pad_to_match(x, encoder_outs[0])
         x = self.final_decoder(x)
         drag_x = self.final_mlp(drag_x)
 
         return x, drag_x
+
+
+class TestVWUNet(unittest.TestCase):
+    """
+    Test VWUNet on a simple case
+    """
+
+    def test_vwunet(self):
+        vwunet = VWUNet()
+        x = torch.randn(2, 3, 64, 64, 64)
+        y = vwunet(x)
+        self.assertEqual(y[0].shape, torch.Size([2, 3, 64, 64, 64]))
+        self.assertEqual(y[1].shape, torch.Size([2, 1]))
+
+
+if __name__ == "__main__":
+    unittest.main()
