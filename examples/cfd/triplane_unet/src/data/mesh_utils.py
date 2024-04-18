@@ -13,7 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Tuple, Optional, List
 
+import torch
 import numpy as np
 from sklearn.utils import check_array, check_consistent_length
 
@@ -23,6 +25,9 @@ except ImportError:
     print(
         "Could not import ensightreader. Please install it from `pip install ensight-reader`"
     )
+
+
+from jaxtyping import Float
 
 
 def compute_drag_coefficient(
@@ -209,3 +214,66 @@ def convert_to_pyvista(ensight_block, fp):
         num_sides = np.repeat(connectivity.shape[1], len(connectivity)).reshape(-1, 1)
         faces = np.hstack([num_sides, connectivity - 1]).flatten()
     return faces
+
+
+def point_cloud_to_sdf(
+    points: Float[torch.Tensor, "N 3"], sdf_points: Float[torch.Tensor, "M 3"]
+) -> Float[torch.Tensor, "M"]:
+    """Compute the signed distance function (SDF) of a point cloud with respect to a set of points.
+
+    Parameters:
+    -----------
+    points: torch.Tensor[N, 3]
+        The point cloud
+    sdf_points: torch.Tensor[M, 3]
+        The points to compute the SDF from
+
+    Returns:
+    --------
+    sdf: torch.Tensor[M]
+        The signed distance function of the point cloud with respect to the sdf_points
+    """
+
+    # Compute the pairwise distances between the points and the sdf_points
+    dist = torch.cdist(points, sdf_points)
+
+    # Compute the minimum distance to each sdf_point
+    sdf = torch.min(dist, dim=1).values
+    return sdf
+
+
+def bbox_to_centers(
+    bbox_min: Float[torch.Tensor, "3"],
+    bbox_max: Float[torch.Tensor, "3"],
+    resolution: Tuple[int, int, int] = [64, 64, 64],
+):
+    """Compute the centers of the cells in a 3D grid defined by a bounding box.
+
+    Parameters:
+    -----------
+    bbox_min: torch.Tensor[3]
+        The minimum coordinates of the bounding box
+    bbox_max: torch.Tensor[3]
+        The maximum coordinates of the bounding box
+    resolution: Tuple[int, int, int]
+        The resolution of the grid
+
+    Returns:
+    --------
+    centers: torch.Tensor[resolution[0] * resolution[1] * resolution[2], 3]
+        The centers of the cells in the grid
+    """
+
+    # Compute the cell size
+    cell_size = (bbox_max - bbox_min) / torch.tensor(resolution)
+
+    # Compute the grid
+    x = torch.linspace(bbox_min[0], bbox_max[0], resolution[0])
+    y = torch.linspace(bbox_min[1], bbox_max[1], resolution[1])
+    z = torch.linspace(bbox_min[2], bbox_max[2], resolution[2])
+
+    # Compute the centers of the cells
+    centers = (
+        torch.stack(torch.meshgrid(x, y, z), dim=-1).reshape(-1, 3) + cell_size / 2
+    )
+    return centers

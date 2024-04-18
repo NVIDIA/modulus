@@ -18,7 +18,11 @@ _target_: src.data.DrivAerDataModule
 _convert_: all
 
 data_path: ???
-every_n_data: null
 subsets_postfix:
   - spoiler
   - nospoiler
+
+webdataset_preprocessor:
+  _target_: src.data.drivaer_datamodule.DrivAerWebdatasetDragPreprocessingFunctor
+  _convert_: all
+  every_n_data: 1

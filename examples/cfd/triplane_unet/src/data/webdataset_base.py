@@ -16,7 +16,7 @@
 
 import io
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Callable
 
 # TODO(akamenev): migration
 # import fire
@@ -25,7 +25,7 @@ import webdataset as wds
 from torch.utils.data import IterableDataset
 
 
-class CallablePreprocessBase:
+class PreprocessingFunctorBase:
     """Base class for a callable preprocess function for the webdataset."""
 
     def __init__(self, **kwargs):
@@ -35,12 +35,12 @@ class CallablePreprocessBase:
         raise NotImplementedError
 
 
-class NumpyPreprocess(CallablePreprocessBase):
+class NumpyPreprocessingFunctor(PreprocessingFunctorBase):
     """numpy preprocessor."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, np_ext: str = "npz", **kwargs):
         super().__init__(**kwargs)
-        self.np_ext = kwargs.get("np_ext", "npz")
+        self.np_ext = np_ext
 
     def __call__(self, sample):
         np_obj = np.load(io.BytesIO(sample[self.np_ext]), allow_pickle=True)
@@ -53,8 +53,7 @@ class Webdataset(IterableDataset):
     def __init__(
         self,
         paths: Union[str, List[str]],
-        preprocess_fn_class: CallablePreprocessBase,
-        preprocessing_kwargs: Optional[Dict] = None,
+        preprocess_fn: Callable,
     ) -> None:
         super().__init__()
         if isinstance(paths, str):
@@ -62,7 +61,6 @@ class Webdataset(IterableDataset):
         for path in paths:
             assert os.path.exists(path), f"Path {path} does not exist"
 
-        preprocess_fn = preprocess_fn_class(**(preprocessing_kwargs or {}))
         self._dataset = wds.WebDataset(paths).map(lambda x: preprocess_fn(x))
 
     def shuffle(self, buffer_size: int) -> IterableDataset:
@@ -74,7 +72,7 @@ class Webdataset(IterableDataset):
 
 
 def test_webdataset(path: str):
-    dataset = Webdataset(path, NumpyPreprocess, {"np_ext": "npz"})
+    dataset = Webdataset(path, NumpyPreprocessingFunctor(np_ext="npz"))
     for i, data in enumerate(dataset):
         for k, v in data.items():
             print(i, k, v.shape if isinstance(v, np.ndarray) else v)

@@ -19,7 +19,7 @@ import uuid
 from collections import defaultdict
 from multiprocessing import Pool, set_start_method
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Dict, Tuple, Callable
 
 # TODO(akamenev): migration
 # import fire
@@ -37,6 +37,9 @@ except ImportError:
         "Could not import ensightreader. Please install it from `pip install ensight-reader`"
     )
 
+from .mesh_utils import point_cloud_to_sdf, bbox_to_centers
+
+
 # Add parent's parent directory to path
 if __name__ == "__main__":
     import sys
@@ -48,7 +51,11 @@ if __name__ == "__main__":
 
 from src.data.base_datamodule import BaseDataModule
 from src.data.mesh_utils import Normalizer, compute_drag_coefficient, convert_to_pyvista
-from src.data.webdataset_base import NumpyPreprocess, Webdataset
+from src.data.webdataset_base import (
+    Webdataset,
+    NumpyPreprocessingFunctor,
+    PreprocessingFunctorBase,
+)
 
 # DrivAer dataset
 # Air density = 1.205 kg/m^3
@@ -291,21 +298,22 @@ class DrivAerToWebdataset:
                 tar.add(file, arcname=file.name)
 
 
-class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+class DrivAerWebdatasetPreprocessingFunctor(NumpyPreprocessingFunctor):
+    def __init__(
+        self,
+        pressure_mean: float = DRIVAER_PRESSURE_MEAN,
+        pressure_std: float = DRIVAER_PRESSURE_STD,
+        every_n_data: int = 1,
+        np_ext: str = "npz",
+        **kwargs,
+    ):
+        super().__init__(np_ext=np_ext, **kwargs)
         self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
         # DrivAer Mean: -150.13066236223494, std: 229.1046667362158
-        self.normalizer = Normalizer(
-            kwargs.get("mean", DRIVAER_PRESSURE_MEAN),
-            kwargs.get("std", DRIVAER_PRESSURE_STD),
-        )
-        every_n_data = kwargs.get("every_n_data", 1)
-        if every_n_data is None:
-            every_n_data = 1
+        self.normalizer = Normalizer(pressure_mean, pressure_std)
         self.every_n_data = every_n_data
 
-    def __call__(self, sample):
+    def __call__(self, sample: Dict) -> Dict:
         np_dict = super().__call__(sample)
 
         if self.every_n_data > 1:
@@ -323,6 +331,13 @@ class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
                 np.char.replace(np_dict["Snapshot"], "EnSight", "")
             )
 
+        return np_dict
+
+
+class DrivAerWebdatasetDragPreprocessingFunctor(DrivAerWebdatasetPreprocessingFunctor):
+    def __call__(self, sample: Dict):
+        np_dict = DrivAerWebdatasetPreprocessingFunctor.__call__(self, sample)
+
         # Compute drag coefficient using area, normal, pressure and wall shear stress
         drag_coef = compute_drag_coefficient(
             np_dict["cell_normals"],
@@ -336,19 +351,59 @@ class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
         np_dict["time_avg_pressure_whitened"] = self.normalizer.encode(
             np_dict["time_avg_pressure"]
         )
+
+        return np_dict
+
+
+class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFunctor):
+    def __init__(
+        self,
+        pressure_mean: float = DRIVAER_PRESSURE_MEAN,
+        pressure_std: float = DRIVAER_PRESSURE_STD,
+        every_n_data: int = 1,
+        np_ext: str = "npz",
+        bbox_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
+        bbox_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
+        **kwargs,
+    ):
+        super().__init__(pressure_mean, pressure_std, every_n_data, np_ext, **kwargs)
+        self.bbox_min = bbox_min
+        self.bbox_max = bbox_max
+        self.bbox_resolution = bbox_resolution
+
+    def __call__(self, sample: Dict) -> Dict:
+        np_dict = super().__call__(sample)
+        # compute bbox center
+        vertices = np_dict["cell_centers"]
+        obj_min = np.min(vertices, axis=0)
+        obj_max = np.max(vertices, axis=0)
+        obj_center = (obj_min + obj_max) / 2.0
+
+        vox_centers = bbox_to_centers(
+            torch.Tensor(self.bbox_min + obj_center),
+            torch.Tensor(self.bbox_max + obj_center),
+            self.bbox_resolution,
+        )
+
+        dists = point_cloud_to_sdf(
+            torch.Tensor(vertices), torch.Tensor(vox_centers).view(-1, 3)
+        )
+        dists = dists.view(self.bbox_resolution).numpy()
+        np_dict["sdf"] = dists
+
         return np_dict
 
 
 class DrivAerWebdataset(Webdataset):
     def __init__(
-        self, paths: str | List[str], preprocessor_kwargs: Optional[dict] = None
+        self,
+        paths: str | List[str],
+        dataset_processor: Callable,
     ) -> None:
         if isinstance(paths, str):
             paths = [paths]
-        if preprocessor_kwargs is None:
-            preprocessor_kwargs = {}
-        preprocessor_kwargs["np_ext"] = "npz"
-        super().__init__(paths, _DrivAerWebdatasetPreprocess, preprocessor_kwargs)
+        super().__init__(paths, dataset_processor)
 
 
 class DrivAerDataModule(BaseDataModule):
@@ -356,8 +411,10 @@ class DrivAerDataModule(BaseDataModule):
         self,
         data_path: Union[Path, str],
         subsets_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
-        every_n_data: Optional[int] = None,  # downsample
-    ) -> None:
+        webdataset_preprocessor: Callable = DrivAerWebdatasetDragPreprocessingFunctor(
+            every_n_data=10
+        ),
+    ):
         """
         Args:
             data_path (Union[Path, str]): Path that contains train and test directories
@@ -373,23 +430,22 @@ class DrivAerDataModule(BaseDataModule):
         ), f"{data_path} must exist and should be a directory"
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
-        self.every_n_data = every_n_data
+        self.webdataset_preprocessor = webdataset_preprocessor
         self.setup()
 
     def setup(self, stage: Optional[str] = None):
         subsets_postfix = self.subsets_postfix
-        every_n_data = self.every_n_data
         self._train_dataset = DrivAerWebdataset(
             [str(self.data_dir / f"train_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
+            self.webdataset_preprocessor,
         )
         self._val_dataset = DrivAerWebdataset(
             [str(self.data_dir / f"val_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
+            self.webdataset_preprocessor,
         )
         self._test_dataset = DrivAerWebdataset(
             [str(self.data_dir / f"test_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
+            self.webdataset_preprocessor,
         )
         self.normalizer = Normalizer(DRIVAER_PRESSURE_MEAN, DRIVAER_PRESSURE_STD)
         self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
@@ -455,7 +511,8 @@ def convert_to_webdataset(
 
 
 def compute_pressure_stats(*data_paths: List[str]):
-    dataset = DrivAerWebdataset(data_paths)
+    preprocessor = NumpyPreprocessingFunctor(every_n_data=10, np_ext="npz")
+    dataset = DrivAerWebdataset(data_paths, preprocessor)
     num_points = []
     means = []
     vars = []
@@ -482,8 +539,9 @@ def test_datamodule(
     subset_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
     every_n_data: Optional[int] = 1,
 ):
+    preprocessor = DrivAerWebdatasetDragPreprocessingFunctor(every_n_data=every_n_data)
     datamodule = DrivAerDataModule(
-        data_dir, subsets_postfix=subset_postfix, every_n_data=every_n_data
+        data_dir, subsets_postfix=subset_postfix, webdataset_preprocessor=preprocessor
     )
     for i, batch in enumerate(datamodule.val_dataloader()):
         print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
@@ -494,4 +552,6 @@ if __name__ == "__main__":
     # fire.Fire(convert_to_webdataset)
     # fire.Fire(compute_pressure_stats)
     # TODO(akamenev): migration
-    # fire.Fire(test_datamodule)
+    import fire
+
+    fire.Fire(test_datamodule)

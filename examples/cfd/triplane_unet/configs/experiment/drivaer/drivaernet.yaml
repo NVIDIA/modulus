@@ -29,7 +29,8 @@ train:
 
 # For faster permutation of point cloud
 data:
-  every_n_data: 100
+  webdataset_preprocessor:
+    every_n_data: 100
 
 loggers:
   wandb:

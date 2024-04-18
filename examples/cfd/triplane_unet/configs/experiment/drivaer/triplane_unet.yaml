@@ -27,7 +27,8 @@ train:
   batch_size: 1
 
 # data:
-#   every_n_data: 10
+#   webdataset_preprocessor:
+#     every_n_data: 10
 
 loggers:
   wandb:
