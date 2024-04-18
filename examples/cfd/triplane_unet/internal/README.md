@@ -98,6 +98,7 @@ Example of command that launches a single-GPU training job:
 NUM_GPUS=1 sbatch ./ord/train.sbatch
 ```
 
-**Note**: this command must be launched from one of the ORD login nodes, see ORD FAQ for more details.
+**Note**: this command must be launched from one of the ORD login nodes,
+see ORD FAQ for more details.
 
 See [train.sbatch](./ord/train.sbatch) for more details.
