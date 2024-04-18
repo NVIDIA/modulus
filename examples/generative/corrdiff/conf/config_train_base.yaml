@@ -64,8 +64,8 @@ checkpoint_dir: checkpoints
   # Where to save the checkpoints
 tick: 1
   # How often to print progress
-dump: 500
-  # How often to dump state
+dump: 50
+  # How often to write a ckpt (diff needs more than reg)
 seed: null  # TODO check
   # Random seed
 transfer: null  # TODO check
@@ -105,4 +105,4 @@ dataset:
   global_means_path: null
   global_stds_path: null
   normalization: "v1"
-  train_test_split: false
+  train_test_split: true
