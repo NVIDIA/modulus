@@ -28,7 +28,4 @@ python train.py \
     +experiment=drivaer/triplane_unet_best  \
     data.data_path=${DATA_PATH}             \
     output=${OUTPUT_PATH}                   \
-    ~loggers.wandb                          \
-    # loggers.wandb.project_name=drivaer \
-    # loggers.wandb.entity=nvr-ai-algo \
-    # loggers.wandb.run_name=AK-TriplaneUNet-level1-32-res250-150-100-ks9-step25-every10
+    "${@}"
