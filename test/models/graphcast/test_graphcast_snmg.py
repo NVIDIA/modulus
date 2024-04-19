@@ -38,6 +38,7 @@ def run_test_distributed_graphcast(
     dtype: torch.dtype,
     do_concat_trick: bool,
     do_checkpointing: bool,
+    use_lat_lon_partitioning: bool,
 ):
     os.environ["RANK"] = f"{rank}"
     os.environ["LOCAL_RANK"] = f"{rank}"
@@ -89,6 +90,7 @@ def run_test_distributed_graphcast(
         partition_group_name="graph_partition",
         expect_partitioned_input=True,
         produce_aggregated_output=False,
+        use_lat_lon_partitioning=use_lat_lon_partitioning,
         **model_kwds,
     ).to(device=device, dtype=dtype)
     if do_checkpointing:
@@ -179,7 +181,10 @@ def run_test_distributed_graphcast(
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("do_concat_trick", [False, True])
 @pytest.mark.parametrize("do_checkpointing", [False, True])
-def test_distributed_graphcast(dtype, do_concat_trick, do_checkpointing, pytestconfig):
+@pytest.mark.parametrize("use_lat_lon_partitioning", [False, True])
+def test_distributed_graphcast(
+    dtype, do_concat_trick, do_checkpointing, use_lat_lon_partitioning, pytestconfig
+):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = min(
@@ -188,7 +193,13 @@ def test_distributed_graphcast(dtype, do_concat_trick, do_checkpointing, pytestc
 
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
-        args=(world_size, dtype, do_concat_trick, do_checkpointing),
+        args=(
+            world_size,
+            dtype,
+            do_concat_trick,
+            do_checkpointing,
+            use_lat_lon_partitioning,
+        ),
         nprocs=world_size,
         start_method="spawn",
     )
