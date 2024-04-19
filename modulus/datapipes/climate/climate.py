@@ -37,8 +37,9 @@ except ImportError:
 
 from dataclasses import dataclass
 from pathlib import Path
-from scipy.io import netcdf_file
 from typing import Callable, Iterable, List, Mapping, Tuple, Union
+
+from scipy.io import netcdf_file
 
 from modulus.datapipes.climate.utils.invariant import latlon_grid
 from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
