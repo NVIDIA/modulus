@@ -30,7 +30,7 @@ seeds: "0-63"
   # Random seeds used for generation
 class_idx: null  
   # Class label. Null is random
-num_steps: 8
+num_steps: 18
   # Number of sampling steps
 sample_res: "full"
   # Sampling resolution
@@ -38,7 +38,7 @@ regression_only: false
   # regression only inference
 diffusion_only: false
   # diffusion only inference
-sampling_method: deterministic
+sampling_method: stochastic
   # Sampling method ["stochastic", "deterministic"]
 seed_batch_size: 32
   # batch size across the seed dimension
@@ -54,20 +54,20 @@ use_torch_compile: True
   # but will significantly speed up subsequent inference runs
 
 ## Data options
-patch_shape_x: 448
-patch_shape_y: 448
+## Data options
+patch_shape_x: 64
+patch_shape_y: 64
   # Patch size. Patch-based sampling will be utilized if these dimensions differ from 
   # img_shape_x and img_shape_y
-overlap_pixels: 0 
+overlap_pixels: 4 
   # Number of overlapping pixels between adjacent patches
-boundary_pixels: 0
+boundary_pixels: 2
   # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
   # artifact.
-hr_mean_conditioning: false
+hr_mean_conditioning: true
   # High-res mean (regression's output) as additional condition
-gridtype: "sinusoidal"
-  # can be either linear, sinusoidal, or learnable
-N_grid_channels: 4
+gridtype: "learnable"
+N_grid_channels: 100
 times:
   - 2021-02-02T00:00:00
   - 2021-03-02T00:00:00
@@ -82,8 +82,6 @@ dataset:
   train: False
   all_times: True
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
-  crop_size_x: 448
-  crop_size_y: 448
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
@@ -97,6 +95,7 @@ dataset:
   global_means_path: null
   global_stds_path: null
   normalization: "v1"
+  
 
 ## Deterministic sampler options
 sigma_min: null

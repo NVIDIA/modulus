@@ -38,6 +38,14 @@ dropout: 0.13
   # Dropout probability
 augment: 0.0
   # Augment probability
+hr_mean_conditioning: False
+  # High-res mean (regression's output) as additional condition
+gridtype: "sinusoidal"
+  # can be either linear, sinusoidal, or learnable
+N_grid_channels: 4
+grad_clip_threshold: None
+  # no gradient clipping for defualt non-patch-based training
+lr_decay: 1
 
 ## Performance options
 fp_optimizations: fp32
@@ -84,8 +92,6 @@ wandb_name: "CorrDiff"
 dataset:
   type: cwb
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
-  crop_size_x: 448
-  crop_size_y: 448
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
@@ -98,7 +104,5 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  gridtype: "sinusoidal"
-  N_grid_channels: 4
   normalization: "v1"
   train_test_split: false

@@ -90,4 +90,15 @@ i.e. properly mounted via `CONTAINER_MOUNTS` variable. `output` parameter uses s
 ## Running jobs in ORD cluster
 
 [ORD](https://confluence.nvidia.com/display/HWINFCSSUP/CS-OCI-ORD+FAQ)
-is an internal GPU SLURM cluster.
+is an internal GPU [SLURM cluster](https://slurm.schedmd.com/overview.html).
+
+Example of command that launches a single-GPU training job:
+
+```bash
+NUM_GPUS=1 sbatch ./ord/train.sbatch
+```
+
+**Note**: this command must be launched from one of the ORD login nodes,
+see ORD FAQ for more details.
+
+See [train.sbatch](./ord/train.sbatch) for more details.

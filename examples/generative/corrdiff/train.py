@@ -114,16 +114,22 @@ def main(cfg: DictConfig) -> None:
     c.wandb_name = wandb_name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    c.patch_num = getattr(cfg, "patch_num", 1)
     cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
     if hasattr(cfg, "global_means_path"):
         cfg.global_means_path = to_absolute_path(cfg.global_means_path)
     if hasattr(cfg, "global_stds_path"):
         cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
+    c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", None)
+    c.lr_decay = getattr(cfg, "lr_decay", 0.8)
+    c.N_grid_channels = getattr(cfg, "N_grid_channels")
+    c.gridtype = getattr(cfg, "gridtype")
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
-
+    c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
+    c.in_channel = len(dataset_cfg["in_channels"])
     # Initialize distributed manager.
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -166,7 +172,7 @@ def main(cfg: DictConfig) -> None:
 
     if arch == "ddpmpp-cwb":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="positional",
             encoder_type="standard",
             decoder_type="standard",
@@ -181,7 +187,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="zero",
             encoder_type="standard",
             decoder_type="standard",
@@ -196,7 +202,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ncsnpp":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="fourier",
             encoder_type="residual",
             decoder_type="standard",
@@ -333,9 +339,7 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(
-            dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
-        )
+        dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
     )
 
 
