@@ -22,6 +22,7 @@ import torch as th
 from modulus.distributed import DistributedManager
 from hydra.utils import instantiate
 
+from modulus import Module
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
 from pathlib import Path
@@ -65,11 +66,11 @@ def train(cfg):
     cfg.model['output_channels'] = output_channels
     cfg.model['n_constants'] = n_constants
     cfg.model['decoder_input_channels'] = decoder_input_channels
-    model = instantiate(cfg.model)
+
+    # convert Hydra cfg to pure dicts so they can be saved using modulus
+    model = instantiate(cfg.model, _convert_="all")
     model.batch_size = cfg.batch_size
     model.learning_rate = cfg.learning_rate
-
-    logger0.info("Model initialized")
 
     # Instantiate PyTorch modules (with state dictionaries from checkpoint if given)
     criterion = instantiate(cfg.trainer.criterion)
@@ -85,13 +86,15 @@ def train(cfg):
 
     # Prepare training under consideration of checkpoint if given
     if cfg.get("checkpoint_name", None) is not None:
-        checkpoint_path = Path(cfg.get("output_dir"), "tensorboard", "checkpoints", cfg.get("checkpoint_name"))
+        checkpoint_path = Path(cfg.get("output_dir"), "tensorboard", "checkpoints", "training-state-"+cfg.get("checkpoint_name")+".mdlus")
+        optimizer_path = Path(cfg.get("output_dir"), "tensorboard", "checkpoints", "optimizer-state-"+cfg.get("checkpoint_name")+".ckpt")
         if checkpoint_path.exists():
             logger0.info(f"Loading checkpoint: {checkpoint_path}")
-            checkpoint = th.load(checkpoint_path, map_location=dist.device)
-            model.load_state_dict(checkpoint["model_state_dict"])
+            model = Module.from_checkpoint(str(checkpoint_path))
+            checkpoint = th.load(optimizer_path, map_location=dist.device)
             if not cfg.get("load_weights_only"):
                 # Load optimizer
+                optimizer = instantiate(cfg.trainer.optimizer, params=model.parameters())
                 optimizer_state_dict = checkpoint["optimizer_state_dict"]
                 optimizer.load_state_dict(optimizer_state_dict)
                 # Move tensors to the appropriate device as in https://github.com/pytorch/pytorch/issues/2830
@@ -100,8 +103,11 @@ def train(cfg):
                         if th.is_tensor(v):
                             state[k] = v.to(device=dist.device)
                 # Optionally load scheduler
-                if lr_scheduler is not None:
+                if cfg.trainer.lr_scheduler is not None:
+                    lr_scheduler = instantiate(cfg.trainer.lr_scheduler, optimizer=optimizer)
                     lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+                else:
+                    lr_scheduler = None
             epoch = checkpoint["epoch"]
             val_error = checkpoint["val_error"]
             iteration = checkpoint["iteration"]
@@ -110,7 +116,7 @@ def train(cfg):
             logger0.info(f"Checkpoint not found, weights not loaded. Requested path: {checkpoint_path}")
 
     # Instantiate the trainer and fit the model
-    logger0.info(f"instantiating model")
+    logger0.info("Model initialized")
     trainer = instantiate(
         cfg.trainer,
         model=model,

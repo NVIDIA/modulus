@@ -20,7 +20,8 @@ defaults:
 
 experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
 output_dir: outputs/${experiment_name}
-checkpoint_name: last.ckpt
+# checkpoints names are in the form training-state-<name>.mdlus
+checkpoint_name: last
 load_weights_only: false
 seed: 0
 

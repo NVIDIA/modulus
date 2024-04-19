@@ -48,37 +48,50 @@ def write_checkpoint(
     :param dst_path: Path where the checkpoint is written to
     :param keep_n_checkpoints: Number of best checkpoints that will be saved (worse checkpoints are overwritten)
     """
-    ckpt_dst_path = os.path.join(
+    root_path = os.path.join(
         dst_path, "checkpoints",
-        f"epoch={str(epoch).zfill(4)}-val_loss=" + "{:.4E}".format(val_error) + ".ckpt"
-        )
-    root_path = os.path.dirname(ckpt_dst_path)
+    )
+    # root_path = os.path.dirname(ckpt_dst_path)
+    ckpt_dst_path = os.path.join(
+        root_path,
+        f"training-state-epoch-{str(epoch).zfill(4)}-val_loss=" + "{:.4E}".format(val_error) + ".mdlus",
+    )
     os.makedirs(root_path, exist_ok=True)
-    th.save(obj={"model_state_dict": model.state_dict(),
-                 "optimizer_state_dict": optimizer.state_dict(),
+
+    model.save(ckpt_dst_path)
+    model.save(os.path.join(root_path, "training-state-last.mdlus"))
+
+    opt_dst_path = os.path.join(
+        root_path,
+        f"optimizer-state-epoch-{str(epoch).zfill(4)}-val_loss=" + "{:.4E}".format(val_error) + ".ckpt",
+    )
+    th.save(obj={"optimizer_state_dict": optimizer.state_dict(),
                  "scheduler_state_dict": scheduler.state_dict(),
                  "epoch": epoch + 1,
                  "iteration": iteration,
                  "val_error": val_error,
                  "epochs_since_improved": epochs_since_improved},
-            f=ckpt_dst_path)
-    th.save(obj={"model_state_dict": model.state_dict(),
-                 "optimizer_state_dict": optimizer.state_dict(),
+            f=opt_dst_path)
+    th.save(obj={"optimizer_state_dict": optimizer.state_dict(),
                  "scheduler_state_dict": scheduler.state_dict(),
                  "epoch": epoch + 1,
                  "iteration": iteration,
                  "val_error": val_error,
                  "epochs_since_improved": epochs_since_improved},
-            f=os.path.join(root_path, "last.ckpt"))
+            f=os.path.join(root_path, "optimizer-state-last.ckpt"))
 
     # Only keep top n checkpoints
-    ckpt_paths = np.array(glob.glob(root_path + "/epoch*.ckpt"))
+    ckpt_paths = np.array(glob.glob(root_path + "/training-state-epoch-*.mdlus"))
     if len(ckpt_paths) > keep_n_checkpoints + 1:
         worst_path = ""
         worst_error = -np.infty
         for ckpt_path in ckpt_paths:
             if "NAN" in ckpt_path:
                 os.remove(ckpt_path)
+                try:
+                    os.remove(ckpt_path.replace("training", "optimizer"))
+                except FileNotFoundError:
+                    pass
                 continue
             # Read the scientific number from the checkpoint name and perform update if appropriate
             curr_error = float(re.findall("-?\d*\.?\d+E[+-]?\d+", os.path.basename(ckpt_path))[0])
@@ -86,4 +99,8 @@ def write_checkpoint(
                 worst_path = ckpt_path
                 worst_error = curr_error
         os.remove(worst_path)
+        try:
+            os.remove(worst_path.replace("training", "optimizer").replace("mdlus", "ckpt"))
+        except FileNotFoundError:
+            pass
 
