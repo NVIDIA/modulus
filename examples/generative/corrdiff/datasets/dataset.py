@@ -80,6 +80,9 @@ def init_dataset_from_config(
 ) -> Tuple[base.DownscalingDataset, Iterable]:
     dataset_cfg = copy.deepcopy(dataset_cfg)
     dataset_type = dataset_cfg.pop("type", "cwb")
+    if "train_test_split" in dataset_cfg:
+        # handled by init_train_valid_datasets_from_config
+        del dataset_cfg["train_test_split"]
     dataset_init_func = known_datasets[dataset_type]
 
     dataset_obj = dataset_init_func(**dataset_cfg)
