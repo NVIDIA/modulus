@@ -23,7 +23,6 @@ from itertools import chain
 import h5py
 import netCDF4 as nc
 import numpy as np
-import scipy
 import torch
 
 try:
@@ -39,6 +38,8 @@ except ImportError:
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Mapping, Tuple, Union
+
+from scipy.io import netcdf_file
 
 from modulus.datapipes.climate.utils.invariant import latlon_grid
 from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
@@ -770,7 +771,7 @@ class ClimateHDF5DaliExternalSource(ClimateDaliExternalSource):
 class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
     """DALI source for reading NetCDF4 formatted climate data files."""
 
-    def _get_data_file(self, year_idx: int) -> scipy.io.netcdf_file:
+    def _get_data_file(self, year_idx: int) -> netcdf_file:
         """Return the opened file for year `year_idx`."""
         if self.data_files[year_idx] is None:
             # This will be called once per worker. Workers are persistent,
@@ -779,7 +780,7 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             # Lazy opening avoids unnecessary file open ops when sharding.
             # NOTE: The SciPy NetCDF reader is used because the netCDF4 library
             # was prone to crashing after many reads.
-            self.data_files[year_idx] = scipy.io.netcdf_file(self.data_paths[year_idx])
+            self.data_files[year_idx] = netcdf_file(self.data_paths[year_idx])
         return self.data_files[year_idx]
 
     def _load_sequence(self, year_idx: int, idx: int) -> np.array:
