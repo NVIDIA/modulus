@@ -158,7 +158,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )

@@ -1,0 +1,122 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job:
+    chdir: False
+
+
+## Main options
+res_ckpt_filename: "./checkpoints/diffusion.mdlus"   
+  # Checkpoint filename for the generative model  
+reg_ckpt_filename: "./checkpoints/regression.mdlus"
+  # Checkpoint filename for the mean predictor model
+image_outdir: "image_outdir"
+  # Where to save the output images
+seeds: "0-63"
+  # Random seeds used for generation
+class_idx: null  
+  # Class label. Null is random
+num_steps: 18
+  # Number of sampling steps
+sample_res: "full"
+  # Sampling resolution
+regression_only: false
+  # regression only inference
+diffusion_only: false
+  # diffusion only inference
+sampling_method: stochastic
+  # Sampling method ["stochastic", "deterministic"]
+seed_batch_size: 32
+  # batch size across the seed dimension
+force_fp16: true
+  # Whether to force fp16 precision for the model. If false, it'll use the precision
+  # specified upon training.
+num_writer_workers: 1
+  # number of workers to use for writing file
+  # To support multiple workers a threadsafe version of the netCDF library must be used
+use_torch_compile: True
+  # whether to use torch.compile on the diffusion model
+  # this will make the first time stamp generation very slow due to compilation overheads
+  # but will significantly speed up subsequent inference runs
+
+## Data options
+## Data options
+patch_shape_x: 64
+patch_shape_y: 64
+  # Patch size. Patch-based sampling will be utilized if these dimensions differ from 
+  # img_shape_x and img_shape_y
+overlap_pixels: 4 
+  # Number of overlapping pixels between adjacent patches
+boundary_pixels: 2
+  # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
+  # artifact.
+hr_mean_conditioning: true
+  # High-res mean (regression's output) as additional condition
+gridtype: "learnable"
+N_grid_channels: 100
+times:
+  - 2021-02-02T00:00:00
+  - 2021-03-02T00:00:00
+  - 2021-04-02T00:00:00
+  # hurricane
+  - 2021-09-12T00:00:00
+  - 2021-09-12T12:00:00
+
+## Weather data options
+dataset:
+  type: cwb
+  train: False
+  all_times: True
+  data_path: /data/data2/2023-01-24-cwb-4years.zarr
+  n_history: 0
+  in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+  out_channels: [0, 17, 18, 19]
+  img_shape_x: 448
+  img_shape_y: 448
+  roll: false
+  add_grid: true
+  ds_factor: 4
+  min_path: null
+  max_path: null
+  global_means_path: null
+  global_stds_path: null
+  normalization: "v1"
+  
+
+## Deterministic sampler options
+sigma_min: null
+  # Lowest noise level
+sigma_max: null
+  # Highest noise level
+rho: 7
+  # Time step exponent
+solver: euler
+  # ODE solver [euler, heun]
+discretization: "edm"
+  # Time step discretization [vp, ve, iddpm, edm]
+schedule: "linear"
+  # noise schedule sigma(t) [vp, ve, linear]
+scaling: null
+  # Signal scaling s(t) [vp, none]
+S_churn: 0
+  # Stochasticity strength
+S_min: 0
+  # Stochasticity min noise level
+S_max: .inf 
+  # Stochasticity max noise level
+S_noise: 1
+  # Stochasticity noise inflation
