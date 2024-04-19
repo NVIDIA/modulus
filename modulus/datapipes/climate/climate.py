@@ -785,9 +785,7 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             # causes crashes.
             reader = self.backend_kwargs.get("reader", "netcdf4")
             if reader == "scipy":
-                self.data_files[year_idx] = netcdf_file(
-                    self.data_paths[year_idx]
-                )
+                self.data_files[year_idx] = netcdf_file(self.data_paths[year_idx])
             elif reader == "netcdf4":
                 self.data_files[year_idx] = nc.Dataset(self.data_paths[year_idx], "r")
                 self.data_files[year_idx].set_auto_maskandscale(False)
