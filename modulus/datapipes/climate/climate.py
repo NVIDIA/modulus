@@ -23,7 +23,6 @@ from itertools import chain
 import h5py
 import netCDF4 as nc
 import numpy as np
-import scipy
 import torch
 
 try:
