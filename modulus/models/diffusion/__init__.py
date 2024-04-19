@@ -24,7 +24,7 @@ from .layers import (
     PositionalEmbedding,
     UNetBlock,
 )
-from .song_unet import SongUNet
+from .song_unet import SongUNet, SongUNetPosEmbd
 from .dhariwal_unet import DhariwalUNet
 from .unet import UNet
 from .preconditioning import (

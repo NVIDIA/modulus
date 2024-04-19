@@ -94,7 +94,7 @@ def initialize_wandb(
         wandb_name = f"{name}_{time_string}"
 
     if not os.path.exists(wandb_dir):
-        os.makedirs(wandb_dir)
+        os.makedirs(wandb_dir, exist_ok=True)
 
     wandb.init(
         project=project,
