@@ -781,9 +781,6 @@ class ClimateNetCDF4DaliExternalSource(ClimateDaliExternalSource):
             # so there is no need to explicitly close the files - this will be done
             # when corresponding pipeline/dataset is destroyed
             # Lazy opening avoids unnecessary file open ops when sharding.
-            # NOTE: The SciPy NetCDF reader is used because the netCDF4 library
-            # was prone to crashing after many reads.
-            self.data_files[year_idx] = netcdf_file(self.data_paths[year_idx])
             # NOTE: The SciPy NetCDF reader can be used if the netCDF4 library
             # causes crashes.
             reader = self.backend_kwargs.get("reader", "netcdf4")
