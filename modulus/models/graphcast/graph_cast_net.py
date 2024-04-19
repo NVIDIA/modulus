@@ -43,6 +43,53 @@ from modulus.utils.graphcast.graph import Graph
 from .graph_cast_processor import GraphCastProcessor
 
 
+def get_lat_lon_partition_separators(partition_size: int):
+    """Utility Function to get separation intervals for lat-lon
+    grid for partition_sizes of interest.
+
+    Parameters
+    ----------
+    partition_size : int
+        size of graph partition, currently supported sizes: {1, 2, 4, 8, 16}
+    """
+
+    if partition_size == 1:
+        lat_ranges = [(-90.0, None)]
+        lon_ranges = [(-180.0, None)]
+
+    elif partition_size == 2:
+        # partition in two halves, divide around longitude=0°
+        lat_ranges = [(-90.0, None)]
+        lon_ranges = [(-180.0, 0.0), (0.0, None)]
+
+    elif partition_size == 4:
+        lat_ranges = [(-90.0, 0.0), (0.0, None)]
+        lon_ranges = [(-180.0, 0.0), (0.0, None)]
+
+    elif partition_size == 8:
+        lat_ranges = [(-90.0, 0.0), (0.0, None)]
+        lon_ranges = [(-180.0, -90.0), (-90.0, 0.0), (0.0, 90.0), (90.0, None)]
+
+    elif partition_size == 16:
+        lat_ranges = [(-90.0, -45.0), (-45.0, 0.0), (0.0, 45.0), (45.0, None)]
+        lon_ranges = [(-180.0, -90.0), (-90.0, 0.0), (0.0, 90.0), (90.0, None)]
+
+    else:
+        raise NotImplementedError(
+            f"lat_lon partitioning for {partition_size} not implemented."
+        )
+
+    min_seps = []
+    max_seps = []
+
+    for lat in lat_ranges:
+        for lon in lon_ranges:
+            min_seps.append([lat[0], lon[0]])
+            max_seps.append([lat[1], lon[1]])
+
+    return min_seps, max_seps
+
+
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "GraphCastNet"
@@ -114,17 +161,20 @@ class GraphCastNet(Module):
         passing no process group name leads to a parallelism across the default
         process group. Otherwise, the group size of a process group is expected
         to match partition_size.
-    expect_partitioned_input : bool, default=False,
+    use_lat_lon_partitioning : bool, default=False
+        flag to specify whether all graphs (grid-to-mesh, mesh, mesh-to-grid)
+        are partitioned based on lat-lon-coordinates of nodes or based on IDs.
+    expect_partitioned_input : bool, default=False
         Flag indicating whether the model expects the input to be already
         partitioned. This can be helpful e.g. in multi-step rollouts to avoid
         aggregating the output just to distribute it in the next step again.
-    global_features_on_rank_0 : bool, default=False,
+    global_features_on_rank_0 : bool, default=False
         Flag indicating whether the model expects the input to be present
         in its "global" form only on group_rank 0. During the input preparation phase,
         the model will take care of scattering the input accordingly onto all ranks
         of the process group across which the graph is partitioned. Note that only either
         this flag or expect_partitioned_input can be set at a time.
-    produce_aggregated_output : bool, default=True,
+    produce_aggregated_output : bool, default=True
         Flag indicating whether the model produces the aggregated output on each
         rank of the procress group across which the graph is distributed or
         whether the output is kept distributed. This can be helpful e.g.
@@ -172,6 +222,7 @@ class GraphCastNet(Module):
         recompute_activation: bool = False,
         partition_size: int = 1,
         partition_group_name: Optional[str] = None,
+        use_lat_lon_partitioning: bool = False,
         expect_partitioned_input: bool = False,
         global_features_on_rank_0: bool = False,
         produce_aggregated_output: bool = True,
@@ -218,10 +269,21 @@ class GraphCastNet(Module):
         self.mesh_ndata = self.mesh_graph.ndata["x"]
 
         if use_cugraphops_encoder or self.is_distributed:
+            kwargs = {}
+            if use_lat_lon_partitioning:
+                min_seps, max_seps = get_lat_lon_partition_separators(partition_size)
+                kwargs = {
+                    "src_coordinates": self.g2m_graph.srcdata["lat_lon"],
+                    "dst_coordinates": self.g2m_graph.dstdata["lat_lon"],
+                    "coordinate_separators_min": min_seps,
+                    "coordinate_separators_max": max_seps,
+                }
             self.g2m_graph, edge_perm = CuGraphCSC.from_dgl(
                 graph=self.g2m_graph,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
+                partition_by_bbox=use_lat_lon_partitioning,
+                **kwargs,
             )
             self.g2m_edata = self.g2m_edata[edge_perm]
 
@@ -231,10 +293,22 @@ class GraphCastNet(Module):
                 )
 
         if use_cugraphops_decoder or self.is_distributed:
+            kwargs = {}
+            if use_lat_lon_partitioning:
+                min_seps, max_seps = get_lat_lon_partition_separators(partition_size)
+                kwargs = {
+                    "src_coordinates": self.m2g_graph.srcdata["lat_lon"],
+                    "dst_coordinates": self.m2g_graph.dstdata["lat_lon"],
+                    "coordinate_separators_min": min_seps,
+                    "coordinate_separators_max": max_seps,
+                }
+
             self.m2g_graph, edge_perm = CuGraphCSC.from_dgl(
                 graph=self.m2g_graph,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
+                partition_by_bbox=use_lat_lon_partitioning,
+                **kwargs,
             )
             self.m2g_edata = self.m2g_edata[edge_perm]
 
@@ -244,10 +318,22 @@ class GraphCastNet(Module):
                 )
 
         if use_cugraphops_processor or self.is_distributed:
+            kwargs = {}
+            if use_lat_lon_partitioning:
+                min_seps, max_seps = get_lat_lon_partition_separators(partition_size)
+                kwargs = {
+                    "src_coordinates": self.mesh_graph.ndata["lat_lon"],
+                    "dst_coordinates": self.mesh_graph.ndata["lat_lon"],
+                    "coordinate_separators_min": min_seps,
+                    "coordinate_separators_max": max_seps,
+                }
+
             self.mesh_graph, edge_perm = CuGraphCSC.from_dgl(
                 graph=self.mesh_graph,
                 partition_size=partition_size,
                 partition_group_name=partition_group_name,
+                partition_by_bbox=use_lat_lon_partitioning,
+                **kwargs,
             )
             self.mesh_edata = self.mesh_edata[edge_perm]
             if self.is_distributed:

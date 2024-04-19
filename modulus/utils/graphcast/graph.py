@@ -30,6 +30,7 @@ from .graph_utils import (
     create_heterograph,
     get_edge_len,
     latlon2xyz,
+    xyz2latlon,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ class Graph:
         )
         mesh_graph = add_edge_features(mesh_graph, mesh_pos)
         mesh_graph = add_node_features(mesh_graph, mesh_pos)
+        mesh_graph.ndata["lat_lon"] = xyz2latlon(mesh_pos)
         # ensure fields set to dtype to avoid later conversions
         mesh_graph.ndata["x"] = mesh_graph.ndata["x"].to(dtype=self.dtype)
         mesh_graph.edata["x"] = mesh_graph.edata["x"].to(dtype=self.dtype)
@@ -162,6 +164,10 @@ class Graph:
             self.icospheres["order_" + str(self.max_order) + "_vertices"]
         )
         distances, indices = neighbors.kneighbors(cartesian_grid)
+        vertex_tensor = torch.tensor(
+            self.icospheres["order_" + str(self.max_order) + "_vertices"],
+            dtype=torch.float32,
+        )
 
         src, dst = [], []
         for i in range(len(cartesian_grid)):
@@ -174,13 +180,19 @@ class Graph:
                     # in the paper what they use.
 
         g2m_graph = create_heterograph(
-            src, dst, ("grid", "g2m", "mesh"), dtype=torch.int32
+            src,
+            dst,
+            ("grid", "g2m", "mesh"),
+            dtype=torch.int32,
+            num_nodes_dict={
+                "grid": cartesian_grid.size(0),
+                "mesh": vertex_tensor.size(0),
+            },
         )  # number of edges is 3,114,720, exactly matches with the paper
+        g2m_graph.srcdata["lat_lon"] = self.lat_lon_grid_flat
         g2m_graph.srcdata["pos"] = cartesian_grid.to(torch.float32)
-        g2m_graph.dstdata["pos"] = torch.tensor(
-            self.icospheres["order_" + str(self.max_order) + "_vertices"],
-            dtype=torch.float32,
-        )
+        g2m_graph.dstdata["lat_lon"] = xyz2latlon(vertex_tensor)
+        g2m_graph.dstdata["pos"] = vertex_tensor
         g2m_graph = add_edge_features(
             g2m_graph, (g2m_graph.srcdata["pos"], g2m_graph.dstdata["pos"])
         )
@@ -220,6 +232,11 @@ class Graph:
         _, indices = neighbors.kneighbors(cartesian_grid)
         indices = indices.flatten()
 
+        vertex_tensor = torch.tensor(
+            self.icospheres["order_" + str(self.max_order) + "_vertices"],
+            dtype=torch.float32,
+        )
+
         src = [
             p
             for i in indices
@@ -227,12 +244,18 @@ class Graph:
         ]
         dst = [i for i in range(len(cartesian_grid)) for _ in range(3)]
         m2g_graph = create_heterograph(
-            src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
+            src,
+            dst,
+            ("mesh", "m2g", "grid"),
+            dtype=torch.int32,
+            num_nodes_dict={
+                "mesh": vertex_tensor.size(0),
+                "grid": cartesian_grid.size(0),
+            },
         )  # number of edges is 3,114,720, exactly matches with the paper
-        m2g_graph.srcdata["pos"] = torch.tensor(
-            self.icospheres["order_" + str(self.max_order) + "_vertices"],
-            dtype=torch.float32,
-        )
+        m2g_graph.srcdata["pos"] = vertex_tensor
+        m2g_graph.srcdata["lat_lon"] = xyz2latlon(vertex_tensor)
+        m2g_graph.dstdata["lat_lon"] = self.lat_lon_grid_flat
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
         m2g_graph = add_edge_features(
             m2g_graph, (m2g_graph.srcdata["pos"], m2g_graph.dstdata["pos"])
