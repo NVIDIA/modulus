@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.networks.DGCNNDrivAer
-_convert_: all
+_target_: torch.optim.lr_scheduler.ReduceLROnPlateau
 
-knn_k: 4
-knn_search_chunk_size: 8192
+factor: 0.1
+patience: 10
