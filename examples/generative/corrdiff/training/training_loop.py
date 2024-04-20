@@ -290,7 +290,7 @@ def training_loop(
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        if grad_clip_threshold is not None:
+        if grad_clip_threshold:
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 net.parameters(), grad_clip_threshold
             )
