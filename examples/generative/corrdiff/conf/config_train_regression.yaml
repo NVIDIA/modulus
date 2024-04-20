@@ -16,8 +16,9 @@
 
 hydra:
   job:
-    chdir: True
-
+    name: regression_job
+  run:
+    dir: ./outputs/${hydra:job.name}
 
 defaults:
   - config_train_base
