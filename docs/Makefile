@@ -32,3 +32,13 @@ convert-markdown-to-rst:
 html: convert-markdown-to-rst
 	@echo "Running custom commands..."
 	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+# package docs for CMS upload
+package_docs:
+	apt-get update && apt-get install -y zip unzip
+	rm -rf deeplearning/
+	mkdir deeplearning
+	mkdir deeplearning/modulus
+	mkdir deeplearning/modulus/modulus-core
+	cp -r _build/html/* deeplearning/modulus/modulus-core/
+	zip -r deeplearning.zip deeplearning
