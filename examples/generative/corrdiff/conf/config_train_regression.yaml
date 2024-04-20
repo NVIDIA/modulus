@@ -16,6 +16,7 @@
 
 hydra:
   job:
+    chdir: true
     name: regression_job
   run:
     dir: ./outputs/${hydra:job.name}
