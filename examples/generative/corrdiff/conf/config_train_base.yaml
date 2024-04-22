@@ -39,7 +39,7 @@ hr_mean_conditioning: False
 gridtype: "sinusoidal"
   # can be either linear, sinusoidal, or learnable
 N_grid_channels: 4
-grad_clip_threshold: None
+grad_clip_threshold: false
   # no gradient clipping for defualt non-patch-based training
 lr_decay: 1
 
