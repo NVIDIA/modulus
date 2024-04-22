@@ -25,6 +25,7 @@ import time
 
 import numpy as np
 from tqdm import tqdm
+physical_devices = tf.config.list_physical_devices("GPU")
 
 try:
     import tensorflow as tf
@@ -34,7 +35,6 @@ except ImportError:
         + "package at: https://www.tensorflow.org/install"
     )
 
-physical_devices = tf.config.list_physical_devices("GPU")
 try:
     for device_ in physical_devices:
         tf.config.experimental.set_memory_growth(device_, True)
