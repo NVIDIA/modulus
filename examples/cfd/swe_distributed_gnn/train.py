@@ -48,7 +48,7 @@ from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
-def l2loss_sphere(solver, prd, tar, relative=False, squared=True):
+def l2loss_sphere(prd, tar, solver, relative=False, squared=True):
     loss = solver.integrate_grid((prd - tar) ** 2, dimensionless=True).sum(dim=-1)
     if relative:
         loss = loss / solver.integrate_grid(tar**2, dimensionless=True).sum(dim=-1)
@@ -57,6 +57,11 @@ def l2loss_sphere(solver, prd, tar, relative=False, squared=True):
         loss = torch.sqrt(loss)
     loss = loss.mean()
 
+    return loss
+
+
+def l2loss(prd, tar, *args, **kwargs):
+    loss = ((prd -tar)**2).mean()
     return loss
 
 
@@ -71,11 +76,19 @@ def autoregressive_inference(
     path_root,
     nsteps,
     dist_manager,
+    loss_fn: str = "l2",
     autoreg_steps=10,
     nskip=1,
     plot_channel=1,
     nics=20,
 ):
+    if loss_fn == "l2":
+        loss_fn = l2loss
+    elif loss_fn == "l2sphere":
+        loss_fn = l2loss_sphere
+    else:
+        raise ValueError(f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'.")
+
     losses = np.zeros(nics)
     fno_times = np.zeros(nics)
     nwp_times = np.zeros(nics)
@@ -139,7 +152,7 @@ def autoregressive_inference(
             ref = dataset.solver.spec2grid(uspec)
             prd = prd * torch.sqrt(inp_var) + inp_mean
 
-            losses[iic] = l2loss_sphere(dataset.solver, prd, ref, relative=True).item()
+            losses[iic] = loss_fn(prd, ref, solver=dataset.solver, relative=True).item()
 
     return losses, fno_times, nwp_times
 
@@ -152,14 +165,19 @@ def train_model(
     gscaler,
     dist_manager,
     metrics,
-    nepochs=10,
-    nfuture=0,
+    num_epochs=10,
+    num_future=0,
     num_examples=512,
     num_valid=8,
     loss_fn="l2",
     enable_amp=False,
-    dummy_dataset=False,
 ):
+    if loss_fn == "l2":
+        loss_fn = l2loss
+    elif loss_fn == "l2sphere":
+        loss_fn = l2loss_sphere
+    else:
+        raise ValueError(f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'.")
     train_start = time.time()
 
     # count iterations
@@ -171,7 +189,7 @@ def train_model(
     metrics["val_loss"] = []
     metrics["epochs"] = []
 
-    for epoch in range(nepochs):
+    for epoch in range(num_epochs):
 
         # time each epoch
         epoch_start = time.time()
@@ -189,9 +207,9 @@ def train_model(
         for inp, tar in dataloader:
             with amp.autocast(enabled=enable_amp):
                 prd = model(inp)
-                for _ in range(nfuture):
+                for _ in range(num_future):
                     prd = model(prd)
-                loss = l2loss_sphere(solver, prd, tar, relative=False)
+                loss = loss_fn(prd, tar, solver=solver, relative=False)
 
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=False)
@@ -206,19 +224,18 @@ def train_model(
         dataloader.dataset.set_initial_condition("random")
         dataloader.dataset.set_num_examples(num_valid)
 
-        # perform validation (only on actual data)
+        # perform validation
         valid_loss = 0.0
-        if not dummy_dataset:
-            model.eval()
-            with torch.no_grad():
-                for inp, tar in dataloader:
-                    prd = model(inp)
-                    for _ in range(nfuture):
-                        prd = model(prd)
-                    loss = l2loss_sphere(solver, prd, tar, relative=True)
-                    valid_loss += loss.item() * inp.size(0)
+        model.eval()
+        with torch.no_grad():
+            for inp, tar in dataloader:
+                prd = model(inp)
+                for _ in range(num_future):
+                    prd = model(prd)
+                loss = loss_fn(prd, tar, solver=solver, relative=True)
+                valid_loss += loss.item() * inp.size(0)
 
-            valid_loss = valid_loss / len(dataloader.dataset)
+        valid_loss = valid_loss / len(dataloader.dataset)
 
         epoch_time = time.time() - epoch_start
 
@@ -241,33 +258,36 @@ def train_model(
 
 def main(
     mesh_size: int = 6,
-    dummy_dataset: bool = False,
     short_run: bool = False,
     seed: int = 1234,
     root_path: Optional[str] = None,
+    loss_fn: str = "l2",
+    enable_amp: bool = False,
+    hidden_dim: int = 128,
+    processor_layers: int = 16,
+    num_examples: int = 512,
+    num_epochs: int = 10,
+    angular_resolution: float = 0.703125,
+    use_lat_lon_partitioning: bool = False,
 ):
-
-    # control precision to a certain degree to
-    # make sure that the loss pattern is easier
-    # to sompare in slightly different accumulation
-    if not dummy_dataset:
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cudnn.allow_tf32 = False
-        torch.set_float32_matmul_precision("highest")
-
-    else:
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
+    # realistic FP32 / TF32 settings
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
 
     train = True
     load_checkpoint = False
     save_checkpoint = False
     enable_amp = False
 
-    nepochs = 10 if not short_run else 1
-    num_examples = 512 if not short_run else 64
-    input_res = (256, 512)
+    num_epochs = num_epochs if not short_run else 1
+    num_examples = num_examples if not short_run else 64
+    num_future = 0 # for now, no multi-step-rollout training
+    # default of 0.703125 gives (256, 512)
+    input_res = (
+        int(180.0 / angular_resolution),
+        int(360.0 / angular_resolution),
+    )
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -280,8 +300,6 @@ def main(
         graph_partition_pg_name = "graph_partition"
         world_size = torch.distributed.get_world_size()
         run_suffix = f"mg-{world_size}_mesh-{mesh_size}_seed-{seed}"
-        if dummy_dataset:
-            run_suffix += "_dummy"
         if short_run:
             run_suffix += "_short"
         DistributedManager.create_process_subgroup(
@@ -291,8 +309,6 @@ def main(
         )
     else:
         run_suffix = f"sg_mesh-{mesh_size}_seed-{seed}"
-        if dummy_dataset:
-            run_suffix += "_dummy"
         if short_run:
             run_suffix += "_short"
         graph_partition_pg_name = None
@@ -310,14 +326,15 @@ def main(
         input_dim_mesh_nodes=3,
         input_dim_edges=4,
         output_dim_grid_nodes=3,
-        processor_layers=16,
-        hidden_dim=128,
+        processor_layers=processor_layers,
+        hidden_dim=hidden_dim,
         partition_size=dist_manager.group_size(graph_partition_pg_name),
         partition_group_name=graph_partition_pg_name,
         expect_partitioned_input=False,
         global_features_on_rank_0=True,
         produce_aggregated_output=True,
         produce_aggregated_output_on_all_ranks=False,
+        use_lat_lon_partitioning=use_lat_lon_partitioning,
     ).to(device=dist_manager.device)
 
     # since model is "tensor-parallel" in graph-partition
@@ -357,7 +374,6 @@ def main(
         device=dist_manager.device,
         normalize=True,
         rank=dist_manager.rank,
-        dummy_dataset=dummy_dataset,
     )
     # There is still an issue with parallel dataloading. Do NOT use it at the moment
     # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
@@ -384,10 +400,10 @@ def main(
             dist_manager,
             metrics,
             num_examples=num_examples,
-            nepochs=nepochs,
-            loss_fn="l2",
+            num_epochs=num_epochs,
+            loss_fn=loss_fn,
+            num_future=num_future,
             enable_amp=enable_amp,
-            dummy_dataset=dummy_dataset,
         )
 
         training_time = time.time() - start_time
@@ -406,17 +422,18 @@ def main(
                     os.path.join(root_path, run_suffix, "checkpoints", "model.pt"),
                 )
 
-    # set seed
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    if not short_run:
+        # set seed
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
 
-    if not dummy_dataset:
         with torch.inference_mode():
             losses, fno_times, nwp_times = autoregressive_inference(
                 model,
                 dataset,
                 os.path.join(root_path, run_suffix, "figures"),
                 dist_manager=dist_manager,
+                loss_fn=loss_fn,
                 nsteps=nsteps,
                 autoreg_steps=10,
             )
@@ -448,19 +465,31 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh_size", type=int, default=6)
-    # random "dummy" data is useful for benchmark just
-    # the training part of things while actual data is used
-    # to verify numeric behavior
-    parser.add_argument("--dummy_data", action="store_true")
+    # for quick debugging, directly launches training with 1 epoch
+    # and 64 examples and adds suffix _short to log assets
     parser.add_argument("--short_run", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--root_path", type=str, default=None)
+    parser.add_argument("--loss", type=str, default="l2")
+    parser.add_argument("--hidden_dim", type=int, default=128)
+    parser.add_argument("--processor_layers", type=int, default=16)
+    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--num_examples", type=int, default=512)
+    parser.add_argument("--angular_resolution", type=float, default=0.703125)
+    parser.add_argument("--enable_amp", action="store_true")
+    parser.add_argument("--lat_lon_part", action="store_true")
     args = parser.parse_args()
 
     main(
         mesh_size=args.mesh_size,
-        dummy_dataset=args.dummy_data,
         short_run=args.short_run,
         seed=args.seed,
         root_path=args.root_path,
+        loss_fn=args.loss,
+        hidden_dim=args.hidden_dim,
+        processor_layers=args.processor_layers,
+        num_epochs=args.num_epochs,
+        angular_resolution=args.angular_resolution,
+        enable_amp=args.enable_amp,
+        use_lat_lon_partitioning=args.lat_lon_part,
     )

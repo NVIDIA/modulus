@@ -194,7 +194,7 @@ def partition_graph_with_id_mapping(
             mapping_dst_ids_to_ranks == rank
         ).view(-1)
         src_nodes_in_each_partition[rank] = torch.nonzero(
-            mapping_src_ids_to_ranks == partition_rank
+            mapping_src_ids_to_ranks == rank
         ).view(-1)
         num_nodes = dst_nodes_in_each_partition[rank].numel()
         if num_nodes == 0:
@@ -652,6 +652,16 @@ class DistributedGraph:
             if graph_partition.device != self.device:
                 raise AssertionError(error_msg)
             self.graph_partition = graph_partition
+
+        send_sizes = self.graph_partition.sizes[self.graph_partition.partition_rank]
+        recv_sizes = [p[self.graph_partition.partition_rank] for p in self.graph_partition.sizes]
+        msg = f"GraphPartition(rank={self.graph_partition.partition_rank}, "
+        msg += f"num_local_src_nodes={self.graph_partition.num_local_src_nodes}, "
+        msg += f"num_local_dst_nodes={self.graph_partition.num_local_dst_nodes}, "
+        msg += f"num_partitioned_src_nodes={self.graph_partition.num_src_nodes_in_each_partition[self.graph_partition.partition_rank]}, "
+        msg += f"num_partitioned_dst_nodes={self.graph_partition.num_dst_nodes_in_each_partition[self.graph_partition.partition_rank]}, "
+        msg += f"send_sizes={send_sizes}, recv_sizes={recv_sizes})"
+        print(msg)
 
         dist.barrier(self.process_group)
 
