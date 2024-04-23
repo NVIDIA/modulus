@@ -29,13 +29,16 @@ Full paper on:
 
 For more sample parts simulation:
 <p align="center">
-<img src="../../../docs/img/vfgn_doc/busbar-video.gif" width="700" />
+<img src="../../../docs/img/vfgn_doc/usb.gif" width="560" />
 </p>
 <p align="center">
-<img src="../../../docs/img/vfgn_doc/busbar%20(1).gif" width="700" />
+<img src="../../../docs/img/vfgn_doc/pushing-grip.gif" width="560" />
 </p>
 <p align="center">
-<img src="../../../docs/img/vfgn_doc/screw.gif" width="700" />
+<img src="../../../docs/img/vfgn_doc/screw.gif" width="560" />
+</p>
+<p align="center">
+<img src="../../../docs/img/vfgn_doc/busbar.gif" width="560" />
 </p>
 
 ## Setup with Modulus package
