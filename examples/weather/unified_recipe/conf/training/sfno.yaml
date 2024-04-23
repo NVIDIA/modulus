@@ -14,20 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# coding: utf-8
-import datetime
-import random
-import sys
+amp_supported: !!bool False
+nr_input_steps: 1
 
-import training.dataset
-import training.YParams
-import yaml
-from training.time import convert_datetime_to_cftime
+optimizer:
+  framework: torch
+  name: Adam
+  args:
+    lr: 1e-3
+    betas: [0.9, 0.999]
 
-p = training.YParams.YParams("era5-cwb-v3.yaml", "validation_small")
-ds = training.dataset.get_zarr_dataset(p, train=False)
-times = ds.time()
-random.shuffle(times)
-subset = times[:200]
-subset = sorted([convert_datetime_to_cftime(t, cls=datetime.datetime) for t in subset])
-yaml.safe_dump({"validation_big": {"times": subset}}, sys.stdout)
+stages:
+  - name: "Step LR"
+    max_iterations: .inf
+    num_epochs: 500
+    unroll_steps: 1
+    batch_size: 2
+    lr_scheduler_name: StepLR
+    args:
+      step_size: 100
+      gamma: 0.5

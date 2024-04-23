@@ -38,10 +38,19 @@ dropout: 0.13
   # Dropout probability
 augment: 0.0
   # Augment probability
+hr_mean_conditioning: False
+  # High-res mean (regression's output) as additional condition
+gridtype: "sinusoidal"
+  # can be either linear, sinusoidal, or learnable
+N_grid_channels: 4
+grad_clip_threshold: false
+  # no gradient clipping for defualt non-patch-based training
+lr_decay: 1
 
 ## Performance options
-fp16: false
-  # Enable mixed-precision training
+fp_optimizations: fp32
+  # Floating point mode, one of ["fp32", "fp16", "amp-fp16", "amp-bf16"]
+  # "amp-{fp16,bf16}" activates Automatic Mixed Precision (AMP) with {float16,bfloat16}
 ls: 1
   # Loss scaling
 bench: false
@@ -68,23 +77,21 @@ validation_dump: 50
 validation_steps: 10
   # how many loss evaluations are used to compute the validation loss per checkpoint
 wandb_mode: online
-  # Wights & biases mode [online, ofline, disabled]
+  # Weights & biases mode [online, ofline, disabled]
 wandb_project:  "Modulus-Generative"
- # Wights & biases project
+ # Weights & biases project
 wandb_group: "CorrDiff-DDP-Group"
- # Wights & biases group
+ # Weights & biases group
 wandb_entity: "CorrDiff-DDP-Group"
- # Wights & biases entity (i.e. a workspace, personal or a team workspace)
+ # Weights & biases entity (i.e. a workspace, personal or a team workspace)
 wandb_name: "CorrDiff"
- # Wights & biases name
+ # Weights & biases name
 
 
 ## Weather data options
 dataset:
   type: cwb
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
-  crop_size_x: 448
-  crop_size_y: 448
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
@@ -97,7 +104,5 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  gridtype: "sinusoidal"
-  N_grid_channels: 4
   normalization: "v1"
   train_test_split: false
