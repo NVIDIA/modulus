@@ -430,9 +430,10 @@ def gather_v_wrapper(
                 req_list[r].wait()
 
     else:
-        req = dist.isend(tensor, dst=dst, group=group)
+        req = dist.isend(tensor, dst, group=group)
         req.wait()
 
+    dist.barrier(group=group)
     output = torch.cat(gather_list, dim=dim)
 
     return output
@@ -501,7 +502,7 @@ def scatter_v_wrapper(
             if r == src:
                 output = tensor_to_scatter_to_r
             else:
-                req_list[r] = dist.isend(tensor_to_scatter_to_r, dst=r, group=group)
+                req_list[r] = dist.isend(tensor_to_scatter_to_r, r, group=group)
 
         for r in range(comm_size):
             if r != src:
@@ -510,6 +511,8 @@ def scatter_v_wrapper(
     else:
         req = dist.irecv(output, src=src, group=group)
         req.wait()
+
+    dist.barrier(group=group)
 
     return output
 

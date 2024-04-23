@@ -169,8 +169,8 @@ class CuGraphCSC:
             partition_rank = dist_manager.group_rank(name=partition_group_name)
 
             graph_partition = partition_graph_by_coordinate_bbox(
-                offsets,
-                indices,
+                offsets.to(dtype=torch.int64),
+                indices.to(dtype=torch.int64),
                 src_coordinates=src_coordinates,
                 dst_coordinates=dst_coordinates,
                 coordinate_separators_min=coordinate_separators_min,
@@ -181,8 +181,8 @@ class CuGraphCSC:
             )
 
         graph_csc = CuGraphCSC(
-            offsets,
-            indices,
+            offsets.to(dtype=torch.int64),
+            indices.to(dtype=torch.int64),
             n_src_nodes,
             n_dst_nodes,
             partition_size=partition_size,

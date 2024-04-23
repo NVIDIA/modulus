@@ -32,6 +32,9 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 icosphere_path = get_icosphere_path()
 
 
+torch.backends.cuda.matmul.allow_tf32 = False
+
+
 def run_test_distributed_graphcast(
     rank: int,
     world_size: int,
@@ -114,12 +117,6 @@ def run_test_distributed_graphcast(
         x_multi_gpu
     ).requires_grad_(True)
 
-    # zero grads
-    for param in model_single_gpu.parameters():
-        param.data.zero_()
-    for param in model_multi_gpu.parameters():
-        param.data.zero_()
-
     # forward + backward passes
     out_single_gpu = model_single_gpu(x_single_gpu)
     loss = out_single_gpu.sum()
@@ -136,11 +133,15 @@ def run_test_distributed_graphcast(
 
     # numeric tolerances based on dtype
     tolerances = {
-        torch.float32: (2e-3, 1e-6),
-        torch.bfloat16: (5e-2, 1e-3),
-        torch.float16: (5e-2, 1e-3),
+        torch.float32: (1e-5, 1e-6),
+        torch.float16: (1e-2, 1e-3),
+    }
+    tolerances_weight = {
+        torch.float32: (1e-4, 1e-5),
+        torch.float16: (1e-1, 1e-2),
     }
     atol, rtol = tolerances[dtype]
+    atol_w, rtol_w = tolerances_weight[dtype]
 
     # compare forward, now fully materialize out_multi_gpu to faciliate comparison
     _B, _C, _N = out_multi_gpu.shape
@@ -161,19 +162,18 @@ def run_test_distributed_graphcast(
     for param_idx, param in enumerate(model_single_gpu.parameters()):
         diff = param.grad - model_multi_gpu_parameters[param_idx].grad
         diff = torch.abs(diff)
-        mask = diff > atol
+        mask = diff > atol_w
         assert torch.allclose(
-            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol, rtol=rtol
-        ), f"{mask.sum()} elements have diff > {atol} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
+            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol_w, rtol=rtol_w
+        ), f"{mask.sum()} elements have diff > {atol_w} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
 
     # cleanup distributed
+    DistributedManager.cleanup()
     del os.environ["RANK"]
     del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
-
-    DistributedManager.cleanup()
 
 
 @import_or_fail("dgl")
@@ -191,6 +191,7 @@ def test_distributed_graphcast(
         4, num_gpus
     )  # test-graph is otherwise too small for distribution across more GPUs
 
+    torch.set_num_threads(1)
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
         args=(

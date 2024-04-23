@@ -33,6 +33,8 @@ from modulus.models.gnn_layers import (
     partition_graph_with_id_mapping,
 )
 
+torch.backends.cuda.matmul.allow_tf32 = False
+
 
 def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme):
     from modulus.models.gnn_layers.utils import CuGraphCSC
@@ -174,9 +176,9 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     # zero grads
     for param in model_single_gpu.parameters():
-        param.data.zero_()
+        param.grad = None
     for param in model_multi_gpu.parameters():
-        param.data.zero_()
+        param.grad = None
 
     # forward + backward passes
     out_single_gpu = model_single_gpu(
@@ -197,11 +199,15 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     # numeric tolerances based on dtype
     tolerances = {
-        torch.float32: (1e-3, 1e-6),
-        torch.bfloat16: (1e-1, 1e-3),
+        torch.float32: (1e-5, 1e-6),
+        torch.float16: (1e-2, 1e-3),
+    }
+    tolerances_weight = {
+        torch.float32: (1e-4, 1e-6),
         torch.float16: (1e-1, 1e-3),
     }
     atol, rtol = tolerances[dtype]
+    atol_w, rtol_w = tolerances_weight[dtype]
 
     # compare forward
     out_single_gpu_dist = graph_multi_gpu.get_src_node_features_in_partition(
@@ -219,10 +225,10 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     for param_idx, param in enumerate(model_single_gpu.parameters()):
         diff = param.grad - model_multi_gpu_parameters[param_idx].grad
         diff = torch.abs(diff)
-        mask = diff > atol
+        mask = diff > atol_w
         assert torch.allclose(
-            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol, rtol=rtol
-        ), f"{mask.sum()} elements have diff > {atol} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
+            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol_w, rtol=rtol_w
+        ), f"{mask.sum()} elements have diff > {atol_w} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
 
     # cleanup distributed
     del os.environ["RANK"]
@@ -245,6 +251,7 @@ def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
         4, num_gpus
     )  # test-graph is otherwise too small for distribution across more GPUs
 
+    torch.set_num_threads(1)
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,
         args=(world_size, dtype, partition_scheme),
