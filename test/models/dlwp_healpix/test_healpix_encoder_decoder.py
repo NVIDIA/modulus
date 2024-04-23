@@ -13,25 +13,23 @@
 # limitations under the License.
 
 import common
-import numpy as np
 import pytest
 import torch
 
 from modulus.models.dlwp_healpix_layers import (
-    UNetEncoder,
-    UNetDecoder,
-    MaxPool,  # for downsampling
-    TransposedConvUpsample,  # for upsampling
-    ConvNeXtBlock,  # for convolutional layer
     BasicConvBlock,  # for the output layer
     ConvGRUBlock,  # for the recurrent layer
+    ConvNeXtBlock,  # for convolutional layer
+    MaxPool,  # for downsampling
+    TransposedConvUpsample,  # for upsampling
+    UNetDecoder,
+    UNetEncoder,
 )
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_initialize(device):
     channels = 2
-    hw_size = 16
     n_channels = (16, 32, 64)
 
     # Dicts for block configs used by encoder
@@ -105,8 +103,6 @@ def test_UNetEncoder_forward(device):
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_reset(device):
     channels = 2
-    hw_size = 16
-    b_size = 12
     n_channels = (16, 32, 64)
 
     # Dicts for block configs used by encoder
@@ -135,7 +131,6 @@ def test_UNetEncoder_reset(device):
 def test_UNetDecoder_initilization(device):
     in_channels = 2
     out_channels = 1
-    hw_size = 32
     n_channels = (64, 32, 16)
 
     # Dicts for block configs used by decoder

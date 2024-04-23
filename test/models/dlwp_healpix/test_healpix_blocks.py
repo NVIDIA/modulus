@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import common
-import numpy as np
 import pytest
 import torch
 
@@ -225,7 +224,6 @@ def test_BasicConvBlock_initialization(device):
 def test_BasicConvBlock_forward(device, test_data):
     in_channels = 3
     out_channels = 1
-    latent_channels = 2
     tensor_size = 16
     conv_block = BasicConvBlock(
         in_channels=in_channels,

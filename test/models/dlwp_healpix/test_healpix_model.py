@@ -13,24 +13,12 @@
 # limitations under the License.
 
 import common
-import numpy as np
 import pytest
 import torch
-
+from graphcast.utils import fix_random_seeds
 from omegaconf import DictConfig
-from graphcast.utils import create_random_input, fix_random_seeds
 
 from modulus.models.dlwp_healpix import HEALPixRecUNet
-
-from modulus.models.dlwp_healpix_layers import (
-    UNetEncoder,
-    UNetDecoder,
-    MaxPool,  # for downsampling
-    TransposedConvUpsample,  # for upsampling
-    ConvNeXtBlock,  # for convolutional layer
-    BasicConvBlock,  # for the output layer
-    ConvGRUBlock,  # for the recurrent layer
-)
 
 
 @pytest.fixture
@@ -193,7 +181,7 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
 
     # test fail case for bad input and output time dims
     with pytest.raises(
-        ValueError, match=(f"'output_time_dim' must be a multiple of 'input_time_dim'")
+        ValueError, match=("'output_time_dim' must be a multiple of 'input_time_dim'")
     ):
         model = HEALPixRecUNet(
             encoder=encoder_dict,
@@ -209,7 +197,7 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
     # test fail case for couplings with no constants or decoder input channels
     with pytest.raises(
         NotImplementedError,
-        match=(f"support for coupled models with no constant field"),
+        match=("support for coupled models with no constant field"),
     ):
         model = HEALPixRecUNet(
             encoder=encoder_dict,
@@ -224,7 +212,7 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
         ).to(device)
 
     with pytest.raises(
-        NotImplementedError, match=(f"support for coupled models with no decoder")
+        NotImplementedError, match=("support for coupled models with no decoder")
     ):
         model = HEALPixRecUNet(
             encoder=encoder_dict,
@@ -240,7 +228,7 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
 
     with pytest.raises(
         NotImplementedError,
-        match=(f"support for models with no constant fields and no decoder"),
+        match=("support for models with no constant fields and no decoder"),
     ):
         model = HEALPixRecUNet(
             encoder=encoder_dict,

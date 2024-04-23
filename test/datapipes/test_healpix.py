@@ -12,33 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-
-from pathlib import Path
-import pytest
-import torch
-import xarray as xr
-import numpy as np
 import random
 import shutil
+import warnings
 from pathlib import Path
 
+import numpy as np
+import pytest
+import xarray as xr
+from omegaconf import DictConfig
 from pytest_utils import nfsdata_or_fail
-
-import warnings
-
-import pandas as pd
-
-from omegaconf import DictConfig, OmegaConf
-
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from modulus.datapipes.healpix.data_modules import (
+    TimeSeriesDataModule,
+    create_time_series_dataset_classic,
     open_time_series_dataset_classic_on_the_fly,
     open_time_series_dataset_classic_prebuilt,
-    create_time_series_dataset_classic,
-    TimeSeriesDataModule,
 )
 from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
 
@@ -443,7 +434,6 @@ def test_TimeSeriesDataModule_initialization(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
     variables = ["z500", "z1000"]
-    constants = {"lsm": "lsm"}
     splits = {
         "train_date_start": "1959-01-01",
         "train_date_end": "1998-12-31T18:00",
@@ -537,7 +527,7 @@ def test_TimeSeriesDataModule_get_constants(
         constants=None,
     )
 
-    assert timeseries_dm.get_constants() == None
+    assert timeseries_dm.get_constants() is None
 
     # just lsm as constant
     timeseries_dm = TimeSeriesDataModule(
@@ -585,7 +575,6 @@ def test_TimeSeriesDataModule_get_dataloaders(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
     variables = ["z500", "z1000"]
-    constants = {"lsm": "lsm"}
     splits = {
         "train_date_start": "1979-01-01",
         "train_date_end": "1979-01-01T21:00",
@@ -610,15 +599,15 @@ def test_TimeSeriesDataModule_get_dataloaders(
 
     # with 1 shard should get no sampler
     train_dataloader, train_sampler = timeseries_dm.train_dataloader(num_shards=1)
-    assert train_sampler == None
+    assert train_sampler is None
     assert isinstance(train_dataloader, DataLoader)
 
     val_dataloader, val_sampler = timeseries_dm.val_dataloader(num_shards=1)
-    assert val_sampler == None
+    assert val_sampler is None
     assert isinstance(val_dataloader, DataLoader)
 
     test_dataloader, test_sampler = timeseries_dm.test_dataloader(num_shards=1)
-    assert test_sampler == None
+    assert test_sampler is None
     assert isinstance(test_dataloader, DataLoader)
     print(f"dataset lenght {len}")
     # with >1 shard should be distributed sampler
