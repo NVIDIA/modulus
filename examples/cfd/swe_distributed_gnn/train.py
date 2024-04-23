@@ -33,6 +33,7 @@ import argparse
 import json
 import os
 import time
+import uuid
 from typing import Optional
 
 import torch
@@ -190,7 +191,6 @@ def train_model(
     metrics["epochs"] = []
 
     for epoch in range(num_epochs):
-
         # time each epoch
         epoch_start = time.time()
 
@@ -212,7 +212,7 @@ def train_model(
                 loss = loss_fn(prd, tar, solver=solver, relative=False)
 
             acc_loss += loss.item() * inp.size(0)
-            optimizer.zero_grad(set_to_none=False)
+            optimizer.zero_grad(set_to_none=True)
             gscaler.scale(loss).backward()
             gscaler.step(optimizer)
             gscaler.update()
@@ -239,13 +239,13 @@ def train_model(
 
         epoch_time = time.time() - epoch_start
 
-        if dist_manager.rank == 0 and metrics is not None:
-                current_lr = optimizer.param_groups[0]["lr"]
-                metrics["epochs"].append(epoch)
-                metrics["current_lr"].append(current_lr)
-                metrics["epoch_time"].append(epoch_time)
-                metrics["acc_loss"].append(acc_loss)
-                metrics["val_loss"].append(valid_loss)
+        if metrics is not None:
+            current_lr = optimizer.param_groups[0]["lr"]
+            metrics["epochs"].append(epoch)
+            metrics["current_lr"].append(current_lr)
+            metrics["epoch_time"].append(epoch_time)
+            metrics["acc_loss"].append(acc_loss)
+            metrics["val_loss"].append(valid_loss)
 
     train_time = time.time() - train_start
 
@@ -280,8 +280,8 @@ def main(
     save_checkpoint = False
     enable_amp = False
 
-    num_epochs = num_epochs if not short_run else 1
-    num_examples = num_examples if not short_run else 64
+    num_epochs = num_epochs if not short_run else 16
+    num_examples = num_examples if not short_run else 1
     num_future = 0 # for now, no multi-step-rollout training
     # default of 0.703125 gives (256, 512)
     input_res = (
@@ -299,24 +299,36 @@ def main(
     if DistributedManager().distributed:
         graph_partition_pg_name = "graph_partition"
         world_size = torch.distributed.get_world_size()
-        run_suffix = f"mg-{world_size}_mesh-{mesh_size}_seed-{seed}"
-        if short_run:
-            run_suffix += "_short"
         DistributedManager.create_process_subgroup(
             name=graph_partition_pg_name,
             size=world_size,
             verbose=True,
         )
     else:
-        run_suffix = f"sg_mesh-{mesh_size}_seed-{seed}"
-        if short_run:
-            run_suffix += "_short"
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
 
+    hyperparameters = {
+        "loss_fn": loss_fn,
+        "processor_layers": processor_layers,
+        "hidden_dim": hidden_dim,
+        "num_examples": num_examples,
+        "num_epochs": num_epochs,
+        "angular_resolution": angular_resolution,
+        "input_resolution": input_res,
+        "mesh_size": mesh_size,
+        "use_lat_lon_partitioning": use_lat_lon_partitioning,
+        "enable_amp": enable_amp,
+        "short_run": short_run,
+        "seed": seed,
+        "world_size": world_size,
+    }
+
+    run_suffix = str(uuid.uuid4())
+
     if dist_manager.rank == 0:
-        print(f"starting to run {run_suffix} ...")
+        print(f"starting to run ...")
 
     model = GraphCastNet(
         meshgraph_path=f"./icospheres_{mesh_size}.json",
@@ -352,7 +364,7 @@ def main(
 
     num_params = count_parameters(model)
     # prepare dicts containing models and corresponding metrics
-    metrics = {}
+    metrics = {**hyperparameters}
 
     if dist_manager.rank == 0:
         print(f"number of trainable params: {num_params}")
@@ -444,16 +456,30 @@ def main(
             metrics["nwp_time_mean"] = np.mean(nwp_times)
             metrics["nwp_time_std"] = np.std(nwp_times)
 
-    if train:
-        metrics["training_time"] = training_time
-        metrics[f"max_memory_allocated_gib"] = (
-            torch.cuda.max_memory_allocated() * 1.0 / (1024**3)
-        )
-        metrics[f"max_memory_reserved_gib"] = (
-            torch.cuda.max_memory_reserved() * 1.0 / (1024**3)
-        )
+
+    max_mem = torch.tensor(
+        [
+            torch.cuda.max_memory_allocated() * 1.0 / (1024**3),
+            torch.cuda.max_memory_reserved() * 1.0 / (1024**3),
+        ],
+        dtype=torch.float32,
+        device=dist_manager.device,
+    ).view(1, 2)
+    if dist_manager.rank == 0:
+        gather_list = [
+            torch.empty_like(max_mem) for r in range(dist_manager.world_size)
+        ]
+    else:
+        gather_list = [] 
+    torch.distributed.gather(max_mem, gather_list, dst=0)
 
     if dist_manager.rank == 0:
+        if train:
+            max_mem = torch.vstack(gather_list)
+            metrics["training_time"] = training_time
+            metrics[f"max_memory_allocated_gib"] = max_mem[:, 0].tolist()
+            metrics[f"max_memory_reserved_gib"] = max_mem[:, 1].tolist()
+
         with open(
             os.path.join(root_path, run_suffix, "output_data", "metrics.json"), "w"
         ) as f:
