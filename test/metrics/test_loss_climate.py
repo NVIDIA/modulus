@@ -48,21 +48,21 @@ def test_MSE_SSIM(device):
     mse_ssim_loss = MSE_SSIM()
 
     # test for fail case of invalid dims (h != w)
-    shape = [1, 1, 1, 12, 128, 64]
+    shape = [1, 1, 1, 12, 64, 32]
     ones = torch.ones(shape).to(device)
     with pytest.raises(
-        AssertionError, match="Spatial dims H and W must match: got 128 and 64"
+        AssertionError, match="Spatial dims H and W must match: got 64 and 32"
     ):
         mse_ssim_loss(ones, ones, model)
 
     # test for fail case of F != 12
-    shape = [1, 1, 2, 8, 64, 64]
+    shape = [1, 1, 2, 8, 32, 32]
     ones = torch.ones(shape).to(device)
     with pytest.raises(AssertionError, match="Spatial dim F must be 12: got 8"):
         mse_ssim_loss(ones, ones, model)
 
     # test for fail case of number of channels not matching number of weights
-    shape = [1, 1, 4, 12, 64, 64]
+    shape = [1, 1, 4, 12, 32, 32]
     ones = torch.ones(shape).to(device)
     with pytest.raises(
         AssertionError,
@@ -71,7 +71,7 @@ def test_MSE_SSIM(device):
         mse_ssim_loss(ones, ones, model)
 
     # test for fail case of wrong number of time dims
-    shape = [1, 5, 2, 12, 64, 64]
+    shape = [1, 5, 2, 12, 32, 32]
     ones = torch.ones(shape).to(device)
     with pytest.raises(
         AssertionError,
