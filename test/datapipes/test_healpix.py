@@ -34,6 +34,7 @@ from modulus.datapipes.healpix.data_modules import (
     open_time_series_dataset_classic_prebuilt,
 )
 from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
+from modulus.distributed import DistributedManager
 
 
 @pytest.fixture
@@ -263,6 +264,7 @@ def test_TimeSeriesDataset_initialization(
         time_step="6h",
     )
     assert isinstance(timeseries_ds, TimeSeriesDataset)
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -285,6 +287,7 @@ def test_TimeSeriesDataset_get_constants(
         expected,
         outvar,
     )
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -324,6 +327,7 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfi
         drop_last=True,
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -429,6 +433,7 @@ def test_TimeSeriesDataset_get(
         forecast_init_times=zarr_ds.time[:init_times],
     )
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -508,6 +513,7 @@ def test_TimeSeriesDataModule_initialization(
         splits=DictConfig(splits),
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -570,6 +576,7 @@ def test_TimeSeriesDataModule_get_constants(
         timeseries_dm.get_constants(),
         expected,
     )
+    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -624,3 +631,4 @@ def test_TimeSeriesDataModule_get_dataloaders(
     test_dataloader, test_sampler = timeseries_dm.test_dataloader(num_shards=2)
     assert isinstance(test_sampler, DistributedSampler)
     assert isinstance(test_dataloader, DataLoader)
+    DistributedManager.cleanup()

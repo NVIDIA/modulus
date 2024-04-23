@@ -535,7 +535,9 @@ class TimeSeriesDataModule:
         else:
             raise ValueError("'data_format' must be one of ['classic']")
 
-        DistributedManager.initialize()
+        # make sure distributed manager is initalized
+        if not DistributedManager.is_initialized():
+            DistributedManager.initialize()
         dist = DistributedManager()
 
         if torch.distributed.is_initialized():
