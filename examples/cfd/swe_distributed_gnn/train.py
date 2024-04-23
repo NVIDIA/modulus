@@ -62,7 +62,7 @@ def l2loss_sphere(prd, tar, solver, relative=False, squared=True):
 
 
 def l2loss(prd, tar, *args, **kwargs):
-    loss = ((prd -tar)**2).mean()
+    loss = ((prd - tar) ** 2).mean()
     return loss
 
 
@@ -88,7 +88,9 @@ def autoregressive_inference(
     elif loss_fn == "l2sphere":
         loss_fn = l2loss_sphere
     else:
-        raise ValueError(f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'.")
+        raise ValueError(
+            f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'."
+        )
 
     losses = np.zeros(nics)
     fno_times = np.zeros(nics)
@@ -149,7 +151,7 @@ def autoregressive_inference(
                     plt.clf()
 
             nwp_times[iic] = time.time() - start_time
-            
+
             ref = dataset.solver.spec2grid(uspec)
             prd = prd * torch.sqrt(inp_var) + inp_mean
 
@@ -178,7 +180,9 @@ def train_model(
     elif loss_fn == "l2sphere":
         loss_fn = l2loss_sphere
     else:
-        raise ValueError(f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'.")
+        raise ValueError(
+            f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'."
+        )
     train_start = time.time()
 
     # count iterations
@@ -282,7 +286,7 @@ def main(
 
     num_epochs = num_epochs if not short_run else 16
     num_examples = num_examples if not short_run else 1
-    num_future = 0 # for now, no multi-step-rollout training
+    num_future = 0  # for now, no multi-step-rollout training
     # default of 0.703125 gives (256, 512)
     input_res = (
         int(180.0 / angular_resolution),
@@ -456,7 +460,6 @@ def main(
             metrics["nwp_time_mean"] = np.mean(nwp_times)
             metrics["nwp_time_std"] = np.std(nwp_times)
 
-
     max_mem = torch.tensor(
         [
             torch.cuda.max_memory_allocated() * 1.0 / (1024**3),
@@ -470,7 +473,7 @@ def main(
             torch.empty_like(max_mem) for r in range(dist_manager.world_size)
         ]
     else:
-        gather_list = [] 
+        gather_list = []
     torch.distributed.gather(max_mem, gather_list, dst=0)
 
     if dist_manager.rank == 0:

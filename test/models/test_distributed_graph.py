@@ -15,13 +15,14 @@
 # limitations under the License.
 
 import os
+
 import pytest
 import torch
 
 from modulus.distributed import DistributedManager
 from modulus.models.gnn_layers import (
-    GraphPartition,
     DistributedGraph,
+    GraphPartition,
     partition_graph_by_coordinate_bbox,
     partition_graph_nodewise,
 )
@@ -34,16 +35,14 @@ def get_random_graph(device):
     min_degree = 2
     max_degree = 8
     degree = torch.randint(
-        min_degree, 
-        max_degree+1,
-        (num_dst_nodes,),
-        device=device,
-        dtype=torch.int64
+        min_degree, max_degree + 1, (num_dst_nodes,), device=device, dtype=torch.int64
     )
-    degree = torch.cat([
-        torch.zeros(1, dtype=torch.int64, device=device),
-        degree,
-    ])
+    degree = torch.cat(
+        [
+            torch.zeros(1, dtype=torch.int64, device=device),
+            degree,
+        ]
+    )
     offsets = torch.cumsum(degree, dim=0)
     indices = torch.randint(
         0,
@@ -58,10 +57,19 @@ def get_random_graph(device):
 
 
 def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, device):
-    #src_feat = torch.randn((num_src_nodes, num_channels), dtype=torch.float32, device=device)
-    src_feat = torch.arange(num_src_nodes, device=device).to(dtype=torch.float32).view(num_src_nodes, 1).repeat(1, num_channels)
-    dst_feat = torch.randn((num_dst_nodes, num_channels), dtype=torch.float32, device=device)
-    edge_feat = torch.randn((num_indices, num_channels), dtype=torch.float32, device=device)
+    # src_feat = torch.randn((num_src_nodes, num_channels), dtype=torch.float32, device=device)
+    src_feat = (
+        torch.arange(num_src_nodes, device=device)
+        .to(dtype=torch.float32)
+        .view(num_src_nodes, 1)
+        .repeat(1, num_channels)
+    )
+    dst_feat = torch.randn(
+        (num_dst_nodes, num_channels), dtype=torch.float32, device=device
+    )
+    edge_feat = torch.randn(
+        (num_indices, num_channels), dtype=torch.float32, device=device
+    )
     src_feat.requires_grad_(True)
     dst_feat.requires_grad_(True)
     edge_feat.requires_grad_(True)
@@ -70,16 +78,16 @@ def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, dev
 
 def get_random_lat_lon_coordinates(num_src_nodes, num_dst_nodes, device):
     x_src = torch.rand(
-        (num_src_nodes, 2), 
-        dtype=torch.float32, 
+        (num_src_nodes, 2),
+        dtype=torch.float32,
         device=device,
     )
     x_src[:, 0] = x_src[:, 0] * 180 - 90
     x_src[:, 1] = x_src[:, 1] * 360 - 180
 
     x_dst = torch.rand(
-        (num_dst_nodes, 2), 
-        dtype=torch.float32, 
+        (num_dst_nodes, 2),
+        dtype=torch.float32,
         device=device,
     )
     x_dst[:, 0] = x_dst[:, 0] * 180 - 90
@@ -97,9 +105,9 @@ def scatter_reduce(
     feat: torch.Tensor,
     offsets: torch.Tensor,
     indices: torch.Tensor,
-):  
+):
     num_dst = offsets.size(0) - 1
-    
+
     src = feat[indices]
     degree = offsets[1:] - offsets[0:-1]
     ids = torch.arange(0, num_dst, dtype=torch.int64, device=feat.device)
@@ -116,8 +124,8 @@ def run_test_distributed_graph(
     rank: int,
     world_size: int,
     partition_scheme: str,
-    use_torchrun: bool = False, 
-):  
+    use_torchrun: bool = False,
+):
     if not use_torchrun:
         os.environ["RANK"] = f"{rank}"
         os.environ["LOCAL_RANK"] = f"{rank}"
@@ -138,19 +146,24 @@ def run_test_distributed_graph(
     src_feat, dst_feat, edge_feat = get_random_feat(
         num_src_nodes, num_dst_nodes, num_indices, num_channels, manager.device
     )
-    
+
     if partition_scheme == "lat_lon_bbox":
-        x_src, x_dst = get_random_lat_lon_coordinates(num_src_nodes, num_dst_nodes, manager.device)
+        x_src, x_dst = get_random_lat_lon_coordinates(
+            num_src_nodes, num_dst_nodes, manager.device
+        )
         min_seps, max_seps = get_lat_lon_partition_separators(manager.world_size)
         graph_partition = partition_graph_by_coordinate_bbox(
-            offsets, indices,
-            x_src, x_dst,
-            min_seps, max_seps,
+            offsets,
+            indices,
+            x_src,
+            x_dst,
+            min_seps,
+            max_seps,
             partition_size=manager.world_size,
             partition_rank=manager.rank,
             device=manager.device,
         ).to(device=manager.device)
-    
+
     else:
         graph_partition = None
 
@@ -164,13 +177,15 @@ def run_test_distributed_graph(
 
     # src-feat
     for scatter_features in [False, True]:
-        for get_on_all_ranks in [False, True]:     
-            src_feat.grad = None      
+        for get_on_all_ranks in [False, True]:
+            src_feat.grad = None
             local_src_feat = dist_graph.get_src_node_features_in_partition(
-                src_feat, scatter_features=scatter_features,
+                src_feat,
+                scatter_features=scatter_features,
             )
             global_src_feat = dist_graph.get_global_src_node_features(
-                local_src_feat, get_on_all_ranks=get_on_all_ranks,
+                local_src_feat,
+                get_on_all_ranks=get_on_all_ranks,
             )
             torch.distributed.barrier()
             loss = global_src_feat.sum()
@@ -180,7 +195,7 @@ def run_test_distributed_graph(
             torch.distributed.barrier()
 
             if get_on_all_ranks or (dist_graph.partition_rank == 0):
-               assert torch.allclose(global_src_feat, src_feat)
+                assert torch.allclose(global_src_feat, src_feat)
 
             if scatter_features:
                 if dist_graph.partition_rank == 0:
@@ -188,23 +203,27 @@ def run_test_distributed_graph(
             else:
                 with torch.no_grad():
                     grad_local = dist_graph.get_src_node_features_in_partition(
-                        src_feat.grad, scatter_features=False,
+                        src_feat.grad,
+                        scatter_features=False,
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_src_feat))
-            
+
             torch.distributed.barrier()
 
             # test "local-graph" by comparing against simpel reduction on "global graph"
             global_src_feat = src_feat.detach().clone()
             global_src_feat.requires_grad_(True)
-            src_feat.grad = None      
+            src_feat.grad = None
             local_src_feat = dist_graph.get_src_node_features_in_partition(
-                src_feat, scatter_features=scatter_features,
+                src_feat,
+                scatter_features=scatter_features,
             )
 
             global_agg = scatter_reduce(global_src_feat, offsets, indices)
 
-            local_src_feat = dist_graph.get_src_node_features_in_local_graph(local_src_feat)
+            local_src_feat = dist_graph.get_src_node_features_in_local_graph(
+                local_src_feat
+            )
 
             torch.distributed.barrier()
 
@@ -214,7 +233,8 @@ def run_test_distributed_graph(
                 dist_graph.graph_partition.local_indices,
             )
             local_agg = dist_graph.get_global_dst_node_features(
-                local_agg, get_on_all_ranks=get_on_all_ranks,
+                local_agg,
+                get_on_all_ranks=get_on_all_ranks,
             )
             if get_on_all_ranks or (dist_graph.partition_rank == 0):
                 diff = torch.abs(local_agg - global_agg)
@@ -236,10 +256,12 @@ def run_test_distributed_graph(
             else:
                 with torch.no_grad():
                     grad_local = dist_graph.get_src_node_features_in_partition(
-                        src_feat.grad, scatter_features=False,
+                        src_feat.grad,
+                        scatter_features=False,
                     )
                     grad_global_local = dist_graph.get_src_node_features_in_partition(
-                        global_src_feat.grad, scatter_features=False,
+                        global_src_feat.grad,
+                        scatter_features=False,
                     )
                     assert torch.allclose(grad_local, grad_global_local)
 
@@ -247,13 +269,15 @@ def run_test_distributed_graph(
 
     # dst-feat
     for scatter_features in [False, True]:
-        for get_on_all_ranks in [False, True]:         
-            dst_feat.grad = None   
+        for get_on_all_ranks in [False, True]:
+            dst_feat.grad = None
             local_dst_feat = dist_graph.get_dst_node_features_in_partition(
-                dst_feat, scatter_features=scatter_features,
+                dst_feat,
+                scatter_features=scatter_features,
             )
             global_dst_feat = dist_graph.get_global_dst_node_features(
-                local_dst_feat, get_on_all_ranks=get_on_all_ranks,
+                local_dst_feat,
+                get_on_all_ranks=get_on_all_ranks,
             )
 
             torch.distributed.barrier()
@@ -264,7 +288,7 @@ def run_test_distributed_graph(
             torch.distributed.barrier()
 
             if get_on_all_ranks:
-               assert torch.allclose(global_dst_feat, dst_feat)
+                assert torch.allclose(global_dst_feat, dst_feat)
             else:
                 if dist_graph.partition_rank == 0:
                     assert torch.allclose(global_dst_feat, dst_feat)
@@ -276,7 +300,8 @@ def run_test_distributed_graph(
                 grad = dst_feat.grad
                 with torch.no_grad():
                     grad_local = dist_graph.get_dst_node_features_in_partition(
-                        grad, scatter_features=False,
+                        grad,
+                        scatter_features=False,
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_dst_feat))
 
@@ -287,10 +312,12 @@ def run_test_distributed_graph(
         for get_on_all_ranks in [False, True]:
             edge_feat.grad = None
             local_edge_feat = dist_graph.get_edge_features_in_partition(
-                edge_feat, scatter_features=scatter_features,
+                edge_feat,
+                scatter_features=scatter_features,
             )
             global_edge_feat = dist_graph.get_global_edge_features(
-                local_edge_feat, get_on_all_ranks=get_on_all_ranks,
+                local_edge_feat,
+                get_on_all_ranks=get_on_all_ranks,
             )
 
             torch.distributed.barrier()
@@ -301,7 +328,7 @@ def run_test_distributed_graph(
             torch.distributed.barrier()
 
             if get_on_all_ranks:
-               assert torch.allclose(global_edge_feat, edge_feat)
+                assert torch.allclose(global_edge_feat, edge_feat)
             else:
                 if dist_graph.partition_rank == 0:
                     assert torch.allclose(global_edge_feat, edge_feat)
@@ -313,12 +340,12 @@ def run_test_distributed_graph(
                 grad = edge_feat.grad
                 with torch.no_grad():
                     grad_local = dist_graph.get_edge_features_in_partition(
-                        edge_feat.grad, scatter_features=False,
+                        edge_feat.grad,
+                        scatter_features=False,
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_edge_feat))
 
             torch.distributed.barrier()
-
 
     if not use_torchrun:
         DistributedManager.cleanup()
@@ -334,7 +361,7 @@ def run_test_distributed_graph(
 def test_distributed_graph(partition_scheme):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    world_size = 2 # num_gpus
+    world_size = 2  # num_gpus
 
     torch.set_num_threads(1)
     torch.multiprocessing.spawn(

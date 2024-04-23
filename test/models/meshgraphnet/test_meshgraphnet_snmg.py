@@ -227,7 +227,10 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         diff = torch.abs(diff)
         mask = diff > atol_w
         assert torch.allclose(
-            param.grad, model_multi_gpu_parameters[param_idx].grad, atol=atol_w, rtol=rtol_w
+            param.grad,
+            model_multi_gpu_parameters[param_idx].grad,
+            atol=atol_w,
+            rtol=rtol_w,
         ), f"{mask.sum()} elements have diff > {atol_w} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
 
     # cleanup distributed

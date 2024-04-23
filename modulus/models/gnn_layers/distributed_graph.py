@@ -143,7 +143,7 @@ class GraphPartition:
 
         # handle scatter_indices separately
         self.scatter_indices = [idx.to(*args, **kwargs) for idx in self.scatter_indices]
-        
+
         return self
 
 
@@ -205,17 +205,29 @@ def partition_graph_with_id_mapping(
     dst_nodes_in_each_partition = [None] * partition_size
     src_nodes_in_each_partition = [None] * partition_size
     num_dst_nodes_in_each_partition = [None] * partition_size
-    num_src_nodes_in_each_partition = [None] * partition_size   
+    num_src_nodes_in_each_partition = [None] * partition_size
 
     dtype = global_indices.dtype
     input_device = global_indices.device
 
-    graph_partition.map_concatenated_local_src_ids_to_global = torch.empty_like(mapping_src_ids_to_ranks)
-    graph_partition.map_concatenated_local_dst_ids_to_global = torch.empty_like(mapping_dst_ids_to_ranks)
-    graph_partition.map_concatenated_local_edge_ids_to_global = torch.empty_like(global_indices)
-    graph_partition.map_global_src_ids_to_concatenated_local = torch.empty_like(mapping_src_ids_to_ranks)
-    graph_partition.map_global_dst_ids_to_concatenated_local = torch.empty_like(mapping_dst_ids_to_ranks)
-    graph_partition.map_global_edge_ids_to_concatenated_local = torch.empty_like(global_indices)
+    graph_partition.map_concatenated_local_src_ids_to_global = torch.empty_like(
+        mapping_src_ids_to_ranks
+    )
+    graph_partition.map_concatenated_local_dst_ids_to_global = torch.empty_like(
+        mapping_dst_ids_to_ranks
+    )
+    graph_partition.map_concatenated_local_edge_ids_to_global = torch.empty_like(
+        global_indices
+    )
+    graph_partition.map_global_src_ids_to_concatenated_local = torch.empty_like(
+        mapping_src_ids_to_ranks
+    )
+    graph_partition.map_global_dst_ids_to_concatenated_local = torch.empty_like(
+        mapping_dst_ids_to_ranks
+    )
+    graph_partition.map_global_edge_ids_to_concatenated_local = torch.empty_like(
+        global_indices
+    )
     _map_global_src_ids_to_local = torch.empty_like(mapping_src_ids_to_ranks)
 
     # temporarily track cum-sum of nodes per partition for "concatenated_local_ids"
@@ -248,7 +260,7 @@ def partition_graph_with_id_mapping(
         ids = src_nodes_in_each_partition[rank]
         mapped_ids = torch.arange(
             start=_src_id_offset,
-            end=_src_id_offset+ids.numel(),
+            end=_src_id_offset + ids.numel(),
             dtype=dtype,
             device=input_device,
         )
@@ -260,7 +272,7 @@ def partition_graph_with_id_mapping(
         ids = dst_nodes_in_each_partition[rank]
         mapped_ids = torch.arange(
             start=_dst_id_offset,
-            end=_dst_id_offset+ids.numel(),
+            end=_dst_id_offset + ids.numel(),
             dtype=dtype,
             device=input_device,
         )
@@ -280,7 +292,8 @@ def partition_graph_with_id_mapping(
         local_offsets = torch.cat(
             [
                 torch.Tensor([0]).to(
-                    dtype=dtype, device=input_device,
+                    dtype=dtype,
+                    device=input_device,
                 ),
                 local_offsets,
             ]
@@ -293,14 +306,17 @@ def partition_graph_with_id_mapping(
                     end=offset_end[i],
                     dtype=dtype,
                     device=input_device,
-                ) 
+                )
                 for i in range(len(offset_start))
             ]
         )
 
         ids = partitioned_edge_ids
         mapped_ids = torch.arange(
-            _edge_id_offset, _edge_id_offset+ids.numel(), device=ids.device, dtype=ids.dtype,
+            _edge_id_offset,
+            _edge_id_offset + ids.numel(),
+            device=ids.device,
+            dtype=ids.dtype,
         )
         graph_partition.map_global_edge_ids_to_concatenated_local[ids] = mapped_ids
         graph_partition.map_concatenated_local_edge_ids_to_global[mapped_ids] = ids
@@ -342,7 +358,7 @@ def partition_graph_with_id_mapping(
                 dtype=dtype,
             )
             _num_local_indices += numel_mask
-            tmp_map = global_src_ids_on_rank[mask] 
+            tmp_map = global_src_ids_on_rank[mask]
             _map_global_src_ids_to_local_graph[tmp_map] = tmp_ids
 
         local_indices = _map_global_src_ids_to_local_graph[partitioned_src_ids]
@@ -355,17 +371,15 @@ def partition_graph_with_id_mapping(
             graph_partition.num_local_indices = graph_partition.local_indices.size(0)
             graph_partition.num_local_dst_nodes = num_dst_nodes_in_each_partition[rank]
             graph_partition.num_local_src_nodes = global_src_ids_on_rank.size(0)
-            
+
             # partition-local mappings (local IDs to global)
             graph_partition.map_partitioned_src_ids_to_global = (
                 src_nodes_in_each_partition[rank]
             )
-            graph_partition.map_partitioned_dst_ids_to_global= (
+            graph_partition.map_partitioned_dst_ids_to_global = (
                 dst_nodes_in_each_partition[rank]
             )
-            graph_partition.map_partitioned_edge_ids_to_global = (
-                partitioned_edge_ids
-            )
+            graph_partition.map_partitioned_edge_ids_to_global = partitioned_edge_ids
 
     for r in range(graph_partition.partition_size):
         err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
@@ -734,7 +748,9 @@ class DistributedGraph:
             self.graph_partition = graph_partition
 
         send_sizes = self.graph_partition.sizes[self.graph_partition.partition_rank]
-        recv_sizes = [p[self.graph_partition.partition_rank] for p in self.graph_partition.sizes]
+        recv_sizes = [
+            p[self.graph_partition.partition_rank] for p in self.graph_partition.sizes
+        ]
         msg = f"GraphPartition(rank={self.graph_partition.partition_rank}, "
         msg += f"num_local_src_nodes={self.graph_partition.num_local_src_nodes}, "
         msg += f"num_local_dst_nodes={self.graph_partition.num_local_dst_nodes}, "
@@ -754,7 +770,9 @@ class DistributedGraph:
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
         if scatter_features:
-            global_node_features = global_node_features[self.graph_partition.map_concatenated_local_src_ids_to_global]
+            global_node_features = global_node_features[
+                self.graph_partition.map_concatenated_local_src_ids_to_global
+            ]
             return scatter_v(
                 global_node_features,
                 self.graph_partition.num_src_nodes_in_each_partition,
@@ -822,7 +840,9 @@ class DistributedGraph:
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
         if scatter_features:
-            global_edge_features = global_edge_features[self.graph_partition.map_concatenated_local_edge_ids_to_global]
+            global_edge_features = global_edge_features[
+                self.graph_partition.map_concatenated_local_edge_ids_to_global
+            ]
             return scatter_v(
                 global_edge_features,
                 self.graph_partition.num_indices_in_each_partition,
@@ -861,7 +881,9 @@ class DistributedGraph:
                 group=self.process_group,
             )
             if self.graph_partition.partition_rank == dst_rank:
-                global_node_feat = global_node_feat[self.graph_partition.map_global_src_ids_to_concatenated_local]
+                global_node_feat = global_node_feat[
+                    self.graph_partition.map_global_src_ids_to_concatenated_local
+                ]
 
             return global_node_feat
 
@@ -872,9 +894,11 @@ class DistributedGraph:
             use_fp32=True,
             group=self.process_group,
         )
-        global_node_feat = global_node_feat[self.graph_partition.map_global_src_ids_to_concatenated_local]
+        global_node_feat = global_node_feat[
+            self.graph_partition.map_global_src_ids_to_concatenated_local
+        ]
         return global_node_feat
-        
+
     def get_global_dst_node_features(
         self,
         partitioned_node_features: torch.Tensor,
@@ -894,8 +918,10 @@ class DistributedGraph:
                 group=self.process_group,
             )
             if self.graph_partition.partition_rank == dst_rank:
-                global_node_feat = global_node_feat[self.graph_partition.map_global_dst_ids_to_concatenated_local]
-            
+                global_node_feat = global_node_feat[
+                    self.graph_partition.map_global_dst_ids_to_concatenated_local
+                ]
+
             return global_node_feat
 
         global_node_feat = all_gather_v(
@@ -905,7 +931,9 @@ class DistributedGraph:
             use_fp32=True,
             group=self.process_group,
         )
-        global_node_feat = global_node_feat[self.graph_partition.map_global_dst_ids_to_concatenated_local]
+        global_node_feat = global_node_feat[
+            self.graph_partition.map_global_dst_ids_to_concatenated_local
+        ]
         return global_node_feat
 
     def get_global_edge_features(
@@ -927,7 +955,9 @@ class DistributedGraph:
                 group=self.process_group,
             )
             if self.graph_partition.partition_rank == dst_rank:
-                global_edge_feat = global_edge_feat[self.graph_partition.map_global_edge_ids_to_concatenated_local]
+                global_edge_feat = global_edge_feat[
+                    self.graph_partition.map_global_edge_ids_to_concatenated_local
+                ]
             return global_edge_feat
 
         global_edge_feat = all_gather_v(
@@ -937,5 +967,7 @@ class DistributedGraph:
             use_fp32=True,
             group=self.process_group,
         )
-        global_edge_feat = global_edge_feat[self.graph_partition.map_global_edge_ids_to_concatenated_local]
+        global_edge_feat = global_edge_feat[
+            self.graph_partition.map_global_edge_ids_to_concatenated_local
+        ]
         return global_edge_feat
