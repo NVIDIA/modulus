@@ -20,12 +20,13 @@ import torch
 from modulus.models.dlwp_healpix_layers import (
     UNetEncoder,
     UNetDecoder,
-    MaxPool, # for downsampling
-    TransposedConvUpsample, # for upsampling
-    ConvNeXtBlock, # for convolutional layer
-    BasicConvBlock, # for the output layer
-    ConvGRUBlock, # for the recurrent layer
+    MaxPool,  # for downsampling
+    TransposedConvUpsample,  # for upsampling
+    ConvNeXtBlock,  # for convolutional layer
+    BasicConvBlock,  # for the output layer
+    ConvGRUBlock,  # for the recurrent layer
 )
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_initialize(device):
@@ -35,19 +36,19 @@ def test_UNetEncoder_initialize(device):
 
     # Dicts for block configs used by encoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": channels,
     }
     down_sampling_block = {
-       "_target_":MaxPool,
-       "pooling":2,
+        "_target_": MaxPool,
+        "pooling": 2,
     }
 
     encoder = UNetEncoder(
         conv_block=conv_block,
         down_sampling_block=down_sampling_block,
-        n_channels = n_channels,
-        input_channels = channels,
+        n_channels=n_channels,
+        input_channels=channels,
     ).to(device)
     assert isinstance(encoder, UNetEncoder)
 
@@ -55,11 +56,12 @@ def test_UNetEncoder_initialize(device):
     encoder = UNetEncoder(
         conv_block=conv_block,
         down_sampling_block=down_sampling_block,
-        n_channels = n_channels,
-        input_channels = channels,
-        dilations=(1,1,1)
+        n_channels=n_channels,
+        input_channels=channels,
+        dilations=(1, 1, 1),
     ).to(device)
     assert isinstance(encoder, UNetEncoder)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_forward(device):
@@ -70,22 +72,22 @@ def test_UNetEncoder_forward(device):
 
     # Dicts for block configs used by encoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": channels,
     }
     down_sampling_block = {
-       "_target_":MaxPool,
-       "pooling":2,
+        "_target_": MaxPool,
+        "pooling": 2,
     }
 
     encoder = UNetEncoder(
         conv_block=conv_block,
         down_sampling_block=down_sampling_block,
-        n_channels = n_channels,
-        input_channels = channels,
+        n_channels=n_channels,
+        input_channels=channels,
     ).to(device)
 
-    tensor_size = [b_size,channels,hw_size,hw_size]
+    tensor_size = [b_size, channels, hw_size, hw_size]
     invar = torch.rand(tensor_size).to(device)
     outvar = encoder(invar)
 
@@ -97,7 +99,8 @@ def test_UNetEncoder_forward(device):
         # verify the channels and h dim are correct
         assert out_tensor.shape[1] == n_channels[idx]
         # default behaviour is to half the h/w size after first
-        assert out_tensor.shape[2] == tensor_size[2] // (2 ** idx)
+        assert out_tensor.shape[2] == tensor_size[2] // (2**idx)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_reset(device):
@@ -108,24 +111,25 @@ def test_UNetEncoder_reset(device):
 
     # Dicts for block configs used by encoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": channels,
     }
     down_sampling_block = {
-       "_target_":MaxPool,
-       "pooling":2,
+        "_target_": MaxPool,
+        "pooling": 2,
     }
 
     encoder = UNetEncoder(
         conv_block=conv_block,
         down_sampling_block=down_sampling_block,
-        n_channels = n_channels,
-        input_channels = channels,
+        n_channels=n_channels,
+        input_channels=channels,
     ).to(device)
 
     # doesn't do anything
     encoder.reset()
     assert isinstance(encoder, UNetEncoder)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetDecoder_initilization(device):
@@ -136,19 +140,19 @@ def test_UNetDecoder_initilization(device):
 
     # Dicts for block configs used by decoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":in_channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": in_channels,
     }
-    
+
     up_sampling_block = {
-       "_target_":TransposedConvUpsample,
-       "in_channels":in_channels,
-       "out_channels":out_channels,
-       "upsampling":2,
+        "_target_": TransposedConvUpsample,
+        "in_channels": in_channels,
+        "out_channels": out_channels,
+        "upsampling": 2,
     }
 
     output_layer = {
-        "_target_":BasicConvBlock,
+        "_target_": BasicConvBlock,
         "in_channels": in_channels,
         "out_channels": out_channels,
         "kernel_size": 1,
@@ -157,29 +161,29 @@ def test_UNetDecoder_initilization(device):
     }
 
     recurrent_block = {
-        "_target_":ConvGRUBlock,
-        "in_channels":2,
-        "kernel_size":1,
+        "_target_": ConvGRUBlock,
+        "in_channels": 2,
+        "kernel_size": 1,
     }
 
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = recurrent_block,
-        n_channels = n_channels,
+        output_layer=output_layer,
+        recurrent_block=recurrent_block,
+        n_channels=n_channels,
     ).to(device)
 
     assert isinstance(decoder, UNetDecoder)
 
-    #without the recurrent block and with dilations
+    # without the recurrent block and with dilations
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = None,
-        n_channels = n_channels,
-        dilations=(1,1,1),
+        output_layer=output_layer,
+        recurrent_block=None,
+        n_channels=n_channels,
+        dilations=(1, 1, 1),
     ).to(device)
     assert isinstance(decoder, UNetDecoder)
 
@@ -194,19 +198,19 @@ def test_UNetDecoder_forward(device):
 
     # Dicts for block configs used by decoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":in_channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": in_channels,
     }
-    
+
     up_sampling_block = {
-       "_target_":TransposedConvUpsample,
-       "in_channels":in_channels,
-       "out_channels":out_channels,
-       "upsampling":2,
+        "_target_": TransposedConvUpsample,
+        "in_channels": in_channels,
+        "out_channels": out_channels,
+        "upsampling": 2,
     }
 
     output_layer = {
-        "_target_":BasicConvBlock,
+        "_target_": BasicConvBlock,
         "in_channels": in_channels,
         "out_channels": out_channels,
         "kernel_size": 1,
@@ -215,17 +219,17 @@ def test_UNetDecoder_forward(device):
     }
 
     recurrent_block = {
-        "_target_":ConvGRUBlock,
-        "in_channels":2,
-        "kernel_size":1,
+        "_target_": ConvGRUBlock,
+        "in_channels": 2,
+        "kernel_size": 1,
     }
 
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = recurrent_block,
-        n_channels = n_channels,
+        output_layer=output_layer,
+        recurrent_block=recurrent_block,
+        n_channels=n_channels,
     ).to(device)
 
     expected_size = torch.Size([b_size, out_channels, hw_size, hw_size])
@@ -233,8 +237,8 @@ def test_UNetDecoder_forward(device):
     # build the list of tensors for the decoder
     invars = []
     # decoder has an algorithm that goes back to front
-    for idx in range(len(n_channels)-1,-1,-1):
-        tensor_size = [b_size,n_channels[idx],hw_size,hw_size]
+    for idx in range(len(n_channels) - 1, -1, -1):
+        tensor_size = [b_size, n_channels[idx], hw_size, hw_size]
         invars.append(torch.rand(tensor_size).to(device))
         hw_size = hw_size // 2
 
@@ -249,10 +253,10 @@ def test_UNetDecoder_forward(device):
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = None,
-        n_channels = n_channels,
-        dilations=(1,1,1),
+        output_layer=output_layer,
+        recurrent_block=None,
+        n_channels=n_channels,
+        dilations=(1, 1, 1),
     ).to(device)
 
     outvar = decoder(invars)
@@ -267,21 +271,21 @@ def test_UNetDecoder_reset(device):
     b_size = 12
     n_channels = (64, 32, 16)
 
-        # Dicts for block configs used by decoder
+    # Dicts for block configs used by decoder
     conv_block = {
-        "_target_":ConvNeXtBlock,
-        "in_channels":in_channels,
+        "_target_": ConvNeXtBlock,
+        "in_channels": in_channels,
     }
-    
+
     up_sampling_block = {
-       "_target_":TransposedConvUpsample,
-       "in_channels":in_channels,
-       "out_channels":out_channels,
-       "upsampling":2,
+        "_target_": TransposedConvUpsample,
+        "in_channels": in_channels,
+        "out_channels": out_channels,
+        "upsampling": 2,
     }
 
     output_layer = {
-        "_target_":BasicConvBlock,
+        "_target_": BasicConvBlock,
         "in_channels": in_channels,
         "out_channels": out_channels,
         "kernel_size": 1,
@@ -290,27 +294,27 @@ def test_UNetDecoder_reset(device):
     }
 
     recurrent_block = {
-        "_target_":ConvGRUBlock,
-        "in_channels":2,
-        "kernel_size":1,
+        "_target_": ConvGRUBlock,
+        "in_channels": 2,
+        "kernel_size": 1,
     }
 
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = recurrent_block,
-        n_channels = n_channels,
+        output_layer=output_layer,
+        recurrent_block=recurrent_block,
+        n_channels=n_channels,
     ).to(device)
 
     # build the list of tensors for the decoder
     invars = []
     # decoder has an algorithm that goes back to front
-    for idx in range(len(n_channels)-1,-1,-1):
-        tensor_size = [b_size,n_channels[idx],hw_size,hw_size]
+    for idx in range(len(n_channels) - 1, -1, -1):
+        tensor_size = [b_size, n_channels[idx], hw_size, hw_size]
         invars.append(torch.rand(tensor_size).to(device))
         hw_size = hw_size // 2
-    
+
     outvar = decoder(invars)
 
     # make sure history is taken into account with ConvGRU
@@ -326,9 +330,9 @@ def test_UNetDecoder_reset(device):
     decoder = UNetDecoder(
         conv_block=conv_block,
         up_sampling_block=up_sampling_block,
-        output_layer = output_layer,
-        recurrent_block = None,
-        n_channels = n_channels,
+        output_layer=output_layer,
+        recurrent_block=None,
+        n_channels=n_channels,
     ).to(device)
 
     outvar = decoder(invars)

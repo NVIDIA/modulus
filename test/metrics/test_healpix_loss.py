@@ -53,7 +53,7 @@ class trainer_helper:
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     mse_func = BaseMSE()
-    mse_func.setup(None) # for coverage
+    mse_func.setup(None)  # for coverage
     channels, pred_tensor_np, targ_tensor_np = test_data()
 
     pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels, -1, -1)
@@ -107,9 +107,9 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     targ_tensor = targ_tensor.contiguous()
     pred_tensor[0, 0, 0, -1, ...] = ones[...]
     targ_tensor[0, 0, 0, -1, ...] = ones[...]
-    
+
     error = mse_func(pred_tensor**2, targ_tensor**2, average_channels=False)
-    
+
     expected_err = 0.25 * torch.ones(error.shape, dtype=torch.float32, device=device)
     expected_err[-1] = 0
 
@@ -121,14 +121,10 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
 
-
-
-
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     num_channels = 3
     channels, pred_tensor_np, targ_tensor_np = test_data(channels=num_channels)
-
 
     # first two channels will be as BaseMSE above, the last channel will be 0 loss
     # so per channel loss will be [0.25, 0.25, 0]
@@ -146,7 +142,7 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     )
     weighted_mse_func.setup(trainer)
 
-    # test setup fail case if number of variables doesn't match number of weights 
+    # test setup fail case if number of variables doesn't match number of weights
     trainer = trainer_helper(
         output_variables=["a", "b"],
         device=device,

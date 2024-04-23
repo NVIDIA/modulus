@@ -352,13 +352,13 @@ def create_time_series_dataset_classic(
     logger.info("writing unified dataset to file (takes long!)")
 
     # writing out
-    def write_zarr(data, path):
+    def _write_zarr(data, path):
         write_job = data.to_zarr(path, compute=False, mode="w")
         with ProgressBar():
             logger.info(f"writing dataset to {path}")
             write_job.compute()
 
-    write_zarr(data=result, path=dst_zarr)
+    _write_zarr(data=result, path=dst_zarr)
 
     return result
 

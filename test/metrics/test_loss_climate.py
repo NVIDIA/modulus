@@ -36,7 +36,6 @@ def test_MSE_SSIM(device):
     model = Model()
 
     # test for invalid weights
-    
 
     with pytest.raises(
         ValueError, match="Weights passed to MSE_SSIM loss must sum to 1"
@@ -53,13 +52,11 @@ def test_MSE_SSIM(device):
         AssertionError, match="Spatial dims H and W must match: got 128 and 64"
     ):
         mse_ssim_loss(ones, ones, model)
-    
+
     # test for fail case of F != 12
     shape = [1, 1, 2, 8, 64, 64]
     ones = torch.ones(shape).to(device)
-    with pytest.raises(
-        AssertionError, match="Spatial dim F must be 12: got 8"
-    ):
+    with pytest.raises(AssertionError, match="Spatial dim F must be 12: got 8"):
         mse_ssim_loss(ones, ones, model)
 
     # test for fail case of number of channels not matching number of weights
@@ -79,7 +76,7 @@ def test_MSE_SSIM(device):
         match="Number of time steps in prediction must equal to model output time dim, or model output time dime divided by model input time dim",
     ):
         mse_ssim_loss(ones, ones, model)
-    
+
     shape = [1, 1, 2, 12, 128, 128]
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
@@ -92,69 +89,72 @@ def test_MSE_SSIM(device):
     assert mse_ssim_loss(invar, zeros, model) == 0.5
 
     # test with SSIM and 1 SSIM variable and 1 non SSIM variable
-    ssim_variables = ['t2m', 'u10m']
+    ssim_variables = ["t2m", "u10m"]
     ssim_params = {
-        'window_size':11,
-        'padding_mode':'constant',
-        'time_series_forecasting':True,
+        "window_size": 11,
+        "padding_mode": "constant",
+        "time_series_forecasting": True,
     }
-    mse_ssim_loss = MSE_SSIM(ssim_variables=ssim_variables,ssim_params=ssim_params)
-    
+    mse_ssim_loss = MSE_SSIM(ssim_variables=ssim_variables, ssim_params=ssim_params)
+
     assert mse_ssim_loss(invar, zeros, model) == 0.5
 
     # test providing all params
     weights = [0.75, 0.25]
     mse_params = {
-        'reduction':'sum',
+        "reduction": "sum",
     }
-    ssim_variables = ["ttr1h", "tcwv0"] #['t2m', 'u10m']
+    ssim_variables = ["ttr1h", "tcwv0"]  # ['t2m', 'u10m']
     ssim_params = {
-        'window_size':11,
-        'padding_mode':'constant',
-        'time_series_forecasting':True,
+        "window_size": 11,
+        "padding_mode": "constant",
+        "time_series_forecasting": True,
     }
     mse_ssim_loss = MSE_SSIM(
         weights=weights,
         mse_params=mse_params,
         ssim_params=ssim_params,
-        ssim_variables=ssim_variables
+        ssim_variables=ssim_variables,
     )
-    
+
     # since we're using sum as the reduction instead of mean
     # difference is c * h * w
-    expected = ones[0,0,0,...].sum()
+    expected = ones[0, 0, 0, ...].sum()
     assert mse_ssim_loss(ones, zeros, model) == expected
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_SSIM(device):
     """Test SSIM loss in loss"""
-    ssim_loss = SSIM(time_series_forecasting = False)
+    ssim_loss = SSIM(time_series_forecasting=False)
 
-    four_dim_var = torch.randn([2,2,2,2]).to(device)
-    six_dim_var = torch.randn([2,2,2,2,2,2]).to(device)
+    four_dim_var = torch.randn([2, 2, 2, 2]).to(device)
+    six_dim_var = torch.randn([2, 2, 2, 2, 2, 2]).to(device)
 
     # Test fail cases
     # dimensions don't match
     with pytest.raises(
-        AssertionError, match="Predicted and target tensor need to have the same number of dimensions"
+        AssertionError,
+        match="Predicted and target tensor need to have the same number of dimensions",
     ):
         ssim_loss(four_dim_var, six_dim_var)
-    
+
     # wrong dimensions without timeseries forecasting
     with pytest.raises(
-        AssertionError, match=("Need 4 or 5 dimensions when not using time series forecasting")
+        AssertionError,
+        match=("Need 4 or 5 dimensions when not using time series forecasting"),
     ):
         ssim_loss(six_dim_var, six_dim_var)
 
     # wrong dimensions with timeseries forecasting
-    ssim_loss = SSIM(time_series_forecasting = True)
+    ssim_loss = SSIM(time_series_forecasting=True)
     with pytest.raises(
-        AssertionError, match=("Need 5 or 6 dimensions when using time series forecasting")
+        AssertionError,
+        match=("Need 5 or 6 dimensions when using time series forecasting"),
     ):
-        ssim_loss(four_dim_var,four_dim_var) 
+        ssim_loss(four_dim_var, four_dim_var)
 
-    ssim_loss = SSIM(time_series_forecasting = True)
+    ssim_loss = SSIM(time_series_forecasting=True)
     # 5 or 6 time series True
     # 4 or 5 time series False
     shape = [1, 1, 2, 2, 720, 720]
@@ -191,5 +191,3 @@ def test_SSIM(device):
     # test the case of being below the mse_epoch threshold
     loss = ssim_loss(eye, torch.roll(eye, 1, -1), epoch=-1)  # ~0.9729
     assert loss == F.mse_loss(eye, torch.roll(eye, 1, -1))
-
-    

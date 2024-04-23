@@ -35,6 +35,7 @@ class MulX(torch.nn.Module):
     def forward(self, x):
         return x * self.multiplier
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixFoldFaces_initialization(device):
     fold_func = HEALPixFoldFaces()
@@ -54,12 +55,14 @@ def test_HEALPixFoldFaces_forward(device):
 
     fold_func = HEALPixFoldFaces(enable_nhwc=True)
     assert fold_func(invar).shape == outvar.shape
-    assert fold_func(invar).stride() != outvar.stride() 
+    assert fold_func(invar).stride() != outvar.stride()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUnfoldFaces_initialization(device):
     unfold_func = HEALPixUnfoldFaces()
     assert isinstance(unfold_func, HEALPixUnfoldFaces)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUnfoldFaces_forward(device):
@@ -68,7 +71,7 @@ def test_HEALPixUnfoldFaces_forward(device):
 
     tensor_size = torch.randint(low=1, high=4, size=(4,)).tolist()
     output_size = (tensor_size[0], num_faces, *tensor_size[1:])
-    
+
     # first dim is B * num_faces
     tensor_size[0] *= num_faces
     invar = torch.ones(*tensor_size, device=device)
@@ -86,10 +89,12 @@ HEALPixPadding_testdata = [
     ("cpu", 4),
 ]
 
+
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
 def test_HEALPixPadding_initialization(device, padding):
     pad_func = HEALPixPadding(padding)
     assert isinstance(pad_func, HEALPixPadding)
+
 
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
 def test_HEALPixPadding_forward(device, padding):
@@ -102,7 +107,7 @@ def test_HEALPixPadding_forward(device, padding):
         ValueError, match=("invalid value for 'padding', expected int > 0 but got 0")
     ):
         pad_func = HEALPixPadding(0)
-    
+
     hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
     c_size = torch.randint(low=3, high=7, size=(1,)).tolist()
     hw_size = np.asarray(hw_size + hw_size)
@@ -130,10 +135,12 @@ HEALPixLayer_testdata = [
     ("cpu", 4),
 ]
 
+
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
 def test_HEALPixLayer_initialization(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
     assert isinstance(layer, HEALPixLayer)
+
 
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
 def test_HEALPixLayer_forward(device, multiplier):
@@ -153,7 +160,7 @@ def test_HEALPixLayer_forward(device, multiplier):
         out_channels=8,
         kernel_size=3,
         device=device,
-        #dilation=4,
+        # dilation=4,
     )
 
     outvar = layer(invar)

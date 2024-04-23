@@ -22,22 +22,23 @@ import torch as th
 
 logger = logging.getLogger(__name__)
 
+
 # TODO switch over to modulus checkpoint system
 def write_checkpoint(
-        model,
-        optimizer,
-        scheduler,
-        epoch: int,
-        iteration: int,
-        val_error: float,
-        epochs_since_improved: int,
-        dst_path: str,
-        keep_n_checkpoints: int = 5
-    ):
+    model,
+    optimizer,
+    scheduler,
+    epoch: int,
+    iteration: int,
+    val_error: float,
+    epochs_since_improved: int,
+    dst_path: str,
+    keep_n_checkpoints: int = 5,
+):
     """
     Writes a checkpoint including model, optimizer, and scheduler state dictionaries along with current epoch,
     iteration, and validation error to file.
-    
+
     :param model: The network model
     :param optimizer: The pytorch optimizer
     :param scheduler: The pytorch learning rate scheduler
@@ -49,12 +50,15 @@ def write_checkpoint(
     :param keep_n_checkpoints: Number of best checkpoints that will be saved (worse checkpoints are overwritten)
     """
     root_path = os.path.join(
-        dst_path, "checkpoints",
+        dst_path,
+        "checkpoints",
     )
     # root_path = os.path.dirname(ckpt_dst_path)
     ckpt_dst_path = os.path.join(
         root_path,
-        f"training-state-epoch-{str(epoch).zfill(4)}-val_loss=" + "{:.4E}".format(val_error) + ".mdlus",
+        f"training-state-epoch-{str(epoch).zfill(4)}-val_loss="
+        + "{:.4E}".format(val_error)
+        + ".mdlus",
     )
     os.makedirs(root_path, exist_ok=True)
 
@@ -63,22 +67,32 @@ def write_checkpoint(
 
     opt_dst_path = os.path.join(
         root_path,
-        f"optimizer-state-epoch-{str(epoch).zfill(4)}-val_loss=" + "{:.4E}".format(val_error) + ".ckpt",
+        f"optimizer-state-epoch-{str(epoch).zfill(4)}-val_loss="
+        + "{:.4E}".format(val_error)
+        + ".ckpt",
     )
-    th.save(obj={"optimizer_state_dict": optimizer.state_dict(),
-                 "scheduler_state_dict": scheduler.state_dict(),
-                 "epoch": epoch + 1,
-                 "iteration": iteration,
-                 "val_error": val_error,
-                 "epochs_since_improved": epochs_since_improved},
-            f=opt_dst_path)
-    th.save(obj={"optimizer_state_dict": optimizer.state_dict(),
-                 "scheduler_state_dict": scheduler.state_dict(),
-                 "epoch": epoch + 1,
-                 "iteration": iteration,
-                 "val_error": val_error,
-                 "epochs_since_improved": epochs_since_improved},
-            f=os.path.join(root_path, "optimizer-state-last.ckpt"))
+    th.save(
+        obj={
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "epoch": epoch + 1,
+            "iteration": iteration,
+            "val_error": val_error,
+            "epochs_since_improved": epochs_since_improved,
+        },
+        f=opt_dst_path,
+    )
+    th.save(
+        obj={
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "epoch": epoch + 1,
+            "iteration": iteration,
+            "val_error": val_error,
+            "epochs_since_improved": epochs_since_improved,
+        },
+        f=os.path.join(root_path, "optimizer-state-last.ckpt"),
+    )
 
     # Only keep top n checkpoints
     ckpt_paths = np.array(glob.glob(root_path + "/training-state-epoch-*.mdlus"))
@@ -94,13 +108,16 @@ def write_checkpoint(
                     pass
                 continue
             # Read the scientific number from the checkpoint name and perform update if appropriate
-            curr_error = float(re.findall("-?\d*\.?\d+E[+-]?\d+", os.path.basename(ckpt_path))[0])
+            curr_error = float(
+                re.findall("-?\d*\.?\d+E[+-]?\d+", os.path.basename(ckpt_path))[0]
+            )
             if curr_error > worst_error:
                 worst_path = ckpt_path
                 worst_error = curr_error
         os.remove(worst_path)
         try:
-            os.remove(worst_path.replace("training", "optimizer").replace("mdlus", "ckpt"))
+            os.remove(
+                worst_path.replace("training", "optimizer").replace("mdlus", "ckpt")
+            )
         except FileNotFoundError:
             pass
-
