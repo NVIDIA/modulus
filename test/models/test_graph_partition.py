@@ -27,7 +27,7 @@ from modulus.models.gnn_layers import (
 
 @pytest.fixture
 def global_graph():
-    # simple graph with a degree of 2 per node
+    """test fixture: simple graph with a degree of 2 per node"""
     num_src_nodes = 8
     num_dst_nodes = 4
     offsets = torch.arange(num_dst_nodes + 1, dtype=torch.int64) * 2
@@ -37,6 +37,7 @@ def global_graph():
 
 
 def assert_partitions_are_equal(a, b):
+    """test utility: check if a matches b"""
     attributes = [
         "partition_size",
         "partition_rank",

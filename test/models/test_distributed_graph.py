@@ -22,14 +22,13 @@ import torch
 from modulus.distributed import DistributedManager
 from modulus.models.gnn_layers import (
     DistributedGraph,
-    GraphPartition,
     partition_graph_by_coordinate_bbox,
-    partition_graph_nodewise,
 )
 from modulus.models.graphcast.graph_cast_net import get_lat_lon_partition_separators
 
 
 def get_random_graph(device):
+    """test utility: create random graph for this test"""
     num_src_nodes = 4321
     num_dst_nodes = 1234
     min_degree = 2
@@ -57,12 +56,9 @@ def get_random_graph(device):
 
 
 def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, device):
-    # src_feat = torch.randn((num_src_nodes, num_channels), dtype=torch.float32, device=device)
-    src_feat = (
-        torch.arange(num_src_nodes, device=device)
-        .to(dtype=torch.float32)
-        .view(num_src_nodes, 1)
-        .repeat(1, num_channels)
+    """test utility: create random node and edge features for given graph"""
+    src_feat = torch.randn(
+        (num_src_nodes, num_channels), dtype=torch.float32, device=device
     )
     dst_feat = torch.randn(
         (num_dst_nodes, num_channels), dtype=torch.float32, device=device
@@ -77,6 +73,7 @@ def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, dev
 
 
 def get_random_lat_lon_coordinates(num_src_nodes, num_dst_nodes, device):
+    """test utility: create random lat-lon coordintes for given graph nodes"""
     x_src = torch.rand(
         (num_src_nodes, 2),
         dtype=torch.float32,
@@ -97,6 +94,7 @@ def get_random_lat_lon_coordinates(num_src_nodes, num_dst_nodes, device):
 
 
 def broadcast(src: torch.Tensor, ref: torch.Tensor, dim: int) -> torch.Tensor:
+    """helper function for scatter_reduce"""
     size = ((1,) * dim) + (-1,) + ((1,) * (ref.dim() - dim - 1))
     return src.view(size).expand_as(ref)
 
@@ -106,6 +104,8 @@ def scatter_reduce(
     offsets: torch.Tensor,
     indices: torch.Tensor,
 ):
+    """helper function for message-passing without further dependencies
+    or graph format conversions"""
     num_dst = offsets.size(0) - 1
 
     src = feat[indices]
@@ -237,7 +237,6 @@ def run_test_distributed_graph(
                 get_on_all_ranks=get_on_all_ranks,
             )
             if get_on_all_ranks or (dist_graph.partition_rank == 0):
-                diff = torch.abs(local_agg - global_agg)
                 assert torch.allclose(local_agg, global_agg)
 
             torch.distributed.barrier()
@@ -251,7 +250,6 @@ def run_test_distributed_graph(
 
             if scatter_features:
                 if dist_graph.partition_rank == 0:
-                    diff = torch.abs(src_feat.grad - global_src_feat.grad)
                     assert torch.allclose(src_feat.grad, global_src_feat.grad)
             else:
                 with torch.no_grad():
