@@ -28,9 +28,14 @@ Full paper on:
 [Virtual Foundry Graphnet for Metal Sintering Deformation Prediction](https://arxiv.org/abs/2404.11753)
 
 For more sample parts simulation:
-
 <p align="center">
 <img src="../../../docs/img/vfgn_doc/busbar-video.gif" width="700" />
+</p>
+<p align="center">
+<img src="../../../docs/img/vfgn_doc/busbar%20(1).gif" width="700" />
+</p>
+<p align="center">
+<img src="../../../docs/img/vfgn_doc/screw.gif" width="700" />
 </p>
 
 ## Setup with Modulus package
