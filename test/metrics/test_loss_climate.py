@@ -79,7 +79,7 @@ def test_MSE_SSIM(device):
     ):
         mse_ssim_loss(ones, ones, model)
 
-    shape = [1, 1, 2, 12, 128, 128]
+    shape = [1, 1, 2, 12, 32, 32]
     ones = torch.ones(shape).to(device)
     zeros = torch.zeros(shape).to(device)
 
