@@ -21,8 +21,8 @@
 
 
 general:
-  mode: "rollout"   # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval_rollout', 'rollout']
-  eval_split: "test"  # Stored output dataset name, options: ['train', 'valid', 'test']
+  mode: "train"   # Train model, one step evaluation or rollout evaluation, options: ['train', 'eval_rollout', 'rollout']
+  eval_split: "train"  # Stored output dataset name, options: ['train', 'valid', 'test']
   device: "cuda:0"
   message_passing_devices: "['cuda:0']"
   fp16: False     # performance configs
@@ -42,7 +42,7 @@ train_options:
 data_options:
   data_path: "./data/2024-3-absnorm"
   noise_std: 0
-  ckpt_path_vfgn: "models/new24-gpus-mean_me_final/model_loss-2.72E-03_step-250.pt"
+  ckpt_path_vfgn: "models/new24-gpus-mean_me_final"
   output_path: "rollouts/test24"
   NUM_PARTICLE_TYPES: 3
   KINEMATIC_PARTICLE_ID: 0  # refers to anchor point

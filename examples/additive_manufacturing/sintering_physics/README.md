@@ -2,6 +2,32 @@
 
 # Virtual Foundary GraphNet
 
+## Introduction 
+
+Metal sintering is a necessary step for Metal Injection Molded parts and binder jetting such as 
+[HP’s metal 3D printer (MetJet)](https://www.hp.com/us-en/printers/3d-printers/products/metal-jet.html). 
+The metal sintering process introduces large deformation varying from 25% to 50% depending on the green part porosity. The final part's geometrical accuracy and consistency remain the top challenge to manufacturing yield. 
+This is due to: 
+
+1. Green parts out of MetJet printer are much more porous than other technologies (e.g., MIM); 
+2. Such shrinkage is not isotropic depending on non-uniform stress built up during the sintering process, e.g., gravitational sag, gravitational slump, surface drag.  
+
+In this work, we use a graph-based deep learning approach to predict the part deformation, 
+which can speed up the deformation simulation substantially at the voxel level. Running a well-trained Metal sintering inferencing engine only takes a range of seconds to obtain the final sintering deformation value. 
+
+<p align="center">
+<img src="../../../docs/img/vfgn_doc/HP-MetalJet-process.png" />
+</p>
+
+The tested accuracy on example complex geometry achieves 0.7um mean deviation for a 63mm testing part, for a single sintering step (equivalent to 8.3 minutes physical sintering time), and a 0.3mm mean deviation for the complete sintering cycle (~4 hrs physical sintering time).  
+
+
+
+For detailed paper on
+[Virtual Foundry Graphnet for Metal Sintering Deformation Prediction](https://arxiv.org/abs/2404.11753)
+
+
+
 ## Setup with Modulus package
 
 - Download Modulus, make or install
