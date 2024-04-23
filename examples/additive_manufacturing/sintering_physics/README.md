@@ -13,23 +13,25 @@ This is due to:
 2. Such shrinkage is not isotropic depending on non-uniform stress built up during the sintering process, e.g., gravitational sag, gravitational slump, surface drag.  
 
 <p align="center">
-<img src="../../../docs/img/vfgn_doc/HP-MetalJet-process.png" width="560" />
+<img src="../../../docs/img/vfgn_doc/HP-MetalJet-process.png" width="700" />
 </p>
-
 
 In this work, we use a graph-based deep learning approach to predict the part deformation, 
 which can speed up the deformation simulation substantially at the voxel level. Running a well-trained Metal sintering inferencing engine only takes a range of seconds to obtain the final sintering deformation value.
-
 The tested accuracy on example complex geometry achieves 0.7um mean deviation for a 63mm testing part, for a single sintering step (equivalent to 8.3 minutes physical sintering time), and a 0.3mm mean deviation for the complete sintering cycle (~4 hrs physical sintering time).  
 <p align="center">
-<img src="../../../docs/img/vfgn_doc/4-parts-final.png" width="560" />
+<img src="../../../docs/img/vfgn_doc/4-parts-final.png" width="700" />
 </p>
 
 
 Full paper on: 
 [Virtual Foundry Graphnet for Metal Sintering Deformation Prediction](https://arxiv.org/abs/2404.11753)
 
+For more sample parts simulation:
 
+<p align="center">
+<img src="../../../docs/img/vfgn_doc/busbar-video.gif" width="700" />
+</p>
 
 ## Setup with Modulus package
 
@@ -162,6 +164,9 @@ Defition of step_context & methods tried:
   ```bash
     tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'],[1, -1])
   ```
+
+## Disclaimer and future work 
+With the model prediction accuracy and fast inference speed, this work, as a component of HP’s Digital Twin effort, Virtual Foundry Graphnet led by HP Labs, aims to apply Physics-ML to significantly accelerate the computation that predicts the metal powder material phase transition. It has achieved orders of magnitude speed-up compared to physics simulation software while preserving reasonable accuracy. Furthermore, Virtual Foundry Graphnet has demonstrated an outstanding path forward to scaling for diverse parts of arbitrary geometrical complexity and scaling for different process parameter configurations. 
 
 ## Reference
 
