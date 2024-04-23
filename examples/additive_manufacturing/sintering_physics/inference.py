@@ -25,6 +25,7 @@ import time
 
 import numpy as np
 from tqdm import tqdm
+
 physical_devices = tf.config.list_physical_devices("GPU")
 
 try:
@@ -76,7 +77,10 @@ class Stats:
 
 def cast(v):
     return np.array(v, dtype=np.float64)
+
+
 device = "cpu"
+
 
 def Inference(rank_zero_logger, dist, cfg):
     """
@@ -102,15 +106,21 @@ def Inference(rank_zero_logger, dist, cfg):
     metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)
+        ),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)
+        ),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)
+        ),
     )
 
     normalization_stats = {
@@ -147,7 +157,7 @@ def Inference(rank_zero_logger, dist, cfg):
 
                 model.inference(
                     position_sequence=features["position"][
-                        :, 0:cfg.train_options.input_seq_len
+                        :, 0 : cfg.train_options.input_seq_len
                     ].to(device),
                     n_particles_per_example=features["n_particles_per_example"].to(
                         device
@@ -162,7 +172,9 @@ def Inference(rank_zero_logger, dist, cfg):
 
                 # Loading the pretrained model from model ckpt_path_vfgn
                 # For provided ckpt with missing keys, ignore
-                model.load_state_dict(torch.load(cfg.data_options.ckpt_path_vfgn), strict=False)
+                model.load_state_dict(
+                    torch.load(cfg.data_options.ckpt_path_vfgn), strict=False
+                )
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
                 rank_zero_logger.info(
@@ -176,9 +188,9 @@ def Inference(rank_zero_logger, dist, cfg):
                 model.eval()
                 loaded = True
 
-            initial_positions = features["position"][:, :cfg.train_options.input_seq_len].to(
-                device
-            )
+            initial_positions = features["position"][
+                :, : cfg.train_options.input_seq_len
+            ].to(device)
 
             global_context = features["step_context"].to(device)
             rank_zero_logger.info(
@@ -205,7 +217,9 @@ def Inference(rank_zero_logger, dist, cfg):
                     global_context_step = None
                     rank_zero_logger.info("global_context_step is None")
                 else:
-                    read_step_context = global_context[: step + cfg.train_options.input_seq_len]
+                    read_step_context = global_context[
+                        : step + cfg.train_options.input_seq_len
+                    ]
                     zero_pad = torch.zeros(
                         [global_context.shape[0] - read_step_context.shape[0] - 1, 1],
                         dtype=features["step_context"].dtype,

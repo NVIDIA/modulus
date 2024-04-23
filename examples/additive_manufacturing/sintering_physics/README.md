@@ -2,29 +2,42 @@
 
 # Virtual Foundary GraphNet
 
-## Introduction 
+## Introduction
 
-Metal sintering is a necessary step for Metal Injection Molded parts and binder jetting such as 
-[HP’s metal 3D printer (MetJet)](https://www.hp.com/us-en/printers/3d-printers/products/metal-jet.html). 
-The metal sintering process introduces large deformation varying from 25% to 50% depending on the green part porosity. The final part's geometrical accuracy and consistency remain the top challenge to manufacturing yield. 
-This is due to: 
+Metal sintering is a necessary step for Metal Injection Molded parts and
+binder jetting such as
+[HP’s metal 3D printer (MetJet)](https://www.hp.com/us-en/printers/3d-printers/products/metal-jet.html).
+The metal sintering process introduces large deformation varying from 25% to 50%
+depending on
+the green part porosity. The final part's geometrical accuracy and consistency
+remain the top challenge to manufacturing yield.
+This is due to:
 
-1. Green parts out of MetJet printer are much more porous than other technologies (e.g., MIM); 
-2. Such shrinkage is not isotropic depending on non-uniform stress built up during the sintering process, e.g., gravitational sag, gravitational slump, surface drag.  
+1. Green parts out of MetJet printer are much more porous than
+other technologies (e.g., MIM);
+2. Such shrinkage is not isotropic depending on non-uniform stress
+built up during the sintering process,
+e.g., gravitational sag, gravitational slump, surface drag.  
 
 <p align="center">
 <img src="../../../docs/img/vfgn_doc/HP-MetalJet-process.png" width="700" />
 </p>
 
-In this work, we use a graph-based deep learning approach to predict the part deformation, 
-which can speed up the deformation simulation substantially at the voxel level. Running a well-trained Metal sintering inferencing engine only takes a range of seconds to obtain the final sintering deformation value.
-The tested accuracy on example complex geometry achieves 0.7um mean deviation for a 63mm testing part, for a single sintering step (equivalent to 8.3 minutes physical sintering time), and a 0.3mm mean deviation for the complete sintering cycle (~4 hrs physical sintering time).  
+In this work, we use a graph-based deep learning approach to
+predict the part deformation,
+which can speed up the deformation simulation substantially
+at the voxel level. Running a well-trained Metal sintering
+inferencing engine only takes a range of seconds to
+obtain the final sintering deformation value.
+The tested accuracy on example complex geometry achieves 0.7um mean
+deviation for a 63mm testing part, for a single sintering step
+(equivalent to 8.3 minutes physical sintering time), and a 0.3mm
+mean deviation for the complete sintering cycle (~4 hrs physical sintering time).  
 <p align="center">
 <img src="../../../docs/img/vfgn_doc/4-parts-final.png" width="700" />
 </p>
 
-
-Full paper on: 
+Full paper on:
 [Virtual Foundry Graphnet for Metal Sintering Deformation Prediction](https://arxiv.org/abs/2404.11753)
 
 For more sample parts simulation:
@@ -70,7 +83,6 @@ simulation data files
   - pip install importlib-metadata
   - pip install hydra-core --upgrade
 
-
 ## Train
 
 Change the params in conf/config.yaml for training:
@@ -79,7 +91,8 @@ Change the params in conf/config.yaml for training:
 - ckpt_path_vfgn={path to save model trained ckpt}, i.e. "models/test24"
 - data_path: {data path for the pre-processed data in tfrecord}, i.e. "./data/test_validation"
 - noise_std: i.e.1e-9
-- loss: i.e. me loss # options: ['standard', 'anchor', 'me', 'weighted', '''correlation', 'anchor_me']
+- loss: i.e. me loss # options: ['standard', 'anchor',
+'me', 'weighted', '''correlation', 'anchor_me']
 
 Then run:
 
@@ -112,7 +125,9 @@ Then run:
 python train.py
 ```
 
-## To generate visualization of the test result, change the params in conf/config.yaml 
+## Visualize test result
+
+Change the params in conf/config.yaml:
 
 - rollout_path={selected_prediction_output.json}, i.e. "rollouts/rollout_test_0.json"
 - metadata_path={metadata path}, i.e. "./data/test_validation"
@@ -173,13 +188,22 @@ Defition of step_context & methods tried:
     tensor_dict['step_context'] = tf.reshape(tensor_dict['step_context'],[1, -1])
   ```
 
-## Disclaimer and future work 
-With the model prediction accuracy and fast inference speed, this work, as a component of HP’s Digital Twin effort, Virtual Foundry Graphnet led by HP Labs, aims to apply Physics-ML to significantly accelerate the computation that predicts the metal powder material phase transition. It has achieved orders of magnitude speed-up compared to physics simulation software while preserving reasonable accuracy. Furthermore, Virtual Foundry Graphnet has demonstrated an outstanding path forward to scaling for diverse parts of arbitrary geometrical complexity and scaling for different process parameter configurations. 
+## Disclaimer and future work
+
+With the model prediction accuracy and fast inference speed,
+this work, as a component of HP’s Digital Twin effort,
+Virtual Foundry Graphnet led by HP Labs, aims to apply Physics-ML
+to significantly accelerate the computation that predicts the
+metal powder material phase transition. It has achieved orders
+of magnitude speed-up compared to physics simulation software while
+preserving reasonable accuracy. Furthermore, Virtual Foundry Graphnet
+has demonstrated an outstanding path forward to scaling for
+diverse parts of arbitrary geometrical complexity
+and scaling for different process parameter configurations.
 
 ## Reference
 
 [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405)
-
 
 ```text
 @inproceedings{sanchezgonzalez2020learning,

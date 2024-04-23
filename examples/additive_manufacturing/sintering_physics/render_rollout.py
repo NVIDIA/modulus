@@ -297,16 +297,16 @@ def plot_mean_error(rollout_data_tuple, metadata, plot_steps, rollout_path, buil
     plt.ylabel("Accuracy (Mean error/mm)", fontsize=30)
     # plt.title("Mean error as compare to VF  " + build_name)
     plt.savefig(
-        os.path.join(
-            os.path.dirname(rollout_path), "mean_error_" + build_name + ".png"
-        )
+        os.path.join(os.path.dirname(rollout_path), "mean_error_" + build_name + ".png")
     )
     plt.close()
 
     return rollout_list, rollout_uvw
 
 
-def plot_mean_error_temperature(rollout_data, metadata, plot_steps, rollout_path, build_name):
+def plot_mean_error_temperature(
+    rollout_data, metadata, plot_steps, rollout_path, build_name
+):
     gt_position = rollout_data["ground_truth_rollout"]
     pred_position = rollout_data["predicted_rollout"]
     temperatures = rollout_data["global_context"][3:]
@@ -469,7 +469,13 @@ def main(cfg: DictConfig) -> None:
         )
 
     print("\n\n plot mean error")
-    plot_mean_error(rollout_data_tuple, metadata, n, cfg.test_options.rollout_path, cfg.test_options.test_build_name)
+    plot_mean_error(
+        rollout_data_tuple,
+        metadata,
+        n,
+        cfg.test_options.rollout_path,
+        cfg.test_options.test_build_name,
+    )
 
     if cfg.test_options.plot_3d:
         # Plot 3D visualization

@@ -506,7 +506,7 @@ class EncodeProcessDecode(Module):
         # TODO:
         # CHECK
         if device_list is None:
-            self.device_list = ['cpu']
+            self.device_list = ["cpu"]
         else:
             self.device_list = device_list
 

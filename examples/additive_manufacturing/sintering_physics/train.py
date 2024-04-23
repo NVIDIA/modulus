@@ -80,6 +80,7 @@ class Stats:
         self.std = self.std.to(device)
         return self
 
+
 def cast(v):
     return np.array(v, dtype=np.float64)
 
@@ -101,7 +102,10 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
     )
 
     testDataset = GraphDataset(
-        size=cfg.train_options.num_steps, split="test", data_path=cfg.data_options.data_path, batch_size=cfg.train_options.batch_size
+        size=cfg.train_options.num_steps,
+        split="test",
+        data_path=cfg.data_options.data_path,
+        batch_size=cfg.train_options.batch_size,
     )
     rank_zero_logger.info(
         f"Initialized testDataset with mode {testDataset.mode}, dataset size {testDataset.size}..."
@@ -111,15 +115,21 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
     metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)
+        ),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)
+        ),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)
+        ),
     )
 
     normalization_stats = {
@@ -202,13 +212,17 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
 
         if optimizer is None:
             # first data need to inference the feature size
-            device = torch.device(cfg.general.device if torch.cuda.is_available() else "cpu")
+            device = torch.device(
+                cfg.general.device if torch.cuda.is_available() else "cpu"
+            )
             rank_zero_logger.info(
                 f"*******************device: {device} ****************"
             )
             # print("*******************device: {} ****************".format(device))
             # config optimizer
-            message_passing_devices = ast.literal_eval(cfg.general.message_passing_devices)
+            message_passing_devices = ast.literal_eval(
+                cfg.general.message_passing_devices
+            )
             model.setMessagePassingDevices(message_passing_devices)
             model = model.to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
@@ -235,7 +249,10 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
         loss = (pred_acceleration - target_acceleration) ** 2
 
         decay_fators_1 = torch.DoubleTensor(
-            [math.pow(cfg.train_options.loss_decay_factor, i) for i in range(cfg.train_options.pred_len)]
+            [
+                math.pow(cfg.train_options.loss_decay_factor, i)
+                for i in range(cfg.train_options.pred_len)
+            ]
         ).to(device)
         decay_fators_3 = torch.repeat_interleave(decay_fators_1, repeats=3)
 
@@ -365,8 +382,12 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
 
             non_kinematic_mask = non_kinematic_mask.to(torch.bool).to(device)
             num_non_kinematic = torch.sum(non_kinematic_mask)
-            print("non_kinematic_mask/ num_non_kinematic: ",
-                  non_kinematic_mask.shape, num_non_kinematic, num_non_kinematic.shape)
+            print(
+                "non_kinematic_mask/ num_non_kinematic: ",
+                non_kinematic_mask.shape,
+                num_non_kinematic,
+                num_non_kinematic.shape,
+            )
             loss = torch.where(
                 non_kinematic_mask,
                 loss,
@@ -498,15 +519,21 @@ def Test(rank_zero_logger, dist, cfg):
     metadata = _read_metadata(cfg.data_options.data_path)
     acceleration_stats = Stats(
         torch.DoubleTensor(cast(metadata["acc_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["acc_std"]), cfg.data_options.noise_std)
+        ),
     )
     velocity_stats = Stats(
         torch.DoubleTensor(cast(metadata["vel_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["vel_std"]), cfg.data_options.noise_std)
+        ),
     )
     context_stats = Stats(
         torch.DoubleTensor(cast(metadata["context_mean"])),
-        torch.DoubleTensor(_combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)),
+        torch.DoubleTensor(
+            _combine_std(cast(metadata["context_std"]), cfg.data_options.noise_std)
+        ),
     )
 
     normalization_stats = {
@@ -540,7 +567,7 @@ def Test(rank_zero_logger, dist, cfg):
 
                 model.inference(
                     position_sequence=features["position"][
-                        :, 0:cfg.train_options.input_seq_len
+                        :, 0 : cfg.train_options.input_seq_len
                     ].to(device),
                     n_particles_per_example=features["n_particles_per_example"].to(
                         device
@@ -555,7 +582,9 @@ def Test(rank_zero_logger, dist, cfg):
 
                 # Loading the pretrained model from model ckpt_path_vfgn
                 # For provided ckpt with missing keys, ignore with strict=False
-                model.load_state_dict(torch.load(cfg.data_options.ckpt_path_vfgn), strict=False)
+                model.load_state_dict(
+                    torch.load(cfg.data_options.ckpt_path_vfgn), strict=False
+                )
                 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
                 # config optimizer
@@ -565,12 +594,12 @@ def Test(rank_zero_logger, dist, cfg):
                 model.eval()
                 loaded = True
 
-            initial_positions = features["position"][:, :cfg.train_options.input_seq_len].to(
-                device
-            )
-            ground_truth_positions = features["position"][:, cfg.train_options.input_seq_len:].to(
-                device
-            )
+            initial_positions = features["position"][
+                :, : cfg.train_options.input_seq_len
+            ].to(device)
+            ground_truth_positions = features["position"][
+                :, cfg.train_options.input_seq_len :
+            ].to(device)
             global_context = features["step_context"].to(device)
             rank_zero_logger.info(
                 f"\n Initial_positions shape: {initial_positions.shape}"
@@ -592,7 +621,9 @@ def Test(rank_zero_logger, dist, cfg):
                 if global_context is None:
                     global_context_step = None
                 else:
-                    read_step_context = global_context[: step + cfg.train_options.input_seq_len]
+                    read_step_context = global_context[
+                        : step + cfg.train_options.input_seq_len
+                    ]
                     zero_pad = torch.zeros(
                         [global_context.shape[0] - read_step_context.shape[0] - 1, 1],
                         dtype=features["step_context"].dtype,
