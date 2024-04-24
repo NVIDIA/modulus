@@ -15,6 +15,9 @@ flexibly select different meteorological variables for their training dataset.
     surface temperature variable however if you would like a more complete dataset such
     as the one used to train [FourCastNet](https://arxiv.org/abs/2202.11214),
     please use `conf/config_34var.yaml`.
+4. `credentials/cdsapi.yaml` - can be used to enter the credentials for CDS API when
+    using a container environment. Should never be commited because it contains
+    sensitive information.
 
 ## How to Use
 
