@@ -299,6 +299,8 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
         encoder_channels: List[int] = [16, 32, 64, 128, 256, 512],
         decoder_channels: List[int] = [512, 256, 128, 64, 32, 16],
         drag_mlp_channels: List[int] = [128, 64, 32, 16],
+        bbox_min: List[float] = [-1.0, -1.0, -1.0],
+        bbox_max: List[float] = [1.0, 1.0, 1.0],
     ):
         DrivAerDragRegressionBase.__init__(self)
         VWUNet.__init__(
@@ -310,6 +312,52 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
             decoder_channels,
             drag_mlp_channels,
         )
+
+        self.bbox_min = torch.tensor(bbox_min)
+        self.bbox_max = torch.tensor(bbox_max)
+
+    def data_dict_to_input(self, data_dict) -> torch.Tensor:
+        vertices = data_dict["cell_centers"].float()
+        sdf = data_dict["sdf"].unsqueeze(1)  # add channel dimension to BxCxHxWxD
+
+        # center vertices
+        vertices_max = vertices.max(0)[0]
+        vertices_min = vertices.min(0)[0]
+        vertices_center = (vertices_max + vertices_min) / 2.0
+        vertices = vertices - vertices_center
+
+        # bbox_min to be the origin of vertices
+        vertices = vertices - self.bbox_min
+
+        return vertices.to(self.device), sdf.to(self.device)
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices, sdf = self.data_dict_to_input(data_dict)
+        normalized_pred, drag_pred = self(sdf)
+        normalized_gt = (
+            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+        )
+
+        # use tri-linear interpolation to sample the pressure field
+        normalized_pred = F.grid_sample(
+            normalized_pred,
+            vertices,
+            align_corners=True,
+        )
+
+        return_dict = {}
+        if loss_fn is None:
+            loss_fn = self.loss
+
+        return_dict["pressure_loss"] = loss_fn(
+            normalized_pred.view(1, -1), normalized_gt.view(1, -1).to(self.device)
+        )
+
+        # compute drag loss
+        gt_drag = data_dict["c_d"].float().to(self.device)
+        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
+
+        return return_dict
 
 
 class TestVWUNet(unittest.TestCase):

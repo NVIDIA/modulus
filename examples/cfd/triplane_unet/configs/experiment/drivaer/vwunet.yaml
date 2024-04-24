@@ -31,6 +31,21 @@ data:
   webdataset_preprocessor:
     _target_: src.data.components.DrivAerWebdatasetSDFPreprocessingFunctor
     every_n_data: 100
+    bbox_min:
+      - -2.5
+      - -2.5
+      - -2.5
+    bbox_max:
+      - 2.5
+      - 2.5
+      - 2.5
+    bbox_resolution:
+      - 128
+      - 128
+      - 128
+    dist_compute_device: cuda
+    # dist_chunk_size: 65536 # 2^16
+    dist_chunk_size: 131072 # 2^17
 
 loggers:
   wandb:

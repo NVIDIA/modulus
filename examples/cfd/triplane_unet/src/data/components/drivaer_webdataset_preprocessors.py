@@ -105,6 +105,7 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         bbox_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
         dist_compute_device: str = "cuda",
+        dist_chunk_size: int = 16384,
         **kwargs,
     ):
         super().__init__(pressure_mean, pressure_std, every_n_data, np_ext, **kwargs)
@@ -112,6 +113,12 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         self.bbox_max = bbox_max
         self.bbox_resolution = bbox_resolution
         self.dist_compute_device = dist_compute_device
+        self.dist_chunk_size = dist_chunk_size
+        self.vox_centers = bbox_to_centers(
+            torch.Tensor(self.bbox_min),
+            torch.Tensor(self.bbox_max),
+            self.bbox_resolution,
+        ).to(self.dist_compute_device)
 
     def __call__(self, sample: Dict) -> Dict:
         np_dict = super().__call__(sample)
@@ -120,15 +127,15 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         obj_min = np.min(vertices, axis=0)
         obj_max = np.max(vertices, axis=0)
         obj_center = (obj_min + obj_max) / 2.0
-
-        vox_centers = bbox_to_centers(
-            torch.Tensor(self.bbox_min + obj_center),
-            torch.Tensor(self.bbox_max + obj_center),
-            self.bbox_resolution,
-        )
-        vox_centers_device = torch.Tensor(vox_centers).to(self.dist_compute_device)
+        vertices = vertices - obj_center
         vertices_device = torch.Tensor(vertices).to(self.dist_compute_device)
-        dists = point_cloud_to_sdf(vertices_device, vox_centers_device.view(-1, 3))
+
+        # Distance computation
+        dists = point_cloud_to_sdf(
+            vertices_device,
+            self.vox_centers.view(-1, 3),
+            chunk_size=self.dist_chunk_size,
+        )
         dists = dists.view(self.bbox_resolution).cpu().numpy()
         np_dict["sdf"] = dists
 
