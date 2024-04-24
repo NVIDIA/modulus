@@ -28,7 +28,10 @@ from hydra.utils import instantiate, to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
 import torch
+import torch.distributed
 import torchinfo
+
+import warp as wp
 
 from modulus.distributed import DistributedManager
 
@@ -55,13 +58,18 @@ def _delete_previous_checkpoints(config):
             pass
 
 
-def save_state(model, optimizer, scheduler, epoch, tot_iter, config):
+def _save_state(model, optimizer, scheduler, scaler, epoch, tot_iter, config):
+    # Only rank 0 saves the model.
+    if DistributedManager().rank != 0:
+        return
+
     save_path = os.path.join(config.output, f"model_{epoch:05d}.pth")
     logger.info(f"Saving model at epoch {epoch} to {save_path}")
     state_dict = {
-        "model": model.state_dict(),
+        "model": model.model().state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
+        "scaler": scaler.state_dict(),
         "epoch": epoch,
         "tot_iter": tot_iter,
     }
@@ -70,18 +78,55 @@ def save_state(model, optimizer, scheduler, epoch, tot_iter, config):
     _delete_previous_checkpoints(config)
 
 
+def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
+    logger.info(f"Resuming from {config.output}")
+
+    # Find the latest checkpoint
+    checkpoints = []
+    for f in os.listdir(config.output):
+        if f.startswith("model_") and f.endswith(".pth"):
+            checkpoints.append(f)
+    checkpoints.sort()
+
+    start_epoch = 0
+    tot_iter = 0
+    # Load if there is a checkpoint
+    if len(checkpoints) == 0:
+        logger.info("No checkpoints found")
+    else:
+        logger.info(f"Found {len(checkpoints)} checkpoints")
+        logger.info(f"Loading {checkpoints[-1]}")
+        checkpoint_path = os.path.join(config.output, checkpoints[-1])
+        checkpoint = torch.load(checkpoint_path)
+
+        model.model().load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        scheduler.load_state_dict(checkpoint["scheduler"])
+        scaler.load_state_dict(checkpoint["scaler"])
+        start_epoch = checkpoint["epoch"] + 1
+        tot_iter = checkpoint["tot_iter"]
+
+            # Wait until all processes load the checkpoint.
+        if DistributedManager().distributed:
+            torch.distributed.barrier()
+
+    return start_epoch, tot_iter
+
+
 @torch.no_grad()
 def eval(model, datamodule, config, loss_fn=None):
     model.eval()
     test_loader = datamodule.test_dataloader(
-        batch_size=config.eval.batch_size, num_workers=0
+        batch_size=config.eval.batch_size, **config.eval.dataloader
     )
     eval_meter = AverageMeterDict()
     visualize_data_dicts = []
     eval_timer = Timer()
     for i, data_dict in enumerate(test_loader):
         eval_timer.tic()
-        out_dict = model.eval_dict(data_dict, loss_fn=loss_fn, datamodule=datamodule)
+        out_dict = model.model().eval_dict(
+            data_dict, loss_fn=loss_fn, datamodule=datamodule
+        )
         out_dict["inference_time"] = eval_timer.toc()
         eval_meter.update(out_dict)
         if i % config.eval.plot_interval == 0:
@@ -95,7 +140,7 @@ def eval(model, datamodule, config, loss_fn=None):
     merged_point_cloud_dict = {}
     if hasattr(model, "image_pointcloud_dict"):
         for i, data_dict in enumerate(visualize_data_dicts):
-            image_dict, pointcloud_dict = model.image_pointcloud_dict(
+            image_dict, pointcloud_dict = model.model().image_pointcloud_dict(
                 data_dict, datamodule=datamodule
             )
             for k, v in image_dict.items():
@@ -104,7 +149,7 @@ def eval(model, datamodule, config, loss_fn=None):
                 merged_point_cloud_dict[f"{k}_{i}"] = v
     elif hasattr(model, "image_dict"):
         for i, data_dict in enumerate(visualize_data_dicts):
-            image_dict, pointcloud_dict = model.image_dict(
+            image_dict, pointcloud_dict = model.model().image_dict(
                 data_dict, datamodule=datamodule
             )
             for k, v in image_dict.items():
@@ -115,8 +160,13 @@ def eval(model, datamodule, config, loss_fn=None):
 
 
 def train(config: DictConfig):
-    # Initialize the device
-    device = torch.device(config.device)
+    dist = DistributedManager()
+
+    # Initialize the device. Allow device override only in non-distributed setting.
+    device = dist.device if dist.distributed else torch.device(config.device)
+    # Set default devices.
+    torch.cuda.device(device)
+    wp.set_device(str(device))
 
     # Initialize the loggers first.
     loggers = init_logger(config)
@@ -129,10 +179,25 @@ def train(config: DictConfig):
     # Print model summary (structure and parmeter count).
     logger.info(f"Model summary:\n{torchinfo.summary(model, verbose=0)}\n")
 
+    # Enable DDP.
+    if dist.distributed:
+        # TODO(akamenev): make broadcast_buffers configurable
+        # since some of the models use BatchNorm.
+        model = torch.nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=[dist.device],
+            broadcast_buffers=dist.broadcast_buffers,
+            find_unused_parameters=dist.find_unused_parameters,
+        )
+        logger.info("Initialized DDP.")
+    # Set the original model getter to simplify access.
+    assert not hasattr(model, "model")
+    type(model).model = (lambda m: m.module) if dist.distributed else (lambda m: m)
+
     # Initialize the dataloaders
     datamodule = instantiate(config.data)
     train_loader = datamodule.train_dataloader(
-        batch_size=config.train.batch_size, shuffle=True
+        batch_size=config.train.batch_size, **config.train.dataloader
     )
 
     # Initialize the optimizer and scheduler.
@@ -171,38 +236,19 @@ def train(config: DictConfig):
     start_epoch = 0
     tot_iter = 0
     if config.train.resume and os.path.exists(config.output):
-        logger.info(f"Resuming from {config.output}")
-        # Find the latest checkpoint
-        checkpoints = []
-        for f in os.listdir(config.output):
-            if f.startswith("model_") and f.endswith(".pth"):
-                checkpoints.append(f)
-        checkpoints.sort()
-        # Load if there is a checkpoint
-        if len(checkpoints) == 0:
-            logger.info("No checkpoints found")
-        else:
-            logger.info(f"Found {len(checkpoints)} checkpoints")
-            logger.info(f"Loading {checkpoints[-1]}")
-            checkpoint_path = os.path.join(config.output, checkpoints[-1])
-            checkpoint = torch.load(checkpoint_path)
-
-            model.load_state_dict(checkpoint["model"])
-            optimizer.load_state_dict(checkpoint["optimizer"])
-            scheduler.load_state_dict(checkpoint["scheduler"])
-            start_epoch = checkpoint["epoch"] + 1
-            tot_iter = checkpoint["tot_iter"]
+        start_epoch, tot_iter = _resume_from_checkpoint(model, optimizer, scheduler, config)
 
     for ep in range(start_epoch, config.train.num_epochs):
         model.train()
         t1 = default_timer()
         train_l2_meter = AverageMeter()
 
+        logger.info("Starting training.")
         for data_dict in train_loader:
             optimizer.zero_grad()
 
             with autocast():
-                loss_dict = model.loss_dict(
+                loss_dict = model.model().loss_dict(
                     data_dict, loss_fn=loss_fn, datamodule=datamodule
                 )
 
@@ -278,7 +324,7 @@ def train(config: DictConfig):
         # Save the weights, optimization state, and scheduler state into one file
         if ep % config.train.save_interval == 0:
             # save the model
-            save_state(model, optimizer, scheduler, ep, tot_iter, config)
+            _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
 
         # Update average epoch time
         if average_epoch_time == 0:
@@ -293,15 +339,15 @@ def train(config: DictConfig):
                     f"Time limit {time_limit} seconds reached. Breaking the training loop."
                 )
                 # Save model
-                save_state(model, optimizer, scheduler, ep, tot_iter, config)
+                _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
                 # Write the status to the output directory to status.txt file
                 with open(os.path.join(config.output, "status.txt"), "w") as f:
                     f.write("resuming")
                 sys.exit(0)
 
     # Save the final model
-    save_state(
-        model, optimizer, scheduler, config.train.num_epochs - 1, tot_iter, config
+    _save_state(
+        model, optimizer, scheduler, scaler, config.train.num_epochs - 1, tot_iter, config
     )
     # Write the status to the output directory to status.txt file
     with open(os.path.join(config.output, "status.txt"), "w") as f:
@@ -335,6 +381,14 @@ def main(config: DictConfig):
     # Set the random seed.
     if config.seed is not None:
         set_seed(config.seed)
+
+    # TODO(akamenev): restriction due to NN search code.
+    if config.train.batch_size > 1 or config.eval.batch_size > 1:
+        raise ValueError(
+            "Only batch size 1 is currently supported due "
+            "to nearest neighbor search implementation. "
+            "Use DDP with batch size 1 to parallelize the workload."
+        )
 
     train(config)
 

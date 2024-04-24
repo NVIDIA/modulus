@@ -32,6 +32,9 @@ train:
   time_limit: null
   resume: false
   print_interval: 200 # save image for every N'th train data
+  dataloader:
+    shuffle: true # can also specify the shuffle buffer size, e.g. shuffle_buffer_size: 100
+    num_workers: 0
 
 eval:
   loss: null
@@ -39,6 +42,9 @@ eval:
   batch_size: 1
   plot_interval: 20 # save image for every N'th test data
   print_interval: 20 # print every N'th test data
+  dataloader:
+    shuffle: false
+    num_workers: 0
 
 device: cuda
 

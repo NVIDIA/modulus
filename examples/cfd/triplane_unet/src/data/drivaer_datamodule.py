@@ -14,12 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import tarfile
 import uuid
 from collections import defaultdict
 from multiprocessing import Pool, set_start_method
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import Any, List, Literal, Mapping, Optional, Union
 
 # TODO(akamenev): migration
 # import fire
@@ -27,6 +28,8 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 import torch
+import torch.utils
+import torch.utils.data
 import webdataset as wds
 from torch.utils.data import DataLoader, Dataset
 
@@ -48,7 +51,6 @@ if __name__ == "__main__":
 
 from src.data.base_datamodule import BaseDataModule
 from src.data.mesh_utils import Normalizer, compute_drag_coefficient, convert_to_pyvista
-from src.data.webdataset_base import NumpyPreprocess, Webdataset
 
 # DrivAer dataset
 # Air density = 1.205 kg/m^3
@@ -291,64 +293,50 @@ class DrivAerToWebdataset:
                 tar.add(file, arcname=file.name)
 
 
-class _DrivAerWebdatasetPreprocess(NumpyPreprocess):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
-        # DrivAer Mean: -150.13066236223494, std: 229.1046667362158
-        self.normalizer = Normalizer(
-            kwargs.get("mean", DRIVAER_PRESSURE_MEAN),
-            kwargs.get("std", DRIVAER_PRESSURE_STD),
-        )
-        every_n_data = kwargs.get("every_n_data", 1)
-        if every_n_data is None:
-            every_n_data = 1
-        self.every_n_data = every_n_data
+def from_numpy(sample: Mapping[str, Any], key: str):
+    """Loads numpy objects from .npy, .npz or pickled files."""
 
-    def __call__(self, sample):
-        np_dict = super().__call__(sample)
-
-        if self.every_n_data > 1:
-            # Downsample the data
-            for k, v in np_dict.items():
-                if (isinstance(v, np.ndarray) and v.size > 1) or (
-                    isinstance(v, torch.Tensor) and v.numel() > 1
-                ):
-                    np_dict[k] = v[:: self.every_n_data]
-
-        if "Snapshot" in np_dict:
-            # array('EnSightXXX', dtype='<U10')
-            # Convert it to an integer
-            np_dict["Snapshot"] = int(
-                np.char.replace(np_dict["Snapshot"], "EnSight", "")
-            )
-
-        # Compute drag coefficient using area, normal, pressure and wall shear stress
-        drag_coef = compute_drag_coefficient(
-            np_dict["cell_normals"],
-            np_dict["cell_areas"],
-            self.air_coeff / np_dict["proj_area_x"],
-            np_dict["time_avg_pressure"],
-            np_dict["time_avg_wall_shear_stress"],
-        )
-        # np_dict["c_d"] is computed on a finer mesh and the newly computed drag is on a coarser mesh so they are not equal
-        np_dict["c_d_computed"] = drag_coef
-        np_dict["time_avg_pressure_whitened"] = self.normalizer.encode(
-            np_dict["time_avg_pressure"]
-        )
-        return np_dict
+    np_obj = np.load(io.BytesIO(sample[key]), allow_pickle=True)
+    return {k: np_obj[k] for k in np_obj.files}
 
 
-class DrivAerWebdataset(Webdataset):
-    def __init__(
-        self, paths: str | List[str], preprocessor_kwargs: Optional[dict] = None
-    ) -> None:
-        if isinstance(paths, str):
-            paths = [paths]
-        if preprocessor_kwargs is None:
-            preprocessor_kwargs = {}
-        preprocessor_kwargs["np_ext"] = "npz"
-        super().__init__(paths, _DrivAerWebdatasetPreprocess, preprocessor_kwargs)
+def update_drivaer(
+    sample: Mapping[str, Any],
+    every_n_data: int,
+    normalizer: Normalizer,
+    air_coeff: float,
+):
+    """Adds some DrivAer pre-computed values to the sample."""
+
+    if every_n_data > 1:
+        # Downsample the data
+        for k, v in sample.items():
+            if (isinstance(v, np.ndarray) and v.size > 1) or (
+                isinstance(v, torch.Tensor) and v.numel() > 1
+            ):
+                sample[k] = v[::every_n_data]
+
+    snapshot = sample.get("Snapshot")
+    if snapshot is not None:
+        # array('EnSightXXX', dtype='<U10')
+        # Convert it to an integer
+        sample["Snapshot"] = int(np.char.replace(snapshot, "EnSight", ""))
+
+    # Compute drag coefficient using area, normal, pressure and wall shear stress
+    drag_coef = compute_drag_coefficient(
+        sample["cell_normals"],
+        sample["cell_areas"],
+        air_coeff / sample["proj_area_x"],
+        sample["time_avg_pressure"],
+        sample["time_avg_wall_shear_stress"],
+    )
+    # sample["c_d"] is computed on a finer mesh and the newly computed drag is
+    # on a coarser mesh so they are not equal
+    sample["c_d_computed"] = drag_coef
+    sample["time_avg_pressure_whitened"] = normalizer.encode(
+        sample["time_avg_pressure"]
+    )
+    return sample
 
 
 class DrivAerDataModule(BaseDataModule):
@@ -361,7 +349,8 @@ class DrivAerDataModule(BaseDataModule):
         """
         Args:
             data_path (Union[Path, str]): Path that contains train and test directories
-            subsets_postfix (Optional[List[str]], optional): Postfixes for the subsets. Defaults to ["spoiler", "nospoiler"].
+            subsets_postfix (Optional[List[str]], optional): Postfixes for the subsets.
+            Defaults to ["spoiler", "nospoiler"].
 
         """
         super().__init__()
@@ -371,28 +360,38 @@ class DrivAerDataModule(BaseDataModule):
         assert (
             data_path.exists() and data_path.is_dir()
         ), f"{data_path} must exist and should be a directory"
+
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
         self.every_n_data = every_n_data
-        self.setup()
 
-    def setup(self, stage: Optional[str] = None):
-        subsets_postfix = self.subsets_postfix
-        every_n_data = self.every_n_data
-        self._train_dataset = DrivAerWebdataset(
-            [str(self.data_dir / f"train_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
-        )
-        self._val_dataset = DrivAerWebdataset(
-            [str(self.data_dir / f"val_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
-        )
-        self._test_dataset = DrivAerWebdataset(
-            [str(self.data_dir / f"test_{subset}.tar") for subset in subsets_postfix],
-            preprocessor_kwargs={"every_n_data": every_n_data},
-        )
         self.normalizer = Normalizer(DRIVAER_PRESSURE_MEAN, DRIVAER_PRESSURE_STD)
         self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
+
+        self._train_dataset = self._create_dataset("train")
+        self._val_dataset = self._create_dataset("val")
+        self._test_dataset = self._create_dataset("test")
+
+    def _create_dataset(self, prefix: str) -> wds.DataPipeline:
+        paths = [
+            str(self.data_dir / f"{prefix}_{subset}.tar")
+            for subset in self.subsets_postfix
+        ]
+
+        # Create dataset with the processing pipeline.
+        dataset = wds.DataPipeline(
+            wds.SimpleShardList(sorted(paths)),
+            wds.tarfile_to_samples(),
+            wds.split_by_node,
+            wds.map(lambda x: from_numpy(x, "npz")),
+            wds.map(
+                lambda x: update_drivaer(
+                    x, self.every_n_data, self.normalizer, self.air_coeff
+                )
+            ),
+        )
+
+        return dataset
 
     def encode(self, x):
         return self.normalizer.encode(x)
@@ -412,22 +411,36 @@ class DrivAerDataModule(BaseDataModule):
     def test_dataset(self):
         return self._test_dataset
 
-    def train_dataloader(self, **kwargs) -> wds.WebLoader:
-        collate_fn = getattr(self, "collate_fn", None)
-        # Remove shuffle from kwargs
-        kwargs.pop("shuffle", None)
-        buffer_size = kwargs.pop("buffer_size", 100)
-        return DataLoader(
-            self.train_dataset.shuffle(buffer_size), collate_fn=collate_fn, **kwargs
+    def _create_dataloader(self, dataset: wds.DataPipeline, **kwargs) -> wds.WebLoader:
+        # Handle shuffling and batching.
+        stages = []
+        if (buf_size := kwargs.pop("shuffle_buffer_size", 0)) or kwargs.pop(
+            "shuffle", False
+        ):
+            stages.append(wds.shuffle(buf_size if buf_size > 0 else 100))
+
+        batch_size = kwargs.pop("batch_size", 1)
+        stages.append(
+            wds.batched(batch_size, collation_fn=torch.utils.data.default_collate)
         )
 
+        # Create dataloader from the pipeline.
+        # Use `compose` to avoid changing the original dataset.
+        return wds.WebLoader(
+            dataset.compose(*stages),
+            batch_size=None,
+            shuffle=False,
+            **kwargs,
+        )
+
+    def train_dataloader(self, **kwargs) -> DataLoader:
+        return self._create_dataloader(self.train_dataset, **kwargs)
+
     def val_dataloader(self, **kwargs) -> DataLoader:
-        collate_fn = getattr(self, "collate_fn", None)
-        return DataLoader(self.val_dataset, collate_fn=collate_fn, **kwargs)
+        return self._create_dataloader(self.val_dataset, **kwargs)
 
     def test_dataloader(self, **kwargs) -> DataLoader:
-        collate_fn = getattr(self, "collate_fn", None)
-        return DataLoader(self.test_dataset, collate_fn=collate_fn, **kwargs)
+        return self._create_dataloader(self.test_dataset, **kwargs)
 
 
 def convert_to_webdataset(

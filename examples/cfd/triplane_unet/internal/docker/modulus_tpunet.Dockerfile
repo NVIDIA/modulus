@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip
 
 # Add and install torch_scatter wheel, which was built using:
-# TORCH_CUDA_ARCH_LIST="8.0 8.6 9.0" pip wheel --no-deps torch-scatter
+# TORCH_CUDA_ARCH_LIST="7.5 8.0 8.6 9.0" pip wheel --no-deps torch-scatter
 ADD ./examples/cfd/triplane_unet/internal/docker/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl /workspace
 RUN pip install --no-deps /workspace/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl
 
