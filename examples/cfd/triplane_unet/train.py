@@ -29,12 +29,15 @@ from omegaconf import DictConfig, OmegaConf
 
 import torch
 import torch.distributed
+import torch.utils
+import torch.utils.data
 import torchinfo
 
 import warp as wp
 
 from modulus.distributed import DistributedManager
 
+from src.utils import rank0
 from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
@@ -58,11 +61,8 @@ def _delete_previous_checkpoints(config):
             pass
 
 
+@rank0
 def _save_state(model, optimizer, scheduler, scaler, epoch, tot_iter, config):
-    # Only rank 0 saves the model.
-    if DistributedManager().rank != 0:
-        return
-
     save_path = os.path.join(config.output, f"model_{epoch:05d}.pth")
     logger.info(f"Saving model at epoch {epoch} to {save_path}")
     state_dict = {
@@ -76,6 +76,14 @@ def _save_state(model, optimizer, scheduler, scaler, epoch, tot_iter, config):
     # Save the file with 0000X format
     torch.save(state_dict, save_path)
     _delete_previous_checkpoints(config)
+
+
+@rank0
+def _save_status(output_dir: str, status: str):
+    """Writes the status to the output directory to status.txt file."""
+
+    with open(os.path.join(output_dir, "status.txt"), "w", encoding="utf-8") as f:
+        f.write(status)
 
 
 def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
@@ -106,7 +114,7 @@ def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
         start_epoch = checkpoint["epoch"] + 1
         tot_iter = checkpoint["tot_iter"]
 
-            # Wait until all processes load the checkpoint.
+        # Wait until all processes load the checkpoint.
         if DistributedManager().distributed:
             torch.distributed.barrier()
 
@@ -236,14 +244,15 @@ def train(config: DictConfig):
     start_epoch = 0
     tot_iter = 0
     if config.train.resume and os.path.exists(config.output):
-        start_epoch, tot_iter = _resume_from_checkpoint(model, optimizer, scheduler, config)
+        start_epoch, tot_iter = _resume_from_checkpoint(
+            model, optimizer, scheduler, scaler, config
+        )
 
     for ep in range(start_epoch, config.train.num_epochs):
         model.train()
         t1 = default_timer()
         train_l2_meter = AverageMeter()
 
-        logger.info("Starting training.")
         for data_dict in train_loader:
             optimizer.zero_grad()
 
@@ -338,20 +347,22 @@ def train(config: DictConfig):
                 logger.info(
                     f"Time limit {time_limit} seconds reached. Breaking the training loop."
                 )
-                # Save model
+                # Save model and status.
                 _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
-                # Write the status to the output directory to status.txt file
-                with open(os.path.join(config.output, "status.txt"), "w") as f:
-                    f.write("resuming")
+                _save_status(config.output, "resuming")
                 sys.exit(0)
 
     # Save the final model
     _save_state(
-        model, optimizer, scheduler, scaler, config.train.num_epochs - 1, tot_iter, config
+        model,
+        optimizer,
+        scheduler,
+        scaler,
+        config.train.num_epochs - 1,
+        tot_iter,
+        config,
     )
-    # Write the status to the output directory to status.txt file
-    with open(os.path.join(config.output, "status.txt"), "w") as f:
-        f.write("finished")
+    _save_status(config.output, "finished")
 
 
 def _init_python_logging(config: DictConfig):
@@ -366,8 +377,8 @@ def _init_python_logging(config: DictConfig):
     if pylog_cfg := OmegaConf.select(config, "logging.python"):
         pylog_cfg.output = config.output
         pylog_cfg.rank = DistributedManager().rank
-        # Enable logging only on rank 0.
-        if pylog_cfg.rank != 0:
+        # Enable logging only on rank 0, if requested.
+        if pylog_cfg.rank0_only and pylog_cfg.rank != 0:
             pylog_cfg.handlers = {}
             pylog_cfg.loggers.tpunet.handlers = []
         # Configure logging.

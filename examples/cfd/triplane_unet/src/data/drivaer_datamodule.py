@@ -15,12 +15,13 @@
 # limitations under the License.
 
 import io
+import itertools
 import tarfile
 import uuid
 from collections import defaultdict
 from multiprocessing import Pool, set_start_method
 from pathlib import Path
-from typing import Any, List, Literal, Mapping, Optional, Union
+from typing import Any, Iterable, List, Literal, Mapping, Optional, Union
 
 # TODO(akamenev): migration
 # import fire
@@ -293,6 +294,28 @@ class DrivAerToWebdataset:
                 tar.add(file, arcname=file.name)
 
 
+def split_by_node_equal(
+    src: Iterable,
+    drop_last: bool = False,
+    group: "torch.distributed.ProcessGroup" = None,
+):
+    """Splits input iterable into equal-sized chunks according to multiprocessing configuration.
+
+    Similar to `Webdataset.split_by_node`, but the resulting split is equal-sized.
+    """
+
+    rank, world_size, *_ = wds.utils.pytorch_worker_info(group=group)
+    cur = iter(src)
+    while len(next_items := list(itertools.islice(cur, world_size))) == world_size:
+        yield next_items[rank]
+
+    tail_size = len(next_items)
+    assert tail_size < world_size
+    # If drop_last is not set, handle the tail.
+    if not drop_last and tail_size > 0:
+        yield next_items[rank % tail_size]
+
+
 def from_numpy(sample: Mapping[str, Any], key: str):
     """Loads numpy objects from .npy, .npz or pickled files."""
 
@@ -382,7 +405,7 @@ class DrivAerDataModule(BaseDataModule):
         dataset = wds.DataPipeline(
             wds.SimpleShardList(sorted(paths)),
             wds.tarfile_to_samples(),
-            wds.split_by_node,
+            split_by_node_equal,
             wds.map(lambda x: from_numpy(x, "npz")),
             wds.map(
                 lambda x: update_drivaer(
