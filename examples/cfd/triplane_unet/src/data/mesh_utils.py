@@ -16,7 +16,9 @@
 from typing import Tuple, Optional, List
 
 import torch
+from torch import Tensor
 import numpy as np
+from jaxtyping import Int, Float
 from sklearn.utils import check_array, check_consistent_length
 
 try:
@@ -25,9 +27,6 @@ except ImportError:
     print(
         "Could not import ensightreader. Please install it from `pip install ensight-reader`"
     )
-
-
-from jaxtyping import Float
 
 
 def compute_drag_coefficient(
@@ -216,8 +215,41 @@ def convert_to_pyvista(ensight_block, fp):
     return faces
 
 
+def min_distance(
+    ref_positions: Int[Tensor, "N 3"],
+    query_positions: Int[Tensor, "M 3"],
+) -> Int[Tensor, "M"]:
+    """Perform knn search using the open3d backend."""
+    assert ref_positions.device == query_positions.device
+    # Critical for multi GPU
+    if ref_positions.is_cuda:
+        torch.cuda.set_device(ref_positions.device)
+    # Use topk to get the top k indices from distances
+    dists = torch.cdist(query_positions, ref_positions)
+    min_dist = torch.min(dists, dim=1).values
+    return min_dist
+
+
+@torch.no_grad()
+def chunked_min_distance(
+    ref_positions: Int[Tensor, "N 3"],
+    query_positions: Int[Tensor, "M 3"],
+    chunk_size: int = 4096,
+):
+    """Divide the out_positions into chunks and perform knn search."""
+    assert chunk_size > 0
+    min_dists = []
+    for i in range(0, query_positions.shape[0], chunk_size):
+        chunk_out_positions = query_positions[i : i + chunk_size]
+        min_dist = min_distance(ref_positions, chunk_out_positions)
+        min_dists.append(min_dist)
+    return torch.concatenate(min_dists, dim=0)
+
+
 def point_cloud_to_sdf(
-    points: Float[torch.Tensor, "N 3"], sdf_points: Float[torch.Tensor, "M 3"]
+    points: Float[torch.Tensor, "N 3"],
+    sdf_points: Float[torch.Tensor, "M 3"],
+    chunk_size: int = 8192,
 ) -> Float[torch.Tensor, "M"]:
     """Compute the signed distance function (SDF) of a point cloud with respect to a set of points.
 
@@ -227,6 +259,7 @@ def point_cloud_to_sdf(
         The point cloud
     sdf_points: torch.Tensor[M, 3]
         The points to compute the SDF from
+    chunk_size: int
 
     Returns:
     --------
@@ -235,11 +268,7 @@ def point_cloud_to_sdf(
     """
 
     # Compute the pairwise distances between the points and the sdf_points
-    dist = torch.cdist(points, sdf_points)
-
-    # Compute the minimum distance to each sdf_point
-    sdf = torch.min(dist, dim=1).values
-    return sdf
+    return chunked_min_distance(points, sdf_points, chunk_size=chunk_size)
 
 
 def bbox_to_centers(

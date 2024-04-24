@@ -81,6 +81,6 @@ def test_webdataset(path: str):
 
 
 if __name__ == "__main__":
-    # TODO(akamenev): migration
-    # fire.Fire(test_webdataset)
-    pass
+    import sys
+
+    test_webdataset(sys.argv[1])

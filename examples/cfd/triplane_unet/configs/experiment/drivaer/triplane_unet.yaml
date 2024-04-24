@@ -26,9 +26,10 @@ defaults:
 train:
   batch_size: 1
 
-# data:
-#   webdataset_preprocessor:
-#     every_n_data: 10
+data:
+  webdataset_preprocessor:
+    _target_: src.data.components.DrivAerWebdatasetDragPreprocessingFunctor
+    every_n_data: 10
 
 loggers:
   wandb:

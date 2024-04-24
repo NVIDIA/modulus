@@ -14,19 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tarfile
-import uuid
 from collections import defaultdict
-from multiprocessing import Pool, set_start_method
 from pathlib import Path
-from typing import List, Literal, Optional, Union, Dict, Tuple, Callable
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
-# TODO(akamenev): migration
-# import fire
 import numpy as np
 import pandas as pd
 import pyvista as pv
-import torch
 import webdataset as wds
 from torch.utils.data import DataLoader, Dataset
 
@@ -37,24 +31,12 @@ except ImportError:
         "Could not import ensightreader. Please install it from `pip install ensight-reader`"
     )
 
-from .mesh_utils import point_cloud_to_sdf, bbox_to_centers
-
-
-# Add parent's parent directory to path
-if __name__ == "__main__":
-    import sys
-
-    # Get current path
-    current_path = Path(__file__).resolve().parent
-    # Add parent's parent directory to path
-    sys.path.append(str(current_path.parent.parent))
-
 from src.data.base_datamodule import BaseDataModule
-from src.data.mesh_utils import Normalizer, compute_drag_coefficient, convert_to_pyvista
-from src.data.webdataset_base import (
-    Webdataset,
-    NumpyPreprocessingFunctor,
-    PreprocessingFunctorBase,
+from src.data.mesh_utils import Normalizer, convert_to_pyvista
+from src.data.webdataset_base import Webdataset
+from src.data.components.drivaer_webdataset_preprocessors import (
+    DrivAerWebdatasetDragPreprocessingFunctor,
+    DrivAerWebdatasetSDFPreprocessingFunctor,
 )
 
 # DrivAer dataset
@@ -244,157 +226,6 @@ class DrivAerDataset(Dataset):
         }
 
 
-class DrivAerToWebdataset:
-    def __init__(
-        self,
-        dataset: DrivAerDataset,
-        output_path: Union[str, Path],
-        tarfile_name: str = "data.tar",
-    ):
-        self.dataset = dataset
-        self.tarfile_name = tarfile_name
-        self.output_path = Path(output_path)
-        self.temp_path = self.output_path / str(uuid.uuid4())[:8]
-        self.temp_path.mkdir(exist_ok=True)
-        print(
-            f"Saving DrivAerWebdataset to {self.temp_path} for {self.dataset.data_path} phase: {self.dataset.phase}, has_spoiler: {self.dataset.has_spoiler}"
-        )
-        # Create a text file in the temp_path and print dataset information
-        with open(self.temp_path / "info.txt", "w") as f:
-            f.write(f"Dataset: {self.dataset.data_path}\n")
-            f.write(f"Phase: {self.dataset.phase}\n")
-            f.write(f"Has spoiler: {self.dataset.has_spoiler}\n")
-            f.write(f"Number of items: {len(self.dataset)}\n")
-
-    def _save_item(self, idx: int):
-        print(f"Saving item {idx}/{len(self.dataset)}")
-        item = self.dataset[idx]
-        # Save to 0 padded index
-        np.savez_compressed(
-            self.temp_path / f"{idx:06d}.npz",
-            **item,
-        )
-
-    def save(self, num_processes: int = 1):
-        # Save each item in as a numpy file in parallel
-        assert (
-            num_processes > 0
-        ), f"num_processes should be greater than 0, got {num_processes}"
-        if num_processes < 2:
-            for idx in range(len(self.dataset)):
-                print(f"Saving item {idx}/{len(self.dataset)}")
-                self._save_item(idx)
-        elif num_processes > 1:
-            with Pool(num_processes) as p:
-                p.map(self._save_item, range(len(self.dataset)))
-
-        # Compress the dataset to a tar file
-        print("Compressing the dataset to a tar file")
-        self.output_path = self.output_path.expanduser()
-        self.output_path.mkdir(exist_ok=True)
-        tar_path = self.output_path / self.tarfile_name
-        with tarfile.open(tar_path, "w") as tar:
-            for file in self.temp_path.glob("*.npz"):
-                tar.add(file, arcname=file.name)
-
-
-class DrivAerWebdatasetPreprocessingFunctor(NumpyPreprocessingFunctor):
-    def __init__(
-        self,
-        pressure_mean: float = DRIVAER_PRESSURE_MEAN,
-        pressure_std: float = DRIVAER_PRESSURE_STD,
-        every_n_data: int = 1,
-        np_ext: str = "npz",
-        **kwargs,
-    ):
-        super().__init__(np_ext=np_ext, **kwargs)
-        self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
-        # DrivAer Mean: -150.13066236223494, std: 229.1046667362158
-        self.normalizer = Normalizer(pressure_mean, pressure_std)
-        self.every_n_data = every_n_data
-
-    def __call__(self, sample: Dict) -> Dict:
-        np_dict = super().__call__(sample)
-
-        if self.every_n_data > 1:
-            # Downsample the data
-            for k, v in np_dict.items():
-                if (isinstance(v, np.ndarray) and v.size > 1) or (
-                    isinstance(v, torch.Tensor) and v.numel() > 1
-                ):
-                    np_dict[k] = v[:: self.every_n_data]
-
-        if "Snapshot" in np_dict:
-            # array('EnSightXXX', dtype='<U10')
-            # Convert it to an integer
-            np_dict["Snapshot"] = int(
-                np.char.replace(np_dict["Snapshot"], "EnSight", "")
-            )
-
-        return np_dict
-
-
-class DrivAerWebdatasetDragPreprocessingFunctor(DrivAerWebdatasetPreprocessingFunctor):
-    def __call__(self, sample: Dict):
-        np_dict = DrivAerWebdatasetPreprocessingFunctor.__call__(self, sample)
-
-        # Compute drag coefficient using area, normal, pressure and wall shear stress
-        drag_coef = compute_drag_coefficient(
-            np_dict["cell_normals"],
-            np_dict["cell_areas"],
-            self.air_coeff / np_dict["proj_area_x"],
-            np_dict["time_avg_pressure"],
-            np_dict["time_avg_wall_shear_stress"],
-        )
-        # np_dict["c_d"] is computed on a finer mesh and the newly computed drag is on a coarser mesh so they are not equal
-        np_dict["c_d_computed"] = drag_coef
-        np_dict["time_avg_pressure_whitened"] = self.normalizer.encode(
-            np_dict["time_avg_pressure"]
-        )
-
-        return np_dict
-
-
-class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFunctor):
-    def __init__(
-        self,
-        pressure_mean: float = DRIVAER_PRESSURE_MEAN,
-        pressure_std: float = DRIVAER_PRESSURE_STD,
-        every_n_data: int = 1,
-        np_ext: str = "npz",
-        bbox_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
-        bbox_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
-        **kwargs,
-    ):
-        super().__init__(pressure_mean, pressure_std, every_n_data, np_ext, **kwargs)
-        self.bbox_min = bbox_min
-        self.bbox_max = bbox_max
-        self.bbox_resolution = bbox_resolution
-
-    def __call__(self, sample: Dict) -> Dict:
-        np_dict = super().__call__(sample)
-        # compute bbox center
-        vertices = np_dict["cell_centers"]
-        obj_min = np.min(vertices, axis=0)
-        obj_max = np.max(vertices, axis=0)
-        obj_center = (obj_min + obj_max) / 2.0
-
-        vox_centers = bbox_to_centers(
-            torch.Tensor(self.bbox_min + obj_center),
-            torch.Tensor(self.bbox_max + obj_center),
-            self.bbox_resolution,
-        )
-
-        dists = point_cloud_to_sdf(
-            torch.Tensor(vertices), torch.Tensor(vox_centers).view(-1, 3)
-        )
-        dists = dists.view(self.bbox_resolution).numpy()
-        np_dict["sdf"] = dists
-
-        return np_dict
-
-
 class DrivAerWebdataset(Webdataset):
     def __init__(
         self,
@@ -486,60 +317,14 @@ class DrivAerDataModule(BaseDataModule):
         return DataLoader(self.test_dataset, collate_fn=collate_fn, **kwargs)
 
 
-def convert_to_webdataset(
-    data_path: str,
-    out_path: Optional[str] = "~/datasets/drivaer_webdataset",
-    has_spoiler: Optional[bool] = False,
-    phase: Optional[Literal["train", "val", "test"]] = "train",
-    num_processes: Optional[int] = 8,
-):
-    set_start_method("spawn", force=True)
-    # Add the parent directory to the path
-    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
-
-    # Create separate paths for train/text, with and without spoiler
-    print(f"Saving {phase} {'with' if has_spoiler else 'without'} spoiler")
-    dataset = DrivAerDataset(data_path, phase=phase, has_spoiler=has_spoiler)
-    output_path = Path(out_path).expanduser()
-    output_path.mkdir(exist_ok=True)
-    # Save to numpy
-    DrivAerToWebdataset(
-        dataset,
-        output_path,
-        tarfile_name=f"{phase}_{'spoiler' if has_spoiler else 'nospoiler'}.tar",
-    ).save(num_processes=num_processes)
-
-
-def compute_pressure_stats(*data_paths: List[str]):
-    preprocessor = NumpyPreprocessingFunctor(every_n_data=10, np_ext="npz")
-    dataset = DrivAerWebdataset(data_paths, preprocessor)
-    num_points = []
-    means = []
-    vars = []
-
-    # visualize the progress bar using tqdm
-    import tqdm
-
-    for item in tqdm.tqdm(dataset):
-        p = item["time_avg_pressure"]
-        num_points.append(p.shape[0])
-        means.append(p.mean().item())
-        vars.append(p.var().item())
-    # Compute normalization function
-    mean = np.mean(means)
-    std = np.sqrt(np.mean(vars))
-    print(f"Mean: {mean}, std: {std}")
-    # Save the parameters as a text file
-    with open("pressure_normalization.txt", "w") as f:
-        f.write(f"Mean: {mean}, std: {std}")
-
-
 def test_datamodule(
     data_dir: str,
     subset_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
-    every_n_data: Optional[int] = 1,
+    preprocessor: str = "DrivAerWebdatasetDragPreprocessingFunctor",
+    every_n_data: Optional[int] = 100,
 ):
-    preprocessor = DrivAerWebdatasetDragPreprocessingFunctor(every_n_data=every_n_data)
+    # String to class
+    preprocessor = globals()[preprocessor](every_n_data=every_n_data)
     datamodule = DrivAerDataModule(
         data_dir, subsets_postfix=subset_postfix, webdataset_preprocessor=preprocessor
     )
@@ -548,10 +333,6 @@ def test_datamodule(
 
 
 if __name__ == "__main__":
-    __spec__ = None
-    # fire.Fire(convert_to_webdataset)
-    # fire.Fire(compute_pressure_stats)
-    # TODO(akamenev): migration
-    import fire
+    import sys
 
-    fire.Fire(test_datamodule)
+    test_datamodule(sys.argv[1], preprocessor=sys.argv[2])

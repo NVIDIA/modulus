@@ -30,6 +30,7 @@ train:
 # For faster permutation of point cloud
 data:
   webdataset_preprocessor:
+    _target_: src.data.components.DrivAerWebdatasetDragPreprocessingFunctor
     every_n_data: 100
 
 loggers:

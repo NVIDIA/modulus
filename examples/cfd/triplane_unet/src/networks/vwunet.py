@@ -286,6 +286,32 @@ class VWUNet(BaseModel):
         return x, drag_x
 
 
+class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
+    """
+    Same as VWUNet but with DrivAerDragRegressionBase for drag prediction loss
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 1,
+        out_velocity_channels: int = 3,
+        encoder_channels: List[int] = [16, 32, 64, 128, 256, 512],
+        decoder_channels: List[int] = [512, 256, 128, 64, 32, 16],
+        drag_mlp_channels: List[int] = [128, 64, 32, 16],
+    ):
+        DrivAerDragRegressionBase.__init__(self)
+        VWUNet.__init__(
+            self,
+            in_channels,
+            out_channels,
+            out_velocity_channels,
+            encoder_channels,
+            decoder_channels,
+            drag_mlp_channels,
+        )
+
+
 class TestVWUNet(unittest.TestCase):
     """
     Test VWUNet on a simple case

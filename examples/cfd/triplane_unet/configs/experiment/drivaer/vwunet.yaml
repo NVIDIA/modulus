@@ -18,38 +18,22 @@
 
 defaults:
   - /data: drivaer
-  - /model: triplane_unet_drivaer
+  - /model: vwunet
   - /loss: mseloss
   - /optimizer: adam
   - /lr_scheduler: steplr
 
 train:
-  batch_size: 1
+  num_epochs: 100
+  batch_size: 32
 
 data:
   webdataset_preprocessor:
-    _target_: src.data.components.DrivAerWebdatasetDragPreprocessingFunctor
-    every_n_data: 10
-
-model:
-  num_levels: 1
-  hidden_channels:
-    - 32
-    - 32
-    - 32
-    - 32
-  resolution_memory_format_pairs:
-    - ${res_mem_pair:xc_y_z, [  5, 150, 100]}
-    - ${res_mem_pair:yc_x_z, [250,   3, 100]}
-    - ${res_mem_pair:zc_x_y, [250, 150,   2]}
-
-lr_scheduler:
-  step_size: 25
+    _target_: src.data.components.DrivAerWebdatasetSDFPreprocessingFunctor
+    every_n_data: 100
 
 loggers:
   wandb:
     project_name: drivaer
     entity: nvr-ai-algo
-    run_name: TriplaneUNet-level1-32-res250-150-100-ks9-step25-every10
-
-seed: 0
+    run_name: VWUNet

@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .grid_feature_group_unet import (
-    PointFeatureToGridGroupUNetAhmedBody,
-    PointFeatureToGridGroupUNetDrivAer,
+from .drivaer_webdataset_preprocessors import (
+    DrivAerWebdatasetDragPreprocessingFunctor,
+    DrivAerWebdatasetSDFPreprocessingFunctor,
 )
-from .dgcnn import DrivAerNet
-from .vwunet import VWUNetDrivAer
