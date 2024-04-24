@@ -28,6 +28,7 @@ import urllib3
 import logging
 import numpy as np
 import fsspec
+import yaml
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -58,6 +59,42 @@ class ERA5Mirror:
         # Create metadata that will be used to track which chunks have been downloaded
         self.metadata_file = os.path.join(self.base_path, "metadata.json")
         self.metadata = self.get_metadata()
+
+        # If .cdsapirc does not exist in home directory create it from source file in ./credentials
+        self.create_cdsapirc()
+
+    def create_cdsapirc(self):
+        """Creates the .cdsapirc file if it is not present in the home directory.
+        If provided it is using the information from ./credentials/cdsapi.yaml to create the .cdsapirc file automatically"""
+
+        home = os.path.expanduser("~")
+        cds_credentials_path = os.path.join(home, ".cdsapirc")
+
+        if not os.path.exists(cds_credentials_path):
+            source_file = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "credentials", "cdsapi.yaml"
+            )
+
+            logger = logging.getLogger()  # Suppress logging from cdsapi
+            logger.warning(
+                """No .cdsapirc file found in the home directory. 
+                Please create it directly or alternatively specify it in %s"""
+                % source_file
+            )
+
+            # read credentials from source file in ./credentials/
+            with open(source_file) as stream:
+                credentials_dict = yaml.safe_load(stream)
+            assert (
+                credentials_dict["url"] is not None
+            ), "Please provide a valid CDSAPI url in cdsapi.yaml"
+            assert (
+                credentials_dict["key"] is not None
+            ), "Please provide a valid CDSAPI key in cdsapi.yaml"
+
+            # create .cdsapi in $HOME directory
+            with open(cds_credentials_path, "w") as target_file:
+                yaml.safe_dump(credentials_dict, target_file)
 
     def get_metadata(self):
         """Get metadata"""
