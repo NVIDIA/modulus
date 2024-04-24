@@ -232,7 +232,9 @@ def main(cfg: DictConfig) -> None:
                         net=net_reg,
                         img_lr=image_lr_patch,
                         seed_batch_size=1,
-                        seeds=list(range(dist.world_size)),  # Only run regression model once
+                        seeds=list(
+                            range(dist.world_size)
+                        ),  # Only run regression model once
                         pretext="reg",
                         class_idx=class_idx,
                     )
@@ -415,7 +417,7 @@ def generate_and_save(
     elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
     timed_steps = time_index + 1 - warmup_steps
     if dist.rank == 0:
-        average_time_per_batch_element = elapsed_time / timed_steps / batch_size    
+        average_time_per_batch_element = elapsed_time / timed_steps / batch_size
         logger.info(
             f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
         )
