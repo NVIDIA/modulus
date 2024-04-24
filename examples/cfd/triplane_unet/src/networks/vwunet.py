@@ -224,9 +224,9 @@ class VWUNet(BaseModel):
 
     def __init__(
         self,
-        in_channels: int = 3,
+        in_channels: int = 1,
         out_channels: int = 1,
-        out_velocity_channels: int = 3,
+        out_decoder_channels: int = 1,
         encoder_channels: List[int] = [16, 32, 64, 128, 256, 512],
         decoder_channels: List[int] = [512, 256, 128, 64, 32, 16],
         drag_mlp_channels: List[int] = [128, 64, 32, 16],
@@ -249,7 +249,7 @@ class VWUNet(BaseModel):
             )
 
         self.final_decoder = nn.Sequential(
-            nn.Conv3d(decoder_channels[-1], out_velocity_channels, kernel_size=1),
+            nn.Conv3d(decoder_channels[-1], out_decoder_channels, kernel_size=1),
         )
 
         # MLP that extract features from the end of encoder
@@ -293,9 +293,9 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
 
     def __init__(
         self,
-        in_channels: int = 3,
+        in_channels: int = 1,
         out_channels: int = 1,
-        out_velocity_channels: int = 3,
+        out_decoder_channels: int = 1,
         encoder_channels: List[int] = [16, 32, 64, 128, 256, 512],
         decoder_channels: List[int] = [512, 256, 128, 64, 32, 16],
         drag_mlp_channels: List[int] = [128, 64, 32, 16],
@@ -307,7 +307,7 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
             self,
             in_channels,
             out_channels,
-            out_velocity_channels,
+            out_decoder_channels,
             encoder_channels,
             decoder_channels,
             drag_mlp_channels,
@@ -315,47 +315,45 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
 
         self.bbox_min = torch.tensor(bbox_min)
         self.bbox_max = torch.tensor(bbox_max)
+        self.vert_scaler = 2 / (self.bbox_max - self.bbox_min)
 
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
-        vertices = data_dict["cell_centers"].float()
         sdf = data_dict["sdf"].unsqueeze(1)  # add channel dimension to BxCxHxWxD
-
-        # center vertices
-        vertices_max = vertices.max(0)[0]
-        vertices_min = vertices.min(0)[0]
-        vertices_center = (vertices_max + vertices_min) / 2.0
-        vertices = vertices - vertices_center
-
-        # bbox_min to be the origin of vertices
-        vertices = vertices - self.bbox_min
-
-        return vertices.to(self.device), sdf.to(self.device)
+        return sdf.to(self.device)
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
-        vertices, sdf = self.data_dict_to_input(data_dict)
+        sdf = self.data_dict_to_input(data_dict)
         normalized_pred, drag_pred = self(sdf)
-        normalized_gt = (
-            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
-        )
+        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device)
+
+        # BxNx3 vertices
+        # Assume these are centered
+        vertices = data_dict["cell_centers"].float().to(self.device)  # BxNx3
+        # Scale it to [-1, 1] for grid_sample
+        vertices = (vertices - self.bbox_min.to(self.device)) * self.vert_scaler.to(
+            self.device
+        ) - 1
+        # Convert to BxNx1x1x3
+        vertices = vertices.unsqueeze(2).unsqueeze(2)
 
         # use tri-linear interpolation to sample the pressure field
         normalized_pred = F.grid_sample(
             normalized_pred,
             vertices,
             align_corners=True,
-        )
+        )  # Bx1xNx1x1x1
+        # Bx1xNx1x1x1 -> BxN
+        normalized_pred = normalized_pred.view(normalized_pred.size(0), -1)
 
         return_dict = {}
         if loss_fn is None:
             loss_fn = self.loss
 
-        return_dict["pressure_loss"] = loss_fn(
-            normalized_pred.view(1, -1), normalized_gt.view(1, -1).to(self.device)
-        )
+        return_dict["pressure_loss"] = loss_fn(normalized_pred, normalized_gt)
 
         # compute drag loss
         gt_drag = data_dict["c_d"].float().to(self.device)
-        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
+        return_dict["drag_loss"] = loss_fn(drag_pred.view(-1), gt_drag.view(-1))
 
         return return_dict
 

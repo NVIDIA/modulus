@@ -30,7 +30,7 @@ train:
 data:
   webdataset_preprocessor:
     _target_: src.data.components.DrivAerWebdatasetSDFPreprocessingFunctor
-    every_n_data: 100
+    every_n_data: 10
     bbox_min:
       - -2.5
       - -2.5
@@ -44,8 +44,20 @@ data:
       - 128
       - 128
     dist_compute_device: cuda
-    # dist_chunk_size: 65536 # 2^16
-    dist_chunk_size: 131072 # 2^17
+    dist_chunk_size: 262144 # 2^18
+    # dist_chunk_size: 524288 # 2^19
+    # Number of points used for pressure prediction and SDF computation
+    point_sample_size: 8192 # 2^13
+
+model:
+  bbox_min:
+    - -2.5
+    - -2.5
+    - -2.5
+  bbox_max:
+    - 2.5
+    - 2.5
+    - 2.5
 
 loggers:
   wandb:

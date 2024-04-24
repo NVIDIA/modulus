@@ -106,6 +106,7 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
         dist_compute_device: str = "cuda",
         dist_chunk_size: int = 16384,
+        point_sample_size: int = 16384,
         **kwargs,
     ):
         super().__init__(pressure_mean, pressure_std, every_n_data, np_ext, **kwargs)
@@ -113,12 +114,14 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         self.bbox_max = bbox_max
         self.bbox_resolution = bbox_resolution
         self.dist_compute_device = dist_compute_device
+        assert isinstance(dist_chunk_size, int), "dist_chunk_size must be an integer"
         self.dist_chunk_size = dist_chunk_size
         self.vox_centers = bbox_to_centers(
             torch.Tensor(self.bbox_min),
             torch.Tensor(self.bbox_max),
             self.bbox_resolution,
         ).to(self.dist_compute_device)
+        self.point_sample_size = point_sample_size
 
     def __call__(self, sample: Dict) -> Dict:
         np_dict = super().__call__(sample)
@@ -128,6 +131,13 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         obj_max = np.max(vertices, axis=0)
         obj_center = (obj_min + obj_max) / 2.0
         vertices = vertices - obj_center
+
+        # Point sample index
+        point_sample_idx = np.random.choice(
+            len(vertices), self.point_sample_size, replace=True
+        )
+
+        vertices = vertices[point_sample_idx]
         vertices_device = torch.Tensor(vertices).to(self.dist_compute_device)
 
         # Distance computation
@@ -139,7 +149,8 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         dists = dists.view(self.bbox_resolution).cpu().numpy()
         np_dict["sdf"] = dists
 
+        np_dict["cell_centers"] = vertices
         np_dict["time_avg_pressure_whitened"] = self.normalizer.encode(
-            np_dict["time_avg_pressure"]
+            np_dict["time_avg_pressure"][point_sample_idx]
         )
         return np_dict
