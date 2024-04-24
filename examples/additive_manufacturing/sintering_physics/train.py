@@ -40,6 +40,8 @@ from graph_dataset import GraphDataset
 from omegaconf import DictConfig
 from torch.utils.tensorboard import SummaryWriter
 from utils import (
+    Stats,
+    cast,
     _combine_std,
     _read_metadata,
     get_anchor_z_mask,
@@ -63,26 +65,6 @@ try:
 except:
     # Invalid device or cannot modify virtual devices once initialized.
     pass
-
-
-class Stats:
-    """
-    Represents statistical attributes with methods for device transfer.
-    """
-
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def to(self, device):
-        """Transfers the mean and standard deviation to a specified device."""
-        self.mean = self.mean.to(device)
-        self.std = self.std.to(device)
-        return self
-
-
-def cast(v):
-    return np.array(v, dtype=np.float64)
 
 
 def Train(rank_zero_logger, dist, cfg: DictConfig):

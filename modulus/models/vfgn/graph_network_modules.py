@@ -503,8 +503,6 @@ class EncodeProcessDecode(Module):
             raise ValueError("Invalid arch params - EncodeProcessDecode")
         super().__init__(meta=MetaData(name="vfgn_encoderprocess_decode"))
 
-        # TODO:
-        # CHECK
         if device_list is None:
             self.device_list = ["cpu"]
         else:
@@ -819,6 +817,7 @@ class LearnedSimulator(Module):
         # 1. Node features
         node_features = []
         velocity_stats = self._normalization_stats["velocity"]
+
         normalized_velocity_sequence = (
             velocity_sequence - velocity_stats.mean
         ) / velocity_stats.std

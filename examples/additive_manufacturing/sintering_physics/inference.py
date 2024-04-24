@@ -23,10 +23,7 @@ import json
 import os
 import time
 
-import numpy as np
 from tqdm import tqdm
-
-physical_devices = tf.config.list_physical_devices("GPU")
 
 try:
     import tensorflow as tf
@@ -35,6 +32,7 @@ except ImportError:
         "Mesh Graph Net Datapipe requires the Tensorflow library. Install the "
         + "package at: https://www.tensorflow.org/install"
     )
+physical_devices = tf.config.list_physical_devices("GPU")
 
 try:
     for device_ in physical_devices:
@@ -47,7 +45,7 @@ import hydra
 import torch
 from graph_dataset import GraphDataset
 from omegaconf import DictConfig
-from utils import _combine_std, _read_metadata
+from utils import _combine_std, _read_metadata, Stats, cast
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
@@ -56,30 +54,6 @@ from modulus.launch.logging import (
     RankZeroLoggingWrapper,
 )
 from modulus.models.vfgn.graph_network_modules import LearnedSimulator
-
-
-# todo: move stats class to data / utils file
-class Stats:
-    """
-    Represents statistical attributes with methods for device transfer.
-    """
-
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def to(self, device):
-        """Transfers the mean and standard deviation to a specified device."""
-        self.mean = self.mean.to(device)
-        self.std = self.std.to(device)
-        return self
-
-
-def cast(v):
-    return np.array(v, dtype=np.float64)
-
-
-device = "cpu"
 
 
 def Inference(rank_zero_logger, dist, cfg):
@@ -141,8 +115,9 @@ def Inference(rank_zero_logger, dist, cfg):
 
     loaded = False
     example_index = 0
-    device = "cpu"
-    # device = torch.device(cfg.general.device if torch.cuda.is_available() else "cpu")
+    device = torch.device(cfg.general.device if torch.cuda.is_available() else "cpu")
+    model.setMessagePassingDevices([device])
+    model.to(device)
 
     with torch.no_grad():
         for features, targets in tqdm(dataset):
@@ -175,16 +150,16 @@ def Inference(rank_zero_logger, dist, cfg):
                 model.load_state_dict(
                     torch.load(cfg.data_options.ckpt_path_vfgn), strict=False
                 )
-                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+                # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 rank_zero_logger.info(f"Device: {device}")
                 rank_zero_logger.info(
                     f"Loaded model from ckpt path: {cfg.data_options.ckpt_path_vfgn}"
                 )
 
                 # config optimizer
-                # todo: check msg passing device
-                model.setMessagePassingDevices(["cuda:0"])
-                model = model.to(device)
+                # # todo: check msg passing device
+                # model.setMessagePassingDevices(["cuda:0"])
+                # model = model.to(device)
                 model.eval()
                 loaded = True
 

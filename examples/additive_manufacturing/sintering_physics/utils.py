@@ -37,6 +37,26 @@ METAL_PARTICLE_ID = 2  # refers to normal particles
 ANCHOR_PLANE_PARTICLE_ID = 1  # refers to anchor plane
 
 
+class Stats:
+    """
+    Represents statistical attributes with methods for device transfer.
+    """
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def to(self, device):
+        """Transfers the mean and standard deviation to a specified device."""
+        self.mean = self.mean.to(device)
+        self.std = self.std.to(device)
+        return self
+
+
+def cast(v):
+    return np.array(v, dtype=np.float64)
+
+
 def _read_metadata(data_path):
     """reads metadata"""
     with open(os.path.join(data_path, "metadata.json"), "rt") as fp:
