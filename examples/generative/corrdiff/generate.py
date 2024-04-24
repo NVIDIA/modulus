@@ -232,9 +232,7 @@ def main(cfg: DictConfig) -> None:
                         net=net_reg,
                         img_lr=image_lr_patch,
                         seed_batch_size=1,
-                        seeds=[
-                            0,
-                        ],  # Only run regression model once
+                        seeds=list(range(dist.world_size)),  # Only run regression model once
                         pretext="reg",
                         class_idx=class_idx,
                     )
@@ -393,12 +391,11 @@ def generate_and_save(
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
 
-        batch_size = image_out.shape[0]
-
         # for validation - make 3x450x450 to an ordered sequence of 50x50 patches
         # input; 1x3x450x450 --> (1*9*9)x3x50x50
 
         if dist.rank == 0:
+            batch_size = image_out.shape[0]
             # write out data in a seperate thread so we don't hold up inferencing
             writer_threads.append(
                 writer_executor.submit(
@@ -417,8 +414,8 @@ def generate_and_save(
     end.synchronize()
     elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
     timed_steps = time_index + 1 - warmup_steps
-    average_time_per_batch_element = elapsed_time / timed_steps / batch_size
     if dist.rank == 0:
+        average_time_per_batch_element = elapsed_time / timed_steps / batch_size    
         logger.info(
             f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
         )
