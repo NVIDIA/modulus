@@ -14,30 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .activations import (
-    CappedGELU,
-    CappedLeakyReLU,
-    Identity,
-    SquarePlus,
-    Stan,
-    get_activation,
-)
-from .dgm_layers import DGMLayer
-from .fourier_layers import FourierFilter, FourierLayer, GaborFilter
-from .fully_connected_layers import (
-    Conv1dFCLayer,
-    Conv2dFCLayer,
-    Conv3dFCLayer,
-    ConvNdFCLayer,
-    ConvNdKernel1Layer,
-    FCLayer,
-)
-from .siren_layers import SirenLayer, SirenLayerType
-from .spectral_layers import (
-    SpectralConv1d,
-    SpectralConv2d,
-    SpectralConv3d,
-    SpectralConv4d,
-)
-from .weight_fact import WeightFactLinear
-from .weight_norm import WeightNormLinear
+defaults:
+  - criterion: mse
+  - optimizer: adam
+  - lr_scheduler: cosine
+
+_target_: trainer.Trainer
+_recursive_: true
+max_epochs: 300
+early_stopping_patience: null
+amp_mode: "fp16"
+graph_mode: "train_eval"
+output_dir: ${output_dir}
