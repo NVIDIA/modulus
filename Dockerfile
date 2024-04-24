@@ -44,7 +44,7 @@ ENV NUMCODECS_ARM64_WHEEL=${NUMCODECS_ARM64_WHEEL:-unknown}
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Pip install for numcodecs for $TARGETPLATFORM exists, installing!" && \
         pip install --no-cache-dir numcodecs; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$NUMCODECS_ARM64_WHEEL" != "unknown"]; then \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$NUMCODECS_ARM64_WHEEL" != "unknown" ]; then \
         echo "Numcodecs wheel for $TARGETPLATFORM exists, installing!" && \
         pip install --force-reinstall --no-cache-dir /modulus/deps/${NUMCODECS_ARM64_WHEEL}; \
     else \
@@ -56,7 +56,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 ARG VTK_ARM64_WHEEL
 ENV VTK_ARM64_WHEEL=${VTK_ARM64_WHEEL:-unknown}
 
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$VTK_ARM64_WHEEL" != "unknown"]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$VTK_ARM64_WHEEL" != "unknown" ]; then \
         echo "VTK wheel $VTK_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
         pip install --no-cache-dir /modulus/deps/${VTK_ARM64_WHEEL}; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
