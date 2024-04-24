@@ -104,12 +104,14 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
         bbox_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
         bbox_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
+        dist_compute_device: str = "cuda",
         **kwargs,
     ):
         super().__init__(pressure_mean, pressure_std, every_n_data, np_ext, **kwargs)
         self.bbox_min = bbox_min
         self.bbox_max = bbox_max
         self.bbox_resolution = bbox_resolution
+        self.dist_compute_device = dist_compute_device
 
     def __call__(self, sample: Dict) -> Dict:
         np_dict = super().__call__(sample)
@@ -124,8 +126,8 @@ class DrivAerWebdatasetSDFPreprocessingFunctor(DrivAerWebdatasetPreprocessingFun
             torch.Tensor(self.bbox_max + obj_center),
             self.bbox_resolution,
         )
-        vox_centers_device = torch.Tensor(vox_centers).cuda()
-        vertices_device = torch.Tensor(vertices).cuda()
+        vox_centers_device = torch.Tensor(vox_centers).to(self.dist_compute_device)
+        vertices_device = torch.Tensor(vertices).to(self.dist_compute_device)
         dists = point_cloud_to_sdf(vertices_device, vox_centers_device.view(-1, 3))
         dists = dists.view(self.bbox_resolution).cpu().numpy()
         np_dict["sdf"] = dists
