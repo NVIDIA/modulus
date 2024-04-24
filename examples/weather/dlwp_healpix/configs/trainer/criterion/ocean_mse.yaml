@@ -14,30 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .activations import (
-    CappedGELU,
-    CappedLeakyReLU,
-    Identity,
-    SquarePlus,
-    Stan,
-    get_activation,
-)
-from .dgm_layers import DGMLayer
-from .fourier_layers import FourierFilter, FourierLayer, GaborFilter
-from .fully_connected_layers import (
-    Conv1dFCLayer,
-    Conv2dFCLayer,
-    Conv3dFCLayer,
-    ConvNdFCLayer,
-    ConvNdKernel1Layer,
-    FCLayer,
-)
-from .siren_layers import SirenLayer, SirenLayerType
-from .spectral_layers import (
-    SpectralConv1d,
-    SpectralConv2d,
-    SpectralConv3d,
-    SpectralConv4d,
-)
-from .weight_fact import WeightFactLinear
-from .weight_norm import WeightNormLinear
+_target_: modulus.metrics.climate.healpix_loss.OceanMSE
+
+lsm_file: /invariants/hpx32_1950-2022_3h_sst-only.zarr
+

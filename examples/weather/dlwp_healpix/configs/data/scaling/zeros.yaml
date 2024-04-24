@@ -14,30 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .activations import (
-    CappedGELU,
-    CappedLeakyReLU,
-    Identity,
-    SquarePlus,
-    Stan,
-    get_activation,
-)
-from .dgm_layers import DGMLayer
-from .fourier_layers import FourierFilter, FourierLayer, GaborFilter
-from .fully_connected_layers import (
-    Conv1dFCLayer,
-    Conv2dFCLayer,
-    Conv3dFCLayer,
-    ConvNdFCLayer,
-    ConvNdKernel1Layer,
-    FCLayer,
-)
-from .siren_layers import SirenLayer, SirenLayerType
-from .spectral_layers import (
-    SpectralConv1d,
-    SpectralConv2d,
-    SpectralConv3d,
-    SpectralConv4d,
-)
-from .weight_fact import WeightFactLinear
-from .weight_norm import WeightNormLinear
+z500:
+  mean: 0.
+  std: 1.
+z1000:
+  mean: 0.
+  std: 1.
+tau300-700:
+  mean: 0.
+  std: 1.
+t2m0:
+  mean: 0.
+  std: 1.
+tcwv0:
+  mean: 0.
+  std: 1.
+t850:
+  mean: 0.
+  std: 1.
+z250:
+  mean: 0.
+  std: 1.
+tp6:
+  mean: 0.
+  std: 1.
+  log_epsilon: 1e-6
