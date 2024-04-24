@@ -386,7 +386,7 @@ class DrivAerDataModule(BaseDataModule):
 
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
-        self.every_n_data = every_n_data
+        self.every_n_data = every_n_data if every_n_data is not None else 1
 
         self.normalizer = Normalizer(DRIVAER_PRESSURE_MEAN, DRIVAER_PRESSURE_STD)
         self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)

@@ -66,6 +66,25 @@ In this scenario:
 
 See [Hydra documentation](https://hydra.cc/docs/intro) for more details.
 
+### Multi-GPU Training
+
+Triplane UNet supports training and evaluation on multiple GPUs.
+This can be done using `mpirun` or [torchrun](https://pytorch.org/docs/2.0/elastic/run.html)
+utilities. For example, to train the previous example on 2 GPUs using MPI:
+
+```bash
+mpirun -np 2 python train.py \
+    +experiment=drivaer/triplane_unet \
+    data.data_path=./dataset/drivaer/ \
+    'data.subsets_postfix=[nospoiler]' \
+    'model.hidden_channels=[16, 16, 16, 16]' \
+    optimizer=adamw \
+    optimizer.lr=0.1 \
+    seed=1 \
+    train.num_epochs=10 \
+    ~loggers.wandb
+```
+
 ## References
 
 1. [Some Salient Features Of The Time-Averaged Ground Vehicle Wake](https://doi.org/10.4271/840300)
