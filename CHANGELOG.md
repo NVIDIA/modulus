@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise `ModulusUndefinedGroupError` when querying undefined process groups
+
 ### Deprecated
 
 ### Removed
