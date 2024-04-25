@@ -100,6 +100,75 @@ class SquarePlus(nn.Module):
         return 0.5 * (x + torch.sqrt(x * x + self.b))
 
 
+class CappedLeakyReLU(torch.nn.Module):
+    """
+    Implements a ReLU with capped maximum value.
+
+    Example
+    -------
+    >>> capped_leakyReLU_func = modulus.models.layers.CappedLeakyReLU()
+    >>> input = torch.Tensor([[-2,-1],[0,1],[2,3]])
+    >>> capped_leakyReLU_func(input)
+    tensor([[-0.0200, -0.0100],
+            [ 0.0000,  1.0000],
+            [ 1.0000,  1.0000]])
+
+    """
+
+    def __init__(self, cap_value=1.0, **kwargs):
+        """
+        Parameters:
+        ----------
+        cap_value: float, optional
+            Maximum that values will be capped at
+        **kwargs:
+             Keyword arguments to be passed to the `torch.nn.LeakyReLU` function
+        """
+        super().__init__()
+        self.add_module("leaky_relu", torch.nn.LeakyReLU(**kwargs))
+        self.register_buffer("cap", torch.tensor(cap_value, dtype=torch.float32))
+
+    def forward(self, inputs):
+        x = self.leaky_relu(inputs)
+        x = torch.clamp(x, max=self.cap)
+        return x
+
+
+class CappedGELU(torch.nn.Module):
+    """
+    Implements a GELU with capped maximum value.
+
+    Example
+    -------
+    >>> capped_gelu_func = modulus.models.layers.CappedGELU()
+    >>> input = torch.Tensor([[-2,-1],[0,1],[2,3]])
+    >>> capped_gelu_func(input)
+    tensor([[-0.0455, -0.1587],
+            [ 0.0000,  0.8413],
+            [ 1.0000,  1.0000]])
+
+    """
+
+    def __init__(self, cap_value=1.0, **kwargs):
+        """
+        Parameters:
+        ----------
+        cap_value: float, optional
+            Maximum that values will be capped at
+        **kwargs:
+             Keyword arguments to be passed to the `torch.nn.GELU` function
+        """
+
+        super().__init__()
+        self.add_module("gelu", torch.nn.GELU(**kwargs))
+        self.register_buffer("cap", torch.tensor(cap_value, dtype=torch.float32))
+
+    def forward(self, inputs):
+        x = self.gelu(inputs)
+        x = torch.clamp(x, max=self.cap)
+        return x
+
+
 # Dictionary of activation functions
 ACT2FN = {
     "relu": nn.ReLU,
@@ -122,6 +191,8 @@ ACT2FN = {
     "identity": Identity,
     "stan": Stan,
     "squareplus": SquarePlus,
+    "cappek_leaky_relu": CappedLeakyReLU,
+    "capped_gelu": CappedGELU,
 }
 
 
