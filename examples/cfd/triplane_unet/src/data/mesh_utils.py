@@ -306,3 +306,64 @@ def bbox_to_centers(
         torch.stack(torch.meshgrid(x, y, z), dim=-1).reshape(-1, 3) + cell_size / 2
     )
     return centers
+
+
+def parse_txt_array(
+    src: List[str],
+    sep: Optional[str] = None,
+    start: int = 0,
+    end: Optional[int] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> Tensor:
+    """From https://github.com/pyg-team/pytorch_geometric/blob/master/torch_geometric/io/txt_array.py#L8"""
+    empty = torch.empty(0, dtype=dtype)
+    to_number = float if empty.is_floating_point() else int
+
+    return torch.tensor(
+        [[to_number(x) for x in line.split(sep)[start:end]] for line in src],
+        dtype=dtype,
+    ).squeeze()
+
+
+def parse_off(src: List[str]) -> Tuple[Tensor, Tensor]:
+    # Some files may contain a bug and do not have a carriage return after OFF.
+    if src[0] == "OFF":
+        src = src[1:]
+    else:
+        src[0] = src[0][3:]
+
+    num_nodes, num_faces = [int(item) for item in src[0].split()[:2]]
+
+    vertices = parse_txt_array(src[1 : 1 + num_nodes])
+    faces = face_to_tri(src[1 + num_nodes : 1 + num_nodes + num_faces])
+
+    return vertices, faces
+
+
+def face_to_tri(face: List[str]) -> Tensor:
+    face_index = [[int(x) for x in line.strip().split()] for line in face]
+
+    triangle = torch.tensor([line[1:] for line in face_index if line[0] == 3])
+    triangle = triangle.to(torch.int64)
+
+    rect = torch.tensor([line[1:] for line in face_index if line[0] == 4])
+    rect = rect.to(torch.int64)
+
+    if rect.numel() > 0:
+        first, second = rect[:, [0, 1, 2]], rect[:, [0, 2, 3]]
+        return torch.cat([triangle, first, second], dim=0).t().contiguous()
+
+    return triangle.t().contiguous()
+
+
+def read_off(path: str) -> Tuple[Tensor, Tensor]:
+    r"""Reads an OFF (Object File Format) file, returning both the position of
+    nodes and their connectivity in a :class:`torch_geometric.data.Data`
+    object.
+
+    Args:
+        path (str): The path to the file.
+    """
+    with open(path, "r") as f:
+        src = f.read().split("\n")[:-1]
+    return parse_off(src)
