@@ -281,6 +281,10 @@ class DistributedManager(object):
         `MODULUS_DISTRIBUTED_INITIALIZATION_METHOD` environment variable and setting it
         to one of the options above.
         """
+        if DistributedManager.is_initialized():
+            warn("Distributed manager is already intialized")
+            return
+
         addr = os.getenv("MASTER_ADDR", "localhost")
         port = os.getenv("MASTER_PORT", "12355")
         # https://pytorch.org/docs/master/notes/cuda.html#id5

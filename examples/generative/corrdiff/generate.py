@@ -91,6 +91,11 @@ def main(cfg: DictConfig) -> None:
     boundary_pix = getattr(cfg, "boundary_pixels", 2)
     hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
 
+    # Initialize distributed manager
+    DistributedManager.initialize()
+    dist = DistributedManager()
+    device = dist.device
+
     if times_range is not None:
         times = []
         t_start = datetime.datetime.strptime(times_range[0], time_format)
@@ -135,11 +140,6 @@ def main(cfg: DictConfig) -> None:
         }
     else:
         raise ValueError(f"Unknown sampling method {sampling_method}")
-
-    # Initialize distributed manager
-    DistributedManager.initialize()
-    dist = DistributedManager()
-    device = dist.device
 
     # Initialize logger
     logger = PythonLogger("generate")  # General python logger
