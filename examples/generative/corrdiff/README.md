@@ -110,7 +110,7 @@ To explore the pre-trained model over Taiwan, use the
 To train the regression model on a single GPU, run
 
 ```bash
-python train.py --config-name=config_train_regression.yaml hydra.job.name=my_regression_job
+python train.py --config-name=config_train_regression.yaml
 
 ```
 
@@ -118,7 +118,7 @@ Once the regression model is trained, put the checkpoints in the `checkpoints/re
 Next, to train the diffusion mode on a single GPU, run
 
 ```bash
-python train.py --config-name=config_train_diffusion.yaml hydra.job.name=my_diffusion_job
+python train.py --config-name=config_train_diffusion.yaml
 ```
 
 This will launch a CorrDiff training using the base configs specified in

@@ -141,10 +141,10 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
 
     # Save a copy of the Modulus source code
-    # if dist.rank == 0:
-    #    shutil.copytree(
-    #        os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
-    #    )
+    if dist.rank == 0:
+        shutil.copytree(
+            os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
+        )
 
     # inform about the output
     logger.info(
