@@ -15,10 +15,10 @@
 : "${DATA_PATH:=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets/DrivAer/drivaer_webdataset}"
 : "${OUTPUT_PATH:="/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet/\${now:%Y-%m-%d}/\${now:%H-%M-%S}"}"
 
-srun                \
---nodes=1           \
---ntasks=1          \
---gpus=${NUM_GPUS}  \
+srun                    \
+--nodes=1               \
+--ntasks=${NUM_GPUS}    \
+--gpus=${NUM_GPUS}      \
 --gpus-per-node=${NUM_GPUS}             \
 --cpus-per-task=${NUM_CPUS_PER_TASK}    \
 --exclusive                             \

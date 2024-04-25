@@ -102,3 +102,21 @@ NUM_GPUS=1 sbatch ./ord/train.sbatch
 see ORD FAQ for more details.
 
 See [train.sbatch](./ord/train.sbatch) for more details.
+
+### Running multi-GPU training job
+
+TPUNet support data parallel training using standard PyTorch DDP [mechanism](https://pytorch.org/docs/2.2/generated/torch.nn.parallel.DistributedDataParallel.html#).
+
+Example of command that launches 8-GPU training job:
+
+```bash
+NUM_GPUS=8 sbatch --ntasks=8 --gres=gpu:8 ./tpunet/train.sbatch loggers.wandb.run_name=TriplaneUNet-8GPU
+```
+
+Any additional arguments can be appended to the command line above.
+
+**Note**: if Weights & Biases logger is enabled, make sure to export `WANDB_API_KEY` environment
+variable *before* running `sbatch` command.
+
+GPU usage can be monitored using [Grafana dashboard](https://grafana.nvidia.com/d/fdimc4dtoyfpcf/draco-oci-clusters-dcgm?orgId=10&var-cluster=cs-oci-ord).
+Filter **Node** using the name of the node from `scontrol show job` command.
