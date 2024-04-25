@@ -33,7 +33,7 @@ class Constants(BaseModel):
     epochs: int = 301
     num_training_samples: int = 400
     num_training_time_steps: int = 300
-    lr: float = 0.00001 #0.0001
+    lr: float = 0.00001  # 0.0001
     lr_decay_rate: float = 0.9999991
     num_input_features: int = 3
     num_output_features: int = 3

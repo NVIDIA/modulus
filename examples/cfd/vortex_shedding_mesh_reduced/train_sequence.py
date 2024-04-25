@@ -43,6 +43,8 @@ C = Constants()
 
 
 class Sequence_Trainer:
+    """Sequence trainer"""
+
     def __init__(
         self,
         wb,

@@ -130,6 +130,10 @@ class Sequence_Model(torch.nn.Module):
 
     @torch.no_grad()
     def sample(self, z0, step_size, context=None):
+        """
+        Samples a sequence starting from the initial input `z0` for a given number of steps using
+        the model's `forward` method.
+        """
         z = z0  # .unsqueeze(1)
 
         for i in range(step_size):
@@ -143,6 +147,7 @@ class Sequence_Model(torch.nn.Module):
         device: torch.device = torch.device(torch._C._get_default_device()),
         dtype: torch.dtype = torch.get_default_dtype(),
     ) -> Tensor:
+        """Generates a square mask for the sequence. The mask shows which entries should not be used."""
 
         return torch.triu(
             torch.full((sz, sz), float("-inf"), dtype=dtype, device=device),

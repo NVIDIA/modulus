@@ -15,12 +15,14 @@
 # limitations under the License.
 
 import os
+
 import dgl
 import numpy as np
 import torch
 from dgl.data import DGLDataset
 from dgl.dataloading import GraphDataLoader
 from tqdm import tqdm
+
 from .utils import load_json, save_json
 
 
@@ -49,6 +51,7 @@ class LatentDataset(DGLDataset):
     verbose : bool, optional
         verbose, by default False
     """
+
     def __init__(
         self,
         name="dataset",
@@ -85,6 +88,7 @@ class LatentDataset(DGLDataset):
         )
 
     def get_re_number(self):
+        """Get RE number"""
         ReAll = torch.from_numpy(np.linspace(300, 1000, 101)).float().reshape([-1, 1])
         nuAll = 1 / ReAll
         listCatALL = []
@@ -97,7 +101,6 @@ class LatentDataset(DGLDataset):
             index = [i for i in range(101) if i % 2 == 0]
         else:
             index = [i for i in range(101) if i % 2 == 1]
-        
 
         self.re = torch.cat(listCatALL, dim=1)[index, :]
 
@@ -150,6 +153,7 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
     verbose : bool, optional
         verbose, by default False
     """
+
     def __init__(
         self, name="dataset", data_dir="dataset", split="train", verbose=False
     ):
@@ -216,7 +220,6 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         sidx = idx // self.sequence_len
         tidx = idx % self.sequence_len
 
-        
         node_features = self.solution_states[sidx, tidx]
         node_targets = self.solution_states[sidx, tidx]
         graph = dgl.graph((self.A[0], self.A[1]), num_nodes=self.num_nodes)
@@ -255,4 +258,3 @@ class VortexSheddingRe300To1000Dataset(DGLDataset):
         """denormalizes a tensor"""
         denormalized_invar = invar * std + mu
         return denormalized_invar
-

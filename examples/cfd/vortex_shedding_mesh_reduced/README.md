@@ -63,14 +63,13 @@ cd dataset
 sh TODO: need a shell to download the raw dataset from a cloud storage.
 ```
 
-This example requires the `torch-scatter` and  `torch-cluster` library for the 
+This example requires the `torch-scatter` and  `torch-cluster` library for the
 graph nodes agrregation. Install with
 
 ```bash
 conda install pytorch-scatter -c pyg
 conda install pytorch-cluster -c pyg
 ```
-
 
 To train the encoding-decoding model, run
 

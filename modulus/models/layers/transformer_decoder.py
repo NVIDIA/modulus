@@ -32,7 +32,7 @@ class TransformerDecoder(Module):
             Layer used for the doceder
         num_layers: int
             Number of sub-decoder-layers in the decoder.
-        norm: str 
+        norm: str
             Layer normalization component.
     """
     __constants__ = ["norm"]
@@ -51,8 +51,7 @@ class TransformerDecoder(Module):
         tgt_key_padding_mask: Optional[Tensor] = None,
         tgt_is_causal: Optional[bool] = None,
     ) -> Tensor:
-        """Pass the inputs (and mask) through the decoder layer in turn.
-        """
+        """Pass the inputs (and mask) through the decoder layer in turn."""
         output = tgt
 
         tgt_is_causal = True
@@ -164,8 +163,7 @@ class DecoderOnlyLayer(Module):
         tgt_key_padding_mask: Optional[Tensor] = None,
         tgt_is_causal: bool = False,
     ) -> Tensor:
-        r"""Pass the inputs (and mask) through the decoder layer.
-        """
+        r"""Pass the inputs (and mask) through the decoder layer."""
 
         # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
 
