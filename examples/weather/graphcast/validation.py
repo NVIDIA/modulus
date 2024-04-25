@@ -20,7 +20,6 @@ import torch
 import matplotlib.pyplot as plt
 
 from modulus.datapipes.climate import ERA5HDF5Datapipe
-
 import hydra
 import wandb
 from hydra.utils import to_absolute_path

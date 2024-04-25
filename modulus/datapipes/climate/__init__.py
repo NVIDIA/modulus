@@ -15,4 +15,5 @@
 # limitations under the License.
 
 from .climate import ClimateDatapipe, ClimateDataSourceSpec
+from .dummy import DummyWeatherDataLoader
 from .era5_hdf5 import ERA5HDF5Datapipe

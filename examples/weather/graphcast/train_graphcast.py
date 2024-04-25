@@ -41,7 +41,7 @@ from train_utils import count_trainable_params
 from loss.utils import grid_cell_area
 from train_base import BaseTrainer
 from validation import Validation
-from modulus.datapipes.climate import ERA5HDF5Datapipe
+from modulus.datapipes.climate import ERA5HDF5Datapipe, DummyWeatherDataLoader
 from modulus.distributed import DistributedManager
 
 import hydra
@@ -61,6 +61,11 @@ class GraphCastTrainer(BaseTrainer):
         self.amp_dtype = None
         self.pyt_profiler = cfg.pyt_profiler
         self.grad_clip_norm = cfg.grad_clip_norm
+        static_dataset_path = (
+            to_absolute_path(cfg.static_dataset_path)
+            if cfg.static_dataset_path
+            else None
+        )
 
         if cfg.full_bf16:
             assert torch.cuda.is_bf16_supported()
@@ -83,7 +88,7 @@ class GraphCastTrainer(BaseTrainer):
         # instantiate the model
         self.model = GraphCastNet(
             meshgraph_path=to_absolute_path(cfg.icospheres_path),
-            static_dataset_path=to_absolute_path(cfg.static_dataset_path),
+            static_dataset_path=static_dataset_path,
             input_dim_grid_nodes=cfg.num_channels,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
@@ -132,7 +137,8 @@ class GraphCastTrainer(BaseTrainer):
         )
 
         # instantiate the training datapipe
-        self.datapipe = ERA5HDF5Datapipe(
+        DataPipe = DummyWeatherDataLoader if cfg.dummy_dataset else ERA5HDF5Datapipe
+        self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
             channels=[i for i in range(cfg.num_channels)],
@@ -149,8 +155,10 @@ class GraphCastTrainer(BaseTrainer):
         )
 
         # instantiate the validation
-        if dist.rank == 0:
+        if dist.rank == 0 and not cfg.dummy_dataset:
             self.validation = Validation(cfg, self.model, self.dtype, self.dist)
+        else:
+            self.validation = None
 
         # enable train mode
         self.model.train()
@@ -239,6 +247,14 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     rank_zero_logger.file_logging()
 
+    # specify the datapipe
+    if cfg.dummy_dataset:
+        DataPipe = DummyWeatherDataLoader
+        cfg.static_dataset_path = None
+        rank_zero_logger.warning("Using Dummy dataset. Ignoring static dataset.")
+    else:
+        DataPipe = ERA5HDF5Datapipe
+
     # initialize trainer
     trainer = GraphCastTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
@@ -299,7 +315,7 @@ def main(cfg: DictConfig) -> None:
                     num_rollout_steps = (
                         iter - (cfg.num_iters_step1 + cfg.num_iters_step2)
                     ) // cfg.step_change_freq + 2
-                    trainer.datapipe = ERA5HDF5Datapipe(
+                    trainer.datapipe = DataPipe(
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
                         channels=[i for i in range(cfg.num_channels)],
@@ -331,7 +347,7 @@ def main(cfg: DictConfig) -> None:
                     loss_agg += loss.detach().cpu()
 
                 # validation
-                if dist.rank == 0 and iter % cfg.val_freq == 0:
+                if trainer.validation and iter % cfg.val_freq == 0:
                     # free up GPU memory
                     del data_x, y
                     torch.cuda.empty_cache()

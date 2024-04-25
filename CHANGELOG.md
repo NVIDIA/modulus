@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression output as additional conditioning for CorrDiff.
 - Learnable positional embedding for CorrDiff.
 - Support for patch-based CorrDiff training and generation (stochastic sampling only)
+- A dummy dataloader for global weather prediction models, demonstrated on GraphCast.
 
 ### Changed
 
