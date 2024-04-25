@@ -204,7 +204,6 @@ def test_manager_undefined_group_query():
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
     DistributedManager.initialize()
-    print(DistributedManager())
 
     manager = DistributedManager()
 

@@ -53,7 +53,7 @@ class ModulusUninitializedDistributedManagerWarning(Warning):
 
 
 class DistributedManager(object):
-    """Distributed Manager for setting up distributed training enviroment.
+    """Distributed Manager for setting up distributed training environment.
 
     This is a singleton that creates a persistance class instance for storing parallel
     environment information through out the life time of the program. This should be
