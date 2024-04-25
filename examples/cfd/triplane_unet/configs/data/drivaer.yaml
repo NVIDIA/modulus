@@ -21,8 +21,4 @@ data_path: ???
 subsets_postfix:
   - spoiler
   - nospoiler
-
-webdataset_preprocessor:
-  _target_: src.data.drivaer_datamodule.DrivAerWebdatasetDragPreprocessingFunctor
-  _convert_: all
-  every_n_data: 1
+every_n_data: 10

@@ -19,11 +19,10 @@ import tarfile
 import uuid
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, Union
-
+from typing import Dict, List, Literal, Optional, Union
+import webdataset as wds
 import numpy as np
-from src.data.drivaer_datamodule import DrivAerDataset, DrivAerWebdataset
-from src.data.webdataset_base import NumpyPreprocessingFunctor
+from src.data.drivaer_datamodule import DrivAerDataset, from_numpy
 from torch.multiprocessing import set_start_method
 
 
@@ -106,8 +105,11 @@ def convert_to_webdataset(
 
 
 def compute_pressure_stats(*data_paths: List[str]):
-    preprocessor = NumpyPreprocessingFunctor(every_n_data=10, np_ext="npz")
-    dataset = DrivAerWebdataset(data_paths, preprocessor)
+    dataset = wds.DataPipeline(
+        wds.SimpleShardList(sorted(data_paths)),
+        wds.tarfile_to_samples(),
+        wds.map(lambda x: from_numpy(x, "npz")),
+    )
     num_points = []
     means = []
     vars = []

@@ -13,8 +13,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Any, Mapping
 
-from .drivaer_webdataset_preprocessors import (
-    DrivAerWebdatasetDragPreprocessingFunctor,
-    DrivAerWebdatasetSDFPreprocessingFunctor,
+from .drivaer_preprocessors import (
+    DrivAerPreprocessingFunctor,
+    DrivAerDragPreprocessingFunctor,
+    DrivAerTDFPreprocessingFunctor,
 )
+
+
+class ComposePreprocessors:
+    """
+    Compose multiple preprocessors into a single callable object
+    """
+
+    def __init__(self, preprocessors):
+        self.preprocessors = preprocessors
+
+    def __call__(self, sample: Mapping[str, Any]):
+        for preprocessor in self.preprocessors:
+            sample = preprocessor(sample)
+        return sample

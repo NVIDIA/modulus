@@ -37,11 +37,12 @@ except ImportError:
     )
 
 from src.data.base_datamodule import BaseDataModule
-from src.data.mesh_utils import Normalizer, convert_to_pyvista, compute_drag_coefficient
-from src.data.webdataset_base import Webdataset
-from src.data.components.drivaer_webdataset_preprocessors import (
-    DrivAerWebdatasetDragPreprocessingFunctor,
-    DrivAerWebdatasetSDFPreprocessingFunctor,
+from src.data.mesh_utils import convert_to_pyvista
+from src.data.components import (
+    ComposePreprocessors,
+    DrivAerPreprocessingFunctor,
+    DrivAerDragPreprocessingFunctor,
+    DrivAerTDFPreprocessingFunctor,
 )
 
 # DrivAer dataset
@@ -260,53 +261,13 @@ def from_numpy(sample: Mapping[str, Any], key: str):
     return {k: np_obj[k] for k in np_obj.files}
 
 
-def update_drivaer(
-    sample: Mapping[str, Any],
-    every_n_data: int,
-    normalizer: Normalizer,
-    air_coeff: float,
-):
-    """Adds some DrivAer pre-computed values to the sample."""
-
-    if every_n_data > 1:
-        # Downsample the data
-        for k, v in sample.items():
-            if (isinstance(v, np.ndarray) and v.size > 1) or (
-                isinstance(v, torch.Tensor) and v.numel() > 1
-            ):
-                sample[k] = v[::every_n_data]
-
-    snapshot = sample.get("Snapshot")
-    if snapshot is not None:
-        # array('EnSightXXX', dtype='<U10')
-        # Convert it to an integer
-        sample["Snapshot"] = int(np.char.replace(snapshot, "EnSight", ""))
-
-    # Compute drag coefficient using area, normal, pressure and wall shear stress
-    drag_coef = compute_drag_coefficient(
-        sample["cell_normals"],
-        sample["cell_areas"],
-        air_coeff / sample["proj_area_x"],
-        sample["time_avg_pressure"],
-        sample["time_avg_wall_shear_stress"],
-    )
-    # sample["c_d"] is computed on a finer mesh and the newly computed drag is
-    # on a coarser mesh so they are not equal
-    sample["c_d_computed"] = drag_coef
-    sample["time_avg_pressure_whitened"] = normalizer.encode(
-        sample["time_avg_pressure"]
-    )
-    return sample
-
-
 class DrivAerDataModule(BaseDataModule):
     def __init__(
         self,
         data_path: Union[Path, str],
         subsets_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
-        webdataset_preprocessor: Callable = DrivAerWebdatasetDragPreprocessingFunctor(
-            every_n_data=10
-        ),
+        preprocessors: List[Callable] = None,
+        every_n_data: int = 10,
     ):
         """
         Args:
@@ -325,10 +286,20 @@ class DrivAerDataModule(BaseDataModule):
 
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
-        self.webdataset_preprocessor = webdataset_preprocessor
 
-        self.normalizer = Normalizer(DRIVAER_PRESSURE_MEAN, DRIVAER_PRESSURE_STD)
-        self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
+        if preprocessors is None:
+            preprocessors = []
+
+        # Add normalization and downsampling first
+        preprocessors.insert(
+            0,
+            DrivAerPreprocessingFunctor(
+                pressure_mean=DRIVAER_PRESSURE_MEAN,
+                pressure_std=DRIVAER_PRESSURE_STD,
+                every_n_data=every_n_data,
+            ),
+        )
+        self.preprocessors = ComposePreprocessors(preprocessors)
 
         self._train_dataset = self._create_dataset("train")
         self._val_dataset = self._create_dataset("val")
@@ -346,11 +317,7 @@ class DrivAerDataModule(BaseDataModule):
             wds.tarfile_to_samples(),
             split_by_node_equal,
             wds.map(lambda x: from_numpy(x, "npz")),
-            wds.map(
-                lambda x: update_drivaer(
-                    x, self.every_n_data, self.normalizer, self.air_coeff
-                )
-            ),
+            wds.map(lambda x: self.preprocessors(x)),
         )
 
         return dataset

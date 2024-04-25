@@ -394,7 +394,9 @@ def main(config: DictConfig):
         set_seed(config.seed)
 
     # TODO(akamenev): restriction due to NN search code.
-    if config.train.batch_size > 1 or config.eval.batch_size > 1:
+    if "PointFeatureToGridGroupUNet" in config.model._target_ and (
+        config.train.batch_size > 1 or config.eval.batch_size > 1
+    ):
         raise ValueError(
             "Only batch size 1 is currently supported due "
             "to nearest neighbor search implementation. "
