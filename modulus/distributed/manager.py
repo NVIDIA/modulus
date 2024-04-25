@@ -44,6 +44,14 @@ class ModulusUndefinedGroupError(Exception):
         super().__init__(message)
 
 
+class ModulusUninitializedDistributedManagerWarning(Warning):
+    """Warning to indicate usage of an uninitialized DistributedManager"""
+
+    def __init__(self):
+        message = "Instantiating DistributedManager before calling DistributedManager.initialize is not recommended"
+        super().__init__(message)
+
+
 class DistributedManager(object):
     """Distributed Manager for setting up distributed training enviroment.
 
@@ -97,8 +105,15 @@ class DistributedManager(object):
             obj._group_ranks = {}
         if not hasattr(obj, "_group_names"):
             obj._group_names = {}
+        if not hasattr(obj, "_is_initialized"):
+            obj._is_initialized = False
 
         return obj
+
+    def __init__(self):
+        if not self._is_initialized:
+            raise ModulusUninitializedDistributedManagerWarning()
+        super().__init__()
 
     @property
     def rank(self):
@@ -211,7 +226,7 @@ class DistributedManager(object):
     @classmethod
     def is_initialized(cls) -> bool:
         """If manager singleton has been initialized"""
-        return len(cls._shared_state) > 0
+        return cls._shared_state.get("_is_initialized", False)
 
     @staticmethod
     def get_available_backend():
@@ -315,6 +330,11 @@ class DistributedManager(object):
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
                     DistributedManager.initialize_open_mpi(addr, port)
+                else:
+                    warn(
+                        "Could not initialize using ENV, SLURM or OPENMPI methods. Assuming this is a single process job"
+                    )
+                    DistributedManager._shared_state["_is_initialized"] = True
         elif initialization_method == "ENV":
             DistributedManager.initialize_env()
         elif initialization_method == "SLURM":
@@ -347,6 +367,7 @@ class DistributedManager(object):
         os.environ["MASTER_ADDR"] = addr
         os.environ["MASTER_PORT"] = str(port)
 
+        DistributedManager._shared_state["_is_initialized"] = True
         manager = DistributedManager()
 
         manager._distributed = torch.distributed.is_available()
