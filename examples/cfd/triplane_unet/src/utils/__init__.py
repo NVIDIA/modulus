@@ -14,34 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Standard Python logging configuration, as described here:
-# https://docs.python.org/3.10/library/logging.config.html
-version: 1
-disable_existing_loggers: false
+import functools
 
-output: ???
-rank: ???
-rank0_only: true
+from modulus.distributed import DistributedManager
 
-formatters:
-  default:
-    format: "[%(asctime)s - %(name)s - %(levelname)s] %(message)s"
-    datefmt: "%H:%M:%S"
 
-handlers:
-  console:
-    class: logging.StreamHandler
-    level: ${...loggers.tpunet.level}
-    formatter: default
+def rank0(func):
+    """Decorator that makes sure the function is executed only in rank 0 process."""
 
-  file:
-    class: logging.FileHandler
-    filename: ${...output}/train_${...rank}.log
-    level: ${...loggers.tpunet.level}
-    formatter: default
+    @functools.wraps(func)
+    def rank0_only(*args, **kwargs):
+        if DistributedManager().rank == 0:
+            return func(*args, **kwargs)
 
-loggers:
-  tpunet:
-    handlers: [console, file]
-    level: INFO
-    propagate: false
+    return rank0_only

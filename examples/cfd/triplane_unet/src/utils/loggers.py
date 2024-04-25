@@ -41,7 +41,11 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from .visualization import fig_to_numpy
+from modulus.distributed import DistributedManager
+
+from src.utils import rank0
+
+from src.utils.visualization import fig_to_numpy
 
 
 class Logger:
@@ -215,26 +219,32 @@ class Loggers(Logger):
         else:
             self.loggers = [loggers]
 
+    @rank0
     def log_scalar(self, tag: str, value: float, step: int):
         for logger in self.loggers:
             logger.log_scalar(tag, value, step)
 
+    @rank0
     def log_image(self, tag: str, img: torch.Tensor, step: int):
         for logger in self.loggers:
             logger.log_image(tag, img, step)
 
+    @rank0
     def log_figure(self, tag: str, fig, step: int):
         for logger in self.loggers:
             logger.log_figure(tag, fig, step)
 
+    @rank0
     def log_time(self, tag: str, duration: float, step: int):
         for logger in self.loggers:
             logger.log_time(tag, duration, step)
 
+    @rank0
     def log_dict(self, dict: Dict, step: int):
         for logger in self.loggers:
             logger.log_dict(dict, step)
 
+    @rank0
     def log_pointcloud(
         self,
         tag: str,
@@ -247,6 +257,10 @@ class Loggers(Logger):
 
 
 def init_logger(config: dict) -> Logger:
+
+    if DistributedManager().rank != 0:
+        return Loggers([])
+
     loggers = []
 
     for logger_type, logger_cfg in config.loggers.items():

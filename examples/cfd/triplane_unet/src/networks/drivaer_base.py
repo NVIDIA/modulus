@@ -105,7 +105,7 @@ class DrivAerBase(BaseModel):
         # compute drag loss
         gt_drag = data_dict["c_d_computed"].float().to(self.device)
         pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
-        return_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
+        return_dict["drag_loss"] = loss_fn(torch.atleast_1d(pred_drag), gt_drag)
 
         return return_dict
 
