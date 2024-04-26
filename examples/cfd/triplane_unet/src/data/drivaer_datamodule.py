@@ -318,7 +318,7 @@ class DrivAerDataModule(BaseDataModule):
             wds.tarfile_to_samples(),
             split_by_node_equal,
             wds.map(lambda x: from_numpy(x, "npz")),
-            wds.map(lambda x: self.preprocessors(x)),
+            wds.map(self.preprocessors),
         )
 
         return dataset
