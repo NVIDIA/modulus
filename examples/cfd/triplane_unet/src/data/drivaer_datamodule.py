@@ -40,8 +40,8 @@ from src.data.base_datamodule import BaseDataModule
 from src.data.components import (
     ComposePreprocessors,
     DrivAerPreprocessingFunctor,
+    DrivAerDragPreprocessingFunctor,
 )
-from src.data.components.drivaer_preprocessors import DRIVAER_AIR_COEFF
 from src.data.mesh_utils import convert_to_pyvista
 
 # DrivAer dataset
@@ -286,8 +286,6 @@ class DrivAerDataModule(BaseDataModule):
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
 
-        self.air_coeff = DRIVAER_AIR_COEFF
-
         if preprocessors is None:
             preprocessors = []
 
@@ -376,19 +374,16 @@ class DrivAerDataModule(BaseDataModule):
 def test_datamodule(
     data_dir: str,
     subset_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
-    preprocessor: str = "DrivAerWebdatasetDragPreprocessingFunctor",
-    every_n_data: Optional[int] = 100,
 ):
     # String to class
-    preprocessor = globals()[preprocessor](every_n_data=every_n_data)
     datamodule = DrivAerDataModule(
-        data_dir, subsets_postfix=subset_postfix, webdataset_preprocessor=preprocessor
+        data_dir, subsets_postfix=subset_postfix, preprocessors=[DrivAerDragPreprocessingFunctor()]
     )
-    for i, batch in enumerate(datamodule.val_dataloader()):
+    for i, batch in enumerate(datamodule.val_dataloader(num_workers=0)):
         print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
 
 
 if __name__ == "__main__":
     import sys
 
-    test_datamodule(sys.argv[1], preprocessor=sys.argv[2])
+    test_datamodule(sys.argv[1])
