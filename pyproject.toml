@@ -34,6 +34,12 @@ classifiers = [
 ]
 dynamic = ["version"]
 
+[project.urls]
+Homepage = "https://github.com/NVIDIA/modulus"
+Documentation = "https://docs.nvidia.com/modulus/#core"
+Issues = "https://github.com/NVIDIA/modulus/issues"
+Changelog = "https://github.com/NVIDIA/modulus/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 launch = [
     "hydra-core>=1.2.0",

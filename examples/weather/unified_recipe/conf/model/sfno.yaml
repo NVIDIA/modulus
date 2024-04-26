@@ -22,6 +22,20 @@ input_shape: ${transform.transformed_shape}
 args:
   inp_shape: ${model.input_shape}
   out_shape: ${model.input_shape}
-  in_channels: ${model.nr_input_channels}
-  out_channels: ${model.nr_output_channels}
-  embed_dim: 768
+  inp_chans: ${model.nr_input_channels}
+  out_chans: ${model.nr_output_channels}
+  model_grid_type: "equiangular"
+  sht_grid_type: "legendre-gauss"
+  filter_type: "linear"
+  scale_factor: 3
+  embed_dim: 384
+  num_layers: 8
+  complex_activation: "real"
+  normalization_layer: "instance_norm"
+  hard_thresholding_fraction: 1.0
+  use_mlp: !!bool True
+  mlp_ratio: 2
+  separable: !!bool False
+  operator_type: "dhconv"
+  activation_function: "gelu"
+  pos_embed: "none"
