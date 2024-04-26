@@ -72,7 +72,7 @@ def main(cfg: DictConfig) -> None:
     # Initialize config dict.
     c = EasyDict()
     c.dataset = cfg.dataset
-    if cfg.arch=="dfsr":
+    if cfg.arch == "dfsr":
         print("Training diffusion model for fluid data super-resolution.")
         dataset_class_name = "dataset.KolmogorovFlowDataset"
     else:
@@ -164,7 +164,7 @@ def main(cfg: DictConfig) -> None:
             model_channels=128,
             channel_mult=[2, 2, 2],
         )
-    elif cfg.arch  == "dfsr": # two model types for fluid data super-resolution
+    elif cfg.arch == "dfsr":  # two model types for fluid data super-resolution
         c.network_kwargs.update(
             model_type="SongUNet",
             embedding_type="positional",
@@ -207,7 +207,7 @@ def main(cfg: DictConfig) -> None:
         c.network_kwargs.class_name = "modulus.models.diffusion.VEPrecond_dfsr"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr"
     elif cfg.precond == "dfsr_cond":
-        # Configure model for physics-informed conditional fluid data super-resolution 
+        # Configure model for physics-informed conditional fluid data super-resolution
         c.network_kwargs.class_name = "modulus.models.diffusion.VEPrecond_dfsr_cond"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr"
 

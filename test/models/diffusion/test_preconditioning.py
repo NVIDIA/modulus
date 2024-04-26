@@ -70,31 +70,34 @@ def test_VEPrecond_dfsr():
     b, c, x, y = 1, 3, 256, 256
     img_resolution = 256
     img_channels = 3
-    model_kwargs = {'embedding_type': 'positional', 
-                    'encoder_type': 'standard', 
-                    'decoder_type': 'standard', 
-                    'channel_mult_noise': 1, 
-                    'resample_filter': [1, 1], 
-                    'model_channels': 64, 
-                    'channel_mult': [1, 1, 1, 2], 
-                    'dropout': 0.13}
+    model_kwargs = {
+        "embedding_type": "positional",
+        "encoder_type": "standard",
+        "decoder_type": "standard",
+        "channel_mult_noise": 1,
+        "resample_filter": [1, 1],
+        "model_channels": 64,
+        "channel_mult": [1, 1, 1, 2],
+        "dropout": 0.13,
+    }
 
-    preconditioned_model = VEPrecond_dfsr(img_resolution = img_resolution,
-        img_channels = img_channels,
-        label_dim = 0,
-        use_fp16 = False,
-        sigma_min = 0.02,
-        sigma_max = 100.0,
-        dataset_mean = 5.85e-05,
-        dataset_scale = 4.79,
-        model_type = "SongUNet",
+    preconditioned_model = VEPrecond_dfsr(
+        img_resolution=img_resolution,
+        img_channels=img_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0.02,
+        sigma_max=100.0,
+        dataset_mean=5.85e-05,
+        dataset_scale=4.79,
+        model_type="SongUNet",
         **model_kwargs
-        )
+    )
 
-    xt = torch.randn(b,c,x,y)
+    xt = torch.randn(b, c, x, y)
     t = torch.randn(b)
     pred_t = preconditioned_model(xt, t)
-    assert xt.size()==pred_t.size()
+    assert xt.size() == pred_t.size()
 
 
 def test_voriticity_residual_method():
@@ -104,29 +107,34 @@ def test_voriticity_residual_method():
     img_channels = 3
     dataset_mean = 5.85e-05
     dataset_scale = 4.79
-    model_kwargs = {'embedding_type': 'positional', 
-                    'encoder_type': 'standard', 
-                    'decoder_type': 'standard', 
-                    'channel_mult_noise': 1, 
-                    'resample_filter': [1, 1], 
-                    'model_channels': 64, 
-                    'channel_mult': [1, 1, 1, 2], 
-                    'dropout': 0.13}
+    model_kwargs = {
+        "embedding_type": "positional",
+        "encoder_type": "standard",
+        "decoder_type": "standard",
+        "channel_mult_noise": 1,
+        "resample_filter": [1, 1],
+        "model_channels": 64,
+        "channel_mult": [1, 1, 1, 2],
+        "dropout": 0.13,
+    }
 
-    preconditioned_model = VEPrecond_dfsr_cond(img_resolution = img_resolution,
-        img_channels = img_channels,
-        label_dim = 0,
-        use_fp16 = False,
-        sigma_min = 0.02,
-        sigma_max = 100.0,
-        dataset_mean = dataset_mean,
-        dataset_scale = dataset_scale,
-        model_type = "SongUNet",
+    preconditioned_model = VEPrecond_dfsr_cond(
+        img_resolution=img_resolution,
+        img_channels=img_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0.02,
+        sigma_max=100.0,
+        dataset_mean=dataset_mean,
+        dataset_scale=dataset_scale,
+        model_type="SongUNet",
         **model_kwargs
-        )
+    )
 
-    xt = torch.randn(b,c,x,y)
-    dx_t = preconditioned_model.voriticity_residual((xt*dataset_scale+dataset_mean)/dataset_scale)
+    xt = torch.randn(b, c, x, y)
+    dx_t = preconditioned_model.voriticity_residual(
+        (xt * dataset_scale + dataset_mean) / dataset_scale
+    )
 
     assert xt.size() == dx_t.size()
 
@@ -136,28 +144,31 @@ def test_VEPrecond_dfsr():
     b, c, x, y = 1, 3, 256, 256
     img_resolution = 256
     img_channels = 3
-    model_kwargs = {'embedding_type': 'positional', 
-                    'encoder_type': 'standard', 
-                    'decoder_type': 'standard', 
-                    'channel_mult_noise': 1, 
-                    'resample_filter': [1, 1], 
-                    'model_channels': 64, 
-                    'channel_mult': [1, 1, 1, 2], 
-                    'dropout': 0.13}
+    model_kwargs = {
+        "embedding_type": "positional",
+        "encoder_type": "standard",
+        "decoder_type": "standard",
+        "channel_mult_noise": 1,
+        "resample_filter": [1, 1],
+        "model_channels": 64,
+        "channel_mult": [1, 1, 1, 2],
+        "dropout": 0.13,
+    }
 
-    preconditioned_model = VEPrecond_dfsr_cond(img_resolution = img_resolution,
-        img_channels = img_channels,
-        label_dim = 0,
-        use_fp16 = False,
-        sigma_min = 0.02,
-        sigma_max = 100.0,
-        dataset_mean = 5.85e-05,
-        dataset_scale = 4.79,
-        model_type = "SongUNet",
+    preconditioned_model = VEPrecond_dfsr_cond(
+        img_resolution=img_resolution,
+        img_channels=img_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0.02,
+        sigma_max=100.0,
+        dataset_mean=5.85e-05,
+        dataset_scale=4.79,
+        model_type="SongUNet",
         **model_kwargs
-        )
+    )
 
-    xt = torch.randn(b,c,x,y)
+    xt = torch.randn(b, c, x, y)
     t = torch.randn(b)
     pred_t = preconditioned_model(xt, t)
-    assert xt.size()==pred_t.size()
+    assert xt.size() == pred_t.size()

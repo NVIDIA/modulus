@@ -985,11 +985,12 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
             sigma_data=sigma_data,
         )
 
+
 class VEPrecond_dfsr(torch.nn.Module):
     """
-    Preconditioning for dfsr model, modified from class VEPrecond, where the input 
-    argument 'sigma' in forward propagation function is used to receive the timestep 
-    of the backward diffusion process. 
+    Preconditioning for dfsr model, modified from class VEPrecond, where the input
+    argument 'sigma' in forward propagation function is used to receive the timestep
+    of the backward diffusion process.
 
     Parameters
     ----------
@@ -1012,7 +1013,7 @@ class VEPrecond_dfsr(torch.nn.Module):
 
     Note
     ----
-    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models. 
+    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models.
     Advances in neural information processing systems. 2020;33:6840-51.
     """
 
@@ -1062,7 +1063,7 @@ class VEPrecond_dfsr(torch.nn.Module):
         c_skip = 1
         c_out = sigma
         c_in = 1
-        c_noise = sigma # Change the definitation of c_noise to avoid -inf values for zero sigma
+        c_noise = sigma  # Change the definitation of c_noise to avoid -inf values for zero sigma
 
         F_x = self.model(
             (c_in * x).to(dtype),
@@ -1070,7 +1071,7 @@ class VEPrecond_dfsr(torch.nn.Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        
+
         if F_x.dtype != dtype:
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
@@ -1081,11 +1082,11 @@ class VEPrecond_dfsr(torch.nn.Module):
 
 class VEPrecond_dfsr_cond(torch.nn.Module):
     """
-    Preconditioning for dfsr model with physics-informed conditioning input, modified 
-    from class VEPrecond, where the input argument 'sigma' in forward propagation function 
-    is used to receive the timestep of the backward diffusion process. The gradient of PDE 
-    residual with respect to the vorticity in the governing Navier-Stokes equation is computed 
-    as the physics-informed conditioning variable and is combined with the backward diffusion 
+    Preconditioning for dfsr model with physics-informed conditioning input, modified
+    from class VEPrecond, where the input argument 'sigma' in forward propagation function
+    is used to receive the timestep of the backward diffusion process. The gradient of PDE
+    residual with respect to the vorticity in the governing Navier-Stokes equation is computed
+    as the physics-informed conditioning variable and is combined with the backward diffusion
     timestep before being sent to the underlying model for noise prediction.
 
     Parameters
@@ -1109,11 +1110,11 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
 
     Note
     ----
-    Reference: 
+    Reference:
     [1] Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
-    [2] Shu D, Li Z, Farimani AB. A physics-informed diffusion model for high-fidelity 
+    [2] Shu D, Li Z, Farimani AB. A physics-informed diffusion model for high-fidelity
     flow field reconstruction. Journal of Computational Physics. 2023 Apr 1;478:111972.
     """
 
@@ -1137,22 +1138,38 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         self.use_fp16 = use_fp16
         self.model = globals()[model_type](
             img_resolution=img_resolution,
-            in_channels=model_kwargs['model_channels']*2,
+            in_channels=model_kwargs["model_channels"] * 2,
             out_channels=img_channels,
             label_dim=label_dim,
             **model_kwargs,
         )  # TODO needs better handling
 
         # modules to embed residual loss
-        self.conv_in = torch.nn.Conv2d(img_channels,
-                                       model_kwargs['model_channels'],
-                                       kernel_size=3,
-                                       stride=1,
-                                       padding=1, padding_mode='circular')
+        self.conv_in = torch.nn.Conv2d(
+            img_channels,
+            model_kwargs["model_channels"],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            padding_mode="circular",
+        )
         self.emb_conv = torch.nn.Sequential(
-            torch.nn.Conv2d(img_channels, model_kwargs['model_channels'], kernel_size=1, stride=1, padding=0),
+            torch.nn.Conv2d(
+                img_channels,
+                model_kwargs["model_channels"],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
             torch.nn.GELU(),
-            torch.nn.Conv2d(model_kwargs['model_channels'], model_kwargs['model_channels'], kernel_size=3, stride=1, padding=1, padding_mode='circular')
+            torch.nn.Conv2d(
+                model_kwargs["model_channels"],
+                model_kwargs["model_channels"],
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                padding_mode="circular",
+            ),
         )
         self.dataset_mean = dataset_mean
         self.dataset_scale = dataset_scale
@@ -1179,11 +1196,14 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         c_noise = sigma
 
         # Compute physics-informed conditioning information using vorticity residual
-        dx = self.voriticity_residual((x*self.dataset_scale + self.dataset_mean)) / self.dataset_scale
+        dx = (
+            self.voriticity_residual((x * self.dataset_scale + self.dataset_mean))
+            / self.dataset_scale
+        )
         x = self.conv_in(x)
         cond_emb = self.emb_conv(dx)
         x = torch.cat((x, cond_emb), dim=1)
-        
+
         F_x = self.model(
             (c_in * x).to(dtype),
             c_noise.flatten(),
@@ -1197,9 +1217,9 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
             )
         return F_x
 
-    def voriticity_residual(self, w, re=1000.0, dt=1/32):
+    def voriticity_residual(self, w, re=1000.0, dt=1 / 32):
         """
-        Compute the gradient of PDE residual with respect to a given vorticity w using the 
+        Compute the gradient of PDE residual with respect to a given vorticity w using the
         spectrum method.
 
         Parameters
@@ -1209,8 +1229,8 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         re: float
             The value of Reynolds number used in the governing Navier-Stokes equation.
         dt: float
-            Time step used to compute the time-derivative of vorticity included in the governing 
-            Navier-Stokes equation. 
+            Time step used to compute the time-derivative of vorticity included in the governing
+            Navier-Stokes equation.
 
         Returns
         -------
@@ -1228,16 +1248,34 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
 
         w_h = torch.fft.fft2(w[:, 1:-1], dim=[2, 3])
         # Wavenumbers in y-direction
-        k_max = nx//2
+        k_max = nx // 2
         N = nx
-        k_x = torch.cat((torch.arange(start=0, end=k_max, step=1, device=device),
-                         torch.arange(start=-k_max, end=0, step=1, device=device)), 0).\
-            reshape(N, 1).repeat(1, N).reshape(1,1,N,N)
-        k_y = torch.cat((torch.arange(start=0, end=k_max, step=1, device=device),
-                         torch.arange(start=-k_max, end=0, step=1, device=device)), 0).\
-            reshape(1, N).repeat(N, 1).reshape(1,1,N,N)
+        k_x = (
+            torch.cat(
+                (
+                    torch.arange(start=0, end=k_max, step=1, device=device),
+                    torch.arange(start=-k_max, end=0, step=1, device=device),
+                ),
+                0,
+            )
+            .reshape(N, 1)
+            .repeat(1, N)
+            .reshape(1, 1, N, N)
+        )
+        k_y = (
+            torch.cat(
+                (
+                    torch.arange(start=0, end=k_max, step=1, device=device),
+                    torch.arange(start=-k_max, end=0, step=1, device=device),
+                ),
+                0,
+            )
+            .reshape(1, N)
+            .repeat(N, 1)
+            .reshape(1, 1, N, N)
+        )
         # Negative Laplacian in Fourier space
-        lap = (k_x ** 2 + k_y ** 2)
+        lap = k_x**2 + k_y**2
         lap[..., 0, 0] = 1.0
         psi_h = w_h / lap
 
@@ -1247,23 +1285,23 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         wy_h = 1j * k_y * w_h
         wlap_h = -lap * w_h
 
-        u = torch.fft.irfft2(u_h[..., :, :k_max + 1], dim=[2, 3])
-        v = torch.fft.irfft2(v_h[..., :, :k_max + 1], dim=[2, 3])
-        wx = torch.fft.irfft2(wx_h[..., :, :k_max + 1], dim=[2, 3])
-        wy = torch.fft.irfft2(wy_h[..., :, :k_max + 1], dim=[2, 3])
-        wlap = torch.fft.irfft2(wlap_h[..., :, :k_max + 1], dim=[2, 3])
-        advection = u*wx + v*wy
+        u = torch.fft.irfft2(u_h[..., :, : k_max + 1], dim=[2, 3])
+        v = torch.fft.irfft2(v_h[..., :, : k_max + 1], dim=[2, 3])
+        wx = torch.fft.irfft2(wx_h[..., :, : k_max + 1], dim=[2, 3])
+        wy = torch.fft.irfft2(wy_h[..., :, : k_max + 1], dim=[2, 3])
+        wlap = torch.fft.irfft2(wlap_h[..., :, : k_max + 1], dim=[2, 3])
+        advection = u * wx + v * wy
 
         wt = (w[:, 2:, :, :] - w[:, :-2, :, :]) / (2 * dt)
 
         # establish forcing term
-        x = torch.linspace(0, 2*np.pi, nx + 1, device=device)
+        x = torch.linspace(0, 2 * np.pi, nx + 1, device=device)
         x = x[0:-1]
         X, Y = torch.meshgrid(x, x)
-        f = -4*torch.cos(4*Y)
+        f = -4 * torch.cos(4 * Y)
 
-        residual = wt + (advection - (1.0 / re) * wlap + 0.1*w[:, 1:-1]) - f
+        residual = wt + (advection - (1.0 / re) * wlap + 0.1 * w[:, 1:-1]) - f
         residual_loss = (residual**2).mean()
         dw = torch.autograd.grad(residual_loss, w)[0]
-        
+
         return dw

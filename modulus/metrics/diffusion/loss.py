@@ -611,6 +611,7 @@ class ResLoss:
 
         return loss
 
+
 class VELoss_dfsr:
     """
     Loss function for dfsr model, modified from class VELoss.
@@ -627,13 +628,18 @@ class VELoss_dfsr:
 
     Note:
     -----
-    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models. 
+    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models.
     Advances in neural information processing systems. 2020;33:6840-51.
     """
 
-    def __init__(self, beta_start: float = 0.0001, beta_end: float = 0.02, num_diffusion_timesteps: int = 1000):
+    def __init__(
+        self,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        num_diffusion_timesteps: int = 1000,
+    ):
         # scheduler for diffusion:
-        self.beta_schedule = 'linear'
+        self.beta_schedule = "linear"
         self.beta_start = beta_start
         self.beta_end = beta_end
         self.num_diffusion_timesteps = num_diffusion_timesteps
@@ -646,10 +652,12 @@ class VELoss_dfsr:
         self.betas = torch.from_numpy(betas).float()
         self.num_timesteps = betas.shape[0]
 
-    def get_beta_schedule(self, beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
+    def get_beta_schedule(
+        self, beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps
+    ):
         """
-        Compute the variance scheduling parameters {beta(0), ..., beta(t), ..., beta(T)} 
-        based on the VP formulation. 
+        Compute the variance scheduling parameters {beta(0), ..., beta(t), ..., beta(T)}
+        based on the VP formulation.
 
         beta_schedule: str
             Method to construct the sequence of beta(t)'s.
@@ -660,19 +668,19 @@ class VELoss_dfsr:
         num_diffusion_timesteps: int
             Total number of forward/backward diffusion steps
         """
-        
+
         def sigmoid(x):
             return 1 / (np.exp(-x) + 1)
 
         if beta_schedule == "quad":
             betas = (
-                    np.linspace(
-                        beta_start ** 0.5,
-                        beta_end ** 0.5,
-                        num_diffusion_timesteps,
-                        dtype=np.float64,
-                    )
-                    ** 2
+                np.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_diffusion_timesteps,
+                    dtype=np.float64,
+                )
+                ** 2
             )
         elif beta_schedule == "linear":
             betas = np.linspace(
@@ -697,8 +705,8 @@ class VELoss_dfsr:
         Calculate and return the loss corresponding to the variance preserving
         formulation.
 
-        The method adds random noise to the input images and calculates the loss as the 
-        square difference between the network's predictions and the noise samples added 
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the noise samples added
         to the t-th step of the diffusion process.
         The noise level is determined by 'beta_t' based on the given parameters 'beta_start',
         'beta_end' and the current diffusion timestep t.
@@ -726,15 +734,15 @@ class VELoss_dfsr:
         """
         t = torch.randint(
             low=0, high=self.num_timesteps, size=(images.size(0) // 2 + 1,)
-            ).to(images.device)
-        t = torch.cat([t, self.num_timesteps - t - 1], dim=0)[:images.size(0)]
+        ).to(images.device)
+        t = torch.cat([t, self.num_timesteps - t - 1], dim=0)[: images.size(0)]
         e = torch.randn_like(images)
         b = self.betas.to(images.device)
-        a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
+        a = (1 - b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
         x = images * a.sqrt() + e * (1.0 - a).sqrt()
         num_diffusion_timesteps = b.shape[0]
-        
+
         output = net(x, t, labels)
         loss = (e - output).square()
-        
+
         return loss
