@@ -21,4 +21,4 @@ data_path: ???
 subsets_postfix:
   - spoiler
   - nospoiler
-every_n_data: 10
+every_n_data: ???
