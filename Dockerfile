@@ -141,9 +141,6 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluste
     fi
 RUN pip install --no-cache-dir "torch_geometric==2.5.3"
 
-# cleanup of stage
-RUN rm -rf /modulus/
-
 # Deployment image
 FROM builder as deploy
 COPY . /modulus/
