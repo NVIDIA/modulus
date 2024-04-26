@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import io
+import time
 import itertools
 from collections import defaultdict
 from pathlib import Path
@@ -373,17 +374,22 @@ class DrivAerDataModule(BaseDataModule):
 
 def test_datamodule(
     data_dir: str,
+    num_workers: int = 4,
     subset_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
 ):
     # String to class
     datamodule = DrivAerDataModule(
         data_dir, subsets_postfix=subset_postfix, preprocessors=[DrivAerDragPreprocessingFunctor()]
     )
-    for i, batch in enumerate(datamodule.val_dataloader(num_workers=0)):
-        print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
+    val_iter = iter(datamodule.val_dataloader(num_workers=num_workers))
+    for i in range(20):
+        tic = time.time()        
+        batch = next(val_iter)
+        print(f"Time to load batch {i}: {time.time() - tic:.2f} s")
+        # print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
 
 
 if __name__ == "__main__":
     import sys
 
-    test_datamodule(sys.argv[1])
+    test_datamodule(sys.argv[1], int(sys.argv[2]))
