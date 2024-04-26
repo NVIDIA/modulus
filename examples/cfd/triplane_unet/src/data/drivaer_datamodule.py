@@ -37,13 +37,12 @@ except ImportError:
     )
 
 from src.data.base_datamodule import BaseDataModule
-from src.data.mesh_utils import convert_to_pyvista
 from src.data.components import (
     ComposePreprocessors,
     DrivAerPreprocessingFunctor,
-    DrivAerDragPreprocessingFunctor,
-    DrivAerTDFPreprocessingFunctor,
 )
+from src.data.components.drivaer_preprocessors import DRIVAER_AIR_COEFF
+from src.data.mesh_utils import convert_to_pyvista
 
 # DrivAer dataset
 # Air density = 1.205 kg/m^3
@@ -287,18 +286,20 @@ class DrivAerDataModule(BaseDataModule):
         self.data_dir = data_path
         self.subsets_postfix = subsets_postfix
 
+        self.air_coeff = DRIVAER_AIR_COEFF
+
         if preprocessors is None:
             preprocessors = []
 
-        # Add normalization and downsampling first
-        preprocessors.insert(
-            0,
-            DrivAerPreprocessingFunctor(
-                pressure_mean=DRIVAER_PRESSURE_MEAN,
-                pressure_std=DRIVAER_PRESSURE_STD,
-                every_n_data=every_n_data,
-            ),
+        # Add normalization and downsampling first.
+        default_preproc = DrivAerPreprocessingFunctor(
+            pressure_mean=DRIVAER_PRESSURE_MEAN,
+            pressure_std=DRIVAER_PRESSURE_STD,
+            every_n_data=every_n_data,
         )
+        preprocessors.insert(0, default_preproc)
+        self.normalizer = default_preproc.normalizer
+
         self.preprocessors = ComposePreprocessors(preprocessors)
 
         self._train_dataset = self._create_dataset("train")

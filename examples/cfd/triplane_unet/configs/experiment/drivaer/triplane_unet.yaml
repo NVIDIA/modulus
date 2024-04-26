@@ -28,6 +28,8 @@ train:
 
 data:
   every_n_data: 10
+  preprocessors:
+    - _target_: src.data.components.DrivAerDragPreprocessingFunctor
 
 loggers:
   wandb:
