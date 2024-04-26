@@ -165,6 +165,7 @@ def train_model(
     model,
     dataloader,
     optimizer,
+    scheduler,
     gscaler,
     dist_manager,
     metrics,
@@ -251,6 +252,105 @@ def train_model(
             metrics["acc_loss"].append(acc_loss)
             metrics["val_loss"].append(valid_loss)
 
+        scheduler.step()
+
+    train_time = time.time() - train_start
+
+    if dist_manager.rank == 0:
+        print(
+            f"--------------------------------------------------------------------------------"
+        )
+        print(f"done. Training took {train_time}.")
+
+
+def get_random_data(dataset, device):
+    inp = torch.randn((1, 3, dataset.nlat, dataset.nlon), device=device)
+    tar = torch.randn((1, 3, dataset.nlat, dataset.nlon), device=device)
+    return inp, tar
+
+
+def train_model_on_dummy_data(
+    model,
+    dataloader,
+    optimizer,
+    scheduler,
+    gscaler,
+    dist_manager,
+    metrics,
+    num_epochs=10,
+    num_future=0,
+    num_examples=512,
+    num_valid=8,
+    loss_fn="l2",
+    enable_amp=False,
+):
+    train_start = time.time()
+
+    # count iterations
+    iters = 0
+
+    metrics["current_lr"] = []
+    metrics["epoch_time"] = []
+    metrics["acc_loss"] = []
+    metrics["val_loss"] = []
+    metrics["epochs"] = []
+
+    for epoch in range(num_epochs):
+        # time each epoch
+        epoch_start = time.time()
+
+        dataloader.dataset.set_num_examples(num_examples)
+
+        # do the training
+        acc_loss = 0
+        model.train()
+
+        for train_batch in range(num_examples):
+            inp, tar = get_random_data(dataloader.dataset, model.device)
+            with amp.autocast(enabled=enable_amp):
+                prd = model(inp)
+                for _ in range(num_future):
+                    prd = model(prd)
+                loss = l2loss(prd, tar)
+
+            acc_loss += loss.item() * inp.size(0)
+            optimizer.zero_grad(set_to_none=True)
+            gscaler.scale(loss).backward()
+            gscaler.step(optimizer)
+            gscaler.update()
+
+            iters += 1
+
+        acc_loss = acc_loss / len(dataloader.dataset)
+
+        dataloader.dataset.set_num_examples(num_valid)
+
+        # perform validation
+        valid_loss = 0.0
+        model.eval()
+        with torch.no_grad():
+            for val_batch in range(num_valid):
+                inp, tar = get_random_data(dataloader.dataset, model.device)
+                prd = model(inp)
+                for _ in range(num_future):
+                    prd = model(prd)
+                loss = l2loss(prd, tar)
+                valid_loss += loss.item() * inp.size(0)
+
+        valid_loss = valid_loss / len(dataloader.dataset)
+
+        epoch_time = time.time() - epoch_start
+
+        if metrics is not None:
+            current_lr = optimizer.param_groups[0]["lr"]
+            metrics["epochs"].append(epoch)
+            metrics["current_lr"].append(current_lr)
+            metrics["epoch_time"].append(epoch_time)
+            metrics["acc_loss"].append(acc_loss)
+            metrics["val_loss"].append(valid_loss)
+
+        scheduler.step()
+
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
@@ -262,7 +362,7 @@ def train_model(
 
 def main(
     mesh_size: int = 6,
-    short_run: bool = False,
+    dummy_data: bool = False,
     seed: int = 1234,
     root_path: Optional[str] = None,
     loss_fn: str = "l2",
@@ -284,8 +384,6 @@ def main(
     save_checkpoint = False
     enable_amp = False
 
-    num_epochs = num_epochs if not short_run else 16
-    num_examples = num_examples if not short_run else 1
     num_future = 0  # for now, no multi-step-rollout training
     # default of 0.703125 gives (256, 512)
     input_res = (
@@ -324,7 +422,6 @@ def main(
         "mesh_size": mesh_size,
         "use_lat_lon_partitioning": use_lat_lon_partitioning,
         "enable_amp": enable_amp,
-        "short_run": short_run,
         "seed": seed,
         "world_size": world_size,
     }
@@ -401,6 +498,11 @@ def main(
     if train:
         # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, 
+            milestones=[10, 20],
+            gamma=0.1
+        )
         gscaler = amp.GradScaler(enabled=enable_amp)
 
         start_time = time.time()
@@ -408,13 +510,19 @@ def main(
         if dist_manager.rank == 0:
             print(f"Training, single step")
 
-        train_model(
-            model,
-            dataloader,
-            optimizer,
-            gscaler,
-            dist_manager,
-            metrics,
+        if dummy_data:
+            train_fn = train_model_on_dummy_data
+        else:
+            train_fn = train_model
+
+        train_fn(
+            model=model,
+            dataloader=dataloader,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            gscaler=gscaler,
+            dist_manager=dist_manager,
+            metrics=metrics,
             num_examples=num_examples,
             num_epochs=num_epochs,
             loss_fn=loss_fn,
@@ -438,7 +546,8 @@ def main(
                     os.path.join(root_path, run_suffix, "checkpoints", "model.pt"),
                 )
 
-    if not short_run:
+    # skip inference for dummy_data
+    if not dummy_data:
         # set seed
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
@@ -496,7 +605,7 @@ if __name__ == "__main__":
     parser.add_argument("--mesh_size", type=int, default=6)
     # for quick debugging, directly launches training with 1 epoch
     # and 64 examples and adds suffix _short to log assets
-    parser.add_argument("--short_run", action="store_true")
+    parser.add_argument("--dummy_data", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--root_path", type=str, default=None)
     parser.add_argument("--loss", type=str, default="l2")
@@ -511,13 +620,14 @@ if __name__ == "__main__":
 
     main(
         mesh_size=args.mesh_size,
-        short_run=args.short_run,
+        dummy_data=args.dummy_data,
         seed=args.seed,
         root_path=args.root_path,
         loss_fn=args.loss,
         hidden_dim=args.hidden_dim,
         processor_layers=args.processor_layers,
         num_epochs=args.num_epochs,
+        num_examples=args.num_examples,
         angular_resolution=args.angular_resolution,
         enable_amp=args.enable_amp,
         use_lat_lon_partitioning=args.lat_lon_part,

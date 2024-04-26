@@ -51,10 +51,8 @@ class PdeDataset(torch.utils.data.Dataset):
         normalize=True,
         rank=0,
         stream=None,
-        dummy_dataset=False,
         dtype=torch.float32,
     ):
-        self.dummy_dataset = dummy_dataset
         self.dtype = dtype
 
         self.num_examples = num_examples
@@ -122,36 +120,27 @@ class PdeDataset(torch.utils.data.Dataset):
         return inp, tar
 
     def __getitem__(self, index):
-        if self.dummy_dataset:
-            inp = torch.randn(
-                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
-            )
-            tar = torch.randn(
-                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
-            )
+        if self.rank == 0:
+            with torch.inference_mode():
+                with torch.no_grad():
+                    inp, tar = self._get_sample()
+
+                    if self.normalize:
+                        inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
+                        tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
+                        inp = inp.clone()
+                        tar = tar.clone()
+
+            if inp.dtype != self.dtype:
+                inp = inp.to(dtype=self.dtype)
+                tar = tar.to(dtype=self.dtype)
 
         else:
-            if self.rank == 0:
-                with torch.inference_mode():
-                    with torch.no_grad():
-                        inp, tar = self._get_sample()
-
-                        if self.normalize:
-                            inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
-                            tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
-                            inp = inp.clone()
-                            tar = tar.clone()
-
-                if inp.dtype != self.dtype:
-                    inp = inp.to(dtype=self.dtype)
-                    tar = tar.to(dtype=self.dtype)
-
-            else:
-                inp = torch.empty(
-                    (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
-                )
-                tar = torch.empty(
-                    (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
-                )
+            inp = torch.empty(
+                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+            )
+            tar = torch.empty(
+                (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
+            )
 
         return inp, tar
