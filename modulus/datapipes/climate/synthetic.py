@@ -24,13 +24,13 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
-class DummyWeatherDataLoader(DataLoader):
+class SyntheticWeatherDataLoader(DataLoader):
     """
-    This custom DataLoader initializes the DummyWeatherDataset with given arguments.
+    This custom DataLoader initializes the SyntheticWeatherDataset with given arguments.
     """
 
     def __init__(self, *args, **kwargs):
-        dataset = DummyWeatherDataset(*args, **kwargs)
+        dataset = SyntheticWeatherDataset(*args, **kwargs)
         super().__init__(
             dataset=dataset,
             batch_size=kwargs.get("batch_size", 1),
@@ -41,7 +41,7 @@ class DummyWeatherDataLoader(DataLoader):
         )
 
 
-class DummyWeatherDataset(Dataset):
+class SyntheticWeatherDataset(Dataset):
     """
     A dataset for generating synthetic temperature data on a latitude-longitude grid for multiple atmospheric layers.
 
@@ -160,7 +160,7 @@ def plot_temperature_data(dataset: Dataset, day_index: int = 0) -> None:
     Plots the temperature data for all channels on a specified day from the dataset.
     """
     num_channels: int = dataset.num_channels
-    temperatures: np.ndarray = dataset[day_index].numpy()
+    temperatures: np.ndarray = dataset[day_index][0]['outvar'].numpy()
 
     fig, axes = plt.subplots(nrows=1, ncols=num_channels, figsize=(15, 3))
     for i in range(num_channels):
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     num_samples_per_year: int = 365
     num_steps: int = 10
     channels: List[int] = [0, 1, 2, 3, 4]
-    dataset = DummyWeatherDataset(channels, num_samples_per_year, num_steps)
+    dataset = SyntheticWeatherDataset(channels, num_samples_per_year, num_steps, device="cpu")
 
     # Plot the temperature data for the first day
     plot_temperature_data(dataset, day_index=90)
