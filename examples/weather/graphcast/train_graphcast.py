@@ -41,7 +41,7 @@ from train_utils import count_trainable_params
 from loss.utils import grid_cell_area
 from train_base import BaseTrainer
 from validation import Validation
-from modulus.datapipes.climate import ERA5HDF5Datapipe, DummyWeatherDataLoader
+from modulus.datapipes.climate import ERA5HDF5Datapipe, SyntheticWeatherDataLoader
 from modulus.distributed import DistributedManager
 
 import hydra
@@ -137,7 +137,7 @@ class GraphCastTrainer(BaseTrainer):
         )
 
         # instantiate the training datapipe
-        DataPipe = DummyWeatherDataLoader if cfg.dummy_dataset else ERA5HDF5Datapipe
+        DataPipe = SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
@@ -155,7 +155,7 @@ class GraphCastTrainer(BaseTrainer):
         )
 
         # instantiate the validation
-        if dist.rank == 0 and not cfg.dummy_dataset:
+        if dist.rank == 0 and not cfg.synthetic_dataset:
             self.validation = Validation(cfg, self.model, self.dtype, self.dist)
         else:
             self.validation = None
@@ -248,8 +248,8 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger.file_logging()
 
     # specify the datapipe
-    if cfg.dummy_dataset:
-        DataPipe = DummyWeatherDataLoader
+    if cfg.synthetic_dataset:
+        DataPipe = SyntheticWeatherDataLoader
         cfg.static_dataset_path = None
         rank_zero_logger.warning("Using Dummy dataset. Ignoring static dataset.")
     else:
