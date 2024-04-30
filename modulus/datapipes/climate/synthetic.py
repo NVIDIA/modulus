@@ -61,7 +61,7 @@ class SyntheticWeatherDataset(Dataset):
         channels: List[int],
         num_samples_per_year: int,
         num_steps: int,
-        device: str = "cuda",
+        device: str | torch.device = "cuda",
         grid_size: Tuple[int, int] = (721, 1440),
         base_temp: float = 15,
         amplitude: float = 10,
