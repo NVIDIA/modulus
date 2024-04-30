@@ -379,11 +379,13 @@ def test_datamodule(
 ):
     # String to class
     datamodule = DrivAerDataModule(
-        data_dir, subsets_postfix=subset_postfix, preprocessors=[DrivAerDragPreprocessingFunctor()]
+        data_dir,
+        subsets_postfix=subset_postfix,
+        preprocessors=[DrivAerDragPreprocessingFunctor()],
     )
     val_iter = iter(datamodule.val_dataloader(num_workers=num_workers))
     for i in range(20):
-        tic = time.time()        
+        tic = time.time()
         batch = next(val_iter)
         print(f"Time to load batch {i}: {time.time() - tic:.2f} s")
         # print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
