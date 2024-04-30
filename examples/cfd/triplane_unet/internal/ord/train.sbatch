@@ -12,8 +12,6 @@
 : "${DOCKER_IMAGE:=nvcr.io#nv-maglev/dlav/modulus-tpunet-${USER}:latest}"
 : "${NUM_GPUS:=1}"
 : "${NUM_CPUS_PER_TASK:=16}"
-: "${DATA_PATH:=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets/DrivAer/drivaer_webdataset}"
-: "${OUTPUT_PATH:="/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet/\${now:%Y-%m-%d}/\${now:%H-%M-%S}"}"
 
 srun                    \
 --nodes=1               \
@@ -25,7 +23,4 @@ srun                    \
 --container-image=${DOCKER_IMAGE}       \
 --container-mounts=/lustre:/lustre      \
 python train.py \
-    +experiment=drivaer/triplane_unet_best  \
-    data.data_path=${DATA_PATH}             \
-    output=${OUTPUT_PATH}                   \
     "${@}"

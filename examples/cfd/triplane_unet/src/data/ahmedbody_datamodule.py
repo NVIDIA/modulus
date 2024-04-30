@@ -23,6 +23,7 @@ try:
 except ImportError:
     warnings.warn("VTK not installed")
 import glob
+import logging
 import os
 import pickle
 from pathlib import Path
@@ -33,6 +34,8 @@ from torch.utils.data import Dataset, Subset
 from src.data.base_datamodule import BaseDataModule
 from src.data.dict_dataset import MappingDatasetWrapper
 from src.data.pickle_dataset import PickleDataset
+
+logger = logging.getLogger("tpunet")
 
 
 def _compute_cell_areas_and_centers(polydata):
@@ -230,20 +233,31 @@ class AhmedBodyDataModule(BaseDataModule):
         assert self.data_dir.is_dir(), f"Path {self.data_dir} is not a directory"
         # Select files that have numeric names that start with 00
         dataset = PickleDataset(self.data_dir, file_format="00*", extension="pkl")
-        assert len(dataset) == 805, f"Dataset size is {len(dataset)}, expected 805"
+        if len(dataset) != 805:
+            logger.warning(f"Dataset size is {len(dataset)}, expected 805")
 
         if transform is None:
             transform = AhmedBodyDatumTransform()
         self.transform = transform
 
-        # Split them into 600, 100, 105
-        # Use the same seed to get the same split
-        np.random.seed(42)
         indices = np.arange(len(dataset))
-        np.random.shuffle(indices)
-        train_indices = indices[:600]
-        val_indices = indices[600:700]
-        test_indices = indices[700:]
+        # For the full dataset, split items into 600, 100, 105.
+        if len(dataset) == 805:
+            # Use the same seed to get the same split.
+            rng = np.random.default_rng(42)
+            rng.shuffle(indices)
+            train_indices = indices[:600]
+            val_indices = indices[600:700]
+            test_indices = indices[700:]
+        else:
+            from sklearn.model_selection import train_test_split
+
+            train_indices, val_test = train_test_split(
+                indices, train_size=0.75, random_state=42
+            )
+            val_indices, test_indices = train_test_split(
+                val_test, train_size=0.5, random_state=42
+            )
 
         def _get_subdataset(dataset, indices):
             return MappingDatasetWrapper(
