@@ -26,7 +26,6 @@ from .manager import DistributedManager
 
 
 def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
-
     # treat trivial case first
     if num_chunks == 1:
         return [size]
