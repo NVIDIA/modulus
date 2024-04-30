@@ -24,9 +24,8 @@ import pytest
 import torch
 from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
 from pytest_utils import import_or_fail
-from torch.nn.parallel import DistributedDataParallel
 
-from modulus.distributed import DistributedManager
+from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 icosphere_path = get_icosphere_path()
@@ -99,9 +98,7 @@ def run_test_distributed_graphcast(
     if do_checkpointing:
         model_multi_gpu.set_checkpoint_model(True)
 
-    model_multi_gpu = DistributedDataParallel(
-        model_multi_gpu, process_group=manager.group("graph_partition")
-    )
+    mark_module_as_shared(model_multi_gpu, "graph_partition")
 
     # initialize data
     x_single_gpu = create_random_input(
@@ -110,10 +107,10 @@ def run_test_distributed_graphcast(
     x_multi_gpu = x_single_gpu.detach().clone()
     x_multi_gpu = (
         x_multi_gpu[0]
-        .view(model_multi_gpu.module.input_dim_grid_nodes, -1)
+        .view(model_multi_gpu.input_dim_grid_nodes, -1)
         .permute(1, 0)
     )
-    x_multi_gpu = model_multi_gpu.module.g2m_graph.get_src_node_features_in_partition(
+    x_multi_gpu = model_multi_gpu.g2m_graph.get_src_node_features_in_partition(
         x_multi_gpu
     ).requires_grad_(True)
 
@@ -123,12 +120,7 @@ def run_test_distributed_graphcast(
     loss.backward()
 
     out_multi_gpu = model_multi_gpu(x_multi_gpu)
-    # PyTorch unfortunately averages across all process groups within DistributedDataParallel
-    # by default, for tensor-parallel applications like this one, potential solutions
-    # are either custom gradient hooks (the best solution for actual training workloads)
-    # or multiplying by world_size to cancel out the normalization. As this is just a simple
-    # test, we do the easier thing here as we only compare the weight gradients.
-    loss = out_multi_gpu.sum() * world_size
+    loss = out_multi_gpu.sum()
     loss.backward()
 
     # numeric tolerances based on dtype
@@ -146,7 +138,7 @@ def run_test_distributed_graphcast(
     # compare forward, now fully materialize out_multi_gpu to faciliate comparison
     _B, _C, _N = out_multi_gpu.shape
     out_multi_gpu = out_multi_gpu.view(_C, _N).permute(1, 0)
-    out_multi_gpu = model_multi_gpu.module.m2g_graph.get_global_dst_node_features(
+    out_multi_gpu = model_multi_gpu.m2g_graph.get_global_dst_node_features(
         out_multi_gpu
     )
     out_multi_gpu = out_multi_gpu.permute(1, 0).view(out_single_gpu.shape)
@@ -194,7 +186,6 @@ def test_distributed_graphcast(
         4, num_gpus
     )  # test-graph is otherwise too small for distribution across more GPUs
 
-    torch.set_num_threads(1)
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
         args=(

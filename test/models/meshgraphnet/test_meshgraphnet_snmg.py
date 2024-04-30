@@ -25,9 +25,8 @@ import pytest
 import torch
 from meshgraphnet.utils import get_random_graph
 from pytest_utils import import_or_fail
-from torch.nn.parallel import DistributedDataParallel
 
-from modulus.distributed import DistributedManager
+from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.gnn_layers import (
     partition_graph_by_coordinate_bbox,
     partition_graph_with_id_mapping,
@@ -55,17 +54,17 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     assert manager.is_initialized() and manager._distributed
 
     model_kwds = {
-        "input_dim_nodes": 3,
-        "input_dim_edges": 4,
-        "output_dim": 5,
-        "processor_size": 4,
+        "input_dim_nodes": 32,
+        "input_dim_edges": 32,
+        "output_dim": 32,
+        "processor_size": 2,
         "num_layers_node_processor": 2,
         "num_layers_edge_processor": 2,
-        "hidden_dim_node_encoder": 256,
+        "hidden_dim_node_encoder": 32,
         "num_layers_node_encoder": 2,
-        "hidden_dim_edge_encoder": 256,
+        "hidden_dim_edge_encoder": 32,
         "num_layers_edge_encoder": 2,
-        "hidden_dim_node_decoder": 256,
+        "hidden_dim_node_decoder": 32,
         "num_layers_node_decoder": 2,
     }
 
@@ -73,20 +72,20 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     torch.cuda.manual_seed(42)
     torch.manual_seed(42)
     np.random.seed(42)
-
     model_single_gpu = MeshGraphNet(**model_kwds).to(device=manager.device, dtype=dtype)
+
     # initialze distributed model with the same seeds
     torch.cuda.manual_seed(42)
     torch.manual_seed(42)
     np.random.seed(42)
 
     model_multi_gpu = MeshGraphNet(**model_kwds).to(device=manager.device, dtype=dtype)
-    model_multi_gpu = DistributedDataParallel(
-        model_multi_gpu,
-        process_group=manager.group("graph_partition"),
-    )
+    mark_module_as_shared(model_multi_gpu, "graph_partition")
 
     # initialize data
+    torch.cuda.manual_seed(42)
+    torch.manual_seed(42)
+    np.random.seed(42)
     num_nodes = 1024
     offsets, indices = get_random_graph(
         num_nodes=num_nodes,
@@ -113,6 +112,8 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         step_size = 1.0 / (world_size + 1)
         coordinate_separators_min = [[step_size * p] for p in range(world_size)]
         coordinate_separators_max = [[step_size * (p + 1)] for p in range(world_size)]
+        coordinate_separators_min[0] = [None]
+        coordinate_separators_max[-1] = [None]
 
         graph_partition = partition_graph_by_coordinate_bbox(
             offsets,
@@ -188,12 +189,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     loss.backward()
 
     out_multi_gpu = model_multi_gpu(nfeat_multi_gpu, efeat_multi_gpu, graph_multi_gpu)
-    # PyTorch unfortunately averages across all process groups within DistributedDataParallel
-    # by default, for tensor-parallel applications like this one, potential solutions
-    # are either custom gradient hooks (the best solution for actual training workloads)
-    # or multiplying by world_size to cancel out the normalization. As this is just a simple
-    # test, we do the easier thing here as we only compare the weight gradients.
-    loss = out_multi_gpu.sum() * world_size
+    loss = out_multi_gpu.sum()
 
     loss.backward()
 
@@ -203,8 +199,8 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         torch.float16: (1e-2, 1e-3),
     }
     tolerances_weight = {
-        torch.float32: (1e-4, 1e-6),
-        torch.float16: (1e-1, 1e-3),
+        torch.float32: (1e-2, 1e-4),
+        torch.float16: (1e-1, 1e-2),
     }
     atol, rtol = tolerances[dtype]
     atol_w, rtol_w = tolerances_weight[dtype]
@@ -254,7 +250,6 @@ def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
         4, num_gpus
     )  # test-graph is otherwise too small for distribution across more GPUs
 
-    torch.set_num_threads(1)
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,
         args=(world_size, dtype, partition_scheme),

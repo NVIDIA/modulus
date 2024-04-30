@@ -57,15 +57,15 @@ def get_random_graph(device):
 
 def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, device):
     """test utility: create random node and edge features for given graph"""
-    src_feat = torch.randn(
+    src_feat = 10 * torch.rand(
         (num_src_nodes, num_channels), dtype=torch.float32, device=device
-    )
-    dst_feat = torch.randn(
+    ) + 16
+    dst_feat = 10 * torch.rand(
         (num_dst_nodes, num_channels), dtype=torch.float32, device=device
-    )
-    edge_feat = torch.randn(
+    ) + 8
+    edge_feat = 10 * torch.rand(
         (num_indices, num_channels), dtype=torch.float32, device=device
-    )
+    ) + 4
     src_feat.requires_grad_(True)
     dst_feat.requires_grad_(True)
     edge_feat.requires_grad_(True)
@@ -187,12 +187,10 @@ def run_test_distributed_graph(
                 local_src_feat,
                 get_on_all_ranks=get_on_all_ranks,
             )
-            torch.distributed.barrier()
             loss = global_src_feat.sum()
             if get_on_all_ranks:
                 loss = loss / dist_graph.partition_size
             loss.backward()
-            torch.distributed.barrier()
 
             if get_on_all_ranks or (dist_graph.partition_rank == 0):
                 assert torch.allclose(global_src_feat, src_feat)
@@ -207,8 +205,6 @@ def run_test_distributed_graph(
                         scatter_features=False,
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_src_feat))
-
-            torch.distributed.barrier()
 
             # test "local-graph" by comparing against simpel reduction on "global graph"
             global_src_feat = src_feat.detach().clone()
@@ -225,8 +221,6 @@ def run_test_distributed_graph(
                 local_src_feat
             )
 
-            torch.distributed.barrier()
-
             local_agg = scatter_reduce(
                 local_src_feat,
                 dist_graph.graph_partition.local_offsets,
@@ -238,8 +232,6 @@ def run_test_distributed_graph(
             )
             if get_on_all_ranks or (dist_graph.partition_rank == 0):
                 assert torch.allclose(local_agg, global_agg)
-
-            torch.distributed.barrier()
 
             local_loss = local_agg.sum()
             if get_on_all_ranks:
@@ -263,8 +255,6 @@ def run_test_distributed_graph(
                     )
                     assert torch.allclose(grad_local, grad_global_local)
 
-            torch.distributed.barrier()
-
     # dst-feat
     for scatter_features in [False, True]:
         for get_on_all_ranks in [False, True]:
@@ -278,12 +268,10 @@ def run_test_distributed_graph(
                 get_on_all_ranks=get_on_all_ranks,
             )
 
-            torch.distributed.barrier()
             loss = global_dst_feat.sum()
             if get_on_all_ranks:
                 loss = loss / dist_graph.partition_size
             loss.backward()
-            torch.distributed.barrier()
 
             if get_on_all_ranks:
                 assert torch.allclose(global_dst_feat, dst_feat)
@@ -303,8 +291,6 @@ def run_test_distributed_graph(
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_dst_feat))
 
-            torch.distributed.barrier()
-
     # edge-feat
     for scatter_features in [False, True]:
         for get_on_all_ranks in [False, True]:
@@ -318,12 +304,10 @@ def run_test_distributed_graph(
                 get_on_all_ranks=get_on_all_ranks,
             )
 
-            torch.distributed.barrier()
             loss = global_edge_feat.sum()
             if get_on_all_ranks:
                 loss = loss / dist_graph.partition_size
             loss.backward()
-            torch.distributed.barrier()
 
             if get_on_all_ranks:
                 assert torch.allclose(global_edge_feat, edge_feat)
@@ -343,8 +327,6 @@ def run_test_distributed_graph(
                     )
                     assert torch.allclose(grad_local, torch.ones_like(local_edge_feat))
 
-            torch.distributed.barrier()
-
     if not use_torchrun:
         DistributedManager.cleanup()
         del os.environ["RANK"]
@@ -361,7 +343,6 @@ def test_distributed_graph(partition_scheme):
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = 2  # num_gpus
 
-    torch.set_num_threads(1)
     torch.multiprocessing.spawn(
         run_test_distributed_graph,
         args=(
