@@ -15,9 +15,12 @@
 # limitations under the License.
 
 import numpy as np
+from pytest_utils import import_or_fail
+
 from modulus.utils.sdf import signed_distance_field
 
 
+@import_or_fail("warp")
 def tet_verts(flip_x=1):
     tet = np.array(
         [
@@ -64,6 +67,7 @@ def tet_verts(flip_x=1):
     return tet
 
 
+@import_or_fail("warp")
 def test_sdf():
 
     tet = tet_verts()
@@ -74,7 +78,6 @@ def test_sdf():
         np.array([1, 1, 1, 0.1, 0.1, 0.1], dtype=np.float64),
     )
     print("results:", sdf_tet)
-    # np.testing.assert_allclose(sdf_tet, [ 1.15470052, -0.1       ], atol=1e-7)
 
     sdf_tet = signed_distance_field(
         tet,

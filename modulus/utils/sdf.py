@@ -14,11 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: F401
+
+import numpy as np
 import warp as wp
 
 
 @wp.kernel
-def bvh_query_distance(
+def _bvh_query_distance(
     mesh: wp.uint64,
     points: wp.array(dtype=wp.vec3f),
     max_dist: wp.float32,
@@ -56,20 +59,21 @@ def bvh_query_distance(
 
 
 def signed_distance_field(
-    mesh_vertices,
-    mesh_indices,
-    input_points,
-    max_dist=1e8,
-    include_hit_points=False,
-    include_hit_points_and_id=False,
-):
+    mesh_vertices: list[tuple[float, float, float]],
+    mesh_indices: list[tuple[int, int, int]],
+    input_points: list[tuple[float, float, float]],
+    max_dist: float = 1e8,
+    include_hit_points: bool = False,
+    include_hit_points_and_id: bool = False,
+) -> wp.array:
     """
     Computes the signed distance field (SDF) for a given mesh and input points.
 
     Parameters:
-        mesh_vertices (list): List of vertices defining the mesh.
-        mesh_indices (list): List of indices defining the triangles of the mesh.
-        input_points (list): List of input points for which to compute the SDF.
+    ----------
+        mesh_vertices (list[tuple[float, float, float]]): List of vertices defining the mesh.
+        mesh_indices (list[tuple[int, int, int]]): List of indices defining the triangles of the mesh.
+        input_points (list[tuple[float, float, float]]): List of input points for which to compute the SDF.
         max_dist (float, optional): Maximum distance within which to search for
             the closest point on the mesh. Default is 1e8.
         include_hit_points (bool, optional): Whether to include hit points in
@@ -78,8 +82,18 @@ def signed_distance_field(
             and their corresponding IDs in the output. Default is False.
 
     Returns:
+    -------
         wp.array: An array containing the computed signed distance field.
+
+    Example:
+    -------
+    >>> mesh_vertices = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    >>> mesh_indices = np.array((0, 1, 2))
+    >>> input_points = [(0.5, 0.5, 0.5)]
+    >>> signed_distance_field(mesh_vertices, mesh_indices, input_points).numpy()
+    array([0.5], dtype=float32)
     """
+
     wp.init()
     mesh = wp.Mesh(
         wp.array(mesh_vertices, dtype=wp.vec3), wp.array(mesh_indices, dtype=wp.int32)
@@ -87,7 +101,7 @@ def signed_distance_field(
     sdf_points = wp.array(input_points, dtype=wp.vec3)
     sdf = wp.zeros(shape=sdf_points.shape, dtype=wp.float32)
     wp.launch(
-        kernel=bvh_query_distance,
+        kernel=_bvh_query_distance,
         dim=len(sdf_points),
         inputs=[mesh.id, sdf_points, max_dist, sdf],
     )
