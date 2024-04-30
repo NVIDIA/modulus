@@ -97,8 +97,8 @@ Example of command that launches a single-GPU training job:
 ### DrivAer experiment
 
 ```bash
-export DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
-export OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
 NUM_GPUS=1 sbatch ./ord/train.sbatch \
     +experiment=drivaer/triplane_unet_best                              \
     data.data_path=${DATA_PATH}/DrivAer/drivaer_webdataset              \
@@ -108,11 +108,11 @@ NUM_GPUS=1 sbatch ./ord/train.sbatch \
 ### Ahmed body experiment
 
 ```bash
-export DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
-export OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
 NUM_GPUS=1 sbatch ./ord/train.sbatch \
     +experiment=ahmed/triplane_unet_best  \
-    data.data_path=${DATA_PATH}/AhmedBody/ahmed_preprocessed \
+    data.data_dir=${DATA_PATH}/AhmedBody/ahmed_preprocessed \
     output="${OUTPUT_PATH}/ahmed/\${now:%Y-%m-%d}/\${now:%H-%M-%S}" \
 ```
 
@@ -125,11 +125,11 @@ See [train.sbatch](./ord/train.sbatch) for more details.
 
 TPUNet support data parallel training using standard PyTorch DDP [mechanism](https://pytorch.org/docs/2.2/generated/torch.nn.parallel.DistributedDataParallel.html#).
 
-Example of command that launches 8-GPU training job:
+Example of command that launches 8-GPU DrivAer training job:
 
 ```bash
-export DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
-export OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
 NUM_GPUS=8 sbatch --ntasks=8 --gres=gpu:8 ./tpunet/train.sbatch
     +experiment=drivaer/triplane_unet_best                              \
     data.data_path=${DATA_PATH}/DrivAer/drivaer_webdataset              \

@@ -46,7 +46,7 @@ lr_scheduler:
 
 loggers:
   wandb:
-    project_name: drivaer
+    project_name: ahmed_body
     entity: nvr-ai-algo
     run_name: TriplaneUNet-level1-32-res186-70-60-ks11-step25-every10
 

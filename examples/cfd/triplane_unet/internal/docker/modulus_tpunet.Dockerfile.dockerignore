@@ -1,0 +1,9 @@
+.git/
+.github/
+.gitlab/
+.ruff_cache/
+*.egg-info/
+
+/docs
+
+*/__pycache__/
