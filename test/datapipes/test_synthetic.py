@@ -16,14 +16,21 @@
 
 
 import pytest
-import numpy as np
-import torch
-from modulus.datapipes.climate import SyntheticWeatherDataLoader, SyntheticWeatherDataset
+
+from modulus.datapipes.climate import (
+    SyntheticWeatherDataLoader,
+    SyntheticWeatherDataset,
+)
+
 
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_dataloader_setup(device):
     dataloader = SyntheticWeatherDataLoader(
-        channels=[0, 1, 2, 3], num_samples_per_year=12, num_steps=5, device=device, grid_size=(8, 8),
+        channels=[0, 1, 2, 3],
+        num_samples_per_year=12,
+        num_steps=5,
+        device=device,
+        grid_size=(8, 8),
         batch_size=3,
         shuffle=True,
         num_workers=2,
@@ -33,36 +40,44 @@ def test_dataloader_setup(device):
     assert dataloader.num_workers == 2
     assert isinstance(dataloader.dataset, SyntheticWeatherDataset)
 
+
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_dataloader_iteration(device):
     """Test the iteration over batches in the DataLoader."""
     dataloader = SyntheticWeatherDataLoader(
-        channels=[0, 1], num_samples_per_year=30, num_steps=4, device=device, grid_size=(24, 24),
+        channels=[0, 1],
+        num_samples_per_year=30,
+        num_steps=4,
+        device=device,
+        grid_size=(24, 24),
         batch_size=2,
         shuffle=False,
         num_workers=0,
     )
     for batch in dataloader:
-        assert isinstance(batch, list) 
-        sample = batch[0] 
-        assert 'invar' in sample
-        assert 'outvar' in sample
-        assert sample['invar'].shape == (dataloader.batch_size, 2, 24, 24)
-        assert sample['outvar'].shape == (dataloader.batch_size, 4, 2, 24, 24)
-        assert sample['invar'].device.type == device
-        assert sample['outvar'].device.type == device
+        assert isinstance(batch, list)
+        sample = batch[0]
+        assert "invar" in sample
+        assert "outvar" in sample
+        assert sample["invar"].shape == (dataloader.batch_size, 2, 24, 24)
+        assert sample["outvar"].shape == (dataloader.batch_size, 4, 2, 24, 24)
+        assert sample["invar"].device.type == device
+        assert sample["outvar"].device.type == device
         break  # Only test one batch for quick testing
+
 
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_dataloader_length(device):
     """Test the length of the DataLoader to ensure it is correct based on the dataset and batch size."""
     dataloader = SyntheticWeatherDataLoader(
-        channels=[0, 1, 2], num_samples_per_year=30, num_steps=2, device=device, grid_size=(10, 10),
+        channels=[0, 1, 2],
+        num_samples_per_year=30,
+        num_steps=2,
+        device=device,
+        grid_size=(10, 10),
         batch_size=4,
         shuffle=True,
         num_workers=0,
     )
     expected_length = (30 - 2) // 4  # dataset length divided by batch size
     assert len(dataloader) == expected_length
-
-

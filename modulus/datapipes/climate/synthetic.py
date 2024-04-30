@@ -160,7 +160,7 @@ def plot_temperature_data(dataset: Dataset, day_index: int = 0) -> None:
     Plots the temperature data for all channels on a specified day from the dataset.
     """
     num_channels: int = dataset.num_channels
-    temperatures: np.ndarray = dataset[day_index][0]['outvar'].numpy()
+    temperatures: np.ndarray = dataset[day_index][0]["outvar"].numpy()
 
     fig, axes = plt.subplots(nrows=1, ncols=num_channels, figsize=(15, 3))
     for i in range(num_channels):
@@ -179,7 +179,9 @@ if __name__ == "__main__":
     num_samples_per_year: int = 365
     num_steps: int = 10
     channels: List[int] = [0, 1, 2, 3, 4]
-    dataset = SyntheticWeatherDataset(channels, num_samples_per_year, num_steps, device="cpu")
+    dataset = SyntheticWeatherDataset(
+        channels, num_samples_per_year, num_steps, device="cpu"
+    )
 
     # Plot the temperature data for the first day
     plot_temperature_data(dataset, day_index=90)

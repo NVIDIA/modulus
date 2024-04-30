@@ -137,7 +137,9 @@ class GraphCastTrainer(BaseTrainer):
         )
 
         # instantiate the training datapipe
-        DataPipe = SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
+        DataPipe = (
+            SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
+        )
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
