@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import io
+import time
 import itertools
 from collections import defaultdict
 from pathlib import Path
@@ -37,13 +38,12 @@ except ImportError:
     )
 
 from src.data.base_datamodule import BaseDataModule
-from src.data.mesh_utils import convert_to_pyvista
 from src.data.components import (
     ComposePreprocessors,
     DrivAerPreprocessingFunctor,
     DrivAerDragPreprocessingFunctor,
-    DrivAerTDFPreprocessingFunctor,
 )
+from src.data.mesh_utils import convert_to_pyvista
 
 # DrivAer dataset
 # Air density = 1.205 kg/m^3
@@ -290,15 +290,15 @@ class DrivAerDataModule(BaseDataModule):
         if preprocessors is None:
             preprocessors = []
 
-        # Add normalization and downsampling first
-        preprocessors.insert(
-            0,
-            DrivAerPreprocessingFunctor(
-                pressure_mean=DRIVAER_PRESSURE_MEAN,
-                pressure_std=DRIVAER_PRESSURE_STD,
-                every_n_data=every_n_data,
-            ),
+        # Add normalization and downsampling first.
+        default_preproc = DrivAerPreprocessingFunctor(
+            pressure_mean=DRIVAER_PRESSURE_MEAN,
+            pressure_std=DRIVAER_PRESSURE_STD,
+            every_n_data=every_n_data,
         )
+        preprocessors.insert(0, default_preproc)
+        self.normalizer = default_preproc.normalizer
+
         self.preprocessors = ComposePreprocessors(preprocessors)
 
         self._train_dataset = self._create_dataset("train")
@@ -317,7 +317,7 @@ class DrivAerDataModule(BaseDataModule):
             wds.tarfile_to_samples(),
             split_by_node_equal,
             wds.map(lambda x: from_numpy(x, "npz")),
-            wds.map(lambda x: self.preprocessors(x)),
+            wds.map(self.preprocessors),
         )
 
         return dataset
@@ -374,20 +374,22 @@ class DrivAerDataModule(BaseDataModule):
 
 def test_datamodule(
     data_dir: str,
+    num_workers: int = 4,
     subset_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
-    preprocessor: str = "DrivAerWebdatasetDragPreprocessingFunctor",
-    every_n_data: Optional[int] = 100,
 ):
     # String to class
-    preprocessor = globals()[preprocessor](every_n_data=every_n_data)
     datamodule = DrivAerDataModule(
-        data_dir, subsets_postfix=subset_postfix, webdataset_preprocessor=preprocessor
+        data_dir, subsets_postfix=subset_postfix, preprocessors=[DrivAerDragPreprocessingFunctor()]
     )
-    for i, batch in enumerate(datamodule.val_dataloader()):
-        print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
+    val_iter = iter(datamodule.val_dataloader(num_workers=num_workers))
+    for i in range(20):
+        tic = time.time()        
+        batch = next(val_iter)
+        print(f"Time to load batch {i}: {time.time() - tic:.2f} s")
+        # print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)
 
 
 if __name__ == "__main__":
     import sys
 
-    test_datamodule(sys.argv[1], preprocessor=sys.argv[2])
+    test_datamodule(sys.argv[1], int(sys.argv[2]))
