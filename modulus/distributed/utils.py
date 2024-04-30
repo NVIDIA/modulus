@@ -425,10 +425,10 @@ def gather_v_wrapper(
         else:
             tensor_shape[dim] = 0
             x_send[r] = torch.empty(
-                        tensor_shape,
-                        dtype=tensor.dtype,
-                        device=tensor.device,
-                    )
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
 
     dist.all_to_all(x_recv, x_send, group=group)
 
@@ -497,7 +497,7 @@ def scatter_v_wrapper(
     #     for r in range(comm_size):
     #        if r != src:
     #             req_list[r].wait()
-    # 
+    #
     # else:
     #     req = dist.irecv(output, src=src, group=group)
     #     req.wait()
@@ -514,21 +514,15 @@ def scatter_v_wrapper(
         for r in range(comm_size):
             tensor_shape[dim] = 0
             x_send[r] = torch.empty(
-                tensor_shape, 
-                device=tensor.device, 
-                dtype=tensor.dtype
+                tensor_shape, device=tensor.device, dtype=tensor.dtype
             )
-    
+
     for r in range(comm_size):
         if r == src:
             tensor_shape[dim] = sizes[rank]
         else:
             tensor_shape[dim] = 0
-        x_recv[r] = torch.empty(
-            tensor_shape, 
-            device=tensor.device, 
-            dtype=tensor.dtype
-        )
+        x_recv[r] = torch.empty(tensor_shape, device=tensor.device, dtype=tensor.dtype)
 
     dist.all_to_all(x_recv, x_send, group=group)
 
@@ -590,10 +584,10 @@ def indexed_all_to_all_v_wrapper(
     for r in range(comm_size):
         tensor_shape[dim] = sizes[r][rank]
         x_recv[r] = torch.empty(
-                tensor_shape,
-                dtype=tensor.dtype,
-                device=tensor.device,
-            )
+            tensor_shape,
+            dtype=tensor.dtype,
+            device=tensor.device,
+        )
 
     dist.all_to_all(x_recv, x_send, group=group)
 
@@ -661,7 +655,7 @@ def indexed_all_to_all_v_wrapper_bwd(
     recv_sizes = [sizes[i][rank] for i in range(comm_size)]
     # send_sizes in forward pass
     send_sizes = [sizes[rank][i] for i in range(comm_size)]
-    
+
     x_send = torch.split(tensor, recv_sizes, dim=dim)
     x_send = [t.contiguous() for t in x_send]
     x_recv = [None] * comm_size

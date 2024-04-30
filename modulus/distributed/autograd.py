@@ -184,9 +184,8 @@ class ScatterVAutograd(torch.autograd.Function):
         # to not break the backward pass due to not-matching gradients
         # we create a "dummy" gradient on other ranks if input tensor
         # is passed with a certain shape
-        if (
-            (dist.get_rank(group=ctx.group) != ctx.src) and 
-            (grad_tensor.size() != ctx.tensor_meta_data["size"])
+        if (dist.get_rank(group=ctx.group) != ctx.src) and (
+            grad_tensor.size() != ctx.tensor_meta_data["size"]
         ):
             grad_tensor = torch.empty(**ctx.tensor_meta_data)
 

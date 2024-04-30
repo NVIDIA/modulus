@@ -57,15 +57,20 @@ def get_random_graph(device):
 
 def get_random_feat(num_src_nodes, num_dst_nodes, num_indices, num_channels, device):
     """test utility: create random node and edge features for given graph"""
-    src_feat = 10 * torch.rand(
-        (num_src_nodes, num_channels), dtype=torch.float32, device=device
-    ) + 16
-    dst_feat = 10 * torch.rand(
-        (num_dst_nodes, num_channels), dtype=torch.float32, device=device
-    ) + 8
-    edge_feat = 10 * torch.rand(
-        (num_indices, num_channels), dtype=torch.float32, device=device
-    ) + 4
+    src_feat = (
+        10
+        * torch.rand((num_src_nodes, num_channels), dtype=torch.float32, device=device)
+        + 16
+    )
+    dst_feat = (
+        10
+        * torch.rand((num_dst_nodes, num_channels), dtype=torch.float32, device=device)
+        + 8
+    )
+    edge_feat = (
+        10 * torch.rand((num_indices, num_channels), dtype=torch.float32, device=device)
+        + 4
+    )
     src_feat.requires_grad_(True)
     dst_feat.requires_grad_(True)
     edge_feat.requires_grad_(True)
@@ -173,7 +178,6 @@ def run_test_distributed_graph(
         partition_size=manager.world_size,
         graph_partition=graph_partition,
     )
-    torch.distributed.barrier()
 
     # src-feat
     for scatter_features in [False, True]:

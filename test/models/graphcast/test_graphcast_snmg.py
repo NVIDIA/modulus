@@ -106,9 +106,7 @@ def run_test_distributed_graphcast(
     ).to(device=device, dtype=dtype)
     x_multi_gpu = x_single_gpu.detach().clone()
     x_multi_gpu = (
-        x_multi_gpu[0]
-        .view(model_multi_gpu.input_dim_grid_nodes, -1)
-        .permute(1, 0)
+        x_multi_gpu[0].view(model_multi_gpu.input_dim_grid_nodes, -1).permute(1, 0)
     )
     x_multi_gpu = model_multi_gpu.g2m_graph.get_src_node_features_in_partition(
         x_multi_gpu

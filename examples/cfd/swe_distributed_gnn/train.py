@@ -499,9 +499,7 @@ def main(
         # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, 
-            milestones=[10, 20],
-            gamma=0.1
+            optimizer, milestones=[10, 20], gamma=0.1
         )
         gscaler = amp.GradScaler(enabled=enable_amp)
 
