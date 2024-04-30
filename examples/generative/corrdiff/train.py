@@ -35,7 +35,7 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict, parse_int_list
 
 from training import training_loop
-from datasets.dataset import init_dataset_from_config
+from datasets.dataset import init_train_valid_datasets_from_config
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
@@ -69,6 +69,7 @@ def main(cfg: DictConfig) -> None:
     duration = getattr(cfg, "duration", 200)
     batch_size_global = getattr(cfg, "batch_size_global", 256)
     batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
+    train_test_split = getattr(cfg.dataset, "train_test_split", False)
     cbase = getattr(cfg, "cbase", 1)
     # cres = parse_int_list(getattr(cfg, "cres", None))
     lr = getattr(cfg, "lr", 0.0002)
@@ -77,15 +78,27 @@ def main(cfg: DictConfig) -> None:
     augment = getattr(cfg, "augment", 0.0)
 
     # Parse performance options
-    fp16 = getattr(cfg, "fp16", False)
+    if hasattr(cfg, "fp_optimizations"):
+        fp_optimizations = cfg.fp_optimizations
+        fp16 = fp_optimizations == "fp16"
+    else:
+        # look for legacy "fp16" parameter
+        fp16 = getattr(cfg, "fp16", False)
+        fp_optimizations = "fp16" if fp16 else "fp32"
     ls = getattr(cfg, "ls", 1)
     bench = getattr(cfg, "bench", True)
     workers = getattr(cfg, "workers", 4)
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
+    wandb_project = getattr(cfg, "wandb_project", "Modulus-Generative")
+    wandb_group = getattr(cfg, "wandb_group", "CorrDiff-DDP-Group")
+    wandb_entity = getattr(cfg, "wandb_entity", "CorrDiff-DDP-Group")
+    wandb_name = getattr(cfg, "wandb_name", "CorrDiff")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
+    validation_dump = getattr(cfg, "validation_dump", 500)
+    validation_steps = getattr(cfg, "validation_steps", 10)
     seed = getattr(cfg, "seed", 0)
     transfer = getattr(cfg, "transfer")
     dry_run = getattr(cfg, "dry_run", False)
@@ -93,19 +106,30 @@ def main(cfg: DictConfig) -> None:
     # Parse weather data options
     c = EasyDict()
     c.task = task
+    c.fp_optimizations = fp_optimizations
     c.wandb_mode = wandb_mode
+    c.wandb_project = wandb_project
+    c.wandb_group = wandb_group
+    c.wandb_entity = wandb_entity
+    c.wandb_name = wandb_name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
+    c.patch_num = getattr(cfg, "patch_num", 1)
     cfg.dataset.data_path = to_absolute_path(cfg.dataset.data_path)
     if hasattr(cfg, "global_means_path"):
         cfg.global_means_path = to_absolute_path(cfg.global_means_path)
     if hasattr(cfg, "global_stds_path"):
         cfg.global_stds_path = to_absolute_path(cfg.global_stds_path)
+    c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", None)
+    c.lr_decay = getattr(cfg, "lr_decay", 0.8)
+    c.N_grid_channels = getattr(cfg, "N_grid_channels")
+    c.gridtype = getattr(cfg, "gridtype")
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     data_loader_kwargs = EasyDict(
         pin_memory=True, num_workers=workers, prefetch_factor=2
     )
-
+    c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
+    c.in_channel = len(dataset_cfg["in_channels"])
     # Initialize distributed manager.
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -148,7 +172,7 @@ def main(cfg: DictConfig) -> None:
 
     if arch == "ddpmpp-cwb":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="positional",
             encoder_type="standard",
             decoder_type="standard",
@@ -163,7 +187,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ddpmpp-cwb-v0-regression":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="zero",
             encoder_type="standard",
             decoder_type="standard",
@@ -178,7 +202,7 @@ def main(cfg: DictConfig) -> None:
 
     elif arch == "ncsnpp":
         c.network_kwargs.update(
-            model_type="SongUNet",
+            model_type="SongUNetPosEmbd",
             embedding_type="fourier",
             encoder_type="residual",
             decoder_type="standard",
@@ -236,7 +260,12 @@ def main(cfg: DictConfig) -> None:
     c.ema_halflife_kimg = int(ema * 1000)
     c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
     c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(kimg_per_tick=tick, state_dump_ticks=dump)
+    c.update(
+        kimg_per_tick=tick,
+        state_dump_ticks=dump,
+        valid_dump_ticks=validation_dump,
+        num_validation_evals=validation_steps,
+    )
     if regression_checkpoint_path:
         c.regression_checkpoint_path = regression_checkpoint_path
 
@@ -267,7 +296,7 @@ def main(cfg: DictConfig) -> None:
     logger0.info(f"Preconditioning & loss:  {precond}")
     logger0.info(f"Number of GPUs:          {dist.world_size}")
     logger0.info(f"Batch size:              {c.batch_size_global}")
-    logger0.info(f"Mixed-precision:         {c.network_kwargs.use_fp16}")
+    logger0.info(f"Mixed-precision:         {c.fp_optimizations}")
 
     # Dry run?
     if dry_run:
@@ -281,8 +310,17 @@ def main(cfg: DictConfig) -> None:
         with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
             json.dump(c, f, indent=2)
 
-    (dataset, dataset_iterator) = init_dataset_from_config(
-        dataset_cfg, data_loader_kwargs, batch_size=batch_size_gpu, seed=seed
+    (
+        dataset,
+        dataset_iter,
+        valid_dataset,
+        valid_dataset_iter,
+    ) = init_train_valid_datasets_from_config(
+        dataset_cfg,
+        data_loader_kwargs,
+        batch_size=batch_size_gpu,
+        seed=seed,
+        train_test_split=train_test_split,
     )
 
     (img_shape_y, img_shape_x) = dataset.image_shape()
@@ -301,7 +339,7 @@ def main(cfg: DictConfig) -> None:
 
     # Train.
     training_loop.training_loop(
-        training_loop.training_loop(dataset, dataset_iterator, **c)
+        dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
     )
 
 

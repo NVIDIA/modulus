@@ -40,7 +40,6 @@ from modulus.utils.generative import (
     StackedRandomGenerator,
 )
 from modulus import Module
-
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
 from training.time import convert_datetime_to_cftime, time_range
@@ -88,8 +87,14 @@ def main(cfg: DictConfig) -> None:
     patch_size = getattr(cfg, "patch_size", 448)
     patch_shape_x = getattr(cfg, "patch_shape_x", 448)
     patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    overlap_pix = getattr(cfg, "overlap_pix", 0)
-    boundary_pix = getattr(cfg, "boundary_pix", 2)
+    overlap_pix = getattr(cfg, "overlap_pixels", 0)
+    boundary_pix = getattr(cfg, "boundary_pixels", 2)
+    hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
+
+    # Initialize distributed manager
+    DistributedManager.initialize()
+    dist = DistributedManager()
+    device = dist.device
 
     if times_range is not None:
         times = []
@@ -136,11 +141,6 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown sampling method {sampling_method}")
 
-    # Initialize distributed manager
-    DistributedManager.initialize()
-    dist = DistributedManager()
-    device = dist.device
-
     # Initialize logger
     logger = PythonLogger("generate")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
@@ -155,6 +155,10 @@ def main(cfg: DictConfig) -> None:
     if patch_shape_y > img_shape_y:
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
+        if sampling_method == "deterministic":
+            raise NotImplementedError(
+                "Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. "
+            )
         logger0.info("Patch-based generation enabled")
     else:
         logger0.info("Patch-based generation disabled")
@@ -228,13 +232,15 @@ def main(cfg: DictConfig) -> None:
                         net=net_reg,
                         img_lr=image_lr_patch,
                         seed_batch_size=1,
-                        seeds=[
-                            0,
-                        ],  # Only run regression model once
+                        seeds=list(
+                            range(dist.world_size)
+                        ),  # Only run regression model once
                         pretext="reg",
                         class_idx=class_idx,
                     )
             if net_res:
+                if hr_mean_conditioning and sampling_method == "stochastic":
+                    sampler_kwargs.update({"mean_hr": image_reg[0:1]})
                 with nvtx.annotate("diffusion model", color="purple"):
                     image_res = generate(
                         net=net_res,
@@ -387,12 +393,11 @@ def generate_and_save(
         image_tar = image_tar.to(device=device).to(torch.float32)
         image_out = generate_fn(image_lr)
 
-        batch_size = image_out.shape[0]
-
         # for validation - make 3x450x450 to an ordered sequence of 50x50 patches
         # input; 1x3x450x450 --> (1*9*9)x3x50x50
 
         if dist.rank == 0:
+            batch_size = image_out.shape[0]
             # write out data in a seperate thread so we don't hold up inferencing
             writer_threads.append(
                 writer_executor.submit(
@@ -411,8 +416,8 @@ def generate_and_save(
     end.synchronize()
     elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
     timed_steps = time_index + 1 - warmup_steps
-    average_time_per_batch_element = elapsed_time / timed_steps / batch_size
     if dist.rank == 0:
+        average_time_per_batch_element = elapsed_time / timed_steps / batch_size
         logger.info(
             f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
         )
@@ -579,7 +584,6 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
         [net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])]
     )  # t_N = 0
 
-    # conditioning
     x_lr = img_lr
 
     # Main sampling loop.
@@ -662,6 +666,8 @@ def save_images(
             info = input_channel_info[channel_idx]
             channel_name = _get_name(info)
             writer.write_input(channel_name, time_index, image_lr2[0, channel_idx])
+            if channel_idx == image_lr2.shape[1] - 1:
+                break
 
 
 class NetCDFWriter:

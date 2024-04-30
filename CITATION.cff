@@ -1,6 +1,7 @@
-cff-version: 0.5.0
+cff-version: 1.2.0
 message: If you use this software, please cite it as below.
 title: NVIDIA Modulus
+version: 0.6.0
 authors:
   - family-names: NVIDIA Modulus Team
 url: https://github.com/NVIDIA/modulus/tree/main

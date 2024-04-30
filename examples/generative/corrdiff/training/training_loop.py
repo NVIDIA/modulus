@@ -51,6 +51,8 @@ from modulus.utils.generative import (
 def training_loop(
     dataset,
     dataset_iterator,
+    validation_dataset,
+    validation_dataset_iterator,
     *,
     task,
     run_dir=".",  # Output directory.
@@ -73,7 +75,20 @@ def training_loop(
     patch_shape_y=448,
     patch_num=1,
     wandb_mode="disabled",
+    wandb_project="Modulus-Generative",
+    wandb_group="CorrDiff-DDP-Group",
+    wandb_entity="CorrDiff-DDP-Group",
+    wandb_name="CorrDiff",
+    fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
+    hr_mean_conditioning=False,
+    N_grid_channels=4,
+    gridtype="sinusoidal",
+    in_channel=12,
+    grad_clip_threshold=None,
+    lr_decay=0.8,
+    valid_dump_ticks=5000,
+    num_validation_evals=10,
 ):
     """CorrDiff training loop"""
 
@@ -88,10 +103,10 @@ def training_loop(
 
     # wandb logger
     initialize_wandb(
-        project="Modulus-Generative",
-        entity="Modulus",
-        name="CorrDiff",
-        group="CorrDiff-DDP-Group",
+        project=wandb_project,
+        entity=wandb_entity,
+        name=wandb_name,
+        group=wandb_group,
         mode=wandb_mode,
         save_code=True,
     )
@@ -101,6 +116,9 @@ def training_loop(
         to_absolute_path("."),
         exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
     )
+
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     # Initialize.
     start_time = time.time()
@@ -123,9 +141,17 @@ def training_loop(
             "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
-    img_in_channels = len(dataset.input_channels())  # noise + low-res input
+    img_in_channels = (
+        len(dataset.input_channels()) + N_grid_channels
+    )  # noise + low-res input
     (img_shape_y, img_shape_x) = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
+    if hr_mean_conditioning:
+        img_in_channels += img_out_channels
+
+    # interpolate global channel if patch-based model is used
+    if img_shape_x != patch_shape_x:
+        img_in_channels += in_channel
 
     # Construct network.
     logger0.info("Constructing network...")
@@ -135,6 +161,8 @@ def training_loop(
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
         label_dim=0,
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,
     )  # weather
     merged_args = {**network_kwargs, **interface_kwargs}
     net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
@@ -156,6 +184,7 @@ def training_loop(
             patch_shape_x=patch_shape_x,
             patch_shape_y=patch_shape_y,
             patch_num=patch_num,
+            hr_mean_conditioning=hr_mean_conditioning,
         )
         logger0.success("Loaded the pre-trained regression network")
     else:
@@ -200,8 +229,10 @@ def training_loop(
 
     try:
         net.load(os.path.join(run_dir, max_index_file))
+        # load state directly to each gpu to reduce memory usage
+        map_location = {"cuda:%d" % 0: "cuda:%d" % int(dist.local_rank)}
         optimizer_state_dict = torch.load(
-            os.path.join(run_dir, max_index_file_optimizer)
+            os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
         )
         optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
@@ -233,31 +264,66 @@ def training_loop(
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
 
-                loss = loss_fn(
-                    net=ddp,
-                    img_clean=img_clean,
-                    img_lr=img_lr,
-                    labels=labels,
-                    augment_pipe=augment_pipe,
-                )
+                with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
+                    loss = loss_fn(
+                        net=ddp,
+                        img_clean=img_clean,
+                        img_lr=img_lr,
+                        labels=labels,
+                        augment_pipe=augment_pipe,
+                    )
                 training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
-                loss_accum += loss
+                loss_accum += loss / num_accumulation_rounds
                 loss.backward()
-        wb.log({"loss": loss_accum}, step=cur_nimg)
+        wb.log({"training loss": loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
+            g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
             wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
+        if grad_clip_threshold:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                net.parameters(), grad_clip_threshold
+            )
         optimizer.step()
+        if validation_dataset_iterator is not None:
+            valid_loss_accum = 0
+            if cur_tick % valid_dump_ticks == 0:
+                with torch.no_grad():
+                    for _ in range(num_validation_evals):
+                        img_clean_valid, img_lr_valid, labels_valid = next(
+                            validation_dataset_iterator
+                        )
+
+                        img_clean_valid = (
+                            img_clean_valid.to(device).to(torch.float32).contiguous()
+                        )  # [-4.5, +4.5]
+                        img_lr_valid = (
+                            img_lr_valid.to(device).to(torch.float32).contiguous()
+                        )
+                        labels_valid = labels_valid.to(device).contiguous()
+                        loss_valid = loss_fn(
+                            net=ddp,
+                            img_clean=img_clean_valid,
+                            img_lr=img_lr_valid,
+                            labels=labels_valid,
+                            augment_pipe=augment_pipe,
+                        )
+                        training_stats.report("Loss/validation loss", loss_valid)
+                        loss_valid = loss_valid.sum().mul(
+                            loss_scaling / batch_gpu_total
+                        )
+                        valid_loss_accum += loss_valid / num_validation_evals
+                    wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
@@ -315,7 +381,7 @@ def training_loop(
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
-            net.save(os.path.join(run_dir, filename))
+            net.save(os.path.join(run_dir, filename), verbose=True)
             logger0.info(f"Saved model in the {run_dir} directory")
 
             filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"

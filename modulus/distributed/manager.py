@@ -26,6 +26,24 @@ import torch.distributed as dist
 from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
 
 
+class ModulusUndefinedGroupError(Exception):
+    """Exception for querying an undefined process group using the Modulus DistributedManager"""
+
+    def __init__(self, name: str):
+        """
+
+        Parameters
+        ----------
+        name : str
+            Name of the process group being queried.
+
+        """
+        message = (
+            f"Cannot query process group '{name}' before it is explicitly created."
+        )
+        super().__init__(message)
+
+
 class DistributedManager(object):
     """Distributed Manager for setting up distributed training enviroment.
 
@@ -123,12 +141,14 @@ class DistributedManager(object):
         """
         Returns a process group with the given name
         If name is None, group is also None indicating the default process group
-        If named group does not exist, returns None also
+        If named group does not exist, ModulusUndefinedGroupError exception is raised
         """
         if name in self._groups.keys():
             return self._groups[name]
-        else:
+        elif name is None:
             return None
+        else:
+            raise ModulusUndefinedGroupError(name)
 
     def group_size(self, name=None):
         """
@@ -146,10 +166,7 @@ class DistributedManager(object):
         if name is None:
             return self._rank
         group = self.group(name)
-        if group is None:
-            return 0
-        else:
-            return dist.get_rank(group=group)
+        return dist.get_rank(group=group)
 
     def group_name(self, group=None):
         """

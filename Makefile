@@ -2,6 +2,10 @@ install:
 	pip install --upgrade pip && \
 		pip install -e .
 
+editable-install:
+	pip install --upgrade pip && \
+		pip install -e . --config-settings editable_mode=strict
+
 get-data:
 	mkdir -p /data && \
 		mkdir -p /data/nfs/ && \
