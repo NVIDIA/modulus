@@ -51,10 +51,20 @@ class AverageMeterDict:
         self.sum = {}
         self.count = {}
         self.max = {}
+        self._private_attributes = {}
 
     def update(self, val, n=1):
         """update"""
         for k, v in val.items():
+            if isinstance(k, str) and k[0] == "_":
+                # Add to private attributes
+                if k not in self._private_attributes:
+                    self._private_attributes[k] = v
+                else:
+                    self._private_attributes[k].append(v)
+                # Skip updating the meter
+                continue
+
             if k not in self.val:
                 self.val[k] = 0
                 self.sum[k] = 0
@@ -65,6 +75,7 @@ class AverageMeterDict:
             self.count[k] += n
             self.avg[k] = self.sum[k] / self.count[k]
             self.max[k] = max(v, self.max[k])
+
 
 
 class Timer:

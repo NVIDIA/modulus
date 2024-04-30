@@ -56,6 +56,14 @@ class ProcessMesh:
             if self.transform is not None:
                 data = self.transform(data)
 
+            # Check validity
+            if data["vertices"].shape[0] == 0:
+                continue
+            if not torch.isfinite(data["vertices"]).all():
+                continue
+            if data["class"] is None:
+                continue
+
             data_list.append(data)
 
             # print every 100 files
@@ -154,7 +162,9 @@ class NormalizeVertices:
         vertices = data["vertices"]
         min_vertices = vertices.min(0)[0]
         max_vertices = vertices.max(0)[0]
-        vertices = (vertices - min_vertices) / (max_vertices - min_vertices)
+        # Find scale and shift
+        scale = 1.0 / (max_vertices - min_vertices).max()
+        vertices = scale * (vertices - min_vertices)
         vertices = vertices * (self.bbox_max - self.bbox_min) + self.bbox_min
         data["vertices"] = vertices
         return data
@@ -260,8 +270,8 @@ class ModelNet40DataModule(BaseDataModule):
 
 
 if __name__ == "__main__":
-    # preprocess(sys.argv[1], "train")
-    # preprocess(sys.argv[1], "test")
+    preprocess(sys.argv[1], "train")
+    preprocess(sys.argv[1], "test")
     data_module = ModelNet40DataModule(sys.argv[1])
     train_loader = data_module.train_dataloader(batch_size=32)
     for batch in train_loader:

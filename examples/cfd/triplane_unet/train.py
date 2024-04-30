@@ -163,6 +163,12 @@ def eval(model, datamodule, config, loss_fn=None):
             for k, v in image_dict.items():
                 merged_image_dict[f"{k}_{i}"] = v
 
+    # Post process the eval dict
+    if hasattr(model, "post_eval_epoch"):
+        out_dict, image_dict, pointcloud_dict = model.model().post_eval_epoch(eval_meter._private_attributes, datamodule)
+        eval_meter.update()
+
+
     model.train()
     return eval_meter.avg, merged_image_dict, merged_point_cloud_dict
 

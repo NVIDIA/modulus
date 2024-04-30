@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from .base_model import BaseModel
 from .ahmedbody_base import AhmedBodyDragRegressionBase
 from .drivaer_base import DrivAerDragRegressionBase
+from .modelnet_base import ModelNet40Base
 from .neighbor_ops import neighbor_knn_search
 
 
@@ -71,9 +72,8 @@ class EdgeConv(nn.Module):
         x = x.view(batch_size, -1, num_points)
         if idx is None:
             idx = batched_self_knn(x, k=k)  # (batch_size, num_points, k)
-        device = torch.device("cuda")
         idx_base = (
-            torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+            torch.arange(0, batch_size, device=x.device).view(-1, 1, 1) * num_points
         )
 
         idx = idx + idx_base
@@ -178,6 +178,44 @@ class DGCNN(BaseModel):
             x = mlp(x)
 
         return self.final(x)
+
+
+class DGCNNModelNet40(ModelNet40Base, DGCNN):
+    """
+    DGCNN from https://arxiv.org/abs/1801.07829
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 40,
+        conv_channels: List[int] = [256, 512, 512, 1024],
+        pre_mlp_channels: int = 512,
+        mlp_channels: List[int] = [128, 64, 32, 16],
+        knn_k: int = 4,
+        dropout: float = 0.5,
+        knn_search_chunk_size: int = 4096,
+    ):
+        ModelNet40Base.__init__(self)
+
+        DGCNN.__init__(
+            self,
+            in_channels,
+            out_channels,
+            conv_channels,
+            pre_mlp_channels,
+            mlp_channels,
+            knn_k,
+            dropout,
+            knn_search_chunk_size,
+        )
+
+    def data_dict_to_input(self, data_dict, **kwargs) -> Any:
+        """Convert data dictionary to appropriate input for the model."""
+        points = data_dict["vertices"].to(self.device).transpose(1, 2)
+        label = data_dict["class"].to(self.device)
+        return points, label
+
 
 
 class DrivAerNet(DrivAerDragRegressionBase, DGCNN):

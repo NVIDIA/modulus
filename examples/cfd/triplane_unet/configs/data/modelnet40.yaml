@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .base_datamodule import BaseDataModule
-from .ahmedbody_datamodule import AhmedBodyDataModule
-from .drivaer_datamodule import DrivAerDataModule
-from .modelnet_datamodule import ModelNet40DataModule
+_target_: src.data.ModelNet40DataModule
+_convert_: all
+
+data_path: ???

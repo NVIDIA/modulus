@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,7 +16,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .base_datamodule import BaseDataModule
-from .ahmedbody_datamodule import AhmedBodyDataModule
-from .drivaer_datamodule import DrivAerDataModule
-from .modelnet_datamodule import ModelNet40DataModule
+defaults:
+  - /data: modelnet40
+  - /model: dgcnn
+  - /loss: celoss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+train:
+  num_epochs: 100
+  batch_size: 32
+
+loggers:
+  wandb:
+    project_name: modelnet40
+    entity: nvr-ai-algo
+    run_name: DGCNN
