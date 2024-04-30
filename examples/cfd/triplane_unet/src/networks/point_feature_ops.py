@@ -96,6 +96,10 @@ class PointFeatures:
         down_features = self.features[unique_indices]
         return PointFeatures(down_vertices, down_features)
 
+    def random_down_sample(self, num_points: int):
+        idx = torch.randperm(self.vertices.shape[0])[:num_points]
+        return PointFeatures(self.vertices[idx], self.features[idx])
+
     def __add__(self, other):
         assert len(self) == len(other)
         assert self.features.shape[1] == other.features.shape[1]
@@ -390,15 +394,15 @@ class GridFeatures(PointFeatures):
         return vertices
 
 
-class DownSampleLayer(BaseModule):
-    """DownSampleLayer."""
+class VoxelDownSampleLayer(BaseModule):
+    """VoxelDownSampleLayer."""
 
     def __init__(self, voxel_size):
         super().__init__()
         self.voxel_size = voxel_size
 
     def __repr__(self):
-        return f"DownSampleLayer(voxel_size={self.voxel_size})"
+        return f"VoxelDownSampleLayer(voxel_size={self.voxel_size})"
 
     @torch.no_grad()
     def forward(self, vertices: Float[Tensor, "N 3"]) -> Float[Tensor, "M 3"]:
@@ -407,6 +411,25 @@ class DownSampleLayer(BaseModule):
         down_pcd = pcd.voxel_down_sample(voxel_size=self.voxel_size)
         down_vertices = torch.Tensor(np.array(down_pcd.points)).to(self.device)
         return down_vertices
+
+
+class RandomDownSampleLayer(BaseModule):
+    """RandomDownSampleLayer."""
+
+    def __init__(self, num_point: int = 512):
+        super().__init__()
+        self.num_points = num_point
+
+    def __repr__(self):
+        return f"RandomDownSampleLayer(num_points={self.num_points})"
+
+    @torch.no_grad()
+    def forward(self, vertices: Float[Tensor, "B N 3"]) -> Float[Tensor, "B M 3"]:
+        down_vertices = []
+        for vert in vertices:
+            idx = torch.randperm(vert.shape[0])[: self.num_points]
+            down_vertices.append(vert[idx])
+        return torch.stack(down_vertices, dim=0)
 
 
 class VerticesToPointFeatures(BaseModule):
