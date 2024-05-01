@@ -5,5 +5,3 @@
 *.egg-info/
 
 /docs
-
-*/__pycache__/

@@ -253,6 +253,8 @@ def train(config: DictConfig):
         t1 = default_timer()
         train_l2_meter = AverageMeter()
 
+        datamodule.set_epoch(train_loader, ep)
+
         for data_dict in train_loader:
             optimizer.zero_grad()
 

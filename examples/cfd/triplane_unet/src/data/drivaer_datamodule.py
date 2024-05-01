@@ -43,6 +43,8 @@ from src.data.components import (
     DrivAerPreprocessingFunctor,
     DrivAerDragPreprocessingFunctor,
 )
+from src.data.components.drivaer_preprocessors import DRIVAER_AIR_COEFF
+
 from src.data.mesh_utils import convert_to_pyvista
 
 # DrivAer dataset
@@ -298,6 +300,12 @@ class DrivAerDataModule(BaseDataModule):
         )
         preprocessors.insert(0, default_preproc)
         self.normalizer = default_preproc.normalizer
+        # TODO(akamenev): there should be a better way than this...
+        for p in preprocessors:
+            coeff = getattr(p, "air_coeff", None)
+            if coeff is not None:
+                break
+        self.air_coeff = coeff if coeff is not None else DRIVAER_AIR_COEFF
 
         self.preprocessors = ComposePreprocessors(preprocessors)
 

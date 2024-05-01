@@ -15,6 +15,9 @@
 # limitations under the License.
 
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
+
+from modulus.distributed import DistributedManager
 
 
 class BaseDataModule:
@@ -32,14 +35,39 @@ class BaseDataModule:
     def test_dataset(self) -> Dataset:
         raise NotImplementedError
 
-    def train_dataloader(self, **kwargs) -> DataLoader:
+    def _create_dataloader(self, dataset: Dataset, **kwargs) -> DataLoader:
         collate_fn = getattr(self, "collate_fn", None)
-        return DataLoader(self.train_dataset, collate_fn=collate_fn, **kwargs)
+
+        shuffle = kwargs.pop("shuffle", False)
+        sampler = kwargs.pop("sampler", None)
+        if sampler is None and DistributedManager().distributed:
+            sampler = DistributedSampler(dataset, shuffle=shuffle)
+
+        return DataLoader(
+            dataset,
+            collate_fn=collate_fn,
+            sampler=sampler,
+            shuffle=None if sampler is not None else shuffle,
+            **kwargs,
+        )
+
+    def train_dataloader(self, **kwargs) -> DataLoader:
+        return self._create_dataloader(self.train_dataset, **kwargs)
 
     def val_dataloader(self, **kwargs) -> DataLoader:
-        collate_fn = getattr(self, "collate_fn", None)
-        return DataLoader(self.val_dataset, collate_fn=collate_fn, **kwargs)
+        return self._create_dataloader(self.val_dataset, **kwargs)
 
     def test_dataloader(self, **kwargs) -> DataLoader:
-        collate_fn = getattr(self, "collate_fn", None)
-        return DataLoader(self.test_dataset, collate_fn=collate_fn, **kwargs)
+        return self._create_dataloader(self.test_dataset, **kwargs)
+
+    @staticmethod
+    def set_epoch(dataloader: DataLoader, epoch: int):
+        """Sets the epoch in the dataloader.
+
+        In some cases, such as in distributed case with DistributedSampler,
+        the sampler requires setting an epoch number to properly shuffle entries.
+        """
+        try:
+            dataloader.sampler.set_epoch(epoch)
+        except AttributeError:
+            pass
