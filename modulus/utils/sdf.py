@@ -22,10 +22,10 @@ import warp as wp
 
 @wp.kernel
 def _bvh_query_distance(
-    mesh: wp.uint64,
-    points: wp.array(dtype=wp.vec3f),
-    max_dist: wp.float32,
-    sdf: wp.array(dtype=wp.float32),
+    mesh,
+    points,
+    max_dist,
+    sdf,
 ):
     """
     Computes the signed distance from each point in the given array `points`
