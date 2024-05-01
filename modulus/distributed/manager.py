@@ -49,7 +49,7 @@ class ModulusUninitializedDistributedManagerWarning(Warning):
 
     def __init__(self):
         message = "A DistributedManager object is being instantiated before "
-        "the class has been initialized. Instantiating a manager before "
+        "this singleton class has been initialized. Instantiating a manager before "
         "initialization can lead to unexpected results where processes fail "
         "to communicate. Initialize the distributed manager via "
         "DistributedManager.initialize() before instantiating."
