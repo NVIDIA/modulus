@@ -18,7 +18,6 @@
 import time
 from typing import Any, Dict, List, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -153,35 +152,3 @@ class SyntheticWeatherDataset(Dataset):
                 ).to(self.device),
             }
         ]
-
-
-def plot_temperature_data(dataset: Dataset, day_index: int = 0) -> None:
-    """
-    Plots the temperature data for all channels on a specified day from the dataset.
-    """
-    num_channels: int = dataset.num_channels
-    temperatures: np.ndarray = dataset[day_index][0]["outvar"].numpy()
-
-    fig, axes = plt.subplots(nrows=1, ncols=num_channels, figsize=(15, 3))
-    for i in range(num_channels):
-        ax = axes[i]
-        temp_data: np.ndarray = temperatures[0, i, :, :]
-        im = ax.imshow(temp_data, cmap="coolwarm", interpolation="nearest")
-        ax.set_title(f"Channel {i+1}")
-        ax.axis("off")
-
-    fig.colorbar(im, ax=axes.ravel().tolist(), shrink=0.6)
-    plt.suptitle("Temperature Distribution Across Different Atmospheric Layers")
-    plt.savefig("temperature_data.png")
-
-
-if __name__ == "__main__":
-    num_samples_per_year: int = 365
-    num_steps: int = 10
-    channels: List[int] = [0, 1, 2, 3, 4]
-    dataset = SyntheticWeatherDataset(
-        channels, num_samples_per_year, num_steps, device="cpu"
-    )
-
-    # Plot the temperature data for the first day
-    plot_temperature_data(dataset, day_index=90)
