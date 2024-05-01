@@ -14,10 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: True
-
 
 ## Hyperparameters
 duration: 200
@@ -91,6 +87,7 @@ wandb_name: "CorrDiff"
 ## Weather data options
 dataset:
   type: cwb
+  train_test_split: false
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
@@ -105,4 +102,9 @@ dataset:
   global_means_path: null
   global_stds_path: null
   normalization: "v1"
-  train_test_split: false
+
+# Validation dataset options
+# (need to set dataset.train_test_split == true to have an effect)
+validation_dataset:
+  train: false
+  all_times: false
