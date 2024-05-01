@@ -276,27 +276,25 @@ def train(config: DictConfig):
             # Assert loss is valid
             assert torch.isfinite(loss).all(), f"Loss is not finite: {loss}"
 
-            if config.amp.enabled:
-                scaler.scale(loss).backward()
+            # Note: if AMP is disabled, the scaler will fall back to the default behavior.
+            scaler.scale(loss).backward()
 
-                if config.amp.clip_grad:
-                    # Unscales the gradients of optimizer's assigned params in-place
-                    scaler.unscale_(optimizer)
+            # TODO(akamenev): grad clipping can be used not only in AMP.
+            if config.amp.clip_grad:
+                # Unscales the gradients of optimizer's assigned params in-place.
+                scaler.unscale_(optimizer)
 
-                    # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(), config.amp.grad_max_norm
-                    )
+                # Since the gradients of optimizer's assigned params are unscaled, clips as usual.
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), config.amp.grad_max_norm
+                )
 
-                    # optimizer's gradients are already unscaled, so scaler.step does not unscale them,
-                    # although it still skips optimizer.step() if the gradients contain infs or NaNs.
-                    scaler.step(optimizer)
+            # If optimizer's gradients were already unscaled, the scaler.step does not unscale them,
+            # although it still skips optimizer.step() if the gradients contain infs or NaNs.
+            scaler.step(optimizer)
 
-                    # Updates the scale for next iteration.
-                    scaler.update()
-            else:
-                loss.backward()
-            optimizer.step()
+            # Updates the scale for next iteration.
+            scaler.update()
 
             train_l2_meter.update(loss.item())
             loggers.log_scalar("train/iter_lr", scheduler.get_lr()[0], tot_iter)
