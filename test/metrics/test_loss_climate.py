@@ -159,7 +159,7 @@ def test_SSIM(device):
     ssim_loss = SSIM(time_series_forecasting=True)
     # 5 or 6 time series True
     # 4 or 5 time series False
-    shape = [1, 1, 2, 2, 720, 720]
+    shape = [1, 1, 2, 2, 360, 360]
 
     # Test for exact match
     rand = torch.randn(shape).to(device)
@@ -174,7 +174,7 @@ def test_SSIM(device):
     assert ssim_loss(ones, zeros) < 1.0e-4
 
     # test mask
-    mask = torch.ones([1, 1, 2, 2, 360, 360], dtype=int)
+    mask = torch.ones([1, 1, 2, 2, 180, 180], dtype=int)
 
     ssim_rand = ssim_loss(rand, ones)
     ssim_rand_mask = ssim_loss(rand, ones, mask)
@@ -184,11 +184,11 @@ def test_SSIM(device):
     # Test window
     # Since SSIM looks over a window rolling will only cause a small dropoff
     ssim_loss = SSIM(mse=True)
-    eye = torch.eye(720).to(device)
+    eye = torch.eye(360).to(device)
     eye = eye[None, None, ...]
 
     loss = ssim_loss(eye, torch.roll(eye, 1, -1))  # ~0.9729
-    assert 0.97 < loss < 0.98
+    assert 0.95 < loss < 0.96
 
     # test the case of being below the mse_epoch threshold
     loss = ssim_loss(eye, torch.roll(eye, 1, -1), epoch=-1)  # ~0.9729
