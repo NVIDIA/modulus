@@ -187,9 +187,9 @@ def test_SSIM(device):
     eye = torch.eye(360).to(device)
     eye = eye[None, None, ...]
 
-    loss = ssim_loss(eye, torch.roll(eye, 1, -1))  # ~0.9729
+    loss = ssim_loss(eye, torch.roll(eye, 1, -1))  # ~0.9516
     assert 0.95 < loss < 0.96
 
     # test the case of being below the mse_epoch threshold
-    loss = ssim_loss(eye, torch.roll(eye, 1, -1), epoch=-1)  # ~0.9729
+    loss = ssim_loss(eye, torch.roll(eye, 1, -1), epoch=-1)  # ~0.9516
     assert loss == F.mse_loss(eye, torch.roll(eye, 1, -1))
