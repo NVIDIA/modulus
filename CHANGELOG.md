@@ -6,7 +6,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0a0] - 2024-04-XX
+## [0.7.0a0] - 2024-07-XX
+
+### Added
+
+- Code logging for CorrDiff via Wandb.
+- Augmentation pipeline for CorrDiff.
+- Regression output as additional conditioning for CorrDiff.
+- Learnable positional embedding for CorrDiff.
+- Support for patch-based CorrDiff training and generation (stochastic sampling only)
+- Enable CorrDiff multi-gpu generation
+
+### Changed
+
+- Raise `ModulusUndefinedGroupError` when querying undefined process groups
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.6.0] - 2024-04-17
 
 ### Added
 
@@ -15,21 +40,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
+- Warp neighbor search routine with a minimal example
+- Strict option for loading Modulus checkpoints.
+- Regression only or diffusion only inference for CorrDiff.
+- Support for organization level model files on NGC file system
+- Physics-Informed Magnetohydrodynamics example.
 
 ### Changed
 
 - Updated Ahmed Body and Vortex Shedding examples to use Hydra config.
+- Added more config options to FCN AFNO example.
+- Moved posiitonal embedding in CorrDiff from the dataloader to network architecture
 
 ### Deprecated
 
+- `modulus.models.diffusion.preconditioning.EDMPrecondSR`. Use `EDMPecondSRV2` instead.
+
 ### Removed
+
+- Pickle dependency for CorrDiff.
 
 ### Fixed
 
 - Consistent handling of single GPU runs in DistributedManager
 - Output location of objects downloaded with NGC file system
-
-### Security
+- Bug in scaling the conditional input in CorrDiff deterministic sampler
 
 ### Dependencies
 

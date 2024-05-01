@@ -22,27 +22,30 @@ run_desc: "unified training recipe for global weather models"
 defaults:
 
   # Dataset
-  #- dataset/7_var
-  - dataset/healpix_19_var
-  #- dataset/34_var
+  - dataset/tiny_6hr_subsample
+  #- dataset/6hr_subsample # uncomment for full dataset
+
+  # Curated Dataset
+  - curated_dataset/tiny_2_var
+  #- curated_dataset/healpix_19_var
+  #- curated_dataset/34_var
   
   # Transform
-  - transform/downsample
-  #- transform/trim_lat720
+  - transform/trim_lat720
   #- transform/healpix
-
-  # Filesystem
-  - filesystem/local
-  #- filesystem/pbss
+  #- transform/downsample
 
   # Model
-  - model/sfno
-    #- model/afno
-    #- model/graphcastnet
+  - model/tiny_afno
+  #- model/afno
+  #- model/graphcastnet
+  #- model/tiny_sfno
+  #- model/sfno
 
   # Training
-  #- training/afno
-  - training/graphcastnet
+  - training/afno
+  #- training/graphcastnet
+  #- training/sfno
 
   # Validation
   - validation/afno

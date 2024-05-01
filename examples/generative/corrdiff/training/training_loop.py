@@ -26,11 +26,13 @@ import wandb as wb
 import numpy as np
 import psutil
 import torch
+
+from hydra.utils import to_absolute_path
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
 sys.path.append("../")
-from module import Module
+from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
@@ -38,61 +40,55 @@ from modulus.launch.logging import (
     initialize_wandb,
 )
 from modulus.utils.generative import (
-    InfiniteSampler,
     construct_class_by_name,
     ddp_sync,
     format_time,
 )
 
-from .dataset import get_zarr_dataset
-
 # ----------------------------------------------------------------------------
 
 
 def training_loop(
+    dataset,
+    dataset_iterator,
+    validation_dataset,
+    validation_dataset_iterator,
+    *,
     task,
     run_dir=".",  # Output directory.
-    dataset_kwargs={},  # Options for training set.
-    data_loader_kwargs={},  # Options for torch.utils.data.DataLoader.
     network_kwargs={},  # Options for model and preconditioning.
     loss_kwargs={},  # Options for loss function.
     optimizer_kwargs={},  # Options for optimizer.
     augment_kwargs=None,  # Options for augmentation pipeline, None = disable.
     seed=0,  # Global random seed.
-    batch_size=512,  # Total batch size for one training iteration.
-    batch_gpu=None,  # Limit batch size per GPU, None = no limit.
+    batch_size_global=512,  # Total batch size for one training iteration.
+    batch_size_gpu=None,  # Limit batch size per GPU, None = no limit.
     total_kimg=200000,  # Training duration, measured in thousands of training images.
     ema_halflife_kimg=500,  # Half-life of the exponential moving average (EMA) of model weights.
     ema_rampup_ratio=0.05,  # EMA ramp-up coefficient, None = no rampup.
     lr_rampup_kimg=10000,  # Learning rate ramp-up duration.
     loss_scaling=1,  # Loss scaling factor for reducing FP16 under/overflows.
     kimg_per_tick=50,  # Interval of progress prints.
-    snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
-    train_data_path=None,
-    crop_size_x=448,
-    crop_size_y=448,
-    n_history=0,
-    in_channels=[0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19],
-    out_channels=[0, 17, 18, 19],
-    img_shape_x=448,
-    img_shape_y=448,
     patch_shape_x=448,
     patch_shape_y=448,
     patch_num=1,
-    roll=False,
-    add_grid=True,
-    ds_factor=4,
-    min_path=None,
-    max_path=None,
-    global_means_path=None,
-    global_stds_path=None,
-    gridtype="sinusoidal",
-    N_grid_channels=4,
-    normalization="v1",
     wandb_mode="disabled",
+    wandb_project="Modulus-Generative",
+    wandb_group="CorrDiff-DDP-Group",
+    wandb_entity="CorrDiff-DDP-Group",
+    wandb_name="CorrDiff",
+    fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
+    hr_mean_conditioning=False,
+    N_grid_channels=4,
+    gridtype="sinusoidal",
+    in_channel=12,
+    grad_clip_threshold=None,
+    lr_decay=0.8,
+    valid_dump_ticks=5000,
+    num_validation_evals=10,
 ):
     """CorrDiff training loop"""
 
@@ -103,16 +99,26 @@ def training_loop(
     # Initialize logger.
     logger = PythonLogger(name="training_loop")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f".logs/training_loop_{dist.rank}.log")
+    logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
 
     # wandb logger
     initialize_wandb(
-        project="Modulus-Generative",
-        entity="Modulus",
-        name="CorrDiff",
-        group="CorrDiff-DDP-Group",
+        project=wandb_project,
+        entity=wandb_entity,
+        name=wandb_name,
+        group=wandb_group,
         mode=wandb_mode,
+        save_code=True,
     )
+
+    # log code
+    wb.run.log_code(
+        to_absolute_path("."),
+        exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
+    )
+
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     # Initialize.
     start_time = time.time()
@@ -125,71 +131,38 @@ def training_loop(
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
     # Select batch size per GPU.
-    batch_gpu_total = batch_size // dist.world_size
-    logger0.info(f"batch_gpu: {batch_gpu}")
-    if batch_gpu is None or batch_gpu > batch_gpu_total:
-        batch_gpu = batch_gpu_total
-    num_accumulation_rounds = batch_gpu_total // batch_gpu
-    if batch_size != batch_gpu * num_accumulation_rounds * dist.world_size:
+    batch_gpu_total = batch_size_global // dist.world_size
+    logger0.info(f"batch_size_gpu: {batch_size_gpu}")
+    if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
+        batch_size_gpu = batch_gpu_total
+    num_accumulation_rounds = batch_gpu_total // batch_size_gpu
+    if batch_size_global != batch_size_gpu * num_accumulation_rounds * dist.world_size:
         raise ValueError(
-            "batch_size must be equal to batch_gpu * num_accumulation_rounds * dist.world_size"
+            "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
-    # Load dataset: weather
-    logger0.info("Loading dataset...")
-    dataset_obj = get_zarr_dataset(
-        path=train_data_path,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        img_shape_x=img_shape_x,
-        img_shape_y=img_shape_y,
-        crop_size_x=crop_size_x,
-        crop_size_y=crop_size_y,
-        roll=roll,
-        add_grid=add_grid,
-        ds_factor=ds_factor,
-        train=True,
-        all_times=False,  # TODO check if this should be False
-        n_history=n_history,
-        min_path=min_path,
-        max_path=max_path,
-        global_means_path=global_means_path,
-        global_stds_path=global_stds_path,
-        normalization=normalization,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
-    )
-    worker_init_fn = None
+    img_in_channels = (
+        len(dataset.input_channels()) + N_grid_channels
+    )  # noise + low-res input
+    (img_shape_y, img_shape_x) = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
+    if hr_mean_conditioning:
+        img_in_channels += img_out_channels
 
-    dataset_sampler = InfiniteSampler(
-        dataset=dataset_obj, rank=dist.rank, num_replicas=dist.world_size, seed=seed
-    )
-    dataset_iterator = iter(
-        torch.utils.data.DataLoader(
-            dataset=dataset_obj,
-            sampler=dataset_sampler,
-            batch_size=batch_gpu,
-            worker_init_fn=worker_init_fn,
-            **data_loader_kwargs,
-        )
-    )
-
-    img_in_channels = len(in_channels)  # noise + low-res input
-    if img_shape_x != patch_shape_x or img_shape_y != patch_shape_y:
-        img_in_channels *= 2  # add global maps for patch-based model
-    if add_grid:
-        img_in_channels = img_in_channels + N_grid_channels
-
-    img_out_channels = len(out_channels)
+    # interpolate global channel if patch-based model is used
+    if img_shape_x != patch_shape_x:
+        img_in_channels += in_channel
 
     # Construct network.
     logger0.info("Constructing network...")
     interface_kwargs = dict(
-        img_resolution=crop_size_x,
+        img_resolution=img_shape_x,
         img_channels=img_out_channels,
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
         label_dim=0,
+        gridtype=gridtype,
+        N_grid_channels=N_grid_channels,
     )  # weather
     merged_args = {**network_kwargs, **interface_kwargs}
     net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
@@ -211,6 +184,7 @@ def training_loop(
             patch_shape_x=patch_shape_x,
             patch_shape_y=patch_shape_y,
             patch_num=patch_num,
+            hr_mean_conditioning=hr_mean_conditioning,
         )
         logger0.success("Loaded the pre-trained regression network")
     else:
@@ -223,7 +197,7 @@ def training_loop(
         construct_class_by_name(**augment_kwargs)
         if augment_kwargs is not None
         else None
-    )  # training.augment.AugmentPipe
+    )
     if dist.world_size > 1:
         ddp = DistributedDataParallel(
             net,
@@ -255,8 +229,10 @@ def training_loop(
 
     try:
         net.load(os.path.join(run_dir, max_index_file))
+        # load state directly to each gpu to reduce memory usage
+        map_location = {"cuda:%d" % 0: "cuda:%d" % int(dist.local_rank)}
         optimizer_state_dict = torch.load(
-            os.path.join(run_dir, max_index_file_optimizer)
+            os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
         )
         optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
@@ -288,42 +264,77 @@ def training_loop(
                 img_lr = img_lr.to(device).to(torch.float32).contiguous()
                 labels = labels.to(device).contiguous()
 
-                loss = loss_fn(
-                    net=ddp,
-                    img_clean=img_clean,
-                    img_lr=img_lr,
-                    labels=labels,
-                    augment_pipe=augment_pipe,
-                )
+                with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
+                    loss = loss_fn(
+                        net=ddp,
+                        img_clean=img_clean,
+                        img_lr=img_lr,
+                        labels=labels,
+                        augment_pipe=augment_pipe,
+                    )
                 training_stats.report("Loss/loss", loss)
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
-                loss_accum += loss
+                loss_accum += loss / num_accumulation_rounds
                 loss.backward()
-        wb.log({"loss": loss_accum}, step=cur_nimg)
+        wb.log({"training loss": loss_accum}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
+            g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
             wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
+        if grad_clip_threshold:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                net.parameters(), grad_clip_threshold
+            )
         optimizer.step()
+        if validation_dataset_iterator is not None:
+            valid_loss_accum = 0
+            if cur_tick % valid_dump_ticks == 0:
+                with torch.no_grad():
+                    for _ in range(num_validation_evals):
+                        img_clean_valid, img_lr_valid, labels_valid = next(
+                            validation_dataset_iterator
+                        )
+
+                        img_clean_valid = (
+                            img_clean_valid.to(device).to(torch.float32).contiguous()
+                        )  # [-4.5, +4.5]
+                        img_lr_valid = (
+                            img_lr_valid.to(device).to(torch.float32).contiguous()
+                        )
+                        labels_valid = labels_valid.to(device).contiguous()
+                        loss_valid = loss_fn(
+                            net=ddp,
+                            img_clean=img_clean_valid,
+                            img_lr=img_lr_valid,
+                            labels=labels_valid,
+                            augment_pipe=augment_pipe,
+                        )
+                        training_stats.report("Loss/validation loss", loss_valid)
+                        loss_valid = loss_valid.sum().mul(
+                            loss_scaling / batch_gpu_total
+                        )
+                        valid_loss_accum += loss_valid / num_validation_evals
+                    wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
         if ema_rampup_ratio is not None:
             ema_halflife_nimg = min(ema_halflife_nimg, cur_nimg * ema_rampup_ratio)
-        ema_beta = 0.5 ** (batch_size / max(ema_halflife_nimg, 1e-8))
+        ema_beta = 0.5 ** (batch_size_global / max(ema_halflife_nimg, 1e-8))
         for p_ema, p_net in zip(ema.parameters(), net.parameters()):
             p_ema.copy_(p_net.detach().lerp(p_ema, ema_beta))
 
         # Perform maintenance tasks once per tick.
-        cur_nimg += batch_size
+        cur_nimg += batch_size_global
         done = cur_nimg >= total_kimg * 1000
         if (
             (not done)
@@ -370,7 +381,7 @@ def training_loop(
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
-            net.save(os.path.join(run_dir, filename))
+            net.save(os.path.join(run_dir, filename), verbose=True)
             logger0.info(f"Saved model in the {run_dir} directory")
 
             filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"

@@ -18,12 +18,7 @@ import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 from torch.cuda.amp import autocast
 
-# import modules
 import sys
-
-from constants import Constants
-
-C = Constants()
 
 
 class BaseTrainer:
@@ -33,7 +28,7 @@ class BaseTrainer:
         pass
 
     def rollout(self, grid_nfeat, y):
-        with autocast(enabled=C.amp, dtype=self.amp_dtype):
+        with autocast(enabled=self.amp, dtype=self.amp_dtype):
             total_loss = 0
             pred_prev = grid_nfeat
             for i in range(y.size(dim=1)):
@@ -47,7 +42,7 @@ class BaseTrainer:
     def forward(self, grid_nfeat, y):
         # forward pass
         torch.cuda.nvtx.range_push("Loss computation")
-        if C.pyt_profiler:
+        if self.pyt_profiler:
             with profile(
                 activities=[ProfilerActivity.CUDA], record_shapes=True
             ) as prof:
@@ -68,16 +63,16 @@ class BaseTrainer:
     def backward(self, loss):
         # backward pass
         torch.cuda.nvtx.range_push("Weight gradients")
-        if C.amp:
+        if self.amp:
             self.scaler.scale(loss).backward()
             torch.cuda.nvtx.range_pop()
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), C.grad_clip_norm)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), C.grad_clip_norm)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
             torch.cuda.nvtx.range_pop()
             self.optimizer.step()
 

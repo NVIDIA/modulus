@@ -16,8 +16,11 @@
 
 hydra:
   job:
-    chdir: False
-
+    chdir: true
+    name: diffusion_job
+  run:
+    dir: ./outputs/${hydra:job.name}
+      
 defaults:
   - config_train_base
 

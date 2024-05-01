@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dask
 import numpy as np
 import xarray as xr
-import dask
 
 
 # Downsample transform
