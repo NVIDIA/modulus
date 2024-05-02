@@ -25,6 +25,8 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from .components.mlp import MLP
+
 
 class ChannelSELayer3D(nn.Module):
     """
@@ -253,17 +255,7 @@ class VWUNet(BaseModel):
         )
 
         # MLP that extract features from the end of encoder
-        self.mlp = nn.ModuleList()
-        self.mlp.append(nn.Linear(encoder_channels[-1], drag_mlp_channels[0]))
-        for i in range(1, len(drag_mlp_channels)):
-            self.mlp.append(
-                nn.Sequential(
-                    nn.Linear(drag_mlp_channels[i - 1], drag_mlp_channels[i]),
-                    nn.ReLU(),
-                )
-            )
-
-        self.final_mlp = nn.Linear(drag_mlp_channels[-1], out_channels)
+        self.mlp = MLP(encoder_channels[-1], out_channels, drag_mlp_channels)
 
     def forward(self, x):
         encoder_outs = [x]
@@ -272,8 +264,7 @@ class VWUNet(BaseModel):
             encoder_outs.append(x)
 
         drag_x = F.adaptive_max_pool3d(x, 1).view(x.size(0), -1)
-        for mlp in self.mlp:
-            drag_x = mlp(drag_x)
+        drag_x = self.mlp(drag_x)
 
         for decoder, encoder_out in zip(self.decoder, encoder_outs[::-1]):
             x = pad_to_match(x, encoder_out)
@@ -281,7 +272,6 @@ class VWUNet(BaseModel):
 
         x = pad_to_match(x, encoder_outs[0])
         x = self.final_decoder(x)
-        drag_x = self.final_mlp(drag_x)
 
         return x, drag_x
 

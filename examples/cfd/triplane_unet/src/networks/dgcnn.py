@@ -15,9 +15,11 @@
 # limitations under the License.
 
 from typing import List, Dict, Any, Optional
+from jaxtyping import Float
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 import torch.nn.functional as F
 
 from .base_model import BaseModel
@@ -25,6 +27,7 @@ from .ahmedbody_base import AhmedBodyDragRegressionBase
 from .drivaer_base import DrivAerDragRegressionBase
 from .modelnet_base import ModelNet40Base
 from .neighbor_ops import neighbor_knn_search
+from .components.mlp import MLP
 
 
 def batched_self_knn(x, k: int, chunk_size: int = 4096):
@@ -103,31 +106,6 @@ class EdgeConv(nn.Module):
         return x.max(dim=-1, keepdim=False)[0]
 
 
-class LinearBlock(nn.Module):
-    """
-    Simple linear block with ReLU and dropout
-    """
-
-    def __init__(self, in_channels: int, out_channels: int, dropout: float = 0.5):
-        """
-        :param in_channels: input channels
-        :param out_channels: output channels
-        :param dropout: dropout rate
-        """
-        super(LinearBlock, self).__init__()
-        self.block = nn.Sequential(
-            nn.Linear(in_channels, out_channels, bias=False),
-            nn.ReLU(),
-            nn.Dropout(p=dropout),
-        )
-
-    def forward(self, x):
-        """
-        Forward pass
-        """
-        return self.block(x)
-
-
 class DGCNN(BaseModel):
     def __init__(
         self,
@@ -135,9 +113,8 @@ class DGCNN(BaseModel):
         out_channels: int = 1,
         conv_channels: List[int] = [256, 512, 512, 1024],
         pre_mlp_channels: int = 512,
-        mlp_channels: List[int] = [128, 64, 32, 16],
+        mlp_channels: List[int] = [1024, 1024],
         knn_k: int = 4,
-        dropout: float = 0.5,
         knn_search_chunk_size: int = 4096,
     ):
         super(DGCNN, self).__init__()
@@ -152,16 +129,15 @@ class DGCNN(BaseModel):
             )
 
         self.pre_mlp = nn.Conv1d(sum(conv_channels), pre_mlp_channels, kernel_size=1)
+        self.mlp = MLP(
+            pre_mlp_channels,
+            out_channels,
+            mlp_channels,
+            use_residual=True,
+            activation=nn.GELU,
+        )
 
-        self.mlp = nn.ModuleList()
-        self.mlp.append(LinearBlock(pre_mlp_channels, mlp_channels[0], dropout=dropout))
-        for i in range(1, len(mlp_channels)):
-            self.mlp.append(
-                LinearBlock(mlp_channels[i - 1], mlp_channels[i], dropout=dropout)
-            )
-        self.final = nn.Linear(mlp_channels[-1], out_channels)
-
-    def forward(self, x):
+    def forward(self, x: Float[Tensor, "B C N"]) -> Float[Tensor, "B C2"]:
         batch_size = x.size(0)
         idx = batched_self_knn(x, k=self.k, chunk_size=self.knn_search_chunk_size)
 
@@ -174,10 +150,7 @@ class DGCNN(BaseModel):
         x = self.pre_mlp(x)
         x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
 
-        for mlp in self.mlp:
-            x = mlp(x)
-
-        return self.final(x)
+        return self.mlp(x)
 
 
 class DGCNNModelNet40(ModelNet40Base, DGCNN):
@@ -193,7 +166,6 @@ class DGCNNModelNet40(ModelNet40Base, DGCNN):
         pre_mlp_channels: int = 1024,
         mlp_channels: List[int] = [1024, 1024],
         knn_k: int = 4,
-        dropout: float = 0.5,
         knn_search_chunk_size: int = 4096,
     ):
         ModelNet40Base.__init__(self)
@@ -206,12 +178,12 @@ class DGCNNModelNet40(ModelNet40Base, DGCNN):
             pre_mlp_channels,
             mlp_channels,
             knn_k,
-            dropout,
             knn_search_chunk_size,
         )
 
     def data_dict_to_input(self, data_dict, **kwargs) -> Any:
         """Convert data dictionary to appropriate input for the model."""
+        # From BxNxC to BxCxN for DGCNN input
         points = data_dict["vertices"].to(self.device).transpose(1, 2)
         label = data_dict["class"].to(self.device)
         return points, label
@@ -233,7 +205,6 @@ class DrivAerNet(DrivAerDragRegressionBase, DGCNN):
         pre_mlp_channels: int = 512,
         mlp_channels: List[int] = [128, 64, 32, 16],
         knn_k: int = 4,
-        dropout: float = 0.5,
         point_cloud_sample_size: int = 5000,
         knn_search_chunk_size: int = 4096,
     ):
@@ -247,7 +218,6 @@ class DrivAerNet(DrivAerDragRegressionBase, DGCNN):
             pre_mlp_channels=pre_mlp_channels,
             mlp_channels=mlp_channels,
             knn_k=knn_k,
-            dropout=dropout,
             knn_search_chunk_size=knn_search_chunk_size,
         )
 

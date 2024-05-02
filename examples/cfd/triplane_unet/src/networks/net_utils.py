@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 
 
+# TODO(cchooy) move to .component.mlp
 class MLP(torch.nn.Module):
     """A simple feedforward neural network."""
 
@@ -41,6 +42,7 @@ class MLP(torch.nn.Module):
         return self.layers(x)
 
 
+# TODO(cchooy) move to .component.mlp
 class MLPBlock(nn.Module):
     """MLPBlock."""
 
@@ -72,6 +74,7 @@ class MLPBlock(nn.Module):
         return out
 
 
+# TODO(cchooy) move to .component.encoding
 class SinusoidalEncoding(nn.Module):
     """PositionalEncoding."""
 

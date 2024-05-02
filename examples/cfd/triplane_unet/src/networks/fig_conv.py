@@ -35,6 +35,7 @@ from src.networks.point_feature_ops import (
 from .ahmedbody_base import AhmedBodyBase
 from .base_model import BaseModel, BaseModule
 from .components.reductions import REDUCTION_TYPES
+from .components.mlp import MLP
 from .drivaer_base import DrivAerBase
 from .grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
@@ -184,7 +185,6 @@ class PointFeatureToFactorizedImplicitGlobalConvNet(BaseModel):
         use_rel_pos_embed: bool = True,
         pos_encode_dim: int = 32,
         communication_types: List[Literal["mul", "sum"]] = ["sum"],
-        to_point_sample_method: Literal["graphconv", "interp"] = "graphconv",
         neighbor_search_type: Literal["knn", "radius"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
@@ -326,7 +326,6 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         use_rel_pos_embed: bool = True,
         pos_encode_dim: int = 32,
         communication_types: List[Literal["mul", "sum"]] = ["sum"],
-        to_point_sample_method: Literal["graphconv", "interp"] = "graphconv",
         neighbor_search_type: Literal["knn", "radius"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
@@ -349,7 +348,6 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
             use_rel_pos_embed,
             pos_encode_dim,
             communication_types,
-            to_point_sample_method,
             neighbor_search_type,
             knn_k,
             reductions,
@@ -410,24 +408,18 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
                     ),
                     nn.AdaptiveMaxPool2d((1, 1)),
                     nn.Flatten(),
+                    nn.LayerNorm(mlp_channels[0]),
                 )
                 for c in self.compressed_spatial_dims
             ]
         )
 
-        self.projection = nn.Sequential(
-            nn.Linear(
-                mlp_channels[0] * len(self.compressed_spatial_dims), mlp_channels[0]
-            ),
-            *[
-                nn.Sequential(
-                    nn.Linear(mlp_channels[i], mlp_channels[i + 1]),
-                    nn.LayerNorm(mlp_channels[i + 1]),
-                    nn.GELU(),
-                )
-                for i in range(len(mlp_channels) - 1)
-            ],
-            nn.Linear(mlp_channels[-1], out_channels),
+        self.mlp = MLP(
+            mlp_channels[0] * len(self.compressed_spatial_dims),
+            out_channels,
+            mlp_channels,
+            use_residual=True,
+            activation=nn.GELU,
         )
 
     def forward(self, points: Float[Tensor, "B N 3"]):
@@ -438,7 +430,7 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         # seqs = grid_features_to_sequence(grid_features)
         seqs = [pool(seq.features) for seq, pool in zip(grid_features, self.grid_pools)]
         seqs = torch.cat(seqs, dim=-1)
-        return self.projection(seqs)
+        return self.mlp(seqs)
 
 
 def test_figconvnet():
@@ -463,7 +455,6 @@ def test_figconvnet():
         use_rel_pos_embed=True,
         pos_encode_dim=32,
         communication_types=["sum"],
-        to_point_sample_method="graphconv",
         neighbor_search_type="radius",
         knn_k=16,
         reductions=["mean"],
