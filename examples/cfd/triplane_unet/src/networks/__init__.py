@@ -20,4 +20,4 @@ from .grid_feature_group_unet import (
 )
 from .dgcnn import DrivAerNet, DGCNNModelNet40
 from .vwunet import VWUNetDrivAer
-from .FIGConv import FIGConvNetModelNet
+from .fig_conv import FIGConvNetModelNet
