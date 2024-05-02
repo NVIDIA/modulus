@@ -317,9 +317,6 @@ class GridFeatures:
                 or self.features.shape[2] > grid_shape[1]
                 or self.features.shape[3] > grid_shape[2]
             ):
-                import ipdb
-
-                ipdb.set_trace()
                 permuted_features = self.features[
                     :, : grid_shape[0], : grid_shape[1], : grid_shape[2]
                 ]
@@ -327,8 +324,7 @@ class GridFeatures:
                 permuted_features = self.features
 
         return PointFeatures(
-            torch.tile(self.vertices.view(1, -1, 3), (self.batch_size, 1, 1)),
-            permuted_features.reshape(self.batch_size, -1, self.num_channels),
+            self.vertices.flatten(1, 3), permuted_features.flatten(1, 3)
         )
 
     @property

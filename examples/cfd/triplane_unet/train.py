@@ -163,14 +163,24 @@ def eval(model, datamodule, config, loss_fn=None):
             for k, v in image_dict.items():
                 merged_image_dict[f"{k}_{i}"] = v
 
+    eval_dict = eval_meter.avg
+
     # Post process the eval dict
     if hasattr(model, "post_eval_epoch"):
-        out_dict, image_dict, pointcloud_dict = model.model().post_eval_epoch(eval_meter._private_attributes, datamodule)
-        eval_meter.update()
-
+        (
+            eval_dict,
+            merged_image_dict,
+            merged_point_cloud_dict,
+        ) = model.model().post_eval_epoch(
+            eval_dict,
+            merged_image_dict,
+            merged_point_cloud_dict,
+            eval_meter._private_attributes,
+            datamodule,
+        )
 
     model.train()
-    return eval_meter.avg, merged_image_dict, merged_point_cloud_dict
+    return eval_dict, merged_image_dict, merged_point_cloud_dict
 
 
 def train(config: DictConfig):
@@ -398,16 +408,6 @@ def main(config: DictConfig):
     # Set the random seed.
     if config.seed is not None:
         set_seed(config.seed)
-
-    # TODO(akamenev): restriction due to NN search code.
-    if "PointFeatureToGridGroupUNet" in config.model._target_ and (
-        config.train.batch_size > 1 or config.eval.batch_size > 1
-    ):
-        raise ValueError(
-            "Only batch size 1 is currently supported due "
-            "to nearest neighbor search implementation. "
-            "Use DDP with batch size 1 to parallelize the workload."
-        )
 
     train(config)
 

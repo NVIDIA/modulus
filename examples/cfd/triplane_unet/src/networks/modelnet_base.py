@@ -16,6 +16,7 @@
 
 from typing import Dict, Any, Tuple
 import matplotlib.pyplot as plt
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -62,13 +63,25 @@ class ModelNet40Base(BaseModule):
         return_dict["_pred_label"] = pred.argmax(dim=1).cpu().numpy()
         return_dict["_target_label"] = labels.cpu().numpy()
         return return_dict
-    
-    def post_eval_epoch(self, eval_dict: dict, datamodule, **kwargs) -> Tuple[Dict, Dict, Dict]:
+
+    def post_eval_epoch(
+        self,
+        eval_dict: dict,
+        image_dict: dict,
+        pointcloud_dict: dict,
+        private_attributes: dict,
+        datamodule,
+        **kwargs,
+    ) -> Tuple[Dict, Dict, Dict]:
         """Post evaluation epoch hook."""
         # Compute the confusion matrix
         from sklearn.metrics import confusion_matrix
-        pred_label = eval_dict["_pred_label"]
-        target_label = eval_dict["_target_label"]
+
+        pred_label = private_attributes["_pred_label"]
+        target_label = private_attributes["_target_label"]
+        # The labels are list of numpy arrays. Concatenate them to get a single numpy array
+        pred_label = np.concatenate(pred_label)
+        target_label = np.concatenate(target_label)
         confusion_matrix = confusion_matrix(target_label, pred_label)
         eval_dict["confusion_matrix"] = confusion_matrix
         accuracy = confusion_matrix.trace() / confusion_matrix.sum()
@@ -82,8 +95,9 @@ class ModelNet40Base(BaseModule):
         plt.ylabel("True")
         plt.title("Confusion Matrix")
         im = fig_to_numpy(fig)
-    
-        return eval_dict, {"confusion_matrix": im}, {}
+        image_dict = {"confusion_matrix": im}
+
+        return eval_dict, image_dict, pointcloud_dict
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         """Compute the image dict and pointcloud dict for the model."""

@@ -27,7 +27,6 @@ train:
   batch_size: 1
 
 data:
-  every_n_data: 10
   preprocessors:
     - _target_: src.data.components.DrivAerDragPreprocessingFunctor
 

@@ -38,8 +38,7 @@ dataset sampling.
 ```bash
 python train.py \
     +experiment=drivaer/triplane_unet \
-    data.data_path=./datasets/drivaer/ \
-    data.every_n_data=10
+    data.data_path=./datasets/drivaer/
 ```
 
 A bit more interesting example demonstrates how other experiment parameters

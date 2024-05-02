@@ -35,29 +35,30 @@ class DrivAerBase(BaseModel):
     dir_movement = torch.tensor([-1.0, 0.0, 0.0])
 
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
-        vertices = data_dict["cell_centers"].squeeze(0).float()  # (n_in, 3)
+        vertices = data_dict["cell_centers"].float()  # (n_in, 3)
 
+        # Assume it is centered
         # center vertices
-        vertices_max = vertices.max(0)[0]
-        vertices_min = vertices.min(0)[0]
-        vertices_center = (vertices_max + vertices_min) / 2.0
-        vertices = vertices - vertices_center
+        # vertices_max = vertices.max(1)[0]
+        # vertices_min = vertices.min(1)[0]
+        # vertices_center = (vertices_max + vertices_min) / 2.0
+        # vertices = vertices - vertices_center
 
         return vertices.to(self.device)
 
     def drag(self, pred_pressure, air_coeff, data_dict) -> float:
-        coeff = air_coeff / data_dict["proj_area_x"].item()
-        poly_normals = data_dict["cell_normals"].squeeze(0).float().to(self.device)
-        poly_area = data_dict["cell_areas"].squeeze(0).float().to(self.device)
-        poly_pressure = pred_pressure.squeeze().float().to(self.device)
-        poly_wss = (
-            data_dict["time_avg_wall_shear_stress"].squeeze(0).float().to(self.device)
-        )
+        coeff = (air_coeff / data_dict["proj_area_x"]).to(self.device)
+        poly_normals = data_dict["cell_normals"].float().to(self.device)
+        poly_area = data_dict["cell_areas"].float().to(self.device)
+        poly_pressure = pred_pressure.float().to(self.device)
+        poly_wss = data_dict["time_avg_wall_shear_stress"].float().to(self.device)
 
         # Compute coefficients
         # -x direction is the movement direction so
-        c_p = -coeff * torch.dot(poly_normals[:, 0], poly_area * poly_pressure)
-        c_f = coeff * torch.dot(poly_wss[:, 0], poly_area)
+        c_p = -coeff * torch.sum(
+            poly_normals[..., 0] * poly_area * poly_pressure.squeeze(-1), -1
+        )
+        c_f = coeff * torch.sum(poly_wss[..., 0] * poly_area, dim=-1)
 
         # Compute total drag coefficients
         return c_p + c_f
@@ -79,12 +80,12 @@ class DrivAerBase(BaseModel):
         out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
 
         # compute relative difference
-        gt_drag = data_dict["c_d_computed"].float().to(self.device)
-        pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
-        out_dict["c_d_computed"] = gt_drag.item()
-        out_dict["c_d_pred"] = pred_drag.item()
-        out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
-        out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
+        # gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        # pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
+        # out_dict["c_d_computed"] = gt_drag
+        # out_dict["c_d_pred"] = pred_drag
+        # out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
+        # out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
 
         return out_dict
 
@@ -103,9 +104,9 @@ class DrivAerBase(BaseModel):
         )
 
         # compute drag loss
-        gt_drag = data_dict["c_d_computed"].float().to(self.device)
-        pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
-        return_dict["drag_loss"] = loss_fn(torch.atleast_1d(pred_drag), gt_drag)
+        # gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        # pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
+        # return_dict["drag_loss"] = loss_fn(torch.atleast_1d(pred_drag), gt_drag)
 
         return return_dict
 

@@ -190,8 +190,8 @@ class DGCNNModelNet40(ModelNet40Base, DGCNN):
         in_channels: int = 3,
         out_channels: int = 40,
         conv_channels: List[int] = [256, 512, 512, 1024],
-        pre_mlp_channels: int = 512,
-        mlp_channels: List[int] = [128, 64, 32, 16],
+        pre_mlp_channels: int = 1024,
+        mlp_channels: List[int] = [1024, 1024],
         knn_k: int = 4,
         dropout: float = 0.5,
         knn_search_chunk_size: int = 4096,
@@ -215,7 +215,6 @@ class DGCNNModelNet40(ModelNet40Base, DGCNN):
         points = data_dict["vertices"].to(self.device).transpose(1, 2)
         label = data_dict["class"].to(self.device)
         return points, label
-
 
 
 class DrivAerNet(DrivAerDragRegressionBase, DGCNN):

@@ -28,6 +28,9 @@ hidden_channels:
   - 128
 num_levels: 4
 num_down_blocks: 1
+mlp_channels:
+  - 1024
+  - 1024
 use_rel_pos: true
 neighbor_search_type: radius
 

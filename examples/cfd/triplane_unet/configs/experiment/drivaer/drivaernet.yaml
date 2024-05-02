@@ -27,10 +27,6 @@ train:
   num_epochs: 100
   batch_size: 32
 
-# For faster permutation of point cloud
-data:
-  every_n_data: 100
-
 loggers:
   wandb:
     project_name: drivaer

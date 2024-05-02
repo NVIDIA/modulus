@@ -303,8 +303,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
 
     def forward(
         self,
-        vertices: Float[Tensor, "N 3"],
-        features: Optional[Float[Tensor, "N C"]] = None,
+        vertices: Float[Tensor, "B N 3"],
+        features: Optional[Float[Tensor, "B N C"]] = None,
     ) -> Tensor:
         if features is None:
             point_features = self.vertex_to_point_features(vertices)
@@ -421,8 +421,8 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
 
     def forward(
         self,
-        vertices: Float[Tensor, "N 3"],
-        features: Float[Tensor, "N C"],
+        vertices: Float[Tensor, "B N 3"],
+        features: Float[Tensor, "B N C"],
     ) -> Tensor:
         point_feature = PointFeatures(vertices, features)
         point_feature = self.first_conv(point_feature)

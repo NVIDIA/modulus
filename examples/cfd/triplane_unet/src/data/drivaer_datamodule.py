@@ -267,7 +267,7 @@ class DrivAerDataModule(BaseDataModule):
         data_path: Union[Path, str],
         subsets_postfix: Optional[List[str]] = ["spoiler", "nospoiler"],
         preprocessors: List[Callable] = None,
-        every_n_data: int = 10,
+        num_points: int = 16384,
     ):
         """
         Args:
@@ -294,10 +294,11 @@ class DrivAerDataModule(BaseDataModule):
         default_preproc = DrivAerPreprocessingFunctor(
             pressure_mean=DRIVAER_PRESSURE_MEAN,
             pressure_std=DRIVAER_PRESSURE_STD,
-            every_n_data=every_n_data,
+            num_points=num_points,
         )
         preprocessors.insert(0, default_preproc)
         self.normalizer = default_preproc.normalizer
+        self.air_coeff = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
 
         self.preprocessors = ComposePreprocessors(preprocessors)
 
@@ -379,11 +380,13 @@ def test_datamodule(
 ):
     # String to class
     datamodule = DrivAerDataModule(
-        data_dir, subsets_postfix=subset_postfix, preprocessors=[DrivAerDragPreprocessingFunctor()]
+        data_dir,
+        subsets_postfix=subset_postfix,
+        preprocessors=[DrivAerDragPreprocessingFunctor()],
     )
     val_iter = iter(datamodule.val_dataloader(num_workers=num_workers))
     for i in range(20):
-        tic = time.time()        
+        tic = time.time()
         batch = next(val_iter)
         print(f"Time to load batch {i}: {time.time() - tic:.2f} s")
         # print(i, batch["cell_centers"].shape, batch["time_avg_pressure_whitened"].shape)

@@ -75,7 +75,6 @@ to the `run_docker.sh` script:
 ./internal/docker/run_docker.sh \
     python train.py \
     +experiment=drivaer/triplane_unet \
-    data.every_n_data=10 \
     data.data_path=/data/src/modulus/data/triplane_unet/drivaer/ \
     'data.subsets_postfix=[nospoiler]' \
     ~loggers.wandb \

@@ -390,7 +390,7 @@ class GridFeatureGroupToPoint(BaseModule):
             vertices=point_features.vertices,
             features=torch.cat(
                 (out_point_features_add.features, out_point_features_mul.features),
-                dim=1,
+                dim=-1,
             ),
         )
         return out_point_features

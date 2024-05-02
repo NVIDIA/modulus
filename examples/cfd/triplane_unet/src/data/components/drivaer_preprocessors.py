@@ -37,6 +37,20 @@ DRIVAER_PRESSURE_MEAN = -150.13066236223494
 DRIVAER_PRESSURE_STD = 229.1046667362158
 DRIVAER_AIR_COEFF = 2 / (DRIVAER_AIR_DENSITY * DRIVAER_STREAM_VELOCITY**2)
 
+DRIVAER_RETURN_KEYS = [
+    "mesh_nodes",
+    "cell_centers",
+    "cell_areas",
+    "cell_normals",
+    "proj_area_x",
+    "c_d",
+    "c_l",
+    "c_lf",
+    "c_lr",
+    "time_avg_pressure",
+    "time_avg_wall_shear_stress",
+]
+
 
 class DrivAerPreprocessingFunctor:
     """
@@ -47,19 +61,29 @@ class DrivAerPreprocessingFunctor:
         self,
         pressure_mean: float = DRIVAER_PRESSURE_MEAN,
         pressure_std: float = DRIVAER_PRESSURE_STD,
-        every_n_data: int = 1,
+        num_points: int = 16384,
+        return_keys: List[str] = DRIVAER_RETURN_KEYS,
     ):
         self.normalizer = Normalizer(pressure_mean, pressure_std)
-        self.every_n_data = every_n_data
+        self.num_points = num_points
+        self.return_keys = return_keys
 
     def __call__(self, np_dict: Mapping[str, Any]) -> Mapping[str, Any]:
-        if self.every_n_data > 1:
-            # Downsample the data
+        # select return keys only
+        np_dict = {k: v for k, v in np_dict.items() if k in self.return_keys}
+
+        if self.num_points > 0:
+            # Randomly sample points
+            vertices = np_dict["cell_centers"]
+            point_sample_idx = np.random.choice(
+                len(vertices), self.num_points, replace=True
+            )
+
             for k, v in np_dict.items():
                 if (isinstance(v, np.ndarray) and v.size > 1) or (
                     isinstance(v, torch.Tensor) and v.numel() > 1
                 ):
-                    np_dict[k] = v[:: self.every_n_data]
+                    np_dict[k] = v[point_sample_idx]
 
         if "Snapshot" in np_dict:
             # array('EnSightXXX', dtype='<U10')
@@ -68,6 +92,13 @@ class DrivAerPreprocessingFunctor:
                 np.char.replace(np_dict["Snapshot"], "EnSight", "")
             )
 
+        # compute bbox center
+        vertices = np_dict["cell_centers"]
+        obj_min = np.min(vertices, axis=0)
+        obj_max = np.max(vertices, axis=0)
+        obj_center = (obj_min + obj_max) / 2.0
+        vertices = vertices - obj_center
+        np_dict["cell_centers"] = vertices
         np_dict["time_avg_pressure_whitened"] = self.normalizer.encode(
             np_dict["time_avg_pressure"]
         )
@@ -130,12 +161,7 @@ class DrivAerTDFPreprocessingFunctor:
             "time_avg_pressure_whitened" in np_dict
         ), "Please call DrivAerPreprocessingFunctor first"
 
-        # compute bbox center
         vertices = np_dict["cell_centers"]
-        obj_min = np.min(vertices, axis=0)
-        obj_max = np.max(vertices, axis=0)
-        obj_center = (obj_min + obj_max) / 2.0
-        vertices = vertices - obj_center
 
         # Point sample index
         point_sample_idx = np.random.choice(

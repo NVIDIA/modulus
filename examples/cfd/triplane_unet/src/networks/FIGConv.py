@@ -311,6 +311,7 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         hidden_channels: List[int],
         num_levels: int = 3,
         num_down_blocks: Union[int, List[int]] = 1,
+        mlp_channels: List[int] = [2048, 2048],
         aabb_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         aabb_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
         voxel_size: Optional[float] = None,
@@ -385,23 +386,48 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         #     hidden_channels[num_levels] * self.grid_feature_group_size, 1
         # )
 
+        # self.grid_pools = nn.ModuleList(
+        #     [
+        #         nn.Sequential(
+        #             nn.Linear(
+        #                 hidden_channels[num_levels] * c, mlp_channels[0]
+        #             ),
+        #             nn.LayerNorm(mlp_channels[0]),
+        #             MultiHeadAttentionPool(
+        #                 input_dim=mlp_channels[0],
+        #                 output_dim=mlp_channels[0],
+        #                 num_heads=4,
+        #             ),
+        #         )
+        #         for c in self.compressed_spatial_dims
+        #     ]
+        # )
         self.grid_pools = nn.ModuleList(
             [
                 nn.Sequential(
-                    nn.Linear(
-                        hidden_channels[num_levels] * c, hidden_channels[num_levels]
+                    nn.Conv2d(
+                        hidden_channels[num_levels] * c, mlp_channels[0], kernel_size=1
                     ),
-                    nn.LayerNorm(hidden_channels[num_levels]),
-                    nn.GELU(),
-                    MultiHeadAttentionPool(
-                        input_dim=hidden_channels[num_levels],
-                        output_dim=hidden_channels[num_levels],
-                        num_heads=4,
-                    ),
-                    nn.Linear(hidden_channels[num_levels], out_channels),
+                    nn.AdaptiveMaxPool2d((1, 1)),
+                    nn.Flatten(),
                 )
                 for c in self.compressed_spatial_dims
             ]
+        )
+
+        self.projection = nn.Sequential(
+            nn.Linear(
+                mlp_channels[0] * len(self.compressed_spatial_dims), mlp_channels[0]
+            ),
+            *[
+                nn.Sequential(
+                    nn.Linear(mlp_channels[i], mlp_channels[i + 1]),
+                    nn.LayerNorm(mlp_channels[i + 1]),
+                    nn.GELU(),
+                )
+                for i in range(len(mlp_channels) - 1)
+            ],
+            nn.Linear(mlp_channels[-1], out_channels),
         )
 
     def forward(self, points: Float[Tensor, "B N 3"]):
@@ -409,12 +435,10 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         grid_features = PointFeatureToFactorizedImplicitGlobalConvNet.forward(
             self, point_features
         )
-        seqs = grid_features_to_sequence(grid_features)
-        seqs = [pool(seq) for seq, pool in zip(seqs, self.grid_pools)]
-        # seqs = torch.cat(seqs, dim=-1)
-        # return self.projection(seqs).squeeze(-1)
-        seqs = torch.sum(torch.stack(seqs, -1), dim=-1)
-        return seqs
+        # seqs = grid_features_to_sequence(grid_features)
+        seqs = [pool(seq.features) for seq, pool in zip(grid_features, self.grid_pools)]
+        seqs = torch.cat(seqs, dim=-1)
+        return self.projection(seqs)
 
 
 def test_figconvnet():

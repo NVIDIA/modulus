@@ -24,11 +24,9 @@ conv_channels:
   - 1024
 pre_mlp_channels: 512
 mlp_channels:
-  - 128
-  - 64
-  - 32
-  - 16
+  - 1024
+  - 1024
 
 # EdgeConv params
 knn_k: 4
-knn_search_chunk_size: 8192
+knn_search_chunk_size: 32768 # 2^15
