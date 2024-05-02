@@ -210,6 +210,7 @@ class PointFeatureToFactorizedImplicitGlobalConvNet(BaseModel):
                     out_channels=hidden_channels[0],
                     aabb_max=aabb_max,
                     aabb_min=aabb_min,
+                    radius=2.0,
                     voxel_size=voxel_size,
                     resolution=res,
                     use_rel_pos=use_rel_pos,
@@ -416,11 +417,12 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
 
         self.mlp = MLP(
             mlp_channels[0] * len(self.compressed_spatial_dims),
-            out_channels,
+            mlp_channels[-1],
             mlp_channels,
             use_residual=True,
             activation=nn.GELU,
         )
+        self.projection = nn.Linear(mlp_channels[-1], out_channels)
 
     def forward(self, points: Float[Tensor, "B N 3"]):
         with torch.no_grad():
@@ -431,7 +433,7 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         # seqs = grid_features_to_sequence(grid_features)
         seqs = [pool(seq.features) for seq, pool in zip(grid_features, self.grid_pools)]
         seqs = torch.cat(seqs, dim=-1)
-        return self.mlp(seqs)
+        return self.projection(self.mlp(seqs))
 
 
 def test_figconvnet():

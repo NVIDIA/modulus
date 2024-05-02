@@ -90,6 +90,7 @@ def neighbor_radius_search(
     return neighbors
 
 
+@torch.no_grad()
 def batched_neighbor_radius_search(
     inp_positions: Float[Tensor, "B N 3"],
     out_positions: Float[Tensor, "B M 3"],
@@ -116,6 +117,7 @@ def batched_neighbor_radius_search(
     return NeighborSearchReturn(neighbor_index, neighbor_offset)
 
 
+@torch.no_grad()
 def _knn_search(
     ref_positions: Int[Tensor, "N 3"],
     query_positions: Int[Tensor, "M 3"],
@@ -184,6 +186,7 @@ def neighbor_knn_search(
     return neighbors_index
 
 
+@torch.no_grad()
 def batched_neighbor_knn_search(
     ref_positions: Int[Tensor, "B N 3"],
     query_positions: Int[Tensor, "B M 3"],

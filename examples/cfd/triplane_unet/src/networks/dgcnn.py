@@ -131,11 +131,12 @@ class DGCNN(BaseModel):
         self.pre_mlp = nn.Conv1d(sum(conv_channels), pre_mlp_channels, kernel_size=1)
         self.mlp = MLP(
             pre_mlp_channels,
-            out_channels,
+            mlp_channels[-1],
             mlp_channels,
             use_residual=True,
             activation=nn.GELU,
         )
+        self.projection = nn.Linear(mlp_channels[-1], out_channels)
 
     def forward(self, x: Float[Tensor, "B C N"]) -> Float[Tensor, "B C2"]:
         batch_size = x.size(0)
@@ -150,7 +151,7 @@ class DGCNN(BaseModel):
         x = self.pre_mlp(x)
         x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
 
-        return self.mlp(x)
+        return self.projection(self.mlp(x))
 
 
 class DGCNNModelNet40(ModelNet40Base, DGCNN):

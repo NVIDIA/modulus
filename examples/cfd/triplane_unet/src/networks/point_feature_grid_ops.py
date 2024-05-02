@@ -73,6 +73,7 @@ class PointFeatureToGrid(nn.Module):
         reductions: List[REDUCTION_TYPES] = ["mean"],
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: int = 16,
+        radius: float = np.sqrt(3),  # diagonal of a unit cube
     ) -> None:
         super().__init__()
         if resolution is None:
@@ -101,7 +102,7 @@ class PointFeatureToGrid(nn.Module):
             ]
         )
         self.conv = PointFeatureConv(
-            radius=np.sqrt(3),  # diagonal of a unit cube
+            radius=radius,
             in_channels=in_channels,
             out_channels=out_channels,
             provided_in_channels=3 * pos_encode_dim,
