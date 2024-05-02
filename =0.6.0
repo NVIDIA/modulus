@@ -1,0 +1,7 @@
+Looking in indexes: https://pypi.org/simple, https://pypi.ngc.nvidia.com
+Collecting warp-lang
+  Obtaining dependency information for warp-lang from https://files.pythonhosted.org/packages/58/c7/d8d8a510d339e1a0a2e9ae3a8a906572a28c89e177a042323ff4ebfd8f16/warp_lang-1.0.2-py3-none-manylinux2014_x86_64.whl.metadata
+  Downloading warp_lang-1.0.2-py3-none-manylinux2014_x86_64.whl.metadata (23 kB)
+Requirement already satisfied: numpy in /usr/local/lib/python3.10/dist-packages (from warp-lang) (1.24.4)
+Downloading warp_lang-1.0.2-py3-none-manylinux2014_x86_64.whl (54.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸            39.4/54.9 MB 17.8 MB/s eta 0:00:01

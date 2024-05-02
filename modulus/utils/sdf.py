@@ -18,15 +18,17 @@
 
 import numpy as np
 import warp as wp
+from numpy.typing import NDArray
 
 
 @wp.kernel
 def _bvh_query_distance(
-    mesh,
-    points,
-    max_dist,
-    sdf,
+    mesh: wp.uint64,
+    points: wp.array(dtype=wp.vec3f),
+    max_dist: wp.float32,
+    sdf: wp.array(dtype=wp.float32),
 ):
+
     """
     Computes the signed distance from each point in the given array `points`
     to the mesh represented by `mesh`,within the maximum distance `max_dist`,
@@ -60,7 +62,7 @@ def _bvh_query_distance(
 
 def signed_distance_field(
     mesh_vertices: list[tuple[float, float, float]],
-    mesh_indices: list[tuple[int, int, int]],
+    mesh_indices: NDArray[float],
     input_points: list[tuple[float, float, float]],
     max_dist: float = 1e8,
     include_hit_points: bool = False,
@@ -98,6 +100,7 @@ def signed_distance_field(
     mesh = wp.Mesh(
         wp.array(mesh_vertices, dtype=wp.vec3), wp.array(mesh_indices, dtype=wp.int32)
     )
+    print(type(mesh))
     sdf_points = wp.array(input_points, dtype=wp.vec3)
     sdf = wp.zeros(shape=sdf_points.shape, dtype=wp.float32)
     wp.launch(
