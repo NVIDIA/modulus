@@ -274,10 +274,10 @@ def training_loop(
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss / num_accumulation_rounds
                 loss.backward()
-    
+
         loss_sum = torch.tensor([loss_accum], device=device)
         if dist.world_size > 1:
-            torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM) 
+            torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = loss_sum / dist.world_size
         print(f"average_loss: {average_loss}")
         if dist.rank == 0:
@@ -331,10 +331,14 @@ def training_loop(
                         valid_loss_accum += loss_valid / num_validation_evals
                         valid_loss_sum = torch.tensor([valid_loss_accum], device=device)
                         if dist.world_size > 1:
-                            torch.distributed.all_reduce(valid_loss_sum, op=torch.distributed.ReduceOp.SUM) 
+                            torch.distributed.all_reduce(
+                                valid_loss_sum, op=torch.distributed.ReduceOp.SUM
+                            )
                         average_valid_loss = valid_loss_sum / dist.world_size
                         if dist.rank == 0:
-                            wb.log({"validation loss": average_valid_loss}, step=cur_nimg)
+                            wb.log(
+                                {"validation loss": average_valid_loss}, step=cur_nimg
+                            )
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000
