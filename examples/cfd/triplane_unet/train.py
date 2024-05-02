@@ -320,7 +320,10 @@ def train(config: DictConfig):
             for k, v in loss_dict.items():
                 loggers.log_scalar(f"train/{k}", v.item(), tot_iter)
             if tot_iter % config.train.print_interval == 0:
-                logger.info(f"Iter {tot_iter} loss: {loss.item():.4f}")
+                print_str = f"Iter {tot_iter} loss: {loss.item():.4f}, "
+                for k, v in loss_dict.items():
+                    print_str += f"{k}: {v.item():.4f}, "  # only print the number
+                logger.info(print_str)
 
             tot_iter += 1
             torch.cuda.empty_cache()

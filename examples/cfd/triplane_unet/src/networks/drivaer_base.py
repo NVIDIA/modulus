@@ -66,7 +66,7 @@ class DrivAerBase(BaseModel):
     @torch.no_grad()
     def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
-        normalized_pred = self(vertices).reshape(1, -1)
+        normalized_pred, drag_pred = self(vertices)
         if loss_fn is None:
             loss_fn = self.loss
         normalized_gt = (
@@ -78,6 +78,10 @@ class DrivAerBase(BaseModel):
         gt = data_dict["time_avg_pressure"].to(self.device).reshape(1, -1)
         out_dict["l2_decoded"] = loss_fn(pred, gt)
         out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
+
+        # compute drag loss
+        gt_drag = data_dict["c_d"].float().to(self.device)
+        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
 
         # compute relative difference
         # gt_drag = data_dict["c_d_computed"].float().to(self.device)
@@ -91,7 +95,7 @@ class DrivAerBase(BaseModel):
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
-        normalized_pred = self(vertices)
+        normalized_pred, drag_pred = self(vertices)
         normalized_gt = (
             data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
         )
@@ -104,18 +108,18 @@ class DrivAerBase(BaseModel):
         )
 
         # compute drag loss
-        # gt_drag = data_dict["c_d_computed"].float().to(self.device)
-        # pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
-        # return_dict["drag_loss"] = loss_fn(torch.atleast_1d(pred_drag), gt_drag)
+        gt_drag = data_dict["c_d"].float().to(self.device)
+        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
 
         return return_dict
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices = self.data_dict_to_input(data_dict)
-        noramlized_pred = self(vertices).detach().cpu().squeeze()
+        noramlized_pred, drag_pred = self(vertices)
+        normalized_pred = normalized_pred.detach().cpu()
         # denormalize
         pred = datamodule.decode(noramlized_pred)
-        gt_pressure = data_dict["time_avg_pressure"].cpu().squeeze()
+        gt_pressure = data_dict["time_avg_pressure"].cpu()
         vertices = vertices.cpu().squeeze()
 
         # Plot

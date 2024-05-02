@@ -35,6 +35,7 @@ from src.networks.point_feature_ops import (
 from .ahmedbody_base import AhmedBodyBase
 from .base_model import BaseModel
 from .components.reductions import REDUCTION_TYPES
+from .components.mlp import MLP
 from .drivaer_base import DrivAerBase
 from .grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
@@ -58,6 +59,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
         num_levels: int = 3,
         num_down_blocks: Union[int, List[int]] = 1,
         num_up_blocks: Union[int, List[int]] = 1,
+        mlp_channels: List[int] = [2048, 2048],
         aabb_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         aabb_min: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         voxel_size: Optional[float] = None,
@@ -115,6 +117,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
             self.min_voxel_edge_length = torch.min(
                 self.min_voxel_edge_length, voxel_size
             )
+        self.compressed_spatial_dims = compressed_spatial_dims
 
         self.down_blocks = nn.ModuleList()
         self.up_blocks = nn.ModuleList()
@@ -175,6 +178,32 @@ class PointFeatureToGridGroupUNet(BaseModel):
         self.convert_to_orig = GridFeatureMemoryFormatConverter(
             memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
+
+        self.grid_pools = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Conv2d(
+                        hidden_channels[num_levels] * c, mlp_channels[0], kernel_size=1
+                    ),
+                    nn.AdaptiveMaxPool2d((1, 1)),
+                    nn.Flatten(),
+                    nn.LayerNorm(mlp_channels[0]),
+                )
+                for c in self.compressed_spatial_dims
+            ]
+        )
+        self.mlp = MLP(
+            mlp_channels[0] * len(self.compressed_spatial_dims),
+            mlp_channels[-1],
+            mlp_channels,
+            use_residual=True,
+            activation=nn.GELU,
+        )
+        self.mlp_projection = nn.Sequential(
+            nn.Linear(mlp_channels[-1], 1),
+            nn.Sigmoid(),
+        )
+
         self.to_point = GridFeatureGroupToPoint(
             grid_in_channels=hidden_channels[0],
             point_in_channels=in_channels,
@@ -210,6 +239,14 @@ class PointFeatureToGridGroupUNet(BaseModel):
             out_features = down_block(down_grid_feature_groups[-1])
             down_grid_feature_groups.append(out_features)
 
+        # Drag prediction
+        seqs = [
+            pool(seq.features)
+            for seq, pool in zip(down_grid_feature_groups[-1], self.grid_pools)
+        ]
+        seqs = torch.cat(seqs, dim=-1)
+        drag_pred = self.mlp_projection(self.mlp(seqs))
+
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](
                 down_grid_feature_groups[level + 1]
@@ -221,16 +258,16 @@ class PointFeatureToGridGroupUNet(BaseModel):
             down_grid_feature_groups[level] = up_grid_features
 
         grid_features = self.convert_to_orig(down_grid_feature_groups[0])
-        return grid_features
+        return grid_features, drag_pred
 
     def forward(
         self,
         point_features: PointFeatures,
-    ):
-        grid_features = self._grid_forward(point_features)
+    ) -> Tuple[PointFeatures, Tensor]:
+        grid_features, drag_pred = self._grid_forward(point_features)
         out_point_features = self.to_point(grid_features, point_features)
         out_point_features = self.projection(out_point_features)
-        return out_point_features
+        return out_point_features, drag_pred
 
 
 class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNet):
@@ -310,8 +347,10 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
             point_features = self.vertex_to_point_features(vertices)
         else:
             point_features = PointFeatures(vertices, features)
-        out_point_features = PointFeatureToGridGroupUNet.forward(self, point_features)
-        return out_point_features.features
+        out_point_features, drag_pred = PointFeatureToGridGroupUNet.forward(
+            self, point_features
+        )
+        return out_point_features.features, drag_pred
 
 
 class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGroupUNet):
@@ -431,6 +470,6 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
             self.min_voxel_edge_length.min()
         )
         # TriplaneUNet
-        grid_features = self._grid_forward(down_point_feature)
+        grid_features, drag_pred = self._grid_forward(down_point_feature)
         out_point_feature = self.to_point(grid_features, point_feature)
-        return self.projection(out_point_feature.features)
+        return self.projection(out_point_feature.features), drag_pred
