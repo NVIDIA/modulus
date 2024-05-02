@@ -93,11 +93,29 @@ is an internal GPU [SLURM cluster](https://slurm.schedmd.com/overview.html).
 
 Example of command that launches a single-GPU training job:
 
+### DrivAer experiment
+
 ```bash
-NUM_GPUS=1 sbatch ./ord/train.sbatch
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+NUM_GPUS=1 sbatch ./ord/train.sbatch \
+    +experiment=drivaer/triplane_unet_best                              \
+    data.data_path=${DATA_PATH}/DrivAer/drivaer_webdataset              \
+    output="${OUTPUT_PATH}/drivaer/\${now:%Y-%m-%d}/\${now:%H-%M-%S}"   \
 ```
 
-**Note**: this command must be launched from one of the ORD login nodes,
+### Ahmed body experiment
+
+```bash
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+NUM_GPUS=1 sbatch ./ord/train.sbatch \
+    +experiment=ahmed/triplane_unet_best  \
+    data.data_dir=${DATA_PATH}/AhmedBody/ahmed_preprocessed \
+    output="${OUTPUT_PATH}/ahmed/\${now:%Y-%m-%d}/\${now:%H-%M-%S}" \
+```
+
+**Note**: these commands must be launched from one of the ORD login nodes,
 see ORD FAQ for more details.
 
 See [train.sbatch](./ord/train.sbatch) for more details.
@@ -106,10 +124,16 @@ See [train.sbatch](./ord/train.sbatch) for more details.
 
 TPUNet support data parallel training using standard PyTorch DDP [mechanism](https://pytorch.org/docs/2.2/generated/torch.nn.parallel.DistributedDataParallel.html#).
 
-Example of command that launches 8-GPU training job:
+Example of command that launches 8-GPU DrivAer training job:
 
 ```bash
-NUM_GPUS=8 sbatch --ntasks=8 --gres=gpu:8 ./tpunet/train.sbatch loggers.wandb.run_name=TriplaneUNet-8GPU
+DATA_PATH=/lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/datasets
+OUTPUT_PATH=/lustre/fsw/portfolios/coreai/users/${USER}/outputs/tpunet
+NUM_GPUS=8 sbatch --ntasks=8 --gres=gpu:8 ./tpunet/train.sbatch
+    +experiment=drivaer/triplane_unet_best                              \
+    data.data_path=${DATA_PATH}/DrivAer/drivaer_webdataset              \
+    output="${OUTPUT_PATH}/drivaer/\${now:%Y-%m-%d}/\${now:%H-%M-%S}"   \
+    loggers.wandb.run_name=TriplaneUNet-8GPU
 ```
 
 Any additional arguments can be appended to the command line above.

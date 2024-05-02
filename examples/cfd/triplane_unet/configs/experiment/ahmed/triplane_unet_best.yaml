@@ -17,39 +17,37 @@
 # limitations under the License.
 
 defaults:
-  - /data: drivaer
-  - /model: triplane_unet_drivaer
-  - /loss: mseloss
+  - /data: ahmed
+  - /model: triplane_unet_ahmed
+  - /loss: truncatedmseloss
   - /optimizer: adam
   - /lr_scheduler: steplr
+  - /loss@eval.loss: mseloss
 
 train:
   batch_size: 1
 
 data:
-  preprocessors:
-    - _target_: src.data.components.DrivAerDragPreprocessingFunctor
+  every_n_data: 10
 
 model:
   num_levels: 1
-  kernel_size: 9
+  kernel_size: 11
   hidden_channels:
     - 32
     - 32
-    - 32
-    - 32
   resolution_memory_format_pairs:
-    - ${res_mem_pair:xc_y_z, [  5, 150, 100]}
-    - ${res_mem_pair:yc_x_z, [250,   3, 100]}
-    - ${res_mem_pair:zc_x_y, [250, 150,   2]}
+    - ${res_mem_pair:xc_y_z, [  6, 70, 60]}
+    - ${res_mem_pair:yc_x_z, [186,  2, 60]}
+    - ${res_mem_pair:zc_x_y, [186, 70,  2]}
 
 lr_scheduler:
   step_size: 25
 
 loggers:
   wandb:
-    project_name: drivaer
+    project_name: ahmed_body
     entity: nvr-ai-algo
-    run_name: TriplaneUNet-level1-32-res250-150-100-ks9-step25-every10
+    run_name: TriplaneUNet-level1-32-res186-70-60-ks11-step25-every10
 
 seed: 0

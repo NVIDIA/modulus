@@ -35,6 +35,7 @@ train:
   dataloader:
     shuffle: true # can also specify the shuffle buffer size, e.g. shuffle_buffer_size: 100
     num_workers: 0
+    pin_memory: true
 
 eval:
   loss: null
@@ -45,6 +46,7 @@ eval:
   dataloader:
     shuffle: false
     num_workers: 0
+    pin_memory: true
 
 device: cuda
 
