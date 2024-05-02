@@ -124,6 +124,41 @@ class EmbeddingMultiHeadKQVAttention(BaseModule):
         return output
 
 
+class MultiHeadAttentionPool(BaseModule):
+    """
+    Multi-head attention layer
+    """
+
+    def __init__(self, input_dim, output_dim, num_heads):
+        super(MultiHeadAttentionPool, self).__init__()
+        self.num_heads = num_heads
+
+        # Multi-head attention layer
+        self.attention = nn.MultiheadAttention(
+            embed_dim=input_dim, num_heads=num_heads, batch_first=True
+        )
+
+        # Optional: Output transformation layer
+        self.output_transform = (
+            nn.Linear(input_dim, output_dim)
+            if input_dim != output_dim
+            else nn.Identity()
+        )
+
+    def forward(self, x):
+        # x is the input of shape (B, N, C)
+        # Create query that is max-pooled over the points
+        query = x.max(dim=1).values.unsqueeze(1)  # Shape: (B, 1, C)
+        attn_output, attn_output_weights = self.attention(query, x, x)
+
+        # Transform the output to desired output dimension C'
+        output = self.output_transform(attn_output)  # Shape: (B, 1, output_dim)
+
+        # Squeeze the output to remove the extra dimension
+        output = output.squeeze(1)
+        return output
+
+
 class PointFeatureToFactorizedImplicitGlobalConvNet(BaseModel):
     """FIGConvNet"""
 
@@ -141,9 +176,9 @@ class PointFeatureToFactorizedImplicitGlobalConvNet(BaseModel):
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (2, 128, 128)),
-            (GridFeaturesMemoryFormat.yc_x_z, (128, 2, 128)),
-            (GridFeaturesMemoryFormat.zc_x_y, (128, 128, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -227,7 +262,7 @@ class PointFeatureToFactorizedImplicitGlobalConvNet(BaseModel):
 
         self.compressed_spatial_dims = compressed_spatial_dims
         self.convert_to_orig = GridFeatureMemoryFormatConverter(
-            memory_format=GridFeaturesMemoryFormat.x_y_z_c
+            memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
 
     def _grid_forward(self, point_features: PointFeatures):
@@ -254,10 +289,9 @@ def grid_features_to_sequence(
     Convert grid features to sequence of features
     """
     feature_stack = []
-    C = grid_feature_group[0].features.size(0)
+    C = grid_feature_group[0].num_channels
     for grid_feature in grid_feature_group:
-        assert grid_feature.features.ndim == 3
-        feat = grid_feature.features.view(1, C, -1)
+        feat = grid_feature.features.flatten(2)
         feat = feat.permute(0, 2, 1)
         feature_stack.append(feat)
 
@@ -283,9 +317,9 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (2, 128, 128)),
-            (GridFeaturesMemoryFormat.yc_x_z, (128, 2, 128)),
-            (GridFeaturesMemoryFormat.zc_x_y, (128, 128, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -328,6 +362,29 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
             pos_embed_range=aabb_max[0] - aabb_min[0],
         )
 
+        # self.grid_pools = nn.ModuleList(
+        #     [
+        #         nn.Sequential(
+        #             nn.Linear(
+        #                 hidden_channels[num_levels] * c, hidden_channels[num_levels]
+        #             ),
+        #             nn.LayerNorm(hidden_channels[num_levels]),
+        #             nn.GELU(),
+        #             EmbeddingMultiHeadKQVAttention(
+        #                 input_dim=hidden_channels[num_levels],
+        #                 output_dim=hidden_channels[num_levels],
+        #                 num_heads=4,
+        #                 output_tokens=out_channels,
+        #                 key_value_dim=hidden_channels[num_levels],
+        #             ),
+        #         )
+        #         for c in self.compressed_spatial_dims
+        #     ]
+        # )
+        # self.projection = nn.Linear(
+        #     hidden_channels[num_levels] * self.grid_feature_group_size, 1
+        # )
+
         self.grid_pools = nn.ModuleList(
             [
                 nn.Sequential(
@@ -336,28 +393,63 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
                     ),
                     nn.LayerNorm(hidden_channels[num_levels]),
                     nn.GELU(),
-                    EmbeddingMultiHeadKQVAttention(
+                    MultiHeadAttentionPool(
                         input_dim=hidden_channels[num_levels],
                         output_dim=hidden_channels[num_levels],
                         num_heads=4,
-                        output_tokens=out_channels,
-                        key_value_dim=hidden_channels[num_levels],
                     ),
+                    nn.Linear(hidden_channels[num_levels], out_channels),
                 )
                 for c in self.compressed_spatial_dims
             ]
         )
 
-        self.projection = nn.Linear(
-            hidden_channels[num_levels] * self.grid_feature_group_size, 1
-        )
-
-    def forward(self, points: Tensor):
-        point_features = self.vertex_to_point_features(points.squeeze(0))
+    def forward(self, points: Float[Tensor, "B N 3"]):
+        point_features = self.vertex_to_point_features(points)
         grid_features = PointFeatureToFactorizedImplicitGlobalConvNet.forward(
             self, point_features
         )
         seqs = grid_features_to_sequence(grid_features)
         seqs = [pool(seq) for seq, pool in zip(seqs, self.grid_pools)]
-        seqs = torch.cat(seqs, dim=-1)
-        return self.projection(seqs).squeeze(-1)
+        # seqs = torch.cat(seqs, dim=-1)
+        # return self.projection(seqs).squeeze(-1)
+        seqs = torch.sum(torch.stack(seqs, -1), dim=-1)
+        return seqs
+
+
+def test_figconvnet():
+
+    device = torch.device("cuda:0")
+    model = FIGConvNetModelNet(
+        in_channels=3,
+        out_channels=40,
+        kernel_size=3,
+        hidden_channels=[16, 32, 64, 128],
+        num_levels=3,
+        num_down_blocks=1,
+        aabb_max=(1.0, 1.0, 1.0),
+        aabb_min=(-1.0, -1.0, -1.0),
+        voxel_size=None,
+        resolution_memory_format_pairs=[
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
+        ],
+        use_rel_pos=True,
+        use_rel_pos_embed=True,
+        pos_encode_dim=32,
+        communication_types=["sum"],
+        to_point_sample_method="graphconv",
+        neighbor_search_type="radius",
+        knn_k=16,
+        reductions=["mean"],
+        down_num_points=1024,
+    ).to(device)
+
+    points = torch.rand(2, 1024, 3).to(device)
+    output = model(points)
+    assert output.shape == (2, 40)
+
+
+if __name__ == "__main__":
+    test_figconvnet()

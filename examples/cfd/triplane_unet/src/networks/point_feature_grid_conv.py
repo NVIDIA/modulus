@@ -55,19 +55,14 @@ class GridFeaturePadToMatch(nn.Module):
 
     def forward(self, ref_grid: GridFeatures, x_grid: GridFeatures) -> GridFeatures:
         assert ref_grid.memory_format == x_grid.memory_format
-        assert x_grid.memory_format != GridFeaturesMemoryFormat.x_y_z_c
+        assert x_grid.memory_format != GridFeaturesMemoryFormat.b_x_y_z_c
 
-        if x_grid.memory_format == GridFeaturesMemoryFormat.c_x_y_z:
+        if x_grid.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z:
             x = x_grid.batch_features
             # get height, width, depth of x
-            height, width, depth = x.shape[2], x.shape[3], x.shape[4]
+            height, width, depth = x_grid.resolution
             # get height, width, depth of ref
-            ref = ref_grid.batch_features
-            ref_height, ref_width, ref_depth = (
-                ref.shape[2],
-                ref.shape[3],
-                ref.shape[4],
-            )
+            ref_height, ref_width, ref_depth = ref_grid.resolution
             pad_height = ref_height - height
             pad_width = ref_width - width
             pad_depth = ref_depth - depth
@@ -78,7 +73,7 @@ class GridFeaturePadToMatch(nn.Module):
                 x = F.pad(x, (0, pad_depth, 0, pad_width, 0, pad_height), "constant", 0)
             return GridFeatures(
                 vertices=ref_grid.vertices,
-                features=x.squeeze(0),
+                features=x,
                 memory_format=x_grid.memory_format,
                 grid_shape=ref_grid.grid_shape,
                 num_channels=x_grid.num_channels,
@@ -89,8 +84,8 @@ class GridFeaturePadToMatch(nn.Module):
             # Make x to have the same dimension as ref
             x = x_grid.features
             ref = ref_grid.features
-            height, width = x.shape[1], x.shape[2]
-            ref_height, ref_width = ref.shape[1], ref.shape[2]
+            height, width = x.shape[2], x.shape[3]
+            ref_height, ref_width = ref.shape[2], ref.shape[3]
             pad_height = ref_height - height
             pad_width = ref_width - width
             # If pad_XXX is negative, crop. Otherwise, pad 0 at the end
@@ -165,8 +160,8 @@ class GridFeatureConv2d(nn.Module):
 
     def forward(self, grid_features: GridFeatures) -> GridFeatures:
         assert (
-            grid_features.memory_format != GridFeaturesMemoryFormat.x_y_z_c
-            and grid_features.memory_format != GridFeaturesMemoryFormat.c_x_y_z
+            grid_features.memory_format != GridFeaturesMemoryFormat.b_x_y_z_c
+            and grid_features.memory_format != GridFeaturesMemoryFormat.b_c_x_y_z
         )
         plane_view = grid_features.features
         plane_view = self.conv(plane_view)
@@ -205,8 +200,8 @@ class GridFeatureFFTConv2d(nn.Module):
 
     def forward(self, grid_features: GridFeatures) -> GridFeatures:
         assert (
-            grid_features.memory_format != GridFeaturesMemoryFormat.x_y_z_c
-            and grid_features.memory_format != GridFeaturesMemoryFormat.c_x_y_z
+            grid_features.memory_format != GridFeaturesMemoryFormat.b_x_y_z_c
+            and grid_features.memory_format != GridFeaturesMemoryFormat.b_c_x_y_z
         )
         plane_view = grid_features.features
         # if ndim is 3, expand batch dim
@@ -255,20 +250,20 @@ class GridFeatureTransform(BaseModule):
         self.feature_transform = transform
 
     def forward(self, grid_features: GridFeatures) -> GridFeatures:
-        assert grid_features.memory_format != GridFeaturesMemoryFormat.x_y_z_c
+        assert grid_features.memory_format != GridFeaturesMemoryFormat.b_x_y_z_c
 
-        if grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z:
+        if grid_features.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z:
             batch_view = grid_features.batch_features
-            if batch_view.ndim == 4:
-                batch_view = batch_view.unsqueeze(0)
+            assert batch_view.ndim == 5
         else:
             batch_view = grid_features.features
             if batch_view.ndim == 3:
+                assert False, "This should not happen."
                 batch_view = batch_view.unsqueeze(0)
 
         batch_view = self.feature_transform(batch_view)
         out_grid_features = GridFeatures.from_conv_output(
-            batch_view.squeeze(0),
+            batch_view,
             grid_features.vertices,
             grid_features.memory_format,
             grid_features.grid_shape,
@@ -424,7 +419,7 @@ class GridFeatureConv3d(nn.Module):
         self.out_channels = out_channels
 
     def forward(self, grid_features: GridFeatures) -> GridFeatures:
-        assert grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z
+        assert grid_features.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z
         plane_view = grid_features.batch_features
         plane_view = self.conv(plane_view)
         # TODO: stride != 1 vertices
@@ -496,7 +491,7 @@ class GridFeatureConv3dBlock(nn.Module):
         self.nonlinear = GridFeatureTransform(nn.GELU())
 
     def forward(self, grid_features: GridFeatures) -> GridFeatures:
-        assert grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z
+        assert grid_features.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z
         out = self.conv1(grid_features)
         out = self.nonlinear(self.norm1(out))
         out = self.norm2(self.conv2(out))

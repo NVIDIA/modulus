@@ -48,10 +48,10 @@ from .point_feature_ops import (
 )
 
 memory_format_to_axis_index = {
-    GridFeaturesMemoryFormat.xc_y_z: 0,
-    GridFeaturesMemoryFormat.yc_x_z: 1,
-    GridFeaturesMemoryFormat.zc_x_y: 2,
-    GridFeaturesMemoryFormat.x_y_z_c: -1,
+    GridFeaturesMemoryFormat.b_xc_y_z: 0,
+    GridFeaturesMemoryFormat.b_yc_x_z: 1,
+    GridFeaturesMemoryFormat.b_zc_x_y: 2,
+    GridFeaturesMemoryFormat.b_x_y_z_c: -1,
 }
 
 
@@ -267,7 +267,7 @@ class PointFeatureToGrid3DUNet(GridFeature3DUNet):
 
         self.point2grid = point2grid
         self.convert_to_c_x_y_z = GridFeatureMemoryFormatConverter(
-            memory_format=GridFeaturesMemoryFormat.c_x_y_z
+            memory_format=GridFeaturesMemoryFormat.b_c_x_y_z
         )
         self.grid2point = GridFeatureToPointFeature(
             in_channels=hidden_channels[0], pos_encode_point=False
@@ -466,7 +466,7 @@ class PointFeatureToGridUNet(BaseModel):
         aabb_min: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         voxel_size: Optional[float] = None,
         resolution: Optional[Tuple[int, int, int]] = (128, 128, 2),
-        grid_memory_format: GridFeaturesMemoryFormat = GridFeaturesMemoryFormat.zc_x_y,
+        grid_memory_format: GridFeaturesMemoryFormat = GridFeaturesMemoryFormat.b_zc_x_y,
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
         pos_embed_dim: int = 32,
@@ -544,7 +544,7 @@ class PointFeatureToGridUNet(BaseModel):
             up_block = nn.Sequential(*up_block)
             self.up_blocks.append(up_block)
         self.convert_to_orig = GridFeatureMemoryFormatConverter(
-            memory_format=GridFeaturesMemoryFormat.x_y_z_c
+            memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
         self.to_point = GridFeatureToPoint(
             grid_in_channels=hidden_channels[0],
@@ -598,9 +598,9 @@ class PointFeatureToGridUNets(BaseModel):
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (2, 128, 128)),
-            (GridFeaturesMemoryFormat.yc_x_z, (128, 2, 128)),
-            (GridFeaturesMemoryFormat.zc_x_y, (128, 128, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -682,9 +682,9 @@ class PointFeatureToGridUNetsDrivAer(DrivAerBase, PointFeatureToGridUNets):
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (4, 120, 80)),
-            (GridFeaturesMemoryFormat.yc_x_z, (200, 3, 80)),
-            (GridFeaturesMemoryFormat.zc_x_y, (200, 120, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (4, 120, 80)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (200, 3, 80)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (200, 120, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -769,9 +769,9 @@ class PointFeatureToGridUNetsAhmedBody(AhmedBodyBase, PointFeatureToGridUNets):
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (4, 120, 80)),
-            (GridFeaturesMemoryFormat.yc_x_z, (200, 3, 80)),
-            (GridFeaturesMemoryFormat.zc_x_y, (200, 120, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (4, 120, 80)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (200, 3, 80)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (200, 120, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -934,15 +934,15 @@ class PointFeatureUNetWithGridUNets(BaseModel):
             aabb_min=aabb_min,
             resolution_memory_format_pairs=[
                 (
-                    GridFeaturesMemoryFormat.zc_x_y,
+                    GridFeaturesMemoryFormat.b_zc_x_y,
                     (grid_resolution[0], grid_resolution[1], compressed_grid_dim),
                 ),
                 (
-                    GridFeaturesMemoryFormat.yc_x_z,
+                    GridFeaturesMemoryFormat.b_yc_x_z,
                     (grid_resolution[0], compressed_grid_dim, grid_resolution[2]),
                 ),
                 (
-                    GridFeaturesMemoryFormat.xc_y_z,
+                    GridFeaturesMemoryFormat.b_xc_y_z,
                     (compressed_grid_dim, grid_resolution[1], grid_resolution[2]),
                 ),
             ],

@@ -32,9 +32,9 @@ use_rel_pos: true
 neighbor_search_type: radius
 
 resolution_memory_format_pairs:
-  - ${res_mem_pair:xc_y_z, [  4, 255, 255]}
-  - ${res_mem_pair:yc_x_z, [255,   4, 255]}
-  - ${res_mem_pair:zc_x_y, [255, 255,  4]}
+  - ${res_mem_pair:b_xc_y_z, [  4, 255, 255]}
+  - ${res_mem_pair:b_yc_x_z, [255,   4, 255]}
+  - ${res_mem_pair:b_zc_x_y, [255, 255,  4]}
 
 reductions:
   - mean

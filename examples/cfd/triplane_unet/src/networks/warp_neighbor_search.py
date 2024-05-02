@@ -90,7 +90,7 @@ def _radius_search_warp(
     if isinstance(grid_dim, int):
         grid_dim = (grid_dim, grid_dim, grid_dim)
 
-    result_count = wp.zeros(shape=queries.shape, dtype=wp.int32)
+    result_count = wp.zeros(shape=len(queries), dtype=wp.int32)
     grid = wp.HashGrid(
         dim_x=grid_dim[0],
         dim_y=grid_dim[1],
@@ -180,6 +180,61 @@ def radius_search_warp(
     return result_point_idx, result_point_dist, torch_offset
 
 
+def batched_radius_search_warp(
+    points: Float[Tensor, "B N 3"],
+    queries: Float[Tensor, "B M 3"],
+    radius: float,
+    grid_dim: Union[int, Tuple[int, int, int]] = (128, 128, 128),
+    device: str = "cuda",
+) -> Tuple[
+    Float[Tensor, "Q"], Float[Tensor, "Q"], Float[Tensor, "B*M + 1"]
+]:  # noqa: F821
+    """
+    Args:
+        points: [B, N, 3]
+        queries: [B, M, 3]
+        radius: float
+        grid_dim: Union[int, Tuple[int, int, int]]
+        device: str
+
+    Returns:
+        neighbor_index: [Q]
+        neighbor_distance: [Q]
+        neighbor_split: [B*M + 1]
+    """
+    B, N, _ = points.shape
+    neighbor_index_list = []
+    neighbor_distance_list = []
+    neighbor_split_list = []
+    index_offset = 0
+    split_offset = 0
+    for b in range(B):
+        neighbor_index, neighbor_distance, neighbor_split = radius_search_warp(
+            points=points[b],
+            queries=queries[b],
+            radius=radius,
+            grid_dim=grid_dim,
+            device=device,
+        )
+        neighbor_index_list.append(neighbor_index + index_offset)
+        neighbor_distance_list.append(neighbor_distance)
+        # if b is last, append all neighbor_split since the last element is the total count
+        if b == B - 1:
+            neighbor_split_list.append(neighbor_split + split_offset)
+        else:
+            neighbor_split_list.append(neighbor_split[:-1] + split_offset)
+
+        index_offset += N
+        split_offset += len(neighbor_index)
+
+    # Neighbor index, Neighbor Distance, Neighbor Split
+    return (
+        torch.cat(neighbor_index_list),
+        torch.cat(neighbor_distance_list),
+        torch.cat(neighbor_split_list),
+    )
+
+
 _WARP_NEIGHBOR_SEARCH_INIT = False
 if not _WARP_NEIGHBOR_SEARCH_INIT:
     wp.init()
@@ -190,18 +245,23 @@ if __name__ == "__main__":
     torch.manual_seed(42)
 
     # Test search
+    B = 5
     N = 100_000
     M = 200_000
-    points = torch.rand(N, 3).cuda()
-    queries = torch.rand(M, 3).cuda()
+    points = torch.rand(B, N, 3).cuda()
+    queries = torch.rand(B, M, 3).cuda()
 
     radii = [0.05, 0.01, 0.005]
     for radius in radii:
         print(f"Testing radius: {radius}")
-        result_point_idx, result_point_dist, torch_offset = radius_search_warp(
+        result_point_idx, result_point_dist, torch_offset = batched_radius_search_warp(
             points=points, queries=queries, radius=radius
         )
         print(result_point_idx.shape)
         print(result_point_dist.shape)
         print(torch_offset.shape)
         print()
+
+        import ipdb
+
+        ipdb.set_trace()

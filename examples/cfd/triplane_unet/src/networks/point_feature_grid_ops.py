@@ -53,7 +53,7 @@ class AABBGridFeatures(GridFeatures):
         feat = SinusoidalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
             grid
         )
-        super().__init__(grid, feat.view(*resolution, -1))
+        super().__init__(grid.unsqueeze(0), feat.view(1, *resolution, -1))
 
 
 class PointFeatureToGrid(nn.Module):
@@ -116,14 +116,23 @@ class PointFeatureToGrid(nn.Module):
         )
 
     def forward(self, point_features: PointFeatures) -> GridFeatures:
-        # to device
+        # match the batch size of points
         self.grid_features.to(device=point_features.vertices.device)
+        grid_point_features = self.grid_features.point_features.expand_batch_size(
+            point_features.batch_size
+        )
+
         out_point_features = self.conv(
             point_features,
-            self.grid_features.point_features,
+            grid_point_features,
         )
-        out_grid = out_point_features.to_grid_features(self.resolution)
-        return out_grid
+
+        B, _, C = out_point_features.features.shape
+        grid_feature = GridFeatures(
+            out_point_features.vertices.reshape(B, *self.resolution, 3),
+            out_point_features.features.view(B, *self.resolution, C),
+        )
+        return grid_feature
 
 
 class GridFeatureToPoint(nn.Module):
@@ -262,7 +271,7 @@ class GridFeatureToPointInterp(nn.Module):
         self, grid_features: GridFeatures, point_features: PointFeatures
     ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
-        grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
+        grid_features.to(memory_format=GridFeaturesMemoryFormat.b_c_x_y_z)
         xyz = point_features.vertices  # N x 3
         self.to(device=xyz.device)
         normalized_xyz = (xyz - self.aabb_min) / (self.aabb_max - self.aabb_min) * 2 - 1
@@ -386,7 +395,7 @@ class GridFeatureToPointFeature(BaseModule):
         self, grid_features: GridFeatures, point_features: PointFeatures
     ) -> PointFeatures:
         # Use F.interpolate to interpolate grid features to point features
-        assert grid_features.memory_format == GridFeaturesMemoryFormat.c_x_y_z
+        assert grid_features.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z
         batch_grid_features = grid_features.batch_features  # B x C x X x Y x Z
         # normalize the point_features.vertices to [-1, 1] using grid_features.vertices min max
         vertices = point_features.vertices
@@ -424,8 +433,8 @@ class GridFeatureCat(BaseModule):
         # assert torch.allclose(grid_features.vertices, other_grid_features.vertices)
 
         orig_memory_format = grid_features.memory_format
-        grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
-        other_grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
+        grid_features.to(memory_format=GridFeaturesMemoryFormat.b_c_x_y_z)
+        other_grid_features.to(memory_format=GridFeaturesMemoryFormat.b_c_x_y_z)
         cat_grid_features = GridFeatures(
             vertices=grid_features.vertices,
             features=torch.cat(
@@ -437,46 +446,3 @@ class GridFeatureCat(BaseModule):
         )
         cat_grid_features.to(memory_format=orig_memory_format)
         return cat_grid_features
-
-
-class GridFeatureFNO(BaseModule):
-    """GridFeatureFNO."""
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        resolution: Tuple[int, int, int] = (32, 32, 32),
-        hidden_channels: int = 86,
-        domain_padding: float = 0.0,
-        norm: Literal["group_norm"] = "group_norm",
-        factorization: Literal["tucker"] = "tucker",
-        rank: float = 0.4,
-    ):
-        from neuralop.models import FNO
-
-        super().__init__()
-        self.fno = FNO(
-            resolution,
-            hidden_channels=hidden_channels,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            use_mlp=True,
-            mlp={"expansion": 1.0, "dropout": 0},
-            domain_padding=domain_padding,
-            factorization=factorization,
-            norm=norm,
-            rank=rank,
-        )
-
-    def forward(self, grid_features: GridFeatures) -> GridFeatures:
-        grid_features = grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
-        batch_features = self.fno(grid_features.batch_features)
-        out_grid_features = GridFeatures(
-            grid_features.vertices,
-            batch_features.squeeze(0),
-            memory_format=grid_features.memory_format,
-            grid_shape=grid_features.grid_shape,
-            num_channels=self.fno.out_channels,
-        )
-        return out_grid_features

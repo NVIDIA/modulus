@@ -64,9 +64,9 @@ class PointFeatureToGridGroupUNet(BaseModel):
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (2, 128, 128)),
-            (GridFeaturesMemoryFormat.yc_x_z, (128, 2, 128)),
-            (GridFeaturesMemoryFormat.zc_x_y, (128, 128, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = True,
@@ -173,7 +173,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
             up_block = nn.Sequential(*up_block)
             self.up_blocks.append(up_block)
         self.convert_to_orig = GridFeatureMemoryFormatConverter(
-            memory_format=GridFeaturesMemoryFormat.x_y_z_c
+            memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
         self.to_point = GridFeatureGroupToPoint(
             grid_in_channels=hidden_channels[0],
@@ -251,9 +251,9 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (2, 128, 128)),
-            (GridFeaturesMemoryFormat.yc_x_z, (128, 2, 128)),
-            (GridFeaturesMemoryFormat.zc_x_y, (128, 128, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_encode: bool = True,
@@ -332,9 +332,9 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
         ] = [
-            (GridFeaturesMemoryFormat.xc_y_z, (6, 104, 90)),
-            (GridFeaturesMemoryFormat.yc_x_z, (280, 2, 90)),
-            (GridFeaturesMemoryFormat.zc_x_y, (280, 104, 2)),
+            (GridFeaturesMemoryFormat.b_xc_y_z, (6, 104, 90)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (280, 2, 90)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (280, 104, 2)),
         ],
         use_rel_pos: bool = True,
         use_rel_pos_encode: bool = True,

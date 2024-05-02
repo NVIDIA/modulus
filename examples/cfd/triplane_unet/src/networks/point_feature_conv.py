@@ -26,7 +26,7 @@ from torch import Tensor
 
 from .base_model import BaseModule
 from .components.reductions import REDUCTION_TYPES, row_reduction
-from .neighbor_ops import neighbor_knn_search, neighbor_radius_search
+from .neighbor_ops import batched_neighbor_radius_search, batched_neighbor_knn_search
 from .net_utils import MLPBlock, SinusoidalEncoding
 from .point_feature_ops import PointFeatures
 
@@ -215,11 +215,11 @@ class PointFeatureConv(BaseModule):
 
     def forward(
         self,
-        in_point_features: PointFeatures["N C1"],
-        out_point_features: Optional[PointFeatures["M C1"]] = None,
-        in_weight: Optional[Float[Tensor, "N"]] = None,  # noqa: F821
+        in_point_features: PointFeatures["B N C1"],
+        out_point_features: Optional[PointFeatures["B M C1"]] = None,
+        # in_weight: Optional[Float[Tensor, "B N"]] = None,  # noqa: F821
         neighbor_search_vertices_scaler: Optional[Float[Tensor, "3"]] = None,
-    ) -> PointFeatures["M C2"]:
+    ) -> PointFeatures["B M C2"]:
         """When out_point_features is None, the output will be generated on the
         in_point_features.vertices."""
         if self.out_point_feature_type == "provided":
@@ -234,9 +234,12 @@ class PointFeatureConv(BaseModule):
         elif self.out_point_feature_type == "same":
             assert out_point_features is None
             out_point_features = in_point_features
+
+        in_num_channels = in_point_features.num_channels
+        out_num_channels = out_point_features.num_channels
         assert (
-            in_point_features.features.shape[1]
-            + out_point_features.features.shape[1]
+            in_num_channels
+            + out_num_channels
             + self.use_rel_pos_encode * self.positional_encoding.num_channels * 3
             + (not self.use_rel_pos_encode) * self.use_rel_pos * 3
             == self.edge_transform_mlp.in_channels
@@ -253,29 +256,32 @@ class PointFeatureConv(BaseModule):
             )
 
         if self.neighbor_search_type == "knn":
-            # Only support CPU search
             device = in_vertices.device
-            neighbors_index = neighbor_knn_search(
+            neighbors_index = batched_neighbor_knn_search(
                 in_vertices, out_vertices, self.radius_or_k
             )
-            # M x K index
+            # B x M x K index
             neighbors_index = neighbors_index.long().to(device).view(-1)
             # M row splits
             neighbors_row_splits = (
                 torch.arange(0, out_vertices.shape[0] + 1, device=device)
                 * self.radius_or_k
             )
-            rep_in_features = in_point_features.features[neighbors_index]
+            rep_in_features = in_point_features.features.view(-1, in_num_channels)[
+                neighbors_index
+            ]
             num_reps = self.radius_or_k
         elif self.neighbor_search_type == "radius":
-            neighbors = neighbor_radius_search(
+            neighbors = batched_neighbor_radius_search(
                 in_vertices,
                 out_vertices,
                 radius=self.radius_or_k,
                 search_method=self.radius_search_method,
             )
             neighbors_index = neighbors.neighbors_index.long()
-            rep_in_features = in_point_features.features[neighbors_index]
+            rep_in_features = in_point_features.features.view(-1, in_num_channels)[
+                neighbors_index
+            ]
             neighbors_row_splits = neighbors.neighbors_row_splits
             num_reps = neighbors_row_splits[1:] - neighbors_row_splits[:-1]
         else:
@@ -284,26 +290,28 @@ class PointFeatureConv(BaseModule):
             )
         # repeat the self features using num_reps
         self_features = torch.repeat_interleave(
-            out_point_features.features, num_reps, dim=0
+            out_point_features.features.view(-1, out_num_channels), num_reps, dim=0
         )
         edge_features = [rep_in_features, self_features]
         if self.use_rel_pos or self.use_rel_pos_encode:
-            in_rep_vertices = in_point_features.vertices[neighbors_index]
+            in_rep_vertices = in_point_features.vertices.view(-1, 3)[neighbors_index]
             self_vertices = torch.repeat_interleave(
-                out_point_features.vertices, num_reps, dim=0
+                out_point_features.vertices.view(-1, 3), num_reps, dim=0
             )
             if self.use_rel_pos_encode:
                 edge_features.append(
-                    self.positional_encoding(in_rep_vertices - self_vertices)
+                    self.positional_encoding(
+                        in_rep_vertices.view(-1, 3) - self_vertices.view(-1, 3)
+                    )
                 )
             elif self.use_rel_pos:
                 edge_features.append(in_rep_vertices - self_vertices)
         edge_features = torch.cat(edge_features, dim=1)
         edge_features = self.edge_transform_mlp(edge_features)
-        if in_weight is not None:
-            assert in_weight.shape[0] == in_point_features.features.shape[0]
-            rep_weights = in_weight[neighbors_index]
-            edge_features = edge_features * rep_weights.squeeze().unsqueeze(-1)
+        # if in_weight is not None:
+        #     assert in_weight.shape[0] == in_point_features.features.shape[0]
+        #     rep_weights = in_weight[neighbors_index]
+        #     edge_features = edge_features * rep_weights.squeeze().unsqueeze(-1)
 
         out_features = []
         for reduction in self.reductions:
@@ -312,6 +320,12 @@ class PointFeatureConv(BaseModule):
             )
         out_features = torch.cat(out_features, dim=1)
         out_features = self.out_transform_mlp(out_features)
+        # Convert back to the original shape
+        out_features = out_features.view(
+            out_point_features.batch_size,
+            out_point_features.num_points,
+            out_features.shape[-1],
+        )
         return PointFeatures(out_point_features.vertices, out_features)
 
 
@@ -378,9 +392,9 @@ class PointFeatureConvBlock(BaseModule):
 
     def forward(
         self,
-        in_point_features: PointFeatures["N C1"],
-        out_point_features: Optional[PointFeatures["M C2"]] = None,
-    ) -> PointFeatures["N C2"]:
+        in_point_features: PointFeatures["B N C1"],
+        out_point_features: Optional[PointFeatures["B M C2"]] = None,
+    ) -> PointFeatures["B N C2"]:
         if self.out_point_feature_type == "provided":
             assert (
                 out_point_features is not None

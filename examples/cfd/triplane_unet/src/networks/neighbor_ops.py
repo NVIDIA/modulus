@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import unittest
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, List
 
 import torch
 from jaxtyping import Float, Int
@@ -23,7 +23,7 @@ from torch import Tensor
 
 from .components.reductions import REDUCTION_TYPES, row_reduction
 from .net_utils import MLP
-from .warp_neighbor_search import radius_search_warp
+from .warp_neighbor_search import radius_search_warp, batched_radius_search_warp
 
 
 class NeighborSearchReturn:
@@ -65,8 +65,8 @@ class NeighborSearchReturn:
 
 
 def neighbor_radius_search(
-    inp_positions: Int[Tensor, "N 3"],
-    out_positions: Int[Tensor, "M 3"],
+    inp_positions: Float[Tensor, "N 3"],
+    out_positions: Float[Tensor, "M 3"],
     radius: float,
     search_method: Literal["warp"] = "warp",
 ) -> NeighborSearchReturn:
@@ -90,7 +90,33 @@ def neighbor_radius_search(
     return neighbors
 
 
-def knn_search(
+def batched_neighbor_radius_search(
+    inp_positions: Float[Tensor, "B N 3"],
+    out_positions: Float[Tensor, "B M 3"],
+    radius: float,
+    search_method: Literal["warp"] = "warp",
+) -> NeighborSearchReturn:
+    """
+    inp_positions: [B,N,3]
+    out_positions: [B,M,3]
+    radius: float
+    search_method: Literal["warp", "open3d"]
+    """
+    assert (
+        inp_positions.shape[0] == out_positions.shape[0]
+    ), f"Batch size mismatch, {inp_positions.shape[0]} != {out_positions.shape[0]}"
+
+    if search_method == "warp":
+        neighbor_index, neighbor_dist, neighbor_offset = batched_radius_search_warp(
+            inp_positions, out_positions, radius
+        )
+    else:
+        raise ValueError(f"search_method {search_method} not supported.")
+
+    return NeighborSearchReturn(neighbor_index, neighbor_offset)
+
+
+def _knn_search(
     ref_positions: Int[Tensor, "N 3"],
     query_positions: Int[Tensor, "M 3"],
     k: int,
@@ -122,7 +148,7 @@ def _chunked_knn_search(
     neighbors_index = []
     for i in range(0, query_positions.shape[0], chunk_size):
         chunk_out_positions = query_positions[i : i + chunk_size]
-        chunk_neighbors_index = knn_search(ref_positions, chunk_out_positions, k)
+        chunk_neighbors_index = _knn_search(ref_positions, chunk_out_positions, k)
         neighbors_index.append(chunk_neighbors_index)
     return torch.concatenate(neighbors_index, dim=0)
 
@@ -133,7 +159,7 @@ def neighbor_knn_search(
     query_positions: Int[Tensor, "M 3"],
     k: int,
     search_method: Literal["chunk"] = "chunk",
-    chunk_size: int = 4096,
+    chunk_size: int = 32768,  # 2^15
 ) -> Int[Tensor, "M K"]:
     """
     ref_positions: [N,3]
@@ -148,7 +174,7 @@ def neighbor_knn_search(
     assert ref_positions.device == query_positions.device
     if search_method == "chunk":
         if query_positions.shape[0] < chunk_size:
-            neighbors_index = knn_search(ref_positions, query_positions, k)
+            neighbors_index = _knn_search(ref_positions, query_positions, k)
         else:
             neighbors_index = _chunked_knn_search(
                 ref_positions, query_positions, k, chunk_size=chunk_size
@@ -156,6 +182,32 @@ def neighbor_knn_search(
     else:
         raise ValueError(f"search_method {search_method} not supported.")
     return neighbors_index
+
+
+def batched_neighbor_knn_search(
+    ref_positions: Int[Tensor, "B N 3"],
+    query_positions: Int[Tensor, "B M 3"],
+    k: int,
+    search_method: Literal["chunk"] = "chunk",
+    chunk_size: int = 4096,
+) -> Int[Tensor, "B M K"]:
+    """
+    ref_positions: [B,N,3]
+    query_positions: [B,M,3]
+    k: int
+    """
+    assert (
+        ref_positions.shape[0] == query_positions.shape[0]
+    ), f"Batch size mismatch, {ref_positions.shape[0]} != {query_positions.shape[0]}"
+    neighbors = []
+    index_offset = 0
+    for i in range(ref_positions.shape[0]):
+        neighbor_index = neighbor_knn_search(
+            ref_positions[i], query_positions[i], k, search_method, chunk_size
+        )
+        neighbors.append(neighbor_index + index_offset)
+        index_offset += ref_positions.shape[1]
+    return torch.stack(neighbors, dim=0)
 
 
 class NeighborRadiusSearchLayer(torch.nn.Module):
@@ -201,57 +253,6 @@ class NeighborPoolingLayer(torch.nn.Module):
         return out_features
 
 
-class NeighborMLPConvLayer(torch.nn.Module):
-    """NeighborMLPConvLayer."""
-
-    def __init__(
-        self,
-        mlp: torch.nn.Module = None,
-        in_channels: int = 8,
-        hidden_dim: int = 32,
-        out_channels: int = 32,
-        reduction: REDUCTION_TYPES = "mean",
-    ):
-        super().__init__()
-        self.reduction = reduction
-        if mlp is None:
-            mlp = MLP([2 * in_channels, hidden_dim, out_channels], torch.nn.GELU)
-        self.mlp = mlp
-
-    def forward(
-        self,
-        in_features: Float[Tensor, "N C_in"],
-        neighbors: NeighborSearchReturn,
-        out_features: Optional[Float[Tensor, "M C_in"]] = None,
-    ) -> Float[Tensor, "M C_out"]:
-        """
-        inp_features: [N,C]
-        neighbors: NeighborSearchReturn
-        outp_features: Optional[M,C]
-        """
-        if out_features is None:
-            out_features = in_features
-        if isinstance(neighbors, dict):
-            neighbors = NeighborSearchReturn(
-                neighbors["neighbors_index"], neighbors["neighbors_row_splits"]
-            )
-        assert (
-            in_features.shape[1] + out_features.shape[1]
-            == self.mlp.layers[0].in_features
-        )
-        rep_features = in_features[neighbors.neighbors_index.long()]
-        rs = neighbors.neighbors_row_splits
-        num_reps = rs[1:] - rs[:-1]
-        # repeat the self features using num_reps
-        self_features = torch.repeat_interleave(out_features, num_reps, dim=0)
-        agg_features = torch.cat([rep_features, self_features], dim=1)
-        rep_features = self.mlp(agg_features)
-        out_features = row_reduction(
-            rep_features, neighbors.neighbors_row_splits, reduction=self.reduction
-        )
-        return out_features
-
-
 class TestNeighborSearch(unittest.TestCase):
     """Unit tests class."""
 
@@ -277,18 +278,6 @@ class TestNeighborSearch(unittest.TestCase):
         # N x K int64
         self.assertEqual(neighbors.shape[0], query_positions.shape[0])
         self.assertEqual(neighbors.shape[1], 10)
-
-    def test_mlp_conv(self):
-        out_N = 1000
-        radius = 1.2
-        in_positions = torch.randn([self.N, 3]).to(self.device) * 10
-        out_positions = torch.randn([out_N, 3]).to(self.device) * 10
-        in_features = torch.randn([self.N, 8]).to(self.device)
-        out_features = torch.randn([out_N, 8]).to(self.device)
-
-        neighbors = NeighborRadiusSearchLayer(radius)(in_positions, out_positions)
-        conv = NeighborMLPConvLayer(reduction="mean").to(self.device)
-        out_features = conv(in_features, neighbors, out_features=out_features)
 
 
 if __name__ == "__main__":

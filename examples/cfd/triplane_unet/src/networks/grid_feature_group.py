@@ -100,7 +100,7 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
         orig_memory_formats = []
         for grid_features in grid_features_group:
             orig_memory_formats.append(grid_features.memory_format)
-            grid_features.to(memory_format=GridFeaturesMemoryFormat.c_x_y_z)
+            grid_features.to(memory_format=GridFeaturesMemoryFormat.b_c_x_y_z)
 
         # Assert the channel size of all grid_features are the same
         channel_size = grid_features_group[0].features.shape[0]
@@ -110,26 +110,25 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
             ), f"Channel size of grid_features are not the same: {grid_features.features.shape[1]} != {channel_size}"
 
         # broadcast the features between all pairs of grid_features
+        # Copy the features of format B_C_H_W_D to avoid in-place operation
         orig_features = [
             torch.clone(grid_features.features) for grid_features in grid_features_group
         ]
-        normalized_xyzs = []
+        normalized_bxyzs = []
         with torch.no_grad():
             for i in range(len(grid_features_group)):
                 vertices = grid_features_group[i].vertices
-                if (
-                    grid_features_group[i].vertices.shape[:3]
-                    != orig_features[i].shape[1:]
-                ):
+                if grid_features_group[i].resolution != orig_features[i].shape[2:]:
                     vertices = grid_features_group[i].strided_vertices(
-                        orig_features[i].shape[1:]
+                        orig_features[i].shape[2:]
                     )
 
-                xyz = vertices.flatten(0, 2)
-                xyz_min = torch.min(xyz, dim=1, keepdim=True)[0]
-                xyz_max = torch.max(xyz, dim=1, keepdim=True)[0]
-                normalized_xyz = (xyz - xyz_min) / (xyz_max - xyz_min) * 2 - 1
-                normalized_xyzs.append(normalized_xyz.view(vertices.shape))
+                assert vertices.ndim == 5, "Vertices must be BxHxWxDx3 format"
+                bxyz = vertices.flatten(1, 3)
+                bxyz_min = torch.min(bxyz, dim=1, keepdim=True)[0]
+                bxyz_max = torch.max(bxyz, dim=1, keepdim=True)[0]
+                normalized_bxyz = (bxyz - bxyz_min) / (bxyz_max - bxyz_min) * 2 - 1
+                normalized_bxyzs.append(normalized_bxyz.view(vertices.shape))
 
         # Add features from orig_featurs j to i
         for i in range(len(grid_features_group)):
@@ -137,18 +136,10 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
                 if i == j:
                     continue
                 sampled_features = torch.nn.functional.grid_sample(
-                    orig_features[j].unsqueeze(0),  # BCHWD
-                    normalized_xyzs[i].view(1, 1, 1, -1, 3),  # BHWD3
+                    orig_features[j],  # BCHWD
+                    normalized_bxyzs[i],  # BHWD3
                     align_corners=True,
                 )  # BC11N
-                # Reshape to CHWD
-                # TODO: replace the shape
-                sampled_features = sampled_features.reshape(
-                    sampled_features.shape[1],
-                    normalized_xyzs[i].shape[0],
-                    normalized_xyzs[i].shape[1],
-                    normalized_xyzs[i].shape[2],
-                )
                 if self.communication_type == "sum":
                     grid_features_group[i].features += sampled_features
                 elif self.communication_type == "mul":
