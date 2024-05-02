@@ -77,9 +77,11 @@ def preprocess(
     dir_path: str,
     phase: Literal["train", "test"],
     num_processes: int = 8,
-    out_path: Optional[str] = None,
     transform: Optional[Callable] = None,
 ) -> None:
+    if osp.exists(osp.join(dir_path, f"{phase}.pt")):
+        return
+
     # Assume that the input is unzipped http://modelnet.cs.princeton.edu/ModelNet40.zip
     categories = glob.glob(osp.join(dir_path, "*", ""))
     categories = sorted([x.split(os.sep)[-2] for x in categories])
@@ -154,18 +156,23 @@ class NormalizeVertices:
         bbox_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
         bbox_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         bbox_margin: float = 0.1,
+        eps: float = 1e-3,
     ):
         self.bbox_min = torch.Tensor(bbox_min) + bbox_margin
         self.bbox_max = torch.Tensor(bbox_max) - bbox_margin
+        self.eps = eps
 
     def __call__(self, data: dict) -> dict:
         vertices = data["vertices"]
         min_vertices = vertices.min(0)[0]
         max_vertices = vertices.max(0)[0]
         # Find scale and shift
-        scale = 1.0 / (max_vertices - min_vertices).max()
+        scale = (self.bbox_max - self.bbox_min) / (max_vertices - min_vertices).max()
         vertices = scale * (vertices - min_vertices)
-        vertices = vertices * (self.bbox_max - self.bbox_min) + self.bbox_min
+        max_vertices = vertices.max(0)[0]
+        vertices = vertices - max_vertices / 2 + (self.bbox_max + self.bbox_min) / 2
+        # assert torch.greater_equal(vertices.min(0)[0] + self.eps, self.bbox_min).all()
+        # assert torch.less_equal(vertices.max(0)[0] - self.eps, self.bbox_max).all()
         data["vertices"] = vertices
         return data
 
@@ -273,9 +280,7 @@ if __name__ == "__main__":
     preprocess(sys.argv[1], "train")
     preprocess(sys.argv[1], "test")
     data_module = ModelNet40DataModule(sys.argv[1])
-    train_loader = data_module.train_dataloader(batch_size=32)
+    train_loader = data_module.train_dataloader(batch_size=2)
     for batch in train_loader:
-        print(batch["vertices"].shape)
-        print(batch["vertices"].max(1)[0])
-        print(batch["vertices"].min(1)[0])
-        break
+        print("Max: ", batch["vertices"].max(1)[0])
+        print("Min: ", batch["vertices"].min(1)[0])

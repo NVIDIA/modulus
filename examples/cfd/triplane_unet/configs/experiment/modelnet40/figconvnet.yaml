@@ -27,6 +27,9 @@ train:
   num_epochs: 100
   batch_size: 1
 
+data:
+  num_points: 65536
+
 loggers:
   wandb:
     project_name: modelnet40

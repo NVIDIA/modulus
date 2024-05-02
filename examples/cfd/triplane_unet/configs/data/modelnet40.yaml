@@ -18,3 +18,4 @@ _target_: src.data.ModelNet40DataModule
 _convert_: all
 
 data_path: ???
+num_points: 2048

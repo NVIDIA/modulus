@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union, Any
 
 import numpy as np
 import torch
@@ -423,7 +423,8 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         )
 
     def forward(self, points: Float[Tensor, "B N 3"]):
-        point_features = self.vertex_to_point_features(points)
+        with torch.no_grad():
+            point_features = self.vertex_to_point_features(points)
         grid_features = PointFeatureToFactorizedImplicitGlobalConvNet.forward(
             self, point_features
         )
