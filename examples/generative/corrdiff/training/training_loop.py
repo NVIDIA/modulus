@@ -279,7 +279,6 @@ def training_loop(
         if dist.world_size > 1:
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = loss_sum / dist.world_size
-        print(f"average_loss: {average_loss}")
         if dist.rank == 0:
             wb.log({"training loss": average_loss}, step=cur_nimg)
 
