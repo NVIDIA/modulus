@@ -132,7 +132,7 @@ def eval(model, datamodule, config, loss_fn=None):
     eval_timer = Timer()
     for i, data_dict in enumerate(test_loader):
         eval_timer.tic()
-        out_dict = model.model().eval_dict(
+        out_dict = model.eval_dict(
             data_dict, loss_fn=loss_fn, datamodule=datamodule
         )
         out_dict["inference_time"] = eval_timer.toc()
@@ -148,7 +148,7 @@ def eval(model, datamodule, config, loss_fn=None):
     merged_point_cloud_dict = {}
     if hasattr(model, "image_pointcloud_dict"):
         for i, data_dict in enumerate(visualize_data_dicts):
-            image_dict, pointcloud_dict = model.model().image_pointcloud_dict(
+            image_dict, pointcloud_dict = model.image_pointcloud_dict(
                 data_dict, datamodule=datamodule
             )
             for k, v in image_dict.items():
@@ -157,7 +157,7 @@ def eval(model, datamodule, config, loss_fn=None):
                 merged_point_cloud_dict[f"{k}_{i}"] = v
     elif hasattr(model, "image_dict"):
         for i, data_dict in enumerate(visualize_data_dicts):
-            image_dict, pointcloud_dict = model.model().image_dict(
+            image_dict, pointcloud_dict = model.image_dict(
                 data_dict, datamodule=datamodule
             )
             for k, v in image_dict.items():
@@ -317,7 +317,7 @@ def train(config: DictConfig):
 
         if ep % config.eval.interval == 0 or ep == config.train.num_epochs - 1:
             eval_dict, eval_images, eval_point_clouds = eval(
-                model, datamodule, config, eval_loss_fn
+                model.model(), datamodule, config, eval_loss_fn
             )
             for k, v in eval_dict.items():
                 logger.info(f"Epoch: {ep} {k}: {v:.4f}")
