@@ -1,4 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -337,7 +339,7 @@ def ddpm_steps(x, seq, model, b, **kwargs):
 
 
 def guided_ddpm_steps(x, seq, model, b, **kwargs):
-    """ Guided DDPM steps"""
+    """Guided DDPM steps"""
     n = x.size(0)
     seq_next = [-1] + list(seq[:-1])
     xs = [x]
@@ -393,7 +395,7 @@ def guided_ddpm_steps(x, seq, model, b, **kwargs):
 
 
 def guided_ddim_steps(x, seq, model, b, **kwargs):
-    """ Guided DDiM steps"""
+    """Guided DDiM steps"""
     n = x.size(0)
     seq_next = [-1] + list(seq[:-1])
     x0_preds = []
@@ -440,7 +442,8 @@ def guided_ddim_steps(x, seq, model, b, **kwargs):
 
 
 class MetricLogger(object):
-    """ metric logger"""
+    """metric logger"""
+
     def __init__(self, metric_fn_dict):
         self.metric_fn_dict = metric_fn_dict
         self.metric_dict = {}
@@ -464,14 +467,14 @@ class MetricLogger(object):
 
 
 def get_beta_schedule(*, beta_start, beta_end, num_diffusion_timesteps):
-    """ Get beta schedule"""
+    """Get beta schedule"""
     betas = np.linspace(beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64)
     assert betas.shape == (num_diffusion_timesteps,)
     return betas
 
 
 def load_flow_data(path, stat_path=None):
-    """ Loads the flow data"""
+    """Loads the flow data"""
     # load flow data from path
     data = np.load(path)  # [N, T, h, w]
 
@@ -490,7 +493,7 @@ def load_flow_data(path, stat_path=None):
 
 
 def load_recons_data(ref_path, sample_path, data_kw, smoothing, smoothing_scale):
-    """ Loads recons data"""
+    """Loads recons data"""
     print("Loading low-res input data from: ", sample_path)
     with np.load(sample_path, allow_pickle=True) as f:
         sampled_data = f[data_kw][-4:, ...].copy().astype(np.float32)
@@ -547,7 +550,8 @@ def load_recons_data(ref_path, sample_path, data_kw, smoothing, smoothing_scale)
 
 
 class MinMaxScaler(object):
-    """ minmax scaler"""
+    """minmax scaler"""
+
     def __init__(self, min, max):
         self.min = min
         self.max = max
@@ -563,7 +567,8 @@ class MinMaxScaler(object):
 
 
 class StdScaler(object):
-    """ Std scaler"""
+    """Std scaler"""
+
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
@@ -579,7 +584,7 @@ class StdScaler(object):
 
 
 def make_image_grid(images, out_path, ncols=8):
-    """ Make image grid"""
+    """Make image grid"""
     # assume images in the shape of (N, T, H, W)
     t, h, w = images.shape
     images = images.detach().cpu().numpy()
@@ -601,29 +606,29 @@ def make_image_grid(images, out_path, ncols=8):
 
 
 def ensure_dir(path):
-    """ ensure dir"""
+    """ensure dir"""
     if not os.path.exists(path):
         os.makedirs(path)
 
 
 def slice2sequence(data):
-    """ slice to sequence"""
+    """slice to sequence"""
     data = rearrange(data[:, 1:2], "t f h w -> (t f) h w")
     return data
 
 
 def l1_loss(x, y):
-    """ l1 loss"""
+    """l1 loss"""
     return torch.mean(torch.abs(x - y))
 
 
 def l2_loss(x, y):
-    """ l2 loss"""
+    """l2 loss"""
     return ((x - y) ** 2).mean((-1, -2)).sqrt().mean()
 
 
 def vorticity_residual(w, re=1000.0, dt=1 / 32, calc_grad=True):
-    """ Velocity residual"""
+    """Velocity residual"""
     # w [b t h w]
     # print("#### in def vorticity_residual() ####")
     batchsize = w.size(0)

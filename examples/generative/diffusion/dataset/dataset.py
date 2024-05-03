@@ -279,7 +279,8 @@ class ImageFolderDataset(Dataset):
 
 
 class KolmogorovFlowDataset(Dataset):
-    """ Kolmogorov flow dataset"""
+    """Kolmogorov flow dataset"""
+
     def __init__(
         self,
         path,
