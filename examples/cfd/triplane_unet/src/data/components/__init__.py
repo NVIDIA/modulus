@@ -20,17 +20,3 @@ from .drivaer_preprocessors import (
     DrivAerDragPreprocessingFunctor,
     DrivAerTDFPreprocessingFunctor,
 )
-
-
-class ComposePreprocessors:
-    """
-    Compose multiple preprocessors into a single callable object
-    """
-
-    def __init__(self, preprocessors):
-        self.preprocessors = preprocessors
-
-    def __call__(self, sample: Mapping[str, Any]):
-        for preprocessor in self.preprocessors:
-            sample = preprocessor(sample)
-        return sample

@@ -25,7 +25,7 @@ from src.data.mesh_utils import (
     point_cloud_to_sdf,
 )
 
-from .preprocessor_utils import Normalizer
+from .preprocessor_utils import UnitGaussianNormalizer
 
 
 # DrivAer dataset
@@ -66,7 +66,7 @@ class DrivAerPreprocessingFunctor:
         num_points: int = 16384,
         return_keys: List[str] = DRIVAER_RETURN_KEYS,
     ):
-        self.normalizer = Normalizer(pressure_mean, pressure_std)
+        self.normalizer = UnitGaussianNormalizer(pressure_mean, pressure_std)
         self.num_points = num_points
         self.return_keys = return_keys
 

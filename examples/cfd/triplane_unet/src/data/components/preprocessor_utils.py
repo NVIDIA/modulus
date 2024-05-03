@@ -14,9 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Mapping
 
-class Normalizer:
-    """Normalizer."""
+
+class ComposePreprocessors:
+    """
+    Compose multiple preprocessors into a single callable object
+    """
+
+    def __init__(self, preprocessors):
+        self.preprocessors = preprocessors
+
+    def __call__(self, sample: Mapping[str, Any]):
+        for preprocessor in self.preprocessors:
+            sample = preprocessor(sample)
+        return sample
+
+
+class UnitGaussianNormalizer:
+    """Unit Gaussian Normalizer."""
 
     def __init__(self, mean, std):
         self.mean = mean
@@ -29,3 +45,17 @@ class Normalizer:
         return x * self.std + self.mean
 
 
+class UniformNormalizer:
+    """
+    Normalize to [0, 1]
+    """
+
+    def __init__(self, min_val, max_val):
+        self.min_val = min_val
+        self.max_val = max_val
+
+    def encode(self, x):
+        return (x - self.min_val) / (self.max_val - self.min_val)
+
+    def decode(self, x):
+        return x * (self.max_val - self.min_val) + self.min_val

@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
 import time
-import itertools
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, List, Literal, Mapping, Optional, Union, Callable
@@ -39,11 +37,12 @@ except ImportError:
 
 from src.data.base_datamodule import BaseDataModule
 from src.data.components import (
-    ComposePreprocessors,
     DrivAerPreprocessingFunctor,
     DrivAerDragPreprocessingFunctor,
 )
+from src.data.components.preprocessor_utils import ComposePreprocessors
 from src.data.components.drivaer_preprocessors import DRIVAER_AIR_COEFF
+from src.data.components.webdataset_utils import from_numpy, split_by_node_equal
 
 from src.data.mesh_utils import convert_to_pyvista
 
@@ -234,35 +233,6 @@ class DrivAerDataset(Dataset):
         }
 
 
-def split_by_node_equal(
-    src: Iterable,
-    drop_last: bool = False,
-    group: "torch.distributed.ProcessGroup" = None,
-):
-    """Splits input iterable into equal-sized chunks according to multiprocessing configuration.
-
-    Similar to `Webdataset.split_by_node`, but the resulting split is equal-sized.
-    """
-
-    rank, world_size, *_ = wds.utils.pytorch_worker_info(group=group)
-    cur = iter(src)
-    while len(next_items := list(itertools.islice(cur, world_size))) == world_size:
-        yield next_items[rank]
-
-    tail_size = len(next_items)
-    assert tail_size < world_size
-    # If drop_last is not set, handle the tail.
-    if not drop_last and tail_size > 0:
-        yield next_items[rank % tail_size]
-
-
-def from_numpy(sample: Mapping[str, Any], key: str):
-    """Loads numpy objects from .npy, .npz or pickled files."""
-
-    np_obj = np.load(io.BytesIO(sample[key]), allow_pickle=True)
-    return {k: np_obj[k] for k in np_obj.files}
-
-
 class DrivAerDataModule(BaseDataModule):
     def __init__(
         self,
@@ -369,15 +339,6 @@ class DrivAerDataModule(BaseDataModule):
             shuffle=False,
             **kwargs,
         )
-
-    def train_dataloader(self, **kwargs) -> DataLoader:
-        return self._create_dataloader(self.train_dataset, **kwargs)
-
-    def val_dataloader(self, **kwargs) -> DataLoader:
-        return self._create_dataloader(self.val_dataset, **kwargs)
-
-    def test_dataloader(self, **kwargs) -> DataLoader:
-        return self._create_dataloader(self.test_dataset, **kwargs)
 
 
 def test_datamodule(

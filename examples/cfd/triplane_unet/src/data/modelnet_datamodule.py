@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from .mesh_utils import read_off
 from .base_datamodule import BaseDataModule
-from .components import ComposePreprocessors
+from src.data.components.preprocessor_utils import ComposePreprocessors
 
 
 class ProcessMesh:

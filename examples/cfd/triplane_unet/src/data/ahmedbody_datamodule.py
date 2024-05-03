@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import warnings
-from typing import Callable, Dict, Optional, Tuple, Union, Literal
+from typing import Callable, Dict, Optional, Tuple, Union, Literal, List
 
 try:
     import vtk
@@ -23,7 +23,6 @@ try:
 except ImportError:
     warnings.warn("VTK not installed")
 import glob
-import logging
 import os
 import pickle
 from pathlib import Path
@@ -31,13 +30,23 @@ import pandas as pd
 
 import numpy as np
 from torch.utils.data import Dataset, Subset
+import webdataset as wds
 
 from src.data.base_datamodule import BaseDataModule
-from src.data.dict_dataset import MappingDatasetWrapper
-from src.data.pickle_dataset import PickleDataset
-from .components.preprocessor_utils import Normalizer
 
-logger = logging.getLogger("tpunet")
+from src.data.components.preprocessor_utils import (
+    UnitGaussianNormalizer,
+    UniformNormalizer,
+    ComposePreprocessors,
+)
+from src.data.components.webdataset_utils import from_numpy, split_by_node_equal
+
+
+# AhmedBody dataset stats
+AHMED_BODY_PRESSURE_MEAN = -179.03588502774267
+AHMED_BODY_PRESSURE_STD = 355.92119726212775
+AHMED_BODY_VELOCITY_MAX = 60.0
+AHMED_BODY_VELOCITY_MIN = 20.0
 
 
 def _compute_cell_areas_and_centers(polydata):
@@ -119,6 +128,8 @@ class AhmedBodyDataset(Dataset):
         if isinstance(data_path, str):
             data_path = Path(data_path)
         self.data_path = data_path
+        self.transform = transform
+
         assert self.data_path.exists(), f"Path {self.data_path} does not exist"
         assert self.data_path.is_dir(), f"Path {self.data_path} is not a directory"
         converged_cds = (
@@ -127,7 +138,6 @@ class AhmedBodyDataset(Dataset):
         )
         assert converged_cds.exists(), f"Path {converged_cds} does not exist"
 
-        self.transform = transform
         # Count the number of case%d folders
         self.case_folders = glob.glob(str(self.data_path / "case*"))
         # Filter case folders that do not have simpleFoam_steady folder
@@ -179,15 +189,17 @@ class AhmedBodyDataset(Dataset):
         cell_data["cell_centers"][N:, 1] *= -1
         # Flip the Y values of the wallShearStress
         cell_data["wallShearStress"][N:, 1] *= -1
-
+        cds = {
+            "cd_avg": converged_cd["cd_avg"],
+            "cd_std": converged_cd["cd_std"],
+        }
         data = {
             "point_data": point_data,
             "cell_data": cell_data,
             "case_info": case_info,
-            "converged_cd": converged_cd,
+            "converged_cd": cds,
             "case_id": case_id,
         }
-
         if self.transform:
             data = self.transform(data)
         return data
@@ -204,28 +216,57 @@ AHMED_MAPPING = {
 }
 
 
-class AhmedBodyDatumTransform:
-    """Ahmed body item transform."""
-
-    def __init__(self, info: Optional[dict] = None):
-        if info is None:
-            info = {}
-        self.info = info
-
-    def update_info(self, info: dict):
-        """Updates info."""
-
-        self.info.update(info)
+class AhmedBodyMappingFunctor:
+    def __init__(self, mapping: dict):
+        self.mapping = mapping
 
     def __call__(self, datum: dict) -> dict:
-        # Normalize the pressure --> 0 mean 1 std normal distribution
-        datum["normalized_pressure"] = (
-            datum["pressure"] - self.info["mean_p"]
-        ) / self.info["std_p"]
-        # Uniform the velocity --> [0, 1] range
-        datum["uniformized_velocity"] = (datum["velocity"] - self.info["min_vel"]) / (
-            self.info["max_vel"] - self.info["min_vel"]
+        # weird error fix: flatten all dictionary values
+        for k, v in datum.items():
+            if isinstance(v, np.ndarray):
+                datum[k] = dict(enumerate(v.flatten(), 1))[1]
+
+        new_datum = {}
+        for key, new_key in self.mapping.items():
+            if "," not in key:
+                new_datum[new_key] = datum[k]
+            else:
+                keys = key.split(",")
+                value = datum
+                for k in keys:
+                    value = value[k]
+                new_datum[new_key] = value
+        return new_datum
+
+
+class AhmedBodyPreprocessingFunctor:
+    """Ahmed body item transform."""
+
+    def __init__(
+        self,
+        pressure_mean: float,
+        pressure_std: float,
+        velocity_max: float,
+        velocity_min: float,
+        num_points: Optional[int] = None,
+    ):
+        self.normalizer = UnitGaussianNormalizer(mean=pressure_mean, std=pressure_std)
+        self.vel_normalizer = UniformNormalizer(
+            min_val=velocity_min, max_val=velocity_max
         )
+        self.num_points = num_points
+
+    def __call__(self, datum: dict) -> dict:
+        datum["normalized_pressure"] = self.normalizer.encode(datum["pressure"])
+        datum["uniformized_velocity"] = self.vel_normalizer.encode(datum["velocity"])
+        if self.num_points is not None:
+            # Downsample the data
+            indices = np.random.choice(
+                np.arange(len(datum["pressure"])), self.num_points, replace=False
+            )
+            for k, v in datum.items():
+                if isinstance(v, np.ndarray):
+                    datum[k] = v[indices]
         return datum
 
 
@@ -235,9 +276,7 @@ class AhmedBodyDataModule(BaseDataModule):
     def __init__(
         self,
         data_path: Union[Path, str],
-        transform: Optional[Callable] = None,
-        dataset_stats_path: Optional[Union[Path, str]] = "dataset_stats.pkl",
-        # cd_csv_path: Optional[Union[Path, str]] = "converged_cd.csv",
+        preprocessors: Optional[List[Callable]] = None,
         num_points: int = 16384,
     ) -> None:
         """
@@ -248,69 +287,50 @@ class AhmedBodyDataModule(BaseDataModule):
 
         if isinstance(data_path, str):
             data_path = Path(data_path)
-        if isinstance(dataset_stats_path, str):
-            dataset_stats_path = data_path / dataset_stats_path
-        # if isinstance(cd_csv_path, str):
-        #     cd_csv_path = data_path / cd_csv_path
         self.data_path = data_path
 
         # Assert the size
         assert self.data_path.exists(), f"Path {self.data_path} does not exist"
         assert self.data_path.is_dir(), f"Path {self.data_path} is not a directory"
 
-        # Select files that have numeric names that start with 00
-        dataset = PickleDataset(self.data_path, file_format="00*", extension="pkl")
+        if preprocessors is None:
+            preprocessors = []
 
-        if transform is None:
-            transform = AhmedBodyDatumTransform()
-        self.transform = transform
-
-        # Read the cd_csv file
-        # assert cd_csv_path.exists(), f"Path {cd_csv_path} does not exist"
-        # self.cd_df = pd.read_csv(cd_csv_path)
-
-        indices = np.arange(len(dataset))
-        # For the full dataset, split items into 600, 100, 105.
-        if len(dataset) == 805:
-            # Use the same seed to get the same split.
-            rng = np.random.default_rng(42)
-            rng.shuffle(indices)
-            train_indices = indices[:600]
-            val_indices = indices[600:700]
-            test_indices = indices[700:]
-        else:
-            from sklearn.model_selection import train_test_split
-
-            train_indices, val_test = train_test_split(
-                indices, train_size=0.75, random_state=42
-            )
-            val_indices, test_indices = train_test_split(
-                val_test, train_size=0.5, random_state=42
-            )
-
-        def _get_subdataset(dataset, indices):
-            return MappingDatasetWrapper(
-                Subset(dataset, indices),
-                mapping=AHMED_MAPPING,
-                pre_sample_transform=transform,
+        # Add normalization and downsampling first.
+        preprocessors = [
+            AhmedBodyMappingFunctor(AHMED_MAPPING),
+            AhmedBodyPreprocessingFunctor(
+                pressure_mean=AHMED_BODY_PRESSURE_MEAN,
+                pressure_std=AHMED_BODY_PRESSURE_STD,
+                velocity_max=AHMED_BODY_VELOCITY_MAX,
+                velocity_min=AHMED_BODY_VELOCITY_MIN,
                 num_points=num_points,
-            )
+            ),
+        ] + preprocessors
+        self.normalizer = preprocessors[1].normalizer
 
-        # Create the train, val, test datasets
-        self._train_dataset = _get_subdataset(dataset, train_indices)
-        self._val_dataset = _get_subdataset(dataset, val_indices)
-        self._test_dataset = _get_subdataset(dataset, test_indices)
+        self.preprocessors = ComposePreprocessors(preprocessors)
 
-        # Load dataset statistics. Create a new one if it does not exist
-        if not dataset_stats_path.exists():
-            dataset_stats = self.compute_dataset_statistics(self._train_dataset)
-            with open(dataset_stats_path, "wb") as f:
-                pickle.dump(dataset_stats, f)
-        else:
-            with open(dataset_stats_path, "rb") as f:
-                dataset_stats = pickle.load(f)
-        self.dataset_stats = dataset_stats
-        self.transform.update_info(dataset_stats)
+        self._train_dataset = self._create_dataset("train")
+        self._val_dataset = self._create_dataset("val")
+        self._test_dataset = self._create_dataset("test")
+
+    def _create_dataset(self, phase: str) -> wds.DataPipeline:
+        # Create dataset with the processing pipeline.
+        dataset = wds.DataPipeline(
+            wds.SimpleShardList(str(self.data_path / f"{phase}.tar")),
+            wds.tarfile_to_samples(),
+            wds.map(lambda x: from_numpy(x, "npz")),
+            wds.map(self.preprocessors),
+        )
+
+        return dataset
+
+    def encode(self, x):
+        return self.normalizer.encode(x)
+
+    def decode(self, x):
+        return self.normalizer.decode(x)
 
     @property
     def train_dataset(self):
@@ -325,10 +345,8 @@ class AhmedBodyDataModule(BaseDataModule):
         return self._test_dataset
 
 
-if __name__ == "__main__":
-    # Test the datamodule
-    data_dir = Path("./datasets/ahmed_preprocessed")
-    datamodule = AhmedBodyDataModule(data_dir)
+def test_datamodule(data_path: str, num_points: Optional[int] = None):
+    datamodule = AhmedBodyDataModule(data_path, num_points=num_points)
     train_loader = datamodule.train_dataloader()
     for batch in train_loader:
         print(batch["wall_shear_stress"].shape)  # torch.Size([1, 149344, 3])
@@ -342,3 +360,10 @@ if __name__ == "__main__":
         print(batch["cell_areas"].shape)  # torch.Size([1, 149344])
         print(batch["cell_centers"].shape)  # torch.Size([1, 149344, 3])
         break
+
+
+if __name__ == "__main__":
+    # Test the datamodule
+    import fire
+
+    fire.Fire(test_datamodule)

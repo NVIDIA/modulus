@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional, Literal
+from typing import Dict, Optional, Literal, List
 
+import random
+import glob
 import sys
 from pathlib import Path
 import numpy as np
@@ -83,10 +85,9 @@ class AhmedBodyToWebDataset:
     Convert AhmedBodyDataset to a webdataset
     """
 
-    def __init__(self, dataset: AhmedBodyDataset, output_path: Path, tarfile_name: str = "data.tar"):
+    def __init__(self, dataset: AhmedBodyDataset, output_path: Path):
         self.dataset = dataset
         self.output_path = output_path
-        self.tarfile_name = tarfile_name
         self.output_path.mkdir(parents=True, exist_ok=True)
 
     def _save_item(self, idx: int):
@@ -120,10 +121,41 @@ class AhmedBodyToWebDataset:
         print("Compressing the dataset to a tar file")
         self.output_path = self.output_path.expanduser()
         self.output_path.mkdir(exist_ok=True)
-        tar_path = self.output_path / self.tarfile_name
-        with tarfile.open(tar_path, "w") as tar:
-            for file in self.output_path.glob("*.npz"):
-                tar.add(file, arcname=file.name)
+
+    def to_tars(self):
+        case_files = glob.glob(str(self.output_path / "*.npz"))
+
+        case_files.sort()
+        # len(case_files) == 423
+
+        def to_tar(out_tar_file: str, files: List[str]):
+            print(f"Creating tar file {out_tar_file}")
+            tar_path = self.output_path / out_tar_file
+            with tarfile.open(tar_path, "w") as tar:
+                for file in files:
+                    tar.add(file, arcname=Path(file).name)
+
+        # split into train/val/test with 0.7, 0.1, 0.2
+        # random permute case_files
+        random.seed(42)
+
+        # Shuffle the list randomly
+        random.shuffle(case_files)
+
+        # Compute split indices for 70% train, 10% validation, 20% test
+        n = len(case_files)
+        idx_train = int(n * 0.7)
+        idx_val = idx_train + int(n * 0.1)
+
+        # Split files into train, val, and test
+        train_files = case_files[:idx_train]
+        val_files = case_files[idx_train:idx_val]
+        test_files = case_files[idx_val:]
+
+        # Create tar files for each dataset
+        to_tar("train.tar", train_files)
+        to_tar("val.tar", val_files)
+        to_tar("test.tar", test_files)
 
 
 def convert_to_webdataset(
@@ -138,11 +170,12 @@ def convert_to_webdataset(
     output_path = Path(out_path).expanduser()
     output_path.mkdir(exist_ok=True)
     # Save to numpy
-    AhmedBodyToWebDataset(
+    converter = AhmedBodyToWebDataset(
         dataset,
         output_path,
-        tarfile_name=f"ahmedbody.tar",
-    ).save(num_processes=num_processes)
+    )
+    converter.save(num_processes=num_processes)
+    converter.to_tars()
 
 
 if __name__ == "__main__":
