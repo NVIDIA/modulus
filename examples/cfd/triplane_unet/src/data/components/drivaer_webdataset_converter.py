@@ -27,6 +27,10 @@ from torch.multiprocessing import set_start_method
 
 
 class DrivAerToWebdataset:
+    """
+    Convert DrivAerDataset to a webdataset
+    """
+
     def __init__(
         self,
         dataset: DrivAerDataset,

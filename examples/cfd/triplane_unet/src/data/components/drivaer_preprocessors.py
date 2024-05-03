@@ -18,12 +18,14 @@ from typing import List, Literal, Optional, Tuple, Union, Mapping, Any
 
 import numpy as np
 import torch
+
 from src.data.mesh_utils import (
-    Normalizer,
     bbox_to_centers,
     compute_drag_coefficient,
     point_cloud_to_sdf,
 )
+
+from .preprocessor_utils import Normalizer
 
 
 # DrivAer dataset

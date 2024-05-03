@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import warnings
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union, Literal
 
 try:
     import vtk
@@ -27,6 +27,7 @@ import logging
 import os
 import pickle
 from pathlib import Path
+import pandas as pd
 
 import numpy as np
 from torch.utils.data import Dataset, Subset
@@ -34,6 +35,7 @@ from torch.utils.data import Dataset, Subset
 from src.data.base_datamodule import BaseDataModule
 from src.data.dict_dataset import MappingDatasetWrapper
 from src.data.pickle_dataset import PickleDataset
+from .components.preprocessor_utils import Normalizer
 
 logger = logging.getLogger("tpunet")
 
@@ -111,12 +113,20 @@ def read_vtp(path: str) -> Tuple[dict, dict]:
 class AhmedBodyDataset(Dataset):
     """Ahmed body dataset."""
 
-    def __init__(self, data_path: Union[str, Path], transform=None):
+    def __init__(
+        self, data_path: Union[str, Path], transform: Optional[Callable] = None
+    ):
         if isinstance(data_path, str):
             data_path = Path(data_path)
         self.data_path = data_path
         assert self.data_path.exists(), f"Path {self.data_path} does not exist"
         assert self.data_path.is_dir(), f"Path {self.data_path} is not a directory"
+        converged_cds = (
+            self.data_path
+            / "converged_cd_std_0.0e+00_2.7e-03_slope_1.0e-10_1.0e-05_510.csv"
+        )
+        assert converged_cds.exists(), f"Path {converged_cds} does not exist"
+
         self.transform = transform
         # Count the number of case%d folders
         self.case_folders = glob.glob(str(self.data_path / "case*"))
@@ -127,21 +137,27 @@ class AhmedBodyDataset(Dataset):
             if os.path.exists(os.path.join(case_folder, "simpleFoam_steady"))
         ]
         self.case_folders.sort()
-        self.case_count = len(self.case_folders)
+        self.converged_cds = pd.read_csv(converged_cds)
 
     def __len__(self):
-        return self.case_count
+        return len(self.converged_cds)
 
     def __getitem__(self, idx):
-        case_path = self.case_folders[idx]
-        case_info_path = str(Path(case_path) / "case_info.txt")
-        data_path = str(Path(case_path) / "simpleFoam_steady" / "ahmed_body.vtp")
+        converged_cd = self.converged_cds.iloc[idx]
+        case_id = int(converged_cd["Unnamed: 0"])
+        case_path = self.data_path / f"case{case_id}" / "simpleFoam_steady"
+        assert case_path.exists(), f"Path {case_path} does not exist"
+
         # read case info and separate with ":" and convert it to a dictionary
-        with open(case_info_path) as f:
+        case_info_path = self.data_path / f"case{case_id}" / "case_info.txt"
+        assert case_info_path.exists(), f"Path {case_info_path} does not exist"
+        with open(str(case_info_path)) as f:
             case_info = f.readlines()
+
         case_info = [line.strip().split(":") for line in case_info]
         case_info = {key.strip().lower(): float(value) for key, value in case_info}
-        point_data, cell_data = read_vtp(data_path)
+
+        point_data, cell_data = read_vtp(str(Path(case_path) / "ahmed_body.vtp"))
 
         # The dataset only save the positive Y values of the points due to symmetry.
         # We need to flip the points to get the full body
@@ -164,8 +180,14 @@ class AhmedBodyDataset(Dataset):
         # Flip the Y values of the wallShearStress
         cell_data["wallShearStress"][N:, 1] *= -1
 
-        data = {"point_data": point_data, "cell_data": cell_data}
-        data["case_info"] = case_info
+        data = {
+            "point_data": point_data,
+            "cell_data": cell_data,
+            "case_info": case_info,
+            "converged_cd": converged_cd,
+            "case_id": case_id,
+        }
+
         if self.transform:
             data = self.transform(data)
         return data
@@ -178,6 +200,7 @@ AHMED_MAPPING = {
     "cell_data,p": "pressure",
     "cell_data,Normals": "normals",
     "case_info,velocity": "velocity",
+    "converged_cd,cd_avg": "c_d",
 }
 
 
@@ -211,10 +234,11 @@ class AhmedBodyDataModule(BaseDataModule):
 
     def __init__(
         self,
-        data_dir: Union[Path, str],
-        every_n_data: Optional[int] = None,
+        data_path: Union[Path, str],
         transform: Optional[Callable] = None,
         dataset_stats_path: Optional[Union[Path, str]] = "dataset_stats.pkl",
+        # cd_csv_path: Optional[Union[Path, str]] = "converged_cd.csv",
+        num_points: int = 16384,
     ) -> None:
         """
         Args:
@@ -222,23 +246,28 @@ class AhmedBodyDataModule(BaseDataModule):
         """
         super().__init__()
 
-        if isinstance(data_dir, str):
-            data_dir = Path(data_dir)
+        if isinstance(data_path, str):
+            data_path = Path(data_path)
         if isinstance(dataset_stats_path, str):
-            dataset_stats_path = data_dir / dataset_stats_path
-        self.data_dir = data_dir
+            dataset_stats_path = data_path / dataset_stats_path
+        # if isinstance(cd_csv_path, str):
+        #     cd_csv_path = data_path / cd_csv_path
+        self.data_path = data_path
 
         # Assert the size
-        assert self.data_dir.exists(), f"Path {self.data_dir} does not exist"
-        assert self.data_dir.is_dir(), f"Path {self.data_dir} is not a directory"
+        assert self.data_path.exists(), f"Path {self.data_path} does not exist"
+        assert self.data_path.is_dir(), f"Path {self.data_path} is not a directory"
+
         # Select files that have numeric names that start with 00
-        dataset = PickleDataset(self.data_dir, file_format="00*", extension="pkl")
-        if len(dataset) != 805:
-            logger.warning(f"Dataset size is {len(dataset)}, expected 805")
+        dataset = PickleDataset(self.data_path, file_format="00*", extension="pkl")
 
         if transform is None:
             transform = AhmedBodyDatumTransform()
         self.transform = transform
+
+        # Read the cd_csv file
+        # assert cd_csv_path.exists(), f"Path {cd_csv_path} does not exist"
+        # self.cd_df = pd.read_csv(cd_csv_path)
 
         indices = np.arange(len(dataset))
         # For the full dataset, split items into 600, 100, 105.
@@ -263,8 +292,8 @@ class AhmedBodyDataModule(BaseDataModule):
             return MappingDatasetWrapper(
                 Subset(dataset, indices),
                 mapping=AHMED_MAPPING,
-                every_n_data=every_n_data,
-                transform=transform,
+                pre_sample_transform=transform,
+                num_points=num_points,
             )
 
         # Create the train, val, test datasets
@@ -283,54 +312,6 @@ class AhmedBodyDataModule(BaseDataModule):
         self.dataset_stats = dataset_stats
         self.transform.update_info(dataset_stats)
 
-    # Compute the mean, min, max of p and vel
-    def compute_dataset_statistics(self, dataset) -> Dict[str, float]:
-        # compute the mean, min, max of data["p"], data["case_infp"]["Velocity"]
-        # Use the running sum, running count method
-        count_p = 0
-        running_sum_p = 0
-        running_square_sum_p = 0
-        running_min_p = np.inf
-        running_max_p = -np.inf
-        count_vel = 0
-        running_sum_vel = 0
-        running_min_vel = np.inf
-        running_max_vel = -np.inf
-
-        print("Computing mean, min, max of p and vel")
-        for i in range(len(dataset)):
-            if i % 100 == 0:
-                print(f"Processing {i}/{len(dataset)}")
-            data = dataset[i]
-            point_data = data["point_data"]
-            p = point_data["p"]
-            vel = data["case_info"]["velocity"]
-            running_sum_p += p.sum()
-            running_square_sum_p += (p**2).sum()
-            running_min_p = min(running_min_p, p.min())
-            running_max_p = max(running_max_p, p.max())
-            count_p += len(p)
-
-            running_sum_vel += vel
-            running_min_vel = min(running_min_vel, vel)
-            running_max_vel = max(running_max_vel, vel)
-            count_vel += 1
-
-        # Save the mean, min, max of p and vel into a file
-        mean_p = running_sum_p / count_p
-        std_p = np.sqrt((running_square_sum_p / count_p) - mean_p**2)
-        mean_vel = running_sum_vel / count_vel
-        # Create a return dictionary
-        return {
-            "mean_p": mean_p,
-            "min_p": running_min_p,
-            "max_p": running_max_p,
-            "std_p": std_p,
-            "mean_vel": mean_vel,
-            "min_vel": running_min_vel,
-            "max_vel": running_max_vel,
-        }
-
     @property
     def train_dataset(self):
         return self._train_dataset
@@ -345,42 +326,19 @@ class AhmedBodyDataModule(BaseDataModule):
 
 
 if __name__ == "__main__":
-    if False:
-        data_path = Path("./datasets/ahmed_surface")
-        dataset = AhmedBodyDataset(data_path)
-        print(f"Dataset length: {len(dataset)}")
-        point_data = dataset[0]["point_data"]
-        print(point_data.keys())
-        print(point_data["points"].shape)
-        print(point_data["p"].shape)
-        # Show width, height, depth of points
-        print(np.ptp(point_data["points"], axis=0))
-
-        # create a path
-        path = Path("./datasets/ahmed_preprocessed")
-        path.mkdir(parents=True, exist_ok=True)
-        # Loop through each dataset and pickle it
-        for i in range(len(dataset)):
-            if i % 10 == 0:
-                print(f"Processing {i}/{len(dataset)}")
-            data = dataset[i]
-            # Save the dictionary to a pickle file as 0 prepended to the index
-            with open(path / f"{i:05d}.pkl", "wb") as f:
-                pickle.dump(data, f)
-    if True:
-        # Test the datamodule
-        data_dir = Path("./datasets/ahmed_preprocessed")
-        datamodule = AhmedBodyDataModule(data_dir)
-        train_loader = datamodule.train_dataloader()
-        for batch in train_loader:
-            print(batch["wall_shear_stress"].shape)  # torch.Size([1, 149344, 3])
-            print(batch["pressure"].shape)  # torch.Size([1, 149344])
-            print(batch["normalized_pressure"].shape)  # torch.Size([1, 149344])
-            print(batch["normalized_pressure"].mean())  # ~ 0
-            print(batch["velocity"].shape)  # torch.Size([1])
-            print(batch["uniformized_velocity"].shape)  # torch.Size([1])
-            print(batch["uniformized_velocity"])  # [0, 1]
-            print(batch["normals"].shape)  # torch.Size([1, 149344, 3])
-            print(batch["cell_areas"].shape)  # torch.Size([1, 149344])
-            print(batch["cell_centers"].shape)  # torch.Size([1, 149344, 3])
-            break
+    # Test the datamodule
+    data_dir = Path("./datasets/ahmed_preprocessed")
+    datamodule = AhmedBodyDataModule(data_dir)
+    train_loader = datamodule.train_dataloader()
+    for batch in train_loader:
+        print(batch["wall_shear_stress"].shape)  # torch.Size([1, 149344, 3])
+        print(batch["pressure"].shape)  # torch.Size([1, 149344])
+        print(batch["normalized_pressure"].shape)  # torch.Size([1, 149344])
+        print(batch["normalized_pressure"].mean())  # ~ 0
+        print(batch["velocity"].shape)  # torch.Size([1])
+        print(batch["uniformized_velocity"].shape)  # torch.Size([1])
+        print(batch["uniformized_velocity"])  # [0, 1]
+        print(batch["normals"].shape)  # torch.Size([1, 149344, 3])
+        print(batch["cell_areas"].shape)  # torch.Size([1, 149344])
+        print(batch["cell_centers"].shape)  # torch.Size([1, 149344, 3])
+        break

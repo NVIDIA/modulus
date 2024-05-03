@@ -114,20 +114,6 @@ def rel_errors(y_true, y_pred, norm):
     )
 
 
-class Normalizer:
-    """Normalizer."""
-
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def encode(self, x):
-        return (x - self.mean) / self.std
-
-    def decode(self, x):
-        return x * self.std + self.mean
-
-
 # error_metrics_example.py
 # # Drag Coefficient #
 # ####################

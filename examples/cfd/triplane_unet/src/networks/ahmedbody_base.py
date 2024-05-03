@@ -74,7 +74,7 @@ class AhmedBodyBase(BaseModel):
         return feature_dim
 
     def data_dict_to_input(self, data_dict):
-        vertices = data_dict["cell_centers"].squeeze(0)  # (n_in, 3)
+        vertices = data_dict["cell_centers"]  # (B, N, 3)
         # If train and random_purturb_train, add random perturbation to the vertices
         if self.random_purturb_train and self.training:
             vertices += (
@@ -82,9 +82,9 @@ class AhmedBodyBase(BaseModel):
                 - self.vertices_purturb_offset
             )
 
-        vel = data_dict["velocity"].squeeze(0)  # (1)
+        vel = data_dict["velocity"]  # (B)
         if self.use_uniformized_velocity:
-            vel = data_dict["uniformized_velocity"].squeeze(0)  # (1)
+            vel = data_dict["uniformized_velocity"]  # (B)
         if self.random_purturb_train and self.training:
             vel = vel + (
                 torch.rand(1) * self.velocity_purturb_range
@@ -92,31 +92,31 @@ class AhmedBodyBase(BaseModel):
             )
 
         # replite the velocity to match the number of vertices
-        features = vel.repeat(vertices.shape[0], 1)
+        features = torch.tile(vel.reshape(-1, 1, 1), (1, vertices.shape[1], 1))
         if self.velocity_pos_encoding:
             features = self.pos_encoder(features)
         if self.vertices_as_features:
-            features = torch.cat((features, vertices), dim=1)
+            features = torch.cat((features, vertices), dim=-1)
         if self.normals_as_features:
-            normals = data_dict["normals"].squeeze(0)
-            features = torch.cat((features, normals), dim=1)
+            normals = data_dict["normals"]
+            features = torch.cat((features, normals), dim=-1)
         return vertices.float().to(self.device), features.float().to(self.device)
 
     @torch.no_grad()
     def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs):
         vertices, features = self.data_dict_to_input(data_dict)
-        pred = self(vertices, features).reshape(1, -1)
+        pred_press, pred_drag = self(vertices, features)
 
         if loss_fn is None:
             loss_fn = self.loss
 
         normalized_gt = data_dict["normalized_pressure"].to(self.device).reshape(1, -1)
-        out_dict = {"l2": loss_fn(pred, normalized_gt)}
+        out_dict = {"l2": loss_fn(pred_press, normalized_gt)}
         # if the data_dict has normals, use it to compute the drag loss
         if "normals" in data_dict:
             normals = data_dict["normals"].squeeze(0)
             # compute the drag loss
-            pred_drag = self.pressure_drag(pred, normals, data_dict["cell_areas"])
+            pred_drag = self.pressure_drag(pred_press, normals, data_dict["cell_areas"])
             gt_drag = self.pressure_drag(
                 data_dict["normalized_pressure"], normals, data_dict["cell_areas"]
             )
@@ -135,7 +135,7 @@ class AhmedBodyBase(BaseModel):
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices, features = self.data_dict_to_input(data_dict)
-        pred = self(vertices, features)
+        pred_press, pred_drag = self(vertices, features)
         normalized_gt_pressure = data_dict["normalized_pressure"]
 
         return_dict = {}
@@ -143,7 +143,7 @@ class AhmedBodyBase(BaseModel):
         if "normals" in data_dict:
             normals = data_dict["normals"].squeeze(0)
             # compute the drag loss
-            pred_drag = self.pressure_drag(pred, normals, data_dict["cell_areas"])
+            pred_drag = self.pressure_drag(pred_press, normals, data_dict["cell_areas"])
             gt_drag = self.pressure_drag(
                 data_dict["normalized_pressure"], normals, data_dict["cell_areas"]
             )
@@ -154,13 +154,13 @@ class AhmedBodyBase(BaseModel):
             loss_fn = self.loss
 
         return_dict["pressure_loss"] = loss_fn(
-            pred.view(1, -1), normalized_gt_pressure.view(1, -1).to(self.device)
+            pred_press.view(1, -1), normalized_gt_pressure.view(1, -1).to(self.device)
         )
         return return_dict
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices, features = self.data_dict_to_input(data_dict)
-        pred = self(vertices, features).detach().cpu().squeeze()
+        pred_press, pred_drag = self(vertices, features).detach().cpu().squeeze()
         gt_pressure = data_dict["normalized_pressure"].squeeze()
 
         # Plot
@@ -186,14 +186,14 @@ class AhmedBodyBase(BaseModel):
             ax.set_title(title)
 
         vertices = vertices.detach().cpu()
-        pred = pred.detach().cpu()
+        pred_press = pred_press.detach().cpu()
         ax = fig.add_subplot(131, projection="3d")
-        create_subplot(ax, vertices, pred.numpy(), title="Pressure Prediction")
+        create_subplot(ax, vertices, pred_press.numpy(), title="Pressure Prediction")
         ax = fig.add_subplot(132, projection="3d")
         create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
         ax = fig.add_subplot(133, projection="3d")
         create_subplot(
-            ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference"
+            ax, vertices, torch.abs(pred_press - gt_pressure).numpy(), title="Abs Difference"
         )
 
         # figure to numpy image
@@ -204,10 +204,10 @@ class AhmedBodyBase(BaseModel):
 
         # Point clouds
         # Normalize the pressure values using max and min values from both pred and gt_pressure
-        pressures = torch.cat((pred.view(-1), gt_pressure.view(-1))).cpu()
+        pressures = torch.cat((pred_press.view(-1), gt_pressure.view(-1))).cpu()
         min_press = pressures.min()
         max_press = pressures.max()
-        norm_pred = (pred - min_press) / (max_press - min_press)
+        norm_pred = (pred_press - min_press) / (max_press - min_press)
         norm_gt = (gt_pressure - min_press) / (max_press - min_press)
         norm_diff = norm_pred - norm_gt
 

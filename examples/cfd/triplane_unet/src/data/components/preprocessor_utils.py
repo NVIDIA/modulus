@@ -14,8 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.data.AhmedBodyDataModule
-_convert_: all
 
-data_path: ???
-num_points: ???
+class Normalizer:
+    """Normalizer."""
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def encode(self, x):
+        return (x - self.mean) / self.std
+
+    def decode(self, x):
+        return x * self.std + self.mean
+
+

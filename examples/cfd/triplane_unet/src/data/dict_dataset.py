@@ -52,20 +52,22 @@ class MappingDatasetWrapper(Dataset):
         self,
         dataset: Dataset,
         mapping: dict,
-        every_n_data: Optional[int] = None,
+        pre_sample_transform: Optional[Callable] = None,
         transform: Optional[Callable] = None,
+        num_points: Optional[int] = None,
     ) -> None:
         r"""
         Args:
             dataset (Dataset): The dataset to wrap
             mapping (dict): The mapping from the dataset to the new dataset. If the key is comma separated, it will be interpreted as dataset_key, subkey.
-            every_n_data (Optional[int], optional): If not None, only return every n data. Defaults to None.
             transform (Optional[Callable], optional): A callable to transform the data. Defaults to None.
+            num_points (Optional[int], optional): If not None, only return random sampled points. Defaults to None.
         """
         self.dataset = dataset
         self.mapping = mapping
-        self.every_n_data = every_n_data
+        self.pre_sample_transform = pre_sample_transform
         self.transform = transform
+        self.num_points = num_points
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -90,14 +92,24 @@ class MappingDatasetWrapper(Dataset):
                     raise KeyError(f"Key {subkey} not found in dataset[{dataset_key}]")
 
                 return_value = item[dataset_key][subkey]
+                return_dict[v] = return_value
 
-            if self.every_n_data is not None and (
-                isinstance(return_value, Iterable)
-                or isinstance(return_value, np.ndarray)
-                or isinstance(return_value, Tensor)
-            ):
-                return_value = return_value[:: self.every_n_data]
-            return_dict[v] = return_value
+        if self.pre_sample_transform is not None:
+            return_dict = self.pre_sample_transform(return_dict)
+
+        # Sampling
+        _indices = None
+        if self.num_points is not None:
+            for k, v in return_dict.items():
+                if (isinstance(v, Iterable)
+                    or isinstance(v, np.ndarray)
+                    or isinstance(v, Tensor)
+                ):
+                    # Select indices
+                    if _indices is None:
+                        _indices = np.random.choice(len(v), self.num_points, replace=False)
+                    v = v[_indices]
+                return_dict[v] = v
 
         if self.transform is not None:
             return_dict = self.transform(return_dict)
