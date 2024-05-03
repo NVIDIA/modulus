@@ -264,7 +264,9 @@ class PointFeatureConv(BaseModule):
             neighbors_index = neighbors_index.long().to(device).view(-1)
             # M row splits
             neighbors_row_splits = (
-                torch.arange(0, out_vertices.shape[0] + 1, device=device)
+                torch.arange(
+                    0, out_vertices.shape[0] * out_vertices.shape[1] + 1, device=device
+                )
                 * self.radius_or_k
             )
             rep_in_features = in_point_features.features.view(-1, in_num_channels)[
@@ -318,7 +320,7 @@ class PointFeatureConv(BaseModule):
             out_features.append(
                 row_reduction(edge_features, neighbors_row_splits, reduction=reduction)
             )
-        out_features = torch.cat(out_features, dim=1)
+        out_features = torch.cat(out_features, dim=-1)
         out_features = self.out_transform_mlp(out_features)
         # Convert back to the original shape
         out_features = out_features.view(

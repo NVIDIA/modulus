@@ -19,7 +19,7 @@
 defaults:
   - /data: ahmed
   - /model: triplane_unet_ahmed
-  - /loss: truncatedmseloss
+  - /loss: mseloss
   - /optimizer: adam
   - /lr_scheduler: steplr
   - /loss@eval.loss: mseloss

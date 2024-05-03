@@ -80,17 +80,12 @@ class DrivAerBase(BaseModel):
         out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
 
         # compute drag loss
-        gt_drag = data_dict["c_d"].float().to(self.device)
-        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag.view_as(drag_pred))
-
-        # compute relative difference
-        # gt_drag = data_dict["c_d_computed"].float().to(self.device)
-        # pred_drag = self.drag(normalized_pred, datamodule.air_coeff, data_dict)
-        # out_dict["c_d_computed"] = gt_drag
-        # out_dict["c_d_pred"] = pred_drag
-        # out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
-        # out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
-
+        gt_drag = data_dict["c_d"].float().to(self.device).view_as(drag_pred)
+        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
+        out_dict["drag_diff"] = torch.abs(drag_pred - gt_drag).mean()
+        out_dict["drag_rel_diff"] = (
+            torch.abs(drag_pred - gt_drag) / torch.abs(gt_drag)
+        ).mean()
         return out_dict
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:

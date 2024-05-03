@@ -112,56 +112,37 @@ class AhmedBodyBase(BaseModel):
 
         normalized_gt = data_dict["normalized_pressure"].to(self.device).reshape(1, -1)
         out_dict = {"l2": loss_fn(pred_press, normalized_gt)}
-        # if the data_dict has normals, use it to compute the drag loss
-        if "normals" in data_dict:
-            normals = data_dict["normals"].squeeze(0)
-            # compute the drag loss
-            pred_drag = self.pressure_drag(pred_press, normals, data_dict["cell_areas"])
-            gt_drag = self.pressure_drag(
-                data_dict["normalized_pressure"], normals, data_dict["cell_areas"]
-            )
-            pred_drag = pred_drag.to(gt_drag)
-            out_dict["pressure_drag_gt"] = gt_drag
-            out_dict["pressure_drag_pred"] = pred_drag
-            out_dict["pressure_drag_loss"] = loss_fn(pred_drag, gt_drag)
+        gt_drag = data_dict["c_d"].to(self.device).view_as(pred_drag)
+        out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
 
-            # compute relative difference
-            out_dict["drag_rel_diff"] = torch.abs(pred_drag - gt_drag) / torch.abs(
-                gt_drag
-            )
-            out_dict["drag_rel_l2"] = rel_l2(pred_drag, gt_drag)
-
+        # compute relative difference
+        out_dict["drag_diff"] = torch.abs(pred_drag - gt_drag).mean()
+        out_dict["drag_rel_diff"] = (
+            torch.abs(pred_drag - gt_drag) / torch.abs(gt_drag)
+        ).mean()
         return out_dict
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices, features = self.data_dict_to_input(data_dict)
         pred_press, pred_drag = self(vertices, features)
         normalized_gt_pressure = data_dict["normalized_pressure"]
+        gt_drag = data_dict["c_d"].float().to(self.device).view_as(pred_drag)
 
         return_dict = {}
-        # if the data_dict has normals, use it to compute the drag loss
-        if "normals" in data_dict:
-            normals = data_dict["normals"].squeeze(0)
-            # compute the drag loss
-            pred_drag = self.pressure_drag(pred_press, normals, data_dict["cell_areas"])
-            gt_drag = self.pressure_drag(
-                data_dict["normalized_pressure"], normals, data_dict["cell_areas"]
-            )
-            pred_drag = pred_drag.to(gt_drag)
-            return_dict["pressure_drag_loss"] = loss_fn(pred_drag, gt_drag)
-
         if loss_fn is None:
             loss_fn = self.loss
 
         return_dict["pressure_loss"] = loss_fn(
             pred_press.view(1, -1), normalized_gt_pressure.view(1, -1).to(self.device)
         )
+        return_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
         return return_dict
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices, features = self.data_dict_to_input(data_dict)
-        pred_press, pred_drag = self(vertices, features).detach().cpu().squeeze()
-        gt_pressure = data_dict["normalized_pressure"].squeeze()
+        pred_press, pred_drag = self(vertices, features)
+        pred_press = pred_press.detach().cpu().squeeze()
+        gt_pressure = data_dict["normalized_pressure"].view_as(pred_press).cpu()
 
         # Plot
         fig = plt.figure(figsize=(21, 10))  # width, height in inches
@@ -193,7 +174,10 @@ class AhmedBodyBase(BaseModel):
         create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
         ax = fig.add_subplot(133, projection="3d")
         create_subplot(
-            ax, vertices, torch.abs(pred_press - gt_pressure).numpy(), title="Abs Difference"
+            ax,
+            vertices,
+            torch.abs(pred_press - gt_pressure).numpy(),
+            title="Abs Difference",
         )
 
         # figure to numpy image

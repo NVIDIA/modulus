@@ -24,13 +24,13 @@ except ImportError:
     warnings.warn("VTK not installed")
 import glob
 import os
-import pickle
 from pathlib import Path
 import pandas as pd
-
 import numpy as np
-from torch.utils.data import Dataset, Subset
 import webdataset as wds
+
+import torch
+from torch.utils.data import Dataset
 
 from src.data.base_datamodule import BaseDataModule
 
@@ -320,6 +320,7 @@ class AhmedBodyDataModule(BaseDataModule):
         dataset = wds.DataPipeline(
             wds.SimpleShardList(str(self.data_path / f"{phase}.tar")),
             wds.tarfile_to_samples(),
+            split_by_node_equal,
             wds.map(lambda x: from_numpy(x, "npz")),
             wds.map(self.preprocessors),
         )
@@ -343,6 +344,28 @@ class AhmedBodyDataModule(BaseDataModule):
     @property
     def test_dataset(self):
         return self._test_dataset
+
+    def _create_dataloader(self, dataset: wds.DataPipeline, **kwargs) -> wds.WebLoader:
+        # Handle shuffling and batching.
+        stages = []
+        if (buf_size := kwargs.pop("shuffle_buffer_size", 0)) or kwargs.pop(
+            "shuffle", False
+        ):
+            stages.append(wds.shuffle(buf_size if buf_size > 0 else 100))
+
+        batch_size = kwargs.pop("batch_size", 1)
+        stages.append(
+            wds.batched(batch_size, collation_fn=torch.utils.data.default_collate)
+        )
+
+        # Create dataloader from the pipeline.
+        # Use `compose` to avoid changing the original dataset.
+        return wds.WebLoader(
+            dataset.compose(*stages),
+            batch_size=None,
+            shuffle=False,
+            **kwargs,
+        )
 
 
 def test_datamodule(data_path: str, num_points: Optional[int] = None):

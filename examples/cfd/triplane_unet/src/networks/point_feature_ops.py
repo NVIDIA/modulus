@@ -126,7 +126,7 @@ class PointFeatures:
         return self.batch_size
 
     def __repr__(self) -> str:
-        return f"PointFeatures(vertices={[vert.shape for vert in self.vertices]}, features={[feat.shape for feat in self.features]})"
+        return f"PointFeatures(vertices={self.vertices.shape}, features={self.features.shape})"
 
 
 class GridFeaturesMemoryFormat(enum.Enum):
