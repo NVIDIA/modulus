@@ -132,9 +132,7 @@ def eval(model, datamodule, config, loss_fn=None):
     eval_timer = Timer()
     for i, data_dict in enumerate(test_loader):
         eval_timer.tic()
-        out_dict = model.eval_dict(
-            data_dict, loss_fn=loss_fn, datamodule=datamodule
-        )
+        out_dict = model.eval_dict(data_dict, loss_fn=loss_fn, datamodule=datamodule)
         out_dict["inference_time"] = eval_timer.toc()
         eval_meter.update(out_dict)
         if i % config.eval.plot_interval == 0:
