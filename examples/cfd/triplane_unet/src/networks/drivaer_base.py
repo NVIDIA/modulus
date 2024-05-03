@@ -70,12 +70,14 @@ class DrivAerBase(BaseModel):
         if loss_fn is None:
             loss_fn = self.loss
         normalized_gt = (
-            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+            data_dict["time_avg_pressure_whitened"]
+            .to(self.device)
+            .view_as(normalized_pred)
         )
         out_dict = {"l2": loss_fn(normalized_pred, normalized_gt)}
 
         pred = datamodule.decode(normalized_pred.clone())
-        gt = data_dict["time_avg_pressure"].to(self.device).reshape(1, -1)
+        gt = data_dict["time_avg_pressure"].to(self.device).view_as(pred)
         out_dict["l2_decoded"] = loss_fn(pred, gt)
         out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
 
@@ -92,7 +94,7 @@ class DrivAerBase(BaseModel):
         vertices = self.data_dict_to_input(data_dict)
         normalized_pred, drag_pred = self(vertices)
         normalized_gt = (
-            data_dict["time_avg_pressure_whitened"].to(self.device).reshape(1, -1)
+            data_dict["time_avg_pressure_whitened"].to(self.device)
         )
 
         return_dict = {}
