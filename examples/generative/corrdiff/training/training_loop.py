@@ -76,7 +76,6 @@ def training_loop(
     patch_num=1,
     wandb_mode="disabled",
     wandb_project="Modulus-Generative",
-    wandb_group="CorrDiff-DDP-Group",
     wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
     fp_optimizations="fp32",  # The floating point optimization mode
@@ -102,20 +101,19 @@ def training_loop(
     logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
 
     # wandb logger
-    initialize_wandb(
-        project=wandb_project,
-        entity=wandb_entity,
-        name=wandb_name,
-        group=wandb_group,
-        mode=wandb_mode,
-        save_code=True,
-    )
-
-    # log code
-    wb.run.log_code(
-        to_absolute_path("."),
-        exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
-    )
+    if dist.rank == 0:
+        initialize_wandb(
+            project=wandb_project,
+            entity=wandb_entity,
+            name=wandb_name,
+            mode=wandb_mode,
+            save_code=True,
+        )
+        # log code
+        wb.run.log_code(
+            to_absolute_path("."),
+            exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
+        )
 
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
@@ -276,7 +274,13 @@ def training_loop(
                 loss = loss.sum().mul(loss_scaling / batch_gpu_total)
                 loss_accum += loss / num_accumulation_rounds
                 loss.backward()
-        wb.log({"training loss": loss_accum}, step=cur_nimg)
+
+        loss_sum = torch.tensor([loss_accum], device=device)
+        if dist.world_size > 1:
+            torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
+        average_loss = loss_sum / dist.world_size
+        if dist.rank == 0:
+            wb.log({"training loss": average_loss}, step=cur_nimg)
 
         # Update weights.
         for g in optimizer.param_groups:
@@ -284,7 +288,8 @@ def training_loop(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
             g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
-            wb.log({"lr": g["lr"]}, step=cur_nimg)
+            if dist.rank == 0:
+                wb.log({"lr": g["lr"]}, step=cur_nimg)
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
@@ -323,7 +328,14 @@ def training_loop(
                             loss_scaling / batch_gpu_total
                         )
                         valid_loss_accum += loss_valid / num_validation_evals
-                    wb.log({"validation loss": valid_loss_accum}, step=cur_nimg)
+                    valid_loss_sum = torch.tensor([valid_loss_accum], device=device)
+                    if dist.world_size > 1:
+                        torch.distributed.all_reduce(
+                            valid_loss_sum, op=torch.distributed.ReduceOp.SUM
+                        )
+                    average_valid_loss = valid_loss_sum / dist.world_size
+                    if dist.rank == 0:
+                        wb.log({"validation loss": average_valid_loss}, step=cur_nimg)
 
         # Update EMA.
         ema_halflife_nimg = ema_halflife_kimg * 1000

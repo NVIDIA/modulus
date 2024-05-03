@@ -49,6 +49,12 @@ mpirun -np <num_GPUs> python train_graphcast.py
 If running in a docker container, you may need to include the `--allow-run-as-root` in
 the multi-GPU run command.
 
+To try out GraphCast without access to the ERA5 dataset, you can simply use a synthetic dataset:
+
+```bash
+python train_graphcast.py synthetic_dataset=true
+```
+
 Progress and loss logs can be monitored using Weights & Biases. This requires to have an
 active Weights & Biases account. You also need to provide your API key. There are
 multiple ways for providing the API key but you can simply export it as an environment

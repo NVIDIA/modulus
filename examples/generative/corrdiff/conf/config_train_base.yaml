@@ -53,6 +53,8 @@ bench: false
   # Enable cuDNN benchmarking
 workers: 4
   # DataLoader worker processes
+songunet_checkpoint_level: 0 # 0 means no checkpointing
+  # Gradient checkpointing level, value is number of layers to checkpoint
 
 
 ## I/O-related options
@@ -76,12 +78,8 @@ wandb_mode: online
   # Weights & biases mode [online, ofline, disabled]
 wandb_project:  "Modulus-Generative"
  # Weights & biases project
-wandb_group: "CorrDiff-DDP-Group"
- # Weights & biases group
-wandb_entity: "CorrDiff-DDP-Group"
+wandb_entity: "CorrDiff"
  # Weights & biases entity (i.e. a workspace, personal or a team workspace)
-wandb_name: "CorrDiff"
- # Weights & biases name
 
 
 ## Weather data options
