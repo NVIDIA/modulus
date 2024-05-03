@@ -16,8 +16,12 @@
 
 from typing import List, Literal, Optional, Tuple, Union
 
+from jaxtyping import Float
+
 import torch
 import torch.nn as nn
+from torch import Tensor
+import torch.nn.functional as F
 
 from src.networks.base_model import BaseModule
 from src.networks.point_feature_grid_conv import (
@@ -394,3 +398,67 @@ class GridFeatureGroupToPoint(BaseModule):
             ),
         )
         return out_point_features
+
+
+class GridFeaturePool(BaseModule):
+    """
+    Pooling the features of GridFeatures.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        compressed_spatial_dim: int,
+    ):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels=in_channels * compressed_spatial_dim,
+            out_channels=out_channels,
+            kernel_size=1,
+        )
+        self.norm = nn.LayerNorm(out_channels)
+
+    def forward(
+        self,
+        grid_features: GridFeatures,
+    ) -> Float[Tensor, "B C"]:
+        features = grid_features.features
+        assert features.ndim == 4, "Features must be compressed format with BxCxHxW."
+        features = self.conv(features)
+        features = features.flatten(2, 3)
+        pooled_feat = F.adaptive_max_pool1d(features, 1)
+        return self.norm(pooled_feat.squeeze(-1))
+
+
+class GridFeatureGroupPool(BaseModule):
+    """
+    Pooling the features of GridFeatureGroup.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        compressed_spatial_dims: Tuple[int],
+    ):
+        super().__init__()
+        self.pools = nn.ModuleList()
+        for compressed_spatial_dim in compressed_spatial_dims:
+            self.pools.append(
+                GridFeaturePool(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    compressed_spatial_dim=compressed_spatial_dim,
+                )
+            )
+
+    def forward(
+        self,
+        grid_features_group: GridFeatureGroup,
+    ) -> Float[Tensor, "B C"]:
+        assert len(grid_features_group) == len(self.pools)
+        pooled_features = []
+        for grid_features, pool in zip(grid_features_group, self.pools):
+            pooled_features.append(pool(grid_features))
+        return torch.cat(pooled_features, dim=-1)

@@ -40,8 +40,7 @@ from .drivaer_base import DrivAerBase
 from .grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
     GridFeatureGroup,
-    GridFeatureGroupPadToMatch,
-    GridFeatureGroupToPoint,
+    GridFeatureGroupPool,
 )
 from .grid_feature_unet import memory_format_to_axis_index
 from .point_feature_grid_ops import PointFeatureToGrid
@@ -401,18 +400,10 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         #         for c in self.compressed_spatial_dims
         #     ]
         # )
-        self.grid_pools = nn.ModuleList(
-            [
-                nn.Sequential(
-                    nn.Conv2d(
-                        hidden_channels[num_levels] * c, mlp_channels[0], kernel_size=1
-                    ),
-                    nn.AdaptiveMaxPool2d((1, 1)),
-                    nn.Flatten(),
-                    nn.LayerNorm(mlp_channels[0]),
-                )
-                for c in self.compressed_spatial_dims
-            ]
+        self.grid_pools = GridFeatureGroupPool(
+            in_channels=hidden_channels[num_levels],
+            out_channels=mlp_channels[0],
+            compressed_spatial_dims=self.compressed_spatial_dims,
         )
 
         self.mlp = MLP(
@@ -425,15 +416,12 @@ class FIGConvNetModelNet(ModelNet40Base, PointFeatureToFactorizedImplicitGlobalC
         self.projection = nn.Linear(mlp_channels[-1], out_channels)
 
     def forward(self, points: Float[Tensor, "B N 3"]):
-        with torch.no_grad():
-            point_features = self.vertex_to_point_features(points)
+        point_features = self.vertex_to_point_features(points)
         grid_features = PointFeatureToFactorizedImplicitGlobalConvNet.forward(
             self, point_features
         )
-        # seqs = grid_features_to_sequence(grid_features)
-        seqs = [pool(seq.features) for seq, pool in zip(grid_features, self.grid_pools)]
-        seqs = torch.cat(seqs, dim=-1)
-        return self.projection(self.mlp(seqs))
+        pooled_feats = self.grid_pools(grid_features)
+        return self.projection(self.mlp(pooled_feats))
 
 
 def test_figconvnet():

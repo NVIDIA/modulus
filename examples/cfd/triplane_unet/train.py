@@ -18,7 +18,6 @@ from functools import partial
 import logging
 import logging.config
 import os
-import pprint
 import sys
 from timeit import default_timer
 
@@ -141,7 +140,10 @@ def eval(model, datamodule, config, loss_fn=None):
             visualize_data_dicts.append(data_dict)
         if i % config.eval.print_interval == 0:
             # Print eval dict
-            logger.info(f"Eval {i}:\n{pprint.pformat(eval_meter.avg)}")
+            print_str = f"Eval {i}: "
+            for k, v in eval_meter.avg.items():
+                print_str += f"{k}: {v.item():.4f}, "  # only print the number
+            logger.info(print_str)
 
     # Merge all dictionaries
     merged_image_dict = {}

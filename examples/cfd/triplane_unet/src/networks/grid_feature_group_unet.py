@@ -42,6 +42,7 @@ from .grid_feature_group import (
     GridFeatureGroup,
     GridFeatureGroupPadToMatch,
     GridFeatureGroupToPoint,
+    GridFeatureGroupPool,
 )
 from .grid_feature_unet import memory_format_to_axis_index
 from .point_feature_grid_ops import PointFeatureToGrid
@@ -179,19 +180,12 @@ class PointFeatureToGridGroupUNet(BaseModel):
             memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
 
-        self.grid_pools = nn.ModuleList(
-            [
-                nn.Sequential(
-                    nn.Conv2d(
-                        hidden_channels[num_levels] * c, mlp_channels[0], kernel_size=1
-                    ),
-                    nn.AdaptiveMaxPool2d((1, 1)),
-                    nn.Flatten(),
-                    nn.LayerNorm(mlp_channels[0]),
-                )
-                for c in self.compressed_spatial_dims
-            ]
+        self.grid_pools = GridFeatureGroupPool(
+            in_channels=hidden_channels[-1],
+            out_channels=mlp_channels[0],
+            compressed_spatial_dims=self.compressed_spatial_dims,
         )
+
         self.mlp = MLP(
             mlp_channels[0] * len(self.compressed_spatial_dims),
             mlp_channels[-1],
@@ -199,10 +193,8 @@ class PointFeatureToGridGroupUNet(BaseModel):
             use_residual=True,
             activation=nn.GELU,
         )
-        self.mlp_projection = nn.Sequential(
-            nn.Linear(mlp_channels[-1], 1),
-            nn.Sigmoid(),
-        )
+        self.mlp_projection = nn.Linear(mlp_channels[-1], 1)
+        # nn.Sigmoid(),
 
         self.to_point = GridFeatureGroupToPoint(
             grid_in_channels=hidden_channels[0],
@@ -240,12 +232,8 @@ class PointFeatureToGridGroupUNet(BaseModel):
             down_grid_feature_groups.append(out_features)
 
         # Drag prediction
-        seqs = [
-            pool(seq.features)
-            for seq, pool in zip(down_grid_feature_groups[-1], self.grid_pools)
-        ]
-        seqs = torch.cat(seqs, dim=-1)
-        drag_pred = self.mlp_projection(self.mlp(seqs))
+        pooled_feats = self.grid_pools(down_grid_feature_groups[-1])
+        drag_pred = self.mlp_projection(self.mlp(pooled_feats))
 
         for level in reversed(range(self.num_levels)):
             up_grid_features = self.up_blocks[level](

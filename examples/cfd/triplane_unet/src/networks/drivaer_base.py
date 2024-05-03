@@ -81,7 +81,7 @@ class DrivAerBase(BaseModel):
 
         # compute drag loss
         gt_drag = data_dict["c_d"].float().to(self.device)
-        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
+        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag.view_as(drag_pred))
 
         # compute relative difference
         # gt_drag = data_dict["c_d_computed"].float().to(self.device)
@@ -109,17 +109,17 @@ class DrivAerBase(BaseModel):
 
         # compute drag loss
         gt_drag = data_dict["c_d"].float().to(self.device)
-        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
+        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag.view_as(drag_pred))
 
         return return_dict
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         vertices = self.data_dict_to_input(data_dict)
-        noramlized_pred, drag_pred = self(vertices)
+        normalized_pred, _ = self(vertices)
         normalized_pred = normalized_pred.detach().cpu()
         # denormalize
-        pred = datamodule.decode(noramlized_pred)
-        gt_pressure = data_dict["time_avg_pressure"].cpu()
+        pred = datamodule.decode(normalized_pred)
+        gt_pressure = data_dict["time_avg_pressure"].cpu().view_as(pred)
         vertices = vertices.cpu().squeeze()
 
         # Plot
