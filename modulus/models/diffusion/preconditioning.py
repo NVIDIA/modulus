@@ -1060,8 +1060,6 @@ class VEPrecond_dfsr(torch.nn.Module):
             else torch.float32
         )
 
-        c_skip = 1
-        c_out = sigma
         c_in = 1
         c_noise = sigma  # Change the definitation of c_noise to avoid -inf values for zero sigma
 
@@ -1190,8 +1188,6 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
             else torch.float32
         )
 
-        c_skip = 1
-        c_out = sigma
         c_in = 1
         c_noise = sigma
 
@@ -1239,11 +1235,9 @@ class VEPrecond_dfsr_cond(torch.nn.Module):
         """
 
         # w [b t h w]
-        batchsize = w.size(0)
         w = w.clone()
         w.requires_grad_(True)
         nx = w.size(2)
-        ny = w.size(3)
         device = w.device
 
         w_h = torch.fft.fft2(w[:, 1:-1], dim=[2, 3])

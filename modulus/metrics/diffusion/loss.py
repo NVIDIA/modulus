@@ -21,8 +21,8 @@
 import random
 from typing import Callable, Optional, Union
 
-import torch
 import numpy as np
+import torch
 
 
 class VPLoss:
@@ -697,7 +697,11 @@ class VELoss_dfsr:
             betas = sigmoid(betas) * (beta_end - beta_start) + beta_start
         else:
             raise NotImplementedError(beta_schedule)
-        assert betas.shape == (num_diffusion_timesteps,)
+        if betas.shape != (num_diffusion_timesteps,):
+            raise ValueError(
+                f"Expected betas to have shape ({num_diffusion_timesteps},), "
+                f"but got {betas.shape}"
+            )
         return betas
 
     def __call__(self, net, images, labels, augment_pipe=None):
@@ -740,7 +744,6 @@ class VELoss_dfsr:
         b = self.betas.to(images.device)
         a = (1 - b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
         x = images * a.sqrt() + e * (1.0 - a).sqrt()
-        num_diffusion_timesteps = b.shape[0]
 
         output = net(x, t, labels)
         loss = (e - output).square()

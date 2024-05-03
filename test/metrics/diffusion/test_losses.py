@@ -19,8 +19,8 @@ import torch
 from modulus.metrics.diffusion import (
     EDMLoss,
     VELoss,
-    VPLoss,
     VELoss_dfsr,
+    VPLoss,
 )
 
 # VPLoss tests
@@ -287,7 +287,7 @@ def test_veloss_dfsr_initialization():
 
 
 def test_get_beta_schedule_method():
-    loss_func = VPLoss_dfsr()
+    loss_func = VELoss_dfsr()
 
     beta_schedule = "linear"
     beta_start = 0.0001
