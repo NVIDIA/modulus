@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Learnable positional embedding for CorrDiff.
 - Support for patch-based CorrDiff training and generation (stochastic sampling only)
 - Enable CorrDiff multi-gpu generation
+- The Virtual Foundry GraphNet.
 - A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
 
 ### Changed
