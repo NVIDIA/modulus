@@ -142,7 +142,12 @@ def eval(model, datamodule, config, loss_fn=None):
             # Print eval dict
             print_str = f"Eval {i}: "
             for k, v in eval_meter.avg.items():
-                print_str += f"{k}: {v.item():.4f}, "  # only print the number
+                if isinstance(v, torch.Tensor):
+                    v = v.item()
+                if isinstance(v, float):
+                    print_str += f"{k}: {v:.4f}, "
+                else:
+                    print_str += f"{k}: {v}, "
             logger.info(print_str)
 
     # Merge all dictionaries
