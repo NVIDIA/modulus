@@ -30,6 +30,7 @@ from .unet import UNet
 from .preconditioning import (
     EDMPrecond,
     EDMPrecondSR,
+    EDMPrecondSRV2,
     VEPrecond,
     VPPrecond,
     iDDPMPrecond,
