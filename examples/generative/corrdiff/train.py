@@ -26,6 +26,7 @@ os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
 import hydra
 from hydra.utils import to_absolute_path
+from hydra.core.hydra_config import HydraConfig
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
@@ -92,9 +93,7 @@ def main(cfg: DictConfig) -> None:
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     wandb_project = getattr(cfg, "wandb_project", "Modulus-Generative")
-    wandb_group = getattr(cfg, "wandb_group", "CorrDiff-DDP-Group")
     wandb_entity = getattr(cfg, "wandb_entity", "CorrDiff-DDP-Group")
-    wandb_name = getattr(cfg, "wandb_name", "CorrDiff")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
     validation_dump = getattr(cfg, "validation_dump", 500)
@@ -109,9 +108,8 @@ def main(cfg: DictConfig) -> None:
     c.fp_optimizations = fp_optimizations
     c.wandb_mode = wandb_mode
     c.wandb_project = wandb_project
-    c.wandb_group = wandb_group
     c.wandb_entity = wandb_entity
-    c.wandb_name = wandb_name
+    c.wandb_name = HydraConfig.get().job.name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
     c.patch_num = getattr(cfg, "patch_num", 1)
@@ -224,10 +222,10 @@ def main(cfg: DictConfig) -> None:
 
     # Preconditioning & loss function.
     if precond == "edmv2" or precond == "edm":
-        c.network_kwargs.class_name = "training.networks.EDMPrecondSRV2"
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "edmv1":
-        c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
         c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
