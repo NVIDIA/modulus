@@ -101,13 +101,16 @@ class MappingDatasetWrapper(Dataset):
         _indices = None
         if self.num_points is not None:
             for k, v in return_dict.items():
-                if (isinstance(v, Iterable)
+                if (
+                    isinstance(v, Iterable)
                     or isinstance(v, np.ndarray)
                     or isinstance(v, Tensor)
                 ):
                     # Select indices
                     if _indices is None:
-                        _indices = np.random.choice(len(v), self.num_points, replace=False)
+                        _indices = np.random.choice(
+                            len(v), self.num_points, replace=False
+                        )
                     v = v[_indices]
                 return_dict[v] = v
 

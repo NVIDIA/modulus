@@ -113,7 +113,9 @@ class MLP(BaseModule):
             if use_residual and i < len(channels) - 2:
                 self.layers.append(
                     ResidualLinearBlock(
-                        channels[i], channels[i + 1], activation=activation,
+                        channels[i],
+                        channels[i + 1],
+                        activation=activation,
                     )
                 )
             else:
