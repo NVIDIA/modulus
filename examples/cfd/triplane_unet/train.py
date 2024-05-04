@@ -380,8 +380,19 @@ def train(config: DictConfig, signal_handler: SignalHandler):
 
 
 def _init_python_logging(config: DictConfig):
-    # Hydra config contains properly resolved absolute path.
-    config.output = HydraConfig.get().runtime.output_dir
+    # Detect if it is running on a SLURM cluster.
+    if "SLURM_JOB_ID" in os.environ:
+        # The output directory is set to simply outputs/SLURM_JOB_ID.
+        config.output = to_absolute_path(
+            os.path.join("outputs", os.environ["SLURM_JOB_ID"])
+        )
+        # Check for the checkpoints and resume if any exists.
+        if os.path.exists(config.output):
+            config.train.resume = True
+    else:
+        # Hydra config contains properly resolved absolute path.
+        config.output = HydraConfig.get().runtime.output_dir
+
     if config.log_dir is None:
         config.log_dir = config.output
     else:

@@ -138,7 +138,7 @@ class SignalHandler:
         self._STATUS = status
 
     def __enter__(self):
-        self.ENTERED = True
+        self._ENTERED = True
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -161,7 +161,7 @@ class SignalHandler:
         If this is called after the signal is received, it means the job is stopped.
         Write the status to a file accordingly.
         """
-        if self._ENTERED and self.STATUS != "ERROR":
+        if (not self._ENTERED) and (self.STATUS != "ERROR"):
             if self.is_stopped():
                 self.STATUS = "STOPPED"
             else:

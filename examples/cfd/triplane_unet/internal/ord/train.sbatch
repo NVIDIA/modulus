@@ -64,7 +64,7 @@ STATUS=$(cat ${SLURM_JOB_ID}.txt)
 # If the status is STOPPED, resubmit the job
 if [ "${STATUS}" == "STOPPED" ]; then
     echo "Job stopped. Resubmitting the job with script: ${SCRIPT_PATH} ${@}"
-    sbatch --signal=USR1@300 ${SCRIPT_PATH} ${@}
+    scontrol requeue $SLURM_JOB_ID
 else
     echo "Job finished with status: ${STATUS}"
 fi

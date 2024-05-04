@@ -112,6 +112,11 @@ class PointFeatures:
         down_features = torch.stack([feat[:min_len] for feat in down_features], dim=0)
         return PointFeatures(down_vertices, down_features)
 
+    def contiguous(self):
+        self.vertices = self.vertices.contiguous()
+        self.features = self.features.contiguous()
+        return self
+
     def __add__(self, other):
         assert self.batch_size == other.batch_size
         assert self.num_channels == other.num_channels
