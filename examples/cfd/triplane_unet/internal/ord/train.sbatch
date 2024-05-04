@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=batch_singlenode,polar
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 #SBATCH --account coreai_climate_earth2
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
