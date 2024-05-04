@@ -389,6 +389,9 @@ def _init_python_logging(config: DictConfig):
         # Check for the checkpoints and resume if any exists.
         if os.path.exists(config.output):
             config.train.resume = True
+        else:
+            # Make directory if it does not exist.
+            os.makedirs(config.output, exist_ok=True)
     else:
         # Hydra config contains properly resolved absolute path.
         config.output = HydraConfig.get().runtime.output_dir

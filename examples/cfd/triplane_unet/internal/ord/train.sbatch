@@ -59,6 +59,12 @@ python train.py ${ARGS};"
 # The status file (SLURM_JOB_ID.txt) will be updated with the current status of the job. If it is STOPPED, resubmit the job to continue training.
 # The training script will be run with the arguments provided to the sbatch command.
 
+# Check if the status file exists
+if [ ! -f ${SLURM_JOB_ID}.txt ]; then
+    echo "Status file not found. Exiting..."
+    exit 1
+fi
+
 # Read the status
 STATUS=$(cat ${SLURM_JOB_ID}.txt)
 # If the status is STOPPED, resubmit the job
