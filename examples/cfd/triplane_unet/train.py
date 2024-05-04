@@ -40,7 +40,9 @@ from src.utils import rank0
 from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
+from src.utils.signal_handlers import SignalHandler
 from src.networks.point_feature_ops import GridFeaturesMemoryFormat
+
 
 logger = logging.getLogger("tpunet")
 
@@ -75,14 +77,6 @@ def _save_state(model, optimizer, scheduler, scaler, epoch, tot_iter, config):
     # Save the file with 0000X format
     torch.save(state_dict, save_path)
     _delete_previous_checkpoints(config)
-
-
-@rank0
-def _save_status(output_dir: str, status: str):
-    """Writes the status to the output directory to status.txt file."""
-
-    with open(os.path.join(output_dir, "status.txt"), "w", encoding="utf-8") as f:
-        f.write(status)
 
 
 def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
@@ -188,7 +182,7 @@ def eval(model, datamodule, config, loss_fn=None):
     return eval_dict, merged_image_dict, merged_point_cloud_dict
 
 
-def train(config: DictConfig):
+def train(config: DictConfig, signal_handler: SignalHandler):
     dist = DistributedManager()
 
     # Initialize the device. Allow device override only in non-distributed setting.
@@ -197,10 +191,10 @@ def train(config: DictConfig):
     torch.cuda.device(device)
     wp.set_device(str(device))
 
-    # Initialize the loggers first.
-    loggers = init_logger(config)
-
+    # Print out logs to check arguments in SLURM job
     logger.info(f"Config summary:\n{OmegaConf.to_yaml(config, sort_keys=True)}")
+
+    loggers = init_logger(config)
 
     # Initialize the model
     model = instantiate(config.model)
@@ -277,6 +271,11 @@ def train(config: DictConfig):
         datamodule.set_epoch(train_loader, ep)
 
         for data_dict in train_loader:
+            # Check if the signal is received
+            if signal_handler.is_stopped():
+                logger.debug("Signal received. Breaking the training loop.")
+                break
+
             optimizer.zero_grad()
 
             with autocast():
@@ -339,7 +338,11 @@ def train(config: DictConfig):
         loggers.log_scalar("train/epoch_train_l2", train_l2_meter.avg, tot_iter)
         loggers.log_scalar("train/train_epoch_duration", t2 - t1, tot_iter)
 
-        if ep % config.eval.interval == 0 or ep == config.train.num_epochs - 1:
+        if (
+            ep % config.eval.interval == 0
+            or ep == config.train.num_epochs - 1
+            and (not signal_handler.is_stopped())
+        ):
             eval_dict, eval_images, eval_point_clouds = eval(
                 model.model(), datamodule, config, eval_loss_fn
             )
@@ -355,38 +358,25 @@ def train(config: DictConfig):
                     )
 
         # Save the weights, optimization state, and scheduler state into one file
-        if ep % config.train.save_interval == 0:
+        if ep % config.train.save_interval == 0 or signal_handler.is_stopped():
             # save the model
             _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
 
-        # Update average epoch time
-        if average_epoch_time == 0:
-            average_epoch_time = t2 - t1
-        else:
-            average_epoch_time = (t2 - t1) * 0.1 + average_epoch_time * 0.9
+        # Exit the training loop if the signal handler is stopped.
+        if signal_handler.is_stopped():
+            break
 
-        # Break the training loop if the time limit is reached
-        if time_limit is not None:
-            if default_timer() - start_time + 2 * average_epoch_time > time_limit:
-                logger.info(
-                    f"Time limit {time_limit} seconds reached. Breaking the training loop."
-                )
-                # Save model and status.
-                _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
-                _save_status(config.output, "resuming")
-                sys.exit(0)
-
-    # Save the final model
-    _save_state(
-        model,
-        optimizer,
-        scheduler,
-        scaler,
-        config.train.num_epochs - 1,
-        tot_iter,
-        config,
-    )
-    _save_status(config.output, "finished")
+    # Save the final model if the training loop was not stopped by the signal handler.
+    if not signal_handler.is_stopped():
+        _save_state(
+            model,
+            optimizer,
+            scheduler,
+            scaler,
+            config.train.num_epochs - 1,
+            tot_iter,
+            config,
+        )
 
 
 def _init_python_logging(config: DictConfig):
@@ -417,7 +407,8 @@ def main(config: DictConfig):
     if config.seed is not None:
         set_seed(config.seed)
 
-    train(config)
+    with SignalHandler() as signal_handler:
+        train(config, signal_handler)
 
 
 def _init_hydra_resolvers():
