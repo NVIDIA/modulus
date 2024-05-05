@@ -39,6 +39,7 @@ train:
 
 eval:
   loss: null
+  run_eval_first: false
   interval: 5 # epoch
   batch_size: 1
   plot_interval: 20 # save image for every N'th test data

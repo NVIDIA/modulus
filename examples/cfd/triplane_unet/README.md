@@ -57,6 +57,8 @@ python train.py \
     ~loggers.wandb
 ```
 
+Note that for `zsh`, you need to escape `~` in front of `loggers.wandb` with `\~loggers.wandb`.
+
 In this scenario:
 
 * some additional dataset and model parameters are overridden.

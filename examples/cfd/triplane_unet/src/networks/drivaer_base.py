@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import matplotlib
 import torch
+from torch import Tensor
 
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
@@ -25,10 +26,7 @@ import matplotlib.pyplot as plt
 from .base_model import BaseModel
 
 from src.utils.visualization import fig_to_numpy
-
-
-def rel_l2(pred, gt):
-    return torch.norm(pred - gt, p=2) / torch.norm(gt, p=2)
+from src.utils.eval_funcs import eval_all_metrics
 
 
 class DrivAerBase(BaseModel):
@@ -46,23 +44,6 @@ class DrivAerBase(BaseModel):
 
         return vertices.to(self.device)
 
-    def drag(self, pred_pressure, air_coeff, data_dict) -> float:
-        coeff = (air_coeff / data_dict["proj_area_x"]).to(self.device)
-        poly_normals = data_dict["cell_normals"].float().to(self.device)
-        poly_area = data_dict["cell_areas"].float().to(self.device)
-        poly_pressure = pred_pressure.float().to(self.device)
-        poly_wss = data_dict["time_avg_wall_shear_stress"].float().to(self.device)
-
-        # Compute coefficients
-        # -x direction is the movement direction so
-        c_p = -coeff * torch.sum(
-            poly_normals[..., 0] * poly_area * poly_pressure.squeeze(-1), -1
-        )
-        c_f = coeff * torch.sum(poly_wss[..., 0] * poly_area, dim=-1)
-
-        # Compute total drag coefficients
-        return c_p + c_f
-
     @torch.no_grad()
     def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
@@ -79,23 +60,42 @@ class DrivAerBase(BaseModel):
         pred = datamodule.decode(normalized_pred.clone())
         gt = data_dict["time_avg_pressure"].to(self.device).view_as(pred)
         out_dict["l2_decoded"] = loss_fn(pred, gt)
-        out_dict["mean_rel_l2_decoded"] = rel_l2(pred, gt)
-
-        # compute drag loss
-        gt_drag = data_dict["c_d"].float().to(self.device).view_as(drag_pred)
-        out_dict["drag_loss"] = loss_fn(drag_pred, gt_drag)
-        out_dict["drag_diff"] = torch.abs(drag_pred - gt_drag).mean()
-        out_dict["drag_rel_diff"] = (
-            torch.abs(drag_pred - gt_drag) / torch.abs(gt_drag)
-        ).mean()
+        # Pressure evaluation
+        out_dict.update(eval_all_metrics(normalized_gt, normalized_pred, prefix="norm_pressure"))
+        # collect all drag outputs. All _ prefixed keys are collected in the meter
+        gt_drag = data_dict["c_d"].float()
+        out_dict["_gt_drag"] = gt_drag.cpu().flatten()
+        out_dict["_pred_drag"] = drag_pred.detach().cpu().flatten()
         return out_dict
+
+    def post_eval_epoch(
+        self,
+        eval_dict: dict,
+        image_dict: dict,
+        pointcloud_dict: dict,
+        private_attributes: dict,
+        datamodule,
+        **kwargs,
+    ) -> Tuple[Dict, Dict, Dict]:
+        """
+        Post evaluation epoch hook for computing all evaluation statistics that
+        are collected in the private attibutes.
+        """
+        # compute drag evaluation
+        gt_drag: List[Tensor] = private_attributes["_gt_drag"]
+        pred_drag: List[Tensor] = private_attributes["_pred_drag"]
+
+        # Concatenate all the drag values
+        gt_drag = torch.cat(gt_drag)
+        pred_drag = torch.cat(pred_drag)
+
+        eval_dict.update(eval_all_metrics(gt_drag, pred_drag, prefix="drag"))
+        return eval_dict, image_dict, pointcloud_dict
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
         normalized_pred, drag_pred = self(vertices)
-        normalized_gt = (
-            data_dict["time_avg_pressure_whitened"].to(self.device)
-        )
+        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device)
 
         return_dict = {}
         if loss_fn is None:
