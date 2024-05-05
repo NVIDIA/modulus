@@ -103,15 +103,18 @@ class SignalHandler:
 
         self.handler = handler
         self.handler_rank = handler_rank
+
         # Get distributed backend and move the _SIG_RECEIVED to the device
-        backend = torch.distributed.get_backend()
-        self.device = torch.device("cuda" if "nccl" in backend else "cpu")
         # Global flag for signaling for all DDP processes
-        self._SIG_RECEIVED = torch.tensor([0], dtype=torch.int32).to(self.device)
         self._DISTRIBUTED = torch.distributed.is_initialized()
         self._RANK = torch.distributed.get_rank() if self._DISTRIBUTED else 0
         self._STATUS = "RUNNING"
         self._ENTERED = False
+
+        # Get the device
+        backend = torch.distributed.get_backend() if self._DISTRIBUTED else "cpu"
+        self.device = torch.device("cuda" if "nccl" in backend else "cpu")
+        self._SIG_RECEIVED = torch.tensor([0], dtype=torch.int32).to(self.device)
 
         # Register signal handlers
         self._register_sigusr_handler()
