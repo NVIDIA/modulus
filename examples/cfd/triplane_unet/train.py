@@ -170,7 +170,7 @@ def eval(model, datamodule, config, loss_fn=None):
             eval_dict,
             merged_image_dict,
             merged_point_cloud_dict,
-        ) = model.model().post_eval_epoch(
+        ) = model.post_eval_epoch(
             eval_dict,
             merged_image_dict,
             merged_point_cloud_dict,
