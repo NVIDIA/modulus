@@ -61,7 +61,9 @@ class DrivAerBase(BaseModel):
         gt = data_dict["time_avg_pressure"].to(self.device).view_as(pred)
         out_dict["l2_decoded"] = loss_fn(pred, gt)
         # Pressure evaluation
-        out_dict.update(eval_all_metrics(normalized_gt, normalized_pred, prefix="norm_pressure"))
+        out_dict.update(
+            eval_all_metrics(normalized_gt, normalized_pred, prefix="norm_pressure")
+        )
         # collect all drag outputs. All _ prefixed keys are collected in the meter
         gt_drag = data_dict["c_d"].float()
         out_dict["_gt_drag"] = gt_drag.cpu().flatten()

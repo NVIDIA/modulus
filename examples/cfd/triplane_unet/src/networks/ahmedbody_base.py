@@ -116,7 +116,9 @@ class AhmedBodyBase(BaseModel):
         out_dict = {"l2": loss_fn(pred_press, normalized_gt)}
 
         # Pressure evaluation
-        out_dict.update(eval_all_metrics(normalized_gt, pred_press, prefix="norm_pressure"))
+        out_dict.update(
+            eval_all_metrics(normalized_gt, pred_press, prefix="norm_pressure")
+        )
         # collect all drag outputs. All _ prefixed keys are collected in the meter
         gt_drag = data_dict["c_d"].float()
         out_dict["_gt_drag"] = gt_drag.cpu().flatten()
