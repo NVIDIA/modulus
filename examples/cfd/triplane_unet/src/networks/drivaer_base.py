@@ -30,8 +30,6 @@ from src.utils.eval_funcs import eval_all_metrics
 
 
 class DrivAerBase(BaseModel):
-    dir_movement = torch.tensor([-1.0, 0.0, 0.0])
-
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].float()  # (n_in, 3)
 
@@ -102,13 +100,23 @@ class DrivAerBase(BaseModel):
         return_dict = {}
         if loss_fn is None:
             loss_fn = self.loss
+
         return_dict["pressure_loss"] = loss_fn(
             normalized_pred.view(1, -1), normalized_gt.view(1, -1).to(self.device)
         )
 
         # compute drag loss
+        drag_loss_fn = loss_fn
+        # if drag_loss_fn is in self attribute
+        if hasattr(self, "drag_loss_fn"):
+            drag_loss_fn = self.drag_loss_fn
+
         gt_drag = data_dict["c_d"].float().to(self.device)
-        return_dict["drag_loss"] = loss_fn(drag_pred, gt_drag.view_as(drag_pred))
+        return_dict["drag_loss"] = drag_loss_fn(drag_pred, gt_drag.view_as(drag_pred))
+
+        # if drag weight is in self attribute
+        if hasattr(self, "drag_weight"):
+            return_dict["drag_loss"] *= self.drag_weight
 
         return return_dict
 
@@ -219,8 +227,19 @@ class DrivAerDragRegressionBase(DrivAerBase):
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices = self.data_dict_to_input(data_dict)
         pred_drag = self(vertices)
-        gt_drag = data_dict["c_d_computed"].float().to(self.device)
+        gt_drag = data_dict["c_d"].float().to(self.device)
         return {"drag_loss": loss_fn(pred_drag, gt_drag)}
 
+    @torch.no_grad()
+    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices = self.data_dict_to_input(data_dict)
+        drag_pred = self(vertices)
+        out_dict = {}
+        # collect all drag outputs. All _ prefixed keys are collected in the meter
+        gt_drag = data_dict["c_d"].float()
+        out_dict["_gt_drag"] = gt_drag.cpu().flatten()
+        out_dict["_pred_drag"] = drag_pred.detach().cpu().flatten()
+        return out_dict
+
     def image_pointcloud_dict(self, data_dict, datamodule):
-        return {}
+        return {}, {}

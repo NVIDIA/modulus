@@ -50,6 +50,6 @@ loggers:
   wandb:
     project_name: drivaer
     entity: nvr-ai-algo
-    run_name: TriplaneUNet-level1-32-res250-150-100-ks9-step25-every10
+    run_name: TriplaneUNet-level1-32-res250-150-100-ks9
 
 seed: 0

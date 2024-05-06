@@ -242,19 +242,6 @@ def train(config: DictConfig, signal_handler: SignalHandler):
         dtype=hydra.utils.get_object(config.amp.autocast.dtype),
     )
 
-    # If time_limit is set, break the training loop before the time limit
-    average_epoch_time = 0
-    if config.train.time_limit is not None:
-        # time limit is the form hh:mm:ss
-        time_limit = sum(
-            int(x) * 60**i
-            for i, x in enumerate(reversed(config.train.time_limit.split(":")))
-        )
-        logger.info(f"Time limit: {time_limit} seconds")
-        start_time = default_timer()
-    else:
-        time_limit = None
-
     # Resume if resume is True
     start_epoch = 0
     tot_iter = 0
@@ -385,27 +372,32 @@ def train(config: DictConfig, signal_handler: SignalHandler):
         )
 
 
-def _init_python_logging(config: DictConfig):
+def _slurm_setup(config: DictConfig) -> None:
     # Detect if it is running on a SLURM cluster.
     if "SLURM_JOB_ID" in os.environ:
         # The output directory is set to simply outputs/SLURM_JOB_ID.
         config.output = to_absolute_path(
             os.path.join("outputs", os.environ["SLURM_JOB_ID"])
         )
-        # Check for the checkpoints and resume if any exists.
-        if os.path.exists(config.output):
+        # Check for the checkpoints and model_*.pth files in the output directory.
+        if os.path.exists(config.output) and any(
+            f.startswith("model_") and f.endswith(".pth")
+            for f in os.listdir(config.output)
+        ):
             config.train.resume = True
-        else:
-            # Make directory if it does not exist.
-            os.makedirs(config.output, exist_ok=True)
     else:
         # Hydra config contains properly resolved absolute path.
         config.output = HydraConfig.get().runtime.output_dir
 
+
+def _init_python_logging(config: DictConfig) -> None:
     if config.log_dir is None:
         config.log_dir = config.output
     else:
         config.log_dir = to_absolute_path(config.log_dir)
+
+    # Make the log dir
+    os.makedirs(config.log_dir, exist_ok=True)
 
     # Set up Python loggers.
     if pylog_cfg := OmegaConf.select(config, "logging.python"):
@@ -421,6 +413,8 @@ def _init_python_logging(config: DictConfig):
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="base")
 def main(config: DictConfig):
+    _slurm_setup(config)
+
     _init_python_logging(config)
 
     # Set the random seed.
