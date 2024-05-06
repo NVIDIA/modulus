@@ -85,3 +85,7 @@ loggers:
     group_name:
 
 log_pointcloud: false # save pointclouds
+
+# Signal handler
+signal_handler:
+  status_path: ${output}/status.txt

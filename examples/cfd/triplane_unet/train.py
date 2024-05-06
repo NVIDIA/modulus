@@ -419,7 +419,7 @@ def main(config: DictConfig):
     if config.seed is not None:
         set_seed(config.seed)
 
-    with SignalHandler() as signal_handler:
+    with SignalHandler(status_path=config.signal_handler.status_path) as signal_handler:
         train(config, signal_handler)
 
 
