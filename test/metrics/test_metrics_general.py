@@ -281,6 +281,46 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         atol=100 * atol,
     )
 
+    # Test sorted crps
+    c = crps.crps(x[:10_000], y, method="sort")
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
+    )
+
+    # Test when input is numpy array
+    c = crps.crps(x[:10_000], y.cpu().numpy(), method="sort")
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
+    )
+
+    # test sort method
+    c = crps._crps_from_empirical_cdf(x[:10_000], y)
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
+    )
+
+    c = crps._crps_from_empirical_cdf(
+        torch.randn((1, 10_000), device=device, dtype=torch.float32), y, dim=1
+    )
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
+    )
+
     # Test Gaussian CRPS
     mm = torch.zeros([1], dtype=torch.float32, device=device)
     vv = torch.ones([1], dtype=torch.float32, device=device)

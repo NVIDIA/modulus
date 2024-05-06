@@ -50,14 +50,24 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
     Tensor
         Map of CRPS
     """
-    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
-    n = pred.shape[0]
+    n = pred.shape[dim]
+    device = pred.device
     _crps = 0.0 * obs
     for i in range(n):
-        x_i = pred[i]
-        x_j = pred[i:]
-        _crps += torch.abs(x_i - obs) / n
-        _crps -= torch.sum(torch.abs(x_i[None] - x_j) / n, dim=0) / n
+        # x_i = pred[i]
+        x_i = torch.index_select(
+            pred, dim, torch.tensor([i], device=device, dtype=torch.int32)
+        )
+
+        # x_j = pred[i:]
+        x_j = torch.index_select(
+            pred,
+            dim,
+            torch.tensor([j for j in range(i, n)], device=device, dtype=torch.int32),
+        )
+
+        _crps += torch.abs(x_i.squeeze(dim) - obs) / n
+        _crps -= torch.sum(torch.abs(x_i - x_j) / n, dim=dim) / n
     return _crps
 
 
@@ -122,6 +132,82 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     Phi = torch.erf(d / torch.sqrt(torch.as_tensor(2.0)))
 
     return std * (2 * phi + d * Phi - 1.0 / torch.sqrt(torch.as_tensor(torch.pi)))
+
+
+@torch.jit.script
+def _crps_from_empirical_cdf(
+    pred: torch.Tensor, obs: torch.Tensor, dim: int = 0
+) -> torch.Tensor:
+    """Compute the exact CRPS using the CDF method
+
+    Uses this formula
+        # int [F(x) - 1(x-y)]^2 dx
+
+    where F is the emperical CDF and 1(x-y) = 1 if x > y.
+
+    This method is more memory efficient than the kernel method, and uses O(n
+    log n) compute instead of O(n^2), where n is the number of ensemble members.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        tensor of ensemble members / predictions
+    obs : torch.Tensor
+        tensor of observations
+    dim : int
+        Dimension to perform CRPS reduction over.
+
+    Returns
+    -------
+        tensor of CRPS scores
+
+    """
+    n = pred.shape[dim]
+    device = pred.device
+    pred, _ = torch.sort(pred, dim=dim)
+    ans = torch.zeros_like(obs)
+
+    # dx [F(x) - H(x-y)]^2 = dx [0 - 1]^2 = dx
+    # val = ensemble[0] - truth
+    val = (
+        torch.index_select(
+            pred, dim, torch.tensor([0], device=device, dtype=torch.int32)
+        ).squeeze(dim)
+        - obs
+    )
+    ans += torch.where(val > 0, val, 0.0)
+
+    for i in range(n - 1):
+        x0 = torch.index_select(
+            pred, dim, torch.tensor([i], device=device, dtype=torch.int32)
+        ).squeeze(dim)
+        x1 = torch.index_select(
+            pred, dim, torch.tensor([i + 1], device=device, dtype=torch.int32)
+        ).squeeze(dim)
+
+        cdf = (i + 1) / n
+
+        # a. case y < x0
+        val = (x1 - x0) * (cdf - 1) ** 2
+        mask = obs < x0
+        ans += torch.where(mask, val, 0.0)
+
+        # b. case x0 <= y <= x1
+        val = (obs - x0) * cdf**2 + (x1 - obs) * (cdf - 1) ** 2
+        mask = (obs >= x0) & (obs <= x1)
+        ans += torch.where(mask, val, 0.0)
+
+        # c. case x1 < t
+        mask = obs > x1
+        val = (x1 - x0) * cdf**2
+        ans += torch.where(mask, val, 0.0)
+
+    # dx [F(x) - H(x-y)]^2 = dx [1 - 0]^2 = dx
+    val = obs - torch.index_select(
+        pred, dim, torch.tensor([n - 1], device=device, dtype=torch.int32)
+    ).squeeze(dim)
+    ans += torch.where(val > 0, val, 0.0)
+    return ans
 
 
 def _crps_from_cdf(
@@ -291,15 +377,17 @@ def crps(
     Tensor
         Map of CRPS
     """
-    if method not in ["kernel", "histogram"]:
+    if method not in ["kernel", "sort", "histogram"]:
         raise ValueError("Method must either be 'kernel' or 'histogram'.")
 
     n = pred.shape[dim]
-    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
     obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
     if method == "kernel":
-        return kcrps(pred, obs, dim=0)
+        return kcrps(pred, obs, dim=dim)
+    elif method == "sort":
+        return _crps_from_empirical_cdf(pred, obs, dim=dim)
     else:
+        pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
         number_of_bins = max(int(np.sqrt(n)), 100)
         bin_edges, cdf = cdf_function(pred, bins=number_of_bins)
         _crps = _crps_from_cdf(bin_edges, cdf, obs)
