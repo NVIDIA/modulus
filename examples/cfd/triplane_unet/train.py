@@ -191,10 +191,8 @@ def train(config: DictConfig, signal_handler: SignalHandler):
     torch.cuda.device(device)
     wp.set_device(str(device))
 
-    # Print out logs to check arguments in SLURM job
-    logger.info(f"Config summary:\n{OmegaConf.to_yaml(config, sort_keys=True)}")
-
     loggers = init_logger(config)
+    logger.info(f"Config summary:\n{OmegaConf.to_yaml(config, sort_keys=True)}")
 
     # Initialize the model
     model = instantiate(config.model)
