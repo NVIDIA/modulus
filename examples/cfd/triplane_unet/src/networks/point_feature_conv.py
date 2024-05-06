@@ -16,9 +16,6 @@
 
 from typing import List, Literal, Optional
 
-
-# TODO(akamenev): migration
-# import open3d.ml.torch as ml3d
 import torch
 import torch.nn as nn
 from jaxtyping import Float
@@ -292,13 +289,15 @@ class PointFeatureConv(BaseModule):
             )
         # repeat the self features using num_reps
         self_features = torch.repeat_interleave(
-            out_point_features.features.view(-1, out_num_channels), num_reps, dim=0
+            out_point_features.features.view(-1, out_num_channels).contiguous(),
+            num_reps,
+            dim=0,
         )
         edge_features = [rep_in_features, self_features]
         if self.use_rel_pos or self.use_rel_pos_encode:
             in_rep_vertices = in_point_features.vertices.view(-1, 3)[neighbors_index]
             self_vertices = torch.repeat_interleave(
-                out_point_features.vertices.view(-1, 3), num_reps, dim=0
+                out_point_features.vertices.view(-1, 3).contiguous(), num_reps, dim=0
             )
             if self.use_rel_pos_encode:
                 edge_features.append(
