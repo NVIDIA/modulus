@@ -61,14 +61,15 @@ torchrun --nproc-per-node=\$(nvidia-smi -L | wc -l) train.py ${ARGS};"
 # The status file (SLURM_JOB_ID.txt) will be updated with the current status of the job. If it is STOPPED, resubmit the job to continue training.
 # The training script will be run with the arguments provided to the sbatch command.
 
-# Check if the status file exists
-if [ ! -f ${SLURM_JOB_ID}.txt ]; then
+# Check if the status file exists at outputs/${SLURM_JOB_ID}/status.txt
+STATUS_FILE="outputs/${SLURM_JOB_ID}/status.txt"
+if [ ! -f ${STATUS_FILE} ]; then
     echo "Status file not found. Exiting..."
     exit 1
 fi
 
 # Read the status
-STATUS=$(cat ${SLURM_JOB_ID}.txt)
+STATUS=$(cat ${STATUS_FILE})
 # If the status is STOPPED or RUNNING, resubmit the job
 # When the job killed abruptly, the status will be RUNNING
 echo "Job finished with status: ${STATUS}"
