@@ -41,18 +41,35 @@ from src.data.mesh_utils import (
 # Air density = 1.205 kg/m^3
 # Stream velocity = 30 m/s
 DRIVAERNET_AIR_DENSITY = 1.205
-DRIVAERNET_STREAM_VELOCITY = 38.8889
-# DrivAerNet pressure mean and std
-DRIVAERNET_PRESSURE_MEAN = -150.13066236223494
-DRIVAERNET_PRESSURE_STD = 229.1046667362158
+DRIVAERNET_STREAM_VELOCITY = 30.0
 DRIVAERNET_AIR_COEFF = 2 / (DRIVAERNET_AIR_DENSITY * DRIVAERNET_STREAM_VELOCITY**2)
+
+# DrivAerNet pressure mean and std
+DRIVAERNET_PRESSURE_MEAN = -94.5
+DRIVAERNET_PRESSURE_STD = 117.25
 
 
 class DrivAerNetPreprocessor:
+    """DrivAerNet preprocessor"""
+
+    KEY_MAPPING: dict[str, str] = {
+        "Average Cd": "c_d",
+        "Average Cl": "c_l",
+        "Average Cl_f": "c_lf",
+        "Average Cl_r": "c_lr",
+        "pressure": "time_avg_pressure",
+    }
+
     def __init__(self, num_points: int = 16384) -> None:
         self.num_points = num_points
+        self.normalizer = UnitGaussianNormalizer(
+            DRIVAERNET_PRESSURE_MEAN,
+            DRIVAERNET_PRESSURE_STD,
+        )
 
     def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
+        sample = {self.KEY_MAPPING.get(k, k): v for k, v in sample.items()}
+
         if self.num_points > 0:
             # Randomly sample points
             vertices = sample["cell_centers"]
@@ -66,20 +83,28 @@ class DrivAerNetPreprocessor:
                 ):
                     sample[k] = v[point_sample_idx]
 
+        # compute bbox center
+        vertices = sample["cell_centers"]
+        obj_min = np.min(vertices, axis=0)
+        obj_max = np.max(vertices, axis=0)
+        obj_center = (obj_min + obj_max) / 2.0
+        vertices = vertices - obj_center
+        sample["cell_centers"] = vertices
+        sample["time_avg_pressure_whitened"] = self.normalizer.encode(
+            sample["time_avg_pressure"]
+        )
+
         return sample
 
 
 class DrivAerNetDragPreprocessor:
-    def __init__(self) -> None:
-        pass
-
     def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
         # Compute drag coefficient using area, normal, pressure and wall shear stress
         drag_coef = compute_drag_coefficient(
             sample["cell_normals"],
             sample["cell_areas"],
             DRIVAERNET_AIR_COEFF / sample["proj_area_x"],
-            sample["pressure"],
+            sample["time_avg_pressure"],
             sample["wall_shear_stress"],
         )
         # sample["c_d"] is computed on a finer mesh and the newly computed drag is on a coarser mesh so they are not equal
@@ -195,6 +220,7 @@ class DrivAerNetDataset(Dataset):
             **coeffs.to_dict(),
             "pressure": mesh.point_data["p"],
             "wall_shear_stress": wss,
+            "design": key,
         }
 
         return self.preprocessors(sample)
@@ -224,6 +250,9 @@ class DrivAerNetDataModule(BaseDataModule):
             "test",
             preprocessors=preprocessors,
         )
+
+        # TODO(akamenev): refactor.
+        self.normalizer = next(iter(preprocessors)).normalizer
 
     def encode(self, x):
         return self.normalizer.encode(x)
