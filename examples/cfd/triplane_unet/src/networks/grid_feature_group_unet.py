@@ -181,7 +181,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
         )
 
         self.grid_pools = GridFeatureGroupPool(
-            in_channels=hidden_channels[-1],
+            in_channels=hidden_channels[num_levels],
             out_channels=mlp_channels[0],
             compressed_spatial_dims=self.compressed_spatial_dims,
         )

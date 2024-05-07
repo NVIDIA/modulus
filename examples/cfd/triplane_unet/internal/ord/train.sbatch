@@ -4,6 +4,8 @@
 #SBATCH --account coreai_climate_earth2
 #SBATCH --cpus-per-task=16
 #SBATCH --signal=USR1@300
+#SBATCH --output=outputs/%j.out
+#SBATCH --error=outputs/%j.err
 
 # Example usage:
 # 
