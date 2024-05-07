@@ -15,7 +15,9 @@
 # limitations under the License.
 
 import torch
+from torch import Tensor
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 # loss function with rel/abs Lp loss
@@ -88,3 +90,18 @@ class TruncatedMSELoss(nn.Module):
             return loss.sum()
         else:
             return loss
+
+
+class R2Loss(nn.Module):
+    """
+    Compute the R^2 loss.
+    """
+
+    def __init__(self, epsilon: float = 1e-6):
+        super().__init__()
+        self.epsilon = epsilon
+
+    def forward(self, y_true: Tensor, y_pred: Tensor):
+        ss_res = ((y_true - y_pred) ** 2).sum()
+        ss_tot = ((y_true - y_true.mean()) ** 2).sum()
+        return ss_res / (ss_tot + self.epsilon)

@@ -86,6 +86,9 @@ class PointFeatures:
         return self
 
     def expand_batch_size(self, batch_size: int):
+        if batch_size == 1:
+            return self
+
         # contiguous tensor is required for view operation
         self.vertices = self.vertices.expand(batch_size, -1, -1).contiguous()
         self.features = self.features.expand(batch_size, -1, -1).contiguous()
@@ -111,6 +114,11 @@ class PointFeatures:
         down_vertices = torch.stack([vert[:min_len] for vert in down_vertices], dim=0)
         down_features = torch.stack([feat[:min_len] for feat in down_features], dim=0)
         return PointFeatures(down_vertices, down_features)
+
+    def contiguous(self):
+        self.vertices = self.vertices.contiguous()
+        self.features = self.features.contiguous()
+        return self
 
     def __add__(self, other):
         assert self.batch_size == other.batch_size

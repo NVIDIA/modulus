@@ -14,9 +14,58 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+from typing import List
 
+import time
 import numpy as np
+from jaxtyping import Float
+
+import torch
+from torch import Tensor
+import torch.distributed as dist
+
+
+def all_gather_size(
+    tensor: Float[Tensor, "*"] = None, flatten: bool = True
+) -> List[int]:
+    """
+    All gather tensor size
+    """
+    world_size = dist.get_world_size()
+    rank = dist.get_rank()
+    if tensor is not None:
+        tensor_size = [s for s in tensor.size()]
+    else:
+        tensor_size = [0]
+    output = [None for _ in range(world_size)]
+    dist.all_gather_object(output, tensor_size)
+    return output
+
+
+def all_gather_tensor(
+    tensor: Float[Tensor, "*"], flatten: bool
+) -> List[Float[Tensor, "*"]]:
+    """
+    All gather tensor with different sizes
+    """
+    assert tensor is not None
+    if not isinstance(tensor, torch.Tensor):
+        tensor = torch.tensor(tensor)
+
+    # if backend nccl
+    if dist.get_backend() == "nccl":
+        tensor = tensor.cuda()
+
+    if flatten:
+        tensor = tensor.flatten()
+    all_sizes = all_gather_size(tensor)
+    # create empty tensors
+    output = [
+        torch.empty(tuple(size), dtype=tensor.dtype, device=tensor.device)
+        for size in all_sizes
+    ]
+    dist.all_gather(output, tensor)
+    return output
 
 
 class AverageMeter:
@@ -52,6 +101,44 @@ class AverageMeterDict:
         self.count = {}
         self.max = {}
         self._private_attributes = {}
+
+    def all_gather_attributes(self):
+        """
+        All gather private attributes to a tensor
+        """
+        # Check if dist is initialized
+        for k, v in self._private_attributes.items():
+            if isinstance(v, list) and isinstance(v[0], torch.Tensor):
+                v = torch.cat(v)
+                self._private_attributes[k] = v
+
+            if dist.is_initialized():
+                self._private_attributes[k] = torch.cat(
+                    all_gather_tensor(v.cuda(), flatten=True)
+                ).cpu()
+
+        if dist.is_initialized():
+            # Merge sum, count, max and compute avg
+            for k in self.sum.keys():
+                self.sum[k] = (
+                    torch.cat(all_gather_tensor(self.sum[k], flatten=True))
+                    .cpu()
+                    .sum()
+                    .item()
+                )
+                self.count[k] = (
+                    torch.cat(all_gather_tensor(self.count[k], flatten=True))
+                    .cpu()
+                    .sum()
+                    .item()
+                )
+                self.max[k] = (
+                    torch.cat(all_gather_tensor(self.max[k], flatten=True))
+                    .cpu()
+                    .max()
+                    .item()
+                )
+                self.avg[k] = self.sum[k] / self.count[k]
 
     def update(self, val, n=1):
         """update"""

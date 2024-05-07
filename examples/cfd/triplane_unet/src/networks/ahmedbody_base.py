@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import matplotlib
 import numpy as np
 import torch
+from torch import Tensor
 
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
@@ -27,6 +28,7 @@ from .base_model import BaseModel
 
 from src.networks.net_utils import SinusoidalEncoding
 from src.utils.visualization import fig_to_numpy
+from src.utils.eval_funcs import eval_all_metrics
 
 
 def rel_l2(pred, gt):
@@ -112,15 +114,40 @@ class AhmedBodyBase(BaseModel):
 
         normalized_gt = data_dict["normalized_pressure"].to(self.device).reshape(1, -1)
         out_dict = {"l2": loss_fn(pred_press, normalized_gt)}
-        gt_drag = data_dict["c_d"].to(self.device).view_as(pred_drag)
-        out_dict["drag_loss"] = loss_fn(pred_drag, gt_drag)
 
-        # compute relative difference
-        out_dict["drag_diff"] = torch.abs(pred_drag - gt_drag).mean()
-        out_dict["drag_rel_diff"] = (
-            torch.abs(pred_drag - gt_drag) / torch.abs(gt_drag)
-        ).mean()
+        # Pressure evaluation
+        out_dict.update(
+            eval_all_metrics(normalized_gt, pred_press, prefix="norm_pressure")
+        )
+        # collect all drag outputs. All _ prefixed keys are collected in the meter
+        gt_drag = data_dict["c_d"].float()
+        out_dict["_gt_drag"] = gt_drag.cpu().flatten()
+        out_dict["_pred_drag"] = pred_drag.detach().cpu().flatten()
         return out_dict
+
+    def post_eval_epoch(
+        self,
+        eval_dict: dict,
+        image_dict: dict,
+        pointcloud_dict: dict,
+        private_attributes: dict,
+        datamodule,
+        **kwargs,
+    ) -> Tuple[Dict, Dict, Dict]:
+        """
+        Post evaluation epoch hook for computing all evaluation statistics that
+        are collected in the private attibutes.
+        """
+        # compute drag evaluation
+        gt_drag: List[Tensor] = private_attributes["_gt_drag"]
+        pred_drag: List[Tensor] = private_attributes["_pred_drag"]
+
+        # Concatenate all the drag values
+        gt_drag = torch.cat(gt_drag)
+        pred_drag = torch.cat(pred_drag)
+
+        eval_dict.update(eval_all_metrics(gt_drag, pred_drag, prefix="drag"))
+        return eval_dict, image_dict, pointcloud_dict
 
     def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
         vertices, features = self.data_dict_to_input(data_dict)

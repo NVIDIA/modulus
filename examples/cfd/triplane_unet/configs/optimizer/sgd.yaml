@@ -1,5 +1,3 @@
-# @package _global_
-
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -16,38 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-defaults:
-  - /data: ahmed
-  - /model: triplane_unet_ahmed
-  - /loss: mseloss
-  - /optimizer: adam
-  - /lr_scheduler: steplr
-  - /loss@eval.loss: mseloss
-
-train:
-  batch_size: 1
-
-data:
-  num_points: 65536  # 2 ** 16
-
-model:
-  num_levels: 1
-  kernel_size: 11
-  hidden_channels:
-    - 32
-    - 32
-  resolution_memory_format_pairs:
-    - ${res_mem_pair:b_xc_y_z, [  6, 70, 60]}
-    - ${res_mem_pair:b_yc_x_z, [186,  2, 60]}
-    - ${res_mem_pair:b_zc_x_y, [186, 70,  2]}
-
-lr_scheduler:
-  step_size: 25
-
-loggers:
-  wandb:
-    project_name: ahmed_body
-    entity: nvr-ai-algo
-    run_name: TriplaneUNet-level1-32-res186-70-60-ks11
-
-seed: 0
+_target_: torch.optim.SGD
+lr: 0.1

@@ -181,7 +181,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
         )
 
         self.grid_pools = GridFeatureGroupPool(
-            in_channels=hidden_channels[-1],
+            in_channels=hidden_channels[num_levels],
             out_channels=mlp_channels[0],
             compressed_spatial_dims=self.compressed_spatial_dims,
         )
@@ -288,6 +288,7 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
         neighbor_search_type: Literal["knn", "radius"] = "knn",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        drag_loss_weight: Optional[float] = None,
     ):
         DrivAerBase.__init__(self)
 
@@ -322,6 +323,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
         )
 
         self.vertex_to_point_features = vertex_to_point_features
+        if drag_loss_weight is not None:
+            self.drag_loss_weight = drag_loss_weight
 
     def data_dict_to_input(self, data_dict):
         return DrivAerBase.data_dict_to_input(self, data_dict)

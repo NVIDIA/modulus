@@ -40,7 +40,9 @@ from src.utils import rank0
 from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
+from src.utils.signal_handlers import SignalHandler
 from src.networks.point_feature_ops import GridFeaturesMemoryFormat
+
 
 logger = logging.getLogger("tpunet")
 
@@ -75,14 +77,6 @@ def _save_state(model, optimizer, scheduler, scaler, epoch, tot_iter, config):
     # Save the file with 0000X format
     torch.save(state_dict, save_path)
     _delete_previous_checkpoints(config)
-
-
-@rank0
-def _save_status(output_dir: str, status: str):
-    """Writes the status to the output directory to status.txt file."""
-
-    with open(os.path.join(output_dir, "status.txt"), "w", encoding="utf-8") as f:
-        f.write(status)
 
 
 def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
@@ -168,6 +162,9 @@ def eval(model, datamodule, config, loss_fn=None):
             for k, v in image_dict.items():
                 merged_image_dict[f"{k}_{i}"] = v
 
+    # Aggregate all counts, sums, avgs, and private attributes if distributed
+    eval_meter.all_gather_attributes()
+
     eval_dict = eval_meter.avg
 
     # Post process the eval dict
@@ -176,7 +173,7 @@ def eval(model, datamodule, config, loss_fn=None):
             eval_dict,
             merged_image_dict,
             merged_point_cloud_dict,
-        ) = model.model().post_eval_epoch(
+        ) = model.post_eval_epoch(
             eval_dict,
             merged_image_dict,
             merged_point_cloud_dict,
@@ -188,7 +185,7 @@ def eval(model, datamodule, config, loss_fn=None):
     return eval_dict, merged_image_dict, merged_point_cloud_dict
 
 
-def train(config: DictConfig):
+def train(config: DictConfig, signal_handler: SignalHandler):
     dist = DistributedManager()
 
     # Initialize the device. Allow device override only in non-distributed setting.
@@ -197,9 +194,7 @@ def train(config: DictConfig):
     torch.cuda.device(device)
     wp.set_device(str(device))
 
-    # Initialize the loggers first.
     loggers = init_logger(config)
-
     logger.info(f"Config summary:\n{OmegaConf.to_yaml(config, sort_keys=True)}")
 
     # Initialize the model
@@ -248,19 +243,6 @@ def train(config: DictConfig):
         dtype=hydra.utils.get_object(config.amp.autocast.dtype),
     )
 
-    # If time_limit is set, break the training loop before the time limit
-    average_epoch_time = 0
-    if config.train.time_limit is not None:
-        # time limit is the form hh:mm:ss
-        time_limit = sum(
-            int(x) * 60**i
-            for i, x in enumerate(reversed(config.train.time_limit.split(":")))
-        )
-        logger.info(f"Time limit: {time_limit} seconds")
-        start_time = default_timer()
-    else:
-        time_limit = None
-
     # Resume if resume is True
     start_epoch = 0
     tot_iter = 0
@@ -268,6 +250,14 @@ def train(config: DictConfig):
         start_epoch, tot_iter = _resume_from_checkpoint(
             model, optimizer, scheduler, scaler, config
         )
+
+    # Eval first for debugging
+    if config.eval.run_eval_first and start_epoch == 0:
+        eval_dict, eval_images, eval_point_clouds = eval(
+            model.model(), datamodule, config, eval_loss_fn
+        )
+        for k, v in eval_dict.items():
+            logger.info(f"First Eval: {k}: {v:.4f}")
 
     for ep in range(start_epoch, config.train.num_epochs):
         model.train()
@@ -277,6 +267,11 @@ def train(config: DictConfig):
         datamodule.set_epoch(train_loader, ep)
 
         for data_dict in train_loader:
+            # Check if the signal is received
+            if signal_handler.is_stopped():
+                logger.debug("Signal received. Breaking the training loop.")
+                break
+
             optimizer.zero_grad()
 
             with autocast():
@@ -339,7 +334,11 @@ def train(config: DictConfig):
         loggers.log_scalar("train/epoch_train_l2", train_l2_meter.avg, tot_iter)
         loggers.log_scalar("train/train_epoch_duration", t2 - t1, tot_iter)
 
-        if ep % config.eval.interval == 0 or ep == config.train.num_epochs - 1:
+        if (
+            ep % config.eval.interval == 0
+            or ep == config.train.num_epochs - 1
+            and (not signal_handler.is_stopped())
+        ):
             eval_dict, eval_images, eval_point_clouds = eval(
                 model.model(), datamodule, config, eval_loss_fn
             )
@@ -355,47 +354,53 @@ def train(config: DictConfig):
                     )
 
         # Save the weights, optimization state, and scheduler state into one file
-        if ep % config.train.save_interval == 0:
+        if ep % config.train.save_interval == 0 or signal_handler.is_stopped():
             # save the model
             _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
 
-        # Update average epoch time
-        if average_epoch_time == 0:
-            average_epoch_time = t2 - t1
-        else:
-            average_epoch_time = (t2 - t1) * 0.1 + average_epoch_time * 0.9
+        # Exit the training loop if the signal handler is stopped.
+        if signal_handler.is_stopped():
+            break
 
-        # Break the training loop if the time limit is reached
-        if time_limit is not None:
-            if default_timer() - start_time + 2 * average_epoch_time > time_limit:
-                logger.info(
-                    f"Time limit {time_limit} seconds reached. Breaking the training loop."
-                )
-                # Save model and status.
-                _save_state(model, optimizer, scheduler, scaler, ep, tot_iter, config)
-                _save_status(config.output, "resuming")
-                sys.exit(0)
-
-    # Save the final model
-    _save_state(
-        model,
-        optimizer,
-        scheduler,
-        scaler,
-        config.train.num_epochs - 1,
-        tot_iter,
-        config,
-    )
-    _save_status(config.output, "finished")
+    # Save the final model if the training loop was not stopped by the signal handler.
+    if not signal_handler.is_stopped():
+        _save_state(
+            model,
+            optimizer,
+            scheduler,
+            scaler,
+            config.train.num_epochs - 1,
+            tot_iter,
+            config,
+        )
 
 
-def _init_python_logging(config: DictConfig):
-    # Hydra config contains properly resolved absolute path.
-    config.output = HydraConfig.get().runtime.output_dir
+def _slurm_setup(config: DictConfig) -> None:
+    # Detect if it is running on a SLURM cluster.
+    if "SLURM_JOB_ID" in os.environ:
+        # The output directory is set to simply outputs/SLURM_JOB_ID.
+        config.output = to_absolute_path(
+            os.path.join("outputs", os.environ["SLURM_JOB_ID"])
+        )
+        # Check for the checkpoints and model_*.pth files in the output directory.
+        if os.path.exists(config.output) and any(
+            f.startswith("model_") and f.endswith(".pth")
+            for f in os.listdir(config.output)
+        ):
+            config.train.resume = True
+    else:
+        # Hydra config contains properly resolved absolute path.
+        config.output = HydraConfig.get().runtime.output_dir
+
+
+def _init_python_logging(config: DictConfig) -> None:
     if config.log_dir is None:
         config.log_dir = config.output
     else:
         config.log_dir = to_absolute_path(config.log_dir)
+
+    # Make the log dir
+    os.makedirs(config.log_dir, exist_ok=True)
 
     # Set up Python loggers.
     if pylog_cfg := OmegaConf.select(config, "logging.python"):
@@ -411,13 +416,16 @@ def _init_python_logging(config: DictConfig):
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="base")
 def main(config: DictConfig):
+    _slurm_setup(config)
+
     _init_python_logging(config)
 
     # Set the random seed.
     if config.seed is not None:
         set_seed(config.seed)
 
-    train(config)
+    with SignalHandler(status_path=config.signal_handler.status_path) as signal_handler:
+        train(config, signal_handler)
 
 
 def _init_hydra_resolvers():
