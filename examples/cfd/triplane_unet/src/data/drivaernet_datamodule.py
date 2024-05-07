@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 import yaml
@@ -22,9 +23,69 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 
+import torch
 from torch.utils.data import Dataset
 
 from src.data.base_datamodule import BaseDataModule
+from src.data.components.preprocessor_utils import (
+    ComposePreprocessors,
+    UnitGaussianNormalizer,
+)
+from src.data.mesh_utils import (
+    compute_drag_coefficient,
+)
+
+
+# TODO: need to update/check these values.
+# DrivAerNet dataset
+# Air density = 1.205 kg/m^3
+# Stream velocity = 30 m/s
+DRIVAERNET_AIR_DENSITY = 1.205
+DRIVAERNET_STREAM_VELOCITY = 38.8889
+# DrivAerNet pressure mean and std
+DRIVAERNET_PRESSURE_MEAN = -150.13066236223494
+DRIVAERNET_PRESSURE_STD = 229.1046667362158
+DRIVAERNET_AIR_COEFF = 2 / (DRIVAERNET_AIR_DENSITY * DRIVAERNET_STREAM_VELOCITY**2)
+
+
+class DrivAerNetPreprocessor:
+    def __init__(self, num_points: int = 16384) -> None:
+        self.num_points = num_points
+
+    def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
+        if self.num_points > 0:
+            # Randomly sample points
+            vertices = sample["cell_centers"]
+            point_sample_idx = np.random.choice(
+                len(vertices), self.num_points, replace=True
+            )
+
+            for k, v in sample.items():
+                if (isinstance(v, np.ndarray) and v.size > 1) or (
+                    isinstance(v, torch.Tensor) and v.numel() > 1
+                ):
+                    sample[k] = v[point_sample_idx]
+
+        return sample
+
+
+class DrivAerNetDragPreprocessor:
+    def __init__(self) -> None:
+        pass
+
+    def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
+        # Compute drag coefficient using area, normal, pressure and wall shear stress
+        drag_coef = compute_drag_coefficient(
+            sample["cell_normals"],
+            sample["cell_areas"],
+            DRIVAERNET_AIR_COEFF / sample["proj_area_x"],
+            sample["pressure"],
+            sample["wall_shear_stress"],
+        )
+        # sample["c_d"] is computed on a finer mesh and the newly computed drag is on a coarser mesh so they are not equal
+        sample["c_d_computed"] = drag_coef
+
+        return sample
 
 
 class DrivAerNetDataset(Dataset):
@@ -39,6 +100,7 @@ class DrivAerNetDataset(Dataset):
         data_path: str | Path,
         phase: str,
         coeff_filename: str = "coefficients.csv",
+        preprocessors: Iterable[Callable] = None,
     ) -> None:
         """Initializes the dataset."""
 
@@ -48,11 +110,16 @@ class DrivAerNetDataset(Dataset):
                 f"Path {self.data_path} does not exist or is not a directory."
             )
         self.p_vtk_path = self.data_path / "SurfacePressureVTK"
+        self.wss_vtk_path = self.data_path / "WallShearStressVTK"
 
         self.phase = phase.lower()
         phases = ["train", "val", "test"]
         if phase not in phases:
             raise ValueError(f"{phase = } is not supported, must be one of {phases}.")
+
+        if preprocessors is None:
+            preprocessors = []
+        self.preprocessors = ComposePreprocessors(list(preprocessors))
 
         # Load phase ids used to select a corresponding data split.
         with open(self.data_path / f"{phase}_design_ids.txt", encoding="utf-8") as f:
@@ -69,7 +136,7 @@ class DrivAerNetDataset(Dataset):
         proj_areas = pd.DataFrame.from_dict(
             {k.removeprefix("combined_").removesuffix(".stl"): v for k, v in y.items()},
             orient="index",
-            columns=["proj_area"],
+            columns=["proj_area_x"],
         )
         # Merge projected areas into the coeffs dataframe.
         coeffs = coeffs.join(proj_areas)
@@ -96,8 +163,13 @@ class DrivAerNetDataset(Dataset):
         coeffs = self.coeffs.iloc[index]
 
         key = coeffs.name
+
+        # Read pressure and WSS data.
         p_vtk_file = self.p_vtk_path / (key + ".vtk")
         mesh = pv.read(p_vtk_file)
+
+        wss_vtk_file = self.wss_vtk_path / (key + ".vtk")
+        wss = pv.read(wss_vtk_file).point_data["wallShearStress"]
 
         # Estimate normals.
         mesh.compute_normals(
@@ -115,30 +187,86 @@ class DrivAerNetDataset(Dataset):
             cell_normals / np.linalg.norm(cell_normals, axis=1)[:, np.newaxis]
         )
 
-        return {
+        sample = {
             "mesh_nodes": np.array(mesh.points),
             "cell_centers": cell_centers,
             "cell_areas": cell_sizes,
             "cell_normals": cell_normals,
             **coeffs.to_dict(),
+            "pressure": mesh.point_data["p"],
+            "wall_shear_stress": wss,
         }
 
+        return self.preprocessors(sample)
 
-def test_drivaernet_dataset(phase: str):
-    dset = DrivAerNetDataset(
-        "/data/src/modulus/data/triplane_unet/DrivAerNet",
-        phase,
-    )
-    return dset
+
+class DrivAerNetDataModule(BaseDataModule):
+    """DrivAerNet data module."""
+
+    def __init__(
+        self,
+        data_path: str | Path,
+        preprocessors: Iterable[Callable] = None,
+        **kwargs,
+    ):
+        self._train_dataset = DrivAerNetDataset(
+            data_path,
+            "train",
+            preprocessors=preprocessors,
+        )
+        self._val_dataset = DrivAerNetDataset(
+            data_path,
+            "val",
+            preprocessors=preprocessors,
+        )
+        self._test_dataset = DrivAerNetDataset(
+            data_path,
+            "test",
+            preprocessors=preprocessors,
+        )
+
+    def encode(self, x):
+        return self.normalizer.encode(x)
+
+    def decode(self, x):
+        return self.normalizer.decode(x)
+
+    @property
+    def train_dataset(self):
+        return self._train_dataset
+
+    @property
+    def val_dataset(self):
+        return self._val_dataset
+
+    @property
+    def test_dataset(self):
+        return self._test_dataset
+
+
+def test_drivaernet_datamodule(data_path: str):
+    preprocs = [DrivAerNetPreprocessor()]
+
+    dm = DrivAerNetDataModule(data_path, preprocessors=preprocs)
+
+    for x in dm.train_dataloader():
+        break
+
+
+def test_drivaernet_dataset(data_path: str, phase: str, size: int):
+    dset = DrivAerNetDataset(data_path, phase)
+    assert len(dset) == size
+
+    x = dset[0]
+    assert isinstance(x, dict)
 
 
 if __name__ == "__main__":
-    train_dset = test_drivaernet_dataset("train")
-    assert len(train_dset) == 2768
-    x = train_dset[0]
-
-    val_dset = test_drivaernet_dataset("val")
-    assert len(val_dset) == 593
-
-    test_dset = test_drivaernet_dataset("test")
-    assert len(test_dset) == 595
+    data_path = "/data/src/modulus/data/triplane_unet/DrivAerNet"
+    test_mod = True
+    if test_mod:
+        test_drivaernet_datamodule(data_path)
+    else:
+        test_drivaernet_dataset(data_path, "train", 2768)
+        test_drivaernet_dataset(data_path, "val", 593)
+        test_drivaernet_dataset(data_path, "test", 595)

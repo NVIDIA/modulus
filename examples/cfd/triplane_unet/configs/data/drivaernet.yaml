@@ -14,8 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .base_datamodule import BaseDataModule
-from .ahmedbody_datamodule import AhmedBodyDataModule
-from .drivaer_datamodule import DrivAerDataModule
-from .drivaernet_datamodule import DrivAerNetDataModule
-from .modelnet_datamodule import ModelNet40DataModule
+_target_: src.data.DrivAerNetDataModule
+_convert_: all
+
+data_path: ???
+num_points: 32768  # 2^15
+
+preprocessors:
+    - _target_: src.data.drivaernet_datamodule.DrivAerNetPreprocessor
+      num_points: ${...num_points}
+
+    - _target_: src.data.drivaernet_datamodule.DrivAerNetDragPreprocessor
