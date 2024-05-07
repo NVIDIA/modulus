@@ -82,12 +82,8 @@ class DrivAerBase(BaseModel):
         are collected in the private attibutes.
         """
         # compute drag evaluation
-        gt_drag: List[Tensor] = private_attributes["_gt_drag"]
-        pred_drag: List[Tensor] = private_attributes["_pred_drag"]
-
-        # Concatenate all the drag values
-        gt_drag = torch.cat(gt_drag)
-        pred_drag = torch.cat(pred_drag)
+        gt_drag: Tensor = private_attributes["_gt_drag"]
+        pred_drag: Tensor = private_attributes["_pred_drag"]
 
         eval_dict.update(eval_all_metrics(gt_drag, pred_drag, prefix="drag"))
         return eval_dict, image_dict, pointcloud_dict

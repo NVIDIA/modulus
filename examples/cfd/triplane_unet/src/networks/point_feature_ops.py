@@ -86,6 +86,9 @@ class PointFeatures:
         return self
 
     def expand_batch_size(self, batch_size: int):
+        if batch_size == 1:
+            return self
+
         # contiguous tensor is required for view operation
         self.vertices = self.vertices.expand(batch_size, -1, -1).contiguous()
         self.features = self.features.expand(batch_size, -1, -1).contiguous()
