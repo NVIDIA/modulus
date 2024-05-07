@@ -32,6 +32,7 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
     Computes:
+    .. math::
         CRPS(X, y) = E[X - y] - 0.5 E[X-X']
 
     Parameters
@@ -54,12 +55,10 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
     device = pred.device
     _crps = 0.0 * obs
     for i in range(n):
-        # x_i = pred[i]
         x_i = torch.index_select(
             pred, dim, torch.tensor([i], device=device, dtype=torch.int32)
         )
 
-        # x_j = pred[i:]
         x_j = torch.index_select(
             pred,
             dim,
@@ -141,7 +140,8 @@ def _crps_from_empirical_cdf(
     """Compute the exact CRPS using the CDF method
 
     Uses this formula
-        # int [F(x) - 1(x-y)]^2 dx
+    .. math::
+        \\int [F(x) - 1(x-y)]^2 dx
 
     where F is the emperical CDF and 1(x-y) = 1 if x > y.
 
@@ -222,7 +222,7 @@ def _crps_from_cdf(
 
     .. math::
 
-        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx
+        CRPS(X, y) = \\int[ (F(x) - 1[x - y])^2 ] dx
 
     where F is the empirical cdf of X.
 
@@ -344,20 +344,9 @@ def crps(
     pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0, method: str = "kernel"
 ) -> Tensor:
     """
-    Computes the local Continuous Ranked Probability Score (CRPS) by either
-    computing a histogram and CDF of the predictions, or using the kernel definition.
+    Computes the local Continuous Ranked Probability Score (CRPS).
 
-    Creates a map of CRPS and does not accumulate over lat/lon regions.
-
-    Computes:
-
-    .. math::
-
-        CRPS(x, y) = E[X-y] - 0.5*E[X-X'] if B < 100
-        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx otherwise
-
-    where F is the empirical cdf of X.
-
+    Creates a map of CRPS and does not accumulate over any other dimensions (e.g., lat/lon regions).
 
     Parameters
     ----------
@@ -370,7 +359,33 @@ def crps(
         Dimension with which to calculate the CRPS over, the ensemble dimension.
         Assumed to be zero.
     method: str, Optional
-        The method to calculate the crps. Can either be "kernel" or "histogram".
+        The method to calculate the crps. Can either be "kernel", "sort" or "histogram".
+
+        The "kernel" method implements
+        .. math::
+            CRPS(x, y) = E[X-y] - 0.5*E[X-X']
+
+        This method scales as O(n^2) where n is the number of ensemble members and
+        can potentially induce large memory consumption as the algorithm attempts
+        to vectorize over this O(n^2) operation.
+
+        The "sort" method compute the exact CRPS using the CDF method
+        .. math::
+            CRPS(x, y) = int [F(x) - 1(x-y)]^2 dx
+
+        where F is the empirical CDF and 1(x-y) = 1 if x > y.
+
+        This method is more memory efficient than the kernel method, and uses O(n
+        log n) compute instead of O(n^2), where n is the number of ensemble members.
+
+        The "histogram" method computes an approximate CRPS using the CDF method
+        .. math::
+            CRPS(x, y) = int [F(x) - 1(x-y)]^2 dx
+
+        where F is the empirical CDF, estimated via a histogram of the samples. The
+        number of bins used is the lesser of the square root of the number of samples
+        and 100. For more control over the implementation of this method consider using
+        `cdf_function` to construct a cdf and `_crps_from_cdf` to compute CRPS.
 
     Returns
     -------
@@ -378,7 +393,7 @@ def crps(
         Map of CRPS
     """
     if method not in ["kernel", "sort", "histogram"]:
-        raise ValueError("Method must either be 'kernel' or 'histogram'.")
+        raise ValueError("Method must either be 'kernel', 'sort' or 'histogram'.")
 
     n = pred.shape[dim]
     obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
