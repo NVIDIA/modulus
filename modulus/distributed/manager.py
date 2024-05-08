@@ -359,23 +359,23 @@ class DistributedManager(object):
             else:
                 manager._local_rank = local_rank
 
+        manager._device = torch.device(
+            f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
+        )
+
+        if manager._distributed:
             # Setup distributed process group
             dist.init_process_group(
                 backend, rank=manager.rank, world_size=manager.world_size
             )
 
-        manager._device = torch.device(
-            f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
-        )
-        # Needed for cuda graphs
         if torch.cuda.is_available():
-            torch.cuda.set_device(manager.local_rank)
+            # Set device for this process and empty cache to optimize memory usage
+            torch.cuda.set_device(manager.device)
+            torch.cuda.device(manager.device)
+            torch.cuda.empty_cache()
 
         manager._initialization_method = method
-
-        # Set device for this process and empty cache to optimize memory usage
-        torch.cuda.device(manager.device)
-        torch.cuda.empty_cache()
 
     @staticmethod
     def create_process_subgroup(

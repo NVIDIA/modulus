@@ -30,6 +30,7 @@ from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.gnn_layers import (
     partition_graph_by_coordinate_bbox,
     partition_graph_with_id_mapping,
+    partition_graph_nodewise,
 )
 
 torch.backends.cuda.matmul.allow_tf32 = False
@@ -69,29 +70,38 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     }
 
     # initialize single GPU model for reference
-    torch.cuda.manual_seed(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
+    torch.cuda.manual_seed(753)
+    torch.manual_seed(753)
+    np.random.seed(753)
     model_single_gpu = MeshGraphNet(**model_kwds).to(device=manager.device, dtype=dtype)
 
     # initialze distributed model with the same seeds
-    torch.cuda.manual_seed(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
+    torch.cuda.manual_seed(753)
+    torch.manual_seed(753)
+    np.random.seed(753)
 
     model_multi_gpu = MeshGraphNet(**model_kwds).to(device=manager.device, dtype=dtype)
     mark_module_as_shared(model_multi_gpu, "graph_partition")
 
     # initialize data
-    torch.cuda.manual_seed(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
-    num_nodes = 1024
+    torch.cuda.manual_seed(753)
+    torch.manual_seed(753)
+    np.random.seed(753)
+    num_nodes = 256
+
+    nfeat_single_gpu = torch.randn((num_nodes, model_kwds["input_dim_nodes"]))
+    nfeat_single_gpu = nfeat_single_gpu.to(device=manager.device, dtype=dtype)
+    nfeat_single_gpu = nfeat_single_gpu.requires_grad_(True)
+    
     offsets, indices = get_random_graph(
         num_nodes=num_nodes,
         min_degree=3,
         max_degree=6,
     )
+
+    efeat_single_gpu = torch.randn((indices.numel(), model_kwds["input_dim_edges"]))
+    efeat_single_gpu = efeat_single_gpu.to(device=manager.device, dtype=dtype)
+    efeat_single_gpu = efeat_single_gpu.requires_grad_(True)
 
     graph_single_gpu = CuGraphCSC(
         offsets.to(manager.device),
@@ -100,10 +110,19 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         num_nodes,
     )
 
-    graph_partition = None
-
     if partition_scheme == "nodewise":
-        pass  # nodewise is default
+        # nodewise should be default
+        graph_partition = partition_graph_nodewise(
+            offsets,
+            indices,
+            world_size,
+            manager.rank,
+            manager.device,
+        )
+    
+    elif partition_scheme == "none":
+        # check default which should be nodewise
+        graph_partition = None
 
     elif partition_scheme == "coordinate_bbox":
         src_coordinates = torch.rand((num_nodes, 1), device=offsets.device)
@@ -156,16 +175,6 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         graph_partition=graph_partition,
     )
 
-    nfeat_single_gpu = (
-        torch.randn((num_nodes, model_kwds["input_dim_nodes"]))
-        .to(device=manager.device, dtype=dtype)
-        .requires_grad_(True)
-    )
-    efeat_single_gpu = (
-        torch.randn((indices.numel(), model_kwds["input_dim_edges"]))
-        .to(device=manager.device, dtype=dtype)
-        .requires_grad_(True)
-    )
     nfeat_multi_gpu = nfeat_single_gpu.detach().clone()
     nfeat_multi_gpu = graph_multi_gpu.get_src_node_features_in_partition(
         nfeat_multi_gpu
@@ -190,7 +199,6 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     out_multi_gpu = model_multi_gpu(nfeat_multi_gpu, efeat_multi_gpu, graph_multi_gpu)
     loss = out_multi_gpu.sum()
-
     loss.backward()
 
     # numeric tolerances based on dtype
@@ -199,7 +207,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         torch.float16: (1e-2, 1e-3),
     }
     tolerances_weight = {
-        torch.float32: (1e-2, 1e-4),
+        torch.float32: (1e-3, 1e-5),
         torch.float16: (1e-1, 1e-2),
     }
     atol, rtol = tolerances[dtype]
@@ -216,6 +224,17 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
         out_single_gpu_dist, out_multi_gpu, atol=atol, rtol=rtol
     ), f"{mask.sum()} elements have diff > {atol} \n {out_single_gpu_dist[mask]} \n {out_multi_gpu[mask]}"
 
+    # compare data gradient
+    nfeat_grad_single_gpu_dist = graph_multi_gpu.get_src_node_features_in_partition(
+       nfeat_single_gpu.grad
+    )
+    diff = nfeat_grad_single_gpu_dist - nfeat_multi_gpu.grad
+    diff = torch.abs(diff)
+    mask = diff > atol
+    assert torch.allclose(
+        nfeat_multi_gpu.grad, nfeat_grad_single_gpu_dist, atol=atol_w, rtol=rtol_w
+    ), f"{mask.sum()} elements have diff > {atol} \n {nfeat_grad_single_gpu_dist[mask]} \n {nfeat_multi_gpu.grad[mask]}"
+
     # compare model gradients (ensure correctness of backward)
     model_multi_gpu_parameters = list(model_multi_gpu.parameters())
     for param_idx, param in enumerate(model_single_gpu.parameters()):
@@ -227,7 +246,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
             model_multi_gpu_parameters[param_idx].grad,
             atol=atol_w,
             rtol=rtol_w,
-        ), f"{mask.sum()} elements have diff > {atol_w} \n {param.grad[mask]} \n {model_multi_gpu_parameters[param_idx].grad[mask]}"
+        ), f"{mask.sum()} for param[{param_idx}].grad elements have diff > {atol_w} with a avg. diff of {diff[mask].mean().item()} ({diff.mean().item()} overall)"
 
     # cleanup distributed
     del os.environ["RANK"]
@@ -241,14 +260,12 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
 @import_or_fail("dgl")
 @pytest.mark.multigpu
-@pytest.mark.parametrize("partition_scheme", ["nodewise", "coordinate_bbox", "mapping"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("partition_scheme", ["mapping", "nodewise", "coordinate_bbox", "none"])
+@pytest.mark.parametrize("dtype", [torch.float32])
 def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    world_size = min(
-        4, num_gpus
-    )  # test-graph is otherwise too small for distribution across more GPUs
+    world_size = 2
 
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,

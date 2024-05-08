@@ -30,6 +30,7 @@ from modulus.distributed.autograd import (
 
 def run_test_scatter_v(rank, world_size):
     os.environ["RANK"] = f"{rank}"
+    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -63,6 +64,7 @@ def run_test_scatter_v(rank, world_size):
         assert torch.allclose(tensor.grad, expected_grad)
 
     del os.environ["RANK"]
+    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
@@ -72,6 +74,7 @@ def run_test_scatter_v(rank, world_size):
 
 def run_test_gather_v(rank, world_size):
     os.environ["RANK"] = f"{rank}"
+    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -110,6 +113,7 @@ def run_test_gather_v(rank, world_size):
     assert torch.allclose(tensor.grad, expected_grad)
 
     del os.environ["RANK"]
+    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
@@ -119,6 +123,7 @@ def run_test_gather_v(rank, world_size):
 
 def run_test_all_gather_v(rank, world_size):
     os.environ["RANK"] = f"{rank}"
+    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -154,6 +159,7 @@ def run_test_all_gather_v(rank, world_size):
     assert torch.allclose(tensor.grad, expected_grad)
 
     del os.environ["RANK"]
+    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
@@ -163,6 +169,7 @@ def run_test_all_gather_v(rank, world_size):
 
 def run_test_indexed_all_to_all_v(rank, world_size):
     os.environ["RANK"] = f"{rank}"
+    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -206,6 +213,7 @@ def run_test_indexed_all_to_all_v(rank, world_size):
     assert torch.allclose(tensor.grad, expected_grad)
 
     del os.environ["RANK"]
+    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
@@ -247,4 +255,8 @@ def test_indexed_all_to_all_v():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    # pytest.main([__file__])
+    run_test_autograd_prim(run_test_scatter_v)
+    run_test_autograd_prim(run_test_gather_v)
+    run_test_autograd_prim(run_test_all_gather_v)
+    run_test_autograd_prim(run_test_indexed_all_to_all_v)

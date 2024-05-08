@@ -409,6 +409,7 @@ def main(
             verbose=True,
         )
     else:
+        world_size = 1
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
@@ -585,7 +586,11 @@ def main(
         ]
     else:
         gather_list = []
-    torch.distributed.gather(max_mem, gather_list, dst=0)
+
+    if DistributedManager().distributed:
+        torch.distributed.gather(max_mem, gather_list, dst=0)
+    else:
+        max_mem = gather_list[0]
 
     if dist_manager.rank == 0:
         if train:
@@ -599,7 +604,8 @@ def main(
         ) as f:
             json.dump(metrics, f)
 
-    DistributedManager.cleanup()
+    if DistributedManager().distributed:
+        DistributedManager.cleanup()
 
 
 if __name__ == "__main__":
