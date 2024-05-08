@@ -165,11 +165,6 @@ class ScatterVAutograd(torch.autograd.Function):
         ctx.dim = dim
         ctx.src = src
         ctx.group = group
-        ctx.tensor_meta_data = {
-            "device": tensor.device,
-            "dtype": tensor.dtype,
-            "size": tensor.size(),
-        }
         return scattered_tensor
 
     @staticmethod
@@ -179,15 +174,6 @@ class ScatterVAutograd(torch.autograd.Function):
         grad_tensor = gather_v_wrapper(
             grad_output, ctx.sizes, dim=ctx.dim, dst=ctx.src, group=ctx.group
         )
-
-        # for scatter, only tensor at rank == src must be valid
-        # to not break the backward pass due to not-matching gradients
-        # we create a "dummy" gradient on other ranks if input tensor
-        # is passed with a certain shape
-        if (dist.get_rank(group=ctx.group) != ctx.src) and (
-            grad_tensor.size() != ctx.tensor_meta_data["size"]
-        ):
-            grad_tensor = torch.empty(**ctx.tensor_meta_data)
 
         if not ctx.needs_input_grad[0]:
             grad_tensor = None

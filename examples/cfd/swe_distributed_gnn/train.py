@@ -218,7 +218,8 @@ def train_model(
 
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=True)
-            gscaler.scale(loss).backward()
+            if dist_manager.rank == 0:
+                gscaler.scale(loss).backward()
             gscaler.step(optimizer)
             gscaler.update()
 
@@ -315,7 +316,8 @@ def train_model_on_dummy_data(
 
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=True)
-            gscaler.scale(loss).backward()
+            if dist_manager.rank == 0:
+                gscaler.scale(loss).backward()
             gscaler.step(optimizer)
             gscaler.update()
 
@@ -364,7 +366,7 @@ def main(
     mesh_size: int = 6,
     dummy_data: bool = False,
     seed: int = 1234,
-    root_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
     loss_fn: str = "l2",
     enable_amp: bool = False,
     hidden_dim: int = 128,
@@ -431,8 +433,10 @@ def main(
     if dist_manager.rank == 0:
         print(f"starting to run ...")
 
+    mesh_base_path = os.path.dirname(os.path.realpath(__file__))
+    meshgraph_path = os.path.join(mesh_base_path, f"./icospheres_{mesh_size}.json")
     model = GraphCastNet(
-        meshgraph_path=f"./icospheres_{mesh_size}.json",
+        meshgraph_path=meshgraph_path,
         static_dataset_path=None,
         input_res=input_res,
         input_dim_grid_nodes=3,
@@ -460,8 +464,8 @@ def main(
         mark_module_as_shared(model, graph_partition_pg_name)
 
     # iterate over models and train each model
-    if root_path is None:
-        root_path = os.path.dirname(__file__)
+    if output_dir is None:
+        output_dir = os.path.dirname(__file__)
 
     num_params = count_parameters(model)
     # prepare dicts containing models and corresponding metrics
@@ -473,7 +477,7 @@ def main(
 
     if load_checkpoint:
         model.load_state_dict(
-            torch.load(os.path.join(root_path, run_suffix, "checkpoints", "model.pt"))
+            torch.load(os.path.join(output_dir, run_suffix, "checkpoints", "model.pt"))
         )
 
     # 1 hour prediction steps
@@ -531,17 +535,17 @@ def main(
         training_time = time.time() - start_time
 
         if dist_manager.rank == 0:
-            os.makedirs(os.path.join(root_path, run_suffix, "figures"), exist_ok=True)
+            os.makedirs(os.path.join(output_dir, run_suffix, "figures"), exist_ok=True)
             os.makedirs(
-                os.path.join(root_path, run_suffix, "output_data"), exist_ok=True
+                os.path.join(output_dir, run_suffix, "output_data"), exist_ok=True
             )
             if save_checkpoint:
                 os.makedirs(
-                    os.path.join(root_path, run_suffix, "checkpoints"), exist_ok=True
+                    os.path.join(output_dir, run_suffix, "checkpoints"), exist_ok=True
                 )
                 torch.save(
                     model.state_dict(),
-                    os.path.join(root_path, run_suffix, "checkpoints", "model.pt"),
+                    os.path.join(output_dir, run_suffix, "checkpoints", "model.pt"),
                 )
 
     # skip inference for dummy_data
@@ -554,7 +558,7 @@ def main(
             losses, fno_times, nwp_times = autoregressive_inference(
                 model,
                 dataset,
-                os.path.join(root_path, run_suffix, "figures"),
+                os.path.join(output_dir, run_suffix, "figures"),
                 dist_manager=dist_manager,
                 loss_fn=loss_fn,
                 nsteps=nsteps,
@@ -591,7 +595,7 @@ def main(
             metrics[f"max_memory_reserved_gib"] = max_mem[:, 1].tolist()
 
         with open(
-            os.path.join(root_path, run_suffix, "output_data", "metrics.json"), "w"
+            os.path.join(output_dir, run_suffix, "output_data", "metrics.json"), "w"
         ) as f:
             json.dump(metrics, f)
 
@@ -601,11 +605,9 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh_size", type=int, default=6)
-    # for quick debugging, directly launches training with 1 epoch
-    # and 64 examples and adds suffix _short to log assets
     parser.add_argument("--dummy_data", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--root_path", type=str, default=None)
+    parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--loss", type=str, default="l2")
     parser.add_argument("--hidden_dim", type=int, default=128)
     parser.add_argument("--processor_layers", type=int, default=16)
@@ -620,7 +622,7 @@ if __name__ == "__main__":
         mesh_size=args.mesh_size,
         dummy_data=args.dummy_data,
         seed=args.seed,
-        root_path=args.root_path,
+        output_dir=args.output_dir,
         loss_fn=args.loss,
         hidden_dim=args.hidden_dim,
         processor_layers=args.processor_layers,

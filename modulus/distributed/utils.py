@@ -431,6 +431,19 @@ def gather_v_wrapper(
 
     dist.all_to_all(x_recv, x_send, group=group)
 
+    # TODO: clean gather/scatter and some examples up
+    # main question is around whether e.g. gather returns
+    # None for rank != dst or an empty dummy or an dummy
+    # containing meta-information like dtype/etc..
+    if rank != dst:
+        for r in range(comm_size):
+            tensor_shape[dim] = sizes[r]
+            x_recv[r] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+
     output = torch.cat(x_recv, dim=dim)
 
     return output
@@ -478,28 +491,6 @@ def scatter_v_wrapper(
         raise ValueError()
     if not (0 <= src < comm_size):
         raise ValueError()
-
-    # dist.scatter doesn't support tensors of different shape
-    # so this implementation is using explicit send/recv combinations
-    # scatter_list = None
-    # if rank == src:
-    #     scatter_list = torch.split(tensor, sizes, dim=dim)
-    #     scatter_list = [t.contiguous() for t in scatter_list]
-    #     req_list = [None] * comm_size
-    #     for r in range(comm_size):
-    #         tensor_to_scatter_to_r = scatter_list[r]
-    #         if r == src:
-    #             output = tensor_to_scatter_to_r
-    #         else:
-    #             req_list[r] = dist.isend(tensor_to_scatter_to_r, dst=r, group=group)
-    #
-    #     for r in range(comm_size):
-    #        if r != src:
-    #             req_list[r].wait()
-    #
-    # else:
-    #     req = dist.irecv(output, src=src, group=group)
-    #     req.wait()
 
     # all_to_all is already all_to_all_v, use empty tensors to "mask"-out irrelevant parts
     tensor_shape = list(tensor.shape)
