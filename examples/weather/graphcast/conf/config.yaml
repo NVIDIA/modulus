@@ -37,6 +37,7 @@ cugraphops_processor: False
 cugraphops_decoder: False
 recompute_activation: False
 wb_mode: "disabled"
+synthetic_dataset: false
 dataset_path: "/data"
 static_dataset_path: "datasets/static"
 latlon_res: (721, 1440)
@@ -45,7 +46,7 @@ num_workers: 0  # 8
 num_channels: 3  # 34
 num_channels_val: 3
 num_val_steps: 8
-num_val_spy: 1  # SPY: Samples Per Year
+num_val_spy: 3  # SPY: Samples Per Year
 grad_clip_norm: 32.0
 jit: False
 amp: False
