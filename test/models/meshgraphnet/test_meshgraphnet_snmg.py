@@ -29,8 +29,8 @@ from pytest_utils import import_or_fail
 from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.gnn_layers import (
     partition_graph_by_coordinate_bbox,
-    partition_graph_with_id_mapping,
     partition_graph_nodewise,
+    partition_graph_with_id_mapping,
 )
 
 torch.backends.cuda.matmul.allow_tf32 = False
@@ -92,7 +92,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     nfeat_single_gpu = torch.randn((num_nodes, model_kwds["input_dim_nodes"]))
     nfeat_single_gpu = nfeat_single_gpu.to(device=manager.device, dtype=dtype)
     nfeat_single_gpu = nfeat_single_gpu.requires_grad_(True)
-    
+
     offsets, indices = get_random_graph(
         num_nodes=num_nodes,
         min_degree=3,
@@ -119,7 +119,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
             manager.rank,
             manager.device,
         )
-    
+
     elif partition_scheme == "none":
         # check default which should be nodewise
         graph_partition = None
@@ -226,7 +226,7 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     # compare data gradient
     nfeat_grad_single_gpu_dist = graph_multi_gpu.get_src_node_features_in_partition(
-       nfeat_single_gpu.grad
+        nfeat_single_gpu.grad
     )
     diff = nfeat_grad_single_gpu_dist - nfeat_multi_gpu.grad
     diff = torch.abs(diff)
@@ -260,7 +260,9 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
 @import_or_fail("dgl")
 @pytest.mark.multigpu
-@pytest.mark.parametrize("partition_scheme", ["mapping", "nodewise", "coordinate_bbox", "none"])
+@pytest.mark.parametrize(
+    "partition_scheme", ["mapping", "nodewise", "coordinate_bbox", "none"]
+)
 @pytest.mark.parametrize("dtype", [torch.float32])
 def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
     num_gpus = torch.cuda.device_count()
