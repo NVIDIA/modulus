@@ -19,6 +19,7 @@ import torch
 from modulus.metrics.diffusion import (
     EDMLoss,
     VELoss,
+    VELoss_dfsr,
     VPLoss,
 )
 
@@ -265,3 +266,50 @@ def test_call_method_edm():
 #         fake_net, img_clean, img_lr, labels, mock_augment_pipe
 #     )
 #     assert isinstance(loss_value_with_augmentation, torch.Tensor)
+
+
+# VELoss_dfsr tests
+
+
+def test_veloss_dfsr_initialization():
+    loss_func = VELoss_dfsr()
+    assert loss_func.beta_schedule == "linear"
+    assert loss_func.beta_start == 0.0001
+    assert loss_func.beta_end == 0.02
+    assert loss_func.num_diffusion_timesteps == 1000
+    assert loss_func.num_timesteps == loss_func.betas.shape[0]
+
+    loss_func = VELoss_dfsr(
+        beta_start=0.0002, beta_end=0.01, num_diffusion_timesteps=500
+    )
+    assert loss_func.beta_start == 0.0002
+    assert loss_func.beta_end == 0.01
+
+
+def test_get_beta_schedule_method():
+    loss_func = VELoss_dfsr()
+
+    beta_schedule = "linear"
+    beta_start = 0.0001
+    beta_end = 0.02
+    num_diffusion_timesteps = 1000
+
+    betas = loss_func.get_beta_schedule(
+        beta_schedule=beta_schedule,
+        beta_start=beta_start,
+        beta_end=beta_end,
+        num_diffusion_timesteps=num_diffusion_timesteps,
+    )
+    betas = torch.from_numpy(betas).float()
+    assert num_diffusion_timesteps == betas.shape[0]
+
+
+def test_call_method_ve_dfsr():
+    loss_func = VELoss_dfsr()
+
+    images = torch.tensor([[[[1.0]]]])
+    labels = None
+
+    # Without augmentation
+    loss_value = loss_func(fake_net, images, labels)
+    assert isinstance(loss_value, torch.Tensor)

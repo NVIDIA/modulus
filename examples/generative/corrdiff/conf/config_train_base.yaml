@@ -14,10 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: True
-
 
 ## Hyperparameters
 duration: 200
@@ -43,7 +39,7 @@ hr_mean_conditioning: False
 gridtype: "sinusoidal"
   # can be either linear, sinusoidal, or learnable
 N_grid_channels: 4
-grad_clip_threshold: None
+grad_clip_threshold: false
   # no gradient clipping for defualt non-patch-based training
 lr_decay: 1
 
@@ -57,6 +53,8 @@ bench: false
   # Enable cuDNN benchmarking
 workers: 4
   # DataLoader worker processes
+songunet_checkpoint_level: 0 # 0 means no checkpointing
+  # Gradient checkpointing level, value is number of layers to checkpoint
 
 
 ## I/O-related options
@@ -80,17 +78,14 @@ wandb_mode: online
   # Weights & biases mode [online, ofline, disabled]
 wandb_project:  "Modulus-Generative"
  # Weights & biases project
-wandb_group: "CorrDiff-DDP-Group"
- # Weights & biases group
-wandb_entity: "CorrDiff-DDP-Group"
+wandb_entity: "CorrDiff"
  # Weights & biases entity (i.e. a workspace, personal or a team workspace)
-wandb_name: "CorrDiff"
- # Weights & biases name
 
 
 ## Weather data options
 dataset:
   type: cwb
+  train_test_split: false
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
@@ -105,4 +100,9 @@ dataset:
   global_means_path: null
   global_stds_path: null
   normalization: "v1"
-  train_test_split: false
+
+# Validation dataset options
+# (need to set dataset.train_test_split == true to have an effect)
+validation_dataset:
+  train: false
+  all_times: false

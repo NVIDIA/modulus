@@ -14,7 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .activations import Identity, SquarePlus, Stan, get_activation
+from .activations import (
+    CappedGELU,
+    CappedLeakyReLU,
+    Identity,
+    SquarePlus,
+    Stan,
+    get_activation,
+)
 from .dgm_layers import DGMLayer
 from .fourier_layers import FourierFilter, FourierLayer, GaborFilter
 from .fully_connected_layers import (

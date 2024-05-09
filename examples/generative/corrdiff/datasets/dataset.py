@@ -33,8 +33,13 @@ def init_train_valid_datasets_from_config(
     dataloader_cfg: Union[dict, None] = None,
     batch_size: int = 1,
     seed: int = 0,
-    train_test_split: str = True,
-) -> Tuple[base.DownscalingDataset, Iterable, base.DownscalingDataset, Iterable]:
+    validation_dataset_cfg: Union[dict, None] = None,
+) -> Tuple[
+    base.DownscalingDataset,
+    Iterable,
+    Union[base.DownscalingDataset, None],
+    Union[Iterable, None],
+]:
     """
     A wrapper function for managing the train-test split for the CWB dataset.
 
@@ -50,16 +55,16 @@ def init_train_valid_datasets_from_config(
     """
 
     config = copy.deepcopy(dataset_cfg)
-    config.pop("train_test_split", None)
+    train_test_split = config.pop("train_test_split", False)
     (dataset, dataset_iter) = init_dataset_from_config(
         config, dataloader_cfg, batch_size=batch_size, seed=seed
     )
     if train_test_split:
-        validation_dataset_cfg = copy.deepcopy(config)
-        validation_dataset_cfg["all_times"] = False
-        validation_dataset_cfg["train"] = False
+        valid_dataset_cfg = copy.deepcopy(config)
+        if validation_dataset_cfg is not None:
+            valid_dataset_cfg.update(validation_dataset_cfg)
         (valid_dataset, valid_dataset_iter) = init_dataset_from_config(
-            validation_dataset_cfg, dataloader_cfg, batch_size=batch_size, seed=seed
+            valid_dataset_cfg, dataloader_cfg, batch_size=batch_size, seed=seed
         )
     else:
         valid_dataset = valid_dataset_iter = None
@@ -73,8 +78,11 @@ def init_dataset_from_config(
     batch_size: int = 1,
     seed: int = 0,
 ) -> Tuple[base.DownscalingDataset, Iterable]:
-
+    dataset_cfg = copy.deepcopy(dataset_cfg)
     dataset_type = dataset_cfg.pop("type", "cwb")
+    if "train_test_split" in dataset_cfg:
+        # handled by init_train_valid_datasets_from_config
+        del dataset_cfg["train_test_split"]
     dataset_init_func = known_datasets[dataset_type]
 
     dataset_obj = dataset_init_func(**dataset_cfg)
