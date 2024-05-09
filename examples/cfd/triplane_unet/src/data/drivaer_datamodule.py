@@ -35,7 +35,7 @@ except ImportError:
         "Could not import ensightreader. Please install it from `pip install ensight-reader`"
     )
 
-from src.data.base_datamodule import BaseDataModule
+from src.data.base_datamodule import WebdatasetDataModule
 from src.data.components import (
     DrivAerPreprocessingFunctor,
     DrivAerDragPreprocessingFunctor,
@@ -233,7 +233,7 @@ class DrivAerDataset(Dataset):
         }
 
 
-class DrivAerDataModule(BaseDataModule):
+class DrivAerDataModule(WebdatasetDataModule):
     def __init__(
         self,
         data_path: Union[Path, str],
@@ -305,40 +305,6 @@ class DrivAerDataModule(BaseDataModule):
 
     def decode(self, x):
         return self.normalizer.decode(x)
-
-    @property
-    def train_dataset(self):
-        return self._train_dataset
-
-    @property
-    def val_dataset(self):
-        return self._val_dataset
-
-    @property
-    def test_dataset(self):
-        return self._test_dataset
-
-    def _create_dataloader(self, dataset: wds.DataPipeline, **kwargs) -> wds.WebLoader:
-        # Handle shuffling and batching.
-        stages = []
-        if (buf_size := kwargs.pop("shuffle_buffer_size", 0)) or kwargs.pop(
-            "shuffle", False
-        ):
-            stages.append(wds.shuffle(buf_size if buf_size > 0 else 100))
-
-        batch_size = kwargs.pop("batch_size", 1)
-        stages.append(
-            wds.batched(batch_size, collation_fn=torch.utils.data.default_collate)
-        )
-
-        # Create dataloader from the pipeline.
-        # Use `compose` to avoid changing the original dataset.
-        return wds.WebLoader(
-            dataset.compose(*stages),
-            batch_size=None,
-            shuffle=False,
-            **kwargs,
-        )
 
 
 def test_datamodule(

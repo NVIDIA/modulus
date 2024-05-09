@@ -22,19 +22,19 @@ from pathlib import Path
 from typing import Dict, List, Literal, Optional, Union
 import webdataset as wds
 import numpy as np
-from src.data.drivaer_datamodule import DrivAerDataset
+from src.data.drivaernet_datamodule import DrivAerNetDataset
 from src.data.components.webdataset_utils import from_numpy
 from torch.multiprocessing import set_start_method
 
 
-class DrivAerToWebdataset:
+class DrivAerNetToWebdataset:
     """
-    Convert DrivAerDataset to a webdataset
+    Convert DrivAerNetDataset to a webdataset
     """
 
     def __init__(
         self,
-        dataset: DrivAerDataset,
+        dataset: DrivAerNetDataset,
         output_path: Union[str, Path],
         tarfile_name: str = "data.tar",
     ):
@@ -44,13 +44,12 @@ class DrivAerToWebdataset:
         self.temp_path = self.output_path / str(uuid.uuid4())[:8]
         self.temp_path.mkdir(exist_ok=True)
         print(
-            f"Saving DrivAerWebdataset to {self.temp_path} for {self.dataset.data_path} phase: {self.dataset.phase}, has_spoiler: {self.dataset.has_spoiler}"
+            f"Saving DrivAerNetWebdataset to {self.temp_path} for {self.dataset.data_path} phase: {self.dataset.phase}"
         )
         # Create a text file in the temp_path and print dataset information
         with open(self.temp_path / "info.txt", "w") as f:
             f.write(f"Dataset: {self.dataset.data_path}\n")
             f.write(f"Phase: {self.dataset.phase}\n")
-            f.write(f"Has spoiler: {self.dataset.has_spoiler}\n")
             f.write(f"Number of items: {len(self.dataset)}\n")
 
     def _save_item(self, idx: int):
@@ -88,7 +87,6 @@ class DrivAerToWebdataset:
 def convert_to_webdataset(
     data_path: str,
     out_path: Optional[str] = "~/datasets/drivaer_webdataset",
-    has_spoiler: Optional[bool] = False,
     phase: Optional[Literal["train", "val", "test"]] = "train",
     num_processes: Optional[int] = 8,
 ):
@@ -97,15 +95,14 @@ def convert_to_webdataset(
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
     # Create separate paths for train/text, with and without spoiler
-    print(f"Saving {phase} {'with' if has_spoiler else 'without'} spoiler")
-    dataset = DrivAerDataset(data_path, phase=phase, has_spoiler=has_spoiler)
+    dataset = DrivAerNetDataset(data_path, phase=phase)
     output_path = Path(out_path).expanduser()
     output_path.mkdir(exist_ok=True)
     # Save to numpy
-    DrivAerToWebdataset(
+    DrivAerNetToWebdataset(
         dataset,
         output_path,
-        tarfile_name=f"{phase}_{'spoiler' if has_spoiler else 'nospoiler'}.tar",
+        tarfile_name=f"{phase}.tar",
     ).save(num_processes=num_processes)
 
 

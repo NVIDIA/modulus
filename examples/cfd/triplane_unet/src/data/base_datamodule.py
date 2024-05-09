@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import webdataset as wds
+
+import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
@@ -71,3 +74,43 @@ class BaseDataModule:
             dataloader.sampler.set_epoch(epoch)
         except AttributeError:
             pass
+
+
+class WebdatasetDataModule(BaseDataModule):
+    """
+    Base class for webdataset
+    """
+
+    @property
+    def train_dataset(self):
+        return self._train_dataset
+
+    @property
+    def val_dataset(self):
+        return self._val_dataset
+
+    @property
+    def test_dataset(self):
+        return self._test_dataset
+
+    def _create_dataloader(self, dataset: wds.DataPipeline, **kwargs) -> wds.WebLoader:
+        # Handle shuffling and batching.
+        stages = []
+        if (buf_size := kwargs.pop("shuffle_buffer_size", 0)) or kwargs.pop(
+            "shuffle", False
+        ):
+            stages.append(wds.shuffle(buf_size if buf_size > 0 else 100))
+
+        batch_size = kwargs.pop("batch_size", 1)
+        stages.append(
+            wds.batched(batch_size, collation_fn=torch.utils.data.default_collate)
+        )
+
+        # Create dataloader from the pipeline.
+        # Use `compose` to avoid changing the original dataset.
+        return wds.WebLoader(
+            dataset.compose(*stages),
+            batch_size=None,
+            shuffle=False,
+            **kwargs,
+        )
