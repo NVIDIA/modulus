@@ -19,7 +19,13 @@ import random
 import pytest
 import torch
 
-from modulus.models.layers.activations import Identity, SquarePlus, Stan
+from modulus.models.layers.activations import (
+    CappedGELU,
+    CappedLeakyReLU,
+    Identity,
+    SquarePlus,
+    Stan,
+)
 
 from . import common
 
@@ -68,6 +74,56 @@ def test_activation_squareplus(device):
     tensor_dim = random.randint(1, 3)
     tensor_size = torch.randint(low=1, high=4, size=(tensor_dim,)).tolist()
     invar = torch.ones(*tensor_size, device=device)
+
+    outvar = func(invar)
+    assert common.compare_output(torch.ones_like(invar), outvar)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_activation_capped_leaky_relu(device):
+    """Test capped_gelu function in layers"""
+    func = CappedLeakyReLU(cap_value=1.0).to(device)
+    leaky_relu_func = torch.nn.LeakyReLU()
+
+    # check if identical to leaky relu below capped value
+    tensor_dim = random.randint(1, 3)
+    tensor_size = torch.randint(low=1, high=4, size=(tensor_dim,)).tolist()
+    invar = torch.randint(low=-5, high=1, size=tensor_size, device=device).to(
+        torch.float32
+    )
+
+    outvar = func(invar)
+    assert common.compare_output(leaky_relu_func(invar), outvar)
+
+    # check if value is capped properly
+    invar = torch.randint(low=1, high=5, size=tensor_size, device=device).to(
+        torch.float32
+    )
+
+    outvar = func(invar)
+    assert common.compare_output(torch.ones_like(invar), outvar)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_activation_capped_gelu(device):
+    """Test capped_gelu function in layers"""
+    func = CappedGELU(cap_value=1.0).to(device)
+    gelu_func = torch.nn.GELU()
+
+    # check if identical to gelu below capped value
+    tensor_dim = random.randint(1, 3)
+    tensor_size = torch.randint(low=1, high=4, size=(tensor_dim,)).tolist()
+    invar = torch.randint(low=-5, high=1, size=tensor_size, device=device).to(
+        torch.float32
+    )
+
+    outvar = func(invar)
+    assert common.compare_output(gelu_func(invar), outvar)
+
+    # check if value is capped properly
+    invar = torch.randint(low=2, high=5, size=tensor_size, device=device).to(
+        torch.float32
+    )
 
     outvar = func(invar)
     assert common.compare_output(torch.ones_like(invar), outvar)

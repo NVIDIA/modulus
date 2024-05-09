@@ -41,6 +41,9 @@ try:
 except ImportError:
     apex_imported = False
 
+from omegaconf import OmegaConf
+import argparse
+
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -69,8 +72,13 @@ def main(cfg: DictConfig) -> None:
     # Initialize config dict.
     c = EasyDict()
     c.dataset = cfg.dataset
+    if cfg.arch == "dfsr":
+        print("Training diffusion model for fluid data super-resolution.")
+        dataset_class_name = "dataset.KolmogorovFlowDataset"
+    else:
+        dataset_class_name = "dataset.ImageFolderDataset"
     c.dataset_kwargs = EasyDict(
-        class_name="dataset.ImageFolderDataset",
+        class_name=dataset_class_name,
         path=cfg.data,
         use_labels=cfg.cond,
         xflip=cfg.xflip,
@@ -156,6 +164,19 @@ def main(cfg: DictConfig) -> None:
             model_channels=128,
             channel_mult=[2, 2, 2],
         )
+    elif cfg.arch == "dfsr":  # two model types for fluid data super-resolution
+        c.network_kwargs.update(
+            model_type="SongUNet",
+            embedding_type="positional",
+            encoder_type="standard",
+            decoder_type="standard",
+        )
+        c.network_kwargs.update(
+            channel_mult_noise=1,
+            resample_filter=[1, 1],
+            model_channels=64,
+            channel_mult=[1, 1, 1, 2],
+        )
     else:
         assert cfg.arch == "adm"
         c.network_kwargs.update(
@@ -181,6 +202,14 @@ def main(cfg: DictConfig) -> None:
     # elif cfg.precond == 'resloss':
     #     c.network_kwargs.class_name = 'training.networks.EDMPrecond'
     #     c.loss_kwargs.class_name = 'training.loss.ResLoss'
+    elif cfg.precond == "dfsr":
+        # Configure model for fluid data super-resolution
+        c.network_kwargs.class_name = "modulus.models.diffusion.VEPrecond_dfsr"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr"
+    elif cfg.precond == "dfsr_cond":
+        # Configure model for physics-informed conditional fluid data super-resolution
+        c.network_kwargs.class_name = "modulus.models.diffusion.VEPrecond_dfsr_cond"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.VELoss_dfsr"
 
     # Network options.
     if cfg.cbase is not None:

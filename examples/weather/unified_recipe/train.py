@@ -14,26 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import os
-import hydra
-import wandb
-import matplotlib.pyplot as plt
 import time
+
 import fsspec
+import hydra
+import matplotlib.pyplot as plt
+import torch
+from torch import Tensor
 import zarr
-from omegaconf import DictConfig, OmegaConf, ListConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from torch import Tensor, nn
 from torch.nn.parallel import DistributedDataParallel
-from torch.cuda.amp import GradScaler
-from torch.optim.lr_scheduler import SequentialLR
-from torch import nn
+import torch.optim as torch_optimizers
 from tqdm import tqdm
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
 
 try:
-    from apex import optimizers
+    from apex import optimizers as apex_optimizers
 except:
     raise ImportError(
         "training requires apex package for optimizer."
@@ -42,19 +42,20 @@ except:
 
 from modulus import Module
 from modulus.distributed import DistributedManager
-from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
-    initialize_mlflow,
     RankZeroLoggingWrapper,
+    initialize_mlflow,
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 
 from seq_zarr_datapipe import SeqZarrDatapipe
+from model_packages import save_inference_model_package
 
 
-def batch_normalized_mse(pred: Tensor, target: Tensor) -> Union[Tensor, float]:
+def batch_normalized_mse(pred: Tensor, target: Tensor) -> Tensor:
     """Calculates batch-wise normalized mse error between two tensors."""
 
     pred_flat = pred.reshape(pred.size(0), -1)
@@ -91,7 +92,6 @@ def main(cfg: DictConfig) -> None:
     )
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
-    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
     # Initialize model
     model = Module.instantiate(
@@ -103,7 +103,6 @@ def main(cfg: DictConfig) -> None:
             },  # TODO: maybe mobe this conversion to resolver?
         }
     )
-    print(dist.device)
     model = model.to(dist.device)
 
     # Distributed learning
@@ -119,42 +118,46 @@ def main(cfg: DictConfig) -> None:
             )
         torch.cuda.current_stream().wait_stream(ddps)
 
-    # Initialize optimizer
+    # Initialize optimizer (TODO: unify optimizer handling)
+    if cfg.training.optimizer.framework == "apex":
+        optimizers = apex_optimizers
+    elif cfg.training.optimizer.framework == "torch":
+        optimizers = torch_optimizers
     OptimizerClass = getattr(optimizers, cfg.training.optimizer.name)
     optimizer = OptimizerClass(model.parameters(), **cfg.training.optimizer.args)
+
+    # Normalizer (TODO: Maybe wrap this into model)
+    predicted_batch_norm = nn.BatchNorm2d(
+        cfg.curated_dataset.nr_predicted_variables, momentum=None, affine=False
+    ).to(dist.device)
+    unpredicted_batch_norm = nn.BatchNorm2d(
+        cfg.curated_dataset.nr_unpredicted_variables, momentum=None, affine=False
+    ).to(dist.device)
+
+    def normalize_variables(variables, batch_norm):
+        shape = variables.shape
+        variables = variables.flatten(0, 1)
+        variables = batch_norm(variables)
+        variables = variables.view(shape)
+        return variables
 
     # Attempt to load latest checkpoint if one exists
     if dist.world_size > 1:
         torch.distributed.barrier()
     loaded_epoch = load_checkpoint(
         "./checkpoints",
-        models=model,
+        models=[model, predicted_batch_norm, unpredicted_batch_norm],
         optimizer=optimizer,
         scheduler=None,
         device=dist.device,
     )
 
-    # Initialize filesytem
-    if cfg.filesystem.type == "file":
-        fs = fsspec.filesystem(cfg.filesystem.type)
-    elif cfg.filesystem.type == "s3":
-        fs = fsspec.filesystem(
-            cfg.filesystem.type,
-            key=cfg.filesystem.key,
-            secret=os.environ["AWS_SECRET_ACCESS_KEY"],
-            client_kwargs={
-                "endpoint_url": cfg.filesystem.endpoint_url,
-                "region_name": cfg.filesystem.region_name,
-            },
-        )
-    else:
-        raise NotImplementedError(
-            f"Filesystem type {cfg.filesystem.type} not implemented"
-        )
+    # Initialize filesytem (TODO: Add multiple filesystem support)
+    fs = fsspec.filesystem("file")
 
     # Get filesystem mapper for datasets
-    train_dataset_mapper = fs.get_mapper(cfg.dataset.train_dataset_filename)
-    val_dataset_mapper = fs.get_mapper(cfg.dataset.val_dataset_filename)
+    train_dataset_mapper = fs.get_mapper(cfg.curated_dataset.train_dataset_filename)
+    val_dataset_mapper = fs.get_mapper(cfg.curated_dataset.val_dataset_filename)
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
@@ -167,21 +170,6 @@ def main(cfg: DictConfig) -> None:
         process_rank=dist.rank,
         world_size=dist.world_size,
     )
-
-    # Normalizer (TODO: Maybe wrap this into model)
-    predicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_predicted_variables, momentum=None, affine=False
-    ).to(dist.device)
-    unpredicted_batch_norm = nn.BatchNorm2d(
-        cfg.dataset.nr_unpredicted_variables, momentum=None, affine=False
-    ).to(dist.device)
-
-    def normalize_variables(variables, batch_norm):
-        shape = variables.shape
-        variables = variables.flatten(0, 1)
-        variables = batch_norm(variables)
-        variables = variables.view(shape)
-        return variables
 
     # Unroll network
     def unroll(
@@ -232,7 +220,9 @@ def main(cfg: DictConfig) -> None:
         return loss, net_predicted_variables, predicted_variables[:, nr_input_steps:]
 
     # Training forward pass
-    @StaticCaptureTraining(model=model, optim=optimizer, logger=logger)
+    @StaticCaptureTraining(
+        model=model, optim=optimizer, logger=logger, use_amp=cfg.training.amp_supported
+    )  # TODO: remove amp supported config after SFNO fixed
     def train_step_forward(
         model, predicted_variables, unpredicted_variables, nr_input_steps
     ):
@@ -281,8 +271,10 @@ def main(cfg: DictConfig) -> None:
         scheduler = SchedulerClass(optimizer, **stage.args)
 
         # Set scheduler to current step
+        scheduler.step(stage.num_epochs - num_epochs)
+
+        # Get current step for checking if max iterations is reached
         current_step = len(train_datapipe) * (stage.num_epochs - num_epochs)
-        scheduler.step(current_step)
 
         # Run number of epochs
         for epoch in range(num_epochs):
@@ -334,8 +326,11 @@ def main(cfg: DictConfig) -> None:
                     )
                     log.log_minibatch({"loss": loss.detach()})
 
-                    # Step scheduler
-                    scheduler.step()
+                    # Increment current step
+                    current_step += 1
+
+                # Step scheduler (each step is an epoch)
+                scheduler.step()
 
                 # Log learning rate
                 log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
@@ -427,14 +422,32 @@ def main(cfg: DictConfig) -> None:
                 # Use Modulus Launch checkpoint
                 save_checkpoint(
                     "./checkpoints",
-                    models=model,
+                    models=[model, predicted_batch_norm, unpredicted_batch_norm],
                     optimizer=optimizer,
                     scheduler=None,
                     epoch=epoch,
                 )
 
+                # Save model package
+                logger.info("Saving model card")
+                save_inference_model_package(
+                    model,
+                    cfg,
+                    predicted_variable_normalizer=predicted_batch_norm,
+                    unpredicted_variable_normalizer=unpredicted_batch_norm,
+                    latitude=zarr.open(cfg.dataset.dataset_filename, mode="r")[
+                        "latitude"
+                    ],
+                    longitude=zarr.open(cfg.dataset.dataset_filename, mode="r")[
+                        "longitude"
+                    ],
+                    save_path="./model_package_{}".format(cfg.experiment_name),
+                    readme="This is a model card for the global weather model.",
+                )
+
         # Finish training
         if dist.rank == 0:
+            # Save model card
             logger.info("Finished training!")
 
 

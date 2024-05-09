@@ -16,4 +16,4 @@
 # limitations under the License.
 
 
-from .dataset import ImageFolderDataset
+from .dataset import ImageFolderDataset, KolmogorovFlowDataset

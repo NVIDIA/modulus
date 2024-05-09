@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+amp_supported: !!bool False
 nr_input_steps: 1
 
 optimizer:
+  framework: apex
   name: FusedAdam
   args:
     lr: 0.0005
@@ -24,10 +26,10 @@ optimizer:
 
 stages:
   - name: "Cosine Annealing LR"
-    max_iterations: inf
+    max_iterations: .inf
     num_epochs: 100
     unroll_steps: 1
-    batch_size: 8
+    batch_size: 2
     lr_scheduler_name: CosineAnnealingLR
     args:
-      T_max: 150
+      T_max: 100

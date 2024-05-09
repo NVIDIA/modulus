@@ -57,17 +57,34 @@ class Module(torch.nn.Module):
 
     def __new__(cls, *args, **kwargs):
         out = super().__new__(cls)
+
+        # Get signature of __init__ function
         sig = inspect.signature(cls.__init__)
+
+        # Bind args and kwargs to signature
         bound_args = sig.bind_partial(
             *([None] + list(args)), **kwargs
         )  # Add None to account for self
         bound_args.apply_defaults()
-        bound_args.arguments.pop("self", None)
 
+        # Get args and kwargs (excluding self and unroll kwargs)
+        instantiate_args = {}
+        for param, (k, v) in zip(sig.parameters.values(), bound_args.arguments.items()):
+            # Skip self
+            if k == "self":
+                continue
+
+            # Add args and kwargs to instantiate_args
+            if param.kind == param.VAR_KEYWORD:
+                instantiate_args.update(v)
+            else:
+                instantiate_args[k] = v
+
+        # Store args needed for instantiation
         out._args = {
             "__name__": cls.__name__,
             "__module__": cls.__module__,
-            "__args__": {k: v for k, v in bound_args.arguments.items()},
+            "__args__": instantiate_args,
         }
         return out
 
@@ -254,7 +271,10 @@ class Module(torch.nn.Module):
                 )
 
     def load(
-        self, file_name: str, map_location: Union[None, str, torch.device] = None
+        self,
+        file_name: str,
+        map_location: Union[None, str, torch.device] = None,
+        strict: bool = True,
     ) -> None:
         """Simple utility for loading the model weights from checkpoint
 
@@ -264,6 +284,8 @@ class Module(torch.nn.Module):
             Checkpoint file name
         map_location : Union[None, str, torch.device], optional
             Map location for loading the model weights, by default None will use model's device
+        strict: bool, optional
+            whether to strictly enforce that the keys in state_dict match, by default True
 
         Raises
         ------
@@ -292,7 +314,7 @@ class Module(torch.nn.Module):
             model_dict = torch.load(
                 local_path.joinpath("model.pt"), map_location=device
             )
-            self.load_state_dict(model_dict)
+            self.load_state_dict(model_dict, strict=strict)
 
     @classmethod
     def from_checkpoint(cls, file_name: str) -> "Module":
