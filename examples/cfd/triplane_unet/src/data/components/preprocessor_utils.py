@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, List, Callable
 
 
 class ComposePreprocessors:
@@ -22,12 +22,13 @@ class ComposePreprocessors:
     Compose multiple preprocessors into a single callable object
     """
 
-    def __init__(self, preprocessors):
+    def __init__(self, preprocessors: Optional[List[Callable]] = None):
         self.preprocessors = preprocessors
 
     def __call__(self, sample: Mapping[str, Any]):
-        for preprocessor in self.preprocessors:
-            sample = preprocessor(sample)
+        if self.preprocessors is not None:
+            for preprocessor in self.preprocessors:
+                sample = preprocessor(sample)
         return sample
 
 

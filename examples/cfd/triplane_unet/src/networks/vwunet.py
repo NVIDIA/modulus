@@ -17,7 +17,7 @@
 from typing import List, Dict, Any, Optional
 
 from .base_model import BaseModel
-from .drivaer_base import DrivAerDragRegressionBase
+from .drivaer_base import DrivAerBase
 
 import unittest
 from enum import Enum
@@ -276,9 +276,9 @@ class VWUNet(BaseModel):
         return x, drag_x
 
 
-class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
+class VWUNetDrivAer(DrivAerBase, VWUNet):
     """
-    Same as VWUNet but with DrivAerDragRegressionBase for drag prediction loss
+    Same as VWUNet but for DrivAer
     """
 
     def __init__(
@@ -292,7 +292,7 @@ class VWUNetDrivAer(DrivAerDragRegressionBase, VWUNet):
         bbox_min: List[float] = [-1.0, -1.0, -1.0],
         bbox_max: List[float] = [1.0, 1.0, 1.0],
     ):
-        DrivAerDragRegressionBase.__init__(self)
+        DrivAerBase.__init__(self)
         VWUNet.__init__(
             self,
             in_channels,

@@ -72,7 +72,8 @@ class DrivAerNetPreprocessor:
     def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
         sample = {self.KEY_MAPPING.get(k, k): v for k, v in sample.items()}
         # Remove unnecessary keys
-        sample.pop("design")
+        if "design" in sample:
+            sample.pop("design")
 
         if self.num_points > 0:
             # Randomly sample points
@@ -230,12 +231,19 @@ class DrivAerNetDataModule(WebdatasetDataModule):
             data_path / "train.tar"
         ).exists(), f"{data_path} does not contain train.tar"
         self.data_path = data_path
+        if preprocessors is None:
+            preprocessors = []
         self.preprocessors = ComposePreprocessors(preprocessors)
         self._train_dataset = self._create_dataset("train")
         self._val_dataset = self._create_dataset("val")
         self._test_dataset = self._create_dataset("test")
-        # TODO(akamenev): refactor.
-        self.normalizer = next(iter(preprocessors)).normalizer
+        for preproc in preprocessors:
+            if hasattr(preproc, "normalizer"):
+                self.normalizer = preproc.normalizer
+        else:
+            self.normalizer = UnitGaussianNormalizer(
+                mean=DRIVAERNET_PRESSURE_MEAN, std=DRIVAERNET_PRESSURE_STD
+            )
 
     def _create_dataset(self, prefix: str) -> wds.DataPipeline:
         # Create dataset with the processing pipeline.

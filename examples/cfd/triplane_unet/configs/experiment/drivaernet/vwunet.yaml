@@ -14,12 +14,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.data.DrivAerNetDataModule
-_convert_: all
+defaults:
+  - /data: drivaernet_tdf
+  - /model: vwunet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
 
-data_path: ???
-num_points: 32768  # 2^15
+train:
+  num_epochs: 100
+  batch_size: 32
 
-preprocessors:
-    - _target_: src.data.drivaernet_datamodule.DrivAerNetPreprocessor
-      num_points: ${...num_points}
+data:
+  num_points: -1
+  # If using the TDF preprocessed webdatasets, no need to use any preprocessors
+  preprocessors: null
+
+model:
+  bbox_min:
+    - -2.5
+    - -2.5
+    - -2.5
+  bbox_max:
+    - 2.5
+    - 2.5
+    - 2.5
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: VWUNet
