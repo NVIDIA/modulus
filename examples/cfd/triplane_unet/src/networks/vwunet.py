@@ -14,18 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from .base_model import BaseModel
 from .drivaer_base import DrivAerBase
 
 import unittest
-from enum import Enum
+
+from torch import Tensor
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
 from .components.mlp import MLP
+from src.utils.eval_funcs import eval_all_metrics
 
 
 class ChannelSELayer3D(nn.Module):
@@ -311,10 +313,11 @@ class VWUNetDrivAer(DrivAerBase, VWUNet):
         sdf = data_dict["sdf"].unsqueeze(1)  # add channel dimension to BxCxHxWxD
         return sdf.to(self.device)
 
-    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+    def forward_and_sample_pressure(
+        self, data_dict, loss_fn=None, datamodule=None, **kwargs
+    ) -> Tuple[Tensor, Tensor]:
         sdf = self.data_dict_to_input(data_dict)
         normalized_pred, drag_pred = self(sdf)
-        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device)
 
         # BxNx3 vertices
         # Assume these are centered
@@ -333,6 +336,41 @@ class VWUNetDrivAer(DrivAerBase, VWUNet):
             align_corners=True,
         )  # Bx1xNx1x1x1
         # Bx1xNx1x1x1 -> BxN
+        normalized_pred = normalized_pred.view(normalized_pred.size(0), -1)
+        return normalized_pred, drag_pred
+
+    @torch.no_grad()
+    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        normalized_pred, drag_pred = self.forward_and_sample_pressure(
+            data_dict, loss_fn, datamodule, **kwargs
+        )
+        if loss_fn is None:
+            loss_fn = self.loss
+        normalized_gt = (
+            data_dict["time_avg_pressure_whitened"]
+            .to(self.device)
+            .view_as(normalized_pred)
+        )
+        out_dict = {"l2": loss_fn(normalized_pred, normalized_gt)}
+
+        pred = datamodule.decode(normalized_pred.clone())
+        gt = data_dict["time_avg_pressure"].to(self.device).view_as(pred)
+        out_dict["l2_decoded"] = loss_fn(pred, gt)
+        # Pressure evaluation
+        out_dict.update(
+            eval_all_metrics(normalized_gt, normalized_pred, prefix="norm_pressure")
+        )
+        # collect all drag outputs. All _ prefixed keys are collected in the meter
+        gt_drag = data_dict["c_d"].float()
+        out_dict["_gt_drag"] = gt_drag.cpu().flatten()
+        out_dict["_pred_drag"] = drag_pred.detach().cpu().flatten()
+        return out_dict
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        normalized_pred, drag_pred = self.forward_and_sample_pressure(
+            data_dict, loss_fn, datamodule, **kwargs
+        )
+        normalized_gt = data_dict["time_avg_pressure_whitened"].to(self.device)
         normalized_pred = normalized_pred.view(normalized_pred.size(0), -1)
 
         return_dict = {}
