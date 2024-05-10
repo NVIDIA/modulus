@@ -29,6 +29,43 @@ from src.utils.visualization import fig_to_numpy
 from src.utils.eval_funcs import eval_all_metrics
 
 
+def drivaer_create_subplot(ax, vertices, data, title):
+    # Flip along x axis
+    vertices = vertices.clone()
+    vertices[:, 0] = -vertices[:, 0]
+
+    sc = ax.scatter(
+        vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
+    )
+    # Make the colorbar smaller
+    # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+    # Show the numbers on the colorbar
+    cbar = plt.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+    cbar.set_label(title, rotation=270, labelpad=20)
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_aspect("equal")
+    # remove grid and background
+    ax.grid(False)
+    # ax.xaxis.pane.set_edgecolor('black')
+    # ax.yaxis.pane.set_edgecolor('black')
+    # remove bounding wireframe
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    # remove all ticks
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+
 class DrivAerBase(BaseModel):
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].float()  # (n_in, 3)
@@ -127,52 +164,12 @@ class DrivAerBase(BaseModel):
 
         # Plot
         fig = plt.figure(figsize=(21, 10))  # width, height in inches
-
-        def create_subplot(ax, vertices, data, title):
-            # Flip along x axis
-            vertices = vertices.clone()
-            vertices[:, 0] = -vertices[:, 0]
-
-            sc = ax.scatter(
-                vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
-            )
-            # Make the colorbar smaller
-            # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
-            # Show the numbers on the colorbar
-            cbar = plt.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
-            cbar.set_label(title, rotation=270, labelpad=20)
-
-            ax.set_xlabel("X")
-            ax.set_ylabel("Y")
-            ax.set_zlabel("Z")
-            ax.set_aspect("equal")
-            # remove grid and background
-            ax.grid(False)
-            # ax.xaxis.pane.set_edgecolor('black')
-            # ax.yaxis.pane.set_edgecolor('black')
-            # remove bounding wireframe
-            ax.xaxis.pane.fill = False
-            ax.yaxis.pane.fill = False
-            ax.zaxis.pane.fill = False
-
-            # remove all ticks
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-
-            ax.xaxis.pane.fill = False
-            ax.yaxis.pane.fill = False
-            ax.zaxis.pane.fill = False
-
-            # ax.set_facecolor("white")
-            # ax.set_title(title)
-
         ax = fig.add_subplot(131, projection="3d")
-        create_subplot(ax, vertices, pred.numpy(), title="Pressure Prediction")
+        drivaer_create_subplot(ax, vertices, pred.numpy(), title="Pressure Prediction")
         ax = fig.add_subplot(132, projection="3d")
-        create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
+        drivaer_create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
         ax = fig.add_subplot(133, projection="3d")
-        create_subplot(
+        drivaer_create_subplot(
             ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference"
         )
 

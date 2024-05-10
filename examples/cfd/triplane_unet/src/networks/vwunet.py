@@ -16,8 +16,13 @@
 
 from typing import List, Dict, Any, Optional, Tuple
 
+import matplotlib
+
+matplotlib.use("Agg")  # use non-interactive backend
+import matplotlib.pyplot as plt
+
 from .base_model import BaseModel
-from .drivaer_base import DrivAerBase
+from .drivaer_base import DrivAerBase, drivaer_create_subplot
 
 import unittest
 
@@ -28,6 +33,7 @@ from torch.nn import functional as F
 
 from .components.mlp import MLP
 from src.utils.eval_funcs import eval_all_metrics
+from src.utils.visualization import fig_to_numpy
 
 
 class ChannelSELayer3D(nn.Module):
@@ -384,6 +390,34 @@ class VWUNetDrivAer(DrivAerBase, VWUNet):
         return_dict["drag_loss"] = loss_fn(drag_pred.view(-1), gt_drag.view(-1))
 
         return return_dict
+
+    def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
+        normalized_pred, _ = self.forward_and_sample_pressure(
+            data_dict, loss_fn, datamodule, **kwargs
+        )
+        normalized_pred = normalized_pred.detach().cpu()
+        # denormalize
+        pred = datamodule.decode(normalized_pred)
+        gt_pressure = data_dict["time_avg_pressure"].cpu().view_as(pred)
+        vertices = vertices.cpu().squeeze()
+
+        # Plot
+        fig = plt.figure(figsize=(21, 10))  # width, height in inches
+        ax = fig.add_subplot(131, projection="3d")
+        drivaer_create_subplot(ax, vertices, pred.numpy(), title="Pressure Prediction")
+        ax = fig.add_subplot(132, projection="3d")
+        drivaer_create_subplot(ax, vertices, gt_pressure.numpy(), title="GT Pressure")
+        ax = fig.add_subplot(133, projection="3d")
+        drivaer_create_subplot(
+            ax, vertices, torch.abs(pred - gt_pressure).numpy(), title="Abs Difference"
+        )
+
+        # figure to numpy image
+        fig.set_tight_layout(True)
+        # set the background to white
+        fig.patch.set_facecolor("white")
+        im = fig_to_numpy(fig)
+        return {"vis": im}, {}
 
 
 class TestVWUNet(unittest.TestCase):
