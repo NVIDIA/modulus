@@ -123,7 +123,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
 
 # TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
-# RUN pip install --no-cache-dir -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
+RUN pip install --no-cache-dir --no-deps -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
 
 
 # Install torch-scatter, torch-cluster, and pyg
@@ -140,6 +140,9 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluste
         echo "No custom wheel present, skipping"; \
     fi
 RUN pip install --no-cache-dir "torch_geometric==2.5.3"
+
+# cleanup of stage
+RUN rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy
