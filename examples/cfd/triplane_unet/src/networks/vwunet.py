@@ -393,13 +393,13 @@ class VWUNetDrivAer(DrivAerBase, VWUNet):
 
     def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
         normalized_pred, _ = self.forward_and_sample_pressure(
-            data_dict, loss_fn, datamodule, **kwargs
+            data_dict, datamodule=datamodule
         )
         normalized_pred = normalized_pred.detach().cpu()
         # denormalize
         pred = datamodule.decode(normalized_pred)
         gt_pressure = data_dict["time_avg_pressure"].cpu().view_as(pred)
-        vertices = vertices.cpu().squeeze()
+        vertices = data_dict["cell_centers"].float().cpu().squeeze()
 
         # Plot
         fig = plt.figure(figsize=(21, 10))  # width, height in inches
