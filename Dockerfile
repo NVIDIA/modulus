@@ -113,7 +113,7 @@ FROM builder as ci
 ARG TARGETPLATFORM
 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e .[makani] && pip uninstall nvidia-modulus -y && rm -rf /modulus/
+RUN cd /modulus/ && pip install -e .[makani] && pip uninstall nvidia-modulus -y
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
         pip install --no-cache-dir "tensorflow==2.9.0" "warp-lang>=0.6.0"; \
@@ -123,7 +123,26 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
 
 # TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
-RUN pip install --no-cache-dir -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
+RUN pip install --no-cache-dir --no-deps -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
+
+
+# Install torch-scatter, torch-cluster, and pyg
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl" ]; then \
+        echo "Installing torch_scatter and for: $TARGETPLATFORM" && \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl; \
+    else \
+        echo "No custom wheel present, skipping"; \
+    fi
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluster-1.6.3-cp310-cp310-linux_x86_64.whl" ]; then \
+        echo "Installing torch_cluster and for: $TARGETPLATFORM" && \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_cluster-1.6.3-cp310-cp310-linux_x86_64.whl; \
+    else \
+        echo "No custom wheel present, skipping"; \
+    fi
+RUN pip install --no-cache-dir "torch_geometric==2.5.3"
+
+# cleanup of stage
+RUN rm -rf /modulus/
 
 # Deployment image
 FROM builder as deploy

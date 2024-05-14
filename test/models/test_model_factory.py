@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import contextmanager
+
 import pytest
 import torch
 
@@ -31,24 +33,29 @@ class MockModel(Module):
         return self.layer(x)
 
 
+@contextmanager
+def _retrieve_model(model: Module, name: str):
+    """Registers model in the ModelRegistry and retrieves it."""
+
+    registry = ModelRegistry()
+    registry.register(model, name)
+    yield registry.factory(name)
+
+    registry.__clear_registry__()
+    registry.__restore_registry__()
+
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_register_and_factory(device):
-    # Register the MockModel
-    registry = ModelRegistry()
-    registry.register(MockModel, "mock_model")
+    # Register and retrieve the MockModel
+    with _retrieve_model(MockModel, "mock_model") as RetrievedModel:
+        # Check if the retrieved model is the same as the one registered
+        assert RetrievedModel == MockModel
 
-    # Use factory to get the MockModel
-    RetrievedModel = registry.factory("mock_model")
-
-    # Check if the retrieved model is the same as the one registered
-    assert RetrievedModel == MockModel
-
-    # Check forward pass of RetrievedModel
-    layer_size = 16
-    invar = torch.randn(1, layer_size).to(device)
-    model = RetrievedModel(layer_size=layer_size).to(device)
-    outvar = model(invar)
-    assert outvar.shape == invar.shape
-    assert outvar.device == invar.device
-    print(registry.list_models())
-    registry.__clear_registry__()
+        # Check forward pass of the model.
+        layer_size = 16
+        invar = torch.randn(1, layer_size).to(device)
+        model = RetrievedModel(layer_size=layer_size).to(device)
+        outvar = model(invar)
+        assert outvar.shape == invar.shape
+        assert outvar.device == invar.device
