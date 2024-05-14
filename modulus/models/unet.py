@@ -375,21 +375,21 @@ class DecoderBlock(nn.Module):
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
 
         # Final convolution
-        self.layers.append(ConvBlock(
+        self.final_conv = ConvBlock(
             in_channels=current_channels,
             out_channels=out_channels,
             activation=None,
             normalization=None,
         )
-        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
             x = layer(x)
+        x = self.final_conv(x)
         return x
 
 
-class Unet3D(nn.Module):
+class UNet3D(nn.Module):
     """
     3D U-Net model for volumetric (3D) image segmentation, featuring an encoder-decoder architecture with skip connections.
     Default parameters are set to replicate the architecture here: https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/.
@@ -465,10 +465,10 @@ class Unet3D(nn.Module):
 
 
 if __name__ == "__main__":
-    inputs = torch.randn(1, 1, 96, 96, 96).cuda()
+    inputs = torch.randn(2, 1, 96, 96, 96).cuda()
     print("The shape of inputs: ", inputs.shape)
-    model = Unet3D(
-        in_channels=1,
+    model = UNet3D(
+        in_channels=2,
         out_channels=1,
         model_depth=5,
         feature_map_channels=[64, 64, 128, 128, 256, 256, 512, 512, 1024, 1024],
