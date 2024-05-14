@@ -317,6 +317,9 @@ def _parse_vtk_polydata(polydata, vars):
 
     # Fetch node attributes  # TODO modularize
     attributes = []
+    point_data = polydata.GetPointData()
+    if point_data is None:
+        raise ValueError("Failed to get point data from the unstructured grid.")
     for array_name in vars:
         try:
             array = point_data.GetArray(array_name)
@@ -357,11 +360,10 @@ def _parse_vtk_unstructuredgrid(grid, vars):
     ), dtype=torch.float32)
 
     # Fetch node attributes  # TODO modularize
+    attributes = []
     point_data = grid.GetPointData()
     if point_data is None:
         raise ValueError("Failed to get point data from the unstructured grid.")
-    
-    attributes = []
     for array_name in vars:
         try:
             array = point_data.GetArray(array_name)
