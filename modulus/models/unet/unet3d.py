@@ -346,7 +346,7 @@ class DecoderBlock(nn.Module):
 
         if len(feature_map_channels) != model_depth * num_conv_blocks + 1:
             raise ValueError(
-                "The length of feature_map_channels should be equal to model_depth * num_conv_blocks + 1"
+                "The length of feature_map_channels in the decoder block should be equal to model_depth * num_conv_blocks + 1"
             )
 
         self.layers = nn.ModuleList()
@@ -392,6 +392,7 @@ class DecoderBlock(nn.Module):
 class Unet3D(nn.Module):
     """
     3D U-Net model for volumetric (3D) image segmentation, featuring an encoder-decoder architecture with skip connections.
+    Default parameters are set to replicate the architecture here: https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/.
 
     Parameters:
     ----------
@@ -412,10 +413,10 @@ class Unet3D(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        model_depth: int = 4,
-        feature_map_channels: List[int] = [32, 64, 64, 128, 128, 256, 256, 512],
+        model_depth: int = 5,
+        feature_map_channels: List[int] = [64, 64, 128, 128, 256, 256, 512, 512, 1024, 1024],
         num_conv_blocks: int = 2,
-        pooling_type: str = "AvgPool3d",
+        pooling_type: str = "MaxPool3d",
         pool_size: int = 2,
     ):
         super().__init__()
@@ -432,8 +433,8 @@ class Unet3D(nn.Module):
 
         # Construct the decoder
         decoder_feature_maps = feature_map_channels[::-1][
-            :-1
-        ]  # Reverse and discard the last channel
+            1:
+        ]  # Reverse and discard the first channel
         self.decoder = DecoderBlock(
             out_channels=out_channels,
             feature_map_channels=decoder_feature_maps,
@@ -469,9 +470,10 @@ if __name__ == "__main__":
     model = Unet3D(
         in_channels=1,
         out_channels=1,
-        model_depth=2,
-        feature_map_channels=[8, 16, 16, 32],
+        model_depth=5,
+        feature_map_channels=[64, 64, 128, 128, 256, 256, 512, 512, 1024, 1024],
         num_conv_blocks=2,
     ).cuda()
     x = model(inputs)
-    print(model)
+    print("model: ", model)
+    print("The shape of output: ", x.shape)
