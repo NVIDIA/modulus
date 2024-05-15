@@ -177,9 +177,9 @@ class VTKDatapipe(Datapipe):
             raise IOError(f"Std statistics file {std_stat_file} not found")
 
         # has shape [1, C]
-        self.mu = np.load(str(mean_stat_file))[:, self.num_vars]
+        self.mu = np.load(str(mean_stat_file))[:, 0:self.num_vars]
         # has shape [1, C]
-        self.sd = np.load(str(std_stat_file))[:, self.num_vars]
+        self.sd = np.load(str(std_stat_file))[:, 0:self.num_vars]
 
         if not self.mu.shape == self.sd.shape == (1, self.num_vars):
             raise AssertionError("Error, normalisation arrays have wrong shape")
