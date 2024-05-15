@@ -43,7 +43,7 @@ Tensor = torch.Tensor
 
 @dataclass
 class MetaData(DatapipeMetaData):
-    name: str = "VTKHDF"
+    name: str = "VTK"
     # Optimization
     auto_device: bool = True
     cuda_graphs: bool = True
@@ -51,8 +51,8 @@ class MetaData(DatapipeMetaData):
     ddp_sharding: bool = True
 
 
-class VTKHDFDatapipe(Datapipe):
-    """ DALI data pipeline for VTKHDF files
+class VTKDatapipe(Datapipe):
+    """ DALI data pipeline for VTK files
 
     Parameters
     ----------
@@ -80,9 +80,10 @@ class VTKHDFDatapipe(Datapipe):
     def __init__(
         self,
         data_dir: str,
+        vars: List[str],
+        num_vars: int,
         data_type: str = "vtp",
         stats_dir: Union[str, None] = None,
-        vars: List[str] = ["p", "wallShearStress"],
         batch_size: int = 1,
         num_samples: int = 1,
         shuffle: bool = True,
@@ -94,6 +95,7 @@ class VTKHDFDatapipe(Datapipe):
         super().__init__(meta=MetaData())
         self.data_type=data_type
         self.vars = vars
+        self.num_vars = num_vars
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle = shuffle
@@ -119,11 +121,12 @@ class VTKHDFDatapipe(Datapipe):
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
 
         self.parse_dataset_files()
+        self.load_statistics()
 
         self.pipe = self._create_pipeline()
 
     def parse_dataset_files(self) -> None:
-        """Parses the data directory for valid VTKHDF files and determines training samples
+        """Parses the data directory for valid VTK files and determines training samples
 
         Raises
         ------
@@ -146,13 +149,48 @@ class VTKHDFDatapipe(Datapipe):
             )
         self.logger.info(f"Number of total samples: {self.all_samples}, number of requested samples: {self.num_samples}")
 
+    def load_statistics(self) -> None:  # TODO generalize and combine with climate/era5_hdf5 datapipes
+        """Loads statistics from pre-computed numpy files
+
+        The statistic files should be of name global_means.npy and global_std.npy with
+        a shape of [1, C, 1, 1] located in the stat_dir.
+
+        Raises
+        ------
+        IOError
+            If mean or std numpy files are not found
+        AssertionError
+            If loaded numpy arrays are not of correct size
+        """
+        # If no stats dir we just skip loading the stats
+        if self.stats_dir is None:
+            self.mu = None
+            self.std = None
+            return
+        # load normalisation values
+        mean_stat_file = self.stats_dir / Path("global_means.npy")
+        std_stat_file = self.stats_dir / Path("global_stds.npy")
+
+        if not mean_stat_file.exists():
+            raise IOError(f"Mean statistics file {mean_stat_file} not found")
+        if not std_stat_file.exists():
+            raise IOError(f"Std statistics file {std_stat_file} not found")
+
+        # has shape [C, 1, 1]
+        self.mu = np.load(str(mean_stat_file))[:, self.num_vars]
+        # has shape [C, 1, 1]
+        self.sd = np.load(str(std_stat_file))[:, self.num_vars]
+
+        if not self.mu.shape == self.sd.shape == (self.num_vars, 1, 1):
+            raise AssertionError("Error, normalisation arrays have wrong shape")
+
     def _create_pipeline(self) -> dali.Pipeline:
         """Create DALI pipeline
 
         Returns
         -------
         dali.Pipeline
-            VTKHDF DALI pipeline
+            VTK DALI pipeline
         """
         pipe = dali.Pipeline(
             batch_size=self.batch_size,
@@ -164,7 +202,7 @@ class VTKHDFDatapipe(Datapipe):
         )
 
         with pipe:
-            source = VTKHDFDaliExternalSource(
+            source = VTKDaliExternalSource(
                 data_paths=self.data_paths,
                 data_type=self.data_type,
                 vars=self.vars,
@@ -190,6 +228,10 @@ class VTKHDFDatapipe(Datapipe):
                 attributes = attributes.gpu()
                 edges = edges.gpu()
 
+            # Normalize attributes if statistics are available.
+            if self.stats_dir is not None:
+                attributes = dali.fn.normalize(attributes, mean=self.mu, stddev=self.sd)
+
             # Set outputs.
             pipe.set_outputs(vertices, attributes, edges)
 
@@ -205,8 +247,8 @@ class VTKHDFDatapipe(Datapipe):
         return self.length
 
 
-class VTKHDFDaliExternalSource:
-    """DALI Source for lazy-loading the VTKHDF files
+class VTKDaliExternalSource:
+    """DALI Source for lazy-loading the VTK files
 
     Parameters
     ----------
