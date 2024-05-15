@@ -176,12 +176,12 @@ class VTKDatapipe(Datapipe):
         if not std_stat_file.exists():
             raise IOError(f"Std statistics file {std_stat_file} not found")
 
-        # has shape [C, 1, 1]
+        # has shape [1, C]
         self.mu = np.load(str(mean_stat_file))[:, self.num_vars]
-        # has shape [C, 1, 1]
+        # has shape [1, C]
         self.sd = np.load(str(std_stat_file))[:, self.num_vars]
 
-        if not self.mu.shape == self.sd.shape == (self.num_vars, 1, 1):
+        if not self.mu.shape == self.sd.shape == (1, self.num_vars):
             raise AssertionError("Error, normalisation arrays have wrong shape")
 
     def _create_pipeline(self) -> dali.Pipeline:
