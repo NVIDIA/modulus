@@ -30,12 +30,14 @@ class OpenPointBase(BaseModel):
     OpnePointBase class
     """
 
-    def __init__(self, cfg: Dict):
+    def __init__(self, **kwargs):
         BaseModel.__init__(self)
-        self.model = build_model_from_cfg(cfg)
+        self.openpoint_model = build_model_from_cfg(kwargs)
 
     def forward(self, x: Tensor):
-        return self.model(x)
+        # Assert x is in cuda
+        assert x.is_cuda
+        return self.openpoint_model(x)
 
 
 class OpenPointDrivAer(OpenPointBase, DrivAerDragRegressionBase):
@@ -43,39 +45,20 @@ class OpenPointDrivAer(OpenPointBase, DrivAerDragRegressionBase):
     OpenPointDrivAer class
     """
 
-    def __init__(self, cfg):
-        OpenPointBase.__init__(self, cfg)
+    def __init__(self, **kwargs):
         DrivAerDragRegressionBase.__init__(self)
-
-    def forward(self, x):
-        return self.model(x)
+        OpenPointBase.__init__(self, **kwargs)
 
     def data_dict_to_input(self, data_dict):
-        return DrivAerDragRegressionBase.data_dict_to_input(self, data_dict)
+        return data_dict["cell_centers"].to(self.device)
 
 
 if __name__ == "__main__":
-    # NAME: PointMLP
-    # in_channels: 3
-    # points: 1024
-    # num_classes: 40
-    # embed_dim: 64
-    # groups: 1
-    # res_expansion: 1.0
-    # activation: "relu"
-    # bias: False
-    # use_xyz: False
-    # normalize: "anchor"
-    # dim_expansion: [ 2, 2, 2, 2 ]
-    # pre_blocks: [ 2, 2, 2, 2 ]
-    # pos_blocks: [ 2, 2, 2, 2 ]
-    # k_neighbors: [ 24, 24, 24, 24 ]
-    # reducers: [ 2, 2, 2, 2 ]
     model_cfg = {
         "NAME": "PointMLP",
         "in_channels": 3,
         "points": 1024,
-        "num_classes": 40,
+        "num_classes": 1,
         "embed_dim": 64,
         "groups": 1,
         "res_expansion": 1.0,
@@ -89,8 +72,8 @@ if __name__ == "__main__":
         "k_neighbors": [24, 24, 24, 24],
         "reducers": [2, 2, 2, 2],
     }
-    model = OpenPointBase(model_cfg)
+    model = OpenPointDrivAer(**model_cfg).to("cuda")
     print(model)
-    B, N = 2, 1024
-    x = torch.randn(B, N, 3)
+    B, N = 2, 2048
+    x = torch.randn(B, N, 3).to("cuda")
     print(model(x).shape)

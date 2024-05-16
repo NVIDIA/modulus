@@ -29,6 +29,9 @@ RUN git clone --recurse-submodules https://github.com/guochengqian/openpoints.gi
     cd ../chamfer_dist; \
     python setup.py install
 
+# Copy the openpoints_requirements.txt and install
+COPY ./examples/cfd/triplane_unet/internal/docker/openpoints_requirements.txt /workspace/
+RUN pip install --no-cache-dir -r /workspace/openpoints_requirements.txt
 
 # Add a non-root user with a fixed UID and GID
 ARG USERNAME=du
