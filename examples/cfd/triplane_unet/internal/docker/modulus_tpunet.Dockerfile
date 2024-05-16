@@ -20,6 +20,16 @@ RUN pip install --no-cache-dir \
     "warp-lang>=1.0"        \
     "webdataset>=0.2"
 
+# Install openpoint
+RUN git clone --recurse-submodules https://github.com/guochengqian/openpoints.git; \
+    cd openpoints/cpp/pointnet2_batch; \
+    python setup.py install; \
+    cd ../pointops/; \
+    python setup.py install; \
+    cd ../chamfer_dist; \
+    python setup.py install
+
+
 # Add a non-root user with a fixed UID and GID
 ARG USERNAME=du
 ARG USER_UID=1000
