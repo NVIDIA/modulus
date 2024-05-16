@@ -1,0 +1,84 @@
+# @package _global_
+
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+defaults:
+  - /data: drivaernet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+data:
+  num_points: 32768
+
+train:
+  num_epochs: 100
+  batch_size: 32
+
+model:
+  _target_: src.networks.openpoint_base.OpenPointDrivAer
+  _convert_: all
+
+  NAME: BaseCls
+  encoder_args:
+    _target_: easydict.EasyDict
+    NAME: PointNet2Encoder
+    in_channels: 3
+    width: null
+    layers: 3
+    use_res: False
+    strides: [2, 4, 1]
+    mlps: [[[64, 64, 128]],  # stage 1: 96
+          [[128, 128, 256]],
+          [[256, 512, 1024]]
+          ] # stage 4: 1024
+    radius: [0.2, 0.4, null]
+    num_samples: [32, 64, null]
+    sampler: fps
+    aggr_args:
+      _target_: easydict.EasyDict
+      NAME: 'convpool'
+      feature_type: 'dp_fj'
+      anisotropic: False
+      reduction: 'max'
+    group_args:
+      _target_: easydict.EasyDict
+      NAME: 'ballquery'
+      use_xyz: True
+      normalize_dp: False
+    conv_args: 
+      _target_: easydict.EasyDict
+      order: conv-norm-act
+    act_args:
+      _target_: easydict.EasyDict
+      act: 'relu'
+    norm_args:
+      _target_: easydict.EasyDict
+      norm: 'bn'
+  cls_args: 
+    _target_: easydict.EasyDict
+    NAME: ClsHead
+    num_classes: 1
+    mlps: [512, 256]
+    norm_args: 
+      norm: 'bn1d'
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: PointNet++

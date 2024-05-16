@@ -19,7 +19,12 @@ from typing import Dict, Any
 from torch import Tensor
 import torch
 
-from openpoints.models import build_model_from_cfg
+try:
+    from openpoints.models import build_model_from_cfg
+except ImportError:
+    print(
+        "OpenPoints not installed. Please run `git clone https://github.com/guochengqian/openpoints.git` to use this model."
+    )
 
 from src.networks.base_model import BaseModel
 from src.networks.drivaer_base import DrivAerDragRegressionBase
