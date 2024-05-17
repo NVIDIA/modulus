@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 import torch
+import logging
 from torch import Tensor
 
 try:
@@ -42,6 +43,8 @@ from modulus.utils.graphcast.graph import Graph
 
 from .graph_cast_processor import GraphCastProcessor
 
+logger = logging.getLogger(__name__)
+
 
 def get_lat_lon_partition_separators(partition_size: int):
     """Utility Function to get separation intervals for lat-lon
@@ -50,42 +53,102 @@ def get_lat_lon_partition_separators(partition_size: int):
     Parameters
     ----------
     partition_size : int
-        size of graph partition, currently supported sizes: {1, 2, 4, 8, 16}
+        size of graph partition
     """
 
+    def _divide(num_lat_chunks: int, num_lon_chunks: int):
+        # divide lat-lon grid into equally-sizes chunks along both latitude and longitude
+        if (num_lon_chunks * num_lat_chunks) != partition_size:
+            raise ValueError("Can't divide lat-lon grid into grid {num_lat_chunks} x {num_lon_chunks} chunks for partition_size={partition_size}.")            
+        # divide latitutude into num_lat_chunks of size 180 / num_lat_chunks
+        # divide longitude into chunks of size 360 / (partition_size / num_lat_chunks)
+        lat_bin_width = 180.0 / num_lat_chunks
+        lon_bin_width = 360.0 / num_lon_chunks
+
+        lat_ranges = []
+        lon_ranges = []
+
+        for p_lat in range(num_lat_chunks):
+            for p_lon in range(num_lon_chunks):
+                lat_ranges += [
+                    (lat_bin_width * p_lat - 90.0, lat_bin_width * (p_lat + 1) - 90.0)
+                ]
+                lon_ranges += [
+                    (lon_bin_width * p_lon - 180.0, lon_bin_width * (p_lon + 1) - 180.0)
+                ]
+
+        lat_ranges[-1] = (lat_ranges[-1][0], None)
+        lon_ranges[-1] = (lon_ranges[-1][0], None)
+
+        return lat_ranges, lon_ranges
+
+    lat_ranges, lon_ranges = None, None
+
+    # define usual typical sizes explicitly to slightly
+    # simplify handling the generic case
     if partition_size == 1:
-        lat_ranges = [(-90.0, None)]
-        lon_ranges = [(-180.0, None)]
+        lat_ranges, lon_ranges = _divide(1, 1)
 
     elif partition_size == 2:
-        # partition in two halves, divide around longitude=0°
-        lat_ranges = [(-90.0, None)]
-        lon_ranges = [(-180.0, 0.0), (0.0, None)]
+        lat_ranges, lon_ranges = _divide(1, 2)
+
+    elif partition_size == 3:
+        lat_ranges, lon_ranges = _divide(1, 3)
 
     elif partition_size == 4:
-        lat_ranges = [(-90.0, 0.0), (0.0, None)]
-        lon_ranges = [(-180.0, 0.0), (0.0, None)]
+        lat_ranges, lon_ranges = _divide(2, 2)
+
+    elif partition_size == 6:
+        lat_ranges, lon_ranges = _divide(2, 3)
 
     elif partition_size == 8:
-        lat_ranges = [(-90.0, 0.0), (0.0, None)]
-        lon_ranges = [(-180.0, -90.0), (-90.0, 0.0), (0.0, 90.0), (90.0, None)]
+        lat_ranges, lon_ranges = _divide(2, 4)
+
+    elif partition_size == 9:
+        lat_ranges, lon_ranges = _divide(3, 3)
+
+    elif partition_size == 12:
+        lat_ranges, lon_ranges = _divide(3, 4)
 
     elif partition_size == 16:
-        lat_ranges = [(-90.0, -45.0), (-45.0, 0.0), (0.0, 45.0), (45.0, None)]
-        lon_ranges = [(-180.0, -90.0), (-90.0, 0.0), (0.0, 90.0), (90.0, None)]
+        lat_ranges, lon_ranges = _divide(4, 4)
+
+    elif partition_size == 20:
+        lat_ranges, lon_ranges = _divide(4, 5)
+
+    elif partition_size == 24:
+        lat_ranges, lon_ranges = _divide(4, 6)
 
     else:
-        raise NotImplementedError(
-            f"lat_lon partitioning for {partition_size} not implemented."
-        )
+        logger.warn(f"lat_lon partitioning for {partition_size} might not be optimized.")
+        
+        # try to distribute remaining workload as good as possible
+        # TOOD: in the longer term, find a way of using some form of round-robin
+        # distribution scheme for chunks of different size
+        # for now, if not nicely divisble into rectangular grid of "chunks"
+        # just divide along longitude into partition_size chunks 
+        for divisor in [8, 4, 2, 1]:
+            if partition_size % divisor == 0:
+                quotient = partition_size // divisor
+                if quotient > divisor:
+                    lat_ranges, lon_ranges = _divide(divisor, quotient)
+                else:
+                    lat_ranges, lon_ranges = _divide(quotient, divisor)
+                
+                break
+
+    # mainly for debugging
+    if (lat_ranges is None) or (lon_ranges is None):
+        raise ValueError("unexpected error, abort")
 
     min_seps = []
     max_seps = []
 
-    for lat in lat_ranges:
-        for lon in lon_ranges:
-            min_seps.append([lat[0], lon[0]])
-            max_seps.append([lat[1], lon[1]])
+    for i in range(partition_size):
+        lat = lat_ranges[i]
+        lon = lon_ranges[i]
+        min_seps.append([lat[0], lon[0]])
+        max_seps.append([lat[1], lon[1]])
 
     return min_seps, max_seps
 
