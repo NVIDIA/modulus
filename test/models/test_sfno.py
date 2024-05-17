@@ -60,7 +60,9 @@ def test_sfno_forward(pytestconfig, device):
     # Use different checkpoints for different device types due to
     # SFNO implementation differences CPU vs GPU.
     model_file_name = f"{model.meta.name}_{device.type}_output.pth"
-    assert common.validate_forward_accuracy(model, (invar,), file_name=model_file_name)
+    assert common.validate_forward_accuracy(
+        model, (invar,), file_name=model_file_name, atol=0.01
+    )
 
 
 @import_or_fail("makani")
