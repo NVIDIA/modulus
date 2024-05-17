@@ -1,4 +1,5 @@
 # coding=utf-8
+# ignore_header_test
 
 # SPDX-FileCopyrightText: Copyright (c) 2022 The torch-harmonics Authors. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
@@ -29,14 +30,25 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+# This example was adopted from torch-harmonics and modified to
+# highlight the usage of GraphCast on the example of training
+# a neural solver for the Shallow-Water-Equations (SWE) and
+# to showcase the utilities in Modulus when it comes to
+# distributing a model in a tensor-parallel.
+
 import argparse
+import hydra
+from omegaconf import DictConfig, OmegaConf
 import json
 import os
 import time
 import uuid
+import logging
 from typing import Optional
 
 import torch
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 from torch.utils.data import DataLoader
 from torch.cuda import amp
 
@@ -47,6 +59,10 @@ from pde_dataset import PdeDataset
 
 from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
+
+
+logger = logging.getLogger(__name__)
+OmegaConf.register_new_resolver("rand_uuid", lambda: int(uuid.uuid4()))
 
 
 def l2loss_sphere(prd, tar, solver, relative=False, squared=True):
@@ -77,19 +93,19 @@ def autoregressive_inference(
     path_root,
     nsteps,
     dist_manager,
-    loss_fn: str = "l2",
-    autoreg_steps=10,
-    nskip=1,
-    plot_channel=1,
-    nics=20,
+    cfg,
 ):
-    if loss_fn == "l2":
+    nskip = 1
+    plot_channel = 1
+    nics = 20
+
+    if cfg.model.loss_fn == "l2":
         loss_fn = l2loss
-    elif loss_fn == "l2sphere":
+    elif cfg.model.loss_fn == "l2sphere":
         loss_fn = l2loss_sphere
     else:
         raise ValueError(
-            f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'."
+            f"loss_fn={cfg.model.loss_fn} not supported, expected 'l2' or 'l2sphere'."
         )
 
     losses = np.zeros(nics)
@@ -111,7 +127,7 @@ def autoregressive_inference(
 
         # ML model
         start_time = time.time()
-        for i in range(1, autoreg_steps + 1):
+        for i in range(1, cfg.data.autoreg_steps + 1):
             # evaluate the ML model
             prd = model(prd)
 
@@ -133,7 +149,7 @@ def autoregressive_inference(
         # classical model, not parallel so only on rank 0
         if dist_manager.rank == 0:
             start_time = time.time()
-            for i in range(1, autoreg_steps + 1):
+            for i in range(1, cfg.data.autoreg_steps + 1):
 
                 # advance classical model
                 uspec = dataset.solver.timestep(uspec, nsteps)
@@ -169,20 +185,15 @@ def train_model(
     gscaler,
     dist_manager,
     metrics,
-    num_epochs=10,
-    num_future=0,
-    num_examples=512,
-    num_valid=8,
-    loss_fn="l2",
-    enable_amp=False,
+    cfg,
 ):
-    if loss_fn == "l2":
+    if cfg.model.loss_fn == "l2":
         loss_fn = l2loss
-    elif loss_fn == "l2sphere":
+    elif cfg.model.loss_fn == "l2sphere":
         loss_fn = l2loss_sphere
     else:
         raise ValueError(
-            f"loss_fn={loss_fn} not supported, expected 'l2' or 'l2sphere'."
+            f"loss_fn={cfg.model.loss_fn} not supported, expected 'l2' or 'l2sphere'."
         )
     train_start = time.time()
 
@@ -195,12 +206,13 @@ def train_model(
     metrics["val_loss"] = []
     metrics["epochs"] = []
 
-    for epoch in range(num_epochs):
+
+    for epoch in tqdm(range(cfg.data.num_epochs)):
         # time each epoch
         epoch_start = time.time()
 
         dataloader.dataset.set_initial_condition("random")
-        dataloader.dataset.set_num_examples(num_examples)
+        dataloader.dataset.set_num_examples(cfg.data.num_examples)
 
         # get the solver for its convenience functions
         solver = dataloader.dataset.solver
@@ -209,10 +221,10 @@ def train_model(
         acc_loss = 0
         model.train()
 
-        for inp, tar in dataloader:
-            with amp.autocast(enabled=enable_amp):
+        for inp, tar in tqdm(dataloader, leave=False):
+            with amp.autocast(enabled=cfg.model.enable_amp):
                 prd = model(inp)
-                for _ in range(num_future):
+                for _ in range(cfg.data.num_future):
                     prd = model(prd)
                 loss = loss_fn(prd, tar, solver=solver, relative=False)
 
@@ -228,7 +240,7 @@ def train_model(
         acc_loss = acc_loss / len(dataloader.dataset)
 
         dataloader.dataset.set_initial_condition("random")
-        dataloader.dataset.set_num_examples(num_valid)
+        dataloader.dataset.set_num_examples(cfg.data.num_valid)
 
         # perform validation
         valid_loss = 0.0
@@ -236,7 +248,7 @@ def train_model(
         with torch.no_grad():
             for inp, tar in dataloader:
                 prd = model(inp)
-                for _ in range(num_future):
+                for _ in range(cfg.data.num_future):
                     prd = model(prd)
                 loss = loss_fn(prd, tar, solver=solver, relative=True)
                 valid_loss += loss.item() * inp.size(0)
@@ -258,11 +270,10 @@ def train_model(
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
-        print(
-            f"--------------------------------------------------------------------------------"
-        )
-        print(f"done. Training took {train_time}.")
-
+        logger.info(f"Training took {train_time}.")
+        logger.info("Training Metrics")
+        for k, v in metrics.items():
+            logger.info(f"{k}: {v}")
 
 def get_random_data(dataset, device):
     inp = torch.randn((1, 3, dataset.nlat, dataset.nlon), device=device)
@@ -278,12 +289,7 @@ def train_model_on_dummy_data(
     gscaler,
     dist_manager,
     metrics,
-    num_epochs=10,
-    num_future=0,
-    num_examples=512,
-    num_valid=8,
-    loss_fn="l2",
-    enable_amp=False,
+    cfg,
 ):
     train_start = time.time()
 
@@ -296,21 +302,21 @@ def train_model_on_dummy_data(
     metrics["val_loss"] = []
     metrics["epochs"] = []
 
-    for epoch in range(num_epochs):
+    for epoch in tqdm(range(cfg.data.num_epochs)):
         # time each epoch
         epoch_start = time.time()
 
-        dataloader.dataset.set_num_examples(num_examples)
+        dataloader.dataset.set_num_examples(cfg.data.num_examples)
 
         # do the training
         acc_loss = 0
         model.train()
 
-        for train_batch in range(num_examples):
+        for train_batch in tqdm(range(cfg.data.num_examples), leave=False):
             inp, tar = get_random_data(dataloader.dataset, model.device)
-            with amp.autocast(enabled=enable_amp):
+            with amp.autocast(enabled=cfg.model.enable_amp):
                 prd = model(inp)
-                for _ in range(num_future):
+                for _ in range(cfg.data.num_future):
                     prd = model(prd)
                 loss = l2loss(prd, tar)
 
@@ -325,16 +331,16 @@ def train_model_on_dummy_data(
 
         acc_loss = acc_loss / len(dataloader.dataset)
 
-        dataloader.dataset.set_num_examples(num_valid)
+        dataloader.dataset.set_num_examples(cfg.data.num_valid)
 
         # perform validation
         valid_loss = 0.0
         model.eval()
         with torch.no_grad():
-            for val_batch in range(num_valid):
+            for val_batch in range(cfg.data.num_valid):
                 inp, tar = get_random_data(dataloader.dataset, model.device)
                 prd = model(inp)
-                for _ in range(num_future):
+                for _ in range(cfg.data.num_future):
                     prd = model(prd)
                 loss = l2loss(prd, tar)
                 valid_loss += loss.item() * inp.size(0)
@@ -356,45 +362,26 @@ def train_model_on_dummy_data(
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
-        print(
-            f"--------------------------------------------------------------------------------"
-        )
-        print(f"done. Training took {train_time}.")
+        logger.info(f"Training took {train_time}.")
+        logger.info("Training Metrics")
+        for k, v in metrics.items():
+            logger.info(f"{k}: {v}")
 
-
-def main(
-    mesh_size: int = 6,
-    dummy_data: bool = False,
-    seed: int = 1234,
-    output_dir: Optional[str] = None,
-    loss_fn: str = "l2",
-    enable_amp: bool = False,
-    hidden_dim: int = 128,
-    processor_layers: int = 16,
-    num_examples: int = 512,
-    num_epochs: int = 10,
-    angular_resolution: float = 0.703125,
-    use_lat_lon_partitioning: bool = False,
-):
+@hydra.main(version_base="1.3", config_path=".", config_name="config_graphcast_swe.yaml")
+def main(cfg: DictConfig):
     # realistic FP32 / TF32 settings
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision("high")
 
-    train = True
-    load_checkpoint = False
-    save_checkpoint = False
-    enable_amp = False
-
-    num_future = 0  # for now, no multi-step-rollout training
     # default of 0.703125 gives (256, 512)
     input_res = (
-        int(180.0 / angular_resolution),
-        int(360.0 / angular_resolution),
+        int(180.0 / cfg.data.angular_resolution),
+        int(360.0 / cfg.data.angular_resolution),
     )
 
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    torch.manual_seed(cfg.seed)
+    torch.cuda.manual_seed(cfg.seed)
 
     # initialize DistributedManager and define process group
     # across which graph is partitioned and model is parallel across
@@ -415,27 +402,15 @@ def main(
     dist_manager = DistributedManager()
 
     hyperparameters = {
-        "loss_fn": loss_fn,
-        "processor_layers": processor_layers,
-        "hidden_dim": hidden_dim,
-        "num_examples": num_examples,
-        "num_epochs": num_epochs,
-        "angular_resolution": angular_resolution,
-        "input_resolution": input_res,
-        "mesh_size": mesh_size,
-        "use_lat_lon_partitioning": use_lat_lon_partitioning,
-        "enable_amp": enable_amp,
-        "seed": seed,
         "world_size": world_size,
+        **OmegaConf.to_container(cfg, resolve=True),
     }
 
-    run_suffix = str(uuid.uuid4())
-
     if dist_manager.rank == 0:
-        print(f"starting to run ...")
+        logger.info(f"starting to run ...")
 
     mesh_base_path = os.path.dirname(os.path.realpath(__file__))
-    meshgraph_path = os.path.join(mesh_base_path, f"./icospheres_{mesh_size}.json")
+    meshgraph_path = os.path.join(mesh_base_path, f"./icospheres_{cfg.data.mesh_size}.json")
     model = GraphCastNet(
         meshgraph_path=meshgraph_path,
         static_dataset_path=None,
@@ -444,15 +419,15 @@ def main(
         input_dim_mesh_nodes=3,
         input_dim_edges=4,
         output_dim_grid_nodes=3,
-        processor_layers=processor_layers,
-        hidden_dim=hidden_dim,
+        processor_layers=cfg.model.processor_layers,
+        hidden_dim=cfg.model.hidden_dim,
         partition_size=dist_manager.group_size(graph_partition_pg_name),
         partition_group_name=graph_partition_pg_name,
         expect_partitioned_input=False,
         global_features_on_rank_0=True,
         produce_aggregated_output=True,
         produce_aggregated_output_on_all_ranks=False,
-        use_lat_lon_partitioning=use_lat_lon_partitioning,
+        use_lat_lon_partitioning=cfg.model.use_lat_lon_partitioning,
     ).to(device=dist_manager.device)
 
     # since model is "tensor-parallel" in graph-partition
@@ -464,56 +439,49 @@ def main(
     ):
         mark_module_as_shared(model, graph_partition_pg_name)
 
-    # iterate over models and train each model
-    if output_dir is None:
-        output_dir = os.path.dirname(__file__)
-
     num_params = count_parameters(model)
     # prepare dicts containing models and corresponding metrics
     metrics = {**hyperparameters}
 
     if dist_manager.rank == 0:
-        print(f"number of trainable params: {num_params}")
+        logger.info(f"number of trainable params: {num_params}")
     metrics["num_params"] = num_params
 
-    if load_checkpoint:
+    if cfg.load_checkpoint:
+        if cfg.checkpoint_dir is None:
+            raise ValueError("load_checkpoint=True but cfg.checkpoint_dir is not set, abort.")
         model.load_state_dict(
-            torch.load(os.path.join(output_dir, run_suffix, "checkpoints", "model.pt"))
+            torch.load(os.path.join(cfg.checkpoint_dir, "checkpoints", "model.pt"))
         )
 
-    # 1 hour prediction steps
-    dt = 1 * 3600
-    dt_solver = 150
-    nsteps = dt // dt_solver
+    nsteps = cfg.data.dt // cfg.data.dt_solver
     dataset = PdeDataset(
-        dt=dt,
+        dt=cfg.data.dt,
         nsteps=nsteps,
         dims=input_res,
         device=dist_manager.device,
         normalize=True,
         rank=dist_manager.rank,
     )
-    # There is still an issue with parallel dataloading. Do NOT use it at the moment
-    # dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4, persistent_workers=True)
+
     dataloader = DataLoader(
         dataset, batch_size=1, shuffle=True, num_workers=0, persistent_workers=False
     )
 
-    # run the training
-    if train:
+    if cfg.run_training:
         # optimizer:
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[10, 20], gamma=0.1
+            optimizer, milestones=cfg.lr_milestones, gamma=cfg.gamma
         )
-        gscaler = amp.GradScaler(enabled=enable_amp)
+        gscaler = amp.GradScaler(enabled=cfg.model.enable_amp)
 
         start_time = time.time()
 
         if dist_manager.rank == 0:
-            print(f"Training, single step")
+            logger.info(f"Training, started ...")
 
-        if dummy_data:
+        if cfg.data.dummy_data:
             train_fn = train_model_on_dummy_data
         else:
             train_fn = train_model
@@ -526,50 +494,47 @@ def main(
             gscaler=gscaler,
             dist_manager=dist_manager,
             metrics=metrics,
-            num_examples=num_examples,
-            num_epochs=num_epochs,
-            loss_fn=loss_fn,
-            num_future=num_future,
-            enable_amp=enable_amp,
+            cfg=cfg,
         )
 
         training_time = time.time() - start_time
 
+        run_output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+
         if dist_manager.rank == 0:
-            os.makedirs(os.path.join(output_dir, run_suffix, "figures"), exist_ok=True)
+            os.makedirs(os.path.join(run_output_dir, "figures"), exist_ok=True)
             os.makedirs(
-                os.path.join(output_dir, run_suffix, "output_data"), exist_ok=True
+                os.path.join(run_output_dir, "output_data"), exist_ok=True
             )
-            if save_checkpoint:
+            if cfg.save_checkpoint:
                 os.makedirs(
-                    os.path.join(output_dir, run_suffix, "checkpoints"), exist_ok=True
+                    os.path.join(run_output_dir, "checkpoints"), exist_ok=True
                 )
                 torch.save(
                     model.state_dict(),
-                    os.path.join(output_dir, run_suffix, "checkpoints", "model.pt"),
+                    os.path.join(run_output_dir, "checkpoints", "model.pt"),
                 )
 
     # skip inference for dummy_data
-    if not dummy_data:
+    if not cfg.data.dummy_data:
         # set seed
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+        torch.manual_seed(cfg.seed)
+        torch.cuda.manual_seed(cfg.seed)
 
         with torch.inference_mode():
             losses, fno_times, nwp_times = autoregressive_inference(
                 model,
                 dataset,
-                os.path.join(output_dir, run_suffix, "figures"),
+                os.path.join(run_output_dir, "figures"),
+                nsteps,
                 dist_manager=dist_manager,
-                loss_fn=loss_fn,
-                nsteps=nsteps,
-                autoreg_steps=10,
+                cfg=cfg,
             )
             metrics["loss_mean"] = np.mean(losses)
             metrics["loss_std"] = np.std(losses)
             metrics["fno_time_mean"] = np.mean(fno_times)
             metrics["fno_time_std"] = np.std(fno_times)
-            metrics["nwp_time_mean"] = np.mean(nwp_times)
+            metrics["nwp_time_mean"]  = np.mean(nwp_times)
             metrics["nwp_time_std"] = np.std(nwp_times)
 
     max_mem = torch.tensor(
@@ -593,14 +558,14 @@ def main(
         max_mem = gather_list[0]
 
     if dist_manager.rank == 0:
-        if train:
+        if cfg.run_training:
             max_mem = torch.vstack(gather_list)
             metrics["training_time"] = training_time
             metrics[f"max_memory_allocated_gib"] = max_mem[:, 0].tolist()
             metrics[f"max_memory_reserved_gib"] = max_mem[:, 1].tolist()
 
         with open(
-            os.path.join(output_dir, run_suffix, "output_data", "metrics.json"), "w"
+            os.path.join(run_output_dir, "output_data", "metrics.json"), "w"
         ) as f:
             json.dump(metrics, f)
 
@@ -609,32 +574,4 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mesh_size", type=int, default=6)
-    parser.add_argument("--dummy_data", action="store_true")
-    parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--output_dir", type=str, default=None)
-    parser.add_argument("--loss", type=str, default="l2")
-    parser.add_argument("--hidden_dim", type=int, default=128)
-    parser.add_argument("--processor_layers", type=int, default=16)
-    parser.add_argument("--num_epochs", type=int, default=10)
-    parser.add_argument("--num_examples", type=int, default=512)
-    parser.add_argument("--angular_resolution", type=float, default=0.703125)
-    parser.add_argument("--enable_amp", action="store_true")
-    parser.add_argument("--lat_lon_part", action="store_true")
-    args = parser.parse_args()
-
-    main(
-        mesh_size=args.mesh_size,
-        dummy_data=args.dummy_data,
-        seed=args.seed,
-        output_dir=args.output_dir,
-        loss_fn=args.loss,
-        hidden_dim=args.hidden_dim,
-        processor_layers=args.processor_layers,
-        num_epochs=args.num_epochs,
-        num_examples=args.num_examples,
-        angular_resolution=args.angular_resolution,
-        enable_amp=args.enable_amp,
-        use_lat_lon_partitioning=args.lat_lon_part,
-    )
+    main()

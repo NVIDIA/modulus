@@ -1,4 +1,5 @@
 # coding=utf-8
+# ignore_header_test
 
 # SPDX-FileCopyrightText: Copyright (c) 2022 The torch-harmonics Authors. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
