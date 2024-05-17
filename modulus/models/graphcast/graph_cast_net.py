@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
 import torch
-import logging
 from torch import Tensor
 
 try:
@@ -59,7 +59,9 @@ def get_lat_lon_partition_separators(partition_size: int):
     def _divide(num_lat_chunks: int, num_lon_chunks: int):
         # divide lat-lon grid into equally-sizes chunks along both latitude and longitude
         if (num_lon_chunks * num_lat_chunks) != partition_size:
-            raise ValueError("Can't divide lat-lon grid into grid {num_lat_chunks} x {num_lon_chunks} chunks for partition_size={partition_size}.")            
+            raise ValueError(
+                "Can't divide lat-lon grid into grid {num_lat_chunks} x {num_lon_chunks} chunks for partition_size={partition_size}."
+            )
         # divide latitutude into num_lat_chunks of size 180 / num_lat_chunks
         # divide longitude into chunks of size 360 / (partition_size / num_lat_chunks)
         lat_bin_width = 180.0 / num_lat_chunks
@@ -120,13 +122,15 @@ def get_lat_lon_partition_separators(partition_size: int):
         lat_ranges, lon_ranges = _divide(4, 6)
 
     else:
-        logger.warn(f"lat_lon partitioning for {partition_size} might not be optimized.")
-        
+        logger.warn(
+            f"lat_lon partitioning for {partition_size} might not be optimized."
+        )
+
         # try to distribute remaining workload as good as possible
         # TOOD: in the longer term, find a way of using some form of round-robin
         # distribution scheme for chunks of different size
         # for now, if not nicely divisble into rectangular grid of "chunks"
-        # just divide along longitude into partition_size chunks 
+        # just divide along longitude into partition_size chunks
         for divisor in [8, 4, 2, 1]:
             if partition_size % divisor == 0:
                 quotient = partition_size // divisor
@@ -134,7 +138,7 @@ def get_lat_lon_partition_separators(partition_size: int):
                     lat_ranges, lon_ranges = _divide(divisor, quotient)
                 else:
                     lat_ranges, lon_ranges = _divide(quotient, divisor)
-                
+
                 break
 
     # mainly for debugging
