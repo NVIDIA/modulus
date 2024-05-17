@@ -1,5 +1,5 @@
-# coding=utf-8
 # ignore_header_test
+# coding=utf-8
 
 # SPDX-FileCopyrightText: Copyright (c) 2022 The torch-harmonics Authors. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
@@ -206,7 +206,6 @@ def train_model(
     metrics["val_loss"] = []
     metrics["epochs"] = []
 
-
     for epoch in tqdm(range(cfg.data.num_epochs)):
         # time each epoch
         epoch_start = time.time()
@@ -274,6 +273,7 @@ def train_model(
         logger.info("Training Metrics")
         for k, v in metrics.items():
             logger.info(f"{k}: {v}")
+
 
 def get_random_data(dataset, device):
     inp = torch.randn((1, 3, dataset.nlat, dataset.nlon), device=device)
@@ -367,7 +367,10 @@ def train_model_on_dummy_data(
         for k, v in metrics.items():
             logger.info(f"{k}: {v}")
 
-@hydra.main(version_base="1.3", config_path=".", config_name="config_graphcast_swe.yaml")
+
+@hydra.main(
+    version_base="1.3", config_path=".", config_name="config_graphcast_swe.yaml"
+)
 def main(cfg: DictConfig):
     # realistic FP32 / TF32 settings
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -410,7 +413,9 @@ def main(cfg: DictConfig):
         logger.info(f"starting to run ...")
 
     mesh_base_path = os.path.dirname(os.path.realpath(__file__))
-    meshgraph_path = os.path.join(mesh_base_path, f"./icospheres_{cfg.data.mesh_size}.json")
+    meshgraph_path = os.path.join(
+        mesh_base_path, f"./icospheres_{cfg.data.mesh_size}.json"
+    )
     model = GraphCastNet(
         meshgraph_path=meshgraph_path,
         static_dataset_path=None,
@@ -449,7 +454,9 @@ def main(cfg: DictConfig):
 
     if cfg.load_checkpoint:
         if cfg.checkpoint_dir is None:
-            raise ValueError("load_checkpoint=True but cfg.checkpoint_dir is not set, abort.")
+            raise ValueError(
+                "load_checkpoint=True but cfg.checkpoint_dir is not set, abort."
+            )
         model.load_state_dict(
             torch.load(os.path.join(cfg.checkpoint_dir, "checkpoints", "model.pt"))
         )
@@ -503,13 +510,9 @@ def main(cfg: DictConfig):
 
         if dist_manager.rank == 0:
             os.makedirs(os.path.join(run_output_dir, "figures"), exist_ok=True)
-            os.makedirs(
-                os.path.join(run_output_dir, "output_data"), exist_ok=True
-            )
+            os.makedirs(os.path.join(run_output_dir, "output_data"), exist_ok=True)
             if cfg.save_checkpoint:
-                os.makedirs(
-                    os.path.join(run_output_dir, "checkpoints"), exist_ok=True
-                )
+                os.makedirs(os.path.join(run_output_dir, "checkpoints"), exist_ok=True)
                 torch.save(
                     model.state_dict(),
                     os.path.join(run_output_dir, "checkpoints", "model.pt"),
@@ -534,7 +537,7 @@ def main(cfg: DictConfig):
             metrics["loss_std"] = np.std(losses)
             metrics["fno_time_mean"] = np.mean(fno_times)
             metrics["fno_time_std"] = np.std(fno_times)
-            metrics["nwp_time_mean"]  = np.mean(nwp_times)
+            metrics["nwp_time_mean"] = np.mean(nwp_times)
             metrics["nwp_time_std"] = np.std(nwp_times)
 
     max_mem = torch.tensor(
