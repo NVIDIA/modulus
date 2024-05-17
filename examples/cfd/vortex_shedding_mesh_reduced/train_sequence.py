@@ -277,7 +277,7 @@ if __name__ == "__main__":
             ),
             "w",
         ) as json_file:
-            json_file.write(C.json(indent=4))
+            json_file.write(C.model_dump_json(indent=4))
 
     # initialize loggers
     initialize_wandb(
