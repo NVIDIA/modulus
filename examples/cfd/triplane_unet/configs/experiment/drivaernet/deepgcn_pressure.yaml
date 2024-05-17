@@ -30,52 +30,33 @@ train:
   batch_size: 32
 
 model:
-  _target_: src.networks.openpoint_base.OpenPointDrivAer
+  _target_: src.networks.openpoint_base.OpenPointPressureDragDrivAer
   _convert_: all
 
-  NAME: BaseCls
+  NAME: BaseSeg
   encoder_args:
     _target_: easydict.EasyDict
-    NAME: PointNextEncoder
-    blocks: [1, 1, 1, 1, 1, 1]
-    strides: [1, 2, 2, 2, 2, 1]
-    width: 32
-    in_channels: 3 
-    radius: 0.15
-    radius_scaling: 1.5
-    sa_layers: 2
-    sa_use_res: True
-    nsample: 32
-    expansion: 4
-    aggr_args:
-      _target_: easydict.EasyDict
-      feature_type: 'dp_fj'
-      reduction: 'max'
-    group_args:
-      _target_: easydict.EasyDict
-      NAME: 'ballquery'
-      normalize_dp: True
-    conv_args:
-      _target_: easydict.EasyDict
-      order: conv-norm-act
-    act_args:
-      _target_: easydict.EasyDict
-      act: 'relu'
-    norm_args:
-      _target_: easydict.EasyDict
-      norm: 'bn'
-  cls_args: 
-    _target_: easydict.EasyDict
-    NAME: ClsHead
+    NAME: DeepGCN
+    in_channels: 3
+    channels: 64
+    n_classes: 256 
+    emb_dims: 256
+    n_blocks: 14
+    conv: 'edge'
+    block: 'res'
+    k: 9
+    epsilon: 0.2
+    use_stochastic: True
+    use_dilation: True 
     dropout: 0
-    num_classes: 1
-    mlps: [512, 256]
-    norm_args: 
-      _target_: easydict.EasyDict
-      norm: 'bn1d'
+    norm_args: {'norm': 'bn'}
+    act_args: {'act': 'relu'}
+
+  mlp_in_channels: 256
+  decoder_out_channels: 256
 
 loggers:
   wandb:
     project_name: drivaernet
     entity: nvr-ai-algo
-    run_name: PointNext
+    run_name: DeepGCN

@@ -48,11 +48,12 @@ model:
     epsilon: 0.2
     use_stochastic: True
     use_dilation: True 
-    dropout: 0.5
+    dropout: 0
     norm_args: {'norm': 'bn'}
     act_args: {'act': 'relu'}
   cls_args: 
     _target_: easydict.EasyDict
+    dropout: 0
     NAME: ClsHead
     num_classes: 1
     mlps: [512, 256]

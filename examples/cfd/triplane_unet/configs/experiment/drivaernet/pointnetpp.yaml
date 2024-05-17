@@ -73,6 +73,7 @@ model:
     _target_: easydict.EasyDict
     NAME: ClsHead
     num_classes: 1
+    dropout: 0
     mlps: [512, 256]
     norm_args: 
       norm: 'bn1d'

@@ -30,52 +30,54 @@ train:
   batch_size: 32
 
 model:
-  _target_: src.networks.openpoint_base.OpenPointDrivAer
+  _target_: src.networks.openpoint_base.OpenPointPressureDragDrivAer
   _convert_: all
 
-  NAME: BaseCls
+  NAME: BaseSeg
   encoder_args:
     _target_: easydict.EasyDict
-    NAME: PointNextEncoder
-    blocks: [1, 1, 1, 1, 1, 1]
-    strides: [1, 2, 2, 2, 2, 1]
-    width: 32
-    in_channels: 3 
-    radius: 0.15
-    radius_scaling: 1.5
-    sa_layers: 2
-    sa_use_res: True
-    nsample: 32
-    expansion: 4
+    NAME: PointNet2Encoder
+    in_channels: 3
+    strides: [4, 4, 4, 4]
+    blocks: [3, 3, 3, 3]
+    width: 128
+    width_scaling: 3
+    double_last_channel: False
+    layers: 3
+    use_res: True 
+    query_as_support: True
+    mlps: null 
+    stem_conv: True
+    stem_aggr: True
+    radius: [[0.1, 0.2], [0.2, 0.4], [0.4, 0.8], [0.8, 1.6]]
+    num_samples: [[16, 32], [16, 32], [16, 32], [16, 32]]
+    sampler: fps
     aggr_args:
-      _target_: easydict.EasyDict
-      feature_type: 'dp_fj'
-      reduction: 'max'
+      NAME: 'ASSA'
+      feature_type: 'assa'
+      anisotropic: True 
+      reduction: 'mean'
     group_args:
-      _target_: easydict.EasyDict
       NAME: 'ballquery'
+      use_xyz: True
       normalize_dp: True
     conv_args:
-      _target_: easydict.EasyDict
       order: conv-norm-act
     act_args:
-      _target_: easydict.EasyDict
       act: 'relu'
     norm_args:
-      _target_: easydict.EasyDict
       norm: 'bn'
-  cls_args: 
+  decoder_args:
     _target_: easydict.EasyDict
-    NAME: ClsHead
-    dropout: 0
-    num_classes: 1
-    mlps: [512, 256]
-    norm_args: 
-      _target_: easydict.EasyDict
-      norm: 'bn1d'
+    NAME: PointNet2Decoder
+    fp_mlps: [[64, 64], [128, 128], [256, 256], [512, 512]]
+
+  decoder_inputs: both
+  mlp_in_channels: 10368
+  decoder_out_channels: 64
 
 loggers:
   wandb:
     project_name: drivaernet
     entity: nvr-ai-algo
-    run_name: PointNext
+    run_name: AssaNet

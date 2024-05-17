@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 from torch import Tensor
 import torch
+import torch.nn.functional as F
 
 try:
     from openpoints.models import build_model_from_cfg
@@ -27,7 +28,7 @@ except ImportError:
     )
 
 from src.networks.base_model import BaseModel
-from src.networks.drivaer_base import DrivAerDragRegressionBase
+from src.networks.drivaer_base import DrivAerDragRegressionBase, DrivAerBase
 
 
 class OpenPointBase(BaseModel):
@@ -56,6 +57,49 @@ class OpenPointDrivAer(OpenPointBase, DrivAerDragRegressionBase):
 
     def data_dict_to_input(self, data_dict):
         return data_dict["cell_centers"].to(self.device)
+
+
+class OpenPointPressureDragDrivAer(OpenPointBase, DrivAerBase):
+    """
+    OpenPointDrivAer class
+    """
+
+    def __init__(self, **kwargs):
+        DrivAerBase.__init__(self)
+        OpenPointBase.__init__(self, **kwargs)
+
+        mlp_in_channels = kwargs.get("mlp_in_channels", 512)
+        decoder_out_channels = kwargs.get("decoder_out_channels", 512)
+        self.decoder_inputs = kwargs.get("decoder_inputs", "feats")
+        # mlp for drag prediction
+        self.drag_mlp = torch.nn.Sequential(
+            torch.nn.Linear(mlp_in_channels, mlp_in_channels),
+            torch.nn.ReLU(),
+            torch.nn.Linear(mlp_in_channels, 1),
+        )
+        self.pressure_mlp = torch.nn.Conv1d(decoder_out_channels, 1, 1)
+
+    def data_dict_to_input(self, data_dict):
+        return data_dict["cell_centers"].to(self.device)
+
+    def forward(self, data: Tensor) -> Tuple[Tensor, Tensor]:
+        assert data.is_cuda
+        op = self.openpoint_model
+        p, f = op.encoder.forward_seg_feat(data)
+        # For the drag prediction, pool and mlp
+        glob_feats = f
+        if isinstance(f, list):
+            glob_feats = f[-1]
+        drag = self.drag_mlp(F.adaptive_avg_pool1d(glob_feats, 1).squeeze(-1))
+        if hasattr(op, "decoder") and op.decoder is not None:
+            if self.decoder_inputs == "feats":
+                f = op.decoder(f).squeeze(-1)
+            elif self.decoder_inputs == "both":
+                f = op.decoder(p, f).squeeze(-1)
+            else:
+                raise NotImplementedError
+        pressure = self.pressure_mlp(f)
+        return pressure, drag
 
 
 if __name__ == "__main__":

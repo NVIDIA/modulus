@@ -30,27 +30,27 @@ train:
   batch_size: 32
 
 model:
-  _target_: src.networks.openpoint_base.OpenPointDrivAer
+  _target_: src.networks.openpoint_base.OpenPointPressureDragDrivAer
   _convert_: all
 
-  NAME: BaseCls
+  NAME: BaseSeg
   encoder_args:
     _target_: easydict.EasyDict
     NAME: PointNextEncoder
-    blocks: [1, 1, 1, 1, 1, 1]
-    strides: [1, 2, 2, 2, 2, 1]
-    width: 32
-    in_channels: 3 
-    radius: 0.15
-    radius_scaling: 1.5
-    sa_layers: 2
+    blocks: [ 1, 1, 1, 1, 1 ]
+    strides: [ 1, 2, 2, 2, 2 ]
+    width: 64
+    in_channels: 3
+    sa_layers: 1
     sa_use_res: True
+    radius: 0.1
+    radius_scaling: 2.5
     nsample: 32
     expansion: 4
     aggr_args:
       _target_: easydict.EasyDict
       feature_type: 'dp_fj'
-      reduction: 'max'
+    reduction: 'max'
     group_args:
       _target_: easydict.EasyDict
       NAME: 'ballquery'
@@ -60,19 +60,16 @@ model:
       order: conv-norm-act
     act_args:
       _target_: easydict.EasyDict
-      act: 'relu'
+      act: 'relu' # leakrelu makes training unstable.
     norm_args:
       _target_: easydict.EasyDict
-      norm: 'bn'
-  cls_args: 
-    _target_: easydict.EasyDict
-    NAME: ClsHead
-    dropout: 0
-    num_classes: 1
-    mlps: [512, 256]
-    norm_args: 
-      _target_: easydict.EasyDict
-      norm: 'bn1d'
+      norm: 'bn'  # ln makes training unstable
+  decoder_args:
+    NAME: PointNextDecoder
+
+  decoder_inputs: both
+  mlp_in_channels: 1024
+  decoder_out_channels: 64
 
 loggers:
   wandb:
