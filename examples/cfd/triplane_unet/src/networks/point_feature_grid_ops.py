@@ -241,7 +241,7 @@ class GridFeatureToPointGraphConv(nn.Module):
             ]
         )
         out_point_features = self.conv(
-            grid_features.point_features,
+            grid_features.point_features.contiguous(),
             point_features,
             neighbor_search_vertices_scaler=vertices_scaler,
         )

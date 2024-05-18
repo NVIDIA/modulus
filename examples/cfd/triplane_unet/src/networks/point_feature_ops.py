@@ -217,8 +217,8 @@ class GridFeatures:
             self.grid_shape = (H, W, D)
             self.num_channels = C
         else:
-            assert grid_shape is not None
-            assert num_channels is not None
+            assert grid_shape is not None, "grid_shape must be provided."
+            assert num_channels is not None, "num_channels must be provided."
 
             self.grid_shape = grid_shape
             self.num_channels = num_channels

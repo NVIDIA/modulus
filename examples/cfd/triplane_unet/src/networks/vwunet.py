@@ -42,7 +42,11 @@ from src.networks.point_feature_ops import (
     GridFeatures,
     PointFeatures,
 )
-from src.networks.point_feature_grid_ops import PointFeatureToGrid
+from src.networks.point_feature_grid_ops import (
+    PointFeatureToGrid,
+    GridFeatureToPoint,
+    GridFeaturesMemoryFormat,
+)
 
 
 class ChannelSELayer3D(nn.Module):
@@ -456,8 +460,8 @@ class VWUNetPrincipalConvDrivAer(VWUNetDrivAer):
         VWUNetDrivAer.__init__(
             self,
             encoder_channels[0],  # in_channels
-            out_channels,
-            out_decoder_channels,
+            1,  # drag
+            decoder_channels[-1],  # unet output
             encoder_channels,
             decoder_channels,
             drag_mlp_channels,
@@ -485,40 +489,42 @@ class VWUNetPrincipalConvDrivAer(VWUNetDrivAer):
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
         )
+        self.to_point = GridFeatureToPoint(
+            grid_in_channels=decoder_channels[-1],
+            point_in_channels=encoder_channels[0],
+            out_channels=1,  # pressure prediction
+            aabb_max=bbox_max,
+            aabb_min=bbox_min,
+            use_rel_pos=use_rel_pos,
+            neighbor_search_type=neighbor_search_type,
+            knn_k=knn_k,
+            reductions=reductions,
+        )
 
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"]
         return vertices.to(self.device)
 
-    def forward(self, x: Float[Tensor, "B N 3"]):
+    def forward(self, x: Float[Tensor, "B N 3"]) -> Tuple[PointFeatures, Tensor]:
         point_features = self.vertex_to_point_features(x)
         grid_features: GridFeatures = self.to_grid(point_features)
         x, drag_x = VWUNet.forward(self, grid_features.batch_features)
+        out_grid_features: GridFeatures = GridFeatures(
+            vertices=grid_features.vertices,
+            features=x,
+            memory_format=GridFeaturesMemoryFormat.b_c_x_y_z,
+            grid_shape=grid_features.grid_shape,
+            num_channels=x.size(1),
+        )
+        x = self.to_point(out_grid_features, point_features.contiguous())
         return x, drag_x
 
     def forward_and_sample_pressure(
         self, data_dict, loss_fn=None, datamodule=None, **kwargs
     ) -> Tuple[Tensor, Tensor]:
         vertices = self.data_dict_to_input(data_dict)
-        normalized_pred, drag_pred = self(vertices)
-
-        # BxNx3 vertices
-        # Scale it to [-1, 1] for grid_sample
-        vertices = (vertices - self.bbox_min.to(self.device)) * self.vert_scaler.to(
-            self.device
-        ) - 1
-        # Convert to BxNx1x1x3
-        vertices = vertices.unsqueeze(2).unsqueeze(2)
-
-        # use tri-linear interpolation to sample the pressure field
-        normalized_pred = F.grid_sample(
-            normalized_pred,
-            vertices,
-            align_corners=True,
-        )  # Bx1xNx1x1x1
-        # Bx1xNx1x1x1 -> BxN
-        normalized_pred = normalized_pred.view(normalized_pred.size(0), -1)
-        return normalized_pred, drag_pred
+        point_feats, drag_pred = self(vertices)
+        return point_feats.features, drag_pred
 
 
 class TestVWUNet(unittest.TestCase):
