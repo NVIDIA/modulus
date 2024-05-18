@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Literal
 
 import matplotlib
 
@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 from .base_model import BaseModel
 from .drivaer_base import DrivAerBase, drivaer_create_subplot
 
+from jaxtyping import Float
 import unittest
 
 from torch import Tensor
@@ -31,9 +32,17 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from .components.reductions import REDUCTION_TYPES
 from .components.mlp import MLP
 from src.utils.eval_funcs import eval_all_metrics
 from src.utils.visualization import fig_to_numpy
+
+from src.networks.point_feature_ops import (
+    VerticesToPointFeatures,
+    GridFeatures,
+    PointFeatures,
+)
+from src.networks.point_feature_grid_ops import PointFeatureToGrid
 
 
 class ChannelSELayer3D(nn.Module):
@@ -167,7 +176,7 @@ class UNetEncoderBlock(nn.Module):
                 padding=padding,
             ),
             nn.MaxPool3d(kernel_size=2, stride=2),
-            nn.BatchNorm3d(out_channels),
+            nn.InstanceNorm3d(out_channels),
         )
 
     def forward(self, x):
@@ -187,7 +196,7 @@ class UNetDecoderBlock(nn.Module):
             nn.ConvTranspose3d(
                 in_channels, out_channels, kernel_size=3, padding=padding, stride=2
             ),
-            nn.BatchNorm3d(out_channels),
+            nn.InstanceNorm3d(out_channels),
         )
 
     def forward(self, x):
@@ -420,6 +429,98 @@ class VWUNetDrivAer(DrivAerBase, VWUNet):
         return {"vis": im}, {}
 
 
+class VWUNetPrincipalConvDrivAer(VWUNetDrivAer):
+    """
+    Same as VWUNet but for DrivAer
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        out_decoder_channels: int = 1,
+        encoder_channels: List[int] = [16, 32, 64, 128, 256, 512],
+        decoder_channels: List[int] = [512, 256, 128, 64, 32, 16],
+        drag_mlp_channels: List[int] = [128, 64, 32, 16],
+        bbox_max: Tuple[float, float, float] = (2.5, 1.5, 1.0),
+        bbox_min: Tuple[float, float, float] = (-2.5, -1.5, -1.0),
+        pos_encode_dim: int = 32,
+        voxel_size: Optional[float] = None,
+        resolution: Tuple[int, int, int] = (250, 150, 100),
+        use_rel_pos: bool = True,
+        use_rel_pos_encode: bool = True,
+        reductions: List[REDUCTION_TYPES] = ["mean"],
+        neighbor_search_type: Literal["knn", "radius"] = "radius",
+        knn_k: int = 16,
+    ):
+        VWUNetDrivAer.__init__(
+            self,
+            encoder_channels[0],  # in_channels
+            out_channels,
+            out_decoder_channels,
+            encoder_channels,
+            decoder_channels,
+            drag_mlp_channels,
+            bbox_min,
+            bbox_max,
+        )
+
+        self.vertex_to_point_features = VerticesToPointFeatures(
+            embed_dim=pos_encode_dim,
+            out_features=encoder_channels[0],
+            use_mlp=True,
+            pos_embed_range=bbox_max[0] - bbox_min[0],
+        )
+        self.to_grid = PointFeatureToGrid(
+            in_channels=encoder_channels[0],
+            out_channels=encoder_channels[0],
+            aabb_max=bbox_max,
+            aabb_min=bbox_min,
+            voxel_size=voxel_size,
+            resolution=resolution,
+            use_rel_pos=use_rel_pos,
+            use_rel_pos_encode=use_rel_pos_encode,
+            pos_encode_dim=pos_encode_dim,
+            reductions=reductions,
+            neighbor_search_type=neighbor_search_type,
+            knn_k=knn_k,
+        )
+
+    def data_dict_to_input(self, data_dict) -> torch.Tensor:
+        vertices = data_dict["cell_centers"]
+        return vertices.to(self.device)
+
+    def forward(self, x: Float[Tensor, "B N 3"]):
+        point_features = self.vertex_to_point_features(x)
+        grid_features: GridFeatures = self.to_grid(point_features)
+        x, drag_x = VWUNet.forward(self, grid_features.batch_features)
+        return x, drag_x
+
+    def forward_and_sample_pressure(
+        self, data_dict, loss_fn=None, datamodule=None, **kwargs
+    ) -> Tuple[Tensor, Tensor]:
+        vertices = self.data_dict_to_input(data_dict)
+        normalized_pred, drag_pred = self(vertices)
+
+        # BxNx3 vertices
+        # Scale it to [-1, 1] for grid_sample
+        vertices = (vertices - self.bbox_min.to(self.device)) * self.vert_scaler.to(
+            self.device
+        ) - 1
+        # Convert to BxNx1x1x3
+        vertices = vertices.unsqueeze(2).unsqueeze(2)
+
+        # use tri-linear interpolation to sample the pressure field
+        normalized_pred = F.grid_sample(
+            normalized_pred,
+            vertices,
+            align_corners=True,
+        )  # Bx1xNx1x1x1
+        # Bx1xNx1x1x1 -> BxN
+        normalized_pred = normalized_pred.view(normalized_pred.size(0), -1)
+        return normalized_pred, drag_pred
+
+
 class TestVWUNet(unittest.TestCase):
     """
     Test VWUNet on a simple case
@@ -427,10 +528,18 @@ class TestVWUNet(unittest.TestCase):
 
     def test_vwunet(self):
         vwunet = VWUNet()
-        x = torch.randn(2, 3, 64, 64, 64)
+        x = torch.randn(2, 1, 64, 64, 64)
         y = vwunet(x)
-        self.assertEqual(y[0].shape, torch.Size([2, 3, 64, 64, 64]))
+        self.assertEqual(y[0].shape, torch.Size([2, 1, 64, 64, 64]))
         self.assertEqual(y[1].shape, torch.Size([2, 1]))
+
+    def test_vwunet_pconv(self):
+        vwunet = VWUNetPrincipalConvDrivAer()
+        B, N = 2, 10000
+        verts = torch.randn(B, N, 3)
+        y = vwunet(verts)
+        self.assertEqual(y[0].shape, torch.Size([B, N, 1]))
+        self.assertEqual(y[1].shape, torch.Size([B, 1]))
 
 
 if __name__ == "__main__":

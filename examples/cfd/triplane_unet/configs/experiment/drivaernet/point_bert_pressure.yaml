@@ -36,43 +36,54 @@ model:
   NAME: BaseSeg
   encoder_args:
     _target_: easydict.EasyDict
-    NAME: PointNextEncoder
-    blocks: [ 1, 1, 1, 1, 1 ]
-    strides: [ 1, 2, 2, 2, 2 ]
-    width: 64
+    NAME: PointViT
     in_channels: 3
-    sa_layers: 1
-    sa_use_res: True
-    radius: 0.1
-    radius_scaling: 2.5
-    nsample: 32
-    expansion: 4
-    aggr_args:
-      _target_: easydict.EasyDict
-      feature_type: 'dp_fj'
-    reduction: 'max'
-    group_args:
-      _target_: easydict.EasyDict
-      NAME: 'ballquery'
-      normalize_dp: True
-    conv_args:
-      _target_: easydict.EasyDict
-      order: conv-norm-act
+    embed_dim: 512 
+    depth: 8
+    num_heads: 8
+    mlp_ratio: 4.
+    drop_rate: 0.
+    attn_drop_rate: 0.0
+    drop_path_rate: 0.1
+    add_pos_each_block: True
+    qkv_bias: True
     act_args:
       _target_: easydict.EasyDict
-      act: 'relu' # leakrelu makes training unstable.
+      act: 'gelu'
     norm_args:
       _target_: easydict.EasyDict
-      norm: 'bn'  # ln makes training unstable
+      norm: 'ln'
+      eps: 1.0e-6
+    embed_args:
+      _target_: easydict.EasyDict
+      NAME: P3Embed
+      feature_type: 'dp_df'
+      reduction: 'max'
+      sample_ratio: 0.0625
+      normalize_dp: False 
+      group_size: 32
+      subsample: 'fps' # random, FPS
+      group: 'knn'
+      conv_args:
+        _target_: easydict.EasyDict
+        order: conv-norm-act
+      layers: 4
+      norm_args: 
+        _target_: easydict.EasyDict
+        norm: 'ln2d'
   decoder_args:
-    NAME: PointNextDecoder
+    _target_: easydict.EasyDict
+    NAME: PointViTDecoder
+    channel_scaling: 1
+    global_feat: cls,max
+    progressive_input: True
 
   decoder_inputs: both
-  mlp_in_channels: 1024
-  decoder_out_channels: 64
+  mlp_in_channels: 512
+  decoder_out_channels: 1536
 
 loggers:
   wandb:
     project_name: drivaernet
     entity: nvr-ai-algo
-    run_name: PointNext
+    run_name: PointBERT
