@@ -513,11 +513,11 @@ class SongUNetPosEmbd(SongUNet):
         self, x, noise_labels, class_labels, global_index=None, augment_labels=None
     ):
         # append positional embedding to input conditioning
-        if self.pos_embed is not None:
+        if self.pos_embd is not None:
             selected_pos_embd = self.positional_embedding_indexing(x, global_index)
             x = torch.cat((x, selected_pos_embd), dim=1)
 
-        return super.forward(x, noise_labels, class_labels, augment_labels)
+        return super().forward(x, noise_labels, class_labels, augment_labels)
 
     def positional_embedding_indexing(self, x, global_index):
         if global_index is None:
