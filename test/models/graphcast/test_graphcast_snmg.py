@@ -22,14 +22,12 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import pytest
 import torch
-from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
+from graphcast.utils import create_random_input, fix_random_seeds
 from pytest_utils import import_or_fail
 from torch.nn.parallel import DistributedDataParallel
 
 from modulus.distributed import DistributedManager
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-
-icosphere_path = get_icosphere_path()
 
 
 def run_test_distributed_graphcast(

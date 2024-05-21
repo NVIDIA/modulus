@@ -24,9 +24,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import torch  # noqa: E402
 from pytest_utils import import_or_fail  # noqa: E402
-from utils import fix_random_seeds, get_icosphere_path  # noqa: E402
-
-icosphere_path = get_icosphere_path()
+from utils import fix_random_seeds  # noqa: E402
 
 
 @import_or_fail("dgl")

@@ -22,10 +22,8 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import common
 import pytest
-from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
+from graphcast.utils import create_random_input, fix_random_seeds
 from pytest_utils import import_or_fail
-
-icosphere_path = get_icosphere_path()
 
 
 @import_or_fail("dgl")
