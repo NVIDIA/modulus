@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Virtual Foundry GraphNet.
 - A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
 - Sorted Empirical CDF CRPS algorithm
+- 3D UNet
 
 ### Changed
 
