@@ -34,7 +34,7 @@ def test_unet3d_forward(device):
         out_channels=1,
         model_depth=3,
         feature_map_channels=[8, 8, 16, 16, 32, 32],
-        num_conv_blocks = 2,
+        num_conv_blocks=2,
     ).to(device)
 
     bsize = 2
@@ -64,7 +64,7 @@ def test_unet3d_constructor(device):
                 "feature_map_channels": [8, 8, 16, 16, 32, 32],
                 "num_conv_blocks": 2,
                 "pooling_type": pooling_type,
-            }
+            },
         ]
     for _, kw_args in enumerate(arg_list):
         # Construct model
@@ -87,7 +87,7 @@ def test_unet3d_optims(device):
             out_channels=1,
             model_depth=3,
             feature_map_channels=[4, 4, 8, 8, 16, 16],
-            num_conv_blocks = 2,
+            num_conv_blocks=2,
         ).to(device)
 
         bsize = 4
@@ -117,7 +117,7 @@ def test_unet3d_checkpoint(device):
         out_channels=1,
         model_depth=3,
         feature_map_channels=[8, 8, 16, 16, 32, 32],
-        num_conv_blocks = 2,
+        num_conv_blocks=2,
     ).to(device)
 
     model_2 = UNet3D(
@@ -125,7 +125,7 @@ def test_unet3d_checkpoint(device):
         out_channels=1,
         model_depth=3,
         feature_map_channels=[8, 8, 16, 16, 32, 32],
-        num_conv_blocks = 2,
+        num_conv_blocks=2,
     ).to(device)
 
     bsize = random.randint(1, 4)
@@ -142,7 +142,7 @@ def test_unet3d_deploy(device):
         out_channels=1,
         model_depth=3,
         feature_map_channels=[8, 8, 16, 16, 32, 32],
-        num_conv_blocks = 2,
+        num_conv_blocks=2,
     ).to(device)
 
     bsize = random.randint(1, 8)
