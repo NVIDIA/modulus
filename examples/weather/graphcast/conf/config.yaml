@@ -24,6 +24,8 @@ processor_layers: 16
 hidden_dim: 512
 multimesh_level: 6
 segments: 1
+norm_type: "TELayerNorm"
+  # "TELayerNorm" or "LayerNorm"
 force_single_checkpoint: False
 checkpoint_encoder: True
 checkpoint_processor: False

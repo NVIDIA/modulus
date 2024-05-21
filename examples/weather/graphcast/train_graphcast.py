@@ -96,6 +96,7 @@ class GraphCastTrainer(BaseTrainer):
             output_dim_grid_nodes=cfg.num_channels,
             processor_layers=cfg.processor_layers,
             hidden_dim=cfg.hidden_dim,
+            norm_type=cfg.norm_type,
             do_concat_trick=cfg.concat_trick,
             use_cugraphops_encoder=cfg.cugraphops_encoder,
             use_cugraphops_processor=cfg.cugraphops_processor,

@@ -91,7 +91,8 @@ class GraphCastNet(Module):
     activation_fn : str, optional
         Type of activation function, by default "silu"
     norm_type : str, optional
-        Normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     use_cugraphops_encoder : bool, default=False
         Flag to select cugraphops kernels in encoder
     use_cugraphops_processor : bool, default=False
