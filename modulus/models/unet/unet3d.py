@@ -15,12 +15,11 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-import numpy as np
+from typing import List, Optional, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from typing import List, Optional, Union
 
 from ..meta import ModelMetaData
 from ..module import Module
@@ -499,7 +498,7 @@ class UNet3D(Module):
 if __name__ == "__main__":
     inputs = torch.randn(1, 1, 96, 96, 96).cuda()
     print("The shape of inputs: ", inputs.shape)
-    model = Unet3D(
+    model = UNet3D(
         in_channels=1,
         out_channels=1,
         model_depth=5,
