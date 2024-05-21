@@ -14,13 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+from dataclasses import dataclass
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import List, Optional, Union
+
+from ..meta import ModelMetaData
+from ..module import Module
 
 
 class ConvBlock(nn.Module):
@@ -375,12 +378,13 @@ class DecoderBlock(nn.Module):
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
 
         # Final convolution
-        self.layers.append(ConvBlock(
-            in_channels=current_channels,
-            out_channels=out_channels,
-            activation=None,
-            normalization=None,
-        )
+        self.layers.append(
+            ConvBlock(
+                in_channels=current_channels,
+                out_channels=out_channels,
+                activation=None,
+                normalization=None,
+            )
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -389,7 +393,24 @@ class DecoderBlock(nn.Module):
         return x
 
 
-class Unet3D(nn.Module):
+@dataclass
+class MetaData(ModelMetaData):
+    name: str = "UNet3D"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = True
+    amp: bool = True
+    # Inference
+    onnx_cpu: bool = True
+    onnx_gpu: bool = True
+    onnx_runtime: bool = True
+    # Physics informed
+    var_dim: int = 1
+    func_torch: bool = False
+    auto_grad: bool = False
+
+
+class UNet3D(Module):
     """
     3D U-Net model for volumetric (3D) image segmentation, featuring an encoder-decoder architecture with skip connections.
     Default parameters are set to replicate the architecture here: https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/.
@@ -414,12 +435,23 @@ class Unet3D(nn.Module):
         in_channels: int,
         out_channels: int,
         model_depth: int = 5,
-        feature_map_channels: List[int] = [64, 64, 128, 128, 256, 256, 512, 512, 1024, 1024],
+        feature_map_channels: List[int] = [
+            64,
+            64,
+            128,
+            128,
+            256,
+            256,
+            512,
+            512,
+            1024,
+            1024,
+        ],
         num_conv_blocks: int = 2,
         pooling_type: str = "MaxPool3d",
         pool_size: int = 2,
     ):
-        super().__init__()
+        super().__init__(meta=MetaData())
 
         # Construct the encoder
         self.encoder = EncoderBlock(
