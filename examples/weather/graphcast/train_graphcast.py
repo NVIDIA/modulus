@@ -87,8 +87,9 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the model
         self.model = GraphCastNet(
-            meshgraph_path=to_absolute_path(cfg.icospheres_path),
             static_dataset_path=static_dataset_path,
+            multimesh_level=cfg.multimesh_level,
+            input_res=tuple(cfg.latlon_res),
             input_dim_grid_nodes=cfg.num_channels,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
@@ -140,10 +141,14 @@ class GraphCastTrainer(BaseTrainer):
         DataPipe = (
             SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
         )
+        self.interpolation_shape = (
+            cfg.latlon_res if cfg.latlon_res != (721, 1440) else None
+        )  # interpolate if not in native resolution
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
             channels=[i for i in range(cfg.num_channels)],
+            interpolation_shape=self.interpolation_shape,
             num_samples_per_year=cfg.num_samples_per_year_train,
             num_steps=1,
             batch_size=1,
@@ -271,6 +276,7 @@ def main(cfg: DictConfig) -> None:
                 iter < cfg.num_iters_step1 + cfg.num_iters_step2 + cfg.num_iters_step3
             ), "Training is already finished!"
             for i, data in enumerate(trainer.datapipe):
+
                 # profiling
                 if cfg.profile and iter == cfg.profile_range[0]:
                     rank_zero_logger.info("Starting profile", "green")
@@ -321,6 +327,8 @@ def main(cfg: DictConfig) -> None:
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
                         channels=[i for i in range(cfg.num_channels)],
+                        interpolation_shape=trainer.interpolation_shape,
+                        num_samples_per_year=cfg.num_samples_per_year_train,
                         num_steps=num_rollout_steps,
                         batch_size=1,
                         num_workers=cfg.num_workers,

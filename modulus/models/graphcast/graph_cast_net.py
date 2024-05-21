@@ -66,11 +66,10 @@ class GraphCastNet(Module):
 
     Parameters
     ----------
-    meshgraph_path : str
-        Path to the meshgraph file. If not provided, the meshgraph will be created
-        using PyMesh.
     static_dataset_path : str
         Path to the static dataset file.
+    multimesh_level: int, optional
+        Level of the multi-mesh, by default 6
     input_res: Tuple[int, int]
         Input resolution of the latitude-longitude grid
     input_dim_grid_nodes : int, optional
@@ -140,8 +139,8 @@ class GraphCastNet(Module):
 
     def __init__(
         self,
-        meshgraph_path: str,
         static_dataset_path: str,
+        multimesh_level: int = 6,
         input_res: tuple = (721, 1440),
         input_dim_grid_nodes: int = 474,
         input_dim_mesh_nodes: int = 3,
@@ -183,13 +182,8 @@ class GraphCastNet(Module):
         activation_fn = get_activation(activation_fn)
 
         # construct the graph
-        try:
-            self.graph = Graph(meshgraph_path, self.lat_lon_grid)
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                "The icospheres_path is corrupted. "
-                "Tried using pymesh to generate the graph but could not find pymesh"
-            )
+        self.graph = Graph(self.lat_lon_grid, multimesh_level)
+
         self.mesh_graph = self.graph.create_mesh_graph(verbose=False)
         self.g2m_graph = self.graph.create_g2m_graph(verbose=False)
         self.m2g_graph = self.graph.create_m2g_graph(verbose=False)
