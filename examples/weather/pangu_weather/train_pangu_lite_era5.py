@@ -36,7 +36,7 @@ try:
     from apex import optimizers
 except:
     raise ImportError(
-        "FCN training requires apex package for optimizer."
+        "Pangu-Weather training requires apex package for optimizer."
         + "See https://github.com/nvidia/apex for install details."
     )
 
