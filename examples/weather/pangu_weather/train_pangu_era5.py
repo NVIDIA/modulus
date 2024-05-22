@@ -122,13 +122,6 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # Initialize loggers
-    # initialize_wandb(
-    #     project="Modulus-Launch-Dev",
-    #     entity="Modulus",
-    #     name="FourCastNet-Training",
-    #     group="FCN-DDP-Group",
-    # )
     initialize_mlflow(
         experiment_name="Modulus-Launch-Dev",
         experiment_desc="Modulus launch development",
