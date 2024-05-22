@@ -68,6 +68,12 @@ class ERA5HDF5Datapipe(Datapipe):
         stride 2 = 12 hours delta t, by default 1
     num_steps : int, optional
         Number of timesteps are included in the output variables, by default 1
+    interpolation_shape: Tuple[int, int], optional
+        Shape for resizing (H, W), by default None (no interpolation)
+    interpolation_type: str, optional
+        Interpolation type for resizing. Supports ["INTERP_NN", "INTERP_LINEAR", "INTERP_CUBIC",
+        "INTERP_LANCZOS3", "INTERP_TRIANGULAR", "INTERP_GAUSSIAN"]. Interpolation is performed
+        only if `interpolation_shape` is not None. by default "INTERP_LINEAR".
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
         divisible by patch_size, by default None
@@ -93,6 +99,8 @@ class ERA5HDF5Datapipe(Datapipe):
         batch_size: int = 1,
         num_steps: int = 1,
         stride: int = 1,
+        interpolation_shape: Union[Tuple[int, int], None] = None,
+        interpolation_type: str = "INTERP_LINEAR",
         patch_size: Union[Tuple[int, int], int, None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
@@ -109,6 +117,8 @@ class ERA5HDF5Datapipe(Datapipe):
         self.stats_dir = Path(stats_dir) if stats_dir is not None else None
         self.channels = channels
         self.stride = stride
+        self.interpolation_shape = interpolation_shape
+        self.interpolation_type = interpolation_type
         self.num_steps = num_steps
         self.num_samples_per_year = num_samples_per_year
         self.process_rank = process_rank
@@ -131,6 +141,22 @@ class ERA5HDF5Datapipe(Datapipe):
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
         if self.stats_dir is not None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
+
+        # Check interpolation type
+        if self.interpolation_shape is not None:
+            valid_interpolation = [
+                "INTERP_NN",
+                "INTERP_LINEAR",
+                "INTERP_CUBIC",
+                "INTERP_LANCZOS3",
+                "INTERP_TRIANGULAR",
+                "INTERP_GAUSSIAN",
+            ]
+            if self.interpolation_type not in valid_interpolation:
+                raise ValueError(
+                    f"Interpolation type {self.interpolation_type} not supported"
+                )
+            self.interpolation_type = getattr(dali.types, self.interpolation_type)
 
         self.parse_dataset_files()
         self.load_statistics()
@@ -271,6 +297,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 num_outputs=2,
                 parallel=True,
                 batch=False,
+                layout=["CHW", "FCHW"],
             )
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that.
@@ -285,6 +312,22 @@ class ERA5HDF5Datapipe(Datapipe):
             if self.stats_dir is not None:
                 invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
                 outvar = dali.fn.normalize(outvar, mean=self.mu, stddev=self.sd)
+            # Resize.
+            if self.interpolation_shape is not None:
+                invar = dali.fn.resize(
+                    invar,
+                    resize_x=self.interpolation_shape[1],
+                    resize_y=self.interpolation_shape[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
+                outvar = dali.fn.resize(
+                    outvar,
+                    resize_x=self.interpolation_shape[1],
+                    resize_y=self.interpolation_shape[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
 
             # Set outputs.
             pipe.set_outputs(invar, outvar)
