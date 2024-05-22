@@ -29,7 +29,6 @@ def test_grad_checkpointing(device, pytestconfig, num_channels=2, res_h=15, res_
 
     # constants
     model_kwds = {
-        "static_dataset_path": None,
         "multimesh_level": 2,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
