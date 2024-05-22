@@ -43,6 +43,7 @@ from train_base import BaseTrainer
 from validation import Validation
 from modulus.datapipes.climate import ERA5HDF5Datapipe, SyntheticWeatherDataLoader
 from modulus.distributed import DistributedManager
+from modulus.utils.graphcast.data_utils import StaticData
 
 import hydra
 from hydra.utils import to_absolute_path
@@ -85,16 +86,25 @@ class GraphCastTrainer(BaseTrainer):
             else:
                 raise ValueError("Invalid dtype for config amp")
 
+        # Handle the number of static channels
+        if not self.static_dataset_path:
+            cfg.num_channels_static = 0
+            rank_zero_logger.warning(
+                "Static dataset path is not provided. Setting num_channels_static to 0."
+            )
+
         # instantiate the model
         self.model = GraphCastNet(
-            meshgraph_path=to_absolute_path(cfg.icospheres_path),
             static_dataset_path=static_dataset_path,
-            input_dim_grid_nodes=cfg.num_channels,
+            multimesh_level=cfg.multimesh_level,
+            input_res=tuple(cfg.latlon_res),
+            input_dim_grid_nodes=cfg.num_channels_climate + cfg.num_channels_static,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
-            output_dim_grid_nodes=cfg.num_channels,
+            output_dim_grid_nodes=cfg.num_channels_climate,
             processor_layers=cfg.processor_layers,
             hidden_dim=cfg.hidden_dim,
+            norm_type=cfg.norm_type,
             do_concat_trick=cfg.concat_trick,
             use_cugraphops_encoder=cfg.cugraphops_encoder,
             use_cugraphops_processor=cfg.cugraphops_processor,
@@ -140,10 +150,14 @@ class GraphCastTrainer(BaseTrainer):
         DataPipe = (
             SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
         )
+        self.interpolation_shape = (
+            cfg.latlon_res if cfg.latlon_res != (721, 1440) else None
+        )  # interpolate if not in native resolution
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
-            channels=[i for i in range(cfg.num_channels)],
+            channels=[i for i in range(cfg.num_channels_climate)],
+            interpolation_shape=self.interpolation_shape,
             num_samples_per_year=cfg.num_samples_per_year_train,
             num_steps=1,
             batch_size=1,
@@ -178,11 +192,17 @@ class GraphCastTrainer(BaseTrainer):
         self.criterion = CellAreaWeightedLossFunction(self.area)
         try:
             self.optimizer = apex.optimizers.FusedAdam(
-                self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
+                self.model.parameters(),
+                lr=cfg.lr,
+                betas=(0.9, 0.95),
+                adam_w_mode=True,
+                weight_decay=0.1,
             )
             rank_zero_logger.info("Using FusedAdam optimizer")
         except:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
+            self.optimizer = torch.optim.AdamW(
+                self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
+            )
         scheduler1 = LinearLR(
             self.optimizer,
             start_factor=1e-3,
@@ -214,6 +234,36 @@ class GraphCastTrainer(BaseTrainer):
             device=dist.device,
         )
 
+        # Get the static data
+        if self.static_dataset_path:
+            self.static_data = StaticData(
+                static_dataset_path, self.latitudes, self.longitudes
+            ).get()
+            self.static_data = self.static_data.to(dtype=self.dtype).to(
+                device=dist.device
+            )
+            assert cfg.num_channels_static == self.static_data.size(1), (
+                f"Number of static channels in model ({cfg.num_channels_static}) "
+                + f"does not match the static data ({self.static_data.size(1)})"
+            )
+            if (
+                self.model.is_distributed and self.model.expect_partitioned_input
+            ):  # TODO verify
+                # if input itself is distributed, we also need to distribute static data
+                self.static_data(
+                    self.static_data[0].view(cfg.num_channels_static, -1).permute(1, 0)
+                )
+                self.static_data = self.g2m_graph.get_src_node_features_in_partition(
+                    self.static_data
+                )
+                self.static_data = self.static_data.permute(1, 0).unsqueeze(dim=0)
+                self.static_data = self.static_data.to(dtype=self.dtype).to(
+                    device=dist.device
+                )
+
+        else:
+            self.static_data = None
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -244,10 +294,14 @@ def main(cfg: DictConfig) -> None:
         entity="Modulus",
         name="GraphCast-Training",
         group="GraphCast-DDP-Group",
+        mode=cfg.wb_mode,
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     rank_zero_logger.file_logging()
+
+    # print ranks and devices
+    logger.info(f"Rank: {dist.rank}, Device: {dist.device}")
 
     # specify the datapipe
     if cfg.synthetic_dataset:
@@ -271,6 +325,7 @@ def main(cfg: DictConfig) -> None:
                 iter < cfg.num_iters_step1 + cfg.num_iters_step2 + cfg.num_iters_step3
             ), "Training is already finished!"
             for i, data in enumerate(trainer.datapipe):
+
                 # profiling
                 if cfg.profile and iter == cfg.profile_range[0]:
                     rank_zero_logger.info("Starting profile", "green")
@@ -320,7 +375,9 @@ def main(cfg: DictConfig) -> None:
                     trainer.datapipe = DataPipe(
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
-                        channels=[i for i in range(cfg.num_channels)],
+                        channels=[i for i in range(cfg.num_channels_climate)],
+                        interpolation_shape=trainer.interpolation_shape,
+                        num_samples_per_year=cfg.num_samples_per_year_train,
                         num_steps=num_rollout_steps,
                         batch_size=1,
                         num_workers=cfg.num_workers,
@@ -338,6 +395,10 @@ def main(cfg: DictConfig) -> None:
                 # TODO modify for history > 0
                 data_x = data[0]["invar"]
                 data_y = data[0]["outvar"]
+
+                # add static data
+                invar = torch.concat((invar, trainer.static_data), dim=1)
+
                 # move to device & dtype
                 data_x = data_x.to(dtype=trainer.dtype)
                 grid_nfeat = data_x

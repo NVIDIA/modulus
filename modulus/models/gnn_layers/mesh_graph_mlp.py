@@ -26,11 +26,11 @@ from torch.autograd.function import once_differentiable
 from .utils import CuGraphCSC, concat_efeat, sum_efeat
 
 try:
-    from apex.normalization import FusedLayerNorm
+    from transformer_engine import pytorch as te
 
-    apex_imported = True
+    te_imported = True
 except ImportError:
-    apex_imported = False
+    te_imported = False
 
 
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
@@ -118,7 +118,8 @@ class MeshGraphMLP(nn.Module):
     activation_fn : nn.Module, optional
         , by default nn.SiLU()
     norm_type : str, optional
-        normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     recompute_activation : bool, optional
         Flag for recomputing recompute_activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
@@ -147,14 +148,17 @@ class MeshGraphMLP(nn.Module):
             if norm_type is not None:
                 if norm_type not in [
                     "LayerNorm",
-                    "GraphNorm",
-                    "InstanceNorm",
-                    "BatchNorm",
-                    "MessageNorm",
+                    "TELayerNorm",
                 ]:
-                    raise ValueError(norm_type)
-                if norm_type == "LayerNorm" and apex_imported:
-                    norm_layer = FusedLayerNorm
+                    raise ValueError(
+                        f"Invalid norm type {norm_type}. Supported types are LayerNorm and TELayerNorm."
+                    )
+                if norm_type == "TELayerNorm" and te_imported:
+                    norm_layer = te.LayerNorm
+                elif norm_type == "TELayerNorm" and not te_imported:
+                    raise ValueError(
+                        "TELayerNorm requires transformer-engine to be installed."
+                    )
                 else:
                     norm_layer = getattr(nn, norm_type)
                 layers.append(norm_layer(output_dim))
@@ -223,7 +227,8 @@ class MeshGraphEdgeMLPConcat(MeshGraphMLP):
     activation_fn : nn.Module, optional
         type of activation function, by default nn.SiLU()
     norm_type : str, optional
-        normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     bias : bool, optional
         whether to use bias in the MLP, by default True
     recompute_activation : bool, optional
@@ -295,7 +300,8 @@ class MeshGraphEdgeMLPSum(nn.Module):
     activation_fn : nn.Module, optional
         type of activation function, by default nn.SiLU()
     norm_type : str, optional
-        normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     bias : bool, optional
         whether to use bias in the MLP, by default True
     recompute_activation : bool, optional
@@ -349,14 +355,17 @@ class MeshGraphEdgeMLPSum(nn.Module):
         if norm_type is not None:
             if norm_type not in [
                 "LayerNorm",
-                "GraphNorm",
-                "InstanceNorm",
-                "BatchNorm",
-                "MessageNorm",
+                "TELayerNorm",
             ]:
-                raise ValueError(norm_type)
-            if norm_type == "LayerNorm" and apex_imported:
-                norm_layer = FusedLayerNorm
+                raise ValueError(
+                    f"Invalid norm type {norm_type}. Supported types are LayerNorm and TELayerNorm."
+                )
+            if norm_type == "TELayerNorm" and te_imported:
+                norm_layer = te.LayerNorm
+            elif norm_type == "TELayerNorm" and not te_imported:
+                raise ValueError(
+                    "TELayerNorm requires transformer-engine to be installed."
+                )
             else:
                 norm_layer = getattr(nn, norm_type)
             layers.append(norm_layer(output_dim))
