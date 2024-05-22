@@ -34,7 +34,6 @@ def test_graphcast_forward(device, pytestconfig, num_channels=2, res_h=10, res_w
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "static_dataset_path": None,
         "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
@@ -68,7 +67,6 @@ def test_graphcast_constructor(
     # Define dictionary of constructor args
     arg_list = [
         {
-            "static_dataset_path": None,
             "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels_1,
@@ -80,7 +78,6 @@ def test_graphcast_constructor(
             "do_concat_trick": True,
         },
         {
-            "static_dataset_path": None,
             "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels_2,
@@ -117,7 +114,6 @@ def test_GraphCast_optims(device, pytestconfig, num_channels=2, res_h=10, res_w=
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
         model_kwds = {
-            "static_dataset_path": None,
             "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels,
@@ -160,7 +156,6 @@ def test_graphcast_checkpoint(device, pytestconfig, num_channels=2, res_h=10, re
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "static_dataset_path": None,
         "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
@@ -195,7 +190,6 @@ def test_GraphCast_deploy(device, pytestconfig, num_channels=2, res_h=10, res_w=
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "static_dataset_path": None,
         "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,

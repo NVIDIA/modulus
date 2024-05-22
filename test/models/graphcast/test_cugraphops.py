@@ -52,7 +52,6 @@ def test_cugraphops(
     np.random.seed(0)
 
     model = GraphCastNet(
-        static_dataset_path=None,
         multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
@@ -72,7 +71,6 @@ def test_cugraphops(
     fix_random_seeds()
 
     model_dgl = GraphCastNet(
-        static_dataset_path=None,
         multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,

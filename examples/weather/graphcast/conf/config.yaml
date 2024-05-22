@@ -39,7 +39,7 @@ cugraphops_encoder: True
 cugraphops_processor: True
 cugraphops_decoder: True
 recompute_activation: True
-wb_mode: "disabled"
+wb_mode: "online"
 synthetic_dataset: false
 dataset_path: "/data"
 static_dataset_path: null

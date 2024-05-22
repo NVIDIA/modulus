@@ -52,7 +52,6 @@ def test_concat_trick(pytestconfig, recomp_act, num_channels=2, res_h=11, res_w=
 
     # Instantiate the model
     model = GraphCastNet(
-        static_dataset_path=None,
         multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
@@ -70,7 +69,6 @@ def test_concat_trick(pytestconfig, recomp_act, num_channels=2, res_h=11, res_w=
 
     # Instantiate the model with concat trick enabled
     model_ct = GraphCastNet(
-        static_dataset_path=None,
         multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,

@@ -45,7 +45,8 @@ static_dataset_path: "/code/static"  #"/code/mnabian/static"
 latlon_res: [181, 360]
 num_samples_per_year_train: 1408
 num_workers: 8
-num_channels: 73
+num_channels_climate: 73
+num_channels_static: 1
 num_channels_val: 3
 num_val_steps: 8
 num_val_spy: 3  # SPY: Samples Per Year
