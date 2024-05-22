@@ -179,10 +179,9 @@ def test_dlwp(tmp_path, batch_size, device, pytestconfig):
 def save_untrained_graphcast(path):
     """Function to save untrained GraphCast"""
 
-    icosphere_path = path / "icospheres.json"
     config = {
-        "meshgraph_path": icosphere_path.as_posix(),
         "static_dataset_path": None,
+        "multimesh_level": 1,
         "input_dim_grid_nodes": 2,
         "input_dim_mesh_nodes": 3,
         "input_dim_edges": 4,

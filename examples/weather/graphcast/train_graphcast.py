@@ -184,11 +184,17 @@ class GraphCastTrainer(BaseTrainer):
         self.criterion = CellAreaWeightedLossFunction(self.area)
         try:
             self.optimizer = apex.optimizers.FusedAdam(
-                self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
+                self.model.parameters(),
+                lr=cfg.lr,
+                betas=(0.9, 0.95),
+                adam_w_mode=True,
+                weight_decay=0.1,
             )
             rank_zero_logger.info("Using FusedAdam optimizer")
         except:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
+            self.optimizer = torch.optim.AdamW(
+                self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
+            )
         scheduler1 = LinearLR(
             self.optimizer,
             start_factor=1e-3,
@@ -250,10 +256,14 @@ def main(cfg: DictConfig) -> None:
         entity="Modulus",
         name="GraphCast-Training",
         group="GraphCast-DDP-Group",
+        mode=cfg.wb_mode,
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     rank_zero_logger.file_logging()
+
+    # print ranks and devices
+    logger.info(f"Rank: {dist.rank}, Device: {dist.device}")
 
     # specify the datapipe
     if cfg.synthetic_dataset:
