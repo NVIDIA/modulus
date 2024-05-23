@@ -62,6 +62,9 @@ from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
 logger = logging.getLogger(__name__)
+# as we write logs to an output directory, starting many jobs at the same
+# time can lead to conflicts, to avoid this, let hydra define a random
+# uuid appended to the output path to avoid these conflicts
 OmegaConf.register_new_resolver("rand_uuid", lambda: int(uuid.uuid4()))
 
 
@@ -109,7 +112,7 @@ def autoregressive_inference(
         )
 
     losses = np.zeros(nics)
-    fno_times = np.zeros(nics)
+    graphcast_times = np.zeros(nics)
     nwp_times = np.zeros(nics)
 
     for iic in range(nics):
@@ -138,13 +141,15 @@ def autoregressive_inference(
                 and (i % nskip == 0)
             ):
 
-                # do plotting
+                # do plotting, as we aggregated output only on rank0, only use
+                # data from rank 0
                 fig = plt.figure(figsize=(7.5, 6))
                 dataset.solver.plot_griddata(prd[0, plot_channel], fig, vmax=4, vmin=-4)
                 plt.savefig(os.path.join(path_root, f"pred_{i//nskip}.png"))
                 plt.clf()
 
-        fno_times[iic] = time.time() - start_time
+        torch.cuda.synchronize()
+        graphcast_times[iic] = time.time() - start_time
 
         # classical model, not parallel so only on rank 0
         if dist_manager.rank == 0:
@@ -166,6 +171,7 @@ def autoregressive_inference(
                     plt.savefig(os.path.join(path_root, f"truth_{i//nskip}.png"))
                     plt.clf()
 
+            torch.cuda.synchronize()
             nwp_times[iic] = time.time() - start_time
 
             ref = dataset.solver.spec2grid(uspec)
@@ -173,7 +179,7 @@ def autoregressive_inference(
 
             losses[iic] = loss_fn(prd, ref, solver=dataset.solver, relative=True).item()
 
-    return losses, fno_times, nwp_times
+    return losses, graphcast_times, nwp_times
 
 
 # training function
@@ -428,8 +434,13 @@ def main(cfg: DictConfig):
         hidden_dim=cfg.model.hidden_dim,
         partition_size=dist_manager.group_size(graph_partition_pg_name),
         partition_group_name=graph_partition_pg_name,
+        # simplified data-loading scheme: only rank 0 has valid inputs
+        # model then takes care of scattering these onto participating ranks
         expect_partitioned_input=False,
         global_features_on_rank_0=True,
+        # simplilfied loss computation, to allow e.g. the l2_loss_sphere
+        # without having to distribute this loss computation, valid
+        # output is only on rank 0, model aggregates the output accordingly
         produce_aggregated_output=True,
         produce_aggregated_output_on_all_ranks=False,
         use_lat_lon_partitioning=cfg.model.use_lat_lon_partitioning,
@@ -457,9 +468,8 @@ def main(cfg: DictConfig):
             raise ValueError(
                 "load_checkpoint=True but cfg.checkpoint_dir is not set, abort."
             )
-        model.load_state_dict(
-            torch.load(os.path.join(cfg.checkpoint_dir, "checkpoints", "model.pt"))
-        )
+        file_name = os.path.join(cfg.checkpoint_dir, "checkpoints", "model.mdlus")
+        model.load(file_name, map_location=manager.device)
 
     nsteps = cfg.data.dt // cfg.data.dt_solver
     dataset = PdeDataset(
@@ -513,10 +523,8 @@ def main(cfg: DictConfig):
             os.makedirs(os.path.join(run_output_dir, "output_data"), exist_ok=True)
             if cfg.save_checkpoint:
                 os.makedirs(os.path.join(run_output_dir, "checkpoints"), exist_ok=True)
-                torch.save(
-                    model.state_dict(),
-                    os.path.join(run_output_dir, "checkpoints", "model.pt"),
-                )
+                file_name = os.path.join(run_output_dir, "checkpoints", "model.mdlus")
+                model.save(file_name)
 
     # skip inference for dummy_data
     if not cfg.data.dummy_data:
@@ -525,7 +533,7 @@ def main(cfg: DictConfig):
         torch.cuda.manual_seed(cfg.seed)
 
         with torch.inference_mode():
-            losses, fno_times, nwp_times = autoregressive_inference(
+            losses, graphcast_times, nwp_times = autoregressive_inference(
                 model,
                 dataset,
                 os.path.join(run_output_dir, "figures"),
@@ -535,8 +543,8 @@ def main(cfg: DictConfig):
             )
             metrics["loss_mean"] = np.mean(losses)
             metrics["loss_std"] = np.std(losses)
-            metrics["fno_time_mean"] = np.mean(fno_times)
-            metrics["fno_time_std"] = np.std(fno_times)
+            metrics["graphcast_time_mean"] = np.mean(graphcast_times)
+            metrics["graphcast_time_std"] = np.std(graphcast_times)
             metrics["nwp_time_mean"] = np.mean(nwp_times)
             metrics["nwp_time_std"] = np.std(nwp_times)
 

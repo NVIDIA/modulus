@@ -84,62 +84,15 @@ def get_lat_lon_partition_separators(partition_size: int):
 
         return lat_ranges, lon_ranges
 
-    lat_ranges, lon_ranges = None, None
+    # use two closest factors of partition_size
+    lat_chunks, lon_chunks, i = 1, partition_size, 0
+    while lat_chunks < lon_chunks:
+        i += 1
+        if partition_size % i == 0:
+            lat_chunks = i
+            lon_chunks = partition_size // lat_chunks
 
-    # define usual typical sizes explicitly to slightly
-    # simplify handling the generic case
-    if partition_size == 1:
-        lat_ranges, lon_ranges = _divide(1, 1)
-
-    elif partition_size == 2:
-        lat_ranges, lon_ranges = _divide(1, 2)
-
-    elif partition_size == 3:
-        lat_ranges, lon_ranges = _divide(1, 3)
-
-    elif partition_size == 4:
-        lat_ranges, lon_ranges = _divide(2, 2)
-
-    elif partition_size == 6:
-        lat_ranges, lon_ranges = _divide(2, 3)
-
-    elif partition_size == 8:
-        lat_ranges, lon_ranges = _divide(2, 4)
-
-    elif partition_size == 9:
-        lat_ranges, lon_ranges = _divide(3, 3)
-
-    elif partition_size == 12:
-        lat_ranges, lon_ranges = _divide(3, 4)
-
-    elif partition_size == 16:
-        lat_ranges, lon_ranges = _divide(4, 4)
-
-    elif partition_size == 20:
-        lat_ranges, lon_ranges = _divide(4, 5)
-
-    elif partition_size == 24:
-        lat_ranges, lon_ranges = _divide(4, 6)
-
-    else:
-        logger.warn(
-            f"lat_lon partitioning for {partition_size} might not be optimized."
-        )
-
-        # try to distribute remaining workload as good as possible
-        # TOOD: in the longer term, find a way of using some form of round-robin
-        # distribution scheme for chunks of different size
-        # for now, if not nicely divisble into rectangular grid of "chunks"
-        # just divide along longitude into partition_size chunks
-        for divisor in [8, 4, 2, 1]:
-            if partition_size % divisor == 0:
-                quotient = partition_size // divisor
-                if quotient > divisor:
-                    lat_ranges, lon_ranges = _divide(divisor, quotient)
-                else:
-                    lat_ranges, lon_ranges = _divide(quotient, divisor)
-
-                break
+    lat_ranges, lon_ranges = _divide(lat_chunks, lon_chunks)
 
     # mainly for debugging
     if (lat_ranges is None) or (lon_ranges is None):

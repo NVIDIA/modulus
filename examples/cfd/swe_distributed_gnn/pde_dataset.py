@@ -129,14 +129,16 @@ class PdeDataset(torch.utils.data.Dataset):
                     if self.normalize:
                         inp = (inp - self.inp_mean) / torch.sqrt(self.inp_var)
                         tar = (tar - self.inp_mean) / torch.sqrt(self.inp_var)
-                        inp = inp.clone()
-                        tar = tar.clone()
 
             if inp.dtype != self.dtype:
                 inp = inp.to(dtype=self.dtype)
                 tar = tar.to(dtype=self.dtype)
 
         else:
+            # for now: assume only rank 0 produces valid inputs
+            # a distributed model later takes care of scattering these onto
+            # the participating ranks
+            # to simplify things: return empty dummy tensors on other ranks
             inp = torch.empty(
                 (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
             )

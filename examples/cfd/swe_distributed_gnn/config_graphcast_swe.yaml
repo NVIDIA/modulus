@@ -18,6 +18,8 @@ hydra:
   job:
     chdir: True
   run:
+    # "safe" output path - even when multiple jobs are started at the
+    # same time without the need to involve sub-second time resolutions
     dir: ${output_dir}/${now:%Y-%m-%d}_${now:%H-%M-%S}_run-${rand_uuid:}
 
 output_dir: ./outputs
@@ -45,6 +47,9 @@ data:
 model:
   hidden_dim: 128
   processor_layers: 16
+  # to minimize "edges" between partitions it can
+  # be useful to divide a lot-lon based grid into
+  # partitions based on lat-lon coordinates
   use_lat_lon_partitioning: True
   loss_fn: "l2"
   enable_amp: False

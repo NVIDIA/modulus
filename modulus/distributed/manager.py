@@ -366,7 +366,10 @@ class DistributedManager(object):
         if manager._distributed:
             # Setup distributed process group
             dist.init_process_group(
-                backend, rank=manager.rank, world_size=manager.world_size
+                backend,
+                rank=manager.rank,
+                world_size=manager.world_size,
+                device_id=manager.device,
             )
 
         if torch.cuda.is_available():
