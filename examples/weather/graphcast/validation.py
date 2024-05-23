@@ -35,10 +35,14 @@ class Validation:
         self.model = model
         self.dtype = dtype
         self.dist = dist
+        interpolation_shape = (
+            cfg.latlon_res if cfg.latlon_res != (721, 1440) else None
+        )  # interpolate if not in native resolution
         self.val_datapipe = ERA5HDF5Datapipe(
             data_dir=os.path.join(cfg.dataset_path, "test"),
             stats_dir=os.path.join(cfg.dataset_path, "stats"),
             channels=[i for i in range(cfg.num_channels)],
+            interpolation_shape=interpolation_shape,
             num_steps=cfg.num_val_steps,
             batch_size=1,
             num_samples_per_year=cfg.num_val_spy,
