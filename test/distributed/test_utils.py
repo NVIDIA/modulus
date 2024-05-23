@@ -197,11 +197,14 @@ def test_reduce_loss():
     assert num_gpus > 1
     world_size = num_gpus
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_test_reduce_loss,
         args=(world_size,),
         nprocs=world_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )
 
 
@@ -210,11 +213,13 @@ def test_mark_shared():
     num_gpus = torch.cuda.device_count()
     assert num_gpus > 1
     world_size = num_gpus
-    """
+
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_test_mark_shared,
         args=(world_size,),
         nprocs=world_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )
-    """

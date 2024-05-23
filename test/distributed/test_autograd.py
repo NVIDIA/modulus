@@ -218,11 +218,14 @@ def run_test_autograd_prim(func):
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = 2
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         func,
         args=(world_size,),
         nprocs=world_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )
 
 

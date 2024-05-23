@@ -821,10 +821,6 @@ class GraphCastNet(Module):
             outvar = outvar.view(self.output_dim_grid_nodes, *self.input_res)
             outvar = torch.unsqueeze(outvar, dim=0)
 
-        else:
-            # keep partition of H, W, i.e. produce [N, C, P]
-            outvar = outvar.permute(1, 0).unsqueeze(dim=0)
-
         return outvar
 
     def to(self, *args: Any, **kwargs: Any) -> Self:

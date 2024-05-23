@@ -129,8 +129,6 @@ def run_test_distributed_graphcast(
     atol_w, rtol_w = tolerances_weight[dtype]
 
     # compare forward, now fully materialize out_multi_gpu to faciliate comparison
-    _B, _C, _N = out_multi_gpu.shape
-    out_multi_gpu = out_multi_gpu.view(_C, _N).permute(1, 0)
     out_multi_gpu = model_multi_gpu.m2g_graph.get_global_dst_node_features(
         out_multi_gpu
     )
@@ -178,6 +176,8 @@ def test_distributed_graphcast(
         4, num_gpus
     )  # test-graph is otherwise too small for distribution across more GPUs
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_test_distributed_graphcast,
         args=(
@@ -188,7 +188,7 @@ def test_distributed_graphcast(
             use_lat_lon_partitioning,
         ),
         nprocs=world_size,
-        start_method="spawn",
+        join=True,
     )
 
 

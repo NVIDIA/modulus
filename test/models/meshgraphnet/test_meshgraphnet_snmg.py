@@ -267,11 +267,13 @@ def test_distributed_meshgraphnet(dtype, partition_scheme, pytestconfig):
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = 2
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_test_distributed_meshgraphnet,
         args=(world_size, dtype, partition_scheme),
         nprocs=world_size,
-        start_method="spawn",
+        join=True,
     )
 
 
