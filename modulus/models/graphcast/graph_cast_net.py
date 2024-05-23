@@ -38,7 +38,6 @@ from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-from modulus.utils.graphcast.data_utils import StaticData
 from modulus.utils.graphcast.graph import Graph
 
 from .graph_cast_processor import GraphCastProcessor
@@ -133,11 +132,8 @@ class GraphCastNet(Module):
 
     Parameters
     ----------
-    meshgraph_path : str
-        Path to the meshgraph file. If not provided, the meshgraph will be created
-        using PyMesh.
-    static_dataset_path : str
-        Path to the static dataset file.
+    multimesh_level: int, optional
+        Level of the multi-mesh, by default 6
     input_res: Tuple[int, int]
         Input resolution of the latitude-longitude grid
     input_dim_grid_nodes : int, optional
@@ -159,7 +155,8 @@ class GraphCastNet(Module):
     activation_fn : str, optional
         Type of activation function, by default "silu"
     norm_type : str, optional
-        Normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     use_cugraphops_encoder : bool, default=False
         Flag to select cugraphops kernels in encoder
     use_cugraphops_processor : bool, default=False
@@ -222,8 +219,7 @@ class GraphCastNet(Module):
 
     def __init__(
         self,
-        meshgraph_path: str,
-        static_dataset_path: str,
+        multimesh_level: int = 6,
         input_res: tuple = (721, 1440),
         input_dim_grid_nodes: int = 474,
         input_dim_mesh_nodes: int = 3,
@@ -266,19 +262,13 @@ class GraphCastNet(Module):
         self.lat_lon_grid = torch.stack(
             torch.meshgrid(self.latitudes, self.longitudes, indexing="ij"), dim=-1
         )
-        self.has_static_data = static_dataset_path is not None
 
         # Set activation function
         activation_fn = get_activation(activation_fn)
 
         # construct the graph
-        try:
-            self.graph = Graph(meshgraph_path, self.lat_lon_grid)
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                "The icospheres_path is corrupted. "
-                "Tried using pymesh to generate the graph but could not find pymesh"
-            )
+        self.graph = Graph(self.lat_lon_grid, multimesh_level)
+
         self.mesh_graph = self.graph.create_mesh_graph(verbose=False)
         self.g2m_graph = self.graph.create_g2m_graph(verbose=False)
         self.m2g_graph = self.graph.create_m2g_graph(verbose=False)
@@ -363,25 +353,6 @@ class GraphCastNet(Module):
                 self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
                     self.mesh_ndata
                 )
-
-        # Get the static data
-        if self.has_static_data:
-            self.static_data = StaticData(
-                static_dataset_path, self.latitudes, self.longitudes
-            ).get()
-            num_static_feat = self.static_data.size(1)
-            input_dim_grid_nodes += num_static_feat
-            if self.is_distributed and expect_partitioned_input:
-                # if input itself is distributed, we also need to distribute static data
-                self.static_data(
-                    self.static_data[0].view(num_static_feat, -1).permute(1, 0)
-                )
-                self.static_data = self.g2m_graph.get_src_node_features_in_partition(
-                    self.static_data
-                )
-                self.static_data = self.static_data.permute(1, 0).unsqueeze(dim=0)
-        else:
-            self.static_data = None
 
         self.input_dim_grid_nodes = input_dim_grid_nodes
         self.output_dim_grid_nodes = output_dim_grid_nodes
@@ -792,25 +763,18 @@ class GraphCastNet(Module):
         if not self.is_distributed:
             if invar.size(0) != 1:
                 raise ValueError("GraphCast does not support batch size > 1")
-            # concat static data
-            if self.has_static_data:
-                invar = torch.concat((invar, self.static_data), dim=1)
             invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
 
         else:
             # is_distributed
             if expect_partitioned_input:
                 # partitioned input is [N, C, P] instead of [N, C, H, W]
-                if self.has_static_data:
-                    invar = torch.concat((invar, self.static_data), dim=1)
-                    invar = invar[0].permute(1, 0)
+                invar = invar[0].permute(1, 0)
             else:
                 # global_features_on_rank_0
                 if invar.size(0) != 1:
                     raise ValueError("GraphCast does not support batch size > 1")
-                # concat static data
-                if self.has_static_data:
-                    invar = torch.concat((invar, self.static_data), dim=1)
+
                 invar = invar[0].view(self.input_dim_grid_nodes, -1).permute(1, 0)
 
                 # scatter global features
@@ -889,8 +853,6 @@ class GraphCastNet(Module):
         self.m2g_edata = self.m2g_edata.to(*args, **kwargs)
         self.mesh_ndata = self.mesh_ndata.to(*args, **kwargs)
         self.mesh_edata = self.mesh_edata.to(*args, **kwargs)
-        if self.has_static_data:
-            self.static_data = self.static_data.to(*args, **kwargs)
 
         device, _, _, _ = torch._C._nn._parse_to(*args, **kwargs)
         self.g2m_graph = self.g2m_graph.to(device)

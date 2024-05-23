@@ -22,13 +22,11 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import pytest
 import torch
-from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
+from graphcast.utils import create_random_input, fix_random_seeds
 from pytest_utils import import_or_fail
 
 from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-
-icosphere_path = get_icosphere_path()
 
 
 torch.backends.cuda.matmul.allow_tf32 = False
@@ -60,8 +58,7 @@ def run_test_distributed_graphcast(
     res_w = 32
 
     model_kwds = {
-        "meshgraph_path": icosphere_path,
-        "static_dataset_path": None,
+        "multimesh_level": 2,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": 34,
         "input_dim_mesh_nodes": 3,
