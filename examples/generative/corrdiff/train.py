@@ -330,11 +330,11 @@ def main(cfg: DictConfig) -> None:
         c.patch_shape_x = img_shape_x
     if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
         c.patch_shape_y = img_shape_y
-    if c.patch_shape_x != c.patch_shape_y:
-        raise NotImplementedError("Rectangular patch not supported yet")
-    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
-        raise ValueError("Patch shape needs to be a multiple of 32")
     if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
+        if c.patch_shape_x != c.patch_shape_y:
+            raise NotImplementedError("Rectangular patch not supported yet")
+        if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+            raise ValueError("Patch shape needs to be a multiple of 32")
         logger0.info("Patch-based training enabled")
     else:
         logger0.info("Patch-based training disabled")
