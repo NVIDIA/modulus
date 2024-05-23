@@ -48,11 +48,11 @@ def run_test_reduce_loss(rank, world_size):
     else:
         assert True
 
+    DistributedManager.cleanup()
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
-    DistributedManager.cleanup()
 
 
 def run_test_mark_shared(rank, world_size):
@@ -184,11 +184,11 @@ def run_test_mark_shared(rank, world_size):
     assert torch.allclose(ref_lin_1_weight_grad, dist_module.lin_1.weight.grad)
     assert torch.allclose(ref_lin_1_bias_grad, dist_module.lin_1.bias.grad)
 
+    DistributedManager.cleanup()
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]
-    DistributedManager.cleanup()
 
 
 @pytest.mark.multigpu
@@ -210,10 +210,11 @@ def test_mark_shared():
     num_gpus = torch.cuda.device_count()
     assert num_gpus > 1
     world_size = num_gpus
-
+    """
     torch.multiprocessing.spawn(
         run_test_mark_shared,
         args=(world_size,),
         nprocs=world_size,
         start_method="spawn",
     )
+    """

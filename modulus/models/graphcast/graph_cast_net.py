@@ -767,10 +767,7 @@ class GraphCastNet(Module):
 
         else:
             # is_distributed
-            if expect_partitioned_input:
-                # partitioned input is [N, C, P] instead of [N, C, H, W]
-                invar = invar[0].permute(1, 0)
-            else:
+            if not expect_partitioned_input:
                 # global_features_on_rank_0
                 if invar.size(0) != 1:
                     raise ValueError("GraphCast does not support batch size > 1")

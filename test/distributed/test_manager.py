@@ -147,6 +147,7 @@ def test_manager_specified_initialization():
 
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
+    del os.environ["LOCAL_RANK"]
 
 
 def test_manager_singleton():

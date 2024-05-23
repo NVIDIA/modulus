@@ -148,7 +148,7 @@ class Graph:
             dtype=torch.float32,
         )
         g2m_graph.srcdata["lat_lon"] = self.lat_lon_grid_flat
-        g2m_graph.dstdata["lat_lon"] = xyz2latlon(self.multimesh_vertices)
+        g2m_graph.dstdata["lat_lon"] = xyz2latlon(g2m_graph.dstdata["pos"])
 
         g2m_graph = add_edge_features(
             g2m_graph, (g2m_graph.srcdata["pos"], g2m_graph.dstdata["pos"])
@@ -203,7 +203,7 @@ class Graph:
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
 
-        m2g_graph.srcdata["lat_lon"] = xyz2latlon(self.multimesh_vertices)
+        m2g_graph.srcdata["lat_lon"] = xyz2latlon(m2g_graph.srcdata["pos"])
         m2g_graph.dstdata["lat_lon"] = self.lat_lon_grid_flat
 
         m2g_graph = add_edge_features(

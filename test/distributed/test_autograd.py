@@ -247,8 +247,4 @@ def test_indexed_all_to_all_v():
 
 
 if __name__ == "__main__":
-    # pytest.main([__file__])
-    run_test_autograd_prim(run_test_scatter_v)
-    run_test_autograd_prim(run_test_gather_v)
-    run_test_autograd_prim(run_test_all_gather_v)
-    run_test_autograd_prim(run_test_indexed_all_to_all_v)
+    pytest.main([__file__])

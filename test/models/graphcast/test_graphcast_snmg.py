@@ -40,7 +40,6 @@ def run_test_distributed_graphcast(
     use_lat_lon_partitioning: bool,
 ):
     os.environ["RANK"] = f"{rank}"
-    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -159,7 +158,6 @@ def run_test_distributed_graphcast(
     # cleanup distributed
     DistributedManager.cleanup()
     del os.environ["RANK"]
-    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]

@@ -226,10 +226,15 @@ class DistributedManager(object):
         """Setup method using generic initialization"""
         rank = int(os.environ.get("RANK"))
         world_size = int(os.environ.get("WORLD_SIZE"))
-        if "LOCAL_RANK" in os.environ:
-            local_rank = int(os.environ.get("LOCAL_RANK"))
-        else:
+        try:
+            # try getting and converting to int
+            # (it might be empty or set and not valid) 
+            local_rank = int(os.environ["LOCAL_RANK"])
+            if (local_rank < 0) or (local_rank >= torch.cuda.device_count()):
+                raise ValueError
+        except (KeyError, ValueError):
             local_rank = rank % torch.cuda.device_count()
+
         # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
@@ -315,6 +320,8 @@ class DistributedManager(object):
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
                     DistributedManager.initialize_open_mpi(addr, port)
+                else:
+                    raise RuntimeError("Couln't neither initialize manager for ENV, SLURM and OPENMPI, abort.")
         elif initialization_method == "ENV":
             DistributedManager.initialize_env()
         elif initialization_method == "SLURM":
@@ -365,12 +372,20 @@ class DistributedManager(object):
 
         if manager._distributed:
             # Setup distributed process group
-            dist.init_process_group(
-                backend,
-                rank=manager.rank,
-                world_size=manager.world_size,
-                device_id=manager.device,
-            )
+            try:
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                    device_id=manager.device,
+                )
+            except TypeError:
+                # device_id only introduced in PyTorch 2.3
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                )
 
         if torch.cuda.is_available():
             # Set device for this process and empty cache to optimize memory usage
@@ -566,10 +581,8 @@ class DistributedManager(object):
         # Destroying group.WORLD is enough for all process groups to get destroyed
         if DistributedManager().distributed:
             if torch.cuda.is_available():
-                dist.barrier(
-                    device_ids=[DistributedManager().local_rank]
-                )  # just make sure that no process hangs
+                dist.barrier(device_ids=[DistributedManager().local_rank])
             else:
-                dist.barrier()  # just make sure that no process hangs
+                dist.barrier()
             dist.destroy_process_group()
         DistributedManager._shared_state = {}

@@ -41,7 +41,6 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
     from modulus.models.meshgraphnet.meshgraphnet import MeshGraphNet
 
     os.environ["RANK"] = f"{rank}"
-    os.environ["LOCAL_RANK"] = f"{rank}"
     os.environ["WORLD_SIZE"] = f"{world_size}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12355)
@@ -250,7 +249,6 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     # cleanup distributed
     del os.environ["RANK"]
-    del os.environ["LOCAL_RANK"]
     del os.environ["WORLD_SIZE"]
     del os.environ["MASTER_ADDR"]
     del os.environ["MASTER_PORT"]

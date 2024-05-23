@@ -133,7 +133,6 @@ def run_test_distributed_graph(
 ):
     if not use_torchrun:
         os.environ["RANK"] = f"{rank}"
-        os.environ["LOCAL_RANK"] = f"{rank}"
         os.environ["WORLD_SIZE"] = f"{world_size}"
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = str(12355)
@@ -334,7 +333,6 @@ def run_test_distributed_graph(
     if not use_torchrun:
         DistributedManager.cleanup()
         del os.environ["RANK"]
-        del os.environ["LOCAL_RANK"]
         del os.environ["WORLD_SIZE"]
         del os.environ["MASTER_ADDR"]
         del os.environ["MASTER_PORT"]
