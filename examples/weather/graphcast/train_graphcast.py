@@ -62,7 +62,7 @@ class GraphCastTrainer(BaseTrainer):
         self.amp_dtype = None
         self.pyt_profiler = cfg.pyt_profiler
         self.grad_clip_norm = cfg.grad_clip_norm
-        static_dataset_path = (
+        self.static_dataset_path = (
             to_absolute_path(cfg.static_dataset_path)
             if cfg.static_dataset_path
             else None
@@ -95,7 +95,6 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the model
         self.model = GraphCastNet(
-            static_dataset_path=static_dataset_path,
             multimesh_level=cfg.multimesh_level,
             input_res=tuple(cfg.latlon_res),
             input_dim_grid_nodes=cfg.num_channels_climate + cfg.num_channels_static,
@@ -237,7 +236,7 @@ class GraphCastTrainer(BaseTrainer):
         # Get the static data
         if self.static_dataset_path:
             self.static_data = StaticData(
-                static_dataset_path, self.latitudes, self.longitudes
+                self.static_dataset_path, self.model.latitudes, self.model.longitudes
             ).get()
             self.static_data = self.static_data.to(dtype=self.dtype).to(
                 device=dist.device
