@@ -97,6 +97,13 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     ):
         super().__init__(meta=MetaData)
         self.img_resolution = img_resolution
+        # for compatibility with older versions that took only 1 dimension
+        if type(img_resolution) == int:
+            self.img_shape_x = self.img_shape_y = img_resolution
+        else:
+            self.img_shape_x = img_resolution[0]
+            self.img_shape_y = img_resolution[1]
+
         self.img_channels = img_channels
 
         self.img_in_channels = img_in_channels
