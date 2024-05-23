@@ -320,6 +320,7 @@ def all_gather_v_bwd_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
+
     if len(sizes) != comm_size:
         raise ValueError()
     if dim >= tensor.dim():
@@ -482,9 +483,9 @@ def scatter_v_wrapper(
     torch.Tensor
         corresponding local part of the global tensor on each rank
     """
-
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
+
     if len(sizes) != comm_size:
         raise ValueError()
     if dist.get_rank(group=group) == 0 and dim >= tensor.dim():

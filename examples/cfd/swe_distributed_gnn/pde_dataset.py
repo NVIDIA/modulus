@@ -145,5 +145,9 @@ class PdeDataset(torch.utils.data.Dataset):
             tar = torch.empty(
                 (3, self.nlat, self.nlon), device=self.device, dtype=self.dtype
             )
+            # to show that these "dummy inputs" indeed don't play a role at all
+            # multiply them with "NaN"
+            inp = inp * float("nan")
+            tar = tar * float("nan")
 
         return inp, tar

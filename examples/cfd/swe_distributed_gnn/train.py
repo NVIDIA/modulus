@@ -129,6 +129,7 @@ def autoregressive_inference(
             prd = torch.empty((1, 3, dataset.nlat, dataset.nlon), device=model.device)
 
         # ML model
+        torch.cuda.synchronize()
         start_time = time.time()
         for i in range(1, cfg.data.autoreg_steps + 1):
             # evaluate the ML model
@@ -153,6 +154,7 @@ def autoregressive_inference(
 
         # classical model, not parallel so only on rank 0
         if dist_manager.rank == 0:
+            torch.cuda.synchronize()
             start_time = time.time()
             for i in range(1, cfg.data.autoreg_steps + 1):
 
@@ -201,6 +203,7 @@ def train_model(
         raise ValueError(
             f"loss_fn={cfg.model.loss_fn} not supported, expected 'l2' or 'l2sphere'."
         )
+    torch.cuda.synchronize()
     train_start = time.time()
 
     # count iterations
@@ -214,6 +217,7 @@ def train_model(
 
     for epoch in tqdm(range(cfg.data.num_epochs)):
         # time each epoch
+        torch.cuda.synchronize()
         epoch_start = time.time()
 
         dataloader.dataset.set_initial_condition("random")
@@ -235,8 +239,7 @@ def train_model(
 
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=True)
-            if dist_manager.rank == 0:
-                gscaler.scale(loss).backward()
+            gscaler.scale(loss).backward()
             gscaler.step(optimizer)
             gscaler.update()
 
@@ -260,6 +263,7 @@ def train_model(
 
         valid_loss = valid_loss / len(dataloader.dataset)
 
+        torch.cuda.synchronize()
         epoch_time = time.time() - epoch_start
 
         if metrics is not None:
@@ -272,6 +276,7 @@ def train_model(
 
         scheduler.step()
 
+    torch.cuda.synchronize()
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
@@ -297,6 +302,7 @@ def train_model_on_dummy_data(
     metrics,
     cfg,
 ):
+    torch.cuda.synchronize()
     train_start = time.time()
 
     # count iterations
@@ -310,6 +316,7 @@ def train_model_on_dummy_data(
 
     for epoch in tqdm(range(cfg.data.num_epochs)):
         # time each epoch
+        torch.cuda.synchronize()
         epoch_start = time.time()
 
         dataloader.dataset.set_num_examples(cfg.data.num_examples)
@@ -328,8 +335,7 @@ def train_model_on_dummy_data(
 
             acc_loss += loss.item() * inp.size(0)
             optimizer.zero_grad(set_to_none=True)
-            if dist_manager.rank == 0:
-                gscaler.scale(loss).backward()
+            scaler.scale(loss).backward()
             gscaler.step(optimizer)
             gscaler.update()
 
@@ -353,6 +359,7 @@ def train_model_on_dummy_data(
 
         valid_loss = valid_loss / len(dataloader.dataset)
 
+        torch.cuda.synchronize()
         epoch_time = time.time() - epoch_start
 
         if metrics is not None:
@@ -365,6 +372,7 @@ def train_model_on_dummy_data(
 
         scheduler.step()
 
+    torch.cuda.synchronize()
     train_time = time.time() - train_start
 
     if dist_manager.rank == 0:
@@ -418,13 +426,8 @@ def main(cfg: DictConfig):
     if dist_manager.rank == 0:
         logger.info(f"starting to run ...")
 
-    mesh_base_path = os.path.dirname(os.path.realpath(__file__))
-    meshgraph_path = os.path.join(
-        mesh_base_path, f"./icospheres_{cfg.data.mesh_size}.json"
-    )
     model = GraphCastNet(
-        meshgraph_path=meshgraph_path,
-        static_dataset_path=None,
+        multimesh_level=cfg.data.multimesh_level,
         input_res=input_res,
         input_dim_grid_nodes=3,
         input_dim_mesh_nodes=3,
@@ -486,13 +489,13 @@ def main(cfg: DictConfig):
     )
 
     if cfg.run_training:
-        # optimizer:
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=cfg.lr_milestones, gamma=cfg.gamma
         )
         gscaler = amp.GradScaler(enabled=cfg.model.enable_amp)
 
+        torch.cuda.synchronize()
         start_time = time.time()
 
         if dist_manager.rank == 0:
@@ -514,6 +517,7 @@ def main(cfg: DictConfig):
             cfg=cfg,
         )
 
+        torch.cuda.synchronize()
         training_time = time.time() - start_time
 
         run_output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir

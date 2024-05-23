@@ -33,7 +33,7 @@ lr_milestones: [7, 14]
 gamma: 0.1
 
 data:
-  mesh_size: 6
+  multimesh_level: 6
   angular_resolution: 0.703125
   num_examples: 512
   dummy_data: False
