@@ -226,13 +226,14 @@ class DistributedManager(object):
         """Setup method using generic initialization"""
         rank = int(os.environ.get("RANK"))
         world_size = int(os.environ.get("WORLD_SIZE"))
-        try:
-            # try getting and converting to int
-            # (it might be empty or set and not valid)
-            local_rank = int(os.environ["LOCAL_RANK"])
-            if (local_rank < 0) or (local_rank >= torch.cuda.device_count()):
-                raise ValueError
-        except (KeyError, ValueError):
+        if "LOCAL_RANK" in os.environ:
+            local_rank = os.environ.get("LOCAL_RANK")
+            if local_rank is not None:
+                local_rank = int(local_rank)
+            else:
+                local_rank = rank % torch.cuda.device_count()
+
+        else:
             local_rank = rank % torch.cuda.device_count()
 
         # Read env variables
