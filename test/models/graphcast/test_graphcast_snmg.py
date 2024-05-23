@@ -28,7 +28,6 @@ from pytest_utils import import_or_fail
 from modulus.distributed import DistributedManager, mark_module_as_shared
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
-
 torch.backends.cuda.matmul.allow_tf32 = False
 
 

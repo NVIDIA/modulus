@@ -28,8 +28,8 @@ from .graph_utils import (
     create_heterograph,
     get_face_centroids,
     latlon2xyz,
-    xyz2latlon,
     max_edge_length,
+    xyz2latlon,
 )
 from .icosahedral_mesh import (
     faces_to_edges,
@@ -196,13 +196,13 @@ class Graph:
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
         )  # number of edges is 3,114,720, exactly matches with the paper
-        
+
         m2g_graph.srcdata["pos"] = torch.tensor(
             self.multimesh_vertices,
             dtype=torch.float32,
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
-        
+
         m2g_graph.srcdata["lat_lon"] = xyz2latlon(self.multimesh_vertices)
         m2g_graph.dstdata["lat_lon"] = self.lat_lon_grid_flat
 
