@@ -203,6 +203,10 @@ class ERA5HDF5Datapipe(Datapipe):
                 )
                 // self.world_size
             ) * self.world_size
+            if data_samples_per_year < 1:
+                raise ValueError(
+                    f"Not enough number of samples per year ({data_samples_per_year})"
+                )
             self.img_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them
@@ -323,10 +327,7 @@ class ERA5HDF5Datapipe(Datapipe):
 
             # Crop.
             h, w = self.img_shape
-            if self.num_history == 0:
-                invar = invar[:, :h, :w]
-            else:
-                invar = invar[:, :, :h, :w]
+            invar = invar[..., :h, :w]
             outvar = outvar[:, :, :h, :w]
             # Standardize.
             if self.stats_dir is not None:
@@ -471,9 +472,7 @@ class ERA5DaliExternalSource:
             ]
 
         # Has [T,C,H,W] shape.
-        outvar = np.empty(
-            (self.num_steps,) + (len(self.chans),) + data.shape[2:], dtype=invar.dtype
-        )
+        outvar = np.empty((self.num_steps,) + invar.shape[-3:], dtype=invar.dtype)
 
         for i in range(self.num_steps):
             out_idx = in_idx + (self.num_history + i + 1) * self.stride
