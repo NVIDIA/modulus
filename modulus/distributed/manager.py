@@ -228,7 +228,7 @@ class DistributedManager(object):
         world_size = int(os.environ.get("WORLD_SIZE"))
         try:
             # try getting and converting to int
-            # (it might be empty or set and not valid) 
+            # (it might be empty or set and not valid)
             local_rank = int(os.environ["LOCAL_RANK"])
             if (local_rank < 0) or (local_rank >= torch.cuda.device_count()):
                 raise ValueError
@@ -321,7 +321,9 @@ class DistributedManager(object):
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
                     DistributedManager.initialize_open_mpi(addr, port)
                 else:
-                    raise RuntimeError("Couln't neither initialize manager for ENV, SLURM and OPENMPI, abort.")
+                    raise RuntimeError(
+                        "Couln't neither initialize manager for ENV, SLURM and OPENMPI, abort."
+                    )
         elif initialization_method == "ENV":
             DistributedManager.initialize_env()
         elif initialization_method == "SLURM":
