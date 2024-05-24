@@ -39,6 +39,8 @@ recompute_activation: False
 wb_mode: "disabled"
 dataset_path: "/data"
 static_dataset_path: "datasets/static"
+use_variable_weight_loss: False
+data_json_path: "/workspace/examples/weather/graphcast/data.json"
 latlon_res: (721, 1440)
 num_samples_per_year_train: 1448
 num_workers: 0  # 8

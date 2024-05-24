@@ -29,7 +29,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, 
 import os
 
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.utils.graphcast.loss import CellAreaWeightedLossFunction
+from modulus.utils.graphcast.loss import CellAreaWeightedLossFunction, VariableWeightedLossFunction
 from modulus.launch.logging import (
     PythonLogger,
     initialize_wandb,
@@ -165,7 +165,10 @@ class GraphCastTrainer(BaseTrainer):
         self.area = self.area.to(dtype=self.dtype).to(device=dist.device)
 
         # instantiate loss, optimizer, and scheduler
-        self.criterion = CellAreaWeightedLossFunction(self.area)
+        if cfg.use_variable_weight_loss:
+            self.criterion = VariableWeightedLossFunction(self.area,cfg)
+        else:
+            self.criterion = CellAreaWeightedLossFunction(self.area)
         try:
             self.optimizer = apex.optimizers.FusedAdam(
                 self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
