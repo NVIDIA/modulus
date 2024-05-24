@@ -466,8 +466,6 @@ class SongUNetPosEmbd(SongUNet):
         img_resolution: int,
         in_channels: int,
         out_channels: int,
-        img_resolution_x: int = None,
-        img_resolution_y: int = None,
         label_dim: int = 0,
         augment_dim: int = 0,
         model_channels: int = 128,
@@ -484,7 +482,6 @@ class SongUNetPosEmbd(SongUNet):
         resample_filter: List[int] = [1, 1],
         gridtype: str = "sinusoidal",
         N_grid_channels: int = 4,
-        checkpoint_level: int = 0,
     ):
         super().__init__(
             img_resolution,
@@ -504,12 +501,9 @@ class SongUNetPosEmbd(SongUNet):
             encoder_type,
             decoder_type,
             resample_filter,
-            checkpoint_level
         )
 
         self.img_resolution = img_resolution
-        self.img_resolution_x = img_resolution_x
-        self.img_resolution_y =img_resolution_y
         self.gridtype = gridtype
         self.N_grid_channels = N_grid_channels
         self.pos_embd = self._get_positional_embedding()
