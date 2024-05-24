@@ -156,9 +156,11 @@ class GraphCastTrainer(BaseTrainer):
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
             channels=[i for i in range(cfg.num_channels_climate)],
-            interpolation_shape=self.interpolation_shape,
+            latlon_resolution=self.interpolation_shape,
+            interpolation_type="INTERP_LINEAR",
             num_samples_per_year=cfg.num_samples_per_year_train,
             num_steps=1,
+            use_cos_zenith=True,
             batch_size=1,
             num_workers=cfg.num_workers,
             device=dist.device,
@@ -375,9 +377,11 @@ def main(cfg: DictConfig) -> None:
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
                         channels=[i for i in range(cfg.num_channels_climate)],
-                        interpolation_shape=trainer.interpolation_shape,
+                        latlon_resolution=trainer.interpolation_shape,
+                        interpolation_type="INTERP_LINEAR",
                         num_samples_per_year=cfg.num_samples_per_year_train,
                         num_steps=num_rollout_steps,
+                        use_cos_zenith=True,
                         batch_size=1,
                         num_workers=cfg.num_workers,
                         device=dist.device,
@@ -394,9 +398,13 @@ def main(cfg: DictConfig) -> None:
                 # TODO modify for history > 0
                 data_x = data[0]["invar"]
                 data_y = data[0]["outvar"]
+                cos = data[0]["cos_zenith"]
+
+                print(data_x.shape, data_y.shape, cos, cos.shape)
+                exit()
 
                 # add static data
-                invar = torch.concat((invar, trainer.static_data), dim=1)
+                data_x = torch.concat((data_x, trainer.static_data), dim=1)
 
                 # move to device & dtype
                 data_x = data_x.to(dtype=trainer.dtype)
