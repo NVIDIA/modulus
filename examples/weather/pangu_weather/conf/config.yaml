@@ -20,9 +20,6 @@ hydra:
   run:
     dir: ./outputs/
 
-wb_artifacts: False
-use_mlflow: True
-
 start_epoch: 0
 max_epoch: 100
 

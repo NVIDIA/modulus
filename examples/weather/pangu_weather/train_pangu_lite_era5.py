@@ -17,7 +17,6 @@
 import torch
 import os
 import hydra
-import wandb
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -130,7 +129,7 @@ def main(cfg: DictConfig) -> None:
         user_name="Modulus User",
         mode="offline",
     )
-    LaunchLogger.initialize(use_mlflow=cfg.use_mlflow)  # Modulus launch logger
+    LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
 
     no_channals_pangu = 4 + 5 * 13
@@ -193,10 +192,6 @@ def main(cfg: DictConfig) -> None:
         window_size=OmegaConf.to_object(cfg.pangu.window_size),
     ).to(dist.device)
 
-    if dist.rank == 0 and wandb.run is not None:
-        wandb.watch(
-            pangu_model, log="all", log_freq=1000, log_graph=(True)
-        )  # currently does not work with scripted modules. This will be fixed in the next release of W&B SDK.
     # Distributed learning
     if dist.world_size > 1:
         ddps = torch.cuda.Stream()
