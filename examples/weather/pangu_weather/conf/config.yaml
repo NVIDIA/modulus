@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+experiment_name: "Modulus-Launch-Dev"
+experiment_desc: "Modulus launch development"
+run_desc: "Pangu ERA5 Training"
+
 hydra:
   job:
     chdir: True

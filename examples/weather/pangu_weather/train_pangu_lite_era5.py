@@ -41,11 +41,7 @@ except:
 
 
 def loss_func(x, y):
-    yv = y.reshape(x.size()[0], -1)
-    xv = x.reshape(x.size()[0], -1)
-    diff_norms = torch.abs(xv - yv)
-
-    return torch.mean(diff_norms)
+    return torch.nn.functional.l1_loss(x, y)
 
 
 @torch.no_grad()
@@ -121,11 +117,12 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
+    # Initialize loggers
     initialize_mlflow(
-        experiment_name="Modulus-Launch-Dev",
-        experiment_desc="Modulus launch development",
-        run_name="Pangu-lite-Training",
-        run_desc="Pangu lite ERA5 Training",
+        experiment_name=cfg.experiment_name,
+        experiment_desc=cfg.experiment_desc,
+        run_name="Pangu-lite-trainng",
+        run_desc=cfg.experiment_desc,
         user_name="Modulus User",
         mode="offline",
     )
