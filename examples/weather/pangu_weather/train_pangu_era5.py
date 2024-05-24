@@ -22,7 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torch.nn.parallel import DistributedDataParallel
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from modulus.models.pangu import Pangu
 from modulus.datapipes.climate import ERA5HDF5Datapipe
@@ -138,25 +138,31 @@ def main(cfg: DictConfig) -> None:
         data_dir="/data/train/",
         stats_dir="/data/stats/",
         channels=[i for i in range(no_channals_pangu)],
-        num_samples_per_year=cfg.num_samples_per_year_train,
-        batch_size=1,
-        patch_size=(1, 1),
-        num_workers=8,
+        num_samples_per_year=cfg.train.num_samples_per_year,
+        batch_size=cfg.train.batch_size,
+        patch_size=OmegaConf.to_object(cfg.train.patch_size),
+        num_workers=cfg.train.num_workers,
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
     )
     logger.success(f"Loaded datapipe of size {len(datapipe)}")
 
-    mask_dir = "/data/constant_mask"
+    mask_dir = cfg.mask_dir
+    if cfg.get("mask_dtype", "float32") == "float32":
+        mask_dtype = np.float32
+    elif cfg.get("mask_dtype", "float32") == "float16":
+        mask_dtype = np.float16
+    else:
+        mask_dtype = np.float32
     land_mask = torch.from_numpy(
-        np.load(os.path.join(mask_dir, "land_mask.npy")).astype(np.float32)
+        np.load(os.path.join(mask_dir, "land_mask.npy")).astype(mask_dtype)
     )
     soil_type = torch.from_numpy(
-        np.load(os.path.join(mask_dir, "soil_type.npy")).astype(np.float32)
+        np.load(os.path.join(mask_dir, "soil_type.npy")).astype(mask_dtype)
     )
     topography = torch.from_numpy(
-        np.load(os.path.join(mask_dir, "topography.npy")).astype(np.float32)
+        np.load(os.path.join(mask_dir, "topography.npy")).astype(mask_dtype)
     )
     surface_mask = torch.stack([land_mask, soil_type, topography], dim=0).to(
         dist.device
@@ -170,21 +176,21 @@ def main(cfg: DictConfig) -> None:
             stats_dir="/data/stats/",
             channels=[i for i in range(no_channals_pangu)],
             num_steps=1,
-            num_samples_per_year=4,
-            batch_size=1,
-            patch_size=(1, 1),
+            num_samples_per_year=cfg.val.num_samples_per_year,
+            batch_size=cfg.val.batch_size,
+            patch_size=OmegaConf.to_object(cfg.val.patch_size),
             device=dist.device,
-            num_workers=8,
+            num_workers=cfg.val.num_workers,
             shuffle=False,
         )
         logger.success(f"Loaded validaton datapipe of size {len(validation_datapipe)}")
 
     pangu_model = Pangu(
-        img_size=(721, 1440),
-        patch_size=(2, 4, 4),
-        embed_dim=192,
-        num_heads=(6, 12, 12, 6),
-        window_size=(2, 6, 12),
+        img_size=OmegaConf.to_object(cfg.pangu.img_size),
+        patch_size=OmegaConf.to_object(cfg.pangu.patch_size),
+        embed_dim=cfg.pangu.embed_dim,
+        num_heads=OmegaConf.to_object(cfg.pangu.num_heads),
+        window_size=OmegaConf.to_object(cfg.pangu.window_size),
     ).to(dist.device)
 
     if dist.rank == 0 and wandb.run is not None:
@@ -221,7 +227,8 @@ def main(cfg: DictConfig) -> None:
 
     @StaticCaptureEvaluateNoGrad(model=pangu_model, logger=logger, use_graphs=False)
     def eval_step_forward(my_model, invar_surface, surface_mask, invar_upper_air):
-        return my_model(invar_surface, surface_mask, invar_upper_air)
+        invar = my_model.prepare_input(invar_surface, surface_mask, invar_upper_air)
+        return my_model(invar)
 
     @StaticCaptureTraining(model=pangu_model, optim=optimizer, logger=logger)
     def train_step_forward(
@@ -236,9 +243,8 @@ def main(cfg: DictConfig) -> None:
         loss = 0
         # Multi-step not supported
         for t in range(outvar_surface.shape[1]):
-            outpred_surface, outpred_upper_air = my_model(
-                invar_surface, surface_mask, invar_upper_air
-            )
+            invar = my_model.prepare_input(invar_surface, surface_mask, invar_upper_air)
+            outpred_surface, outpred_upper_air = my_model(invar)
             invar_surface = outpred_surface
             invar_upper_air = outpred_upper_air
             loss += loss_func(outpred_surface, outvar_surface[:, t]) * 0.25 + loss_func(

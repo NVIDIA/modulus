@@ -39,7 +39,7 @@ val:
 
 pangu:
   img_size: [721, 1440]
-  patch_size: [2, 4, 4]
+  patch_size: [2, 8, 8]
   embed_dim: 192
   num_heads: [6, 12, 12, 6]
   window_size: [2, 6, 12]
