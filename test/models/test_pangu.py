@@ -41,10 +41,9 @@ def test_pangu_forward(device):
     invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
     invar_surface_mask = torch.randn(3, 32, 32).to(device)
     invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
+    invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
     # Check output size
-    assert common.validate_forward_accuracy(
-        model, (invar_surface, invar_surface_mask, invar_upper_air)
-    )
+    assert common.validate_forward_accuracy(model, (invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -82,9 +81,8 @@ def test_pangu_constructor(device):
         invar_upper_air = torch.randn(
             bsize, 5, 13, kw_args["img_size"][0], kw_args["img_size"][1]
         ).to(device)
-        outvar_surface, outvar_upper_air = model(
-            invar_surface, invar_surface_mask, invar_upper_air
-        )
+        invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+        outvar_surface, outvar_upper_air = model(invar)
         assert outvar_surface.shape == (
             bsize,
             4,
@@ -119,51 +117,21 @@ def test_pangu_optims(device):
         invar_surface = torch.randn(bsize, 4, 128, 128).to(device)
         invar_surface_mask = torch.randn(3, 128, 128).to(device)
         invar_upper_air = torch.randn(bsize, 5, 13, 128, 128).to(device)
-        return model, invar_surface, invar_surface_mask, invar_upper_air
+        invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+        return model, invar
 
     # Ideally always check graphs first
-    model, invar_surface, invar_surface_mask, invar_upper_air = setup_model()
-    assert common.validate_cuda_graphs(
-        model, (invar_surface, invar_surface_mask, invar_upper_air)
-    )
+    model, invar = setup_model()
+    assert common.validate_cuda_graphs(model, (invar,))
     # Check JIT
-    # model, invar_surface, invar_surface_mask, invar_upper_air = setup_model()
-    # assert common.validate_jit(model, (invar_surface, invar_surface_mask, invar_upper_air))
+    # model, invar = setup_model()
+    # assert common.validate_jit(model, (invar,))
     # Check AMP
-    # model, invar_surface, invar_surface_mask, invar_upper_air = setup_model()
-    # assert common.validate_amp(model, (invar_surface, invar_surface_mask, invar_upper_air))
+    # model, invar = setup_model()
+    # assert common.validate_amp(model, (invar,))
     # Check Combo
-    # model, invar_surface, invar_surface_mask, invar_upper_air = setup_model()
-    # assert common.validate_combo_optims(model, (invar_surface, invar_surface_mask, invar_upper_air))
-
-
-# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-# def test_pangu_checkpoint(device):
-#    """Test Pangu checkpoint save/load"""
-#    # Construct Pangu models
-#    model_1 = Pangu(
-#        img_size=(128, 128),
-#        patch_size=(2, 4, 4),
-#        embed_dim=192,
-#        num_heads=(6, 12, 12, 6),
-#        window_size=(2, 6, 12),
-#    ).to(device)
-#
-#    model_2 = Pangu(
-#        img_size=(128, 128),
-#        patch_size=(2, 4, 4),
-#        embed_dim=192,
-#        num_heads=(6, 12, 12, 6),
-#        window_size=(2, 6, 12),
-#    ).to(device)
-#
-#    model_1.eval()
-#    model_2.eval()
-#    bsize = random.randint(1, 5)
-#    invar_surface = torch.randn(bsize, 4, 128, 128).to(device)
-#    invar_surface_mask = torch.randn(3, 128, 128).to(device)
-#    invar_upper_air = torch.randn(bsize, 5, 13, 128, 128).to(device)
-# assert common.validate_checkpoint(model_1, model_2, (invar_surface, invar_surface_mask, invar_upper_air))
+    # model, invar = setup_model()
+    # assert common.validate_combo_optims(model, (invar,))
 
 
 @common.check_ort_version()
@@ -183,9 +151,6 @@ def test_pangu_deploy(device):
     invar_surface = torch.randn(bsize, 4, 128, 128).to(device)
     invar_surface_mask = torch.randn(3, 128, 128).to(device)
     invar_upper_air = torch.randn(bsize, 5, 13, 128, 128).to(device)
-    assert common.validate_onnx_export(
-        model, (invar_surface, invar_surface_mask, invar_upper_air)
-    )
-    assert common.validate_onnx_runtime(
-        model, (invar_surface, invar_surface_mask, invar_upper_air)
-    )
+    invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+    assert common.validate_onnx_export(model, (invar,))
+    assert common.validate_onnx_runtime(model, (invar,))

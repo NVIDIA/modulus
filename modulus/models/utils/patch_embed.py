@@ -17,11 +17,10 @@
 import torch
 from torch import nn
 
-from .utils import ZeroPad3d
-
 
 class PatchEmbed2D(nn.Module):
     """
+    Revise from WeatherLearn https://github.com/lizhuoq/WeatherLearn
     2D Image to Patch Embedding.
 
     Args:
@@ -74,6 +73,7 @@ class PatchEmbed2D(nn.Module):
 
 class PatchEmbed3D(nn.Module):
     """
+    Revise from WeatherLearn https://github.com/lizhuoq/WeatherLearn
     3D Image to Patch Embedding.
 
     Args:
@@ -110,7 +110,7 @@ class PatchEmbed3D(nn.Module):
             padding_left = w_pad // 2
             padding_right = w_pad - padding_left
 
-        self.pad = ZeroPad3d(
+        self.pad = nn.ZeroPad3d(
             (
                 padding_left,
                 padding_right,
@@ -139,6 +139,7 @@ class PatchEmbed3D(nn.Module):
 
 class PatchRecovery2D(nn.Module):
     """
+    Revise from WeatherLearn https://github.com/lizhuoq/WeatherLearn
     Patch Embedding Recovery to 2D Image.
 
     Args:
@@ -172,6 +173,7 @@ class PatchRecovery2D(nn.Module):
 
 class PatchRecovery3D(nn.Module):
     """
+    Revise from WeatherLearn https://github.com/lizhuoq/WeatherLearn
     Patch Embedding Recovery to 3D Image.
 
     Args:

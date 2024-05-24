@@ -14,29 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
-
 import torch
-from torch.nn import ConstantPad3d
-from torch.nn.common_types import _size_6_t
 
 
-def get_earth_position_index(window_size):
+def get_earth_position_index(window_size, ndim=3):
     """
+    Revise from WeatherLearn https://github.com/lizhuoq/WeatherLearn
     This function construct the position index to reuse symmetrical parameters of the position bias.
     implementation from: https://github.com/198808xc/Pangu-Weather/blob/main/pseudocode.py
 
     Args:
-        window_size (tuple[int]): [pressure levels, latitude, longitude]
+        window_size (tuple[int]): [pressure levels, latitude, longitude] or [latitude, longitude]
+        ndim (int): dimension of tensor, 3 or 2
 
     Returns:
-        position_index (torch.Tensor): [win_pl * win_lat * win_lon, win_pl * win_lat * win_lon]
+        position_index (torch.Tensor): [win_pl * win_lat * win_lon, win_pl * win_lat * win_lon] or [win_lat * win_lon, win_lat * win_lon]
     """
-    win_pl, win_lat, win_lon = window_size
-    # Index in the pressure level of query matrix
-    coords_zi = torch.arange(win_pl)
-    # Index in the pressure level of key matrix
-    coords_zj = -torch.arange(win_pl) * win_pl
+    if ndim == 3:
+        win_pl, win_lat, win_lon = window_size
+    elif ndim == 2:
+        win_lat, win_lon = window_size
+
+    if ndim == 3:
+        # Index in the pressure level of query matrix
+        coords_zi = torch.arange(win_pl)
+        # Index in the pressure level of key matrix
+        coords_zj = -torch.arange(win_pl) * win_pl
 
     # Index in the latitude of query matrix
     coords_hi = torch.arange(win_lat)
@@ -47,58 +50,27 @@ def get_earth_position_index(window_size):
     coords_w = torch.arange(win_lon)
 
     # Change the order of the index to calculate the index in total
-    coords_1 = torch.stack(torch.meshgrid([coords_zi, coords_hi, coords_w]))
-    coords_2 = torch.stack(torch.meshgrid([coords_zj, coords_hj, coords_w]))
+    if ndim == 3:
+        coords_1 = torch.stack(torch.meshgrid([coords_zi, coords_hi, coords_w]))
+        coords_2 = torch.stack(torch.meshgrid([coords_zj, coords_hj, coords_w]))
+    elif ndim == 2:
+        coords_1 = torch.stack(torch.meshgrid([coords_hi, coords_w]))
+        coords_2 = torch.stack(torch.meshgrid([coords_hj, coords_w]))
     coords_flatten_1 = torch.flatten(coords_1, 1)
     coords_flatten_2 = torch.flatten(coords_2, 1)
     coords = coords_flatten_1[:, :, None] - coords_flatten_2[:, None, :]
     coords = coords.permute(1, 2, 0).contiguous()
 
     # Shift the index for each dimension to start from 0
-    coords[:, :, 2] += win_lon - 1
-    coords[:, :, 1] *= 2 * win_lon - 1
-    coords[:, :, 0] *= (2 * win_lon - 1) * win_lat * win_lat
+    if ndim == 3:
+        coords[:, :, 2] += win_lon - 1
+        coords[:, :, 1] *= 2 * win_lon - 1
+        coords[:, :, 0] *= (2 * win_lon - 1) * win_lat * win_lat
+    elif ndim == 2:
+        coords[:, :, 1] += win_lon - 1
+        coords[:, :, 0] *= 2 * win_lon - 1
 
-    # Sum up the indexes in three dimensions
-    position_index = coords.sum(-1)
-
-    return position_index
-
-
-def get_earth_position_index_2d(window_size):
-    """
-    This function construct the position index to reuse symmetrical parameters of the position bias.
-    Modify from: https://github.com/198808xc/Pangu-Weather/blob/main/pseudocode.py
-
-    Args:
-        window_size (tuple[int]): [latitude, longitude]
-
-    Returns:
-        position_index (torch.Tensor): [win_lat * win_lon, win_lat * win_lon]
-    """
-    win_lat, win_lon = window_size
-
-    # Index in the latitude of query matrix
-    coords_hi = torch.arange(win_lat)
-    # Index in the latitude of key matrix
-    coords_hj = -torch.arange(win_lat) * win_lat
-
-    # Index in the longitude of the key-value pair
-    coords_w = torch.arange(win_lon)
-
-    # Change the order of the index to calculate the index in total
-    coords_1 = torch.stack(torch.meshgrid([coords_hi, coords_w]))
-    coords_2 = torch.stack(torch.meshgrid([coords_hj, coords_w]))
-    coords_flatten_1 = torch.flatten(coords_1, 1)
-    coords_flatten_2 = torch.flatten(coords_2, 1)
-    coords = coords_flatten_1[:, :, None] - coords_flatten_2[:, None, :]
-    coords = coords.permute(1, 2, 0).contiguous()
-
-    # Shift the index for each dimension to start from 0
-    coords[:, :, 1] += win_lon - 1
-    coords[:, :, 0] *= 2 * win_lon - 1
-
-    # Sum up the indexes in two dimensions
+    # Sum up the indexes in two/three dimensions
     position_index = coords.sum(-1)
 
     return position_index
@@ -208,46 +180,3 @@ def crop3d(x: torch.Tensor, resolution):
         padding_top : Lat - padding_bottom,
         padding_left : Lon - padding_right,
     ]
-
-
-class ZeroPad3d(ConstantPad3d):
-    r"""Pads the input tensor boundaries with zero.
-
-    For `N`-dimensional padding, use :func:`torch.nn.functional.pad()`.
-
-    Args:
-        padding (int, tuple): the size of the padding. If is `int`, uses the same
-            padding in all boundaries. If a 6-`tuple`, uses
-            (:math:`\text{padding\_left}`, :math:`\text{padding\_right}`,
-            :math:`\text{padding\_top}`, :math:`\text{padding\_bottom}`,
-            :math:`\text{padding\_front}`, :math:`\text{padding\_back}`)
-
-    Shape:
-        - Input: :math:`(N, C, D_{in}, H_{in}, W_{in})` or :math:`(C, D_{in}, H_{in}, W_{in})`.
-        - Output: :math:`(N, C, D_{out}, H_{out}, W_{out})` or
-          :math:`(C, D_{out}, H_{out}, W_{out})`, where
-
-          :math:`D_{out} = D_{in} + \text{padding\_front} + \text{padding\_back}`
-
-          :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
-          :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
-
-    Examples::
-
-        >>> m = ZeroPad3d(3)
-        >>> input = torch.randn(16, 3, 10, 20, 30)
-        >>> output = m(input)
-        >>> # using different paddings for different sides
-        >>> m = ZeroPad3d((3, 3, 6, 6, 0, 1))
-        >>> output = m(input)
-
-    """
-
-    padding: Tuple[int, int, int, int, int, int]
-
-    def __init__(self, padding: _size_6_t) -> None:
-        super().__init__(padding, 0.0)
-
-    def extra_repr(self) -> str:
-        return f"{self.padding}"

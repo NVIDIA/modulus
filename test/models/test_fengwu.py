@@ -45,10 +45,11 @@ def test_fengwu_forward(device):
     invar_u = torch.randn(bsize, 37, 32, 32).to(device)
     invar_v = torch.randn(bsize, 37, 32, 32).to(device)
     invar_t = torch.randn(bsize, 37, 32, 32).to(device)
-    # Check output size
-    assert common.validate_forward_accuracy(
-        model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t)
+    invar = model.prepare_input(
+        invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
     )
+    # Check output size
+    assert common.validate_forward_accuracy(model, (invar,))
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -112,9 +113,10 @@ def test_fengwu_constructor(device):
             kw_args["img_size"][0],
             kw_args["img_size"][1],
         ).to(device)
-        outvar_surface, outvar_z, outvar_r, outvar_u, outvar_v, outvar_t = model(
+        invar = model.prepare_input(
             invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
         )
+        outvar_surface, outvar_z, outvar_r, outvar_u, outvar_v, outvar_t = model(invar)
         assert outvar_surface.shape == (
             bsize,
             4,
@@ -176,56 +178,23 @@ def test_fengu_optims(device):
         invar_u = torch.randn(bsize, 37, 64, 64).to(device)
         invar_v = torch.randn(bsize, 37, 64, 64).to(device)
         invar_t = torch.randn(bsize, 37, 64, 64).to(device)
-        return model, invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
+        invar = model.prepare_input(
+            invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
+        )
+        return model, invar
 
     # Ideally always check graphs first
-    model, invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t = setup_model()
-    assert common.validate_cuda_graphs(
-        model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t)
-    )
+    model, invar = setup_model()
+    assert common.validate_cuda_graphs(model, (invar,))
     # Check JIT
-    # model, invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t = setup_model()
-    # assert common.validate_jit(model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t))
+    # model, invar = setup_model()
+    # assert common.validate_jit(model, (invar,))
     # Check AMP
-    # model, invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t = setup_model()
-    # assert common.validate_amp(model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t))
+    # model, invar = setup_model()
+    # assert common.validate_amp(model, (invar,))
     # Check Combo
-    # model, invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t = setup_model()
-    # assert common.validate_combo_optims(model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t))
-
-
-# @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-# def test_fengwu_checkpoint(device):
-#    """Test Fengwu checkpoint save/load"""
-#    # Construct Fengwu models
-#    model_1 = Fengwu(
-#        img_size=(64, 64),
-#        pressure_level=37,
-#        embed_dim=192,
-#        patch_size=(4, 4),
-#        num_heads=(6, 12, 12, 6),
-#        window_size=(2, 6, 12),
-#    ).to(device)
-#
-#    model_2 = Fengwu(
-#        img_size=(64, 64),
-#        pressure_level=37,
-#        embed_dim=192,
-#        patch_size=(4, 4),
-#        num_heads=(6, 12, 12, 6),
-#        window_size=(2, 6, 12),
-#    ).to(device)
-#
-#    model_1.eval()
-#    model_2.eval()
-#    bsize = random.randint(1, 5)
-#    invar_surface = torch.randn(bsize, 4, 64, 64).to(device)
-#    invar_z = torch.randn(bsize, 37, 64, 64).to(device)
-#    invar_r = torch.randn(bsize, 37, 64, 64).to(device)
-#    invar_u = torch.randn(bsize, 37, 64, 64).to(device)
-#    invar_v = torch.randn(bsize, 37, 64, 64).to(device)
-#    invar_t = torch.randn(bsize, 37, 64, 64).to(device)
-# assert common.validate_checkpoint(model_1, model_2, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t))
+    # model, invar = setup_model()
+    # assert common.validate_combo_optims(model, (invar,))
 
 
 @common.check_ort_version()
@@ -249,9 +218,8 @@ def test_fengwu_deploy(device):
     invar_u = torch.randn(bsize, 37, 64, 64).to(device)
     invar_v = torch.randn(bsize, 37, 64, 64).to(device)
     invar_t = torch.randn(bsize, 37, 64, 64).to(device)
-    assert common.validate_onnx_export(
-        model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t)
+    invar = model.prepare_input(
+        invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
     )
-    assert common.validate_onnx_runtime(
-        model, (invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t)
-    )
+    assert common.validate_onnx_export(model, (invar,))
+    assert common.validate_onnx_runtime(model, (invar,))
