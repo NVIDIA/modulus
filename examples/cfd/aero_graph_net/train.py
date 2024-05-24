@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import partial
 import time
 
 import hydra
-from hydra.utils import to_absolute_path
+from hydra.utils import instantiate, to_absolute_path
 
 from dgl.dataloading import GraphDataLoader
 
@@ -40,86 +41,110 @@ from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.meshgraphnet import MeshGraphNet
 
 
+class RRMSELoss(torch.nn.Module):
+    def forward(self, pred: torch.Tensor, target: torch.Tensor):
+        return (torch.norm(pred - target, p=2) / torch.norm(target, p=2)).mean()
+
+
 class MGNTrainer:
     def __init__(self, cfg: DictConfig, rank_zero_logger: RankZeroLoggingWrapper):
         assert DistributedManager.is_initialized()
         self.dist = DistributedManager()
         self.rank_zero_logger = rank_zero_logger
 
-        self.amp = cfg.amp
-        # MGN with recompute_activation currently supports only SiLU activation function.
-        mlp_act = "relu"
-        if cfg.recompute_activation:
-            rank_zero_logger.info(
-                "Setting MLP activation to SiLU required by recompute_activation."
-            )
-            mlp_act = "silu"
+        # self.amp = cfg.amp
+        # # MGN with recompute_activation currently supports only SiLU activation function.
+        # mlp_act = "relu"
+        # if cfg.recompute_activation:
+        #     rank_zero_logger.info(
+        #         "Setting MLP activation to SiLU required by recompute_activation."
+        #     )
+        #     mlp_act = "silu"
 
         # instantiate dataset
         rank_zero_logger.info("Loading the training dataset...")
-        self.dataset = AhmedBodyDataset(
-            name="ahmed_body_train",
-            data_dir=to_absolute_path(cfg.data_dir),
-            split="train",
-            num_samples=cfg.num_training_samples,
-            num_workers=cfg.num_dataset_workers,
-        )
+        self.dataset = instantiate(cfg.data.train)
+        rank_zero_logger.info(f"Using {len(self.dataset)} training samples.")
+        # self.dataset = AhmedBodyDataset(
+        #     name="ahmed_body_train",
+        #     data_dir=to_absolute_path(cfg.data_dir),
+        #     split="train",
+        #     num_samples=cfg.num_training_samples,
+        #     num_workers=cfg.num_dataset_workers,
+        # )
 
         # instantiate validation dataset
         rank_zero_logger.info("Loading the validation dataset...")
-        self.validation_dataset = AhmedBodyDataset(
-            name="ahmed_body_validation",
-            data_dir=to_absolute_path(cfg.data_dir),
-            split="validation",
-            num_samples=cfg.num_validation_samples,
-            num_workers=cfg.num_dataset_workers,
+        self.validation_dataset = instantiate(cfg.data.val)
+        rank_zero_logger.info(
+            f"Using {len(self.validation_dataset)} validation samples."
         )
+        # self.validation_dataset = AhmedBodyDataset(
+        #     name="ahmed_body_validation",
+        #     data_dir=to_absolute_path(cfg.data_dir),
+        #     split="validation",
+        #     num_samples=cfg.num_validation_samples,
+        #     num_workers=cfg.num_dataset_workers,
+        # )
 
+        rank_zero_logger.info("Creating the dataloaders...")
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=cfg.batch_size,
-            shuffle=True,
-            drop_last=True,
-            pin_memory=True,
+            **cfg.train.dataloader,
             use_ddp=self.dist.world_size > 1,
-            num_workers=cfg.num_dataloader_workers,
         )
+        # self.dataloader = GraphDataLoader(
+        #     self.dataset,
+        #     batch_size=cfg.batch_size,
+        #     shuffle=True,
+        #     drop_last=True,
+        #     pin_memory=True,
+        #     use_ddp=self.dist.world_size > 1,
+        #     num_workers=cfg.num_dataloader_workers,
+        # )
 
         # instantiate validation dataloader
         self.validation_dataloader = GraphDataLoader(
             self.validation_dataset,
-            batch_size=cfg.batch_size,
-            shuffle=False,
-            drop_last=True,
-            pin_memory=True,
-            use_ddp=False,
-            num_workers=cfg.num_dataloader_workers,
+            **cfg.val.dataloader,
         )
+        # self.validation_dataloader = GraphDataLoader(
+        #     self.validation_dataset,
+        #     batch_size=cfg.batch_size,
+        #     shuffle=False,
+        #     drop_last=True,
+        #     pin_memory=True,
+        #     use_ddp=False,
+        #     num_workers=cfg.num_dataloader_workers,
+        # )
 
+        rank_zero_logger.info("Creating the model...")
         # instantiate the model
-        self.model = MeshGraphNet(
-            cfg.input_dim_nodes,
-            cfg.input_dim_edges,
-            cfg.output_dim,
-            aggregation=cfg.aggregation,
-            hidden_dim_node_encoder=cfg.hidden_dim_node_encoder,
-            hidden_dim_edge_encoder=cfg.hidden_dim_edge_encoder,
-            hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
-            mlp_activation_fn=mlp_act,
-            do_concat_trick=cfg.do_concat_trick,
-            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
-            recompute_activation=cfg.recompute_activation,
-        )
-        if cfg.jit:
-            if not self.model.meta.jit:
-                raise ValueError("MeshGraphNet is not yet JIT-compatible.")
-            self.model = torch.jit.script(self.model).to(self.dist.device)
+        self.model = instantiate(cfg.model)
+        # self.model = MeshGraphNet(
+        #     cfg.input_dim_nodes,
+        #     cfg.input_dim_edges,
+        #     cfg.output_dim,
+        #     aggregation=cfg.aggregation,
+        #     hidden_dim_node_encoder=cfg.hidden_dim_node_encoder,
+        #     hidden_dim_edge_encoder=cfg.hidden_dim_edge_encoder,
+        #     hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
+        #     mlp_activation_fn=mlp_act,
+        #     do_concat_trick=cfg.do_concat_trick,
+        #     num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
+        #     recompute_activation=cfg.recompute_activation,
+        # )
+
+        if cfg.compile.enabled:
+            self.model = torch.compile(self.model, **cfg.compile.args).to(
+                self.dist.device
+            )
         else:
             self.model = self.model.to(self.dist.device)
 
         # distributed data parallel for multi-node training
-        if self.dist.world_size > 1:
+        if self.dist.distributed:
             self.model = DistributedDataParallel(
                 self.model,
                 device_ids=[self.dist.local_rank],
@@ -127,37 +152,33 @@ class MGNTrainer:
                 broadcast_buffers=self.dist.broadcast_buffers,
                 find_unused_parameters=self.dist.find_unused_parameters,
             )
+        # Set the original model getter to simplify access.
+        assert not hasattr(self.model, "model")
+        type(self.model).model = (
+            (lambda m: m.module) if self.dist.distributed else (lambda m: m)
+        )
 
         # enable train mode
         self.model.train()
 
         # instantiate optimizer, and scheduler
-        self.optimizer = None
-        try:
-            if cfg.use_apex:
-                from apex.optimizers import FusedAdam
+        self.optimizer = instantiate(cfg.optimizer, self.model.parameters())
+        self.scheduler = instantiate(cfg.lr_scheduler, self.optimizer)
 
-                self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
-        except ImportError:
-            rank_zero_logger.warning(
-                "NVIDIA Apex (https://github.com/nvidia/apex) is not installed, "
-                "FusedAdam optimizer will not be used."
-            )
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
-        rank_zero_logger.info(f"Using {self.optimizer.__class__.__name__} optimizer")
-
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer, lr_lambda=lambda epoch: cfg.lr_decay_rate**epoch
+        self.scaler = instantiate(cfg.amp.scaler)
+        self.autocast = partial(
+            torch.cuda.amp.autocast,
+            enabled=cfg.amp.enabled,
+            dtype=hydra.utils.get_object(cfg.amp.autocast.dtype),
         )
-        self.scaler = GradScaler()
 
         # load checkpoint
         if self.dist.world_size > 1:
             torch.distributed.barrier()
+
         self.epoch_init = load_checkpoint(
-            to_absolute_path(cfg.ckpt_path),
-            models=self.model,
+            to_absolute_path(cfg.resume_dir),
+            models=self.model.model,
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             scaler=self.scaler,
@@ -224,14 +245,18 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
+    torch.set_float32_matmul_precision("high")
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.allow_tf32 = True
+
     # initialize loggers
-    initialize_wandb(
-        project="Aero",
-        entity="Modulus",
-        name="Aero-Training",
-        group="Aero-DDP-Group",
-        mode=cfg.wandb_mode,
-    )  # Wandb logger
+    # initialize_wandb(
+    #     project="Aero",
+    #     entity="Modulus",
+    #     name="Aero-Training",
+    #     group="Aero-DDP-Group",
+    #     mode=cfg.wandb_mode,
+    # )  # Wandb logger
 
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
@@ -241,7 +266,7 @@ def main(cfg: DictConfig) -> None:
     start = time.time()
     rank_zero_logger.info("Training started...")
 
-    for epoch in range(trainer.epoch_init, cfg.epochs):
+    for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
         loss_agg = 0
         for graph in trainer.dataloader:
             graph = graph.to(dist.device)
@@ -261,7 +286,7 @@ def main(cfg: DictConfig) -> None:
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if dist.rank == 0 and (epoch + 1) % cfg.checkpoint_save_freq == 0:
+        if dist.rank == 0 and epoch % cfg.checkpoint_save_freq == 0:
             save_checkpoint(
                 to_absolute_path(cfg.ckpt_path),
                 models=trainer.model,

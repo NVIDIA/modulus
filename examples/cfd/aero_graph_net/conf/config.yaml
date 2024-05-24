@@ -15,45 +15,94 @@
 # limitations under the License.
 
 hydra:
-  job:
-    chdir: True
   run:
-    dir: ./outputs/
+    dir: ${output}
+  output_subdir: hydra  # Default is .hydra which causes files not being uploaded in W&B.
 
-data_dir: ./dataset
-ckpt_path: ./checkpoints
+# Main output directory.
+output: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-input_dim_nodes: 11
-input_dim_edges: 4
-output_dim: 4
-aggregation: sum
-hidden_dim_node_encoder: 256
-hidden_dim_edge_encoder: 256
-hidden_dim_node_decoder: 256
+# The directory to search for checkpoints to continue training.
+resume_dir: ${output}
 
-batch_size: 1
-epochs: 500
-num_training_samples: 683
-num_validation_samples: 100
-num_test_samples: 100
+# The dataset directory must be set either in command line or config.
+data:
+  data_dir: ???
 
-lr: 0.0001
-lr_decay_rate: 0.99985
+# The loss should be set in the experiment.
+loss: ???
 
-# performance configs
-use_apex: True
-amp: False
-jit: False
+# The optimizer should be set in the experiment.
+optimizer: ???
 
-# number of workers used by data loader during training.
-num_dataloader_workers: 4
-# number of workers used by dataset during pre-loading (null - auto-select).
-num_dataset_workers: null
+# The scheduler should be set in the experiment.
+lr_scheduler: ???
 
-do_concat_trick: False
-num_processor_checkpoint_segments: 0
-recompute_activation: False
+train:
+  batch_size: 1
+  epochs: 50
+  checkpoint_save_freq: 50
+  dataloader:
+    shuffle: true
+    num_workers: 0
+    pin_memory: true
+    drop_last: true
 
-wandb_mode: disabled
+val:
+  batch_size: 1
+  dataloader:
+    shuffle: false
+    num_workers: 0
+    pin_memory: true
+    drop_last: false
 
-checkpoint_save_freq: 50
+compile:
+  enabled: false
+  args:
+    backend: inductor
+
+amp:
+  enabled: false
+  autocast:
+    dtype: torch.float16
+  scaler:
+    _target_: torch.cuda.amp.GradScaler
+    enabled: ${..enabled}
+
+# data_dir: ./dataset
+# ckpt_path: ./checkpoints
+
+# input_dim_nodes: 11
+# input_dim_edges: 4
+# output_dim: 4
+# aggregation: sum
+# hidden_dim_node_encoder: 256
+# hidden_dim_edge_encoder: 256
+# hidden_dim_node_decoder: 256
+
+# batch_size: 1
+# epochs: 500
+# num_training_samples: 683
+# num_validation_samples: 100
+# num_test_samples: 100
+
+# lr: 0.0001
+# lr_decay_rate: 0.99985
+
+# # performance configs
+# use_apex: True
+# amp: False
+# jit: False
+
+# # number of workers used by data loader during training.
+# num_dataloader_workers: 4
+# # number of workers used by dataset during pre-loading (null - auto-select).
+# num_dataset_workers: null
+
+# do_concat_trick: False
+# num_processor_checkpoint_segments: 0
+# recompute_activation: False
+
+# wandb_mode: disabled
+
+# checkpoint_save_freq: 50
