@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sorted Empirical CDF CRPS algorithm
 - An example showing how to train a "tensor-parallel" version of GraphCast
 on a Shallow-Water-Equation example.
+- Support for the history in the ERA5 HDF5 dataloader
 
 ### Changed
 

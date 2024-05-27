@@ -41,7 +41,7 @@ class Validation:
         self.val_datapipe = ERA5HDF5Datapipe(
             data_dir=os.path.join(cfg.dataset_path, "test"),
             stats_dir=os.path.join(cfg.dataset_path, "stats"),
-            channels=[i for i in range(cfg.num_channels)],
+            channels=[i for i in range(cfg.num_channels_climate)],
             interpolation_shape=interpolation_shape,
             num_steps=cfg.num_val_steps,
             batch_size=1,
