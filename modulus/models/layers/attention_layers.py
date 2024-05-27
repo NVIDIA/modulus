@@ -79,7 +79,9 @@ class EarthAttention3D(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        trunc_normal_(self.earth_position_bias_table, std=0.02)
+        self.earth_position_bias_table = trunc_normal_(
+            self.earth_position_bias_table, std=0.02
+        )
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x: torch.Tensor, mask=None):
@@ -185,7 +187,9 @@ class EarthAttention2D(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        trunc_normal_(self.earth_position_bias_table, std=0.02)
+        self.earth_position_bias_table = trunc_normal_(
+            self.earth_position_bias_table, std=0.02
+        )
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x: torch.Tensor, mask=None):
