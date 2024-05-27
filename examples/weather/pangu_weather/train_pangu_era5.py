@@ -129,11 +129,11 @@ def main(cfg: DictConfig) -> None:
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
     logger = PythonLogger("main")  # General python logger
 
-    no_channals_pangu = 4 + 5 * 13
+    number_channels_pangu = 4 + 5 * 13
     datapipe = ERA5HDF5Datapipe(
-        data_dir="/data/train/",
-        stats_dir="/data/stats/",
-        channels=[i for i in range(no_channals_pangu)],
+        data_dir=cfg.train.data_dir,
+        stats_dir=cfg.train.stats_dir,
+        channels=[i for i in range(number_channels_pangu)],
         num_samples_per_year=cfg.train.num_samples_per_year,
         batch_size=cfg.train.batch_size,
         patch_size=OmegaConf.to_object(cfg.train.patch_size),
@@ -168,9 +168,9 @@ def main(cfg: DictConfig) -> None:
     if dist.rank == 0:
         logger.file_logging()
         validation_datapipe = ERA5HDF5Datapipe(
-            data_dir="/data/test/",
-            stats_dir="/data/stats/",
-            channels=[i for i in range(no_channals_pangu)],
+            data_dir=cfg.val.data_dir,
+            stats_dir=cfg.val.stats_dir,
+            channels=[i for i in range(number_channels_pangu)],
             num_steps=1,
             num_samples_per_year=cfg.val.num_samples_per_year,
             batch_size=cfg.val.batch_size,
