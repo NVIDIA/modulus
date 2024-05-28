@@ -79,6 +79,8 @@ class PointFeatureToGridGroupUNet(BaseModel):
         neighbor_search_type: Literal["knn", "radius"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        pooling_type: Literal["attention", "max", "mean"] = "max",
+        pooling_layers: List[int] = None,
     ):
         BaseModel.__init__(self)
         self.in_channels = in_channels
@@ -180,11 +182,27 @@ class PointFeatureToGridGroupUNet(BaseModel):
             memory_format=GridFeaturesMemoryFormat.b_x_y_z_c
         )
 
-        self.grid_pools = GridFeatureGroupPool(
-            in_channels=hidden_channels[num_levels],
-            out_channels=mlp_channels[0],
-            compressed_spatial_dims=self.compressed_spatial_dims,
-        )
+        if pooling_layers is None:
+            pooling_layers = [num_levels]
+        else:
+            assert isinstance(
+                pooling_layers, list
+            ), f"pooling_layers must be a list, got {type(pooling_layers)}."
+            for layer in pooling_layers:
+                assert (
+                    layer <= num_levels
+                ), f"pooling_layer {layer} is greater than num_levels {num_levels}."
+        self.pooling_layers = pooling_layers
+        grid_pools = [
+            GridFeatureGroupPool(
+                in_channels=hidden_channels[layer],
+                out_channels=mlp_channels[0],
+                compressed_spatial_dims=self.compressed_spatial_dims,
+                pooling_type=pooling_type,
+            )
+            for layer in pooling_layers
+        ]
+        self.grid_pools = nn.ModuleList(grid_pools)
 
         self.mlp = MLP(
             mlp_channels[0] * len(self.compressed_spatial_dims),
@@ -232,7 +250,13 @@ class PointFeatureToGridGroupUNet(BaseModel):
             down_grid_feature_groups.append(out_features)
 
         # Drag prediction
-        pooled_feats = self.grid_pools(down_grid_feature_groups[-1])
+        pooled_feats = []
+        for grid_pool, layer in zip(self.grid_pools, self.pooling_layers):
+            pooled_feats.append(grid_pool(down_grid_feature_groups[layer]))
+        if len(pooled_feats) > 1:
+            pooled_feats = torch.stack(pooled_feats, dim=1).sum(dim=1)
+        else:
+            pooled_feats = pooled_feats[0]
         drag_pred = self.mlp_projection(self.mlp(pooled_feats))
 
         for level in reversed(range(self.num_levels)):
@@ -289,6 +313,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
         drag_loss_weight: Optional[float] = None,
+        pooling_type: Literal["attention", "max", "mean"] = "max",
+        pooling_layers: List[int] = None,
     ):
         DrivAerBase.__init__(self)
 
@@ -320,6 +346,8 @@ class PointFeatureToGridGroupUNetDrivAer(DrivAerBase, PointFeatureToGridGroupUNe
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
             reductions=reductions,
+            pooling_type=pooling_type,
+            pooling_layers=pooling_layers,
         )
 
         self.vertex_to_point_features = vertex_to_point_features
