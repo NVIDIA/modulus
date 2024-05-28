@@ -14,6 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+defaults:
+  - /logging/python: default
+  - override hydra/job_logging: disabled  # We use rank-aware logger configuration instead.
+  - _self_
+
 hydra:
   run:
     dir: ${output}
@@ -41,7 +46,7 @@ lr_scheduler: ???
 train:
   batch_size: 1
   epochs: 50
-  checkpoint_save_freq: 50
+  checkpoint_save_freq: 1
   dataloader:
     shuffle: true
     num_workers: 0
@@ -68,6 +73,16 @@ amp:
   scaler:
     _target_: torch.cuda.amp.GradScaler
     enabled: ${..enabled}
+
+loggers:
+  wandb:
+    _target_: loggers.WandBLogger
+    project: car-cfd # aero-graph-net
+    entity: modulus
+    name: agn
+    group: agn-ahmed
+    mode: disabled
+    dir: ${output}
 
 # data_dir: ./dataset
 # ckpt_path: ./checkpoints

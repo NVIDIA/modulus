@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from functools import partial
+import logging
 import time
 
 import hydra
@@ -25,116 +26,58 @@ from dgl.dataloading import GraphDataLoader
 from omegaconf import DictConfig
 
 import torch
-from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
 import wandb
 
-from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
 from modulus.distributed.manager import DistributedManager
-from modulus.launch.logging import (
-    PythonLogger,
-    RankZeroLoggingWrapper,
-    initialize_wandb,
-)
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.models.meshgraphnet import MeshGraphNet
+
+from loggers import CompositeLogger, ExperimentLogger, init_python_logging
+
+
+logger = logging.getLogger("agnet")
 
 
 class RRMSELoss(torch.nn.Module):
+    """Relative RMSE loss."""
+
     def forward(self, pred: torch.Tensor, target: torch.Tensor):
         return (torch.norm(pred - target, p=2) / torch.norm(target, p=2)).mean()
 
 
 class MGNTrainer:
-    def __init__(self, cfg: DictConfig, rank_zero_logger: RankZeroLoggingWrapper):
+    def __init__(self, cfg: DictConfig):
         assert DistributedManager.is_initialized()
         self.dist = DistributedManager()
-        self.rank_zero_logger = rank_zero_logger
 
-        # self.amp = cfg.amp
-        # # MGN with recompute_activation currently supports only SiLU activation function.
-        # mlp_act = "relu"
-        # if cfg.recompute_activation:
-        #     rank_zero_logger.info(
-        #         "Setting MLP activation to SiLU required by recompute_activation."
-        #     )
-        #     mlp_act = "silu"
-
-        # instantiate dataset
-        rank_zero_logger.info("Loading the training dataset...")
+        # instantiate training dataset
+        logger.info("Loading the training dataset...")
         self.dataset = instantiate(cfg.data.train)
-        rank_zero_logger.info(f"Using {len(self.dataset)} training samples.")
-        # self.dataset = AhmedBodyDataset(
-        #     name="ahmed_body_train",
-        #     data_dir=to_absolute_path(cfg.data_dir),
-        #     split="train",
-        #     num_samples=cfg.num_training_samples,
-        #     num_workers=cfg.num_dataset_workers,
-        # )
+        logger.info(f"Using {len(self.dataset)} training samples.")
 
         # instantiate validation dataset
-        rank_zero_logger.info("Loading the validation dataset...")
+        logger.info("Loading the validation dataset...")
         self.validation_dataset = instantiate(cfg.data.val)
-        rank_zero_logger.info(
-            f"Using {len(self.validation_dataset)} validation samples."
-        )
-        # self.validation_dataset = AhmedBodyDataset(
-        #     name="ahmed_body_validation",
-        #     data_dir=to_absolute_path(cfg.data_dir),
-        #     split="validation",
-        #     num_samples=cfg.num_validation_samples,
-        #     num_workers=cfg.num_dataset_workers,
-        # )
+        logger.info(f"Using {len(self.validation_dataset)} validation samples.")
 
-        rank_zero_logger.info("Creating the dataloaders...")
-        # instantiate dataloader
+        logger.info("Creating the dataloaders...")
+        # instantiate training dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
             **cfg.train.dataloader,
             use_ddp=self.dist.world_size > 1,
         )
-        # self.dataloader = GraphDataLoader(
-        #     self.dataset,
-        #     batch_size=cfg.batch_size,
-        #     shuffle=True,
-        #     drop_last=True,
-        #     pin_memory=True,
-        #     use_ddp=self.dist.world_size > 1,
-        #     num_workers=cfg.num_dataloader_workers,
-        # )
 
         # instantiate validation dataloader
         self.validation_dataloader = GraphDataLoader(
             self.validation_dataset,
             **cfg.val.dataloader,
         )
-        # self.validation_dataloader = GraphDataLoader(
-        #     self.validation_dataset,
-        #     batch_size=cfg.batch_size,
-        #     shuffle=False,
-        #     drop_last=True,
-        #     pin_memory=True,
-        #     use_ddp=False,
-        #     num_workers=cfg.num_dataloader_workers,
-        # )
 
-        rank_zero_logger.info("Creating the model...")
+        logger.info("Creating the model...")
         # instantiate the model
         self.model = instantiate(cfg.model)
-        # self.model = MeshGraphNet(
-        #     cfg.input_dim_nodes,
-        #     cfg.input_dim_edges,
-        #     cfg.output_dim,
-        #     aggregation=cfg.aggregation,
-        #     hidden_dim_node_encoder=cfg.hidden_dim_node_encoder,
-        #     hidden_dim_edge_encoder=cfg.hidden_dim_edge_encoder,
-        #     hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
-        #     mlp_activation_fn=mlp_act,
-        #     do_concat_trick=cfg.do_concat_trick,
-        #     num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
-        #     recompute_activation=cfg.recompute_activation,
-        # )
 
         if cfg.compile.enabled:
             self.model = torch.compile(self.model, **cfg.compile.args).to(
@@ -173,17 +116,16 @@ class MGNTrainer:
         )
 
         # load checkpoint
-        if self.dist.world_size > 1:
-            torch.distributed.barrier()
-
         self.epoch_init = load_checkpoint(
             to_absolute_path(cfg.resume_dir),
-            models=self.model.model,
+            models=self.model.model(),
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             scaler=self.scaler,
             device=self.dist.device,
         )
+        if self.dist.world_size > 1:
+            torch.distributed.barrier()
 
     def train(self, graph):
         self.optimizer.zero_grad()
@@ -194,7 +136,7 @@ class MGNTrainer:
 
     def forward(self, graph):
         # forward pass
-        with autocast(enabled=self.amp):
+        with self.autocast():
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             diff_norm = torch.norm(
                 torch.flatten(pred) - torch.flatten(graph.ndata["y"]), p=2
@@ -204,21 +146,11 @@ class MGNTrainer:
             return loss
 
     def backward(self, loss):
-        # backward pass
-        if self.amp:
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
-            loss.backward()
-            self.optimizer.step()
-        lr = self.get_lr()
-        wandb.log({"lr": lr})
-
-    def get_lr(self):
-        # get the learning rate
-        for param_group in self.optimizer.param_groups:
-            return param_group["lr"]
+        # backward pass.
+        # If AMP is disabled, the scaler will fall back to the default behavior.
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
     @torch.no_grad()
     def validation(self):
@@ -234,9 +166,7 @@ class MGNTrainer:
                 .cpu()
                 .numpy()
             )
-        error = error / len(self.validation_dataloader) * 100
-        wandb.log({"val_error (%)": error})
-        self.rank_zero_logger.info(f"Denormalized validation error (%): {error}")
+        return error / len(self.validation_dataloader)
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -245,26 +175,18 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
+    init_python_logging(cfg)
+
     torch.set_float32_matmul_precision("high")
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.allow_tf32 = True
 
     # initialize loggers
-    # initialize_wandb(
-    #     project="Aero",
-    #     entity="Modulus",
-    #     name="Aero-Training",
-    #     group="Aero-DDP-Group",
-    #     mode=cfg.wandb_mode,
-    # )  # Wandb logger
+    elogger = CompositeLogger(cfg)
 
-    logger = PythonLogger("main")  # General python logger
-    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    rank_zero_logger.file_logging()
-
-    trainer = MGNTrainer(cfg, rank_zero_logger)
+    trainer = MGNTrainer(cfg)
     start = time.time()
-    rank_zero_logger.info("Training started...")
+    logger.info("Training started...")
 
     for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
         loss_agg = 0
@@ -273,31 +195,34 @@ def main(cfg: DictConfig) -> None:
             loss = trainer.train(graph)
             loss_agg += loss.detach().cpu().numpy()
         loss_agg /= len(trainer.dataloader)
-        rank_zero_logger.info(
-            f"epoch: {epoch}, loss: {loss_agg:10.3e}, lr: {trainer.get_lr()}, "
-            f"time per epoch: {(time.time()-start):10.3e}"
+        logger.info(
+            f"epoch: {epoch:5,}, loss: {loss_agg:.5f}, "
+            f"lr: {trainer.scheduler.get_lr()[0]:.6f}, "
+            f"time per epoch: {(time.time() - start):5.2f}"
         )
-        wandb.log({"loss": loss_agg})
+        elogger.log_scalar("loss", loss_agg, epoch)
 
         # validation
         if dist.rank == 0:
-            trainer.validation()
+            val_error_pct = trainer.validation() * 100
+            elogger.log_scalar("val_error (%)", val_error_pct, epoch)
+            logger.info(f"Denormalized validation error (%): {val_error_pct:4.2f}")
 
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if dist.rank == 0 and epoch % cfg.checkpoint_save_freq == 0:
+        if dist.rank == 0 and epoch % cfg.train.checkpoint_save_freq == 0:
             save_checkpoint(
-                to_absolute_path(cfg.ckpt_path),
-                models=trainer.model,
+                cfg.output,
+                models=trainer.model.model(),
                 optimizer=trainer.optimizer,
                 scheduler=trainer.scheduler,
                 scaler=trainer.scaler,
                 epoch=epoch,
             )
-            rank_zero_logger.info(f"Saved model on rank {dist.rank}")
+            logger.info(f"Saved model on rank {dist.rank}")
         start = time.time()
-    rank_zero_logger.info("Training completed!")
+    logger.info("Training completed!")
 
 
 if __name__ == "__main__":
