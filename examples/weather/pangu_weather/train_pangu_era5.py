@@ -222,7 +222,9 @@ def main(cfg: DictConfig) -> None:
         invar = my_model.prepare_input(invar_surface, surface_mask, invar_upper_air)
         return my_model(invar)
 
-    @StaticCaptureTraining(model=pangu_model, optim=optimizer, logger=logger)
+    @StaticCaptureTraining(
+        model=pangu_model, optim=optimizer, logger=logger, use_graphs=False
+    )
     def train_step_forward(
         my_model,
         invar_surface,
