@@ -20,7 +20,7 @@ the potential of end-to-end, global-to- km-scales machine learning weather predi
 Refer to the [CorrDiff preprint](https://arxiv.org/abs/2309.15214) for more details.
 
 <p align="center">
-<img src="../../../docs/img/corrdiff_demo.gif" />
+<img src="../../../docs/img/corrdiff_cold_front.png"/>
 </p>
 
 
@@ -57,10 +57,6 @@ the horizontal winds at 10 meter above the surface and the 1h maximum radar
 reflectivity - a surrogate of expect precipitation.
 Notably, the radar reflectivity channel is not present in the input data and needs to
 be predicted based on the other channels, making its prediction strictly generative.
-
-To avoid over-fitting we divide the data into training and testing sets. Three years of
-data 2018-2020 are used for training (2,4154 samples total). For testing we use the
-full fourth year, 2021, as well as the first four months (January to April) of 2022.
 
 The Zarr dataset used for training and testing the CorrDiff model is available for
 non-commercial use under the [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
@@ -108,10 +104,13 @@ $\sigma_{min} = 0.002$. We adopt the rest of hyperparamaters from [EDM](https://
 
 ## Getting Started
 
+To explore the pre-trained model over Taiwan, use the
+[CorrDiff inference package](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/models/corrdiff_inference_package).
+
 To train the regression model on a single GPU, run
 
 ```bash
-python train.py --config-name=config_train_regression.yaml
+python train.py --config-name=config_train_regression.yaml hydra.job.name=my_regression_job
 
 ```
 
@@ -119,7 +118,7 @@ Once the regression model is trained, put the checkpoints in the `checkpoints/re
 Next, to train the diffusion mode on a single GPU, run
 
 ```bash
-python train.py --config-name=config_train_diffusion.yaml
+python train.py --config-name=config_train_diffusion.yaml hydra.job.name=my_diffusion_job
 ```
 
 This will launch a CorrDiff training using the base configs specified in

@@ -19,7 +19,11 @@ from dgl.dataloading import GraphDataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel
 import time, os
-import wandb as wb
+import wandb
+
+import hydra
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
 
 try:
     import apex
@@ -37,38 +41,34 @@ from modulus.launch.logging import (
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from utils import relative_lp_error
-from constants import Constants
-
-# Instantiate constants
-C = Constants()
 
 
 class MGNTrainer:
-    def __init__(self, wb, dist, rank_zero_logger):
+    def __init__(self, cfg: DictConfig, dist, rank_zero_logger):
         self.dist = dist
-        self.wb = wb
         self.rank_zero_logger = rank_zero_logger
+        self.amp = cfg.amp
 
         # instantiate dataset
         dataset = StokesDataset(
             name="stokes_train",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="train",
-            num_samples=C.num_training_samples,
+            num_samples=cfg.num_training_samples,
         )
 
         # instantiate validation dataset
         validation_dataset = StokesDataset(
             name="stokes_validation",
-            data_dir=C.data_dir,
+            data_dir=to_absolute_path(cfg.data_dir),
             split="validation",
-            num_samples=C.num_validation_samples,
+            num_samples=cfg.num_validation_samples,
         )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=False,
             drop_last=True,
             pin_memory=True,
@@ -78,7 +78,7 @@ class MGNTrainer:
         # instantiate validation dataloader
         self.validation_dataloader = GraphDataLoader(
             validation_dataset,
-            batch_size=C.batch_size,
+            batch_size=cfg.batch_size,
             shuffle=False,
             drop_last=True,
             pin_memory=True,
@@ -87,15 +87,15 @@ class MGNTrainer:
 
         # instantiate the model
         self.model = MeshGraphNet(
-            C.input_dim_nodes,
-            C.input_dim_edges,
-            C.output_dim,
-            aggregation=C.aggregation,
-            hidden_dim_node_encoder=C.hidden_dim_node_encoder,
-            hidden_dim_edge_encoder=C.hidden_dim_edge_encoder,
-            hidden_dim_node_decoder=C.hidden_dim_node_decoder,
+            cfg.input_dim_nodes,
+            cfg.input_dim_edges,
+            cfg.output_dim,
+            aggregation=cfg.aggregation,
+            hidden_dim_node_encoder=cfg.hidden_dim_node_encoder,
+            hidden_dim_edge_encoder=cfg.hidden_dim_edge_encoder,
+            hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
         )
-        if C.jit:
+        if cfg.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
         else:
             self.model = self.model.to(dist.device)
@@ -116,12 +116,14 @@ class MGNTrainer:
         # instantiate loss, optimizer, and scheduler
         self.criterion = torch.nn.MSELoss()
         try:
-            self.optimizer = apex.optimizers.FusedAdam(self.model.parameters(), lr=C.lr)
+            self.optimizer = apex.optimizers.FusedAdam(
+                self.model.parameters(), lr=cfg.lr
+            )
             rank_zero_logger.info("Using FusedAdam optimizer")
         except:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=C.lr)
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer, lr_lambda=lambda epoch: C.lr_decay_rate**epoch
+            self.optimizer, lr_lambda=lambda epoch: cfg.lr_decay_rate**epoch
         )
         self.scaler = GradScaler()
 
@@ -129,7 +131,7 @@ class MGNTrainer:
         if dist.world_size > 1:
             torch.distributed.barrier()
         self.epoch_init = load_checkpoint(
-            os.path.join(C.ckpt_path, C.ckpt_name),
+            to_absolute_path(cfg.ckpt_path),
             models=self.model,
             optimizer=self.optimizer,
             scheduler=self.scheduler,
@@ -147,14 +149,14 @@ class MGNTrainer:
 
     def forward(self, graph):
         # forward pass
-        with autocast(enabled=C.amp):
+        with autocast(enabled=self.amp):
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             loss = self.criterion(pred, graph.ndata["y"])
             return loss
 
     def backward(self, loss):
         # backward pass
-        if C.amp:
+        if self.amp:
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
@@ -162,7 +164,7 @@ class MGNTrainer:
             loss.backward()
             self.optimizer.step()
         lr = self.get_lr()
-        self.wb.log({"lr": lr})
+        wandb.log({"lr": lr})
 
     def get_lr(self):
         for param_group in self.optimizer.param_groups:
@@ -186,7 +188,7 @@ class MGNTrainer:
             errors[key] = errors[key] / len(self.validation_dataloader)
             self.rank_zero_logger.info(f"validation error_{key} (%): {errors[key]}")
 
-        self.wb.log(
+        wandb.log(
             {
                 "val_u_error (%)": errors["u"],
                 "val_v_error (%)": errors["v"],
@@ -195,18 +197,11 @@ class MGNTrainer:
         )
 
 
-if __name__ == "__main__":
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
-
-    # save constants to JSON file
-    if dist.rank == 0:
-        os.makedirs(C.ckpt_path, exist_ok=True)
-        with open(
-            os.path.join(C.ckpt_path, C.ckpt_name.replace(".pt", ".json")), "w"
-        ) as json_file:
-            json_file.write(C.model_dump_json(indent=4))
 
     # initialize loggers
     initialize_wandb(
@@ -214,18 +209,18 @@ if __name__ == "__main__":
         entity="Modulus",
         name="Stokes-Training",
         group="Stokes-DDP-Group",
-        mode=C.wandb_mode,
+        mode=cfg.wandb_mode,
     )
 
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    logger.file_logging()
+    rank_zero_logger.file_logging()
 
-    trainer = MGNTrainer(wb, dist, rank_zero_logger)
+    trainer = MGNTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
 
-    for epoch in range(trainer.epoch_init, C.epochs):
+    for epoch in range(trainer.epoch_init, cfg.epochs):
         loss_agg = 0
         for graph in trainer.dataloader:
             loss = trainer.train(graph)
@@ -234,7 +229,7 @@ if __name__ == "__main__":
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss_agg:10.3e}, lr: {trainer.get_lr()}, time per epoch: {(time.time() - start):10.3e}"
         )
-        wb.log({"loss": loss_agg})
+        wandb.log({"loss": loss_agg})
 
         # validation
         if dist.rank == 0:
@@ -245,13 +240,17 @@ if __name__ == "__main__":
             torch.distributed.barrier()
         if dist.rank == 0:
             save_checkpoint(
-                os.path.join(C.ckpt_path, C.ckpt_name),
+                to_absolute_path(cfg.ckpt_path),
                 models=trainer.model,
                 optimizer=trainer.optimizer,
                 scheduler=trainer.scheduler,
                 scaler=trainer.scaler,
                 epoch=epoch,
             )
-            logger.info(f"Saved model on rank {dist.rank}")
+            rank_zero_logger.info(f"Saved model on rank {dist.rank}")
             start = time.time()
-    logger.info("Training completed!")
+    rank_zero_logger.info("Training completed!")
+
+
+if __name__ == "__main__":
+    main()

@@ -18,7 +18,7 @@ dependencies = [
     "zarr>=2.14.2",
     "fsspec>=2023.1.0",
     "s3fs>=2023.5.0",
-    "nvidia_dali_cuda110>=1.16.0",
+    "nvidia_dali_cuda120>=1.35.0",
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytz>=2023.3",
@@ -34,6 +34,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/NVIDIA/modulus"
+Documentation = "https://docs.nvidia.com/modulus/#core"
+Issues = "https://github.com/NVIDIA/modulus/issues"
+Changelog = "https://github.com/NVIDIA/modulus/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 launch = [

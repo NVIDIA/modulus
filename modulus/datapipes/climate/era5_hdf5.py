@@ -68,6 +68,14 @@ class ERA5HDF5Datapipe(Datapipe):
         stride 2 = 12 hours delta t, by default 1
     num_steps : int, optional
         Number of timesteps are included in the output variables, by default 1
+    num_history : int, optional
+        Number of previous timesteps included in the input variables, by default 0
+    interpolation_shape: Tuple[int, int], optional
+        Shape for resizing (H, W), by default None (no interpolation)
+    interpolation_type: str, optional
+        Interpolation type for resizing. Supports ["INTERP_NN", "INTERP_LINEAR", "INTERP_CUBIC",
+        "INTERP_LANCZOS3", "INTERP_TRIANGULAR", "INTERP_GAUSSIAN"]. Interpolation is performed
+        only if `interpolation_shape` is not None. by default "INTERP_LINEAR".
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
         divisible by patch_size, by default None
@@ -92,7 +100,10 @@ class ERA5HDF5Datapipe(Datapipe):
         channels: Union[List[int], None] = None,
         batch_size: int = 1,
         num_steps: int = 1,
+        num_history: int = 0,
         stride: int = 1,
+        interpolation_shape: Union[Tuple[int, int], None] = None,
+        interpolation_type: str = "INTERP_LINEAR",
         patch_size: Union[Tuple[int, int], int, None] = None,
         num_samples_per_year: Union[int, None] = None,
         shuffle: bool = True,
@@ -109,7 +120,10 @@ class ERA5HDF5Datapipe(Datapipe):
         self.stats_dir = Path(stats_dir) if stats_dir is not None else None
         self.channels = channels
         self.stride = stride
+        self.interpolation_shape = interpolation_shape
+        self.interpolation_type = interpolation_type
         self.num_steps = num_steps
+        self.num_history = num_history
         self.num_samples_per_year = num_samples_per_year
         self.process_rank = process_rank
         self.world_size = world_size
@@ -131,6 +145,30 @@ class ERA5HDF5Datapipe(Datapipe):
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
         if self.stats_dir is not None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
+
+        # Check interpolation type
+        if self.interpolation_shape is not None:
+            valid_interpolation = [
+                "INTERP_NN",
+                "INTERP_LINEAR",
+                "INTERP_CUBIC",
+                "INTERP_LANCZOS3",
+                "INTERP_TRIANGULAR",
+                "INTERP_GAUSSIAN",
+            ]
+            if self.interpolation_type not in valid_interpolation:
+                raise ValueError(
+                    f"Interpolation type {self.interpolation_type} not supported"
+                )
+            self.interpolation_type = getattr(dali.types, self.interpolation_type)
+
+        # Layout
+        # Avoiding API change for self.num_history == 0.
+        # Need to use FCHW layout in the future regardless of the num_history.
+        if self.num_history == 0:
+            self.layout = ["CHW", "FCHW"]
+        else:
+            self.layout = ["FCHW", "FCHW"]
 
         self.parse_dataset_files()
         self.load_statistics()
@@ -159,8 +197,16 @@ class ERA5HDF5Datapipe(Datapipe):
             # truncate the dataset to avoid out-of-range sampling and ensure each
             # rank has same number of samples (to avoid deadlocks)
             data_samples_per_year = (
-                (f["fields"].shape[0] - self.num_steps * self.stride) // self.world_size
+                (
+                    f["fields"].shape[0]
+                    - (self.num_steps + self.num_history) * self.stride
+                )
+                // self.world_size
             ) * self.world_size
+            if data_samples_per_year < 1:
+                raise ValueError(
+                    f"Not enough number of samples per year ({data_samples_per_year})"
+                )
             self.img_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them
@@ -257,6 +303,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 channels=self.channels,
                 stride=self.stride,
                 num_steps=self.num_steps,
+                num_history=self.num_history,
                 num_samples_per_year=self.num_samples_per_year,
                 batch_size=self.batch_size,
                 shuffle=self.shuffle,
@@ -271,6 +318,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 num_outputs=2,
                 parallel=True,
                 batch=False,
+                layout=self.layout,
             )
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that.
@@ -279,12 +327,31 @@ class ERA5HDF5Datapipe(Datapipe):
 
             # Crop.
             h, w = self.img_shape
-            invar = invar[:, :h, :w]
+            invar = invar[..., :h, :w]
             outvar = outvar[:, :, :h, :w]
             # Standardize.
             if self.stats_dir is not None:
-                invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
+                if self.num_history == 0:
+                    invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
+                else:
+                    invar = dali.fn.normalize(invar, mean=self.mu, stddev=self.sd)
                 outvar = dali.fn.normalize(outvar, mean=self.mu, stddev=self.sd)
+            # Resize.
+            if self.interpolation_shape is not None:
+                invar = dali.fn.resize(
+                    invar,
+                    resize_x=self.interpolation_shape[1],
+                    resize_y=self.interpolation_shape[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
+                outvar = dali.fn.resize(
+                    outvar,
+                    resize_x=self.interpolation_shape[1],
+                    resize_y=self.interpolation_shape[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
 
             # Set outputs.
             pipe.set_outputs(invar, outvar)
@@ -316,6 +383,8 @@ class ERA5DaliExternalSource:
         Number of steps between input and output variables
     num_steps : int
         Number of timesteps are included in the output variables
+    num_history : int
+        Number of previous timesteps included in the input variables
     num_samples_per_year : int
         Number of samples randomly taken from each year
     batch_size : int, optional
@@ -339,6 +408,7 @@ class ERA5DaliExternalSource:
         num_samples: int,
         channels: Iterable[int],
         num_steps: int,
+        num_history: int,
         stride: int,
         num_samples_per_year: int,
         batch_size: int = 1,
@@ -352,6 +422,7 @@ class ERA5DaliExternalSource:
         self.num_samples = num_samples
         self.chans = list(channels)
         self.num_steps = num_steps
+        self.num_history = num_history
         self.stride = stride
         self.num_samples_per_year = num_samples_per_year
         self.batch_size = batch_size
@@ -390,14 +461,21 @@ class ERA5DaliExternalSource:
         in_idx = idx % self.num_samples_per_year
 
         data = self.data_files[year_idx]["fields"]
-        # Has [C,H,W] shape.
-        invar = data[in_idx, self.chans]
+        if self.num_history == 0:
+            # Has [C,H,W] shape.
+            invar = data[in_idx, self.chans]
+        else:
+            # Has [T,C,H,W] shape.
+            invar = data[
+                in_idx : in_idx + (self.num_history + 1) * self.stride : self.stride,
+                self.chans,
+            ]
 
         # Has [T,C,H,W] shape.
-        outvar = np.empty((self.num_steps,) + invar.shape, dtype=invar.dtype)
+        outvar = np.empty((self.num_steps,) + invar.shape[-3:], dtype=invar.dtype)
 
         for i in range(self.num_steps):
-            out_idx = in_idx + (i + 1) * self.stride
+            out_idx = in_idx + (self.num_history + i + 1) * self.stride
             outvar[i] = data[out_idx, self.chans]
 
         return invar, outvar

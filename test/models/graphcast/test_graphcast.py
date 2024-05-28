@@ -22,10 +22,8 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import common
 import pytest
-from graphcast.utils import create_random_input, fix_random_seeds, get_icosphere_path
+from graphcast.utils import create_random_input, fix_random_seeds
 from pytest_utils import import_or_fail
-
-icosphere_path = get_icosphere_path()
 
 
 @import_or_fail("dgl")
@@ -36,8 +34,7 @@ def test_graphcast_forward(device, pytestconfig, num_channels=2, res_h=10, res_w
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "meshgraph_path": icosphere_path,
-        "static_dataset_path": None,
+        "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
@@ -70,8 +67,7 @@ def test_graphcast_constructor(
     # Define dictionary of constructor args
     arg_list = [
         {
-            "meshgraph_path": icosphere_path,
-            "static_dataset_path": None,
+            "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels_1,
             "input_dim_mesh_nodes": 3,
@@ -82,8 +78,7 @@ def test_graphcast_constructor(
             "do_concat_trick": True,
         },
         {
-            "meshgraph_path": icosphere_path,
-            "static_dataset_path": None,
+            "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels_2,
             "input_dim_mesh_nodes": 3,
@@ -119,8 +114,7 @@ def test_GraphCast_optims(device, pytestconfig, num_channels=2, res_h=10, res_w=
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
         model_kwds = {
-            "meshgraph_path": icosphere_path,
-            "static_dataset_path": None,
+            "multimesh_level": 1,
             "input_res": (res_h, res_w),
             "input_dim_grid_nodes": num_channels,
             "input_dim_mesh_nodes": 3,
@@ -162,8 +156,7 @@ def test_graphcast_checkpoint(device, pytestconfig, num_channels=2, res_h=10, re
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "meshgraph_path": icosphere_path,
-        "static_dataset_path": None,
+        "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,
@@ -197,8 +190,7 @@ def test_GraphCast_deploy(device, pytestconfig, num_channels=2, res_h=10, res_w=
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     model_kwds = {
-        "meshgraph_path": icosphere_path,
-        "static_dataset_path": None,
+        "multimesh_level": 1,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,

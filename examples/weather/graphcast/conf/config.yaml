@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ./outputs/
+
+processor_layers: 16
+hidden_dim: 512
+multimesh_level: 6
+segments: 1
+norm_type: "TELayerNorm"
+  # "TELayerNorm" or "LayerNorm"
+force_single_checkpoint: False
+checkpoint_encoder: True
+checkpoint_processor: False
+checkpoint_decoder: False
+force_single_checkpoint_finetune: False
+checkpoint_encoder_finetune: True
+checkpoint_processor_finetune: True
+checkpoint_decoder_finetune: True
+concat_trick: True
+cugraphops_encoder: True
+cugraphops_processor: True
+cugraphops_decoder: True
+recompute_activation: True
+wb_mode: "online"
+synthetic_dataset: false
+dataset_path: "/data"
+static_dataset_path: null
+latlon_res: [721, 1440]  
+num_samples_per_year_train: 1408
+num_workers: 0  # 8
+num_channels: 474
+num_channels_val: 3
+num_val_steps: 8
+num_val_spy: 3  # SPY: Samples Per Year
+grad_clip_norm: 32.0
+jit: False
+amp: False
+amp_dtype: "bfloat16"
+full_bf16: True
+watch_model: False
+lr: 1e-3
+lr_step3: 3e-7
+num_iters_step1: 1000
+num_iters_step2: 299000
+num_iters_step3: 11000
+step_change_freq: 1000
+save_freq: 500
+val_freq: 1000
+ckpt_path: "checkpoints"
+val_dir: "validation"
+ckpt_name: "model"
+use_apex: True
+pyt_profiler: False
+profile: False
+profile_range: (90, 110)

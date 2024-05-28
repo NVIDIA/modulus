@@ -20,6 +20,7 @@ Diffusion-Based Generative Models".
 """
 
 import importlib
+import warnings
 from dataclasses import dataclass
 from typing import List, Union
 
@@ -148,7 +149,7 @@ class VPPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -321,7 +322,7 @@ class VEPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -467,7 +468,7 @@ class iDDPMPrecond(Module):
             class_labels=class_labels,
             **model_kwargs,
         )
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -632,7 +633,7 @@ class EDMPrecond(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -733,6 +734,13 @@ class EDMPrecondSR(Module):
         model_type="DhariwalUNet",
         **model_kwargs,
     ):
+        warnings.warn(
+            "EDMPrecondSR has a bug in how the conditional input is scaled "
+            "(see https://github.com/NVIDIA/modulus/issues/229). "
+            "This preconditioner is now deprecated. "
+            "Please use EDMPrecondSRV2 instead.",
+            DeprecationWarning,
+        )
         super().__init__(meta=EDMPrecondSRMetaData)
         self.img_resolution = img_resolution
         self.img_channels = img_channels
@@ -755,7 +763,13 @@ class EDMPrecondSR(Module):
 
     @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
+        self,
+        x,
+        img_lr,
+        sigma,
+        class_labels=None,
+        force_fp32=False,
+        **model_kwargs,
     ):
         # Concatenate input channels
         x = torch.cat((x, img_lr), dim=1)
@@ -787,7 +801,7 @@ class EDMPrecondSR(Module):
             **model_kwargs,
         )
 
-        if F_x.dtype != dtype:
+        if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
@@ -804,3 +818,484 @@ class EDMPrecondSR(Module):
         See EDMPrecond.round_sigma
         """
         return EDMPrecond.round_sigma(sigma)
+
+
+class _ConditionalPrecond(torch.nn.Module):
+    """EDM Preconditioner with appropriate handling of conditional inputs via concatenation
+
+    This class is more modular since ``model`` is not constructed here.
+
+    """
+
+    def __init__(
+        self,
+        *,
+        model: torch.nn.Module,
+        img_resolution: int,
+        img_channels: int,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0,
+        sigma_max=float("inf"),
+        sigma_data=0.5,
+    ):
+        super().__init__()
+
+        # metadata. Not clear which is of these is used externally. I believe
+        # img_resolution and img_channels are.
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.sigma_data = sigma_data
+        self.img_resolution = img_resolution
+        self.img_channels = img_channels
+        self.model = model
+
+    @nvtx.annotate(message="_ConditionalPrecond", color="orange")
+    def forward(
+        self,
+        x,
+        sigma,
+        class_labels=None,
+        condition=None,
+        force_fp32=False,
+        **model_kwargs,
+    ):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        class_labels = (
+            None
+            if self.label_dim == 0
+            else (
+                torch.zeros([1, self.label_dim], device=x.device)
+                if class_labels is None
+                else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+            )
+        )
+        dtype = (
+            torch.float16
+            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            else torch.float32
+        )
+
+        c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
+        c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
+        c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
+        c_noise = sigma.log() / 4
+
+        if condition is None:
+            arg = c_in * x
+        else:
+            condition = condition.to(torch.float32)
+            arg = torch.cat([c_in * x, condition], dim=1)
+
+        F_x = self.model(
+            arg.to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            **model_kwargs,
+        )
+        D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        return D_x
+
+    def round_sigma(self, sigma):
+        return torch.as_tensor(sigma)
+
+
+class EDMPrecondSRV2(_ConditionalPrecond, Module):
+    # note this order of inheritance is necessesary  since Module.__init__ calls
+    # super().__init__
+    """EDM Preconditioner with appropriate handling of conditional inputs via concatenation
+
+    This helper is provided to have a similar interface to EDMPrecondSR,
+    which includes the model construction.
+
+    Parameters
+    ----------
+    img_resolution : int
+        Image resolution.
+    img_in_channels : int
+        Number of input color channels.
+    img_out_channels : int
+        Number of output color channels.
+    label_dim : int
+        Number of class labels, 0 = unconditional, by default 0.
+    use_fp16 : bool
+        Execute the underlying model at FP16 precision?, by default False.
+    sigma_min : float
+        Minimum supported noise level, by default 0.0.
+    sigma_max : float
+        Maximum supported noise level, by default inf.
+    sigma_data : float
+        Expected standard deviation of the training data, by default 0.5.
+    model_type :str
+        Class name of the underlying model, by default "DhariwalUNet".
+    **model_kwargs : dict
+        Keyword arguments for the underlying model.
+
+    Note
+    ----
+    References:
+    - Karras, T., Aittala, M., Aila, T. and Laine, S., 2022. Elucidating the
+    design space of diffusion-based generative models. Advances in Neural Information
+    Processing Systems, 35, pp.26565-26577.
+    - Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self,
+        img_resolution,
+        img_in_channels,
+        img_out_channels,
+        label_dim=0,
+        use_fp16=False,
+        sigma_min=0.0,
+        sigma_max=float("inf"),
+        sigma_data=0.5,
+        model_type="DhariwalUNet",
+        **model_kwargs,
+    ) -> None:
+        # The use of multiple inheritance here is a workaround to make the
+        # preconditioner serializeable. The arguments of a Modulus model must be
+        # serializeable, but _ConditionalPrecond uses a compositional design for
+        # easier testing and modularity. Would be easier if modulus didn't rely
+        # on object inheritance for saving/loading.
+        Module.__init__(self, meta=EDMPrecondSRMetaData)
+        model_class = getattr(network_module, model_type)
+        model = model_class(
+            img_resolution=img_resolution,
+            in_channels=img_in_channels + img_out_channels,
+            out_channels=img_out_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )
+        _ConditionalPrecond.__init__(
+            self,
+            model=model,
+            img_resolution=img_resolution,
+            img_channels=img_out_channels,
+            label_dim=label_dim,
+            use_fp16=use_fp16,
+            sigma_min=sigma_min,
+            sigma_max=sigma_max,
+            sigma_data=sigma_data,
+        )
+
+
+class VEPrecond_dfsr(torch.nn.Module):
+    """
+    Preconditioning for dfsr model, modified from class VEPrecond, where the input
+    argument 'sigma' in forward propagation function is used to receive the timestep
+    of the backward diffusion process.
+
+    Parameters
+    ----------
+    img_resolution : int
+        Image resolution.
+    img_channels : int
+        Number of color channels.
+    label_dim : int
+        Number of class labels, 0 = unconditional, by default 0.
+    use_fp16 : bool
+        Execute the underlying model at FP16 precision?, by default False.
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+    model_type :str
+        Class name of the underlying model, by default "SongUNet".
+    **model_kwargs : dict
+        Keyword arguments for the underlying model.
+
+    Note
+    ----
+    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models.
+    Advances in neural information processing systems. 2020;33:6840-51.
+    """
+
+    def __init__(
+        self,
+        img_resolution: int,
+        img_channels: int,
+        label_dim: int = 0,
+        use_fp16: bool = False,
+        sigma_min: float = 0.02,
+        sigma_max: float = 100.0,
+        dataset_mean: float = 5.85e-05,
+        dataset_scale: float = 4.79,
+        model_type: str = "SongUNet",
+        **model_kwargs: dict,
+    ):
+        super().__init__()
+        self.img_resolution = img_resolution
+        self.img_channels = img_channels
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.model = globals()[model_type](
+            img_resolution=img_resolution,
+            in_channels=self.img_channels,
+            out_channels=img_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )  # TODO needs better handling
+
+    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        # print("sigma: ", sigma)
+        class_labels = (
+            None
+            if self.label_dim == 0
+            else torch.zeros([1, self.label_dim], device=x.device)
+            if class_labels is None
+            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+        )
+        dtype = (
+            torch.float16
+            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            else torch.float32
+        )
+
+        c_in = 1
+        c_noise = sigma  # Change the definitation of c_noise to avoid -inf values for zero sigma
+
+        F_x = self.model(
+            (c_in * x).to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            **model_kwargs,
+        )
+
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+
+        return F_x
+
+
+class VEPrecond_dfsr_cond(torch.nn.Module):
+    """
+    Preconditioning for dfsr model with physics-informed conditioning input, modified
+    from class VEPrecond, where the input argument 'sigma' in forward propagation function
+    is used to receive the timestep of the backward diffusion process. The gradient of PDE
+    residual with respect to the vorticity in the governing Navier-Stokes equation is computed
+    as the physics-informed conditioning variable and is combined with the backward diffusion
+    timestep before being sent to the underlying model for noise prediction.
+
+    Parameters
+    ----------
+    img_resolution : int
+        Image resolution.
+    img_channels : int
+        Number of color channels.
+    label_dim : int
+        Number of class labels, 0 = unconditional, by default 0.
+    use_fp16 : bool
+        Execute the underlying model at FP16 precision?, by default False.
+    sigma_min : float
+        Minimum supported noise level, by default 0.02.
+    sigma_max : float
+        Maximum supported noise level, by default 100.0.
+    model_type :str
+        Class name of the underlying model, by default "SongUNet".
+    **model_kwargs : dict
+        Keyword arguments for the underlying model.
+
+    Note
+    ----
+    Reference:
+    [1] Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+    [2] Shu D, Li Z, Farimani AB. A physics-informed diffusion model for high-fidelity
+    flow field reconstruction. Journal of Computational Physics. 2023 Apr 1;478:111972.
+    """
+
+    def __init__(
+        self,
+        img_resolution: int,
+        img_channels: int,
+        label_dim: int = 0,
+        use_fp16: bool = False,
+        sigma_min: float = 0.02,
+        sigma_max: float = 100.0,
+        dataset_mean: float = 5.85e-05,
+        dataset_scale: float = 4.79,
+        model_type: str = "SongUNet",
+        **model_kwargs: dict,
+    ):
+        super().__init__()
+        self.img_resolution = img_resolution
+        self.img_channels = img_channels
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.model = globals()[model_type](
+            img_resolution=img_resolution,
+            in_channels=model_kwargs["model_channels"] * 2,
+            out_channels=img_channels,
+            label_dim=label_dim,
+            **model_kwargs,
+        )  # TODO needs better handling
+
+        # modules to embed residual loss
+        self.conv_in = torch.nn.Conv2d(
+            img_channels,
+            model_kwargs["model_channels"],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            padding_mode="circular",
+        )
+        self.emb_conv = torch.nn.Sequential(
+            torch.nn.Conv2d(
+                img_channels,
+                model_kwargs["model_channels"],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+            torch.nn.GELU(),
+            torch.nn.Conv2d(
+                model_kwargs["model_channels"],
+                model_kwargs["model_channels"],
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                padding_mode="circular",
+            ),
+        )
+        self.dataset_mean = dataset_mean
+        self.dataset_scale = dataset_scale
+
+    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        class_labels = (
+            None
+            if self.label_dim == 0
+            else torch.zeros([1, self.label_dim], device=x.device)
+            if class_labels is None
+            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+        )
+        dtype = (
+            torch.float16
+            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
+            else torch.float32
+        )
+
+        c_in = 1
+        c_noise = sigma
+
+        # Compute physics-informed conditioning information using vorticity residual
+        dx = (
+            self.voriticity_residual((x * self.dataset_scale + self.dataset_mean))
+            / self.dataset_scale
+        )
+        x = self.conv_in(x)
+        cond_emb = self.emb_conv(dx)
+        x = torch.cat((x, cond_emb), dim=1)
+
+        F_x = self.model(
+            (c_in * x).to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            **model_kwargs,
+        )
+
+        if F_x.dtype != dtype:
+            raise ValueError(
+                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+            )
+        return F_x
+
+    def voriticity_residual(self, w, re=1000.0, dt=1 / 32):
+        """
+        Compute the gradient of PDE residual with respect to a given vorticity w using the
+        spectrum method.
+
+        Parameters
+        ----------
+        w: torch.Tensor
+            The fluid flow data sample (vorticity).
+        re: float
+            The value of Reynolds number used in the governing Navier-Stokes equation.
+        dt: float
+            Time step used to compute the time-derivative of vorticity included in the governing
+            Navier-Stokes equation.
+
+        Returns
+        -------
+        torch.Tensor
+            The computed vorticity gradient.
+        """
+
+        # w [b t h w]
+        w = w.clone()
+        w.requires_grad_(True)
+        nx = w.size(2)
+        device = w.device
+
+        w_h = torch.fft.fft2(w[:, 1:-1], dim=[2, 3])
+        # Wavenumbers in y-direction
+        k_max = nx // 2
+        N = nx
+        k_x = (
+            torch.cat(
+                (
+                    torch.arange(start=0, end=k_max, step=1, device=device),
+                    torch.arange(start=-k_max, end=0, step=1, device=device),
+                ),
+                0,
+            )
+            .reshape(N, 1)
+            .repeat(1, N)
+            .reshape(1, 1, N, N)
+        )
+        k_y = (
+            torch.cat(
+                (
+                    torch.arange(start=0, end=k_max, step=1, device=device),
+                    torch.arange(start=-k_max, end=0, step=1, device=device),
+                ),
+                0,
+            )
+            .reshape(1, N)
+            .repeat(N, 1)
+            .reshape(1, 1, N, N)
+        )
+        # Negative Laplacian in Fourier space
+        lap = k_x**2 + k_y**2
+        lap[..., 0, 0] = 1.0
+        psi_h = w_h / lap
+
+        u_h = 1j * k_y * psi_h
+        v_h = -1j * k_x * psi_h
+        wx_h = 1j * k_x * w_h
+        wy_h = 1j * k_y * w_h
+        wlap_h = -lap * w_h
+
+        u = torch.fft.irfft2(u_h[..., :, : k_max + 1], dim=[2, 3])
+        v = torch.fft.irfft2(v_h[..., :, : k_max + 1], dim=[2, 3])
+        wx = torch.fft.irfft2(wx_h[..., :, : k_max + 1], dim=[2, 3])
+        wy = torch.fft.irfft2(wy_h[..., :, : k_max + 1], dim=[2, 3])
+        wlap = torch.fft.irfft2(wlap_h[..., :, : k_max + 1], dim=[2, 3])
+        advection = u * wx + v * wy
+
+        wt = (w[:, 2:, :, :] - w[:, :-2, :, :]) / (2 * dt)
+
+        # establish forcing term
+        x = torch.linspace(0, 2 * np.pi, nx + 1, device=device)
+        x = x[0:-1]
+        X, Y = torch.meshgrid(x, x)
+        f = -4 * torch.cos(4 * Y)
+
+        residual = wt + (advection - (1.0 / re) * wlap + 0.1 * w[:, 1:-1]) - f
+        residual_loss = (residual**2).mean()
+        dw = torch.autograd.grad(residual_loss, w)[0]
+
+        return dw
