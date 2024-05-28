@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Diffusion model for fluid data super-resolution (CMU contribution).
 - The Virtual Foundry GraphNet.
 - A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
+- Sorted Empirical CDF CRPS algorithm
+- Support for the history in the ERA5 HDF5 dataloader
 
 ### Changed
 
@@ -34,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+- Update DALI to CUDA 12 compatible version.
 
 ## [0.6.0] - 2024-04-17
 

@@ -70,6 +70,7 @@ def test_from_torch_forward(device):
     invar = torch.randn(bsize, 32).to(device)
     model(invar)
     registry.__clear_registry__()
+    registry.__restore_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -82,6 +83,7 @@ def test_from_torch_constructor(device):
     assert isinstance(model, Module)
 
     registry.__clear_registry__()
+    registry.__restore_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -102,18 +104,22 @@ def test_from_torch_optims(device):
     model, invar = setup_model()
     assert common.validate_cuda_graphs(model, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()
     # Check JIT
     model, invar = setup_model()
     assert common.validate_jit(model, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()
     # Check AMP
     model, invar = setup_model()
     assert common.validate_amp(model, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()
     # Check Combo
     model, invar = setup_model()
     assert common.validate_combo_optims(model, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -129,6 +135,7 @@ def test_from_torch_checkpoint(device):
     invar = torch.randn(bsize, 4).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()
 
 
 @common.check_ort_version()
@@ -144,3 +151,4 @@ def test_from_torch_deploy(device):
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
     registry.__clear_registry__()
+    registry.__restore_registry__()

@@ -24,9 +24,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import torch  # noqa: E402
 from pytest_utils import import_or_fail  # noqa: E402
-from utils import fix_random_seeds, get_icosphere_path  # noqa: E402
-
-icosphere_path = get_icosphere_path()
+from utils import fix_random_seeds  # noqa: E402
 
 
 @import_or_fail("dgl")
@@ -54,8 +52,7 @@ def test_concat_trick(pytestconfig, recomp_act, num_channels=2, res_h=11, res_w=
 
     # Instantiate the model
     model = GraphCastNet(
-        meshgraph_path=icosphere_path,
-        static_dataset_path=None,
+        multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
         input_dim_mesh_nodes=3,
@@ -72,8 +69,7 @@ def test_concat_trick(pytestconfig, recomp_act, num_channels=2, res_h=11, res_w=
 
     # Instantiate the model with concat trick enabled
     model_ct = GraphCastNet(
-        meshgraph_path=icosphere_path,
-        static_dataset_path=None,
+        multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
         input_dim_mesh_nodes=3,

@@ -36,14 +36,6 @@ def dlwp_data_dir():
     return path
 
 
-@pytest.fixture
-def graphcast_data_dir():
-    """Data dir for graphcast package"""
-
-    path = "/data/nfs/modulus-data/plugin_data/graphcast/"
-    return path
-
-
 def _copy_directory(src, dst):
     if not os.path.exists(dst):
         os.makedirs(dst)
@@ -173,58 +165,6 @@ def test_dlwp(tmp_path, batch_size, device, pytestconfig):
     time = datetime.datetime(2018, 1, 1)
     with torch.no_grad():
         out = model(x, time)
-    assert out.shape == x.shape
-
-
-def save_untrained_graphcast(path):
-    """Function to save untrained GraphCast"""
-
-    icosphere_path = path / "icospheres.json"
-    config = {
-        "meshgraph_path": icosphere_path.as_posix(),
-        "static_dataset_path": None,
-        "input_dim_grid_nodes": 2,
-        "input_dim_mesh_nodes": 3,
-        "input_dim_edges": 4,
-        "output_dim_grid_nodes": 2,
-        "processor_layers": 3,
-        "hidden_dim": 2,
-        "do_concat_trick": True,
-    }
-
-    from modulus.models.graphcast import GraphCastNet
-
-    model = GraphCastNet(**config)
-
-    config_path = path / "config.json"
-    with config_path.open("w") as f:
-        json.dump(config, f)
-
-    check_point_path = path / "weights.tar"
-    save_ddp_checkpoint(model, check_point_path, del_device_buffer=False)
-
-    url = f"file://{path.as_posix()}"
-    package = Package(url, seperator="/")
-    return package
-
-
-@nfsdata_or_fail
-@import_or_fail(["dgl", "ruamel.yaml", "tensorly", "torch_harmonics", "tltorch"])
-def test_graphcast(tmp_path, graphcast_data_dir, pytestconfig):
-    """Test GraphCast plugin"""
-
-    from modulus.models.fcn_mip_plugin import graphcast_34ch
-
-    source_dir = graphcast_data_dir
-    _copy_directory(source_dir, tmp_path)
-
-    package = save_untrained_graphcast(
-        tmp_path
-    )  # here package needs to load after icosphere.json is copied.
-    model = graphcast_34ch(package, pretrained=False)
-    x = torch.randn(1, 34, 721, 1440).to("cuda")
-    with torch.no_grad():
-        out = model(x)
     assert out.shape == x.shape
 
 

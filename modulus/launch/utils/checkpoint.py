@@ -76,7 +76,9 @@ def _get_checkpoint_filename(
     # only rank 0 saves
     manager = DistributedManager()
     model_parallel_rank = (
-        manager.group_rank("model_parallel") if manager.distributed else 0
+        manager.group_rank("model_parallel")
+        if "model_parallel" in manager.group_names
+        else 0
     )
 
     # Input file name
