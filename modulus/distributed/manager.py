@@ -586,7 +586,12 @@ class DistributedManager(object):
     def cleanup():
         """Clean up distributed group and singleton"""
         # Destroying group.WORLD is enough for all process groups to get destroyed
-        if DistributedManager().distributed:
+        if (
+            "_is_initialized" in DistributedManager._shared_state
+            and DistributedManager._shared_state["_is_initialized"]
+            and "_distributed" in DistributedManager._shared_state
+            and DistributedManager._shared_state["_distributed"]
+        ):
             if torch.cuda.is_available():
                 dist.barrier(
                     device_ids=[DistributedManager().local_rank]
