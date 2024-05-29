@@ -34,12 +34,12 @@ import torch
 
 from math import ceil
 
-from shallow_water_equations import ShallowWaterSolver
+from shallow_water_solver import ShallowWaterSolver
 
 
-class PdeDataset(torch.utils.data.Dataset):
-    """Custom Dataset class for PDE training data"""
-
+class ShallowWaterPDEDataset(torch.utils.data.Dataset):
+    """Custom Dataset class generating trainig data corresponding to
+    the underlying PDEs of the Shallow Water Equations"""
     def __init__(
         self,
         dt,

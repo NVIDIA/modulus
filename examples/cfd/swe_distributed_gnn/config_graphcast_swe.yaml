@@ -53,3 +53,8 @@ model:
   use_lat_lon_partitioning: True
   loss_fn: "l2"
   enable_amp: False
+  # number of GPUs across which model is
+  # distributed across, -1 if you want to use
+  # set it equal to world_size, i.e. the number
+  # of all available GPUs in the run
+  graph_partition_size: -1
