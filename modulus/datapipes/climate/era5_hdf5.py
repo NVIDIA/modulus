@@ -158,8 +158,8 @@ class ERA5HDF5Datapipe(Datapipe):
             cos_zenith_args["latlon_bounds"] = cos_zenith_args.get(
                 "latlon_bounds",
                 (
-                    (90, -90),  # TODO check
-                    (-180, 180),
+                    (90, -90),
+                    (0, 360),
                 ),
             )
         self.latlon_bounds = cos_zenith_args.get("latlon_bounds")
@@ -215,7 +215,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 axis=0,
             )
             self.latlon_dali = dali.types.Constant(self.data_latlon)
-            self.output_keys = ["invar", "outvar", "cos_zenith"]
+            self.output_keys = ["invar", "outvar", "cos_zenith", "t"]
         else:
             self.output_keys = ["invar", "outvar"]
 
@@ -417,10 +417,12 @@ class ERA5HDF5Datapipe(Datapipe):
                     cos_zenith_angle(timestamps, latlon=self.latlon_dali),
                     dtype=dali.types.FLOAT,
                 )
+                if self.device.type == "cuda":
+                    cos_zenith = cos_zenith.gpu()
 
             # Set outputs.
             if self.use_cos_zenith:
-                pipe.set_outputs(invar, outvar, cos_zenith)
+                pipe.set_outputs(invar, outvar, cos_zenith, timestamps)
             else:
                 pipe.set_outputs(invar, outvar)
 

@@ -37,7 +37,7 @@ from modulus.launch.logging import (
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
-from train_utils import count_trainable_params
+from train_utils import count_trainable_params, prepare_input
 from loss.utils import grid_cell_area
 from train_base import BaseTrainer
 from validation import Validation
@@ -97,7 +97,9 @@ class GraphCastTrainer(BaseTrainer):
         self.model = GraphCastNet(
             multimesh_level=cfg.multimesh_level,
             input_res=tuple(cfg.latlon_res),
-            input_dim_grid_nodes=cfg.num_channels_climate + cfg.num_channels_static,
+            input_dim_grid_nodes=(cfg.num_channels_climate + cfg.use_cos_zenith)
+            * (cfg.num_history + 1)
+            + cfg.num_channels_static,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
             output_dim_grid_nodes=cfg.num_channels_climate,
@@ -130,6 +132,14 @@ class GraphCastTrainer(BaseTrainer):
         if cfg.watch_model and not cfg.jit and dist.rank == 0:
             wandb.watch(self.model)
 
+        # Get latitudes and longitudes
+        if hasattr(self.model, "module"):
+            self.latitudes = self.model.module.latitudes
+            self.longitudes = self.model.module.longitudes
+        else:
+            self.latitudes = self.model.latitudes
+            self.longitudes = self.model.longitudes
+
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
             self.model = DistributedDataParallel(
@@ -149,18 +159,25 @@ class GraphCastTrainer(BaseTrainer):
         DataPipe = (
             SyntheticWeatherDataLoader if cfg.synthetic_dataset else ERA5HDF5Datapipe
         )
-        self.interpolation_shape = (
-            cfg.latlon_res if cfg.latlon_res != (721, 1440) else None
+        self.interpolation_type = (
+            "INTERP_LINEAR" if cfg.latlon_res != (721, 1440) else None
         )  # interpolate if not in native resolution
+        self.cos_zenith_args = {
+            "dt": 6.0,
+            "start_year": 1980,
+            "latlon_bounds": ((90, -90), (0, 360)),
+        }
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
             channels=[i for i in range(cfg.num_channels_climate)],
-            latlon_resolution=self.interpolation_shape,
-            interpolation_type="INTERP_LINEAR",
+            latlon_resolution=cfg.latlon_res,
+            interpolation_type=self.interpolation_type,
             num_samples_per_year=cfg.num_samples_per_year_train,
             num_steps=1,
-            use_cos_zenith=True,
+            num_history=cfg.num_history,
+            use_cos_zenith=cfg.use_cos_zenith,
+            cos_zenith_args=self.cos_zenith_args,
             batch_size=1,
             num_workers=cfg.num_workers,
             device=dist.device,
@@ -170,12 +187,6 @@ class GraphCastTrainer(BaseTrainer):
         rank_zero_logger.success(
             f"Loaded training datapipe of size {len(self.datapipe)}"
         )
-
-        # instantiate the validation
-        if dist.rank == 0 and not cfg.synthetic_dataset:
-            self.validation = Validation(cfg, self.model, self.dtype, self.dist)
-        else:
-            self.validation = None
 
         # enable train mode
         self.model.train()
@@ -240,9 +251,7 @@ class GraphCastTrainer(BaseTrainer):
             self.static_data = StaticData(
                 self.static_dataset_path, self.model.latitudes, self.model.longitudes
             ).get()
-            self.static_data = self.static_data.to(dtype=self.dtype).to(
-                device=dist.device
-            )
+            self.static_data = self.static_data.to(device=dist.device)
             assert cfg.num_channels_static == self.static_data.size(1), (
                 f"Number of static channels in model ({cfg.num_channels_static}) "
                 + f"does not match the static data ({self.static_data.size(1)})"
@@ -258,12 +267,18 @@ class GraphCastTrainer(BaseTrainer):
                     self.static_data
                 )
                 self.static_data = self.static_data.permute(1, 0).unsqueeze(dim=0)
-                self.static_data = self.static_data.to(dtype=self.dtype).to(
-                    device=dist.device
-                )
+                self.static_data = self.static_data.to(device=dist.device)
 
         else:
             self.static_data = None
+
+        # instantiate the validation
+        if dist.rank == 0 and not cfg.synthetic_dataset:
+            self.validation = Validation(
+                cfg, self.model, self.dtype, self.dist, self.static_data
+            )
+        else:
+            self.validation = None
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -377,11 +392,13 @@ def main(cfg: DictConfig) -> None:
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
                         channels=[i for i in range(cfg.num_channels_climate)],
-                        latlon_resolution=trainer.interpolation_shape,
-                        interpolation_type="INTERP_LINEAR",
+                        latlon_resolution=cfg.latlon_res,
+                        interpolation_type=trainer.interpolation_type,
                         num_samples_per_year=cfg.num_samples_per_year_train,
                         num_steps=num_rollout_steps,
-                        use_cos_zenith=True,
+                        num_history=cfg.num_history,
+                        use_cos_zenith=cfg.use_cos_zenith,
+                        cos_zenith_args=trainer.cos_zenith_args,
                         batch_size=1,
                         num_workers=cfg.num_workers,
                         device=dist.device,
@@ -394,32 +411,88 @@ def main(cfg: DictConfig) -> None:
                     )
                     break
 
-                # prepare the data
-                # TODO modify for history > 0
-                data_x = data[0]["invar"]
-                data_y = data[0]["outvar"]
-                cos = data[0]["cos_zenith"]
+                # Prepare the input & output
+                invar = data[0]["invar"]
+                outvar = data[0]["outvar"]
+                try:
+                    cos_zenith = data[0]["cos_zenith"]
+                except KeyError:
+                    cos_zenith = None
+                # from datetime import datetime
+                # ts = data[0]["t"].numpy()[0][0]
+                # print(datetime.fromtimestamp(ts))
+                # print(data[0]["t"])
+                # import matplotlib.pyplot as plt
 
-                print(data_x.shape, data_y.shape, cos, cos.shape)
-                exit()
+                # # Create a tensor of size [181, 360] for demonstration purposes
+                # tensor = cos_zenith[0,0,0,...]
 
-                # add static data
-                data_x = torch.concat((data_x, trainer.static_data), dim=1)
+                # # Convert the tensor to a NumPy array
+                # array = tensor.numpy()
+                # array = np.maximum(array, 0) - (1 / np.pi)
 
-                # move to device & dtype
-                data_x = data_x.to(dtype=trainer.dtype)
-                grid_nfeat = data_x
-                y = data_y.to(dtype=trainer.dtype).to(device=dist.device)
+                # ###############
+                # from modulus.utils.zenith_angle import cos_zenith_angle as cos_zenith_angle
+                # import datetime
+
+                # # Define the latitude and longitude grid
+                # lat = np.linspace(90, -90, 181)
+                # lon = np.linspace(0, 360, 360)
+                # lon_grid, lat_grid = np.meshgrid(lon, lat)
+
+                # # Define a specific time for the calculation
+                # #model_time = 435416400.0  # Summer solstice
+                # model_time = datetime.datetime(1983, 10, 19, 6, 0, 0)  #'1983-10-19 06:00:00'
+
+                # # Calculate the cosine of the zenith angle for the entire grid
+                # cos_zenith_grid = np.maximum(cos_zenith_angle(model_time, lon_grid, lat_grid), 0) - 1/np.pi
+
+                # # Plotting the results
+                # plt.figure(figsize=(12, 6))
+                # im1 = plt.imshow(cos_zenith_grid, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
+                # plt.colorbar(im1, label='Cosine of Zenith Angle')
+                # plt.title('Cosine of Zenith Angle (numpy)')
+                # plt.xlabel('Longitude')
+                # plt.ylabel('Latitude')
+                # plt.savefig('legacy.png')
+
+                # # Plot the array
+                # plt.figure(figsize=(12, 6))
+                # im2 = plt.imshow(array, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
+                # plt.colorbar(im2, label='Value')
+                # plt.title('Cosine of Zenith Angle (DALI, 0-360)')
+                # plt.xlabel('Longitude')
+                # plt.ylabel('Latitude')
+                # plt.savefig('test.png')
+
+                # plt.figure(figsize=(12, 6))
+                # im3 = plt.imshow(array-cos_zenith_grid, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
+                # plt.colorbar(im3, label='Value')
+                # plt.title('Cosine of Zenith Angle (Diff)')
+                # plt.xlabel('Longitude')
+                # plt.ylabel('Latitude')
+                # plt.savefig('diff.png')
+                # exit()
+                invar_cat = prepare_input(
+                    invar,
+                    cos_zenith,
+                    num_history=cfg.num_history,
+                    static_data=trainer.static_data,
+                    step=1,
+                )
+                invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
+                    dtype=trainer.dtype
+                )
 
                 # training step
-                loss = trainer.train(grid_nfeat, y)
+                loss = trainer.train(invar_cat, outvar)
                 if dist.rank == 0:
                     loss_agg += loss.detach().cpu()
 
                 # validation
                 if trainer.validation and iter % cfg.val_freq == 0:
                     # free up GPU memory
-                    del data_x, y
+                    del invar, invar_cat, outvar
                     torch.cuda.empty_cache()
                     error = trainer.validation.step(
                         channels=list(np.arange(cfg.num_channels_val)), iter=iter
