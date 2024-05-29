@@ -264,7 +264,6 @@ def test_TimeSeriesDataset_initialization(
         time_step="6h",
     )
     assert isinstance(timeseries_ds, TimeSeriesDataset)
-    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -287,7 +286,6 @@ def test_TimeSeriesDataset_get_constants(
         expected,
         outvar,
     )
-    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -327,7 +325,6 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfi
         drop_last=True,
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
-    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -433,7 +430,6 @@ def test_TimeSeriesDataset_get(
         forecast_init_times=zarr_ds.time[:init_times],
     )
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
-    DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
@@ -465,6 +461,7 @@ def test_TimeSeriesDataModule_initialization(
         )
 
     # use the prebuilt dataset
+    # Internally initializes DistributedManager
     timeseries_dm = TimeSeriesDataModule(
         src_directory=create_path,
         dst_directory=data_dir,
@@ -524,6 +521,7 @@ def test_TimeSeriesDataModule_get_constants(
     constants = {"lsm": "lsm"}
 
     # No constants
+    # Internally initializes DistributedManager
     timeseries_dm = TimeSeriesDataModule(
         src_directory=create_path,
         dst_directory=data_dir,
@@ -594,6 +592,7 @@ def test_TimeSeriesDataModule_get_dataloaders(
     }
 
     # use the prebuilt dataset
+    # Internally initializes DistributedManager
     timeseries_dm = TimeSeriesDataModule(
         src_directory=create_path,
         dst_directory=data_dir,
