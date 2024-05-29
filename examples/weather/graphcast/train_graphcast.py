@@ -418,61 +418,7 @@ def main(cfg: DictConfig) -> None:
                     cos_zenith = data[0]["cos_zenith"]
                 except KeyError:
                     cos_zenith = None
-                # from datetime import datetime
-                # ts = data[0]["t"].numpy()[0][0]
-                # print(datetime.fromtimestamp(ts))
-                # print(data[0]["t"])
-                # import matplotlib.pyplot as plt
 
-                # # Create a tensor of size [181, 360] for demonstration purposes
-                # tensor = cos_zenith[0,0,0,...]
-
-                # # Convert the tensor to a NumPy array
-                # array = tensor.numpy()
-                # array = np.maximum(array, 0) - (1 / np.pi)
-
-                # ###############
-                # from modulus.utils.zenith_angle import cos_zenith_angle as cos_zenith_angle
-                # import datetime
-
-                # # Define the latitude and longitude grid
-                # lat = np.linspace(90, -90, 181)
-                # lon = np.linspace(0, 360, 360)
-                # lon_grid, lat_grid = np.meshgrid(lon, lat)
-
-                # # Define a specific time for the calculation
-                # #model_time = 435416400.0  # Summer solstice
-                # model_time = datetime.datetime(1983, 10, 19, 6, 0, 0)  #'1983-10-19 06:00:00'
-
-                # # Calculate the cosine of the zenith angle for the entire grid
-                # cos_zenith_grid = np.maximum(cos_zenith_angle(model_time, lon_grid, lat_grid), 0) - 1/np.pi
-
-                # # Plotting the results
-                # plt.figure(figsize=(12, 6))
-                # im1 = plt.imshow(cos_zenith_grid, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
-                # plt.colorbar(im1, label='Cosine of Zenith Angle')
-                # plt.title('Cosine of Zenith Angle (numpy)')
-                # plt.xlabel('Longitude')
-                # plt.ylabel('Latitude')
-                # plt.savefig('legacy.png')
-
-                # # Plot the array
-                # plt.figure(figsize=(12, 6))
-                # im2 = plt.imshow(array, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
-                # plt.colorbar(im2, label='Value')
-                # plt.title('Cosine of Zenith Angle (DALI, 0-360)')
-                # plt.xlabel('Longitude')
-                # plt.ylabel('Latitude')
-                # plt.savefig('test.png')
-
-                # plt.figure(figsize=(12, 6))
-                # im3 = plt.imshow(array-cos_zenith_grid, cmap='viridis', extent=[-180, 180, -90, 90], origin='lower', aspect='auto')
-                # plt.colorbar(im3, label='Value')
-                # plt.title('Cosine of Zenith Angle (Diff)')
-                # plt.xlabel('Longitude')
-                # plt.ylabel('Latitude')
-                # plt.savefig('diff.png')
-                # exit()
                 invar_cat = prepare_input(
                     invar,
                     cos_zenith,
