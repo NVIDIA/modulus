@@ -75,7 +75,7 @@ def cos_zenith_angle(
 
 def _days_from_2000(model_time):  # pragma: no cover
     """Get the days since year 2000."""
-    return (model_time - DATETIME_2000) / (24.0 * 3600.0)
+    return (3600 + model_time - DATETIME_2000) / (24.0 * 3600.0)
 
 
 def _greenwich_mean_sidereal_time(model_time):

@@ -15,6 +15,26 @@
 # limitations under the License.
 
 import torch
+import numpy as np
+
+
+def prepare_input(invar, cos_zenith=None, num_history=0, static_data=None, step=None):
+    """Prepare input by adding history, cos zenith angle, and static data, if applicable"""
+    # Add history
+    if num_history > 0:
+        # flatten the history dimension
+        invar = invar.view(invar.size(0), -1, *(invar.size()[3:]))
+    # Add cos zenith
+    if cos_zenith is not None:
+        cos_zenith = torch.squeeze(cos_zenith, dim=2)
+        cos_zenith = torch.clamp(cos_zenith, min=0.0) - 1.0 / np.pi
+        invar = torch.concat(
+            (invar, cos_zenith[:, step - 1 : num_history + step, ...]), dim=1
+        )  # TODO check
+    # Add static data
+    if static_data is not None:
+        invar = torch.concat((invar, static_data), dim=1)
+    return invar
 
 
 def count_trainable_params(model: torch.nn.Module) -> int:
