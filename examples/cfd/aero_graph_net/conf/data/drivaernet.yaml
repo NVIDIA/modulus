@@ -14,14 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.data.DrivAerNetDataModule
+_target_: modulus.datapipes.gnn.drivaernet_dataset.DrivAerNetDataset
 _convert_: all
 
-data_path: ???
-num_points: 32768  # 2^15
-
-preprocessors:
-    - _target_: src.data.drivaernet_datamodule.DrivAerNetPreprocessor
-      num_points: ${...num_points}
-
-    - _target_: src.data.drivaernet_datamodule.DrivAerNetDragPreprocessor
+name: ???
+data_dir: ${data.data_dir}
+split: ???
+num_samples: ???

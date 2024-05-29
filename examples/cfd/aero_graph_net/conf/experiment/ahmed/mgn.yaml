@@ -20,7 +20,7 @@ defaults:
   - /data@data.train: ahmed
   - /data@data.val: ahmed
   - /model: mgn
-  - /loss: rrmseloss
+  - /loss@loss.ndata: rrmseloss
   - /optimizer: adam
   - /lr_scheduler: exponentiallr
 

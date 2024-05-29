@@ -46,10 +46,10 @@ lr_scheduler: ???
 train:
   batch_size: 1
   epochs: 50
-  checkpoint_save_freq: 1
+  checkpoint_save_freq: 10
   dataloader:
     shuffle: true
-    num_workers: 0
+    num_workers: 1
     pin_memory: true
     drop_last: true
 
@@ -57,7 +57,7 @@ val:
   batch_size: 1
   dataloader:
     shuffle: false
-    num_workers: 0
+    num_workers: 1
     pin_memory: true
     drop_last: false
 
@@ -83,41 +83,3 @@ loggers:
     group: agn-ahmed
     mode: disabled
     dir: ${output}
-
-# data_dir: ./dataset
-# ckpt_path: ./checkpoints
-
-# input_dim_nodes: 11
-# input_dim_edges: 4
-# output_dim: 4
-# aggregation: sum
-# hidden_dim_node_encoder: 256
-# hidden_dim_edge_encoder: 256
-# hidden_dim_node_decoder: 256
-
-# batch_size: 1
-# epochs: 500
-# num_training_samples: 683
-# num_validation_samples: 100
-# num_test_samples: 100
-
-# lr: 0.0001
-# lr_decay_rate: 0.99985
-
-# # performance configs
-# use_apex: True
-# amp: False
-# jit: False
-
-# # number of workers used by data loader during training.
-# num_dataloader_workers: 4
-# # number of workers used by dataset during pre-loading (null - auto-select).
-# num_dataset_workers: null
-
-# do_concat_trick: False
-# num_processor_checkpoint_segments: 0
-# recompute_activation: False
-
-# wandb_mode: disabled
-
-# checkpoint_save_freq: 50

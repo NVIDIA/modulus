@@ -17,6 +17,7 @@
 from functools import partial
 import logging
 import time
+from typing import Mapping
 
 import hydra
 from hydra.utils import instantiate, to_absolute_path
@@ -26,9 +27,8 @@ from dgl.dataloading import GraphDataLoader
 from omegaconf import DictConfig
 
 import torch
+from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel
-
-import wandb
 
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
@@ -42,7 +42,7 @@ logger = logging.getLogger("agnet")
 class RRMSELoss(torch.nn.Module):
     """Relative RMSE loss."""
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor):
+    def forward(self, pred: Tensor, target: Tensor):
         return (torch.norm(pred - target, p=2) / torch.norm(target, p=2)).mean()
 
 
@@ -104,6 +104,9 @@ class MGNTrainer:
         # enable train mode
         self.model.train()
 
+        # instantiate losses.
+        self.loss = instantiate(cfg.loss)
+
         # instantiate optimizer, and scheduler
         self.optimizer = instantiate(cfg.optimizer, self.model.parameters())
         self.scheduler = instantiate(cfg.lr_scheduler, self.optimizer)
@@ -127,22 +130,21 @@ class MGNTrainer:
         if self.dist.world_size > 1:
             torch.distributed.barrier()
 
-    def train(self, graph):
+    def train(self, batch: Mapping[str, Tensor]):
         self.optimizer.zero_grad()
-        loss = self.forward(graph)
+        loss = self.forward(batch)
         self.backward(loss)
         self.scheduler.step()
         return loss
 
-    def forward(self, graph):
+    def forward(self, batch):
         # forward pass
+        graph = batch["graph"]
         with self.autocast():
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            diff_norm = torch.norm(
-                torch.flatten(pred) - torch.flatten(graph.ndata["y"]), p=2
-            )
-            y_norm = torch.norm(torch.flatten(graph.ndata["y"]), p=2)
-            loss = diff_norm / y_norm
+            # Graph data (e.g. p and WSS) loss.
+            ndata_loss = self.loss.ndata(pred, graph.ndata["y"])
+            loss = ndata_loss
             return loss
 
     def backward(self, loss):
@@ -155,18 +157,29 @@ class MGNTrainer:
     @torch.no_grad()
     def validation(self):
         error = 0
-        for graph in self.validation_dataloader:
-            graph = graph.to(self.dist.device)
+        for batch in self.validation_dataloader:
+            batch = {k: v.to(self.dist.device) for k, v in as_dict(batch).items()}
+            graph = batch["graph"]
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             pred, gt = self.dataset.denormalize(
                 pred, graph.ndata["y"], self.dist.device
             )
-            error += (
-                torch.mean(torch.norm(pred - gt, p=2) / torch.norm(gt, p=2))
-                .cpu()
-                .numpy()
-            )
+            error += self.loss.ndata(pred, gt)
+
+        # import pyvista as pv
+
+        # plotter = pv.Plotter()
+        # point_cloud = pv.PolyData(graph.ndata["x"].cpu().numpy())
+        # point_cloud["p"] = gt[:, :1].cpu().numpy()
+        # plotter.add_points(
+        #     point_cloud, scalars="p", cmap="jet", clim=(-600, 400), point_size=5
+        # )
+
         return error / len(self.validation_dataloader)
+
+
+def as_dict(batch):
+    return batch if isinstance(batch, Mapping) else {"graph": batch}
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -190,19 +203,23 @@ def main(cfg: DictConfig) -> None:
 
     for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
         loss_agg = 0
-        for graph in trainer.dataloader:
-            graph = graph.to(dist.device)
-            loss = trainer.train(graph)
+        for batch in trainer.dataloader:
+            batch = {k: v.to(dist.device) for k, v in as_dict(batch).items()}
+            loss = trainer.train(batch)
             loss_agg += loss.detach().cpu().numpy()
         loss_agg /= len(trainer.dataloader)
+
+        cur_lr = trainer.scheduler.get_lr()[0]
         logger.info(
             f"epoch: {epoch:5,}, loss: {loss_agg:.5f}, "
-            f"lr: {trainer.scheduler.get_lr()[0]:.6f}, "
+            f"lr: {cur_lr:.7f}, "
             f"time per epoch: {(time.time() - start):5.2f}"
         )
         elogger.log_scalar("loss", loss_agg, epoch)
+        elogger.log_scalar("lr", cur_lr, epoch)
 
         # validation
+        # TODO(akamenev): redundant restriction, val should run on all ranks.
         if dist.rank == 0:
             val_error_pct = trainer.validation() * 100
             elogger.log_scalar("val_error (%)", val_error_pct, epoch)
