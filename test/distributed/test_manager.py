@@ -22,6 +22,7 @@ import torch
 from modulus.distributed import (
     DistributedManager,
     ModulusUndefinedGroupError,
+    ModulusUninitializedDistributedManagerWarning,
     ProcessGroupConfig,
     ProcessGroupNode,
 )
@@ -182,13 +183,28 @@ def test_manager_singleton():
     del os.environ["WORLD_SIZE"]
 
 
+def test_manager_uninitialized_instantiation():
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+
+    assert not DistributedManager.is_initialized()
+
+    with pytest.raises(ModulusUninitializedDistributedManagerWarning):
+        DistributedManager()
+
+    DistributedManager._shared_state = {}
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
+
+
 def test_manager_undefined_group_query():
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
     DistributedManager.initialize()
-    print(DistributedManager())
 
     manager = DistributedManager()
 
