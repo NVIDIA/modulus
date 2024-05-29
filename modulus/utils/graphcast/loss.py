@@ -21,6 +21,7 @@ import torch.nn as nn
 from torch.autograd.function import once_differentiable
 import json
 from collections import defaultdict
+import numpy as np
 
 
 class CellAreaWeightedLossFunction(nn.Module):
@@ -128,7 +129,7 @@ class VariableWeightedLossFunction(nn.Module):
         self.area = area
         self.channel_dict=self.get_channel_dict(cfg)
         self.variable_weights = self.assign_variable_weights()
-        print("Using new wights")
+        self.time_diff_str = self.get_time_diff_str(cfg)
         
 
     def forward(self, invar, outvar):
@@ -144,16 +145,21 @@ class VariableWeightedLossFunction(nn.Module):
             target values of shape [T, C, H, W].
         """
 
+        # outvar normalization
+        outvar = outvar*self.time_diff_str.to(outvar.device)
         loss = (invar - outvar) ** 2  #[T,C,H,W]
         # weighted by variables
         variable_weights = self.variable_weights.view(1, -1, 1, 1).to(loss.device)
         loss = loss*variable_weights #[T,C,H,W]
         # weighted by area
         loss = loss.mean(dim=(0, 1))  
-        # weighted by area
         loss = torch.mul(loss, self.area)
         loss = loss.mean()
         return loss
+    
+    def get_time_diff_str(cfg):
+        time_diff_np = np.load(cfg.time_diff_path)
+        return torch.FloatTensor(time_diff_np)
     
     def get_channel_dict(self,cfg):
         with open(cfg.data_json_path,"r") as f:
