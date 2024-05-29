@@ -20,14 +20,13 @@ Diffusion-Based Generative Models".
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import nvtx
 import torch
 from torch.nn.functional import silu
 from torch.utils.checkpoint import checkpoint
-from typing import Union
 
 from modulus.models.diffusion import (
     Conv2d,
@@ -198,7 +197,7 @@ class SongUNet(Module):
 
         # for compatibility with older versions that took only 1 dimension
         self.img_resolution = img_resolution
-        if type(img_resolution) == int:
+        if isinstance(img_resolution, int):
             self.img_shape_y = self.img_shape_x = img_resolution
         else:
             self.img_shape_y = img_resolution[0]
@@ -533,9 +532,7 @@ class SongUNetPosEmbd(SongUNet):
         if global_index is None:
             selected_pos_embd = (
                 self.pos_embd.to(x.dtype)
-                .to(x.device)[
-                    None,
-                ]
+                .to(x.device)[None]
                 .expand((x.shape[0], -1, -1, -1))
             )
         else:
@@ -563,9 +560,7 @@ class SongUNetPosEmbd(SongUNet):
             return None
         elif self.gridtype == "learnable":
             grid = torch.nn.Parameter(
-                torch.randn(
-                    self.N_grid_channels, self.img_shape_y, self.img_shape_x
-                )
+                torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
             )
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
