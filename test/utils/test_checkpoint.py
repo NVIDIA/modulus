@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 from pytest_utils import import_or_fail
 
+from modulus.distributed import DistributedManager
 from modulus.models.mlp import FullyConnected
 
 
@@ -32,7 +33,6 @@ def checkpoint_folder() -> str:
 
 @pytest.fixture(params=["modulus", "pytorch"])
 def model_generator(request) -> Callable:
-
     # Create fully-connected NN generator function
     if request.param == "modulus":
 
@@ -69,6 +69,9 @@ def test_model_checkpointing(
     """Test checkpointing util for model"""
 
     from modulus.launch.utils import load_checkpoint, save_checkpoint
+
+    # Initialize DistributedManager first since save_checkpoint instantiates it
+    DistributedManager.initialize()
 
     mlp_model_1 = model_generator(8).to(device)
     mlp_model_2 = model_generator(4).to(device)
