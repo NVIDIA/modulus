@@ -40,6 +40,7 @@ from shallow_water_solver import ShallowWaterSolver
 class ShallowWaterPDEDataset(torch.utils.data.Dataset):
     """Custom Dataset class generating trainig data corresponding to
     the underlying PDEs of the Shallow Water Equations"""
+
     def __init__(
         self,
         dt,
@@ -109,7 +110,9 @@ class ShallowWaterPDEDataset(torch.utils.data.Dataset):
         elif self.ictype == "galewsky":
             inp = self.solver.galewsky_initial_condition()
         else:
-            raise NotImplementedError(f"Initial Condition {self.ictype} not implemented.")
+            raise NotImplementedError(
+                f"Initial Condition {self.ictype} not implemented."
+            )
 
         # solve pde for n steps to return the target
         tar = self.solver.timestep(inp, self.nsteps)

@@ -58,7 +58,12 @@ import matplotlib.pyplot as plt
 
 from shallow_water_pde_dataset import ShallowWaterPDEDataset
 
-from modulus.distributed import DistributedManager, mark_module_as_shared, ProcessGroupConfig, ProcessGroupNode
+from modulus.distributed import (
+    DistributedManager,
+    mark_module_as_shared,
+    ProcessGroupConfig,
+    ProcessGroupNode,
+)
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
@@ -430,16 +435,16 @@ def main(cfg: DictConfig):
             )
         world = ProcessGroupNode("world")
         pg_config = ProcessGroupConfig(world)
-        pg_config.add_node(
-            ProcessGroupNode("data_parallel"), parent=world
-        )
-        pg_config.add_node(
-            ProcessGroupNode("model_parallel"), parent=world
-        )
-        pg_sizes = {"model_parallel": graph_partition_size, "data_parallel": world_size // graph_partition_size}
+        pg_config.add_node(ProcessGroupNode("data_parallel"), parent=world)
+        pg_config.add_node(ProcessGroupNode("model_parallel"), parent=world)
+        pg_sizes = {
+            "model_parallel": graph_partition_size,
+            "data_parallel": world_size // graph_partition_size,
+        }
         pg_config.set_leaf_group_sizes(pg_sizes)
         DistributedManager.create_groups_from_config(
-            pg_config, verbose=True,
+            pg_config,
+            verbose=True,
         )
     else:
         world_size = 1
@@ -479,12 +484,9 @@ def main(cfg: DictConfig):
         use_lat_lon_partitioning=cfg.model.use_lat_lon_partitioning,
     ).to(device=dist_manager.device)
 
-    if (
-        dist_manager.distributed
-        and dist_manager.group_size("data_parallel") > 1
-    ):
+    if dist_manager.distributed and dist_manager.group_size("data_parallel") > 1:
         model = DistributedDataParallel(
-            model, 
+            model,
             process_group=dist_manager.group("data_parallel"),
             device_ids=[dist_manager.local_rank],
             output_device=dist_manager.device,
@@ -516,7 +518,9 @@ def main(cfg: DictConfig):
         model.load(file_name, map_location=manager.device)
 
     nsteps = cfg.data.dt // cfg.data.dt_solver
-    mp_rank = 0 if graph_partition_size <= 1 else dist_manager.group_rank("model_parallel")
+    mp_rank = (
+        0 if graph_partition_size <= 1 else dist_manager.group_rank("model_parallel")
+    )
     dataset = ShallowWaterPDEDataset(
         dt=cfg.data.dt,
         nsteps=nsteps,
