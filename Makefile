@@ -4,7 +4,7 @@ install:
 
 editable-install:
 	pip install --upgrade pip && \
-		pip install -e . --config-settings editable_mode=strict
+		pip install -e .[dev] --config-settings editable_mode=strict
 
 get-data:
 	mkdir -p /data && \
