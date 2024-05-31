@@ -60,7 +60,11 @@ def create_graph(
 
 
 def create_heterograph(
-    src: List, dst: List, labels: str, dtype: torch.dtype = torch.int32
+    src: List,
+    dst: List,
+    labels: str,
+    dtype: torch.dtype = torch.int32,
+    num_nodes_dict: dict = None,
 ) -> DGLGraph:
     """Creates a heterogeneous DGL graph from an adj matrix in COO format.
 
@@ -74,13 +78,17 @@ def create_heterograph(
         Label of the edge type
     dtype : torch.dtype, optional
         Graph index data type, by default torch.int32
+    num_nodes_dict : dict, optional
+        number of nodes for some node types, see dgl.heterograph for more information
 
     Returns
     -------
     DGLGraph
         The dgl Graph.
     """
-    graph = dgl.heterograph({labels: ("coo", (src, dst))}, idtype=dtype)
+    graph = dgl.heterograph(
+        {labels: ("coo", (src, dst))}, num_nodes_dict=num_nodes_dict, idtype=dtype
+    )
     return graph
 
 

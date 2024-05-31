@@ -27,7 +27,7 @@ from modulus.models.gnn_layers import (
 
 @pytest.fixture
 def global_graph():
-    # simple graph with a degree of 2 per node
+    """test fixture: simple graph with a degree of 2 per node"""
     num_src_nodes = 8
     num_dst_nodes = 4
     offsets = torch.arange(num_dst_nodes + 1, dtype=torch.int64) * 2
@@ -37,6 +37,7 @@ def global_graph():
 
 
 def assert_partitions_are_equal(a, b):
+    """test utility: check if a matches b"""
     attributes = [
         "partition_size",
         "partition_rank",
@@ -53,9 +54,9 @@ def assert_partitions_are_equal(a, b):
         "local_offsets",
         "local_indices",
         "scatter_indices",
-        "partitioned_src_node_ids_to_global",
-        "partitioned_dst_node_ids_to_global",
-        "partitioned_indices_to_global",
+        "map_partitioned_src_ids_to_global",
+        "map_partitioned_dst_ids_to_global",
+        "map_partitioned_edge_ids_to_global",
     ]
 
     for attr in attributes:
@@ -98,25 +99,25 @@ def test_gp_mapping(global_graph, device):
         partition_size=4,
         partition_rank=0,
         device=device,
-        local_offsets=torch.tensor([0, 2], device=device),
-        local_indices=torch.tensor([0, 1], device=device),
+        local_offsets=torch.tensor([0, 2]),
+        local_indices=torch.tensor([0, 1]),
         num_local_src_nodes=2,
         num_local_dst_nodes=1,
         num_local_indices=2,
-        partitioned_src_node_ids_to_global=torch.tensor([0, 4]),
-        partitioned_dst_node_ids_to_global=torch.tensor([0]),
-        partitioned_indices_to_global=torch.tensor([0, 1]),
+        map_partitioned_src_ids_to_global=torch.tensor([0, 4]),
+        map_partitioned_dst_ids_to_global=torch.tensor([0]),
+        map_partitioned_edge_ids_to_global=torch.tensor([0, 1]),
         sizes=[[1, 0, 1, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 1, 0, 1]],
         scatter_indices=[
-            torch.tensor([0], device=device),
-            torch.tensor([1], device=device),
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([], device=device, dtype=torch.int64),
+            torch.tensor([0]),
+            torch.tensor([1]),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
         ],
         num_src_nodes_in_each_partition=[2, 2, 2, 2],
         num_dst_nodes_in_each_partition=[1, 1, 1, 1],
         num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ).to(device=device)
 
     assert_partitions_are_equal(pg, pg_expected)
 
@@ -139,25 +140,25 @@ def test_gp_nodewise(global_graph, device):
         partition_size=4,
         partition_rank=0,
         device=device,
-        local_offsets=torch.tensor([0, 2], device=device),
-        local_indices=torch.tensor([0, 1], device=device),
+        local_offsets=torch.tensor([0, 2]),
+        local_indices=torch.tensor([0, 1]),
         num_local_src_nodes=2,
         num_local_dst_nodes=1,
         num_local_indices=2,
-        partitioned_src_node_ids_to_global=torch.tensor([0, 1]),
-        partitioned_dst_node_ids_to_global=torch.tensor([0]),
-        partitioned_indices_to_global=torch.tensor([0, 1]),
+        map_partitioned_src_ids_to_global=torch.tensor([0, 1]),
+        map_partitioned_dst_ids_to_global=torch.tensor([0]),
+        map_partitioned_edge_ids_to_global=torch.tensor([0, 1]),
         sizes=[[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]],
         scatter_indices=[
-            torch.tensor([0, 1], device=device),
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([], device=device, dtype=torch.int64),
+            torch.tensor([0, 1]),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
         ],
         num_src_nodes_in_each_partition=[2, 2, 2, 2],
         num_dst_nodes_in_each_partition=[1, 1, 1, 1],
         num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ).to(device=device)
 
     assert_partitions_are_equal(pg, pg_expected)
 
@@ -206,25 +207,25 @@ def test_gp_coordinate_bbox(global_graph, device):
         partition_size=4,
         partition_rank=0,
         device=device,
-        local_offsets=torch.tensor([0, 2], device=device),
-        local_indices=torch.tensor([0, 1], device=device),
+        local_offsets=torch.tensor([0, 2]),
+        local_indices=torch.tensor([0, 1]),
         num_local_src_nodes=2,
         num_local_dst_nodes=1,
         num_local_indices=2,
-        partitioned_src_node_ids_to_global=torch.tensor([1, 5]),
-        partitioned_dst_node_ids_to_global=torch.tensor([1]),
-        partitioned_indices_to_global=torch.tensor([2, 3]),
+        map_partitioned_src_ids_to_global=torch.tensor([1, 5]),
+        map_partitioned_dst_ids_to_global=torch.tensor([1]),
+        map_partitioned_edge_ids_to_global=torch.tensor([2, 3]),
         sizes=[[0, 1, 1, 0], [0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 0, 1]],
         scatter_indices=[
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([0], device=device),
-            torch.tensor([1], device=device),
-            torch.tensor([], device=device, dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([0]),
+            torch.tensor([1]),
+            torch.tensor([], dtype=torch.int64),
         ],
         num_src_nodes_in_each_partition=[2, 2, 2, 2],
         num_dst_nodes_in_each_partition=[1, 1, 1, 1],
         num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ).to(device=device)
 
     assert_partitions_are_equal(pg, pg_expected)
 
@@ -268,25 +269,25 @@ def test_gp_coordinate_bbox_lat_long(global_graph, device):
         partition_size=4,
         partition_rank=0,
         device=device,
-        local_offsets=torch.tensor([0, 2], device=device),
-        local_indices=torch.tensor([0, 1], device=device),
+        local_offsets=torch.tensor([0, 2]),
+        local_indices=torch.tensor([0, 1]),
         num_local_src_nodes=2,
         num_local_dst_nodes=1,
         num_local_indices=2,
-        partitioned_src_node_ids_to_global=torch.tensor([0, 1]),
-        partitioned_dst_node_ids_to_global=torch.tensor([0]),
-        partitioned_indices_to_global=torch.tensor([0, 1]),
+        map_partitioned_src_ids_to_global=torch.tensor([0, 1]),
+        map_partitioned_dst_ids_to_global=torch.tensor([0]),
+        map_partitioned_edge_ids_to_global=torch.tensor([0, 1]),
         sizes=[[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 2]],
         scatter_indices=[
-            torch.tensor([0, 1], device=device),
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([], device=device, dtype=torch.int64),
-            torch.tensor([], device=device, dtype=torch.int64),
+            torch.tensor([0, 1]),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
+            torch.tensor([], dtype=torch.int64),
         ],
         num_src_nodes_in_each_partition=[2, 2, 2, 2],
         num_dst_nodes_in_each_partition=[1, 1, 1, 1],
         num_indices_in_each_partition=[2, 2, 2, 2],
-    )
+    ).to(device=device)
 
     assert_partitions_are_equal(pg, pg_expected)
 
