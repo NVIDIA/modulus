@@ -1,26 +1,40 @@
 # AeroGraphNet for external aerodynamic evaluation
 
 This example demonstrates how to train the AeroGraphNet model for external aerodynamic
-analysis of simplified (Ahmed body-type) car geometries. AeroGraphNet is based on the
-MeshGraphNet architecture. It achieves good accuracy on predicting the pressure and
-wall shear stresses on the surface mesh of the Ahmed body-type geometries, as well as
+analysis of both simplified (Ahmed body-type) and more realistic (DrivAerNet dataset)
+car geometries. AeroGraphNet is based on the MeshGraphNet architecture.
+It achieves good accuracy on predicting the pressure and
+wall shear stresses on the surface mesh of the respective geometries, as well as
 the drag coefficient.
+
+1. [Problem overview](#problem-overview)
+2. [Datasets](#datasets)
+    1. [Ahmed Body](#ahmed-body)
+    2. [DrivAerNet](#drivaernet)
+3. [Model](#model-overview-and-architecture)
+4. [Training](#model-training)
+    1. [Ahmed Body](#ahmed-body-training)
+    2. [DrivAerNet](#drivaernet)
 
 ## Problem overview
 
 To goal is to develop an AI surrogate model that can use simulation data to learn the
-external aerodynamic flow over parameterized Ahmed body shape. This serves as a baseline
-for more refined models for realistic car geometries. The trained model can be used to
-predict the change in drag coefficient,and surface pressure and wall shear stresses due
+external aerodynamic flow over parameterized car body shape. The trained model can be used
+to predict the change in drag coefficient,and surface pressure and wall shear stresses due
 to changes in the car geometry. This is a stepping stone to applying similar approaches
-to other application areas such as aerodynamic analysis of aircraft wings, real car
-geometries, etc.
+to other application areas such as aerodynamic analysis of aircraft wings, more complex
+real car geometries, and so on.
 
-## Dataset
+## Datasets
+
+AeroGraphNet currently supports two datasets: [Ahmed Body](#ahmed-body) and
+[DrivAerNet](#drivaernet).
+
+### Ahmed Body
 
 Industry-standard Ahmed-body geometries are characterized by six design parameters:
 length, width, height, ground clearance, slant angle, and fillet radius. Refer
-to the [wiki](https://www.cfd-online.com/Wiki/Ahmed_body) for details on Ahmed
+to the [[2, 3](#references)] for details on Ahmed
 body geometry. In addition to these design parameters, we include the inlet velocity to
 address a wide variation in Reynolds number. We identify the design points using the
 Latin hypercube sampling scheme for space filling design of experiments and generate
@@ -34,10 +48,20 @@ to training which is roughly around 70k mesh nodes.
 To request access to the full dataset, please reach out to the
 [NVIDIA Modulus team](modulus-team@nvidia.com).
 
+### DrivAerNet
+
+DrivAerNet [[5](#references)] is a larger dataset which contains around 4000 high-quality
+car meshes, coefficients and flow information.
+The dataset can be downloaded by following the instructions on the [DrivAerNet GitHub](https://github.com/Mohamedelrefaie/DrivAerNet)
+Please see the corresponding [paper](#references) for more details.
+
 ## Model overview and architecture
 
-The AeroGraphNet model is based on the MeshGraphNet architecture which is instrumental
-for learning from mesh-based data using GNNs. The inputs to the model are:
+The AeroGraphNet model is based on the MeshGraphNet [[1](#references)] architecture
+which is instrumental for learning from mesh-based data using GNNs.
+Depending on the dataset, the model takes different inputs:
+
+### Ahmed Body dataset
 
 - Ahmed body surface mesh
 - Reynolds number
@@ -49,7 +73,7 @@ Output of the model are:
 
 - Surface pressure
 - Wall shear stresses
-- Drag coefficient
+- Drag coefficient - optional, computed using pressure and shear stress outputs.
 
 ![Comparison between the AeroGraphNet prediction and the
 ground truth for surface pressure, wall shear stresses, and the drag coefficient for one
@@ -66,44 +90,90 @@ exponentially with a rate of 0.99985. Training is performed on 8 NVIDIA A100
 GPUs, leveraging data parallelism. Total training time is 4 hours, and training is
 performed for 500 epochs.
 
-## Getting Started
+### DrivAerNet dataset
 
-The dataset for this example is not publicly available. To get access, please reach out
-to the [NVIDIA Modulus team](modulus-team@nvidia.com).
+- Surface mesh
 
-This example requires the `pyvista` and `vtk` libraries. Install with
+Output of the model are:
+
+- Surface pressure
+- Wall shear stresses
+- Drag coefficient - optional, can be learned by the model along with other outputs.
+
+The input to the model is the original DrivAerNet dataset. It is recommended to enable
+dataset caching (on by default) to speed up the subsequent data loading and training.
+
+## Model training
+
+The example uses [Hydra](https://hydra.cc/docs/intro/) for experiment configuration.
+Hydra provides a convenient way to change almost any experiment parameter,
+such as dataset configuration, model and optimizer settings and so on.
+
+This example also requires the `pyvista` and `vtk` libraries. Install with
 
 ```bash
 pip install pyvista vtk
 ```
 
+### Ahmed Body training
+
+The Ahmed Body dataset for this example is not publicly available. To get access,
+please reach out to the [NVIDIA Modulus team](modulus-team@nvidia.com).
+
 To train the model, run
 
 ```bash
-python train.py
+python train.py +experiment=ahmed/mgn data.data_dir=/data/ahmed_body/
 ```
 
-Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training,
-run
+Make sure to set `data.data_dir` to a proper location.
+
+The following example demonstrates how to change some of the parameters:
 
 ```bash
-mpirun -np <num_GPUs> python train.py
+python train.py \
+    +experiment=ahmed/mgn \
+    data.data_dir=/data/ahmed_body/ \
+    model.processor_size=10 \
+    optimizer.lr=0.0003 \
+    loggers.wandb.mode=online
+```
+
+This will change the number of model message passing layers to 10, set learning rate to 0.0003
+and enable Weights & Biases logger.
+
+Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training, run
+
+```bash
+mpirun -np <num_GPUs> python train.py +experiment=ahmed/mgn data.data_dir=/data/ahmed_body/
 ```
 
 If running in a docker container, you may need to include the `--allow-run-as-root` in
 the multi-GPU run command.
 
 Progress and loss logs can be monitored using Weights & Biases. To activate that,
-set `wandb_mode` to `online` in the `constants.py`. This requires to have an active
-Weights & Biases account. You also need to provide your API key. There are multiple ways
-for providing the API key but you can simply export it as an environment variable
+add `loggers.wandb.mode=online` to the train script command line. This requires to
+have an active Weights & Biases account. You also need to provide your API key.
+There are multiple ways for providing the API key but you can simply export it as
+an environment variable
 
 ```bash
 export WANDB_API_KEY=<your_api_key>
 ```
 
 The URL to the dashboard will be displayed in the terminal after the run is launched.
-Alternatively, the logging utility in `train.py` can be switched to MLFlow.
+
+### DrivAer dataset
+
+To train the model, run
+
+```bash
+python train.py +experiment=drivaernet/mgn data.data_dir=/data/DrivAerNet/
+```
+
+Make sure to set `data.data_dir` to a proper location.
+
+## Inference
 
 Once the model is trained, run
 
@@ -116,4 +186,8 @@ directory. Use Paraview to open and explore the results.
 
 ## References
 
-- [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/abs/2010.03409)
+1. [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/abs/2010.03409)
+2. [Some Salient Features Of The Time-Averaged Ground Vehicle Wake](https://doi.org/10.4271/840300)
+3. [Ahmed body wiki](https://www.cfd-online.com/Wiki/Ahmed_body)
+4. [Deep Learning for Real-Time Aerodynamic Evaluations of Arbitrary Vehicle Shapes](https://arxiv.org/abs/2108.05798)
+5. [DrivAerNet: A Parametric Car Dataset for Data-driven Aerodynamic Design and Graph-Based Drag Prediction](https://arxiv.org/abs/2403.08055)

@@ -16,43 +16,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-defaults:
-  - /data@data.train: ahmed
-  - /data@data.val: ahmed
-  - /model: mgn
-  - /loss@loss.ndata: rrmseloss
-  - /optimizer: adam
-  - /lr_scheduler: exponentiallr
-
-data:
-  train:
-    name: ahmed_body_train
-    split: train
-    num_samples: 683
-  val:
-    name: ahmed_body_val
-    split: validation
-    num_samples: 100
-
-train:
-  epochs: 500
-
-visualizers:
-  mesh:
-    tag: mesh
-    camera_positions:
-      - [
-        [-2.2, -0.7, 0.5],
-        [0.46, 0.76, -0.16],
-        [0.23, 0.01, 0.97],
-      ]
-      - [
-        [-2.1, 0.86, 0.35],
-        [0.18, -0.36, 0.02],
-        [0.18, 0.05, 0.98],
-      ]
-      - [
-        [-2.6, 0.5, -1.18],
-        [-0.04, -0.14, 0.58],
-        [-0.47, 0.31, 0.82],
-      ]
+_target_: visualizers.MeshVisualizer
+_convert_: all

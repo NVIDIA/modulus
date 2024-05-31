@@ -51,7 +51,7 @@ def rank0(func):
     @functools.wraps(func)
     def rank0_only(*args, **kwargs):
         if DistributedManager().rank == 0:
-            return func(*args, **kwargs)
+            func(*args, **kwargs)
 
     return rank0_only
 
@@ -63,15 +63,25 @@ class ExperimentLogger(ABC):
     def log_scalar(self, tag: str, value: float, step: int) -> None:
         pass
 
+    @abstractmethod
+    def log_image(self, tag: str, value, step: int) -> None:
+        pass
+
 
 class WandBLogger(ExperimentLogger):
     """Wrapper for Weights & Biases logger."""
 
     def __init__(self, **kwargs) -> None:
-        wandb.init(**kwargs)
+        if DistributedManager().rank == 0:
+            wandb.init(**kwargs)
 
+    @rank0
     def log_scalar(self, tag: str, value: float, step: int) -> None:
         wandb.log({tag: value}, step=step)
+
+    @rank0
+    def log_image(self, tag: str, value, step: int) -> None:
+        wandb.log({tag: wandb.Image(value)}, step=step)
 
 
 class CompositeLogger(ExperimentLogger):
@@ -90,3 +100,8 @@ class CompositeLogger(ExperimentLogger):
     def log_scalar(self, tag: str, value: float, step: int) -> None:
         for logger in self.loggers.values():
             logger.log_scalar(tag, value, step)
+
+    @rank0
+    def log_image(self, tag: str, value: float, step: int) -> None:
+        for logger in self.loggers.values():
+            logger.log_image(tag, value, step)

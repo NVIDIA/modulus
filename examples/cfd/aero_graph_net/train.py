@@ -38,6 +38,9 @@ from loggers import CompositeLogger, ExperimentLogger, init_python_logging
 
 logger = logging.getLogger("agnet")
 
+# Experiment logger will be set later during initialization.
+elogger: ExperimentLogger = None
+
 
 class RRMSELoss(torch.nn.Module):
     """Relative RMSE loss."""
@@ -130,6 +133,8 @@ class MGNTrainer:
         if self.dist.world_size > 1:
             torch.distributed.barrier()
 
+        self.visualizers = instantiate(cfg.visualizers)
+
     def train(self, batch: Mapping[str, Tensor]):
         self.optimizer.zero_grad()
         loss = self.forward(batch)
@@ -155,10 +160,10 @@ class MGNTrainer:
         self.scaler.update()
 
     @torch.no_grad()
-    def validation(self):
+    def validation(self, epoch: int):
         error = 0
         for batch in self.validation_dataloader:
-            batch = {k: v.to(self.dist.device) for k, v in as_dict(batch).items()}
+            batch = {k: v.to(self.dist.device) for k, v in batch_as_dict(batch).items()}
             graph = batch["graph"]
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             pred, gt = self.dataset.denormalize(
@@ -166,19 +171,14 @@ class MGNTrainer:
             )
             error += self.loss.ndata(pred, gt)
 
-        # import pyvista as pv
-
-        # plotter = pv.Plotter()
-        # point_cloud = pv.PolyData(graph.ndata["x"].cpu().numpy())
-        # point_cloud["p"] = gt[:, :1].cpu().numpy()
-        # plotter.add_points(
-        #     point_cloud, scalars="p", cmap="jet", clim=(-600, 400), point_size=5
-        # )
+        # Visualize last batch.
+        for vis in self.visualizers.values():
+            vis(graph, pred, gt, epoch, elogger)
 
         return error / len(self.validation_dataloader)
 
 
-def as_dict(batch):
+def batch_as_dict(batch):
     return batch if isinstance(batch, Mapping) else {"graph": batch}
 
 
@@ -195,6 +195,7 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.allow_tf32 = True
 
     # initialize loggers
+    global elogger
     elogger = CompositeLogger(cfg)
 
     trainer = MGNTrainer(cfg)
@@ -204,12 +205,12 @@ def main(cfg: DictConfig) -> None:
     for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
         loss_agg = 0
         for batch in trainer.dataloader:
-            batch = {k: v.to(dist.device) for k, v in as_dict(batch).items()}
+            batch = {k: v.to(dist.device) for k, v in batch_as_dict(batch).items()}
             loss = trainer.train(batch)
             loss_agg += loss.detach().cpu().numpy()
         loss_agg /= len(trainer.dataloader)
 
-        cur_lr = trainer.scheduler.get_lr()[0]
+        cur_lr = trainer.scheduler.get_last_lr()[0]
         logger.info(
             f"epoch: {epoch:5,}, loss: {loss_agg:.5f}, "
             f"lr: {cur_lr:.7f}, "
@@ -221,7 +222,7 @@ def main(cfg: DictConfig) -> None:
         # validation
         # TODO(akamenev): redundant restriction, val should run on all ranks.
         if dist.rank == 0:
-            val_error_pct = trainer.validation() * 100
+            val_error_pct = trainer.validation(epoch) * 100
             elogger.log_scalar("val_error (%)", val_error_pct, epoch)
             logger.info(f"Denormalized validation error (%): {val_error_pct:4.2f}")
 
