@@ -113,7 +113,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
             label_dim=label_dim,
-            **model_kwargs,
+            **model_kwargs['model_kwargs'],
         )
 
     def forward(
