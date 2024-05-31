@@ -47,6 +47,7 @@ import logging
 from typing import Optional
 
 import torch
+from torch.nn.parallel import DistributedDataParallel
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from torch.utils.data import DataLoader
@@ -55,9 +56,14 @@ from torch.cuda import amp
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pde_dataset import PdeDataset
+from shallow_water_pde_dataset import ShallowWaterPDEDataset
 
-from modulus.distributed import DistributedManager, mark_module_as_shared
+from modulus.distributed import (
+    DistributedManager,
+    mark_module_as_shared,
+    ProcessGroupConfig,
+    ProcessGroupNode,
+)
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
 
@@ -206,6 +212,12 @@ def train_model(
     torch.cuda.synchronize()
     train_start = time.time()
 
+    dist_manager = DistributedManager()
+    try:
+        dp_group_size = dist_manager.group_size("data_parallel")
+    except:
+        dp_group_size = 1
+
     # count iterations
     iters = 0
 
@@ -221,7 +233,7 @@ def train_model(
         epoch_start = time.time()
 
         dataloader.dataset.set_initial_condition("random")
-        dataloader.dataset.set_num_examples(cfg.data.num_examples)
+        dataloader.dataset.set_num_examples(cfg.data.num_examples // dp_group_size)
 
         # get the solver for its convenience functions
         solver = dataloader.dataset.solver
@@ -305,6 +317,13 @@ def train_model_on_dummy_data(
     torch.cuda.synchronize()
     train_start = time.time()
 
+    dist_manager = DistributedManager()
+    try:
+        dp_group_size = dist_manager.group_size("data_parallel")
+    except:
+        dp_group_size = 1
+    print(dp_group_size)
+    raise ValueError
     # count iterations
     iters = 0
 
@@ -319,13 +338,13 @@ def train_model_on_dummy_data(
         torch.cuda.synchronize()
         epoch_start = time.time()
 
-        dataloader.dataset.set_num_examples(cfg.data.num_examples)
+        dataloader.dataset.set_num_examples(cfg.data.num_examples // dp_group_size)
 
         # do the training
         acc_loss = 0
         model.train()
 
-        for train_batch in tqdm(range(cfg.data.num_examples), leave=False):
+        for train_batch in tqdm(range(dataloader.dataset.num_examples), leave=False):
             inp, tar = get_random_data(dataloader.dataset, model.device)
             with amp.autocast(enabled=cfg.model.enable_amp):
                 prd = model(inp)
@@ -405,15 +424,31 @@ def main(cfg: DictConfig):
     # for now, based
     DistributedManager.initialize()
     if DistributedManager().distributed:
-        graph_partition_pg_name = "graph_partition"
+        graph_partition_pg_name = "model_parallel"
         world_size = torch.distributed.get_world_size()
-        DistributedManager.create_process_subgroup(
-            name=graph_partition_pg_name,
-            size=world_size,
+        graph_partition_size = cfg.model.graph_partition_size
+        if graph_partition_size < 0:
+            graph_partition_size = world_size
+        if not world_size % graph_partition_size == 0:
+            raise ValueError(
+                f"Partition Size ({graph_partition_size}) must divide World Size ({world_size}) evenly."
+            )
+        world = ProcessGroupNode("world")
+        pg_config = ProcessGroupConfig(world)
+        pg_config.add_node(ProcessGroupNode("data_parallel"), parent=world)
+        pg_config.add_node(ProcessGroupNode("model_parallel"), parent=world)
+        pg_sizes = {
+            "model_parallel": graph_partition_size,
+            "data_parallel": world_size // graph_partition_size,
+        }
+        pg_config.set_leaf_group_sizes(pg_sizes)
+        DistributedManager.create_groups_from_config(
+            pg_config,
             verbose=True,
         )
     else:
         world_size = 1
+        graph_partition_size = 1
         graph_partition_pg_name = None
 
     dist_manager = DistributedManager()
@@ -435,7 +470,7 @@ def main(cfg: DictConfig):
         output_dim_grid_nodes=3,
         processor_layers=cfg.model.processor_layers,
         hidden_dim=cfg.model.hidden_dim,
-        partition_size=dist_manager.group_size(graph_partition_pg_name),
+        partition_size=graph_partition_size,
         partition_group_name=graph_partition_pg_name,
         # simplified data-loading scheme: only rank 0 has valid inputs
         # model then takes care of scattering these onto participating ranks
@@ -449,11 +484,19 @@ def main(cfg: DictConfig):
         use_lat_lon_partitioning=cfg.model.use_lat_lon_partitioning,
     ).to(device=dist_manager.device)
 
+    if dist_manager.distributed and dist_manager.group_size("data_parallel") > 1:
+        model = DistributedDataParallel(
+            model,
+            process_group=dist_manager.group("data_parallel"),
+            device_ids=[dist_manager.local_rank],
+            output_device=dist_manager.device,
+        )
+
     # since model is "tensor-parallel" in graph-partition
     # mark model as "shared" which sets gradient hooks and
     # aggregates gradients in the backward pass accordingly
     if (
-        dist_manager.is_initialized()
+        dist_manager.distributed
         and dist_manager.group_size(graph_partition_pg_name) > 1
     ):
         mark_module_as_shared(model, graph_partition_pg_name)
@@ -475,13 +518,16 @@ def main(cfg: DictConfig):
         model.load(file_name, map_location=manager.device)
 
     nsteps = cfg.data.dt // cfg.data.dt_solver
-    dataset = PdeDataset(
+    mp_rank = (
+        0 if graph_partition_size <= 1 else dist_manager.group_rank("model_parallel")
+    )
+    dataset = ShallowWaterPDEDataset(
         dt=cfg.data.dt,
         nsteps=nsteps,
         dims=input_res,
         device=dist_manager.device,
         normalize=True,
-        rank=dist_manager.rank,
+        rank=mp_rank,
     )
 
     dataloader = DataLoader(

@@ -34,18 +34,18 @@ import torch
 
 from math import ceil
 
-from shallow_water_equations import ShallowWaterSolver
+from shallow_water_solver import ShallowWaterSolver
 
 
-class PdeDataset(torch.utils.data.Dataset):
-    """Custom Dataset class for PDE training data"""
+class ShallowWaterPDEDataset(torch.utils.data.Dataset):
+    """Custom Dataset class generating trainig data corresponding to
+    the underlying PDEs of the Shallow Water Equations"""
 
     def __init__(
         self,
         dt,
         nsteps,
         dims=(384, 768),
-        pde="shallow water equations",
         initial_condition="random",
         num_examples=32,
         device=torch.device("cpu"),
@@ -68,24 +68,21 @@ class PdeDataset(torch.utils.data.Dataset):
         self.nsteps = nsteps
         self.normalize = normalize
 
-        if pde == "shallow water equations":
-            lmax = ceil(self.nlat / 3)
-            mmax = lmax
-            dt_solver = dt / float(self.nsteps)
-            self.solver = (
-                ShallowWaterSolver(
-                    self.nlat,
-                    self.nlon,
-                    dt_solver,
-                    lmax=lmax,
-                    mmax=mmax,
-                    grid="equiangular",
-                )
-                .to(self.device)
-                .float()
+        lmax = ceil(self.nlat / 3)
+        mmax = lmax
+        dt_solver = dt / float(self.nsteps)
+        self.solver = (
+            ShallowWaterSolver(
+                self.nlat,
+                self.nlon,
+                dt_solver,
+                lmax=lmax,
+                mmax=mmax,
+                grid="equiangular",
             )
-        else:
-            raise NotImplementedError
+            .to(self.device)
+            .float()
+        )
 
         self.set_initial_condition(ictype=initial_condition)
 
@@ -112,6 +109,10 @@ class PdeDataset(torch.utils.data.Dataset):
             inp = self.solver.random_initial_condition(mach=0.2)
         elif self.ictype == "galewsky":
             inp = self.solver.galewsky_initial_condition()
+        else:
+            raise NotImplementedError(
+                f"Initial Condition {self.ictype} not implemented."
+            )
 
         # solve pde for n steps to return the target
         tar = self.solver.timestep(inp, self.nsteps)

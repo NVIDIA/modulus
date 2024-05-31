@@ -20,7 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Virtual Foundry GraphNet.
 - A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
 - Sorted Empirical CDF CRPS algorithm
+<<<<<<< HEAD
 - Support for history, cos zenith, and downscaling/upscaling in the ERA5 HDF5 dataloader
+=======
+- Support for the history in the ERA5 HDF5 dataloader
+>>>>>>> 01d415587f6997fa7ce5ef8dd2f7ebaf9851c70e
 - An example showing how to train a "tensor-parallel" version of GraphCast
 on a Shallow-Water-Equation example.
 
