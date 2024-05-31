@@ -15,8 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression output as additional conditioning for CorrDiff.
 - Learnable positional embedding for CorrDiff.
 - Support for patch-based CorrDiff training and generation (stochastic sampling only)
+- Enable CorrDiff multi-gpu generation
+- Diffusion model for fluid data super-resolution (CMU contribution).
+- The Virtual Foundry GraphNet.
+- A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
+- Sorted Empirical CDF CRPS algorithm
+- Support for history, cos zenith, and downscaling/upscaling in the ERA5 HDF5 dataloader
 
 ### Changed
+
+- Raise `ModulusUndefinedGroupError` when querying undefined process groups
+- Safeguarding against uninitialized usage of `DistributedManager`
 
 ### Deprecated
 
@@ -27,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+- Update DALI to CUDA 12 compatible version.
 
 ## [0.6.0] - 2024-04-17
 

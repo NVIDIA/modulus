@@ -24,7 +24,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import torch  # noqa: E402
 from pytest_utils import import_or_fail  # noqa: E402
-from utils import fix_random_seeds, get_icosphere_path  # noqa: E402
+from utils import fix_random_seeds  # noqa: E402
 
 
 @import_or_fail("dgl")
@@ -34,8 +34,6 @@ def test_cugraphops(
     pytestconfig, recomp_act, concat_trick, num_channels=2, res_h=21, res_w=10
 ):
     """Test cugraphops"""
-    icosphere_path = get_icosphere_path()
-
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     if recomp_act and not common.utils.is_fusion_available("FusionDefinition"):
@@ -54,8 +52,7 @@ def test_cugraphops(
     np.random.seed(0)
 
     model = GraphCastNet(
-        meshgraph_path=icosphere_path,
-        static_dataset_path=None,
+        multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
         input_dim_mesh_nodes=3,
@@ -74,8 +71,7 @@ def test_cugraphops(
     fix_random_seeds()
 
     model_dgl = GraphCastNet(
-        meshgraph_path=icosphere_path,
-        static_dataset_path=None,
+        multimesh_level=1,
         input_res=(res_h, res_w),
         input_dim_grid_nodes=num_channels,
         input_dim_mesh_nodes=3,

@@ -21,6 +21,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from modulus.distributed import DistributedManager
 from modulus.models.mlp import FullyConnected
 from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 from modulus.utils.capture import _StaticCapture
@@ -72,6 +73,8 @@ def test_capture_training(
     use_amp,
     amp_type,
 ):
+    # Initialize the DistributedManager first since StaticCaptureTraining uses it
+    DistributedManager.initialize()
 
     model = model.to(device)
     input = torch.rand(8, 2).to(device)
@@ -111,6 +114,7 @@ def test_capture_training(
     model.meta.cuda_graphs = use_graphs
     model.meta.amp_gpu = use_amp
     model.meta.amp_cpu = use_amp
+
     # Create training step function with optimization wrapper
     @StaticCaptureTraining(
         model=model,
@@ -144,9 +148,9 @@ def test_capture_evaluate(
     use_amp,
     amp_type,
 ):
-
     model = model.to(device)
     input = torch.rand(8, 2).to(device)
+
     # Create eval step function with optimization wrapper
     @StaticCaptureEvaluateNoGrad(
         model=model,

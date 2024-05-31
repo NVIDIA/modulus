@@ -19,14 +19,19 @@ import os
 import pytest
 import torch
 
-from modulus.distributed import DistributedManager, ProcessGroupConfig, ProcessGroupNode
+from modulus.distributed import (
+    DistributedManager,
+    ModulusUndefinedGroupError,
+    ModulusUninitializedDistributedManagerWarning,
+    ProcessGroupConfig,
+    ProcessGroupNode,
+)
 
 distributed_test = pytest.mark.skipif(
     not torch.distributed.is_available(), reason="PyTorch distributed not available"
 )
 
 
-# TODO: Need to figure out how to test parallel set up
 def test_manager():
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
@@ -172,6 +177,45 @@ def test_manager_singleton():
     assert manager_1.group_name() == manager_2.group_name()
     assert manager_1.broadcast_buffers == manager_2.broadcast_buffers
     assert manager_1.find_unused_parameters == manager_2.find_unused_parameters
+    DistributedManager.cleanup()
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
+
+
+def test_manager_uninitialized_instantiation():
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+
+    assert not DistributedManager.is_initialized()
+
+    with pytest.raises(ModulusUninitializedDistributedManagerWarning):
+        DistributedManager()
+
+    DistributedManager._shared_state = {}
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
+
+
+def test_manager_undefined_group_query():
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+    DistributedManager.initialize()
+
+    manager = DistributedManager()
+
+    assert manager.is_initialized()
+
+    with pytest.raises(ModulusUndefinedGroupError):
+        manager.group("undefined_group")
+    with pytest.raises(ModulusUndefinedGroupError):
+        manager.group_size("undefined_group")
+    with pytest.raises(ModulusUndefinedGroupError):
+        manager.group_rank("undefined_group")
+
     DistributedManager.cleanup()
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]

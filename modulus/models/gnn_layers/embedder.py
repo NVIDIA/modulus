@@ -139,7 +139,8 @@ class GraphCastDecoderEmbedder(nn.Module):
     activation_fn : nn.Module, optional
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
-        Normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     recompute_activation : bool, optional
         Flag for recomputing activation in backward to save memory, by default False.
         Currently, only SiLU is supported.
