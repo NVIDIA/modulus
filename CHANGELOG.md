@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Added `EDMLossSR` to __init__.py imports.
+- Added arg `checkpoint_level` to `SongUNetPosEmbd` class constructor.
+
 ### Security
 
 ### Dependencies
