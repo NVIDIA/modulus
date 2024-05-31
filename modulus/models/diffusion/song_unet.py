@@ -483,6 +483,7 @@ class SongUNetPosEmbd(SongUNet):
         gridtype: str = "sinusoidal",
         N_grid_channels: int = 4,
         checkpoint_level: int = 0,
+        img_channels: int = 0,
     ):
         super().__init__(
             img_resolution,
