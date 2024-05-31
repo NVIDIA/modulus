@@ -37,8 +37,7 @@ Shallow-Water-Equation example.
 
 - Fixed bug in the partitioning logic for distributing graph structures
 intended for distributed message-passing.
-- Added missing `EDMLossSR` to __init__.py imports.
-- Added arg `checkpoint_level` to `SongUNetPosEmbd` class constructor.
+- Fixed bugs for corrdiff diffusion training of `EDMv1` and `EDMv2`
 
 ### Security
 
