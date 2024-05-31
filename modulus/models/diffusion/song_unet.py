@@ -482,6 +482,7 @@ class SongUNetPosEmbd(SongUNet):
         resample_filter: List[int] = [1, 1],
         gridtype: str = "sinusoidal",
         N_grid_channels: int = 4,
+        checkpoint_level: int = 0,
     ):
         super().__init__(
             img_resolution,
@@ -501,6 +502,7 @@ class SongUNetPosEmbd(SongUNet):
             encoder_type,
             decoder_type,
             resample_filter,
+            checkpoint_level
         )
 
         self.img_resolution = img_resolution
