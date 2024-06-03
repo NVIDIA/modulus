@@ -29,7 +29,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, 
 import os
 
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.utils.graphcast.loss import CellAreaWeightedLossFunction
+from modulus.utils.graphcast.loss import GraphCastLossFunction
 from modulus.launch.logging import (
     PythonLogger,
     initialize_wandb,
@@ -132,13 +132,19 @@ class GraphCastTrainer(BaseTrainer):
         if cfg.watch_model and not cfg.jit and dist.rank == 0:
             wandb.watch(self.model)
 
-        # Get latitudes and longitudes
+        # Get required model attributes
         if hasattr(self.model, "module"):
             self.latitudes = self.model.module.latitudes
             self.longitudes = self.model.module.longitudes
+            self.lat_lon_grid = self.model.module.lat_lon_grid
+            self.is_distributed = self.model.module.is_distributed
+            self.expect_partitioned_input = self.model.module.expect_partitioned_input
         else:
             self.latitudes = self.model.latitudes
             self.longitudes = self.model.longitudes
+            self.lat_lon_grid = self.model.lat_lon_grid
+            self.is_distributed = self.model.is_distributed
+            self.expect_partitioned_input = self.model.expect_partitioned_input
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -165,12 +171,12 @@ class GraphCastTrainer(BaseTrainer):
         self.cos_zenith_args = {
             "dt": 6.0,
             "start_year": 1980,
-            "latlon_bounds": ((90, -90), (0, 360)),
         }
+        self.channels_list = [i for i in range(cfg.num_channels_climate)]
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
-            channels=[i for i in range(cfg.num_channels_climate)],
+            channels=self.channels_list,
             latlon_resolution=cfg.latlon_res,
             interpolation_type=self.interpolation_type,
             num_samples_per_year=cfg.num_samples_per_year_train,
@@ -192,16 +198,11 @@ class GraphCastTrainer(BaseTrainer):
         self.model.train()
 
         # get area
-        if hasattr(self.model, "module"):
-            self.area = grid_cell_area(
-                self.model.module.lat_lon_grid[:, :, 0], unit="deg"
-            )
-        else:
-            self.area = grid_cell_area(self.model.lat_lon_grid[:, :, 0], unit="deg")
+        self.area = grid_cell_area(self.lat_lon_grid[:, :, 0], unit="deg")
         self.area = self.area.to(dtype=self.dtype).to(device=dist.device)
 
         # instantiate loss, optimizer, and scheduler
-        self.criterion = CellAreaWeightedLossFunction(self.area)
+        self.criterion = GraphCastLossFunction(self.area, self.channels_list, cfg.dataset_metadata_path, cfg.time_diff_std_path)
         try:
             self.optimizer = apex.optimizers.FusedAdam(
                 self.model.parameters(),
@@ -249,7 +250,7 @@ class GraphCastTrainer(BaseTrainer):
         # Get the static data
         if self.static_dataset_path:
             self.static_data = StaticData(
-                self.static_dataset_path, self.model.latitudes, self.model.longitudes
+                self.static_dataset_path, self.latitudes, self.longitudes
             ).get()
             self.static_data = self.static_data.to(device=dist.device)
             assert cfg.num_channels_static == self.static_data.size(1), (
@@ -257,7 +258,7 @@ class GraphCastTrainer(BaseTrainer):
                 + f"does not match the static data ({self.static_data.size(1)})"
             )
             if (
-                self.model.is_distributed and self.model.expect_partitioned_input
+                self.is_distributed and self.expect_partitioned_input
             ):  # TODO verify
                 # if input itself is distributed, we also need to distribute static data
                 self.static_data(
@@ -305,13 +306,14 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # initialize loggers
-    initialize_wandb(
-        project="Modulus-Launch",
-        entity="Modulus",
-        name="GraphCast-Training",
-        group="GraphCast-DDP-Group",
-        mode=cfg.wb_mode,
-    )  # Wandb logger
+    if dist.rank==0:
+        initialize_wandb(
+            project="GraphCast",
+            entity="Modulus",
+            name=f"GraphCast-{cfg.num_channels_climate}channels",
+            group="GraphCast-group",
+            mode=cfg.wb_mode,
+        )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     rank_zero_logger.file_logging()
@@ -338,7 +340,7 @@ def main(cfg: DictConfig) -> None:
         # training loop
         while True:
             assert (
-                iter < cfg.num_iters_step1 + cfg.num_iters_step2 + cfg.num_iters_step3
+                iter < cfg.num_iters_stepa1 + cfg.num_iters_step2 + cfg.num_iters_step3
             ), "Training is already finished!"
             for i, data in enumerate(trainer.datapipe):
 
@@ -391,7 +393,7 @@ def main(cfg: DictConfig) -> None:
                     trainer.datapipe = DataPipe(
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
-                        channels=[i for i in range(cfg.num_channels_climate)],
+                        channels=trainer.channels_list,
                         latlon_resolution=cfg.latlon_res,
                         interpolation_type=trainer.interpolation_type,
                         num_samples_per_year=cfg.num_samples_per_year_train,
@@ -464,13 +466,17 @@ def main(cfg: DictConfig) -> None:
                         f"iteration: {iter}, loss: {loss_agg/cfg.save_freq:10.3e}, \
                             time per iter: {(time.time()-start)/cfg.save_freq:10.3e}"
                     )
-                    wandb.log(
-                        {
-                            "loss": loss_agg / cfg.save_freq,
-                            "learning_rate": trainer.scheduler.get_last_lr()[0],
-                        },
-                        step=iter,
-                    )
+                    if dist.world_size > 1:
+                        torch.distributed.all_reduce(loss_agg, op=torch.distributed.ReduceOp.SUM)
+                    loss_agg = loss_agg / dist.world_size / cfg.save_freq
+                    if dist.rank==0:
+                        wandb.log(
+                            {
+                                "loss": loss_agg,
+                                "learning_rate": trainer.scheduler.get_last_lr()[0],
+                            },
+                            step=iter,
+                        )
                     loss_agg = 0
                     start = time.time()
                 iter += 1

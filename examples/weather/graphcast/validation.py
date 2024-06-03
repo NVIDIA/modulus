@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import os
-import sys
 import torch
 import matplotlib.pyplot as plt
 
@@ -24,7 +23,6 @@ from modulus.datapipes.climate import ERA5HDF5Datapipe
 from train_utils import prepare_input
 
 
-import hydra
 import wandb
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
@@ -45,7 +43,6 @@ class Validation:
         self.cos_zenith_args = {
             "dt": 6.0,
             "start_year": 2017,
-            "latlon_bounds": ((90, -90), (0, 360)),
         }
         self.val_datapipe = ERA5HDF5Datapipe(
             data_dir=os.path.join(cfg.dataset_path, "test"),
@@ -106,7 +103,7 @@ class Validation:
                     cos_zenith,
                     num_history=self.num_history,
                     static_data=self.static_data,
-                    step=t + 1,
+                    step=t + 2,
                 )
                 invar_cat = invar_cat.to(dtype=self.dtype)
 
