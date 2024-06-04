@@ -16,7 +16,7 @@
 
 """Train diffusion-based generative model using the techniques described in the
 paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
-
+import sys; sys.path.append('/code/modulus')
 import json
 import os
 import shutil
