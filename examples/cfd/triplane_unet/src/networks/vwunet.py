@@ -492,6 +492,7 @@ class VWUNetPrincipalConvDrivAer(VWUNetDrivAer):
         self.to_point = GridFeatureToPoint(
             grid_in_channels=decoder_channels[-1],
             point_in_channels=encoder_channels[0],
+            hidden_dim=decoder_channels[-1],
             out_channels=1,  # pressure prediction
             aabb_max=bbox_max,
             aabb_min=bbox_min,

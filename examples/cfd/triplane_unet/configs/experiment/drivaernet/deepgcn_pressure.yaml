@@ -45,11 +45,11 @@ model:
     conv: 'edge'
     block: 'res'
     k: 9
-    epsilon: 0.2
-    use_stochastic: True
+    epsilon: 0.0
+    use_stochastic: False
     use_dilation: True 
     dropout: 0
-    norm_args: {'norm': 'bn'}
+    norm_args: {'norm': 'in'}
     act_args: {'act': 'relu'}
 
   mlp_in_channels: 256

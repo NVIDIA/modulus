@@ -205,7 +205,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
         self.grid_pools = nn.ModuleList(grid_pools)
 
         self.mlp = MLP(
-            mlp_channels[0] * len(self.compressed_spatial_dims),
+            mlp_channels[0] * len(self.compressed_spatial_dims) * len(pooling_layers),
             mlp_channels[-1],
             mlp_channels,
             use_residual=True,
@@ -254,7 +254,7 @@ class PointFeatureToGridGroupUNet(BaseModel):
         for grid_pool, layer in zip(self.grid_pools, self.pooling_layers):
             pooled_feats.append(grid_pool(down_grid_feature_groups[layer]))
         if len(pooled_feats) > 1:
-            pooled_feats = torch.stack(pooled_feats, dim=1).sum(dim=1)
+            pooled_feats = torch.cat(pooled_feats, dim=-1)
         else:
             pooled_feats = pooled_feats[0]
         drag_pred = self.mlp_projection(self.mlp(pooled_feats))
