@@ -86,7 +86,7 @@ wandb_entity: "CorrDiff"
 dataset:
   type: cwb
   train_test_split: false
-  data_path: /data/data2/2023-01-24-cwb-4years.zarr
+  data_path: /lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/data/2023-01-24-cwb-4years.zarr/
   n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
