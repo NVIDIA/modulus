@@ -16,6 +16,7 @@
 
 """Generate random images using the techniques described in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
+import sys; sys.path.append('/code/modulus')
 
 from concurrent.futures import ThreadPoolExecutor
 import datetime
