@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for history, cos zenith, and downscaling/upscaling in the ERA5 HDF5 dataloader.
 - An example showing how to train a "tensor-parallel" version of GraphCast on a
 Shallow-Water-Equation example.
+- AeroGraphNet example of training of MeshGraphNet on Ahmed body and DrivAerNet datasets.
 
 ### Changed
 
