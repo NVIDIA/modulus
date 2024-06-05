@@ -14,7 +14,7 @@ the drag coefficient.
 3. [Model](#model-overview-and-architecture)
 4. [Training](#model-training)
     1. [Ahmed Body](#ahmed-body-training)
-    2. [DrivAerNet](#drivaernet)
+    2. [DrivAerNet](#drivaer-training)
 
 ## Problem overview
 
@@ -163,15 +163,23 @@ export WANDB_API_KEY=<your_api_key>
 
 The URL to the dashboard will be displayed in the terminal after the run is launched.
 
-### DrivAer dataset
+### DrivAer training
 
-To train the model, run
+To train the MeshGraphNet model, run
 
 ```bash
 python train.py +experiment=drivaernet/mgn data.data_dir=/data/DrivAerNet/
 ```
 
 Make sure to set `data.data_dir` to a proper location.
+
+Another option is to train an extended version of MGN, called AeroGraphNet. This model
+predicts a drag coefficient directly, along with pressure and WSS.
+To use AGN instead of MGN, use `drivaernet/agn` experiment
+
+```bash
+python train.py +experiment=drivaernet/agn data.data_dir=/data/DrivAerNet/
+```
 
 ## Inference
 

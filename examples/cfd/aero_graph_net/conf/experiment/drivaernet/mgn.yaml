@@ -20,7 +20,7 @@ defaults:
   - /data@data.train: drivaernet
   - /data@data.val: drivaernet
   - /model: mgn
-  - /loss@loss.ndata: rrmseloss
+  - /loss@loss.graph: rrmseloss
   - /optimizer: adam
   - /lr_scheduler: exponentiallr
 
@@ -28,11 +28,11 @@ data:
   train:
     name: drivaernet_train
     split: train
-    num_samples: 2600
+    num_samples: 2766
   val:
     name: drivaernet_val
     split: val
-    num_samples: 100
+    num_samples: 593
 
 model:
   input_dim_nodes: 3
@@ -42,8 +42,9 @@ train:
   epochs: 50
 
 visualizers:
-  mesh:
-    tag: mesh
+  mesh_p:
+    scalar: p
+    tag: pressure
     camera_positions:
       - [
         [-8.9, -4.5, 4.9],
@@ -60,3 +61,7 @@ visualizers:
         [1.4, 0.11, 0.64],
         [-0.8, 0.11, 0.65],
       ]
+  mesh_wss:
+    scalar: wallShearStress
+    tag: wall_shear_stress
+    camera_positions: ${..mesh_p.camera_positions}

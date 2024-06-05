@@ -40,7 +40,7 @@ def test_drivaernet_init(data_dir, cache_graph, tmp_path, pytestconfig):
     dataset = DrivAerNetDataset(
         data_dir=data_dir,
         split="train",
-        num_samples=2,
+        num_samples=1,
         cache_dir=cache_dir,
     )
 
@@ -48,10 +48,12 @@ def test_drivaernet_init(data_dir, cache_graph, tmp_path, pytestconfig):
     # and cache graphs, if requested.
     assert common.check_datapipe_iterable(dataset)
 
-    assert len(dataset) == 2
+    assert len(dataset) == 1
 
     # Get the first graph with the corresponding C_d.
-    g0, c_d_0 = dataset[0]
+    sample = dataset[0]
+    g0 = sample["graph"]
+    c_d_0 = sample["c_d"].item()
 
     # Some simple checks.
     assert g0.ndata["x"].shape[0] == g0.ndata["y"].shape[0]

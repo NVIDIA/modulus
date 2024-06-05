@@ -72,8 +72,9 @@ class WandBLogger(ExperimentLogger):
     """Wrapper for Weights & Biases logger."""
 
     def __init__(self, **kwargs) -> None:
-        if DistributedManager().rank == 0:
-            wandb.init(**kwargs)
+        if DistributedManager().rank != 0:
+            return
+        wandb.init(**kwargs)
 
     @rank0
     def log_scalar(self, tag: str, value: float, step: int) -> None:

@@ -265,25 +265,68 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
             The DGL graph.
         """
 
+        def extract_edges(mesh: pv.PolyData) -> list[tuple[int, int]]:
+            # Extract connectivity information from the mesh.
+            # Traversal API is faster comparing to iterating over mesh.cell.
+            polys = mesh.GetPolys()
+            if polys is None:
+                raise ValueError("Failed to get polygons from the mesh.")
+
+            polys.InitTraversal()
+
+            edge_list = []
+            for _ in range(polys.GetNumberOfCells()):
+                id_list = vtk.vtkIdList()
+                polys.GetNextCell(id_list)
+                for j in range(id_list.GetNumberOfIds() - 1):
+                    edge_list.append(  # noqa: PERF401
+                        (id_list.GetId(j), id_list.GetId(j + 1))
+                    )
+            return edge_list
+
+        def permute_mesh(p_vtk_path: Path, wss_vtk_path: Path) -> Tensor:
+            # The issue with DrivAerNet dataset is pressure and WSS meshes
+            # are store in different files. Even though each file contain
+            # the same mesh coordinates, the nodes are permuted (order does not match)
+            # which makes it impossible to do simple point_data assignment.
+            # This method permutes WSS mesh by using vtkProbeFilter.
+
+            p_reader = vtk.vtkPolyDataReader()
+            p_reader.SetFileName(p_vtk_path)
+            p_reader.Update()
+            p_out = p_reader.GetOutput()
+
+            wss_reader = vtk.vtkPolyDataReader()
+            wss_reader.SetFileName(wss_vtk_path)
+            wss_reader.Update()
+            wss_out = wss_reader.GetOutput()
+
+            probe = vtk.vtkProbeFilter()
+            # p mesh is the input for which corresponding values from
+            # wss mesh are retrieved.
+            probe.SetInputData(p_out)
+            probe.SetSourceData(wss_out)
+            probe.Update()
+
+            probe_out = probe.GetOutput()
+            wss_arr = probe_out.GetPointData().GetArray("wallShearStress")
+            num_points = p_out.GetNumberOfPoints()
+            wss = torch.empty((num_points, 3), dtype=torch.float32)
+            for i in range(num_points):
+                x, y, z = wss_arr.GetTuple3(i)
+                wss[i, 0] = x
+                wss[i, 1] = y
+                wss[i, 2] = z
+
+            return wss
+
+        # Load the pressure mesh even if p is not selected.
+        # The p and wss meshes contain the same mesh nodes,
+        # so use nodes from p for simplicity.
         p_vtk_path = self.p_vtk_dir / (name + ".vtk")
         p_mesh = pv.read(p_vtk_path)
 
-        # Extract connectivity information from the mesh.
-        # Traversal API is faster comparing to iterating over mesh.cell.
-        polys = p_mesh.GetPolys()
-        if polys is None:
-            raise ValueError("Failed to get polygons from the mesh.")
-
-        polys.InitTraversal()
-
-        edge_list = []
-        for _ in range(polys.GetNumberOfCells()):
-            id_list = vtk.vtkIdList()
-            polys.GetNextCell(id_list)
-            for j in range(id_list.GetNumberOfIds() - 1):
-                edge_list.append(  # noqa: PERF401
-                    (id_list.GetId(j), id_list.GetId(j + 1))
-                )
+        edge_list = extract_edges(p_mesh)
 
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)
@@ -298,8 +341,7 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
 
         if (k := "wallShearStress") in self.output_keys:
             wss_vtk_path = self.wss_vtk_dir / (name + ".vtk")
-            wss_mesh = pv.read(wss_vtk_path)
-            graph.ndata[k] = torch.tensor(wss_mesh.point_data[k], dtype=torch.float32)
+            graph.ndata[k] = permute_mesh(p_vtk_path, wss_vtk_path)
 
         # Normalize nodes.
         for k in self.input_keys + self.output_keys:

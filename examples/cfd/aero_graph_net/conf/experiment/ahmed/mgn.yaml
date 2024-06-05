@@ -20,7 +20,7 @@ defaults:
   - /data@data.train: ahmed
   - /data@data.val: ahmed
   - /model: mgn
-  - /loss@loss.ndata: rrmseloss
+  - /loss@loss.graph: rrmseloss
   - /optimizer: adam
   - /lr_scheduler: exponentiallr
 
@@ -38,8 +38,9 @@ train:
   epochs: 500
 
 visualizers:
-  mesh:
-    tag: mesh
+  mesh_p:
+    scalar: p
+    tag: pressure
     camera_positions:
       - [
         [-2.2, -0.7, 0.5],
@@ -56,3 +57,7 @@ visualizers:
         [-0.04, -0.14, 0.58],
         [-0.47, 0.31, 0.82],
       ]
+  mesh_wss:
+    scalar: wallShearStress
+    tag: wall_shear_stress
+    camera_positions: ${..mesh_p.camera_positions}

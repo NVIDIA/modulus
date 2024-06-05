@@ -16,9 +16,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: visualizers.MeshVisualizer
-_convert_: all
+defaults:
+  - drivaernet/mgn  # use MGN experiment as a base and change only required parameters.
+  - /loss@loss.c_d: mseloss
 
-scalar: ???
-tag: ???
-camera_positions: ???
+model:
+  _target_: models.AeroGraphNet

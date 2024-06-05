@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from functools import partial
 import logging
 import time
@@ -24,7 +25,7 @@ from hydra.utils import instantiate, to_absolute_path
 
 from dgl.dataloading import GraphDataLoader
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 import torch
 from torch import Tensor
@@ -137,20 +138,29 @@ class MGNTrainer:
 
     def train(self, batch: Mapping[str, Tensor]):
         self.optimizer.zero_grad()
-        loss = self.forward(batch)
-        self.backward(loss)
+        losses = self.forward(batch)
+        self.backward(losses["total"])
         self.scheduler.step()
-        return loss
+        return losses
 
     def forward(self, batch):
         # forward pass
         graph = batch["graph"]
         with self.autocast():
-            pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
+            pred = batch_as_dict(self.model(graph.ndata["x"], graph.edata["x"], graph))
             # Graph data (e.g. p and WSS) loss.
-            ndata_loss = self.loss.ndata(pred, graph.ndata["y"])
-            loss = ndata_loss
-            return loss
+            graph_loss = self.loss.graph(pred["graph"], graph.ndata["y"])
+            losses = {"graph": graph_loss}
+            # Compute C_d loss, if requested.
+            if (pred_c_d := pred.get("c_d")) is not None:
+                c_d_loss = self.loss.c_d(pred_c_d, batch["c_d"])
+                losses["c_d"] = c_d_loss
+            # Get total loss and detach intermediate losses.
+            total_loss = sum(losses.values())
+            losses = {k: v.detach() for k, v in losses.items()}
+            losses["total"] = total_loss
+
+            return losses
 
     def backward(self, loss):
         # backward pass.
@@ -161,21 +171,33 @@ class MGNTrainer:
 
     @torch.no_grad()
     def validation(self, epoch: int):
-        error = 0
+        losses_agg = defaultdict(float)
         for batch in self.validation_dataloader:
             batch = {k: v.to(self.dist.device) for k, v in batch_as_dict(batch).items()}
             graph = batch["graph"]
-            pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            pred, gt = self.dataset.denormalize(
-                pred, graph.ndata["y"], self.dist.device
+            pred = batch_as_dict(self.model(graph.ndata["x"], graph.edata["x"], graph))
+            pred_g, gt_g = self.dataset.denormalize(
+                pred["graph"], graph.ndata["y"], self.dist.device
             )
-            error += self.loss.ndata(pred, gt)
+            losses_agg["graph"] += self.loss.graph(pred_g, gt_g)
+            if (pred_c_d := pred.get("c_d")) is not None:
+                losses_agg["c_d"] += self.loss.c_d(pred_c_d, batch["c_d"])
+
+        losses_agg["total"] = sum(losses_agg.values())
 
         # Visualize last batch.
         for vis in self.visualizers.values():
-            vis(graph, pred, gt, epoch, elogger)
+            vis(graph, pred_g, gt_g, epoch, elogger)
 
-        return error / len(self.validation_dataloader)
+        # Log losses.
+        num_batches = len(self.validation_dataloader)
+        loss_str = []
+        for k, v in losses_agg.items():
+            loss = v / num_batches
+            elogger.log_scalar(f"val/loss/{k}", loss, epoch)
+            loss_str.append(f"{k}: {loss:6.4f}")
+
+        logger.info(f"Validation loss: {', '.join(loss_str)}")
 
 
 def batch_as_dict(batch):
@@ -189,6 +211,7 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     init_python_logging(cfg)
+    logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
 
     torch.set_float32_matmul_precision("high")
     torch.backends.cudnn.benchmark = True
@@ -203,28 +226,30 @@ def main(cfg: DictConfig) -> None:
     logger.info("Training started...")
 
     for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
-        loss_agg = 0
+        losses_agg = defaultdict(float)
         for batch in trainer.dataloader:
             batch = {k: v.to(dist.device) for k, v in batch_as_dict(batch).items()}
-            loss = trainer.train(batch)
-            loss_agg += loss.detach().cpu().numpy()
-        loss_agg /= len(trainer.dataloader)
+            losses = trainer.train(batch)
+            for k, v in losses.items():
+                losses_agg[k] += v.detach().cpu().numpy()
+        num_batches = len(trainer.dataloader)
+        for k, v in losses_agg.items():
+            losses_agg[k] /= num_batches
 
         cur_lr = trainer.scheduler.get_last_lr()[0]
         logger.info(
-            f"epoch: {epoch:5,}, loss: {loss_agg:.5f}, "
+            f"epoch: {epoch:5,}, loss: {losses_agg['total']:.5f}, "
             f"lr: {cur_lr:.7f}, "
             f"time per epoch: {(time.time() - start):5.2f}"
         )
-        elogger.log_scalar("loss", loss_agg, epoch)
+        for k, v in losses_agg.items():
+            elogger.log_scalar(f"train/loss/{k}", v, epoch)
         elogger.log_scalar("lr", cur_lr, epoch)
 
         # validation
         # TODO(akamenev): redundant restriction, val should run on all ranks.
         if dist.rank == 0:
-            val_error_pct = trainer.validation(epoch) * 100
-            elogger.log_scalar("val_error (%)", val_error_pct, epoch)
-            logger.info(f"Denormalized validation error (%): {val_error_pct:4.2f}")
+            trainer.validation(epoch)
 
         # save checkpoint
         if dist.world_size > 1:
