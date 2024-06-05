@@ -15,11 +15,9 @@
 # limitations under the License.
 
 
-import os
 import numpy as np
 import torch
 import vtk
-import dgl
 
 try:
     import nvidia.dali as dali
@@ -33,10 +31,12 @@ except ImportError:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Tuple, Union, List, Any
+from typing import Iterable, List, Tuple, Union
 
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
+
+from .readers import read_cgns, read_vtp, read_vtu
 
 Tensor = torch.Tensor
 
@@ -52,15 +52,22 @@ class MetaData(DatapipeMetaData):
 
 
 class VTKDatapipe(Datapipe):
-    """ DALI data pipeline for VTK files
+    """DALI data pipeline for VTK files
 
     Parameters
     ----------
     data_dir : str
         Directory where ERA5 data is stored
+    vars : List[str, None]
+        Ordered list of variables to be loaded from the files
+    num_vars : int
+        Number of variables to be loaded from the files
+    file_format : str, optional
+        File format of the data, by default "vtp"
+        Supported formats: "vtp", "vtu", "cgns"
     stats_dir : Union[str, None], optional
-        Directory to data statistic numpy files for normalization, if None, no normalization
-        will be used, by default None
+        Directory where statistics are stored, by default None
+        If provided, the statistics are used to normalize the attributes
     batch_size : int, optional
         Batch size, by default 1
     num_steps : int, optional
@@ -82,7 +89,7 @@ class VTKDatapipe(Datapipe):
         data_dir: str,
         vars: List[str],
         num_vars: int,
-        data_type: str = "vtp",
+        file_format: str = "vtp",
         stats_dir: Union[str, None] = None,
         batch_size: int = 1,
         num_samples: int = 1,
@@ -93,7 +100,7 @@ class VTKDatapipe(Datapipe):
         world_size: int = 1,
     ):
         super().__init__(meta=MetaData())
-        self.data_type=data_type
+        self.file_format = file_format
         self.vars = vars
         self.num_vars = num_vars
         self.batch_size = batch_size
@@ -134,10 +141,22 @@ class VTKDatapipe(Datapipe):
             In channels specified or number of samples per year is not valid
         """
         # get all input data files
-        if self.data_type == "vtp":
-            self.data_paths = sorted([str(path) for path in self.data_dir.glob("*.vtp")])
-        elif self.data_type == "vtu":
-            self.data_paths = sorted([str(path) for path in self.data_dir.glob("*.vtu")])
+        if self.file_format == "vtp":
+            self.data_paths = sorted(
+                [str(path) for path in self.data_dir.glob("*.vtp")]
+            )
+        elif self.file_format == "vtu":
+            self.data_paths = sorted(
+                [str(path) for path in self.data_dir.glob("*.vtu")]
+            )
+        elif self.file_format == "cgns":
+            self.data_paths = sorted(
+                [str(path) for path in self.data_dir.glob("*.cgns")]
+            )
+        else:
+            raise NotImplementedError(
+                f"Data type {self.file_format} is not supported yet"
+            )
 
         for data_path in self.data_paths:
             self.logger.info(f"File found: {data_path}")
@@ -145,11 +164,15 @@ class VTKDatapipe(Datapipe):
 
         if self.num_samples > self.all_samples:
             raise ValueError(
-                f"Number of requested samples is greater than the total number of available samples!"
+                "Number of requested samples is greater than the total number of available samples!"
             )
-        self.logger.info(f"Number of total samples: {self.all_samples}, number of requested samples: {self.num_samples}")
+        self.logger.info(
+            f"Number of total samples: {self.all_samples}, number of requested samples: {self.num_samples}"
+        )
 
-    def load_statistics(self) -> None:  # TODO generalize and combine with climate/era5_hdf5 datapipes
+    def load_statistics(
+        self,
+    ) -> None:  # TODO generalize and combine with climate/era5_hdf5 datapipes
         """Loads statistics from pre-computed numpy files
 
         The statistic files should be of name global_means.npy and global_std.npy with
@@ -177,9 +200,9 @@ class VTKDatapipe(Datapipe):
             raise IOError(f"Std statistics file {std_stat_file} not found")
 
         # has shape [1, C]
-        self.mu = np.load(str(mean_stat_file))[:, 0:self.num_vars]
+        self.mu = np.load(str(mean_stat_file))[:, 0 : self.num_vars]
         # has shape [1, C]
-        self.sd = np.load(str(std_stat_file))[:, 0:self.num_vars]
+        self.sd = np.load(str(std_stat_file))[:, 0 : self.num_vars]
 
         if not self.mu.shape == self.sd.shape == (1, self.num_vars):
             raise AssertionError("Error, normalisation arrays have wrong shape")
@@ -204,7 +227,7 @@ class VTKDatapipe(Datapipe):
         with pipe:
             source = VTKDaliExternalSource(
                 data_paths=self.data_paths,
-                data_type=self.data_type,
+                file_format=self.file_format,
                 vars=self.vars,
                 num_samples=self.num_samples,
                 batch_size=self.batch_size,
@@ -274,7 +297,7 @@ class VTKDaliExternalSource:
     def __init__(
         self,
         data_paths: Iterable[str],
-        data_type: str,
+        file_format: str,
         vars: List[str],
         num_samples: int,
         batch_size: int = 1,
@@ -283,7 +306,7 @@ class VTKDaliExternalSource:
         world_size: int = 1,
     ):
         self.data_paths = list(data_paths)
-        self.data_type=data_type
+        self.file_format = file_format
         self.vars = vars
         # Will be populated later once each worker starts running in its own process.
         self.poly_data = None
@@ -303,7 +326,6 @@ class VTKDaliExternalSource:
 
         self.vtk_reader_fn = self.vtk_reader()
         self.parse_vtk_data_fn = self.parse_vtk_data()
-        
 
     def __call__(self, sample_info: dali.types.SampleInfo) -> Tuple[Tensor, Tensor]:
         if sample_info.iteration >= self.num_batches:
@@ -320,42 +342,50 @@ class VTKDaliExternalSource:
         # Get local indices from global index.
         idx = self.indices[sample_info.idx_in_epoch]
 
-        #if self.poly_data is None:  # TODO check
+        # if self.poly_data is None:  # TODO check
         # This will be called once per worker. Workers are persistent,
         # so there is no need to explicitly close the files - this will be done
         # when corresponding pipeline/dataset is destroyed.
         data = self.vtk_reader_fn(self.data_paths[idx])
-        #vertices, pressure, wss = self.parse_vtkpolydata(polydata)
+        # vertices, pressure, wss = self.parse_vtkpolydata(polydata)
 
-        return  self.parse_vtk_data_fn(data, self.vars)
+        return self.parse_vtk_data_fn(data, self.vars)
 
     def __len__(self):
         return len(self.indices)
-    
+
     def vtk_reader(self):
-        if self.data_type == "vtp":
-            return read_vtp_file
-        elif self.data_type=="vtu":
-            return read_vtu_file
+        if self.file_format == "vtp":
+            return read_vtp
+        elif self.file_format == "vtu":
+            return read_vtu
+        elif self.file_format == "cgns":
+            return read_cgns
         else:
-            raise NotImplementedError(f"Data type {self.data_type} is not supported yet")
-    
+            raise NotImplementedError(
+                f"Data type {self.file_format} is not supported yet"
+            )
+
     def parse_vtk_data(self):
-        if self.data_type == "vtp":
+        if self.file_format == "vtp":
             return _parse_vtk_polydata
-        elif self.data_type=="vtu":
+        elif self.file_format == "vtu":
             return _parse_vtk_unstructuredgrid
         else:
-            raise NotImplementedError(f"Data type {self.data_type} is not supported yet")
+            raise NotImplementedError(
+                f"Data type {self.file_format} is not supported yet"
+            )
+
 
 def _parse_vtk_polydata(polydata, vars):
     # Fetch vertices
     points = polydata.GetPoints()
     if points is None:
         raise ValueError("Failed to get points from the polydata.")
-    vertices = torch.tensor(np.array(
-        [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
-    ), dtype=torch.float32)
+    vertices = torch.tensor(
+        np.array([points.GetPoint(i) for i in range(points.GetNumberOfPoints())]),
+        dtype=torch.float32,
+    )
 
     # Fetch node attributes  # TODO modularize
     attributes = []
@@ -366,7 +396,9 @@ def _parse_vtk_polydata(polydata, vars):
         try:
             array = point_data.GetArray(array_name)
         except ValueError:
-            raise ValueError(f"Failed to get array {array_name} from the unstructured grid.")
+            raise ValueError(
+                f"Failed to get array {array_name} from the unstructured grid."
+            )
         array_data = np.zeros(
             (points.GetNumberOfPoints(), array.GetNumberOfComponents())
         )
@@ -384,22 +416,24 @@ def _parse_vtk_polydata(polydata, vars):
     for i in range(polys.GetNumberOfCells()):
         id_list = vtk.vtkIdList()
         polys.GetNextCell(id_list)
-        for j in range(id_list.GetNumberOfIds() - 1):
-            edges.append(
-                (id_list.GetId(j), id_list.GetId(j + 1))
-            )
+        edges = [
+            (id_list.GetId(j), id_list.GetId(j + 1))
+            for j in range(id_list.GetNumberOfIds() - 1)
+        ]
     edges = torch.tensor(edges, dtype=torch.long)
 
     return vertices, attributes, edges
+
 
 def _parse_vtk_unstructuredgrid(grid, vars):
     # Fetch vertices
     points = grid.GetPoints()
     if points is None:
         raise ValueError("Failed to get points from the unstructured grid.")
-    vertices = torch.tensor(np.array(
-        [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
-    ), dtype=torch.float32)
+    vertices = torch.tensor(
+        np.array([points.GetPoint(i) for i in range(points.GetNumberOfPoints())]),
+        dtype=torch.float32,
+    )
 
     # Fetch node attributes  # TODO modularize
     attributes = []
@@ -410,116 +444,22 @@ def _parse_vtk_unstructuredgrid(grid, vars):
         try:
             array = point_data.GetArray(array_name)
         except ValueError:
-            raise ValueError(f"Failed to get array {array_name} from the unstructured grid.")
+            raise ValueError(
+                f"Failed to get array {array_name} from the unstructured grid."
+            )
         array_data = np.zeros(
             (points.GetNumberOfPoints(), array.GetNumberOfComponents())
         )
         for j in range(points.GetNumberOfPoints()):
             array.GetTuple(j, array_data[j])
         attributes.append(torch.tensor(array_data, dtype=torch.float32))
-        print(array_data[1002,:])
+        print(array_data[1002, :])
         print(array_name)
     attributes = torch.cat(attributes, dim=-1)
 
     # Return a dummy tensor of zeros for edges since they are not directly computable
-    return vertices, attributes, torch.zeros((0, 2), dtype=torch.long)  # Dummy tensor for edges
-    
-def read_vtp_file(file_path: str) -> Any:
-    """
-    Read a VTP file and return the polydata.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the VTP file.
-
-    Returns
-    -------
-    vtkPolyData
-        The polydata read from the VTP file.
-    """
-    # Check if file exists
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"{file_path} does not exist.")
-
-    # Check if file has .vtp extension
-    if not file_path.endswith(".vtp"):
-        raise ValueError(f"Expected a .vtp file, got {file_path}")
-
-    reader = vtk.vtkXMLPolyDataReader()
-    reader.SetFileName(file_path)
-    reader.Update()
-
-    # Get the polydata
-    polydata = reader.GetOutput()
-
-    # Check if polydata is valid
-    if polydata is None:
-        raise ValueError(f"Failed to read polydata from {file_path}")
-
-    return polydata
-    
-def read_vtu_file(file_path: str) -> Any:
-    """
-    Read a VTU file and return the unstructured grid data.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the VTU file.
-
-    Returns
-    -------
-    vtkUnstructuredGrid
-        The unstructured grid data read from the VTU file.
-    """
-    # Check if file exists
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"{file_path} does not exist.")
-
-    # Check if file has .vtu extension
-    if not file_path.endswith(".vtu"):
-        raise ValueError(f"Expected a .vtu file, got {file_path}")
-
-    reader = vtk.vtkXMLUnstructuredGridReader()
-    reader.SetFileName(file_path)
-    reader.Update()
-
-    # Get the unstructured grid data
-    grid = reader.GetOutput()
-
-    # Check if grid is valid
-    if grid is None:
-        raise ValueError(f"Failed to read unstructured grid data from {file_path}")
-
-    return grid
-    
-def create_dgl_graph(
-        vertices, attributes, edges, bidirected: bool = True, add_self_loop: bool = False, edge_idx_dtype=torch.int32
-    ) -> dgl.DGLGraph:
-
-        # Create DGL graph using the connectivity information
-        # DALI gives a tensor of shape (1, num_edges, 2). Neet to convert it to a list of tuples
-        edges= [(x[0], x[1]) for x in edges.squeeze(0).tolist()]
-        graph = dgl.graph(edges, idtype=edge_idx_dtype) # TODO(mnabian) check if idtype is correct
-        if bidirected:
-            graph = dgl.to_bidirected(graph)
-        if add_self_loop:
-            graph = dgl.add_self_loop(graph)
-
-        # Assign node features using the vertex data
-        graph.ndata["coordinates"] = vertices.squeeze(0)
-
-        # Assign node attributes to the DGL graph
-        graph.ndata["x"] = attributes.squeeze(0)
-
-        # Assign edge features to the DGL graph
-        row, col = graph.edges()
-        row = row.long()
-        col = col.long()
-
-        disp = graph.ndata["coordinates"][row] - graph.ndata["coordinates"][col]
-        disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
-        graph.edata["x"] = torch.cat((disp, disp_norm), dim=-1)
-
-        return graph
+    return (
+        vertices,
+        attributes,
+        torch.zeros((0, 2), dtype=torch.long),
+    )  # Dummy tensor for edges

@@ -15,8 +15,15 @@
 # limitations under the License.
 
 
-from vtk import vtkAppendPolyData, vtkXMLPolyDataWriter, vtkPolyData, vtkXMLPolyDataReader
 from typing import List
+
+from vtk import (
+    vtkAppendPolyData,
+    vtkPolyData,
+    vtkXMLPolyDataReader,
+    vtkXMLPolyDataWriter,
+)
+
 
 def combine_vtp_files(input_files: List[str], output_file: str) -> None:
     """

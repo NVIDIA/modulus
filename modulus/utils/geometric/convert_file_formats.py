@@ -16,7 +16,9 @@
 
 
 import os
+
 import vtk
+
 
 def convert_obj_to_vtp(input_file: str, output_file: str) -> None:
     """
@@ -38,6 +40,7 @@ def convert_obj_to_vtp(input_file: str, output_file: str) -> None:
     writer.SetFileName(output_file)
     writer.SetInputData(polydata)
     writer.Write()
+
 
 def convert_vtp_to_stl(input_file: str, output_file: str) -> None:
     """
@@ -70,22 +73,26 @@ def convert_tesselated_files_in_directory(conversion_type, input_dir, output_dir
     - output_dir (str): Path to the directory to save the converted files.
     """
 
-    if conversion_type == 'obj2vtp':
+    if conversion_type == "obj2vtp":
         src_ext = ".obj"
         dst_ext = ".vtp"
         converter = convert_obj_to_vtp
-    elif conversion_type == 'vtp2stl':
+    elif conversion_type == "vtp2stl":
         src_ext = ".vtp"
         dst_ext = ".stl"
         converter = convert_vtp_to_stl
     else:
-        raise NotImplementedError(f"Conversion type {conversion_type} is not supported.")
+        raise NotImplementedError(
+            f"Conversion type {conversion_type} is not supported."
+        )
 
     os.makedirs(output_dir, exist_ok=True)
     for filename in os.listdir(input_dir):
         if filename.endswith(src_ext):
             input_file = os.path.join(input_dir, filename)
-            output_file = os.path.join(output_dir, os.path.splitext(filename)[0] + dst_ext)
+            output_file = os.path.join(
+                output_dir, os.path.splitext(filename)[0] + dst_ext
+            )
             converter(input_file, output_file)
             print(f"Converted {input_file} to {output_file}")
     print("Conversion complete.")
