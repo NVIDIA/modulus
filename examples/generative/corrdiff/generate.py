@@ -186,7 +186,7 @@ def main(cfg: DictConfig) -> None:
 
     # load regression network, move to device, change precision
     if not diffusion_only:
-        logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
+        logger0.info(f'Loading regression network from "{reg_ckpt_filename}"...')
         net_reg = Module.from_checkpoint(reg_ckpt_filename)
         net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
