@@ -856,9 +856,9 @@ class _ConditionalPrecond(torch.nn.Module):
     def forward(
         self,
         x,
-        sigma,
-        class_labels=None,
         condition=None,
+        sigma=0.0,
+        class_labels=None,
         force_fp32=False,
         **model_kwargs,
     ):
