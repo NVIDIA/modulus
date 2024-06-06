@@ -62,7 +62,7 @@ checkpoint_dir: checkpoints
   # Where to save the checkpoints
 tick: 1
   # How often to print progress
-dump: 500
+dump: 250
   # How often to dump state
 seed: null  # TODO check
   # Random seed
