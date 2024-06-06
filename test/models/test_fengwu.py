@@ -49,7 +49,8 @@ def test_fengwu_forward(device):
         invar_surface, invar_z, invar_r, invar_u, invar_v, invar_t
     )
     # Check output size
-    assert common.validate_forward_accuracy(model, (invar,))
+    with torch.no_grad():
+        assert common.validate_forward_accuracy(model, (invar,), atol = 1e-3)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

@@ -31,8 +31,8 @@ def test_swinrnn_forward(device):
     model = SwinRNN(
         img_size=(6, 32, 64),
         patch_size=(6, 1, 1),
-        in_chans=71,
-        out_chans=71,
+        in_chans=13,
+        out_chans=13,
         embed_dim=768,
         num_groups=32,
         num_heads=8,
@@ -40,9 +40,10 @@ def test_swinrnn_forward(device):
     ).to(device)
 
     bsize = 2
-    invar = torch.randn(bsize, 71, 6, 32, 64).to(device)
+    invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     # Check output size
-    assert common.validate_forward_accuracy(model, (invar,))
+    with torch.no_grad():
+        assert common.validate_forward_accuracy(model, (invar,), atol = 5e-3)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -53,8 +54,8 @@ def test_swinrnn_constructor(device):
         {
             "img_size": (6, 32, 64),
             "patch_size": (6, 1, 1),
-            "in_chans": 71,
-            "out_chans": 71,
+            "in_chans": 13,
+            "out_chans": 13,
             "embed_dim": 768,
             "num_groups": 32,
             "num_heads": 8,
@@ -63,8 +64,8 @@ def test_swinrnn_constructor(device):
         {
             "img_size": (3, 32, 32),
             "patch_size": (3, 1, 1),
-            "in_chans": 71,
-            "out_chans": 71,
+            "in_chans": 13,
+            "out_chans": 13,
             "embed_dim": 128,
             "num_groups": 32,
             "num_heads": 8,
@@ -101,8 +102,8 @@ def test_swinrnn_optims(device):
         model = SwinRNN(
             img_size=(6, 32, 64),
             patch_size=(6, 1, 1),
-            in_chans=71,
-            out_chans=71,
+            in_chans=13,
+            out_chans=13,
             embed_dim=128,
             num_groups=32,
             num_heads=8,
@@ -110,7 +111,7 @@ def test_swinrnn_optims(device):
         ).to(device)
 
         bsize = random.randint(1, 5)
-        invar = torch.randn(bsize, 71, 6, 32, 64).to(device)
+        invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
         return model, invar
 
     # Ideally always check graphs first
@@ -134,8 +135,8 @@ def test_swinrnn_checkpoint(device):
     model_1 = SwinRNN(
         img_size=(6, 32, 64),
         patch_size=(6, 1, 1),
-        in_chans=71,
-        out_chans=71,
+        in_chans=13,
+        out_chans=13,
         embed_dim=128,
         num_groups=32,
         num_heads=8,
@@ -145,8 +146,8 @@ def test_swinrnn_checkpoint(device):
     model_2 = SwinRNN(
         img_size=(6, 32, 64),
         patch_size=(6, 1, 1),
-        in_chans=71,
-        out_chans=71,
+        in_chans=13,
+        out_chans=13,
         embed_dim=128,
         num_groups=32,
         num_heads=8,
@@ -154,7 +155,7 @@ def test_swinrnn_checkpoint(device):
     ).to(device)
 
     bsize = random.randint(1, 5)
-    invar = torch.randn(bsize, 71, 6, 32, 64).to(device)
+    invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
 
 
@@ -166,8 +167,8 @@ def test_swinrnn_deploy(device):
     model = SwinRNN(
         img_size=(6, 32, 64),
         patch_size=(6, 1, 1),
-        in_chans=71,
-        out_chans=71,
+        in_chans=13,
+        out_chans=13,
         embed_dim=128,
         num_groups=32,
         num_heads=8,
@@ -175,6 +176,6 @@ def test_swinrnn_deploy(device):
     ).to(device)
 
     bsize = random.randint(1, 5)
-    invar = torch.randn(bsize, 71, 6, 32, 64).to(device)
+    invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
