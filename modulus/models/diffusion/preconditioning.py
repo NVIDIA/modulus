@@ -965,6 +965,8 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
         # easier testing and modularity. Would be easier if modulus didn't rely
         # on object inheritance for saving/loading.
         Module.__init__(self, meta=EDMPrecondSRMetaData)
+        self.img_in_channels = img_in_channels
+        self.img_out_channels = img_out_channels
         model_class = getattr(network_module, model_type)
         model = model_class(
             img_resolution=img_resolution,
