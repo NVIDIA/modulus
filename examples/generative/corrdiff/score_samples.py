@@ -41,11 +41,10 @@ variables:
 
 """
 # %%
-import sys
-
 import dask.diagnostics
-
 import xarray as xr
+import os
+import argparse
 
 try:
     import xskillscore
@@ -75,10 +74,8 @@ def open_samples(f):
     return truth, pred, root
 
 
-if __name__ == "__main__":
-    path = sys.argv[1]
-
-    truth, pred, root = open_samples(path)
+def main(netcdf_file, output_dir):
+    truth, pred, root = open_samples(netcdf_file)
     pred = pred.chunk(time=1)
     truth = truth.chunk(time=1)
 
@@ -98,4 +95,14 @@ if __name__ == "__main__":
         metric=["rmse", "crps", "std_dev", "mae"]
     )
     with dask.diagnostics.ProgressBar():
-        metrics.to_netcdf(sys.argv[2], mode="w")
+        metrics.to_netcdf(os.path.join(output_dir, 'scores.nc'), mode="w")
+
+
+if __name__ == "__main__":
+    # Create the parser
+    parser = argparse.ArgumentParser()
+    # Add the positional arguments
+    parser.add_argument("--netcdf_file", help="Path to the NetCDF file")
+    parser.add_argument("--output_dir", help="Path to the output directory")
+    args = parser.parse_args()
+    main(args.netcdf_file, args.output_dir)
