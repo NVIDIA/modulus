@@ -89,20 +89,6 @@ def get_clim(output_channels, f):
     return colorlimits
 
 
-# Create the parser
-parser = argparse.ArgumentParser()
-
-# Add the positional arguments
-parser.add_argument("file", help="Path to the input file")
-parser.add_argument("output_dir", help="Path to the output directory")
-
-# Add the optional argument
-parser.add_argument("--sample", help="Sample to plot", default=0, type=int)
-
-# Parse the arguments
-args = parser.parse_args()
-
-
 def main(file, output_dir, sample):
     """Plot single sample"""
     os.makedirs(output_dir, exist_ok=True)
@@ -204,4 +190,13 @@ def main(file, output_dir, sample):
 
 
 if __name__ == "__main__":
-    main()
+    # Create the parser
+    parser = argparse.ArgumentParser()
+    # Add the positional arguments
+    parser.add_argument("--netcdf_file", help="Path to the NetCDF file")
+    parser.add_argument("--output_dir", help="Path to the output directory")
+    # Add the optional argument
+    parser.add_argument("--sample", help="Sample to plot", default=0, type=int)
+    # Parse the arguments
+    args = parser.parse_args()
+    main(args.netcdf_file, args.output_dir, args.sample)
