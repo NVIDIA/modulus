@@ -43,7 +43,7 @@ def test_swinrnn_forward(device):
     invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     # Check output size
     with torch.no_grad():
-        assert common.validate_forward_accuracy(model, (invar,), atol = 5e-3)
+        assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

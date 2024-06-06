@@ -44,7 +44,7 @@ def test_pangu_forward(device):
     invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
     # Check output size
     with torch.no_grad():
-        assert common.validate_forward_accuracy(model, (invar,), atol = 5e-3)
+        assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
