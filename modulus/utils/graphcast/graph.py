@@ -29,6 +29,7 @@ from .graph_utils import (
     get_face_centroids,
     latlon2xyz,
     max_edge_length,
+    xyz2latlon,
 )
 from .icosahedral_mesh import (
     faces_to_edges,
@@ -97,6 +98,7 @@ class Graph:
         )
         mesh_graph = add_edge_features(mesh_graph, mesh_pos)
         mesh_graph = add_node_features(mesh_graph, mesh_pos)
+        mesh_graph.ndata["lat_lon"] = xyz2latlon(mesh_pos)
         # ensure fields set to dtype to avoid later conversions
         mesh_graph.ndata["x"] = mesh_graph.ndata["x"].to(dtype=self.dtype)
         mesh_graph.edata["x"] = mesh_graph.edata["x"].to(dtype=self.dtype)
@@ -145,9 +147,13 @@ class Graph:
             self.multimesh_vertices,
             dtype=torch.float32,
         )
+        g2m_graph.srcdata["lat_lon"] = self.lat_lon_grid_flat
+        g2m_graph.dstdata["lat_lon"] = xyz2latlon(g2m_graph.dstdata["pos"])
+
         g2m_graph = add_edge_features(
             g2m_graph, (g2m_graph.srcdata["pos"], g2m_graph.dstdata["pos"])
         )
+
         # avoid potential conversions at later points
         g2m_graph.srcdata["pos"] = g2m_graph.srcdata["pos"].to(dtype=self.dtype)
         g2m_graph.dstdata["pos"] = g2m_graph.dstdata["pos"].to(dtype=self.dtype)
@@ -190,11 +196,16 @@ class Graph:
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
         )  # number of edges is 3,114,720, exactly matches with the paper
+
         m2g_graph.srcdata["pos"] = torch.tensor(
             self.multimesh_vertices,
             dtype=torch.float32,
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
+
+        m2g_graph.srcdata["lat_lon"] = xyz2latlon(m2g_graph.srcdata["pos"])
+        m2g_graph.dstdata["lat_lon"] = self.lat_lon_grid_flat
+
         m2g_graph = add_edge_features(
             m2g_graph, (m2g_graph.srcdata["pos"], m2g_graph.dstdata["pos"])
         )

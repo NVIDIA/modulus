@@ -50,6 +50,8 @@ num_channels_static: 5
 num_channels_val: 3
 num_val_steps: 8
 num_val_spy: 3  # SPY: Samples Per Year
+num_history: 1
+use_cos_zenith: True
 grad_clip_norm: 32.0
 jit: False
 amp: False
