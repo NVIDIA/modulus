@@ -215,7 +215,8 @@ def training_loop(
     # Resume training from previous snapshot.
     max_index = -1
     max_index_file = " "
-    for filename in os.listdir(run_dir):
+    chkpt_dir = os.join(run_dir, 'checkpoints')
+    for filename in os.listdir(chkpt_dir):
         if filename.startswith(f"training-state-{task}-") and filename.endswith(
             ".mdlus"
         ):
@@ -230,11 +231,11 @@ def training_loop(
                 continue
 
     try:
-        net.load(os.path.join(run_dir, max_index_file))
+        net.load(os.path.join(chkpt_dir, max_index_file))
         # load state directly to each gpu to reduce memory usage
         map_location = {"cuda:%d" % 0: "cuda:%d" % int(dist.local_rank)}
         optimizer_state_dict = torch.load(
-            os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
+            os.path.join(chkpt_dir, max_index_file_optimizer), map_location=map_location
         )
         optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
@@ -397,15 +398,15 @@ def training_loop(
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
-            net.save(os.path.join(run_dir, filename), verbose=True)
-            logger0.info(f"Saved model in the {run_dir} directory")
+            net.save(os.path.join(chkpt_dir, filename), verbose=True)
+            logger0.info(f"Saved model in the {chkpt_dir} directory")
 
             filename = f"optimizer-state-{task}-{cur_nimg//1000:06d}.pt"
             torch.save(
                 {"optimizer_state_dict": optimizer.state_dict()},
-                os.path.join(run_dir, filename),
+                os.path.join(chkpt_dir, filename),
             )
-            logger0.info(f"Saved optimizer state in the {run_dir} directory")
+            logger0.info(f"Saved optimizer state in the {chkpt_dir} directory")
 
         # Update logs.
         training_stats.default_collector.update()

@@ -13,20 +13,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+checkpoint: 025874
+
 hydra:
   job:
     chdir: True
     name: condiffusion_v2_stathi
   run:
-    dir: /lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/training_output/${hydra:job.name}/inference/s_max_${S_max}/
+    dir: /lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/training_output/${hydra:job.name}/inference/${checkpoint}_s_max_${S_max}/
 
 image_outdir: .
   # Where to save the output images
 
 ## Main options
-res_ckpt_filename: "/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/training_output/condiffusion_v2_stathi/training-state-diffusion-018189.mdlus" 
+res_ckpt_filename: /lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/training_output/condiffusion_v2_stathi/checkpoints/training-state-diffusion-${checkpoint}.mdlus 
   # Checkpoint filename for the generative model  
-reg_ckpt_filename: "/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/regression/training-state-regression-053327.mdlus"
+reg_ckpt_filename: /lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/corrdiff/regression/training-state-regression-053327.mdlus
   # Checkpoint filename for the mean predictor model
 seeds: "0-63"
   # Random seeds used for generation
@@ -117,7 +120,7 @@ S_churn: 0
   # Stochasticity strength
 S_min: 0
   # Stochasticity min noise level
-S_max: 800
+S_max: .inf
   # Stochasticity max noise level
 S_noise: 1
   # Stochasticity noise inflation
