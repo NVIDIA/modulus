@@ -145,26 +145,6 @@ def save_metrics_to_txt(netcdf_file, output_dir):
     df.to_excel(os.path.join(output_dir, 'metrics.xls'), float_format='%.3f')
 
 
-def save_metrics_to_txt2(netcdf_file, output_dir):
-    """Read and save metrics from a NetCDF file to a text file."""
-    ds = xr.open_dataset(netcdf_file)
-    
-    metrics = ds.coords['metric'].values
-    times = ds.coords['time'].values
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    with open(os.path.join(output_dir, 'metrics_2.txt'), 'w') as f:
-        for variable in ds.data_vars:
-            f.write(f"\nVariable: {variable}\n")
-            data = ds[variable]
-            for i, metric in enumerate(metrics):
-                f.write(f"Metric: {metric}\n")
-                metric_values = data[i, :].values
-                for value in metric_values:
-                    f.write(f"{value:.3f}\n")
-
-
 if __name__ == "__main__":
     # Create the parser
     parser = argparse.ArgumentParser()
@@ -176,4 +156,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     compute_and_save_metrics(args.netcdf_file, args.output_dir)
     save_metrics_to_txt(os.path.join(args.output_dir, 'scores.nc'), args.output_dir)
-    save_metrics_to_txt2(os.path.join(args.output_dir, 'scores.nc'), args.output_dir)
