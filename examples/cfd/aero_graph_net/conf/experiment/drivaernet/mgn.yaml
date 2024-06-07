@@ -19,6 +19,7 @@
 defaults:
   - /data@data.train: drivaernet
   - /data@data.val: drivaernet
+  - /data@data.test: drivaernet
   - /model: mgn
   - /loss@loss.graph: rrmseloss
   - /optimizer: adam
@@ -33,6 +34,10 @@ data:
     name: drivaernet_val
     split: val
     num_samples: 593
+  test:
+    name: drivaernet_test
+    split: test
+    num_samples: 595
 
 model:
   input_dim_nodes: 3

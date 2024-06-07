@@ -76,6 +76,7 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
         The features to normalize. Default includes 'p' and 'wallShearStress'.
     cache_dir: str, optional
         Path to the cache directory to store graphs in DGL format for fast loading.
+        Default is ./cache/.
     force_reload: bool, optional
         If True, forces a reload of the data, by default False.
     name: str, optional
@@ -232,6 +233,7 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
         graph.ndata["y"] = torch.cat([graph.ndata[k] for k in self.output_keys], dim=-1)
 
         return {
+            "name": gname,
             "graph": graph,
             "c_d": torch.tensor(coeffs["Average Cd"], dtype=torch.float32),
         }
@@ -286,7 +288,7 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
 
         def permute_mesh(p_vtk_path: Path, wss_vtk_path: Path) -> Tensor:
             # The issue with DrivAerNet dataset is pressure and WSS meshes
-            # are store in different files. Even though each file contain
+            # are stored in different files. Even though each file contains
             # the same mesh coordinates, the nodes are permuted (order does not match)
             # which makes it impossible to do simple point_data assignment.
             # This method permutes WSS mesh by using vtkProbeFilter.

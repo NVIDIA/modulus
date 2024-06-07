@@ -64,6 +64,14 @@ val:
     pin_memory: true
     drop_last: false
 
+test:
+  batch_size: 1
+  dataloader:
+    shuffle: false
+    num_workers: 1
+    pin_memory: true
+    drop_last: false
+
 compile:
   enabled: false
   args:

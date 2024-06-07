@@ -35,6 +35,7 @@ from modulus.distributed.manager import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 from loggers import CompositeLogger, ExperimentLogger, init_python_logging
+from utils import batch_as_dict
 
 
 logger = logging.getLogger("agnet")
@@ -173,7 +174,7 @@ class MGNTrainer:
     def validation(self, epoch: int):
         losses_agg = defaultdict(float)
         for batch in self.validation_dataloader:
-            batch = {k: v.to(self.dist.device) for k, v in batch_as_dict(batch).items()}
+            batch = batch_as_dict(batch, self.dist.device)
             graph = batch["graph"]
             pred = batch_as_dict(self.model(graph.ndata["x"], graph.edata["x"], graph))
             pred_g, gt_g = self.dataset.denormalize(
@@ -200,10 +201,6 @@ class MGNTrainer:
         logger.info(f"Validation loss: {', '.join(loss_str)}")
 
 
-def batch_as_dict(batch):
-    return batch if isinstance(batch, Mapping) else {"graph": batch}
-
-
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     # initialize distributed manager
@@ -228,7 +225,7 @@ def main(cfg: DictConfig) -> None:
     for epoch in range(trainer.epoch_init + 1, cfg.train.epochs + 1):
         losses_agg = defaultdict(float)
         for batch in trainer.dataloader:
-            batch = {k: v.to(dist.device) for k, v in batch_as_dict(batch).items()}
+            batch = batch_as_dict(batch, dist.device)
             losses = trainer.train(batch)
             for k, v in losses.items():
                 losses_agg[k] += v.detach().cpu().numpy()

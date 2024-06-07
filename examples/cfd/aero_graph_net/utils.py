@@ -14,7 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Mapping, Optional
+
 import torch
+
+from dgl import DGLGraph
 
 
 def compute_drag_coefficient(normals, area, coeff, p, s):
@@ -71,3 +75,20 @@ def relative_lp_error(pred, y, p=2):
         .numpy()
     )
     return error * 100
+
+
+def batch_as_dict(
+    batch, device: Optional[torch.device | str] = None
+) -> Mapping[str, Any]:
+    """Wraps provided batch in a dictionary, if needed.
+
+    If `device` is not None, moves all Tensor items to the device.
+    """
+
+    batch = batch if isinstance(batch, Mapping) else {"graph": batch}
+    if device is None:
+        return batch
+    return {
+        k: v.to(device) if isinstance(v, (torch.Tensor, DGLGraph)) else v
+        for k, v in batch.items()
+    }
