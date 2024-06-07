@@ -256,17 +256,17 @@ def modulus_fdm_swe_nonlin(h, u, v, pde_node, D=1, device=0):
     f_dhvv, _ = fourier_derivatives(hvv, [1.0, 1.0])
 
     u_x_x = f_ddu[:, 1 : nt - 1, :nx, :ny]
-    u_y_y = f_ddu[:, nt + 1: 2 * nt - 1, :nx, :ny]
+    u_y_y = f_ddu[:, nt + 1 : 2 * nt - 1, :nx, :ny]
     v_x_x = f_ddv[:, 1 : nt - 1, :nx, :ny]
-    v_y_y = f_ddv[:, nt + 1: 2 * nt - 1, :nx, :ny]
+    v_y_y = f_ddv[:, nt + 1 : 2 * nt - 1, :nx, :ny]
 
     hu_x = f_dhu[:, 1 : nt - 1, :nx, :ny]
-    hv_y = f_dhv[:, nt + 1: 2 * nt - 1, :nx, :ny]
+    hv_y = f_dhv[:, nt + 1 : 2 * nt - 1, :nx, :ny]
     hh_x = f_dhh[:, 1 : nt - 1, :nx, :ny]
-    hh_y = f_dhh[:, nt + 1: 2 * nt - 1, :nx, :ny]
+    hh_y = f_dhh[:, nt + 1 : 2 * nt - 1, :nx, :ny]
 
     huu_x = f_dhuu[:, 1 : nt - 1, :nx, :ny]
-    hvv_y = f_dhvv[:, nt + 1: 2 * nt - 1, :nx, :ny]
+    hvv_y = f_dhvv[:, nt + 1 : 2 * nt - 1, :nx, :ny]
     huv_x = f_dhuv[:, 1 : nt - 1, :nx, :ny]
     huv_y = f_dhuv[:, nt + 1 : 2 * nt - 1, :nx, :ny]
 
