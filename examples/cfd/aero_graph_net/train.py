@@ -44,13 +44,6 @@ logger = logging.getLogger("agnet")
 elogger: ExperimentLogger = None
 
 
-class RRMSELoss(torch.nn.Module):
-    """Relative RMSE loss."""
-
-    def forward(self, pred: Tensor, target: Tensor):
-        return (torch.norm(pred - target, p=2) / torch.norm(target, p=2)).mean()
-
-
 class MGNTrainer:
     def __init__(self, cfg: DictConfig):
         assert DistributedManager.is_initialized()

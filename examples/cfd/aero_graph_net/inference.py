@@ -33,7 +33,7 @@ from modulus.distributed.manager import DistributedManager
 from modulus.launch.utils import load_checkpoint
 
 from loggers import init_python_logging
-from utils import batch_as_dict, relative_lp_error
+from utils import batch_as_dict
 
 
 logger = logging.getLogger("agnet")
@@ -82,6 +82,7 @@ class EvalRollout:
 
     def __init__(self, cfg: DictConfig):
         self.output_dir = Path(to_absolute_path(cfg.output))
+        logger.info(f"Storing results in {self.output_dir}")
 
         # set device
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -99,8 +100,8 @@ class EvalRollout:
             **cfg.test.dataloader,
         )
 
-        logger.info("Creating the model...")
         # instantiate the model
+        logger.info("Creating the model...")
         self.model = instantiate(cfg.model).to(self.device)
 
         # enable train mode
@@ -112,6 +113,10 @@ class EvalRollout:
             models=self.model,
             device=self.device,
         )
+
+        # instantiate losses.
+        logger.info("Creating the losses...")
+        self.loss = instantiate(cfg.loss)
 
     @torch.no_grad()
     def predict(self, save_results=False):
@@ -148,8 +153,8 @@ class EvalRollout:
                 graph.ndata["wallShearStress_pred"] = pred[:, num_out_c - 3 :]
                 graph.ndata["wallShearStress"] = gt[:, num_out_c - 3 :]
 
-            error = relative_lp_error(pred, gt)
-            logger.info(f"Error (%): {error:.4f}")
+            error = self.loss.graph(pred, gt)
+            logger.info(f"Error (%): {error * 100:.4f}")
 
             if save_results:
                 # Convert DGL graph to PyVista graph and save it

@@ -15,6 +15,7 @@ the drag coefficient.
 4. [Training](#model-training)
     1. [Ahmed Body](#ahmed-body-training)
     2. [DrivAerNet](#drivaer-training)
+5. [Inference](#inference)
 
 ## Problem overview
 
@@ -186,11 +187,19 @@ python train.py +experiment=drivaernet/agn data.data_dir=/data/DrivAerNet/
 Once the model is trained, run
 
 ```bash
-python inference.py
+python inference.py +experiment=drivaernet/mgn \
+    data.data_dir=/data/DrivAerNet/ \
+    data.test.num_samples=2 \
+    resume_dir=./outputs/
 ```
 
-This will save the predictions for the test dataset in `.vtp` format in the `outputs`
-directory. Use Paraview to open and explore the results.
+Update experiment and data directory as needed. `resume_dir` directory should point
+to the output directory of the training which contains model checkpoints.
+This example will run inference for only 2 samples, this is just to demonstrate
+how various options can be set from the command line.
+
+The inference script will save the predictions for the test dataset in `.vtp` format
+in the output directory. Use ParaView or VTK.js to open and explore the results.
 
 ## References
 
