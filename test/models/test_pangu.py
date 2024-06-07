@@ -53,16 +53,16 @@ def test_pangu_constructor(device):
     # Define dictionary of constructor args
     arg_list = [
         {
-            "img_size": (128, 128),
+            "img_size": (32, 32),
             "patch_size": (2, 4, 4),
-            "embed_dim": 192,
+            "embed_dim": 96,
             "num_heads": (6, 12, 12, 6),
             "window_size": (2, 6, 12),
         },
         {
-            "img_size": (129, 130),
+            "img_size": (33, 34),
             "patch_size": (2, 4, 4),
-            "embed_dim": 192,
+            "embed_dim": 96,
             "num_heads": (6, 12, 12, 6),
             "window_size": (2, 6, 6),
         },
@@ -106,18 +106,18 @@ def test_pangu_optims(device):
     def setup_model():
         """Setups up fresh Pangu model and inputs for each optim test"""
         model = Pangu(
-            img_size=(128, 128),
+            img_size=(32, 32),
             patch_size=(2, 4, 4),
-            embed_dim=192,
+            embed_dim=96,
             num_heads=(6, 12, 12, 6),
             window_size=(2, 6, 12),
         ).to(device)
         model.eval()
 
         bsize = random.randint(1, 5)
-        invar_surface = torch.randn(bsize, 4, 128, 128).to(device)
-        invar_surface_mask = torch.randn(3, 128, 128).to(device)
-        invar_upper_air = torch.randn(bsize, 5, 13, 128, 128).to(device)
+        invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
+        invar_surface_mask = torch.randn(3, 32, 32).to(device)
+        invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
         invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
         return model, invar
 
@@ -141,17 +141,17 @@ def test_pangu_deploy(device):
     """Test Pangu deployment support"""
     # Construct Pangu model
     model = Pangu(
-        img_size=(128, 128),
+        img_size=(32, 32),
         patch_size=(2, 4, 4),
-        embed_dim=192,
+        embed_dim=96,
         num_heads=(6, 12, 12, 6),
         window_size=(2, 6, 12),
     ).to(device)
 
     bsize = random.randint(1, 5)
-    invar_surface = torch.randn(bsize, 4, 128, 128).to(device)
-    invar_surface_mask = torch.randn(3, 128, 128).to(device)
-    invar_upper_air = torch.randn(bsize, 5, 13, 128, 128).to(device)
+    invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
+    invar_surface_mask = torch.randn(3, 32, 32).to(device)
+    invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
     invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
