@@ -44,8 +44,20 @@ class ModulusUndefinedGroupError(Exception):
         super().__init__(message)
 
 
+class ModulusUninitializedDistributedManagerWarning(Warning):
+    """Warning to indicate usage of an uninitialized DistributedManager"""
+
+    def __init__(self):
+        message = "A DistributedManager object is being instantiated before "
+        "this singleton class has been initialized. Instantiating a manager before "
+        "initialization can lead to unexpected results where processes fail "
+        "to communicate. Initialize the distributed manager via "
+        "DistributedManager.initialize() before instantiating."
+        super().__init__(message)
+
+
 class DistributedManager(object):
-    """Distributed Manager for setting up distributed training enviroment.
+    """Distributed Manager for setting up distributed training environment.
 
     This is a singleton that creates a persistance class instance for storing parallel
     environment information through out the life time of the program. This should be
@@ -97,8 +109,15 @@ class DistributedManager(object):
             obj._group_ranks = {}
         if not hasattr(obj, "_group_names"):
             obj._group_names = {}
+        if not hasattr(obj, "_is_initialized"):
+            obj._is_initialized = False
 
         return obj
+
+    def __init__(self):
+        if not self._is_initialized:
+            raise ModulusUninitializedDistributedManagerWarning()
+        super().__init__()
 
     @property
     def rank(self):
@@ -211,7 +230,7 @@ class DistributedManager(object):
     @classmethod
     def is_initialized(cls) -> bool:
         """If manager singleton has been initialized"""
-        return len(cls._shared_state) > 0
+        return cls._shared_state.get("_is_initialized", False)
 
     @staticmethod
     def get_available_backend():
@@ -227,9 +246,15 @@ class DistributedManager(object):
         rank = int(os.environ.get("RANK"))
         world_size = int(os.environ.get("WORLD_SIZE"))
         if "LOCAL_RANK" in os.environ:
-            local_rank = int(os.environ.get("LOCAL_RANK"))
+            local_rank = os.environ.get("LOCAL_RANK")
+            if local_rank is not None:
+                local_rank = int(local_rank)
+            else:
+                local_rank = rank % torch.cuda.device_count()
+
         else:
             local_rank = rank % torch.cuda.device_count()
+
         # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
@@ -315,6 +340,11 @@ class DistributedManager(object):
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
                     DistributedManager.initialize_open_mpi(addr, port)
+                else:
+                    warn(
+                        "Could not initialize using ENV, SLURM or OPENMPI methods. Assuming this is a single process job"
+                    )
+                    DistributedManager._shared_state["_is_initialized"] = True
         elif initialization_method == "ENV":
             DistributedManager.initialize_env()
         elif initialization_method == "SLURM":
@@ -347,6 +377,7 @@ class DistributedManager(object):
         os.environ["MASTER_ADDR"] = addr
         os.environ["MASTER_PORT"] = str(port)
 
+        DistributedManager._shared_state["_is_initialized"] = True
         manager = DistributedManager()
 
         manager._distributed = torch.distributed.is_available()
@@ -359,23 +390,34 @@ class DistributedManager(object):
             else:
                 manager._local_rank = local_rank
 
-            # Setup distributed process group
-            dist.init_process_group(
-                backend, rank=manager.rank, world_size=manager.world_size
-            )
-
         manager._device = torch.device(
             f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
         )
-        # Needed for cuda graphs
+
+        if manager._distributed:
+            # Setup distributed process group
+            try:
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                    device_id=manager.device,
+                )
+            except TypeError:
+                # device_id only introduced in PyTorch 2.3
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                )
+
         if torch.cuda.is_available():
-            torch.cuda.set_device(manager.local_rank)
+            # Set device for this process and empty cache to optimize memory usage
+            torch.cuda.set_device(manager.device)
+            torch.cuda.device(manager.device)
+            torch.cuda.empty_cache()
 
         manager._initialization_method = method
-
-        # Set device for this process and empty cache to optimize memory usage
-        torch.cuda.device(manager.device)
-        torch.cuda.empty_cache()
 
     @staticmethod
     def create_process_subgroup(
@@ -561,12 +603,15 @@ class DistributedManager(object):
     def cleanup():
         """Clean up distributed group and singleton"""
         # Destroying group.WORLD is enough for all process groups to get destroyed
-        if DistributedManager().distributed:
+        if (
+            "_is_initialized" in DistributedManager._shared_state
+            and DistributedManager._shared_state["_is_initialized"]
+            and "_distributed" in DistributedManager._shared_state
+            and DistributedManager._shared_state["_distributed"]
+        ):
             if torch.cuda.is_available():
-                dist.barrier(
-                    device_ids=[DistributedManager().local_rank]
-                )  # just make sure that no process hangs
+                dist.barrier(device_ids=[DistributedManager().local_rank])
             else:
-                dist.barrier()  # just make sure that no process hangs
+                dist.barrier()
             dist.destroy_process_group()
         DistributedManager._shared_state = {}
