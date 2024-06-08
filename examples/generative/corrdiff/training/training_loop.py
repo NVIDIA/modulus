@@ -187,7 +187,7 @@ def training_loop(
         logger0.success("Loaded the pre-trained regression network")
     else:
         interface_kwargs = {}
-    loss_fn = construct_class_by_name(**loss_kwargs, **interface_kwargs)
+    loss_fn = construct_class_by_name(**loss_kwargs)
     optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer
