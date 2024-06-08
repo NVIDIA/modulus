@@ -215,7 +215,7 @@ def training_loop(
     # Resume training from previous snapshot.
     max_index = -1
     max_index_file = " "
-    chkpt_dir = os.join(run_dir, 'checkpoints')
+    chkpt_dir = os.path.join(run_dir, 'checkpoints')
     for filename in os.listdir(chkpt_dir):
         if filename.startswith(f"training-state-{task}-") and filename.endswith(
             ".mdlus"
