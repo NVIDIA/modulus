@@ -175,7 +175,22 @@ def training_loop(
             )
         net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
+
+        if loss_kwargs["class_name"] == "modulus.metrics.diffusion.ResLoss":
+            interface_kwargs = dict(
+                regression_net=net_reg,
+                img_shape_x=img_shape_x,
+                img_shape_y=img_shape_y,
+                patch_shape_x=patch_shape_x,
+                patch_shape_y=patch_shape_y,
+                patch_num=patch_num,
+                hr_mean_conditioning=hr_mean_conditioning,
+            )
+        else:
+            interface_kwargs = {}
         logger0.success("Loaded the pre-trained regression network")
+    else:
+        interface_kwargs = {}
     loss_fn = construct_class_by_name(**loss_kwargs)
     optimizer = construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
