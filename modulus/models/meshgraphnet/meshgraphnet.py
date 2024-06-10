@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from itertools import chain
 from typing import Callable, List, Tuple, Union
 
+import contextlib
+
 import modulus  # noqa: F401 for docs
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
 from modulus.models.gnn_layers.mesh_graph_mlp import MeshGraphMLP
@@ -38,6 +40,8 @@ from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+
+from modulus.models.meshgraphnet.selective_tensor_offloading import get_selective_offloading_checkpoint_modes
 
 
 @dataclass
@@ -138,6 +142,7 @@ class MeshGraphNet(Module):
         aggregation: str = "sum",
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
+        selective_offloading: bool = False,
         recompute_activation: bool = False,
     ):
         super().__init__(meta=MetaData())
@@ -184,6 +189,7 @@ class MeshGraphNet(Module):
             activation_fn=activation_fn,
             do_concat_trick=do_concat_trick,
             num_processor_checkpoint_segments=num_processor_checkpoint_segments,
+            selective_offloading=selective_offloading,
         )
 
     def forward(
@@ -192,6 +198,7 @@ class MeshGraphNet(Module):
         edge_features: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
+        #with torch.autograd.graph.save_on_cpu():
         edge_features = self.edge_encoder(edge_features)
         node_features = self.node_encoder(node_features)
         x = self.processor(node_features, edge_features, graph)
@@ -214,10 +221,13 @@ class MeshGraphNetProcessor(nn.Module):
         activation_fn: nn.Module = nn.ReLU(),
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
+        selective_offloading: bool = False,
     ):
         super().__init__()
         self.processor_size = processor_size
         self.num_processor_checkpoint_segments = num_processor_checkpoint_segments
+        self.checkpoint_context_fn = get_selective_offloading_checkpoint_modes if selective_offloading else self.noop_context_fn
+
 
         edge_block_invars = (
             input_dim_node,
@@ -283,6 +293,9 @@ class MeshGraphNetProcessor(nn.Module):
             self.checkpoint_fn = set_checkpoint_fn(False)
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
+    def noop_context_fn(self):
+        return contextlib.nullcontext(), contextlib.nullcontext()
+
     def run_function(
         self, segment_start: int, segment_end: int
     ) -> Callable[
@@ -333,6 +346,7 @@ class MeshGraphNetProcessor(nn.Module):
                 graph,
                 use_reentrant=False,
                 preserve_rng_state=False,
+                context_fn = self.checkpoint_context_fn
             )
 
         return node_features

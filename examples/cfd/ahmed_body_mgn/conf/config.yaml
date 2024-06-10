@@ -20,22 +20,22 @@ hydra:
   run:
     dir: ./outputs/
 
-data_dir: ./dataset
+data_dir: ./ahmed_body_test_dataset
 ckpt_path: ./checkpoints
 
 input_dim_nodes: 11
 input_dim_edges: 4
 output_dim: 4
 aggregation: sum
-hidden_dim_node_encoder: 256
-hidden_dim_edge_encoder: 256
-hidden_dim_node_decoder: 256
+hidden_dim_node_encoder: 512
+hidden_dim_edge_encoder: 512
+hidden_dim_node_decoder: 512
 
 batch_size: 1
 epochs: 500
-num_training_samples: 683
-num_validation_samples: 100
-num_test_samples: 100
+num_training_samples: 1
+num_validation_samples: 1
+num_test_samples: 1
 
 lr: 0.0001
 lr_decay_rate: 0.99985
@@ -51,7 +51,7 @@ num_dataloader_workers: 4
 num_dataset_workers: null
 
 do_concat_trick: False
-num_processor_checkpoint_segments: 0
+num_processor_checkpoint_segments: 5
 recompute_activation: False
 
 wandb_mode: disabled
