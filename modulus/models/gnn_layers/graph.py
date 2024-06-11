@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import dgl
 import torch
@@ -27,7 +27,12 @@ except ImportError:
     # for Python versions < 3.11
     from typing_extensions import Self
 
-from modulus.models.gnn_layers import DistributedGraph, GraphPartition
+from modulus.distributed import DistributedManager
+from modulus.models.gnn_layers import (
+    DistributedGraph,
+    GraphPartition,
+    partition_graph_by_coordinate_bbox,
+)
 
 try:
     from pylibcugraphops.pytorch import BipartiteCSC, StaticCSC
@@ -119,6 +124,7 @@ class CuGraphCSC:
             raise AssertionError(
                 "DistributedGraph does not support mapping CSC-indices to COO-indices."
             )
+
         self.dist_graph = DistributedGraph(
             self.offsets,
             self.indices,
@@ -126,6 +132,7 @@ class CuGraphCSC:
             partition_group_name,
             graph_partition=graph_partition,
         )
+
         # overwrite graph information with local graph after distribution
         self.offsets = self.dist_graph.graph_partition.local_offsets
         self.indices = self.dist_graph.graph_partition.local_indices
@@ -138,6 +145,11 @@ class CuGraphCSC:
         graph: DGLGraph,
         partition_size: int = 1,
         partition_group_name: Optional[str] = None,
+        partition_by_bbox: bool = False,
+        src_coordinates: Optional[torch.Tensor] = None,
+        dst_coordinates: Optional[torch.Tensor] = None,
+        coordinate_separators_min: Optional[List[List[Optional[float]]]] = None,
+        coordinate_separators_max: Optional[List[List[Optional[float]]]] = None,
     ):  # pragma: no cover
         # DGL changed their APIs w.r.t. how sparse formats can be accessed
         # this here is done to support both versions
@@ -150,13 +162,32 @@ class CuGraphCSC:
 
         n_src_nodes, n_dst_nodes = (graph.num_src_nodes(), graph.num_dst_nodes())
 
+        graph_partition = None
+
+        if partition_by_bbox and partition_size > 1:
+            dist_manager = DistributedManager()
+            partition_rank = dist_manager.group_rank(name=partition_group_name)
+
+            graph_partition = partition_graph_by_coordinate_bbox(
+                offsets.to(dtype=torch.int64),
+                indices.to(dtype=torch.int64),
+                src_coordinates=src_coordinates,
+                dst_coordinates=dst_coordinates,
+                coordinate_separators_min=coordinate_separators_min,
+                coordinate_separators_max=coordinate_separators_max,
+                partition_size=partition_size,
+                partition_rank=partition_rank,
+                device=dist_manager.device,
+            )
+
         graph_csc = CuGraphCSC(
-            offsets,
-            indices,
+            offsets.to(dtype=torch.int64),
+            indices.to(dtype=torch.int64),
             n_src_nodes,
             n_dst_nodes,
             partition_size=partition_size,
             partition_group_name=partition_group_name,
+            graph_partition=graph_partition,
         )
 
         return graph_csc, edge_perm
