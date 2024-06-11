@@ -25,7 +25,7 @@ from . import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_afno_forward(device):
+def test_modafno_forward(device):
     """Test AFNO forward pass"""
     torch.manual_seed(0)
     model = ModAFNO(
@@ -46,7 +46,7 @@ def test_afno_forward(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_afno_constructor(device):
+def test_modafno_constructor(device):
     """Test AFNO constructor options"""
     # Define dictionary of constructor args
     arg_list = [
@@ -110,7 +110,7 @@ def test_afno_constructor(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_afno_optims(device):
+def test_modafno_optims(device):
     """Test AFNO optimizations"""
 
     def setup_model():
@@ -145,7 +145,7 @@ def test_afno_optims(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_afno_checkpoint(device):
+def test_modafno_checkpoint(device):
     """Test AFNO checkpoint save/load"""
     # Construct AFNO models
     model_1 = ModAFNO(
@@ -176,7 +176,7 @@ def test_afno_checkpoint(device):
 
 @common.check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_afno_deploy(device):
+def test_modafno_deploy(device):
     """Test AFNO deployment support"""
     # Construct AFNO model
     model = ModAFNO(
