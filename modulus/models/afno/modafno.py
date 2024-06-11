@@ -22,9 +22,8 @@ import torch.nn.functional as F
 
 import modulus  # noqa: F401 for docs
 import modulus.models.layers.fft as fft
-
+from modulus.models.afno.afno import AFNO2DLayer, AFNOMlp, PatchEmbed
 from modulus.models.meta import ModelMetaData
-from modulus.models.afno.afno import AFNOMlp, AFNO2DLayer, PatchEmbed
 from modulus.models.module import Module
 
 from .modembed import ModEmbedNet

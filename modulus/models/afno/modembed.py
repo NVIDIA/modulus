@@ -15,7 +15,7 @@
 from typing import Type
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 
 class PositionalEmbedding(nn.Module):
