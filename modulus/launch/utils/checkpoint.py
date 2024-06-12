@@ -74,6 +74,7 @@ def _get_checkpoint_filename(
     # can save their checkpoint. In the case without model parallelism,
     # model_parallel_rank should be the same as the process rank itself and
     # only rank 0 saves
+    DistributedManager.initialize()
     manager = DistributedManager()
     model_parallel_rank = (
         manager.group_rank("model_parallel")
