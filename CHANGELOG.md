@@ -20,11 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Virtual Foundry GraphNet.
 - A synthetic dataloader for global weather prediction models, demonstrated on GraphCast.
 - Sorted Empirical CDF CRPS algorithm
-- Support for history, cos zenith, and downscaling/upscaling in the ERA5 HDF5 dataloader
+- Support for history, cos zenith, and downscaling/upscaling in the ERA5 HDF5 dataloader.
+- An example showing how to train a "tensor-parallel" version of GraphCast on a
+Shallow-Water-Equation example.
 
 ### Changed
 
 - Raise `ModulusUndefinedGroupError` when querying undefined process groups
+- Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `modulus` loss function
 - Safeguarding against uninitialized usage of `DistributedManager`
 
 ### Deprecated
@@ -32,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+
+- Fixed bug in the partitioning logic for distributing graph structures
+intended for distributed message-passing.
 
 ### Security
 
@@ -53,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
 - Physics-Informed Magnetohydrodynamics example.
+- Pangu Weather model
+- Fengwu model
+- SwinRNN model
 
 ### Changed
 
