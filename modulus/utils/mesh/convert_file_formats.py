@@ -45,6 +45,7 @@ def convert_obj_to_vtp(input_file: str, output_file: str) -> None:
 def convert_vtp_to_stl(input_file: str, output_file: str) -> None:
     """
     Convert a VTP file to an STL file.
+    Scope is limited to 2D manifolds. Volumetric data is not supported.
 
     Args:
     - input_file (str): Path to the input VTP file.
@@ -66,6 +67,7 @@ def convert_tesselated_files_in_directory(conversion_type, input_dir, output_dir
     """
     Convert all files in a directory to a desired tesselated file format.
     Supported conversions are OBJ to VTP and VTP to STL.
+    Scope is limited to 2D manifolds. Volumetric data is not supported.
 
     Args:
     - conversion_type (str): Type of conversion to perform. Supported values are 'obj2vtp' and 'vtp2stl'.

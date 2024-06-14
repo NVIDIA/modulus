@@ -43,7 +43,7 @@ Tensor = torch.Tensor
 
 @dataclass
 class MetaData(DatapipeMetaData):
-    name: str = "VTK"
+    name: str = "MeshDatapipe"
     # Optimization
     auto_device: bool = True
     cuda_graphs: bool = True
@@ -51,8 +51,8 @@ class MetaData(DatapipeMetaData):
     ddp_sharding: bool = True
 
 
-class VTKDatapipe(Datapipe):
-    """DALI data pipeline for VTK files
+class MeshDatapipe(Datapipe):
+    """DALI data pipeline for mesh data
 
     Parameters
     ----------
@@ -133,7 +133,7 @@ class VTKDatapipe(Datapipe):
         self.pipe = self._create_pipeline()
 
     def parse_dataset_files(self) -> None:
-        """Parses the data directory for valid VTK files and determines training samples
+        """Parses the data directory for valid files and determines training samples
 
         Raises
         ------
@@ -176,7 +176,7 @@ class VTKDatapipe(Datapipe):
         """Loads statistics from pre-computed numpy files
 
         The statistic files should be of name global_means.npy and global_std.npy with
-        a shape of [1, C, 1, 1] located in the stat_dir.
+        a shape of [1, C] located in the stat_dir.
 
         Raises
         ------
@@ -213,7 +213,7 @@ class VTKDatapipe(Datapipe):
         Returns
         -------
         dali.Pipeline
-            VTK DALI pipeline
+            Mesh DALI pipeline
         """
         pipe = dali.Pipeline(
             batch_size=self.batch_size,
@@ -225,7 +225,7 @@ class VTKDatapipe(Datapipe):
         )
 
         with pipe:
-            source = VTKDaliExternalSource(
+            source = MeshDaliExternalSource(
                 data_paths=self.data_paths,
                 file_format=self.file_format,
                 vars=self.vars,
@@ -270,8 +270,8 @@ class VTKDatapipe(Datapipe):
         return self.length
 
 
-class VTKDaliExternalSource:
-    """DALI Source for lazy-loading the VTK files
+class MeshDaliExternalSource:
+    """DALI Source for lazy-loading with caching of mesh data
 
     Parameters
     ----------
@@ -324,8 +324,13 @@ class VTKDaliExternalSource:
         # Also, DALI external source does not support incomplete batches in parallel mode.
         self.num_batches = len(self.indices) // self.batch_size
 
-        self.vtk_reader_fn = self.vtk_reader()
+        self.mesh_reader_fn = self.mesh_reader()
         self.parse_vtk_data_fn = self.parse_vtk_data()
+
+        # Make cache for the data
+        self.data_cache = {}
+        for data_path in self.data_paths:
+            self.data_cache[data_path] = None
 
     def __call__(self, sample_info: dali.types.SampleInfo) -> Tuple[Tensor, Tensor]:
         if sample_info.iteration >= self.num_batches:
@@ -346,15 +351,19 @@ class VTKDaliExternalSource:
         # This will be called once per worker. Workers are persistent,
         # so there is no need to explicitly close the files - this will be done
         # when corresponding pipeline/dataset is destroyed.
-        data = self.vtk_reader_fn(self.data_paths[idx])
-        # vertices, pressure, wss = self.parse_vtkpolydata(polydata)
+        if self.data_cache[self.data_paths[idx]] is None:
+            data = self.vtk_reader_fn(self.data_paths[idx])
+            processed_data = self.parse_vtk_data_fn(data, self.vars)
+            self.data_cache[self.data_paths[idx]] = processed_data
+        else:
+            processed_data = self.data_cache[self.data_paths[idx]]
 
         return self.parse_vtk_data_fn(data, self.vars)
 
     def __len__(self):
         return len(self.indices)
 
-    def vtk_reader(self):
+    def mesh_reader(self):
         if self.file_format == "vtp":
             return read_vtp
         elif self.file_format == "vtu":
@@ -453,8 +462,6 @@ def _parse_vtk_unstructuredgrid(grid, vars):
         for j in range(points.GetNumberOfPoints()):
             array.GetTuple(j, array_data[j])
         attributes.append(torch.tensor(array_data, dtype=torch.float32))
-        print(array_data[1002, :])
-        print(array_name)
     attributes = torch.cat(attributes, dim=-1)
 
     # Return a dummy tensor of zeros for edges since they are not directly computable
