@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from typing import List
 
 import numpy as np
@@ -35,13 +34,6 @@ def fix_random_seeds(seed=0):
 def create_random_input(input_res, dim):
     """Create random input for testing"""
     return torch.randn(1, dim, *input_res)
-
-
-def get_icosphere_path():
-    """Get path to icosphere mesh"""
-    script_path = os.path.abspath(__file__)
-    icosphere_path = os.path.join(os.path.dirname(script_path), "icospheres.json")
-    return icosphere_path
 
 
 def compare_quantiles(

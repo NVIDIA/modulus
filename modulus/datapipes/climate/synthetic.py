@@ -109,26 +109,54 @@ class SyntheticWeatherDataset(Dataset):
         Returns:
             numpy.ndarray: A 4D array of temperature values across days, channels, latitudes, and longitudes.
         """
-        days: np.ndarray = np.arange(num_days)
+        days = np.arange(num_days)
         latitudes, longitudes = grid_size
-        daily_temps: np.ndarray = np.zeros(
-            (num_days, num_channels, latitudes, longitudes)
+
+        # Create altitude effect and reshape
+        altitude_effect = np.arange(num_channels) * -0.5
+        altitude_effect = altitude_effect[
+            :, np.newaxis, np.newaxis
+        ]  # Shape: (num_channels, 1, 1)
+        altitude_effect = np.tile(
+            altitude_effect, (1, latitudes, longitudes)
+        )  # Shape: (num_channels, latitudes, longitudes)
+        altitude_effect = altitude_effect[
+            np.newaxis, :, :, :
+        ]  # Shape: (1, num_channels, latitudes, longitudes)
+        altitude_effect = np.tile(
+            altitude_effect, (num_days, 1, 1, 1)
+        )  # Shape: (num_days, num_channels, latitudes, longitudes)
+
+        # Create latitude variation and reshape
+        lat_variation = np.linspace(-amplitude, amplitude, latitudes)
+        lat_variation = lat_variation[:, np.newaxis]  # Shape: (latitudes, 1)
+        lat_variation = np.tile(
+            lat_variation, (1, longitudes)
+        )  # Shape: (latitudes, longitudes)
+        lat_variation = lat_variation[
+            np.newaxis, np.newaxis, :, :
+        ]  # Shape: (1, 1, latitudes, longitudes)
+        lat_variation = np.tile(
+            lat_variation, (num_days, num_channels, 1, 1)
+        )  # Shape: (num_days, num_channels, latitudes, longitudes)
+
+        # Create time effect and reshape
+        time_effect = np.sin(2 * np.pi * days / 365)
+        time_effect = time_effect[
+            :, np.newaxis, np.newaxis, np.newaxis
+        ]  # Shape: (num_days, 1, 1, 1)
+        time_effect = np.tile(
+            time_effect, (1, num_channels, latitudes, longitudes)
+        )  # Shape: (num_days, num_channels, latitudes, longitudes)
+
+        # Generate noise
+        noise = np.random.normal(
+            scale=noise_level, size=(num_days, num_channels, latitudes, longitudes)
         )
 
-        for day in days:
-            for channel in range(num_channels):
-                altitude_effect: float = (
-                    channel * -0.5
-                )  # Temperature decreases with altitude
-                lat_variation: np.ndarray = np.linspace(
-                    -amplitude, amplitude, latitudes
-                )
-                daily_temps[day, channel] = (
-                    base_temp
-                    + altitude_effect
-                    + np.outer(lat_variation, np.sin(2 * np.pi * day / 365))
-                    + np.random.normal(scale=noise_level, size=(latitudes, longitudes))
-                )
+        # Calculate daily temperatures
+        daily_temps = base_temp + altitude_effect + lat_variation + time_effect + noise
+
         return daily_temps
 
     def __len__(self) -> int:

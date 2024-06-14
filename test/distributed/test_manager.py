@@ -22,6 +22,7 @@ import torch
 from modulus.distributed import (
     DistributedManager,
     ModulusUndefinedGroupError,
+    ModulusUninitializedDistributedManagerWarning,
     ProcessGroupConfig,
     ProcessGroupNode,
 )
@@ -147,6 +148,7 @@ def test_manager_specified_initialization():
 
     del os.environ["RANK"]
     del os.environ["WORLD_SIZE"]
+    del os.environ["LOCAL_RANK"]
 
 
 def test_manager_singleton():
@@ -181,13 +183,28 @@ def test_manager_singleton():
     del os.environ["WORLD_SIZE"]
 
 
+def test_manager_uninitialized_instantiation():
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+
+    assert not DistributedManager.is_initialized()
+
+    with pytest.raises(ModulusUninitializedDistributedManagerWarning):
+        DistributedManager()
+
+    DistributedManager._shared_state = {}
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
+
+
 def test_manager_undefined_group_query():
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
     DistributedManager.initialize()
-    print(DistributedManager())
 
     manager = DistributedManager()
 
@@ -268,11 +285,14 @@ def test_process_groups():
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_process_groups,
         args=(model_parallel_size, verbose),
         nprocs=model_parallel_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )
 
 
@@ -337,11 +357,14 @@ def test_process_groups_from_config():
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_process_groups_from_config,
         args=(model_parallel_size, verbose),
         nprocs=model_parallel_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )
 
 
