@@ -53,6 +53,7 @@ class Validation:
             num_steps=cfg.num_val_steps,
             num_history=cfg.num_history,
             use_cos_zenith=cfg.use_cos_zenith,
+            use_time_of_year_index=cfg.use_time_of_year_index,
             cos_zenith_args=self.cos_zenith_args,
             batch_size=1,
             num_samples_per_year=cfg.num_val_spy,
@@ -74,11 +75,8 @@ class Validation:
         os.makedirs(self.val_dir, exist_ok=True)
         loss_epoch = 0
         prepare_input_vars = {
-            "invar": invar.to(self.dist.device),
-            "cos_zenith": cos_zenith,
             "num_history": self.num_history,
             "static_data": self.static_data,
-            "time_idx": time_idx,
             "stride": self.stride,
             "dt": self.dt,
             "num_samples_per_year": self.num_samples_per_year_train,
@@ -96,6 +94,9 @@ class Validation:
             except KeyError:
                 time_idx = None
             invar_cat = prepare_input(
+                invar=invar,
+                cos_zenith=cos_zenith,
+                time_idx=time_idx,
                 **prepare_input_vars,
                 step=1,
             )
@@ -115,6 +116,9 @@ class Validation:
                 else:
                     invar = outpred
                 invar_cat = prepare_input(
+                    invar=invar,
+                    cos_zenith=cos_zenith,
+                    time_idx=time_idx,
                     **prepare_input_vars,
                     step=t + 2,
                 )
