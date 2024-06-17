@@ -38,7 +38,7 @@ from modulus.launch.logging import (
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 from train_utils import count_trainable_params, prepare_input
-from loss.utils import grid_cell_area
+from loss.utils import normalized_grid_cell_area
 from train_base import BaseTrainer
 from validation_base import Validation
 from modulus.datapipes.climate import ERA5HDF5Datapipe, SyntheticWeatherDataLoader
@@ -203,8 +203,8 @@ class GraphCastTrainer(BaseTrainer):
         # enable train mode
         self.model.train()
 
-        # get area
-        self.area = grid_cell_area(self.lat_lon_grid[:, :, 0], unit="deg")
+        # get normalized area
+        self.area = normalized_grid_cell_area(self.lat_lon_grid[:, :, 0], unit="deg")
         self.area = self.area.to(dtype=self.dtype).to(device=dist.device)
 
         # instantiate loss, optimizer, and scheduler

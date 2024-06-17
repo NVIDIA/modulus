@@ -44,7 +44,7 @@ This GNN-based approach deviates from conventional grid-structured models, offer
 flexible framework for modeling intricate
 interactions between geographically separated atmospheric variables.
 
-![GraphCast model schematic. Image is taken from the GraphCast paper.](../../../docs/img/bloodflow_1d_mgn_geometries.png)
+![GraphCast model schematic. Image is taken from the GraphCast paper.](../../../docs/img/graphcast_architecture.png)
 
 Please refer to the [reference paper](https://arxiv.org/abs/2212.12794) to learn about
 the model architecture. The above image is taken from the reference paper.

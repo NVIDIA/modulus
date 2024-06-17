@@ -24,7 +24,7 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 import numpy as np
 
-from loss.utils import grid_cell_area
+from loss.utils import normalized_grid_cell_area
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -53,7 +53,9 @@ def main(cfg: DictConfig) -> None:
     print(f"Loaded training datapipe of length {len(datapipe)}")
 
     area = (
-        grid_cell_area(torch.linspace(-90, 90, steps=cfg.latlon_res[0]), unit="deg")
+        normalized_grid_cell_area(
+            torch.linspace(-90, 90, steps=cfg.latlon_res[0]), unit="deg"
+        )
         .unsqueeze(1)
         .to(dist.device)
     )
