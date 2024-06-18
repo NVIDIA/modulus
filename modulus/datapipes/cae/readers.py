@@ -121,11 +121,35 @@ def read_cgns(file_path: str) -> Any:
     reader.SetFileName(file_path)
     reader.Update()
 
-    # Get the unstructured grid data
-    grid = reader.GetOutput()
+    # Get the multi-block dataset
+    multi_block = reader.GetOutput()
 
-    # Check if grid is valid
-    if grid is None:
-        raise ValueError(f"Failed to read unstructured grid data from {file_path}")
+    # Check if the multi-block dataset is valid
+    if multi_block is None:
+        raise ValueError(f"Failed to read multi-block data from {file_path}")
 
-    return grid
+    # Extract and return the vtkUnstructuredGrid from the multi-block dataset
+    return _extract_unstructured_grid(multi_block)
+
+
+def _extract_unstructured_grid(
+    multi_block: vtk.vtkMultiBlockDataSet,
+) -> vtk.vtkUnstructuredGrid:
+    """
+    Extracts a vtkUnstructuredGrid from a vtkMultiBlockDataSet.
+
+    Parameters
+    ----------
+    multi_block : vtk.vtkMultiBlockDataSet
+        The multi-block dataset containing various data blocks.
+
+    Returns
+    -------
+    vtk.vtkUnstructuredGrid
+        The unstructured grid extracted from the multi-block dataset.
+    """
+    block = multi_block.GetBlock(0).GetBlock(0)
+    if isinstance(block, vtk.vtkUnstructuredGrid):
+        print(block)
+        return block
+    raise ValueError("No vtkUnstructuredGrid found in the vtkMultiBlockDataSet.")

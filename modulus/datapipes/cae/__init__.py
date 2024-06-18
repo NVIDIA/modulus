@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .vtk_datapipe import VTKDatapipe
+from .mesh_datapipe import MeshDatapipe

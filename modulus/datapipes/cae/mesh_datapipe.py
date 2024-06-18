@@ -352,7 +352,7 @@ class MeshDaliExternalSource:
         # so there is no need to explicitly close the files - this will be done
         # when corresponding pipeline/dataset is destroyed.
         if self.data_cache[self.data_paths[idx]] is None:
-            data = self.vtk_reader_fn(self.data_paths[idx])
+            data = self.mesh_reader_fn(self.data_paths[idx])
             processed_data = self.parse_vtk_data_fn(data, self.vars)
             self.data_cache[self.data_paths[idx]] = processed_data
         else:
@@ -378,7 +378,7 @@ class MeshDaliExternalSource:
     def parse_vtk_data(self):
         if self.file_format == "vtp":
             return _parse_vtk_polydata
-        elif self.file_format == "vtu":
+        elif self.file_format in ["vtu", "cgns"]:
             return _parse_vtk_unstructuredgrid
         else:
             raise NotImplementedError(
