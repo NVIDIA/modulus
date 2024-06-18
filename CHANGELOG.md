@@ -59,6 +59,9 @@ intended for distributed message-passing.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
 - Physics-Informed Magnetohydrodynamics example.
+- Pangu Weather model
+- Fengwu model
+- SwinRNN model
 
 ### Changed
 
