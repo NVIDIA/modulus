@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass
 from functools import partial
-from typing import List, Type, Union
+from typing import List, Literal, Type, Union
 
 import torch
 import torch.nn as nn
@@ -150,7 +150,7 @@ class ModAFNO2DLayer(AFNO2DLayer):
         Factor to increase spectral features by after weight multiplication, by default 1
     scale_shift_kwargs : dict, optional
         Options to the MLP that computes the scale-shift parameters
-    scale_shift_mode: str
+    scale_shift_mode: ["complex", "real"]
         If 'complex' (default), compute the scale-shift operation using complex
         operations. If 'real', use real operations.
     """
@@ -164,7 +164,7 @@ class ModAFNO2DLayer(AFNO2DLayer):
         hard_thresholding_fraction: float = 1,
         hidden_size_factor: int = 1,
         scale_shift_kwargs: Union[dict, None] = None,
-        scale_shift_mode: str = "complex",
+        scale_shift_mode: Literal["complex", "real"] = "complex",
     ):
         super().__init__(
             hidden_size=hidden_size,
@@ -358,7 +358,7 @@ class Block(nn.Module):
         Whether to compute the modulation for the FFT filter
     modulate_mlp: bool, optional
         Whether to compute the modulation for the MLP
-    scale_shift_mode: str
+    scale_shift_mode: ["complex", "real"]
         If 'complex' (default), compute the scale-shift operation using complex
         operations. If 'real', use real operations.
     """
@@ -377,7 +377,7 @@ class Block(nn.Module):
         hard_thresholding_fraction: float = 1.0,
         modulate_filter: bool = True,
         modulate_mlp: bool = True,
-        scale_shift_mode: str = "real",
+        scale_shift_mode: Literal["complex", "real"] = "real",
     ):
         super().__init__()
         self.norm1 = norm_layer(embed_dim)
@@ -473,7 +473,7 @@ class ModAFNO(Module):
         Whether to compute the modulation for the FFT filter, by default True
     modulate_mlp: bool, optional
         Whether to compute the modulation for the MLP, by default True
-    scale_shift_mode: str
+    scale_shift_mode: ["complex", "real"]
         If 'complex' (default), compute the scale-shift operation using complex
         operations. If 'real', use real operations.
     depth : int, optional
@@ -527,7 +527,7 @@ class ModAFNO(Module):
         mod_dim: int = 64,
         modulate_filter: bool = True,
         modulate_mlp: bool = True,
-        scale_shift_mode: str = "complex",
+        scale_shift_mode: Literal["complex", "real"] = "complex",
         depth: int = 12,
         mlp_ratio: float = 2.0,
         drop_rate: float = 0.0,
