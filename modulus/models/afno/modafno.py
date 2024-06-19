@@ -174,6 +174,8 @@ class ModAFNO2DLayer(AFNO2DLayer):
             hidden_size_factor=hidden_size_factor,
         )
 
+        if scale_shift_mode not in ("complex", "real"):
+            raise ValueError("scale_shift_mode must be 'real' or 'complex'")
         self.scale_shift_mode = scale_shift_mode
         self.channel_mul = 1 if scale_shift_mode == "real" else 2
         if scale_shift_kwargs is None:
