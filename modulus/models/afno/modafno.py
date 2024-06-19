@@ -390,10 +390,12 @@ class Block(nn.Module):
                 hard_thresholding_fraction,
                 scale_shift_mode=scale_shift_mode,
             )
+            self.apply_filter = lambda x, mod_embed: self.filter(x, mod_embed)
         else:
             self.filter = AFNO2DLayer(
                 embed_dim, num_blocks, sparsity_threshold, hard_thresholding_fraction
             )
+            self.apply_filter = lambda x, mod_embed: self.filter(x)
 
         self.norm2 = norm_layer(embed_dim)
         mlp_latent_dim = int(embed_dim * mlp_ratio)
@@ -406,6 +408,7 @@ class Block(nn.Module):
                 activation_fn=activation_fn,
                 drop=drop,
             )
+            self.apply_mlp = lambda x, mod_embed: self.filter(x, mod_embed)
         else:
             self.mlp = AFNOMlp(
                 in_features=embed_dim,
@@ -414,6 +417,7 @@ class Block(nn.Module):
                 activation_fn=activation_fn,
                 drop=drop,
             )
+            self.apply_mlp = lambda x, mod_embed: self.filter(x)
         self.double_skip = double_skip
         self.modulate_filter = modulate_filter
         self.modulate_mlp = modulate_mlp
@@ -421,14 +425,14 @@ class Block(nn.Module):
     def forward(self, x: Tensor, mod_embed: Tensor) -> Tensor:
         residual = x
         x = self.norm1(x)
-        x = self.filter(x, mod_embed) if self.modulate_filter else self.filter(x)
+        x = self.apply_filter(x, mod_embed)
 
         if self.double_skip:
             x = x + residual
             residual = x
 
         x = self.norm2(x)
-        x = self.mlp(x, mod_embed) if self.modulate_mlp else self.mlp(x)
+        x = self.apply_mlp(x, mod_embed)
         x = x + residual
         return x
 
