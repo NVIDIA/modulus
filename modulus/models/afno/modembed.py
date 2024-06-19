@@ -100,6 +100,8 @@ class ModEmbedNet(nn.Module):
             self.onehot_embed = OneHotEmbedding(dim)
         elif method == "sinusoidal":
             self.sinusoid_embed = PositionalEmbedding(dim)
+        else:
+            raise ValueError(f"Embedding '{method}' not supported")
 
         self.dim = dim
 
