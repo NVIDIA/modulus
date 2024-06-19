@@ -39,7 +39,7 @@ class PositionalEmbedding(nn.Module):
         )
         self.register_buffer("freqs", freqs)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         x = x.view(-1).outer(self.freqs.to(x.dtype))
         x = torch.cat([x.cos(), x.sin()], dim=1)
         return x
@@ -62,7 +62,7 @@ class OneHotEmbedding(nn.Module):
         ind = ind.view(1, len(ind))
         self.register_buffer("indices", ind)
 
-    def forward(self, t: Tensor):
+    def forward(self, t: Tensor) -> Tensor:
         ind = t * (self.num_channels - 1)
         return torch.clamp(1 - torch.abs(ind - self.indices), min=0)
 
@@ -108,7 +108,7 @@ class ModEmbedNet(nn.Module):
             blocks.extend([nn.Linear(dim, dim), activation_fn()])
         self.mlp = nn.Sequential(*blocks)
 
-    def forward(self, t: Tensor):
+    def forward(self, t: Tensor) -> Tensor:
         t = t / self.max_time
         if self.method == "onehot":
             emb = self.onehot_embed(t)
