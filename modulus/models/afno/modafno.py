@@ -467,6 +467,15 @@ class ModAFNO(Module):
         Size of image patches, by default [16, 16]
     embed_dim : int, optional
         Embedded channel size, by default 256
+    mod_dim : int
+        Modululation input dimensionality
+    modulate_filter: bool, optional
+        Whether to compute the modulation for the FFT filter, by default True
+    modulate_mlp: bool, optional
+        Whether to compute the modulation for the MLP, by default True
+    scale_shift_mode: str
+        If 'complex' (default), compute the scale-shift operation using complex
+        operations. If 'real', use real operations.
     depth : int, optional
         Number of AFNO layers, by default 4
     mlp_ratio : float, optional
@@ -479,13 +488,6 @@ class ModAFNO(Module):
         Sparsity threshold (softshrink) of spectral features, by default 0.01
     hard_thresholding_fraction : float, optional
         Threshold for limiting number of modes used [0,1], by default 1
-    modulate_filter: bool, optional
-        Whether to compute the modulation for the FFT filter
-    modulate_mlp: bool, optional
-        Whether to compute the modulation for the MLP
-    scale_shift_mode: str
-        If 'complex' (default), compute the scale-shift operation using complex
-        operations. If 'real', use real operations.
 
     The default settings correspond to the implementation in the paper cited below.
 
