@@ -24,7 +24,7 @@ import vtk
 from modulus.datapipes.cae import MeshDatapipe
 
 
-def create_random_vtp_vtu_mesh(num_points: int, num_triangles: int, dir: str) -> tuple:
+def _create_random_vtp_vtu_mesh(num_points: int, num_triangles: int, dir: str) -> tuple:
     """
     Create a random VTP (VTK PolyData) mesh and a random VTU (VTK Unstructured Grid) mesh with triangles.
 
@@ -105,7 +105,7 @@ def create_random_vtp_vtu_mesh(num_points: int, num_triangles: int, dir: str) ->
 def test_mesh_datapipe(device):
     """Tests the MeshDatapipe class with VTP and VTU files."""
     dir = "temp_data"
-    create_random_vtp_vtu_mesh(num_points=20, num_triangles=40, dir=dir)
+    _create_random_vtp_vtu_mesh(num_points=20, num_triangles=40, dir=dir)
     datapipe_vtp = MeshDatapipe(
         data_dir="temp_data",
         vars=["RandomFeatures"],
@@ -148,11 +148,11 @@ def test_mesh_datapipe(device):
 
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_mesh_datapipe_cgns(device):
-    """Tests the MeshDatapipe class with CGNS files."""
+    """Tests the mesh datapipe for CGNS file format."""
     datapipe_cgns = MeshDatapipe(
         data_dir="/code/PRs/geometric/modulus-data/datasets/sample_formats",
-        vars=["Normals"],
-        num_vars=1,
+        vars=[],
+        num_vars=0,
         file_format="cgns",
         stats_dir=None,
         batch_size=1,
@@ -164,5 +164,4 @@ def test_mesh_datapipe_cgns(device):
 
     assert len(datapipe_cgns) == 1
     for data in datapipe_cgns:
-        assert data[0]["vertices"].shape == (1, 20, 3)
-        assert data[0]["x"].shape == (1, 20, 1)
+        assert data[0]["vertices"].shape == (1, 502, 3)

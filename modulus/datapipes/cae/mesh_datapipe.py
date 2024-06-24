@@ -422,12 +422,12 @@ def _parse_vtk_polydata(polydata, vars):
         raise ValueError("Failed to get polygons from the polydata.")
     polys.InitTraversal()
     edges = []
-    for i in range(polys.GetNumberOfCells()):
-        id_list = vtk.vtkIdList()
+    id_list = vtk.vtkIdList()
+    for _ in range(polys.GetNumberOfCells()):
         polys.GetNextCell(id_list)
+        num_ids = id_list.GetNumberOfIds()
         edges = [
-            (id_list.GetId(j), id_list.GetId(j + 1))
-            for j in range(id_list.GetNumberOfIds() - 1)
+            (id_list.GetId(j), id_list.GetId((j + 1) % num_ids)) for j in range(num_ids)
         ]
     edges = torch.tensor(edges, dtype=torch.long)
 
@@ -462,7 +462,10 @@ def _parse_vtk_unstructuredgrid(grid, vars):
         for j in range(points.GetNumberOfPoints()):
             array.GetTuple(j, array_data[j])
         attributes.append(torch.tensor(array_data, dtype=torch.float32))
-    attributes = torch.cat(attributes, dim=-1)
+    if vars:
+        attributes = torch.cat(attributes, dim=-1)
+    else:
+        attributes = torch.zeros((1,), dtype=torch.float32)
 
     # Return a dummy tensor of zeros for edges since they are not directly computable
     return (

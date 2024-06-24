@@ -150,6 +150,5 @@ def _extract_unstructured_grid(
     """
     block = multi_block.GetBlock(0).GetBlock(0)
     if isinstance(block, vtk.vtkUnstructuredGrid):
-        print(block)
         return block
     raise ValueError("No vtkUnstructuredGrid found in the vtkMultiBlockDataSet.")

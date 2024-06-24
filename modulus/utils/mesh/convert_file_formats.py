@@ -30,8 +30,6 @@ def convert_obj_to_vtp(input_file: str, output_file: str) -> None:
     """
     reader = vtk.vtkOBJReader()
     reader.SetFileName(input_file)
-    if not reader.CanReadFile(input_file):
-        raise ValueError(f"Error: Could not read file: {input_file}")
     reader.Update()
 
     polydata = reader.GetOutput()

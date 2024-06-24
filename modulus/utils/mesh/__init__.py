@@ -13,3 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from .combine_vtp_files import combine_vtp_files
+from .convert_file_formats import convert_tesselated_files_in_directory
