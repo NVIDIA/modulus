@@ -128,7 +128,7 @@ class GraphCastLossFunction(nn.Module):
         self.area = area
         self.channel_dict = self.get_channel_dict(dataset_metadata_path, channels_list)
         self.variable_weights = self.assign_variable_weights()
-        self.time_diff_str = self.get_time_diff_str(time_diff_std_path, channels_list)
+        self.time_diff_std = self.get_time_diff_std(time_diff_std_path, channels_list)
 
     def forward(self, invar, outvar):
         """
@@ -148,7 +148,7 @@ class GraphCastLossFunction(nn.Module):
         loss = (
             loss
             * 1.0
-            / torch.square(self.time_diff_str.view(1, -1, 1, 1).to(loss.device))
+            / torch.square(self.time_diff_std.view(1, -1, 1, 1).to(loss.device))
         )
         # weighted by variables
         variable_weights = self.variable_weights.view(1, -1, 1, 1).to(loss.device)
@@ -159,7 +159,7 @@ class GraphCastLossFunction(nn.Module):
         loss = loss.mean()
         return loss
 
-    def get_time_diff_str(self, time_diff_std_path, channels_list):
+    def get_time_diff_std(self, time_diff_std_path, channels_list):
         """Gets the time difference standard deviation"""
         if time_diff_std_path is not None:
             time_diff_np = np.load(time_diff_std_path)
