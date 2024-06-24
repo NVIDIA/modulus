@@ -502,7 +502,7 @@ class SongUNetPosEmbd(SongUNet):
             encoder_type,
             decoder_type,
             resample_filter,
-            checkpoint_level
+            checkpoint_level,
         )
 
         self.img_resolution = img_resolution

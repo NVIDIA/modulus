@@ -78,7 +78,7 @@ def training_loop(
     wandb_project="Modulus-Generative",
     wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
-    wandb_group='CorrDiff-Group',
+    wandb_group="CorrDiff-Group",
     fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
     hr_mean_conditioning=False,
