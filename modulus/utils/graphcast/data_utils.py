@@ -17,9 +17,9 @@
 import os
 
 import netCDF4 as nc
-import numpy as np
 import torch
 from torch import Tensor
+from torch.nn.functional import interpolate
 
 from .graph_utils import deg2rad
 
@@ -57,9 +57,10 @@ class StaticData:
         Tensor
             Land-sea mask with shape (1, 1, lat, lon).
         """
-        ds = nc.Dataset(self.lsm_path)
-        lsm = np.expand_dims(ds["lsm"], axis=0)
-        return torch.tensor(lsm, dtype=torch.float32)
+        ds = torch.tensor(nc.Dataset(self.lsm_path)["lsm"], dtype=torch.float32)
+        ds = torch.unsqueeze(ds, dim=0)
+        ds = interpolate(ds, size=(self.lat.size(0), self.lon.size(0)), mode="bilinear")
+        return ds
 
     def get_geop(self, normalize: bool = True) -> Tensor:  # pragma: no cover
         """Get geopotential from netCDF file.
@@ -74,11 +75,12 @@ class StaticData:
         Tensor
             Normalized geopotential with shape (1, 1, lat, lon).
         """
-        ds = nc.Dataset(self.geop_path)
-        geop = np.expand_dims(ds["z"], axis=0)
+        ds = torch.tensor(nc.Dataset(self.geop_path)["z"], dtype=torch.float32)
+        ds = torch.unsqueeze(ds, dim=0)
+        ds = interpolate(ds, size=(self.lat.size(0), self.lon.size(0)), mode="bilinear")
         if normalize:
-            geop = (geop - geop.mean()) / geop.std()
-        return torch.tensor(geop, dtype=torch.float32)
+            ds = (ds - ds.mean()) / ds.std()
+        return ds
 
     def get_lat_lon(self) -> Tensor:  # pragma: no cover
         """Computes cosine of latitudes and sine and cosine of longitudes.

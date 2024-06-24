@@ -26,6 +26,7 @@ import numpy as np
 import nvtx
 import torch
 from torch.nn.functional import silu
+from torch.utils.checkpoint import checkpoint
 
 from modulus.models.diffusion import (
     Conv2d,
@@ -106,6 +107,8 @@ class SongUNet(Module):
         'standard'.
     resample_filter : List[int], optional (default=[1,1])
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
+    checkpoint_level : int, optional (default=0)
+        How many layers should use gradient checkpointing, 0 is None
 
 
     Note:
@@ -149,6 +152,7 @@ class SongUNet(Module):
         encoder_type: str = "standard",
         decoder_type: str = "standard",
         resample_filter: List[int] = [1, 1],
+        checkpoint_level: int = 0,
     ):
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
@@ -190,6 +194,9 @@ class SongUNet(Module):
             init_zero=init_zero,
             init_attn=init_attn,
         )
+
+        # set the threshold for checkpointing based on image resolution
+        self.checkpoint_threshold = (img_resolution >> checkpoint_level) + 1
 
         # Mapping.
         if self.embedding_type != "zero":
@@ -344,7 +351,14 @@ class SongUNet(Module):
                 elif "aux_residual" in name:
                     x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
                 else:
-                    x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
+                    # For UNetBlocks check if we should use gradient checkpointing
+                    if isinstance(block, UNetBlock):
+                        if x.shape[-1] > self.checkpoint_threshold:
+                            x = checkpoint(block, x, emb, use_reentrant=False)
+                        else:
+                            x = block(x, emb)
+                    else:
+                        x = block(x)
                     skips.append(x)
 
         # Decoder.
@@ -362,7 +376,15 @@ class SongUNet(Module):
                 else:
                     if x.shape[1] != block.in_channels:
                         x = torch.cat([x, skips.pop()], dim=1)
-                    x = block(x, emb)
+                    # check for checkpointing on decoder blocks and up sampling blocks
+                    if (
+                        x.shape[-1] > self.checkpoint_threshold and "_block" in name
+                    ) or (
+                        x.shape[-1] > (self.checkpoint_threshold / 2) and "_up" in name
+                    ):
+                        x = checkpoint(block, x, emb, use_reentrant=False)
+                    else:
+                        x = block(x, emb)
         return aux
 
 
@@ -491,64 +513,11 @@ class SongUNetPosEmbd(SongUNet):
         self, x, noise_labels, class_labels, global_index=None, augment_labels=None
     ):
         # append positional embedding to input conditioning
-        selected_pos_embd = self.positional_embedding_indexing(x, global_index)
-        x = torch.cat((x, selected_pos_embd), dim=1)
+        if self.pos_embd is not None:
+            selected_pos_embd = self.positional_embedding_indexing(x, global_index)
+            x = torch.cat((x, selected_pos_embd), dim=1)
 
-        if self.embedding_type != "zero":
-            # Mapping.
-            emb = self.map_noise(noise_labels)
-            emb = (
-                emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
-            )  # swap sin/cos
-            if self.map_label is not None:
-                tmp = class_labels
-                if self.training and self.label_dropout:
-                    tmp = tmp * (
-                        torch.rand([x.shape[0], 1], device=x.device)
-                        >= self.label_dropout
-                    ).to(tmp.dtype)
-                emb = emb + self.map_label(tmp * np.sqrt(self.map_label.in_features))
-            if self.map_augment is not None and augment_labels is not None:
-                emb = emb + self.map_augment(augment_labels)
-            emb = silu(self.map_layer0(emb))
-            emb = silu(self.map_layer1(emb))
-        else:
-            emb = torch.zeros(
-                (noise_labels.shape[0], self.emb_channels), device=x.device
-            )
-
-        # Encoder.
-        skips = []
-        aux = x
-        for name, block in self.enc.items():
-            with nvtx.annotate(f"SongUNet encoder: {name}", color="blue"):
-                if "aux_down" in name:
-                    aux = block(aux)
-                elif "aux_skip" in name:
-                    x = skips[-1] = x + block(aux)
-                elif "aux_residual" in name:
-                    x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
-                else:
-                    x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
-                    skips.append(x)
-
-        # Decoder.
-        aux = None
-        tmp = None
-        for name, block in self.dec.items():
-            with nvtx.annotate(f"SongUNet decoder: {name}", color="blue"):
-                if "aux_up" in name:
-                    aux = block(aux)
-                elif "aux_norm" in name:
-                    tmp = block(x)
-                elif "aux_conv" in name:
-                    tmp = block(silu(tmp))
-                    aux = tmp if aux is None else tmp + aux
-                else:
-                    if x.shape[1] != block.in_channels:
-                        x = torch.cat([x, skips.pop()], dim=1)
-                    x = block(x, emb)
-        return aux
+        return super().forward(x, noise_labels, class_labels, augment_labels)
 
     def positional_embedding_indexing(self, x, global_index):
         if global_index is None:

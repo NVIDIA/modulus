@@ -21,6 +21,7 @@
 import random
 from typing import Callable, Optional, Union
 
+import numpy as np
 import torch
 
 
@@ -607,5 +608,144 @@ class ResLoss:
             augment_labels=augment_labels,
         )
         loss = weight * ((D_yn - y) ** 2)
+
+        return loss
+
+
+class VELoss_dfsr:
+    """
+    Loss function for dfsr model, modified from class VELoss.
+
+    Parameters
+    ----------
+    beta_start : float
+        Noise level at the initial step of the forward diffusion process, by default 0.0001.
+    beta_end : float
+        Noise level at the Final step of the forward diffusion process, by default 0.02.
+    num_diffusion_timesteps : int
+        Total number of forward/backward diffusion steps, by default 1000.
+
+
+    Note:
+    -----
+    Reference: Ho J, Jain A, Abbeel P. Denoising diffusion probabilistic models.
+    Advances in neural information processing systems. 2020;33:6840-51.
+    """
+
+    def __init__(
+        self,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        num_diffusion_timesteps: int = 1000,
+    ):
+        # scheduler for diffusion:
+        self.beta_schedule = "linear"
+        self.beta_start = beta_start
+        self.beta_end = beta_end
+        self.num_diffusion_timesteps = num_diffusion_timesteps
+        betas = self.get_beta_schedule(
+            beta_schedule=self.beta_schedule,
+            beta_start=self.beta_start,
+            beta_end=self.beta_end,
+            num_diffusion_timesteps=self.num_diffusion_timesteps,
+        )
+        self.betas = torch.from_numpy(betas).float()
+        self.num_timesteps = betas.shape[0]
+
+    def get_beta_schedule(
+        self, beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps
+    ):
+        """
+        Compute the variance scheduling parameters {beta(0), ..., beta(t), ..., beta(T)}
+        based on the VP formulation.
+
+        beta_schedule: str
+            Method to construct the sequence of beta(t)'s.
+        beta_start: float
+            Noise level at the initial step of the forward diffusion process, e.g., beta(0)
+        beta_end: float
+            Noise level at the final step of the forward diffusion process, e.g., beta(T)
+        num_diffusion_timesteps: int
+            Total number of forward/backward diffusion steps
+        """
+
+        def sigmoid(x):
+            return 1 / (np.exp(-x) + 1)
+
+        if beta_schedule == "quad":
+            betas = (
+                np.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_diffusion_timesteps,
+                    dtype=np.float64,
+                )
+                ** 2
+            )
+        elif beta_schedule == "linear":
+            betas = np.linspace(
+                beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "const":
+            betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
+        elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
+            betas = 1.0 / np.linspace(
+                num_diffusion_timesteps, 1, num_diffusion_timesteps, dtype=np.float64
+            )
+        elif beta_schedule == "sigmoid":
+            betas = np.linspace(-6, 6, num_diffusion_timesteps)
+            betas = sigmoid(betas) * (beta_end - beta_start) + beta_start
+        else:
+            raise NotImplementedError(beta_schedule)
+        if betas.shape != (num_diffusion_timesteps,):
+            raise ValueError(
+                f"Expected betas to have shape ({num_diffusion_timesteps},), "
+                f"but got {betas.shape}"
+            )
+        return betas
+
+    def __call__(self, net, images, labels, augment_pipe=None):
+        """
+        Calculate and return the loss corresponding to the variance preserving
+        formulation.
+
+        The method adds random noise to the input images and calculates the loss as the
+        square difference between the network's predictions and the noise samples added
+        to the t-th step of the diffusion process.
+        The noise level is determined by 'beta_t' based on the given parameters 'beta_start',
+        'beta_end' and the current diffusion timestep t.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        images: torch.Tensor
+            Input fluid flow data samples to the neural network.
+
+        labels: torch.Tensor
+            Ground truth labels for the input fluid flow data samples. Not required for dfsr.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
+        t = torch.randint(
+            low=0, high=self.num_timesteps, size=(images.size(0) // 2 + 1,)
+        ).to(images.device)
+        t = torch.cat([t, self.num_timesteps - t - 1], dim=0)[: images.size(0)]
+        e = torch.randn_like(images)
+        b = self.betas.to(images.device)
+        a = (1 - b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
+        x = images * a.sqrt() + e * (1.0 - a).sqrt()
+
+        output = net(x, t, labels)
+        loss = (e - output).square()
 
         return loss

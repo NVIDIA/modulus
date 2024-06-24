@@ -26,6 +26,7 @@ os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
 
 import hydra
 from hydra.utils import to_absolute_path
+from hydra.core.hydra_config import HydraConfig
 import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
@@ -87,13 +88,12 @@ def main(cfg: DictConfig) -> None:
     ls = getattr(cfg, "ls", 1)
     bench = getattr(cfg, "bench", True)
     workers = getattr(cfg, "workers", 4)
+    songunet_checkpoint_level = getattr(cfg, "songunet_checkpoint_level", 0)
 
     # Parse I/O-related options
     wandb_mode = getattr(cfg, "wandb_mode", "disabled")
     wandb_project = getattr(cfg, "wandb_project", "Modulus-Generative")
-    wandb_group = getattr(cfg, "wandb_group", "CorrDiff-DDP-Group")
     wandb_entity = getattr(cfg, "wandb_entity", "CorrDiff-DDP-Group")
-    wandb_name = getattr(cfg, "wandb_name", "CorrDiff")
     tick = getattr(cfg, "tick", 1)
     dump = getattr(cfg, "dump", 500)
     validation_dump = getattr(cfg, "validation_dump", 500)
@@ -108,9 +108,8 @@ def main(cfg: DictConfig) -> None:
     c.fp_optimizations = fp_optimizations
     c.wandb_mode = wandb_mode
     c.wandb_project = wandb_project
-    c.wandb_group = wandb_group
     c.wandb_entity = wandb_entity
-    c.wandb_name = wandb_name
+    c.wandb_name = HydraConfig.get().job.name
     c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
     c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
     c.patch_num = getattr(cfg, "patch_num", 1)
@@ -175,6 +174,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="positional",
             encoder_type="standard",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )  # , attn_resolutions=[28]
         c.network_kwargs.update(
             channel_mult_noise=1,
@@ -190,6 +190,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="zero",
             encoder_type="standard",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )  # , attn_resolutions=[28]
         c.network_kwargs.update(
             channel_mult_noise=1,
@@ -205,6 +206,7 @@ def main(cfg: DictConfig) -> None:
             embedding_type="fourier",
             encoder_type="residual",
             decoder_type="standard",
+            checkpoint_level=songunet_checkpoint_level,
         )
         c.network_kwargs.update(
             channel_mult_noise=2,
@@ -220,10 +222,10 @@ def main(cfg: DictConfig) -> None:
 
     # Preconditioning & loss function.
     if precond == "edmv2" or precond == "edm":
-        c.network_kwargs.class_name = "training.networks.EDMPrecondSRV2"
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "edmv1":
-        c.network_kwargs.class_name = "training.networks.EDMPrecondSR"
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
     elif precond == "unetregression":
         c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
@@ -328,11 +330,11 @@ def main(cfg: DictConfig) -> None:
         c.patch_shape_x = img_shape_x
     if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
         c.patch_shape_y = img_shape_y
-    if c.patch_shape_x != c.patch_shape_y:
-        raise NotImplementedError("Rectangular patch not supported yet")
-    if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
-        raise ValueError("Patch shape needs to be a multiple of 32")
     if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
+        if c.patch_shape_x != c.patch_shape_y:
+            raise NotImplementedError("Rectangular patch not supported yet")
+        if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
+            raise ValueError("Patch shape needs to be a multiple of 32")
         logger0.info("Patch-based training enabled")
     else:
         logger0.info("Patch-based training disabled")
