@@ -16,7 +16,9 @@
 
 from typing import Sequence
 
+import numpy as np
 import torch as th
+import xarray as xr
 
 """
 Custom dlwp compatible loss classes that allow for more sophisticated training optimization.
@@ -126,3 +128,64 @@ class WeightedMSE(th.nn.MSELoss):
             return th.mean(d)
         else:
             return d
+
+
+class OceanMSE(th.nn.MSELoss):
+    """
+    Ocean MSE class offers impementaion for MSE loss weighted by a land-sea-mask field.
+    """
+
+    def __init__(
+        self,
+        lsm_file: str,
+        open_dict: dict = {"engine": "zarr"},
+        selection_dict: dict = {"channel_c": "lsm"},
+    ):
+        """
+        Parameters
+        ----------
+        lsm_file: str
+            land-sea-mask file
+        open_dict: dict, optional
+            dictionary that store land-sea-mask file information
+        selection_dict: dict, optional
+            dictionary that store channel selection information
+        """
+        super().__init__()
+        self.device = None
+        self.lsm_file = lsm_file
+        self.lsm_ds = None
+        self.open_dict = open_dict
+        self.selection_dict = selection_dict
+        self.lsm_tensor = None
+        self.lsm_sum_calculated = False
+        self.lsm_sum = None
+        self.lsm_var_sum = None
+
+    def setup(self, trainer):
+        """
+        reshape lsm and put on device
+        """
+        self.lsm_ds = xr.open_dataset(self.lsm_file, **self.open_dict).constants.sel(
+            self.selection_dict
+        )
+        # 1-lsm gives the percentage of pixel that has ocean
+        self.lsm_tensor = 1 - th.tensor(
+            np.expand_dims(self.lsm_ds.values, (0, 2, 3))
+        ).to(trainer.device)
+
+    def forward(self, prediction, target, average_channels=True):
+
+        if not self.lsm_sum_calculated:
+            self.lsm_sum = th.broadcast_to(self.lsm_tensor, target.shape).sum()
+            self.lsm_var_sum = th.broadcast_to(self.lsm_tensor, target.shape).sum(
+                dim=(0, 1, 2, 4, 5)
+            )
+            self.lsm_sum_calculated = True
+        # average weighted
+        ocean_err = ((target - prediction) ** 2) * self.lsm_tensor
+        ocean_mean_err = ocean_err.sum(dim=(0, 1, 2, 4, 5))
+        if average_channels:
+            return th.sum(ocean_mean_err) / self.lsm_sum
+        else:
+            return ocean_mean_err / self.lsm_var_sum
