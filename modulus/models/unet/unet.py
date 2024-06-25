@@ -27,7 +27,7 @@ from ..module import Module
 
 class ConvBlock(nn.Module):
     """
-    A convolutional block that applies a 3D convolution, followed by an optional normalization and activation.
+    A convolutional block, followed by an optional normalization and activation.
 
     Parameters:
     ----------
@@ -114,7 +114,7 @@ class ConvBlock(nn.Module):
 
 class ConvTranspose(nn.Module):
     """
-    A transposed convolutional block that applies a 3D transposed convolution, followed by an optional normalization and activation.
+    A transposed convolutional block, followed by an optional normalization and activation.
 
     Parameters:
     ----------
@@ -271,6 +271,7 @@ class EncoderBlock(nn.Module):
         feature_map_channels (List[int]): List of the number of channels for each conv block within this encoder.
         model_depth (int): Number of times the conv-pool operation should be repeated.
         num_conv_blocks (int): Number of convolutional blocks per depth level.
+        activation (Optional[str]): Type of activation to use. Default is 'relu'.
         pooling_type (str): Type of pooling to use ('AvgPool3d', 'MaxPool3d').
         pool_size (int): Size of the window for the pooling operation.
 
@@ -285,6 +286,7 @@ class EncoderBlock(nn.Module):
         feature_map_channels: List[int],
         model_depth: int = 4,
         num_conv_blocks: int = 2,
+        activation: Optional[str] = "relu",
         pooling_type: str = "AvgPool3d",
         pool_size: int = 2,
     ):
@@ -304,6 +306,7 @@ class EncoderBlock(nn.Module):
                     ConvBlock(
                         in_channels=current_channels,
                         out_channels=feature_map_channels[depth * num_conv_blocks + i],
+                        activation=activation,
                     )
                 )
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
@@ -331,6 +334,8 @@ class DecoderBlock(nn.Module):
         feature_map_channels (List[int]): List of the number of channels for each deconv block within this decoder.
         model_depth (int): Number of times the deconv operation should be repeated.
         num_conv_blocks (int): Number of deconvolutional blocks per depth level.
+        conv_activation (Optional[str]): Type of activation to usein conv layers. Default is 'relu'.
+        conv_transpose_activation (Optional[str]): Type of activation to use in deconv layers. Default is None.
 
     Returns:
     -------
@@ -343,6 +348,8 @@ class DecoderBlock(nn.Module):
         feature_map_channels: List[int],
         model_depth: int = 3,
         num_conv_blocks: int = 2,
+        conv_activation: Optional[str] = "relu",
+        conv_transpose_activation: Optional[str] = None,
     ):
         super().__init__()
 
@@ -362,6 +369,7 @@ class DecoderBlock(nn.Module):
                         ConvTranspose(
                             in_channels=current_channels,
                             out_channels=current_channels,
+                            activation=conv_transpose_activation,
                         )
                     )
                     current_channels += feature_map_channels[
@@ -372,6 +380,7 @@ class DecoderBlock(nn.Module):
                     ConvBlock(
                         in_channels=current_channels,
                         out_channels=feature_map_channels[depth * num_conv_blocks + i],
+                        activation=conv_activation,
                     )
                 )
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
@@ -394,7 +403,7 @@ class DecoderBlock(nn.Module):
 
 @dataclass
 class MetaData(ModelMetaData):
-    name: str = "UNet3D"
+    name: str = "UNet"
     # Optimization
     jit: bool = False
     cuda_graphs: bool = True
@@ -409,9 +418,9 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class UNet3D(Module):
+class UNet(Module):
     """
-    3D U-Net model for volumetric (3D) image segmentation, featuring an encoder-decoder architecture with skip connections.
+    U-Net model, featuring an encoder-decoder architecture with skip connections.
     Default parameters are set to replicate the architecture here: https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/.
 
     Parameters:
@@ -421,7 +430,9 @@ class UNet3D(Module):
         model_depth (int): Number of levels in the U-Net, not counting the bottleneck layer.
         feature_map_channels (List[int]): Number of channels for each conv block in the encoder and decoder.
         num_conv_blocks (int): Number of convolutional blocks per level in the encoder and decoder.
-        pooling_type (str): Type of pooling operation used in the encoder.
+        conv_activation (Optional[str]): Type of activation to usein conv layers. Default is 'relu'.
+        conv_transpose_activation (Optional[str]): Type of activation to use in deconv layers. Default is None.
+        pooling_type (str): Type of pooling operation used in the encoder. Supports "AvgPool3d", "MaxPool3d".
         pool_size (int): Size of the window for the pooling operation.
 
     Returns:
@@ -447,6 +458,8 @@ class UNet3D(Module):
             1024,
         ],
         num_conv_blocks: int = 2,
+        conv_activation: Optional[str] = "relu",
+        conv_transpose_activation: Optional[str] = None,
         pooling_type: str = "MaxPool3d",
         pool_size: int = 2,
     ):
@@ -458,6 +471,7 @@ class UNet3D(Module):
             feature_map_channels=feature_map_channels,
             model_depth=model_depth,
             num_conv_blocks=num_conv_blocks,
+            activation=conv_activation,
             pooling_type=pooling_type,
             pool_size=pool_size,
         )
@@ -471,6 +485,8 @@ class UNet3D(Module):
             feature_map_channels=decoder_feature_maps,
             model_depth=model_depth - 1,
             num_conv_blocks=num_conv_blocks,
+            conv_activation=conv_activation,
+            conv_transpose_activation=conv_transpose_activation,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -498,7 +514,7 @@ class UNet3D(Module):
 if __name__ == "__main__":
     inputs = torch.randn(1, 1, 96, 96, 96).cuda()
     print("The shape of inputs: ", inputs.shape)
-    model = UNet3D(
+    model = UNet(
         in_channels=1,
         out_channels=1,
         model_depth=5,

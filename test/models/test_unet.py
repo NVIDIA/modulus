@@ -19,17 +19,17 @@ import random
 import pytest
 import torch
 
-from modulus.models.unet import UNet3D
+from modulus.models.unet import UNet
 
 from . import common
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_unet3d_forward(device):
-    """Test unet3d forward pass"""
+def test_unet_forward(device):
+    """Test unet forward pass"""
     torch.manual_seed(0)
     # Construct unet3d model
-    model = UNet3D(
+    model = UNet(
         in_channels=1,
         out_channels=1,
         model_depth=3,
@@ -43,46 +43,38 @@ def test_unet3d_forward(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_unet3d_constructor(device):
-    """Test unet3d constructor options"""
+def test_unet_constructor(device):
+    """Test unet constructor options"""
     # Define dictionary of constructor args
-    arg_list = []
-    for pooling_type in ["MaxPool3d", "AvgPool3d"]:
-        arg_list += [
-            {
+    for depth in [2, 3]:
+        if depth == 2:
+            feature_map_channels = [2, 2, 4, 4]
+        else:
+            feature_map_channels = [2, 2, 4, 4, 8, 8]
+        for pooling_type in ["MaxPool3d", "AvgPool3d"]:
+            args = {
                 "in_channels": random.randint(1, 3),
                 "out_channels": random.randint(1, 3),
-                "model_depth": 3,
-                "feature_map_channels": [8, 8, 16, 16, 32, 32],
-                "num_conv_blocks": 2,
+                "model_depth": depth,
+                "feature_map_channels": feature_map_channels,
                 "pooling_type": pooling_type,
-            },
-            {
-                "in_channels": random.randint(1, 3),
-                "out_channels": random.randint(1, 3),
-                "model_depth": 3,
-                "feature_map_channels": [8, 8, 16, 16, 32, 32],
-                "num_conv_blocks": 2,
-                "pooling_type": pooling_type,
-            },
-        ]
-    for _, kw_args in enumerate(arg_list):
-        # Construct model
-        model = UNet3D(**kw_args).to(device)
-        bsize = random.randint(1, 16)
-        invar = torch.randn(bsize, kw_args["in_channels"], 16, 16, 16).to(device)
-        outvar = model(invar)
-        assert outvar.shape == (bsize, kw_args["out_channels"], *invar.shape[2:])
+            }
+            # Construct model
+            model = UNet(**args).to(device)
+            bsize = random.randint(1, 16)
+            invar = torch.randn(bsize, args["in_channels"], 8, 8, 8).to(device)
+            outvar = model(invar)
+            assert outvar.shape == (bsize, args["out_channels"], *invar.shape[2:])
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_unet3d_optims(device):
-    """Test unet3d optimizations"""
+def test_unet_optims(device):
+    """Test unet optimizations"""
 
     def setup_model():
         """Set up fresh model and inputs for each optim test"""
         # Construct unet3d model
-        model = UNet3D(
+        model = UNet(
             in_channels=1,
             out_channels=1,
             model_depth=3,
@@ -109,10 +101,10 @@ def test_unet3d_optims(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_unet3d_checkpoint(device):
-    """Test unet3d checkpoint save/load"""
+def test_unet_checkpoint(device):
+    """Test unet checkpoint save/load"""
     # Construct unet3d model
-    model_1 = UNet3D(
+    model_1 = UNet(
         in_channels=1,
         out_channels=1,
         model_depth=3,
@@ -120,7 +112,7 @@ def test_unet3d_checkpoint(device):
         num_conv_blocks=2,
     ).to(device)
 
-    model_2 = UNet3D(
+    model_2 = UNet(
         in_channels=1,
         out_channels=1,
         model_depth=3,
@@ -134,10 +126,10 @@ def test_unet3d_checkpoint(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_unet3d_deploy(device):
-    """Test unet3d deployment support"""
+def test_unet_deploy(device):
+    """Test unet deployment support"""
     # Construct unet3d model
-    model = UNet3D(
+    model = UNet(
         in_channels=1,
         out_channels=1,
         model_depth=3,
