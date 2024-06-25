@@ -39,6 +39,7 @@ Shallow-Water-Equation example.
 
 - Fixed bug in the partitioning logic for distributing graph structures
 intended for distributed message-passing.
+- Fixed bugs for corrdiff diffusion training of `EDMv1` and `EDMv2`
 
 ### Security
 
