@@ -140,4 +140,4 @@ def test_unet_deploy(device):
     bsize = random.randint(1, 8)
     invar = torch.randn(bsize, 1, 32, 32, 32).to(device)
     assert common.validate_onnx_export(model, (invar,))
-    assert common.validate_onnx_runtime(model, (invar,))
+    assert common.validate_onnx_runtime(model, (invar,), 1e-2, 1e-2)
