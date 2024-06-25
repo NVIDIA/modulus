@@ -23,7 +23,7 @@ import vtk
 Tensor = torch.Tensor
 
 
-def read_vtp(file_path: str) -> Any:
+def read_vtp(file_path: str) -> Any:  # TODO add support for older format (VTK)
     """
     Read a VTP file and return the polydata.
 

@@ -16,12 +16,18 @@
 
 import os
 import random
-import shutil
 
 import pytest
 import vtk
+from pytest_utils import nfsdata_or_fail
 
 from modulus.datapipes.cae import MeshDatapipe
+
+
+@pytest.fixture
+def cgns_data_dir():
+    path = "/data/nfs/modulus-data/datasets/sample_formats"
+    return path
 
 
 def _create_random_vtp_vtu_mesh(num_points: int, num_triangles: int, dir: str) -> tuple:
@@ -102,14 +108,15 @@ def _create_random_vtp_vtu_mesh(num_points: int, num_triangles: int, dir: str) -
 
 
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_mesh_datapipe(device):
+def test_mesh_datapipe(device, tmp_path):
     """Tests the MeshDatapipe class with VTP and VTU files."""
-    dir = "temp_data"
-    _create_random_vtp_vtu_mesh(num_points=20, num_triangles=40, dir=dir)
+    tmp_dir = tmp_path / "temp_data"
+    tmp_dir.mkdir()
+    _create_random_vtp_vtu_mesh(num_points=20, num_triangles=40, dir=tmp_dir)
     datapipe_vtp = MeshDatapipe(
-        data_dir="temp_data",
-        vars=["RandomFeatures"],
-        num_vars=1,
+        data_dir=tmp_dir,
+        variables=["RandomFeatures"],
+        num_variables=1,
         file_format="vtp",
         stats_dir=None,
         batch_size=1,
@@ -125,9 +132,9 @@ def test_mesh_datapipe(device):
         assert data[0]["x"].shape == (1, 20, 1)
 
     datapipe_vtu = MeshDatapipe(
-        data_dir="temp_data",
-        vars=["RandomFeatures"],
-        num_vars=1,
+        data_dir=tmp_dir,
+        variables=["RandomFeatures"],
+        num_variables=1,
         file_format="vtu",
         stats_dir=None,
         batch_size=1,
@@ -142,17 +149,15 @@ def test_mesh_datapipe(device):
         assert data[0]["vertices"].shape == (1, 20, 3)
         assert data[0]["x"].shape == (1, 20, 1)
 
-    # Remove the directory
-    shutil.rmtree(dir)
 
-
+@nfsdata_or_fail
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_mesh_datapipe_cgns(device):
+def test_mesh_datapipe_cgns(device, pytestconfig):
     """Tests the mesh datapipe for CGNS file format."""
     datapipe_cgns = MeshDatapipe(
-        data_dir="/code/PRs/geometric/modulus-data/datasets/sample_formats",
-        vars=[],
-        num_vars=0,
+        data_dir=cgns_data_dir,
+        variables=[],
+        num_variables=0,
         file_format="cgns",
         stats_dir=None,
         batch_size=1,

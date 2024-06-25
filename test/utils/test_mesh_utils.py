@@ -16,7 +16,6 @@
 
 import os
 import random
-import shutil
 
 import vtk
 
@@ -123,39 +122,31 @@ def _create_random_obj_mesh(num_vertices: int, num_faces: int, dir: str) -> None
             obj_file.write("f {} {} {}\n".format(f[0], f[1], f[2]))
 
 
-def test_combine_vtp_files():
+def test_combine_vtp_files(tmp_path):
     """Tests the utility for combining VTP files"""
-    dir_1 = "temp_data_1"
-    dir_2 = "temp_data_2"
-    _create_random_vtp_mesh(num_points=10, num_triangles=20, dir="temp_data_1")
-    _create_random_vtp_mesh(num_points=8, num_triangles=15, dir="temp_data_2")
+    tmp_dir_1 = tmp_path / "temp_data_1"
+    tmp_dir_2 = tmp_path / "temp_data_2"
+    _create_random_vtp_mesh(num_points=10, num_triangles=20, dir=tmp_dir_1)
+    _create_random_vtp_mesh(num_points=8, num_triangles=15, dir=tmp_dir_2)
     combine_vtp_files(
-        ["temp_data_1/random.vtp", "temp_data_2/random.vtp"], output_file="combined.vtp"
+        [tmp_dir_1 / "random.vtp", tmp_dir_2 / "random.vtp"],
+        output_file=tmp_path / "combined.vtp",
     )
-    assert os.path.exists("combined.vtp")
-
-    # cleanup
-    os.remove("combined.vtp")
-    shutil.rmtree(dir_1)
-    shutil.rmtree(dir_2)
+    assert os.path.exists(tmp_path / "combined.vtp")
 
 
-def test_convert_tesselated_files_in_directory():
+def test_convert_tesselated_files_in_directory(tmp_path):
     """Tests the utility for converting tesselated files in a directory"""
-    dir = "temp_data"
+    tmp_dir = tmp_path / "temp_data"
 
-    _create_random_vtp_mesh(num_points=10, num_triangles=20, dir=dir)
+    _create_random_vtp_mesh(num_points=10, num_triangles=20, dir=tmp_dir)
     convert_tesselated_files_in_directory(
-        "vtp2stl", "temp_data", output_dir="converted"
+        "vtp2stl", tmp_dir, output_dir=tmp_path / "converted"
     )
-    assert os.path.exists("converted/random.stl")
+    assert os.path.exists(tmp_path / "converted/random.stl")
 
-    _create_random_obj_mesh(num_vertices=30, num_faces=12, dir=dir)
+    _create_random_obj_mesh(num_vertices=30, num_faces=12, dir=tmp_dir)
     convert_tesselated_files_in_directory(
-        "obj2vtp", "temp_data", output_dir="converted"
+        "obj2vtp", tmp_dir, output_dir=tmp_path / "converted"
     )
-    assert os.path.exists("converted/random.vtp")
-
-    # cleanup
-    shutil.rmtree(dir)
-    shutil.rmtree("converted")
+    assert os.path.exists(tmp_path / "converted/random.vtp")

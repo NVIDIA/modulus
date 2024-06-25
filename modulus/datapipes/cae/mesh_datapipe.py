@@ -33,12 +33,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Tuple, Union
 
+from torch import Tensor
+
 from modulus.datapipes.datapipe import Datapipe
 from modulus.datapipes.meta import DatapipeMetaData
 
 from .readers import read_cgns, read_vtp, read_vtu
-
-Tensor = torch.Tensor
 
 
 @dataclass
@@ -58,9 +58,9 @@ class MeshDatapipe(Datapipe):
     ----------
     data_dir : str
         Directory where ERA5 data is stored
-    vars : List[str, None]
+    variables : List[str, None]
         Ordered list of variables to be loaded from the files
-    num_vars : int
+    num_variables : int
         Number of variables to be loaded from the files
     file_format : str, optional
         File format of the data, by default "vtp"
@@ -87,8 +87,8 @@ class MeshDatapipe(Datapipe):
     def __init__(
         self,
         data_dir: str,
-        vars: List[str],
-        num_vars: int,
+        variables: List[str],
+        num_variables: int,
         file_format: str = "vtp",
         stats_dir: Union[str, None] = None,
         batch_size: int = 1,
@@ -101,8 +101,8 @@ class MeshDatapipe(Datapipe):
     ):
         super().__init__(meta=MetaData())
         self.file_format = file_format
-        self.vars = vars
-        self.num_vars = num_vars
+        self.variables = variables
+        self.num_variables = num_variables
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle = shuffle
@@ -141,33 +141,30 @@ class MeshDatapipe(Datapipe):
             In channels specified or number of samples per year is not valid
         """
         # get all input data files
-        if self.file_format == "vtp":
-            self.data_paths = sorted(
-                [str(path) for path in self.data_dir.glob("*.vtp")]
-            )
-        elif self.file_format == "vtu":
-            self.data_paths = sorted(
-                [str(path) for path in self.data_dir.glob("*.vtu")]
-            )
-        elif self.file_format == "cgns":
-            self.data_paths = sorted(
-                [str(path) for path in self.data_dir.glob("*.cgns")]
-            )
-        else:
-            raise NotImplementedError(
-                f"Data type {self.file_format} is not supported yet"
-            )
+        match self.file_format:
+            case "vtp":
+                pattern = "*.vtp"
+            case "vtu":
+                pattern = "*.vtu"
+            case "cgns":
+                pattern = "*.cgns"
+            case _:
+                raise NotImplementedError(
+                    f"Data type {self.file_format} is not supported yet"
+                )
+
+        self.data_paths = sorted(str(path) for path in self.data_dir.glob(pattern))
 
         for data_path in self.data_paths:
             self.logger.info(f"File found: {data_path}")
-        self.all_samples = len(self.data_paths)
+        self.total_samples = len(self.data_paths)
 
-        if self.num_samples > self.all_samples:
+        if self.num_samples > self.total_samples:
             raise ValueError(
                 "Number of requested samples is greater than the total number of available samples!"
             )
         self.logger.info(
-            f"Number of total samples: {self.all_samples}, number of requested samples: {self.num_samples}"
+            f"Total number of samples: {self.total_samples}, number of requested samples: {self.num_samples}"
         )
 
     def load_statistics(
@@ -200,11 +197,11 @@ class MeshDatapipe(Datapipe):
             raise IOError(f"Std statistics file {std_stat_file} not found")
 
         # has shape [1, C]
-        self.mu = np.load(str(mean_stat_file))[:, 0 : self.num_vars]
+        self.mu = np.load(str(mean_stat_file))[:, 0 : self.num_variables]
         # has shape [1, C]
-        self.sd = np.load(str(std_stat_file))[:, 0 : self.num_vars]
+        self.sd = np.load(str(std_stat_file))[:, 0 : self.num_variables]
 
-        if not self.mu.shape == self.sd.shape == (1, self.num_vars):
+        if not self.mu.shape == self.sd.shape == (1, self.num_variables):
             raise AssertionError("Error, normalisation arrays have wrong shape")
 
     def _create_pipeline(self) -> dali.Pipeline:
@@ -228,7 +225,7 @@ class MeshDatapipe(Datapipe):
             source = MeshDaliExternalSource(
                 data_paths=self.data_paths,
                 file_format=self.file_format,
-                vars=self.vars,
+                variables=self.variables,
                 num_samples=self.num_samples,
                 batch_size=self.batch_size,
                 shuffle=self.shuffle,
@@ -298,7 +295,7 @@ class MeshDaliExternalSource:
         self,
         data_paths: Iterable[str],
         file_format: str,
-        vars: List[str],
+        variables: List[str],
         num_samples: int,
         batch_size: int = 1,
         shuffle: bool = True,
@@ -307,7 +304,7 @@ class MeshDaliExternalSource:
     ):
         self.data_paths = list(data_paths)
         self.file_format = file_format
-        self.vars = vars
+        self.variables = variables
         # Will be populated later once each worker starts running in its own process.
         self.poly_data = None
         self.num_samples = num_samples
@@ -351,14 +348,13 @@ class MeshDaliExternalSource:
         # This will be called once per worker. Workers are persistent,
         # so there is no need to explicitly close the files - this will be done
         # when corresponding pipeline/dataset is destroyed.
-        if self.data_cache[self.data_paths[idx]] is None:
+        processed_data = self.data_cache.get(self.data_paths[idx])
+        if processed_data is None:
             data = self.mesh_reader_fn(self.data_paths[idx])
-            processed_data = self.parse_vtk_data_fn(data, self.vars)
+            processed_data = self.parse_vtk_data_fn(data, self.variables)
             self.data_cache[self.data_paths[idx]] = processed_data
-        else:
-            processed_data = self.data_cache[self.data_paths[idx]]
 
-        return self.parse_vtk_data_fn(data, self.vars)
+        return processed_data
 
     def __len__(self):
         return len(self.indices)
@@ -366,9 +362,9 @@ class MeshDaliExternalSource:
     def mesh_reader(self):
         if self.file_format == "vtp":
             return read_vtp
-        elif self.file_format == "vtu":
+        if self.file_format == "vtu":
             return read_vtu
-        elif self.file_format == "cgns":
+        if self.file_format == "cgns":
             return read_cgns
         else:
             raise NotImplementedError(
@@ -386,7 +382,7 @@ class MeshDaliExternalSource:
             )
 
 
-def _parse_vtk_polydata(polydata, vars):
+def _parse_vtk_polydata(polydata, variables):
     # Fetch vertices
     points = polydata.GetPoints()
     if points is None:
@@ -401,7 +397,7 @@ def _parse_vtk_polydata(polydata, vars):
     point_data = polydata.GetPointData()
     if point_data is None:
         raise ValueError("Failed to get point data from the unstructured grid.")
-    for array_name in vars:
+    for array_name in variables:
         try:
             array = point_data.GetArray(array_name)
         except ValueError:
@@ -415,6 +411,8 @@ def _parse_vtk_polydata(polydata, vars):
             array.GetTuple(j, array_data[j])
         attributes.append(torch.tensor(array_data, dtype=torch.float32))
     attributes = torch.cat(attributes, dim=-1)
+    # TODO torch.cat is usually very inefficient when the number of items is large.
+    # If possible, the resulting tensor should be pre-allocated and filled in during the loop.
 
     # Fetch edges
     polys = polydata.GetPolys()
@@ -434,7 +432,7 @@ def _parse_vtk_polydata(polydata, vars):
     return vertices, attributes, edges
 
 
-def _parse_vtk_unstructuredgrid(grid, vars):
+def _parse_vtk_unstructuredgrid(grid, variables):
     # Fetch vertices
     points = grid.GetPoints()
     if points is None:
@@ -449,7 +447,7 @@ def _parse_vtk_unstructuredgrid(grid, vars):
     point_data = grid.GetPointData()
     if point_data is None:
         raise ValueError("Failed to get point data from the unstructured grid.")
-    for array_name in vars:
+    for array_name in variables:
         try:
             array = point_data.GetArray(array_name)
         except ValueError:
@@ -462,7 +460,7 @@ def _parse_vtk_unstructuredgrid(grid, vars):
         for j in range(points.GetNumberOfPoints()):
             array.GetTuple(j, array_data[j])
         attributes.append(torch.tensor(array_data, dtype=torch.float32))
-    if vars:
+    if variables:
         attributes = torch.cat(attributes, dim=-1)
     else:
         attributes = torch.zeros((1,), dtype=torch.float32)
