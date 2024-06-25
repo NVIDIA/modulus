@@ -152,7 +152,7 @@ def test_mesh_datapipe(device, tmp_path):
 
 @nfsdata_or_fail
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_mesh_datapipe_cgns(device, pytestconfig):
+def test_mesh_datapipe_cgns(device, cgns_data_dir, pytestconfig):
     """Tests the mesh datapipe for CGNS file format."""
     datapipe_cgns = MeshDatapipe(
         data_dir=cgns_data_dir,
