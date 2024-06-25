@@ -28,6 +28,7 @@ Shallow-Water-Equation example.
 ### Changed
 
 - Raise `ModulusUndefinedGroupError` when querying undefined process groups
+- Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `modulus` loss function
 - Safeguarding against uninitialized usage of `DistributedManager`
 
 ### Deprecated
@@ -38,6 +39,7 @@ Shallow-Water-Equation example.
 
 - Fixed bug in the partitioning logic for distributing graph structures
 intended for distributed message-passing.
+- Fixed bugs for corrdiff diffusion training of `EDMv1` and `EDMv2`
 
 ### Security
 
@@ -59,6 +61,9 @@ intended for distributed message-passing.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
 - Physics-Informed Magnetohydrodynamics example.
+- Pangu Weather model
+- Fengwu model
+- SwinRNN model
 
 ### Changed
 
