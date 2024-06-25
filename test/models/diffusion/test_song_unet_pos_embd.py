@@ -85,9 +85,7 @@ def test_song_unet_global_indexing(device):
     idx_x = torch.arange(45, 45 + batch_shape_x)
     idx_y = torch.arange(12, 12 + batch_shape_y)
     mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-    global_index = torch.stack((mesh_x, mesh_y), dim=0)[
-        None,
-    ].to(device)
+    global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
 
     output_image = model(input_image, noise_labels, class_labels, global_index)
     pos_embed = model.positional_embedding_indexing(input_image, global_index)
@@ -114,6 +112,20 @@ def test_song_unet_constructor(device):
     input_image = torch.ones([1, 2, 16, 16]).to(device)
     output_image = model(input_image, noise_labels, class_labels)
     assert output_image.shape == (1, out_channels, img_resolution, img_resolution)
+
+    # test rectangular shape
+    model = UNet(
+        img_resolution=[img_resolution, img_resolution * 2],
+        in_channels=in_channels + N_pos,
+        out_channels=out_channels,
+    ).to(device)
+    noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+    input_image = torch.ones([1, out_channels, img_resolution, img_resolution * 2]).to(
+        device
+    )
+    output_image = model(input_image, noise_labels, class_labels)
+    assert output_image.shape == (1, out_channels, img_resolution, img_resolution * 2)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
