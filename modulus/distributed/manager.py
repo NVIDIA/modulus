@@ -48,11 +48,13 @@ class ModulusUninitializedDistributedManagerWarning(Warning):
     """Warning to indicate usage of an uninitialized DistributedManager"""
 
     def __init__(self):
-        message = "A DistributedManager object is being instantiated before "
-        "this singleton class has been initialized. Instantiating a manager before "
-        "initialization can lead to unexpected results where processes fail "
-        "to communicate. Initialize the distributed manager via "
-        "DistributedManager.initialize() before instantiating."
+        message = (
+            "A DistributedManager object is being instantiated before "
+            + "this singleton class has been initialized. Instantiating a manager before "
+            + "initialization can lead to unexpected results where processes fail "
+            + "to communicate. Initialize the distributed manager via "
+            + "DistributedManager.initialize() before instantiating."
+        )
         super().__init__(message)
 
 
@@ -246,9 +248,15 @@ class DistributedManager(object):
         rank = int(os.environ.get("RANK"))
         world_size = int(os.environ.get("WORLD_SIZE"))
         if "LOCAL_RANK" in os.environ:
-            local_rank = int(os.environ.get("LOCAL_RANK"))
+            local_rank = os.environ.get("LOCAL_RANK")
+            if local_rank is not None:
+                local_rank = int(local_rank)
+            else:
+                local_rank = rank % torch.cuda.device_count()
+
         else:
             local_rank = rank % torch.cuda.device_count()
+
         # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
@@ -384,23 +392,34 @@ class DistributedManager(object):
             else:
                 manager._local_rank = local_rank
 
-            # Setup distributed process group
-            dist.init_process_group(
-                backend, rank=manager.rank, world_size=manager.world_size
-            )
-
         manager._device = torch.device(
             f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
         )
-        # Needed for cuda graphs
+
+        if manager._distributed:
+            # Setup distributed process group
+            try:
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                    device_id=manager.device,
+                )
+            except TypeError:
+                # device_id only introduced in PyTorch 2.3
+                dist.init_process_group(
+                    backend,
+                    rank=manager.rank,
+                    world_size=manager.world_size,
+                )
+
         if torch.cuda.is_available():
-            torch.cuda.set_device(manager.local_rank)
+            # Set device for this process and empty cache to optimize memory usage
+            torch.cuda.set_device(manager.device)
+            torch.cuda.device(manager.device)
+            torch.cuda.empty_cache()
 
         manager._initialization_method = method
-
-        # Set device for this process and empty cache to optimize memory usage
-        torch.cuda.device(manager.device)
-        torch.cuda.empty_cache()
 
     @staticmethod
     def create_process_subgroup(
@@ -593,10 +612,8 @@ class DistributedManager(object):
             and DistributedManager._shared_state["_distributed"]
         ):
             if torch.cuda.is_available():
-                dist.barrier(
-                    device_ids=[DistributedManager().local_rank]
-                )  # just make sure that no process hangs
+                dist.barrier(device_ids=[DistributedManager().local_rank])
             else:
-                dist.barrier()  # just make sure that no process hangs
+                dist.barrier()
             dist.destroy_process_group()
         DistributedManager._shared_state = {}

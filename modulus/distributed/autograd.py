@@ -66,17 +66,16 @@ class AllGatherVAutograd(torch.autograd.Function):
     def backward(ctx, grad_output: torch.Tensor):  # pragma: no cover
         """backward pass of the of the Distributed AllGatherV primitive"""
 
-        grad_tensor = None
-        needs_grad = ctx.needs_input_grad[0]
+        grad_tensor = all_gather_v_bwd_wrapper(
+            grad_output,
+            ctx.sizes,
+            dim=ctx.dim,
+            use_fp32=ctx.use_fp32,
+            group=ctx.group,
+        )
 
-        if needs_grad:
-            grad_tensor = all_gather_v_bwd_wrapper(
-                grad_output,
-                ctx.sizes,
-                dim=ctx.dim,
-                use_fp32=ctx.use_fp32,
-                group=ctx.group,
-            )
+        if not ctx.needs_input_grad[0]:
+            grad_tensor = None
 
         return grad_tensor, None, None, None, None
 
@@ -122,13 +121,12 @@ class GatherVAutograd(torch.autograd.Function):
     ) -> torch.Tensor:  # pragma: no cover
         """backward pass of the Distributed GatherV primitive"""
 
-        grad_tensor = None
-        needs_grad = ctx.needs_input_grad[0]
+        grad_tensor = scatter_v_wrapper(
+            grad_output, ctx.sizes, dim=ctx.dim, src=ctx.dst, group=ctx.group
+        )
 
-        if needs_grad:
-            grad_tensor = scatter_v_wrapper(
-                grad_output, ctx.sizes, dim=ctx.dim, src=ctx.dst, group=ctx.group
-            )
+        if not ctx.needs_input_grad[0]:
+            grad_tensor = None
 
         return grad_tensor, None, None, None, None
 
@@ -173,13 +171,12 @@ class ScatterVAutograd(torch.autograd.Function):
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:  # pragma: no cover
         """backward pass of the Distributed ScatterV primitive"""
 
-        grad_tensor = None
-        needs_grad = ctx.needs_input_grad[0]
+        grad_tensor = gather_v_wrapper(
+            grad_output, ctx.sizes, dim=ctx.dim, dst=ctx.src, group=ctx.group
+        )
 
-        if needs_grad:
-            grad_tensor = gather_v_wrapper(
-                grad_output, ctx.sizes, dim=ctx.dim, dst=ctx.src, group=ctx.group
-            )
+        if not ctx.needs_input_grad[0]:
+            grad_tensor = None
 
         return grad_tensor, None, None, None, None
 
@@ -234,19 +231,18 @@ class IndexedAllToAllVAutograd(torch.autograd.Function):
     ) -> torch.Tensor:  # pragma: no cover
         """backward pass of the Distributed IndexedAlltoAllV primitive"""
 
-        needs_grad = ctx.needs_input_grad[0]
-        grad_tensor = None
+        grad_tensor = indexed_all_to_all_v_wrapper_bwd(
+            grad_output,
+            ctx.indices,
+            ctx.sizes,
+            tensor_size_along_dim=ctx.tensor_size_along_dim,
+            use_fp32=ctx.use_fp32,
+            dim=ctx.dim,
+            group=ctx.group,
+        )
 
-        if needs_grad:
-            grad_tensor = indexed_all_to_all_v_wrapper_bwd(
-                grad_output,
-                ctx.indices,
-                ctx.sizes,
-                tensor_size_along_dim=ctx.tensor_size_along_dim,
-                use_fp32=ctx.use_fp32,
-                dim=ctx.dim,
-                group=ctx.group,
-            )
+        if not ctx.needs_input_grad[0]:
+            grad_tensor = None
 
         return grad_tensor, None, None, None, None, None, None
 

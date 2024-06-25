@@ -100,6 +100,9 @@ class ERA5HDF5Datapipe(Datapipe):
             ((lat_start, lat_end,), (lon_start, lon_end)).
             By default ((90, -90), (0, 360)).
         Defaults are only applicable if use_cos_zenith is True. Otherwise, defaults to {}.
+    use_time_of_year_index: bool
+        If true, also returns the index that can be sued to determine the time of the year
+        corresponding to each sample. By default False.
     shuffle : bool, optional
         Shuffle dataset, by default True
     num_workers : int, optional
@@ -127,6 +130,7 @@ class ERA5HDF5Datapipe(Datapipe):
         num_samples_per_year: Union[int, None] = None,
         use_cos_zenith: bool = False,
         cos_zenith_args: Dict = {},
+        use_time_of_year_index: bool = False,
         shuffle: bool = True,
         num_workers: int = 1,
         device: Union[str, torch.device] = "cuda",
@@ -148,6 +152,7 @@ class ERA5HDF5Datapipe(Datapipe):
         self.num_samples_per_year = num_samples_per_year
         self.use_cos_zenith = use_cos_zenith
         self.cos_zenith_args = cos_zenith_args
+        self.use_time_of_year_index = use_time_of_year_index
         self.process_rank = process_rank
         self.world_size = world_size
 
@@ -206,6 +211,8 @@ class ERA5HDF5Datapipe(Datapipe):
         else:
             self.layout = ["FCHW", "FCHW"]
 
+        self.output_keys = ["invar", "outvar"]
+
         # Get latlon for zenith angle
         if self.use_cos_zenith:
             if not self.latlon_resolution:
@@ -215,9 +222,10 @@ class ERA5HDF5Datapipe(Datapipe):
                 axis=0,
             )
             self.latlon_dali = dali.types.Constant(self.data_latlon)
-            self.output_keys = ["invar", "outvar", "cos_zenith", "t"]
-        else:
-            self.output_keys = ["invar", "outvar"]
+            self.output_keys += ["cos_zenith"]
+
+        if self.use_time_of_year_index:
+            self.output_keys += ["time_of_year_idx"]
 
         self.parse_dataset_files()
         self.load_statistics()
@@ -358,6 +366,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 num_samples_per_year=self.num_samples_per_year,
                 use_cos_zenith=self.use_cos_zenith,
                 cos_zenith_args=self.cos_zenith_args,
+                use_time_of_year_index=self.use_time_of_year_index,
                 batch_size=self.batch_size,
                 shuffle=self.shuffle,
                 process_rank=self.process_rank,
@@ -366,9 +375,9 @@ class ERA5HDF5Datapipe(Datapipe):
             # Update length of dataset
             self.length = len(source) // self.batch_size
             # Read current batch.
-            invar, outvar, timestamps = dali.fn.external_source(
+            invar, outvar, timestamps, time_of_year_idx = dali.fn.external_source(
                 source,
-                num_outputs=3,
+                num_outputs=4,
                 parallel=True,
                 batch=False,
                 layout=self.layout,
@@ -420,11 +429,19 @@ class ERA5HDF5Datapipe(Datapipe):
                 if self.device.type == "cuda":
                     cos_zenith = cos_zenith.gpu()
 
+            # # Time of the year
+            # time_of_year_idx = dali.fn.cast(
+            #         time_of_year_idx,
+            #         dtype=dali.types.UINT32,
+            #     )
+
             # Set outputs.
+            outputs = (invar, outvar)
             if self.use_cos_zenith:
-                pipe.set_outputs(invar, outvar, cos_zenith, timestamps)
-            else:
-                pipe.set_outputs(invar, outvar)
+                outputs += (cos_zenith,)
+            if self.use_time_of_year_index:
+                outputs += (time_of_year_idx,)
+            pipe.set_outputs(*outputs)
 
         return pipe
 
@@ -493,6 +510,7 @@ class ERA5DaliExternalSource:
         num_samples_per_year: int,
         use_cos_zenith: bool,
         cos_zenith_args: Dict,
+        use_time_of_year_index: bool,
         batch_size: int = 1,
         shuffle: bool = True,
         process_rank: int = 0,
@@ -508,6 +526,7 @@ class ERA5DaliExternalSource:
         self.stride = stride
         self.num_samples_per_year = num_samples_per_year
         self.use_cos_zenith = use_cos_zenith
+        self.use_time_of_year_index = use_time_of_year_index
         self.batch_size = batch_size
         self.shuffle = shuffle
 
@@ -564,6 +583,10 @@ class ERA5DaliExternalSource:
             )
         else:
             timestamps = np.array([])
+        if self.use_time_of_year_index:
+            time_of_year_idx = in_idx
+        else:
+            time_of_year_idx = -1
 
         data = self.data_files[year_idx]["fields"]
         if self.num_history == 0:
@@ -583,7 +606,7 @@ class ERA5DaliExternalSource:
             out_idx = in_idx + (self.num_history + i + 1) * self.stride
             outvar[i] = data[out_idx, self.chans]
 
-        return invar, outvar, timestamps
+        return invar, outvar, timestamps, np.array([time_of_year_idx])
 
     def __len__(self):
         return len(self.indices)
