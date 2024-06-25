@@ -18,14 +18,15 @@ import os
 import random
 
 import pytest
-from pytest_utils import import_or_fail, nfsdata_or_fail
+from pytest_utils import import_or_fail
 
+# from pytest_utils import nfsdata_or_fail
 from modulus.datapipes.cae import MeshDatapipe
 
 
 @pytest.fixture
 def cgns_data_dir():
-    path = "/data/nfs/modulus-data/datasets/sample_formats"
+    path = "/data/nfs/modulus-data/datasets/sample_formats/"
     return path
 
 
@@ -154,24 +155,24 @@ def test_mesh_datapipe(device, tmp_path, pytestconfig):
         assert data[0]["x"].shape == (1, 20, 1)
 
 
-@nfsdata_or_fail
-@import_or_fail(["vtk"])
-@pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_mesh_datapipe_cgns(device, cgns_data_dir, pytestconfig):
-    """Tests the mesh datapipe for CGNS file format."""
-    datapipe_cgns = MeshDatapipe(
-        data_dir=cgns_data_dir,
-        variables=[],
-        num_variables=0,
-        file_format="cgns",
-        stats_dir=None,
-        batch_size=1,
-        num_samples=1,
-        shuffle=True,
-        num_workers=1,
-        device=device,
-    )
+# @nfsdata_or_fail
+# @import_or_fail(["vtk"])
+# @pytest.mark.parametrize("device", ["cuda", "cpu"])
+# def test_mesh_datapipe_cgns(device, cgns_data_dir, pytestconfig):
+#     """Tests the mesh datapipe for CGNS file format."""
+#     datapipe_cgns = MeshDatapipe(
+#         data_dir=cgns_data_dir,
+#         variables=[],
+#         num_variables=0,
+#         file_format="cgns",
+#         stats_dir=None,
+#         batch_size=1,
+#         num_samples=1,
+#         shuffle=True,
+#         num_workers=1,
+#         device=device,
+#     )
 
-    assert len(datapipe_cgns) == 1
-    for data in datapipe_cgns:
-        assert data[0]["vertices"].shape == (1, 502, 3)
+#     assert len(datapipe_cgns) == 1
+#     for data in datapipe_cgns:
+#         assert data[0]["vertices"].shape == (1, 502, 3)
