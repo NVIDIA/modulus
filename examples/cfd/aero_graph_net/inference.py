@@ -84,8 +84,7 @@ class EvalRollout:
         self.output_dir = Path(to_absolute_path(cfg.output))
         logger.info(f"Storing results in {self.output_dir}")
 
-        # set device
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = DistributedManager().device
         logger.info(f"Using {self.device} device")
 
         # instantiate dataset
@@ -118,7 +117,7 @@ class EvalRollout:
         logger.info("Creating the losses...")
         self.loss = instantiate(cfg.loss)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def predict(self, save_results=False):
         """
         Run the prediction process.

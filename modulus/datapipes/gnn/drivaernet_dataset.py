@@ -280,10 +280,14 @@ class DrivAerNetDataset(DGLDataset, Datapipe):
             for _ in range(polys.GetNumberOfCells()):
                 id_list = vtk.vtkIdList()
                 polys.GetNextCell(id_list)
-                for j in range(id_list.GetNumberOfIds() - 1):
+                num_ids = id_list.GetNumberOfIds()
+                for j in range(num_ids - 1):
                     edge_list.append(  # noqa: PERF401
                         (id_list.GetId(j), id_list.GetId(j + 1))
                     )
+                # Add the final edge between the last and the first vertices.
+                edge_list.append((id_list.GetId(num_ids - 1), id_list.GetId(0)))
+
             return edge_list
 
         def permute_mesh(p_vtk_path: Path, wss_vtk_path: Path) -> Tensor:

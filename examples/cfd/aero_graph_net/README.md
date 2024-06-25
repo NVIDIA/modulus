@@ -104,6 +104,10 @@ Output of the model are:
 The input to the model is the original DrivAerNet dataset. It is recommended to enable
 dataset caching (on by default) to speed up the subsequent data loading and training.
 
+![Comparison between the AeroGraphNet prediction and the
+ground truth for surface pressure, wall shear stresses, and absolute error for one
+of the samples from the test dataset.](../../../docs/img/drivaernet_results.png)
+
 ## Model training
 
 The example uses [Hydra](https://hydra.cc/docs/intro/) for experiment configuration.

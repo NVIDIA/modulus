@@ -84,7 +84,7 @@ class MGNTrainer:
         else:
             self.model = self.model.to(self.dist.device)
 
-        # distributed data parallel for multi-node training
+        # distributed data parallel for multi-GPU/multi-node training
         if self.dist.distributed:
             self.model = DistributedDataParallel(
                 self.model,
