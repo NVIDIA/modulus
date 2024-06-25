@@ -286,12 +286,14 @@ class StokesDataset(DGLDataset):
         polys = polydata.GetPolys()
         polys.InitTraversal()
         edge_list = []
-        for i in range(polys.GetNumberOfCells()):
-            id_list = vtk.vtkIdList()
+        id_list = vtk.vtkIdList()
+
+        for _ in range(polys.GetNumberOfCells()):
             polys.GetNextCell(id_list)
-            for j in range(id_list.GetNumberOfIds() - 1):
+            num_ids = id_list.GetNumberOfIds()
+            for j in range(num_ids):
                 edge_list.append(  # noqa: PERF401
-                    (id_list.GetId(j), id_list.GetId(j + 1))
+                    (id_list.GetId(j), id_list.GetId((j + 1) % num_ids))
                 )
 
         # Create DGL graph using the connectivity information
