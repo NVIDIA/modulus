@@ -17,113 +17,115 @@
 import os
 import random
 
-import vtk
+from pytest_utils import import_or_fail
 
 from modulus.utils.mesh import combine_vtp_files, convert_tesselated_files_in_directory
 
 
-def _create_random_vtp_mesh(num_points: int, num_triangles: int, dir: str) -> tuple:
-    """
-    Create a random VTP (VTK PolyData) mesh with triangles.
+@import_or_fail(["vtk"])
+def test_mesh_utils(tmp_path, pytestconfig):
+    """Tests the utility for combining VTP files and converting tesselated files."""
 
-    Parameters:
-        num_points (int): Number of random points.
-        num_triangles (int): Number of triangles.
-        dir (str): Directory to save the VTP and VTU files.
+    import vtk
 
-    Returns:
-        tuple: A tuple containing the random VTP mesh (vtk.vtkPolyData).
-    """
+    def _create_random_vtp_mesh(num_points: int, num_triangles: int, dir: str) -> tuple:
+        """
+        Create a random VTP (VTK PolyData) mesh with triangles.
 
-    # make directory if it does not exist
-    os.makedirs(dir, exist_ok=True)
+        Parameters:
+            num_points (int): Number of random points.
+            num_triangles (int): Number of triangles.
+            dir (str): Directory to save the VTP and VTU files.
 
-    # Create random points
-    points = vtk.vtkPoints()
-    for _ in range(num_points):
-        x, y, z = (
-            random.uniform(-10, 10),
-            random.uniform(-10, 10),
-            random.uniform(-10, 10),
-        )
-        points.InsertNextPoint(x, y, z)
+        Returns:
+            tuple: A tuple containing the random VTP mesh (vtk.vtkPolyData).
+        """
 
-    # Create triangles
-    triangles = vtk.vtkCellArray()
-    for _ in range(num_triangles):
-        p1, p2, p3 = (
-            random.randint(0, num_points - 1),
-            random.randint(0, num_points - 1),
-            random.randint(0, num_points - 1),
-        )
-        triangle = vtk.vtkTriangle()
-        triangle.GetPointIds().SetId(0, p1)
-        triangle.GetPointIds().SetId(1, p2)
-        triangle.GetPointIds().SetId(2, p3)
-        triangles.InsertNextCell(triangle)
+        # make directory if it does not exist
+        os.makedirs(dir, exist_ok=True)
 
-    # Create a PolyData object (VTP mesh)
-    vtp_mesh = vtk.vtkPolyData()
-    vtp_mesh.SetPoints(points)
-    vtp_mesh.SetPolys(triangles)
+        # Create random points
+        points = vtk.vtkPoints()
+        for _ in range(num_points):
+            x, y, z = (
+                random.uniform(-10, 10),
+                random.uniform(-10, 10),
+                random.uniform(-10, 10),
+            )
+            points.InsertNextPoint(x, y, z)
 
-    # Assign random scalar values (features) to points in VTP mesh
-    scalar_values = vtk.vtkDoubleArray()
-    scalar_values.SetName("RandomFeatures")
-    for _ in range(num_points):
-        scalar_values.InsertNextValue(random.uniform(0, 1))
-    vtp_mesh.GetPointData().SetScalars(scalar_values)
+        # Create triangles
+        triangles = vtk.vtkCellArray()
+        for _ in range(num_triangles):
+            p1, p2, p3 = (
+                random.randint(0, num_points - 1),
+                random.randint(0, num_points - 1),
+                random.randint(0, num_points - 1),
+            )
+            triangle = vtk.vtkTriangle()
+            triangle.GetPointIds().SetId(0, p1)
+            triangle.GetPointIds().SetId(1, p2)
+            triangle.GetPointIds().SetId(2, p3)
+            triangles.InsertNextCell(triangle)
 
-    # Write VTP mesh to file
-    vtp_writer = vtk.vtkXMLPolyDataWriter()
-    vtp_writer.SetFileName(os.path.join(dir, "random.vtp"))
-    vtp_writer.SetInputData(vtp_mesh)
-    vtp_writer.Write()
+        # Create a PolyData object (VTP mesh)
+        vtp_mesh = vtk.vtkPolyData()
+        vtp_mesh.SetPoints(points)
+        vtp_mesh.SetPolys(triangles)
 
+        # Assign random scalar values (features) to points in VTP mesh
+        scalar_values = vtk.vtkDoubleArray()
+        scalar_values.SetName("RandomFeatures")
+        for _ in range(num_points):
+            scalar_values.InsertNextValue(random.uniform(0, 1))
+        vtp_mesh.GetPointData().SetScalars(scalar_values)
 
-def _create_random_obj_mesh(num_vertices: int, num_faces: int, dir: str) -> None:
-    """
-    Create a random OBJ file with the specified number of vertices and faces.
+        # Write VTP mesh to file
+        vtp_writer = vtk.vtkXMLPolyDataWriter()
+        vtp_writer.SetFileName(os.path.join(dir, "random.vtp"))
+        vtp_writer.SetInputData(vtp_mesh)
+        vtp_writer.Write()
 
-    Parameters:
-        num_vertices (int): Number of vertices in the mesh.
-        num_faces (int): Number of faces in the mesh.
-        dir (str): Directory to save the OBJ file.
-    """
+    def _create_random_obj_mesh(num_vertices: int, num_faces: int, dir: str) -> None:
+        """
+        Create a random OBJ file with the specified number of vertices and faces.
 
-    # make directory if it does not exist
-    os.makedirs(dir, exist_ok=True)
+        Parameters:
+            num_vertices (int): Number of vertices in the mesh.
+            num_faces (int): Number of faces in the mesh.
+            dir (str): Directory to save the OBJ file.
+        """
 
-    # Generate random vertices
-    vertices = []
-    for _ in range(num_vertices):
-        x, y, z = (
-            random.uniform(-10, 10),
-            random.uniform(-10, 10),
-            random.uniform(-10, 10),
-        )
-        vertices.append((x, y, z))
+        # make directory if it does not exist
+        os.makedirs(dir, exist_ok=True)
 
-    # Generate random faces
-    faces = []
-    for _ in range(num_faces):
-        # Randomly select 3 vertices for a face
-        v1, v2, v3 = random.sample(range(num_vertices), 3)
-        # OBJ format uses 1-based indexing
-        faces.append((v1 + 1, v2 + 1, v3 + 1))
+        # Generate random vertices
+        vertices = []
+        for _ in range(num_vertices):
+            x, y, z = (
+                random.uniform(-10, 10),
+                random.uniform(-10, 10),
+                random.uniform(-10, 10),
+            )
+            vertices.append((x, y, z))
 
-    # Write vertices and faces to OBJ file
-    with open(os.path.join(dir, "random.obj"), "w") as obj_file:
-        # Write vertices
-        for v in vertices:
-            obj_file.write("v {} {} {}\n".format(v[0], v[1], v[2]))
-        # Write faces
-        for f in faces:
-            obj_file.write("f {} {} {}\n".format(f[0], f[1], f[2]))
+        # Generate random faces
+        faces = []
+        for _ in range(num_faces):
+            # Randomly select 3 vertices for a face
+            v1, v2, v3 = random.sample(range(num_vertices), 3)
+            # OBJ format uses 1-based indexing
+            faces.append((v1 + 1, v2 + 1, v3 + 1))
 
+        # Write vertices and faces to OBJ file
+        with open(os.path.join(dir, "random.obj"), "w") as obj_file:
+            # Write vertices
+            for v in vertices:
+                obj_file.write("v {} {} {}\n".format(v[0], v[1], v[2]))
+            # Write faces
+            for f in faces:
+                obj_file.write("f {} {} {}\n".format(f[0], f[1], f[2]))
 
-def test_combine_vtp_files(tmp_path):
-    """Tests the utility for combining VTP files"""
     tmp_dir_1 = tmp_path / "temp_data_1"
     tmp_dir_2 = tmp_path / "temp_data_2"
     _create_random_vtp_mesh(num_points=10, num_triangles=20, dir=tmp_dir_1)
@@ -134,9 +136,6 @@ def test_combine_vtp_files(tmp_path):
     )
     assert os.path.exists(tmp_path / "combined.vtp")
 
-
-def test_convert_tesselated_files_in_directory(tmp_path):
-    """Tests the utility for converting tesselated files in a directory"""
     tmp_dir = tmp_path / "temp_data"
 
     _create_random_vtp_mesh(num_points=10, num_triangles=20, dir=tmp_dir)
