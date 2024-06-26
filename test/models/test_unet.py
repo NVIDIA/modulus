@@ -39,7 +39,7 @@ def test_unet_forward(device):
 
     bsize = 2
     invar = torch.randn(bsize, 1, 16, 16, 16).to(device)
-    assert common.validate_forward_accuracy(model, (invar,))
+    assert common.validate_forward_accuracy(model, (invar,), 1e-2, 1e-2)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -88,16 +88,16 @@ def test_unet_optims(device):
 
     # Ideally always check graphs first
     model, invar = setup_model()
-    assert common.validate_cuda_graphs(model, (invar,))
+    assert common.validate_cuda_graphs(model, (invar,), 1e-2, 1e-2)
     # Check JIT
     model, invar = setup_model()
-    assert common.validate_jit(model, (invar,))
+    assert common.validate_jit(model, (invar,), 1e-2, 1e-2)
     # Check AMP
     model, invar = setup_model()
-    assert common.validate_amp(model, (invar,))
+    assert common.validate_amp(model, (invar,), 1e-2, 1e-2)
     # Check Combo
     model, invar = setup_model()
-    assert common.validate_combo_optims(model, (invar,))
+    assert common.validate_combo_optims(model, (invar,), 1e-2, 1e-2)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -122,7 +122,7 @@ def test_unet_checkpoint(device):
 
     bsize = random.randint(1, 4)
     invar = torch.randn(bsize, 1, 16, 16, 16).to(device)
-    assert common.validate_checkpoint(model_1, model_2, (invar,))
+    assert common.validate_checkpoint(model_1, model_2, (invar,), 1e-2, 1e-2)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -139,5 +139,5 @@ def test_unet_deploy(device):
 
     bsize = random.randint(1, 8)
     invar = torch.randn(bsize, 1, 32, 32, 32).to(device)
-    assert common.validate_onnx_export(model, (invar,))
+    assert common.validate_onnx_export(model, (invar,), 1e-2, 1e-2)
     assert common.validate_onnx_runtime(model, (invar,), 1e-2, 1e-2)
