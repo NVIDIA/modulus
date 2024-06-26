@@ -93,7 +93,8 @@ def compute_force_coefficient(
     force_direction: np.ndarray = np.array([1, 0, 0]),
 ):
     """
-    Compute force coefficient for a given mesh. Can be used to compute lift and drag.
+    Computes force coefficient for a given mesh. Output includes the pressure and skin
+    friction components. Can be used to compute lift and drag.
     For drag, use the `force_direction` as the direction of the motion,
     e.g. [1, 0, 0] for flow in x direction.
     For lift, use the `force_direction` as the direction perpendicular to the motion,
