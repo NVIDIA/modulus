@@ -14,46 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: True
-  run:
-    dir: ./outputs/
+_target_: modulus.datapipes.gnn.ahmed_body_dataset.AhmedBodyDataset
+_convert_: all
 
-data_dir: ./dataset
-ckpt_path: ./checkpoints
-
-input_dim_nodes: 11
-input_dim_edges: 4
-output_dim: 4
-aggregation: sum
-hidden_dim_node_encoder: 256
-hidden_dim_edge_encoder: 256
-hidden_dim_node_decoder: 256
-
-batch_size: 1
-epochs: 500
-num_training_samples: 683
-num_validation_samples: 100
-num_test_samples: 100
-
-lr: 0.0001
-lr_decay_rate: 0.99985
-
-# performance configs
-use_apex: True
-amp: False
-jit: False
-
-# number of workers used by data loader during training.
-num_dataloader_workers: 4
+name: ???
+data_dir: ${data.data_dir}
+split: ???
+num_samples: ???
 # number of workers used by dataset during pre-loading (null - auto-select).
-num_dataset_workers: null
-
-do_concat_trick: False
-num_processor_checkpoint_segments: 0
-recompute_activation: False
-
-wandb_mode: disabled
-
-checkpoint_save_freq: 50
+num_workers: null
