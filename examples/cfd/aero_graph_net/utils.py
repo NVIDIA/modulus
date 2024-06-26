@@ -14,7 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Mapping, Optional
+
 import torch
+from torch import Tensor
+
+from dgl import DGLGraph
+
+
+class RRMSELoss(torch.nn.Module):
+    """Relative RMSE loss."""
+
+    def forward(self, pred: Tensor, target: Tensor):
+        return (
+            torch.linalg.vector_norm(pred - target) / torch.linalg.vector_norm(target)
+        ).mean()
 
 
 def compute_drag_coefficient(normals, area, coeff, p, s):
@@ -50,24 +64,18 @@ def compute_drag_coefficient(normals, area, coeff, p, s):
     return c_drag
 
 
-def relative_lp_error(pred, y, p=2):
-    """
-    Calculate relative L2 error norm
-    Parameters:
-    -----------
-    pred: torch.Tensor
-        Prediction
-    y: torch.Tensor
-        Ground truth
-    Returns:
-    --------
-    error: float
-        Calculated relative L2 error norm (percentage) on cpu
+def batch_as_dict(
+    batch, device: Optional[torch.device | str] = None
+) -> Mapping[str, Any]:
+    """Wraps provided batch in a dictionary, if needed.
+
+    If `device` is not None, moves all Tensor items to the device.
     """
 
-    error = (
-        torch.mean(torch.linalg.norm(pred - y, ord=p) / torch.linalg.norm(y, ord=p))
-        .cpu()
-        .numpy()
-    )
-    return error * 100
+    batch = batch if isinstance(batch, Mapping) else {"graph": batch}
+    if device is None:
+        return batch
+    return {
+        k: v.to(device) if isinstance(v, (Tensor, DGLGraph)) else v
+        for k, v in batch.items()
+    }
