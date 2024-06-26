@@ -84,7 +84,7 @@ def compute_frontal_area(mesh: pv.PolyData, direction: str = "x"):
     return merged.area
 
 
-def compute_force_coefficient(
+def compute_force_coefficients(
     normals: np.ndarray,
     area: np.ndarray,
     coeff: float,
@@ -93,7 +93,7 @@ def compute_force_coefficient(
     force_direction: np.ndarray = np.array([1, 0, 0]),
 ):
     """
-    Computes force coefficient for a given mesh. Output includes the pressure and skin
+    Computes force coefficients for a given mesh. Output includes the pressure and skin
     friction components. Can be used to compute lift and drag.
     For drag, use the `force_direction` as the direction of the motion,
     e.g. [1, 0, 0] for flow in x direction.
@@ -117,8 +117,12 @@ def compute_force_coefficient(
 
     Returns:
     --------
-    c_force: float
-        Computed force coefficient
+    c_total: float
+        Computed total force coefficient
+    c_p: float
+        Computed pressure force coefficient
+    c_f: float
+        Computed skin friction coefficient
     """
 
     # Compute coefficients
@@ -126,9 +130,9 @@ def compute_force_coefficient(
     c_f = -coeff * np.sum(np.dot(wss, force_direction) * area)
 
     # Compute total force coefficients
-    c_force = c_p + c_f
+    c_total = c_p + c_f
 
-    return c_force
+    return c_total, c_p, c_f
 
 
 def batch_as_dict(
