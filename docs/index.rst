@@ -28,7 +28,7 @@ Welcome to Modulus Core's documentation!
    :maxdepth: 1
    :caption: Examples: Weather and Climate
    :name: Examples: Weather and Climate
-   
+
    examples/weather/dataset_download/README.rst
    examples/weather/fcn_afno/README.rst
    examples/weather/dlwp/README.rst
@@ -39,8 +39,8 @@ Welcome to Modulus Core's documentation!
    :maxdepth: 1
    :caption: Examples: CFD
    :name: Examples: CFD
-   
-   examples/cfd/ahmed_body_mgn/README.rst
+
+   examples/cfd/aero_graph_net/README.rst
    examples/cfd/vortex_shedding_mgn/README.rst
    examples/cfd/darcy_fno/README.rst
    examples/cfd/darcy_nested_fnos/README.rst
@@ -52,21 +52,21 @@ Welcome to Modulus Core's documentation!
    :maxdepth: 1
    :caption: Examples: Healthcare
    :name: Examples: Healthcare
-   
+
    examples/healthcare/bloodflow_1d_mgn/README.rst
 
 .. toctree::
    :maxdepth: 1
    :caption: Examples: Molecular Dynamics
    :name: Examples: Molecular Dynamics
-   
+
    examples/molecular_dynamics/lennard_jones/README.rst
 
 .. toctree::
    :maxdepth: 1
    :caption: Examples: Generative
    :name: Examples: Generative
-   
+
    examples/generative/corrdiff/README.rst
 
 
@@ -74,4 +74,3 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
-

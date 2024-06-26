@@ -20,7 +20,7 @@ Diffusion-Based Generative Models".
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import nvtx
@@ -70,8 +70,8 @@ class SongUNet(Module):
 
     Parameters:
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[List[int], int]
+        The resolution of the input/output image, 1 value represents a square image.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -195,8 +195,16 @@ class SongUNet(Module):
             init_attn=init_attn,
         )
 
+        # for compatibility with older versions that took only 1 dimension
+        self.img_resolution = img_resolution
+        if isinstance(img_resolution, int):
+            self.img_shape_y = self.img_shape_x = img_resolution
+        else:
+            self.img_shape_y = img_resolution[0]
+            self.img_shape_x = img_resolution[1]
+
         # set the threshold for checkpointing based on image resolution
-        self.checkpoint_threshold = (img_resolution >> checkpoint_level) + 1
+        self.checkpoint_threshold = (self.img_shape_y >> checkpoint_level) + 1
 
         # Mapping.
         if self.embedding_type != "zero":
@@ -232,7 +240,7 @@ class SongUNet(Module):
         cout = in_channels
         caux = in_channels
         for level, mult in enumerate(channel_mult):
-            res = img_resolution >> level
+            res = self.img_shape_y >> level
             if level == 0:
                 cin = cout
                 cout = model_channels
@@ -279,7 +287,7 @@ class SongUNet(Module):
         # Decoder.
         self.dec = torch.nn.ModuleDict()
         for level, mult in reversed(list(enumerate(channel_mult))):
-            res = img_resolution >> level
+            res = self.img_shape_y >> level
             if level == len(channel_mult) - 1:
                 self.dec[f"{res}x{res}_in0"] = UNetBlock(
                     in_channels=cout, out_channels=cout, attention=True, **block_kwargs
@@ -400,8 +408,8 @@ class SongUNetPosEmbd(SongUNet):
 
     Parameters:
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[List[int], int]
+        The resolution of the input/output image, 1 value represents a square image.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -463,7 +471,7 @@ class SongUNetPosEmbd(SongUNet):
 
     def __init__(
         self,
-        img_resolution: int,
+        img_resolution: Union[List[int], int],
         in_channels: int,
         out_channels: int,
         label_dim: int = 0,
@@ -505,7 +513,6 @@ class SongUNetPosEmbd(SongUNet):
             checkpoint_level,
         )
 
-        self.img_resolution = img_resolution
         self.gridtype = gridtype
         self.N_grid_channels = N_grid_channels
         self.pos_embd = self._get_positional_embedding()
@@ -525,9 +532,7 @@ class SongUNetPosEmbd(SongUNet):
         if global_index is None:
             selected_pos_embd = (
                 self.pos_embd.to(x.dtype)
-                .to(x.device)[
-                    None,
-                ]
+                .to(x.device)[None]
                 .expand((x.shape[0], -1, -1, -1))
             )
         else:
@@ -555,24 +560,22 @@ class SongUNetPosEmbd(SongUNet):
             return None
         elif self.gridtype == "learnable":
             grid = torch.nn.Parameter(
-                torch.randn(
-                    self.N_grid_channels, self.img_resolution, self.img_resolution
-                )
+                torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
             )
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
                 raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
-            x = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
-            y = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
+            x = np.meshgrid(np.linspace(-1, 1, self.img_shape_y))
+            y = np.meshgrid(np.linspace(-1, 1, self.img_shape_x))
             grid_x, grid_y = np.meshgrid(y, x)
             grid = torch.from_numpy(np.stack((grid_x, grid_y), axis=0))
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels == 4:
             # print('sinusuidal grid added ......')
-            x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_resolution)))
+            x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_x)))
+            y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_x)))
             grid_x1, grid_y1 = np.meshgrid(y1, x1)
             grid_x2, grid_y2 = np.meshgrid(y2, x2)
             grid = torch.squeeze(
@@ -590,8 +593,8 @@ class SongUNetPosEmbd(SongUNet):
             freq_bands = 2.0 ** np.linspace(0.0, num_freq, num=num_freq)
             grid_list = []
             grid_x, grid_y = np.meshgrid(
-                np.linspace(0, 2 * np.pi, self.img_resolution),
-                np.linspace(0, 2 * np.pi, self.img_resolution),
+                np.linspace(0, 2 * np.pi, self.img_shape_x),
+                np.linspace(0, 2 * np.pi, self.img_shape_y),
             )
             for freq in freq_bands:
                 for p_fn in [np.sin, np.cos]:
@@ -600,8 +603,8 @@ class SongUNetPosEmbd(SongUNet):
             grid = torch.from_numpy(np.stack(grid_list, axis=0))
             grid.requires_grad = False
         elif self.gridtype == "test" and self.N_grid_channels == 2:
-            idx_x = torch.arange(self.img_resolution)
-            idx_y = torch.arange(self.img_resolution)
+            idx_x = torch.arange(self.img_shape_y)
+            idx_y = torch.arange(self.img_shape_x)
             mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
             grid = torch.stack((mesh_x, mesh_y), dim=0)
         else:
