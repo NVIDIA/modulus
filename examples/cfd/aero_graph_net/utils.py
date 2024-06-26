@@ -84,16 +84,20 @@ def compute_frontal_area(mesh: pv.PolyData, direction: str = "x"):
     return merged.area
 
 
-def compute_drag_coefficient(
+def compute_force_coefficient(
     normals: np.ndarray,
     area: np.ndarray,
     coeff: float,
     p: np.ndarray,
     wss: np.ndarray,
-    drag_direction: np.ndarray = np.array([1, 0, 0]),
+    force_direction: np.ndarray = np.array([1, 0, 0]),
 ):
     """
-    Compute drag coefficient for a given mesh.
+    Compute force coefficient for a given mesh. Can be used to compute lift and drag.
+    For drag, use the `force_direction` as the direction of the motion,
+    e.g. [1, 0, 0] for flow in x direction.
+    For lift, use the `force_direction` as the direction perpendicular to the motion,
+    e.g. [0, 1, 0] for flow in x direction and weight in y direction.
 
     Parameters:
     -----------
@@ -105,25 +109,25 @@ def compute_drag_coefficient(
         Reciprocal of dynamic pressure times the frontal area, i.e. 2/(A * rho * U^2)
     p: np.ndarray
         Pressure distribution on the mesh (on each cell)
-    s: np.ndarray
+    wss: np.ndarray
         Wall shear stress distribution on the mesh (on each cell)
-    drag_direction: np.ndarray
-        Direction of drag, default is np.array([1, 0, 0])
+    force_direction: np.ndarray
+        Direction to compute the force, default is np.array([1, 0, 0])
 
     Returns:
     --------
-    c_drag: float
-        Computed drag coefficient
+    c_force: float
+        Computed force coefficient
     """
 
     # Compute coefficients
-    c_p = coeff * np.sum(np.dot(normals, drag_direction) * area * p)
-    c_f = -coeff * np.sum(np.dot(wss, drag_direction) * area)
+    c_p = coeff * np.sum(np.dot(normals, force_direction) * area * p)
+    c_f = -coeff * np.sum(np.dot(wss, force_direction) * area)
 
-    # Compute total drag coefficients
-    c_drag = c_p + c_f
+    # Compute total force coefficients
+    c_force = c_p + c_f
 
-    return c_drag
+    return c_force
 
 
 def batch_as_dict(
@@ -141,3 +145,26 @@ def batch_as_dict(
         k: v.to(device) if isinstance(v, (Tensor, DGLGraph)) else v
         for k, v in batch.items()
     }
+
+
+def relative_lp_error(pred, y, p=2):
+    """
+    Calculate relative L2 error norm
+    Parameters:
+    -----------
+    pred: torch.Tensor
+        Prediction
+    y: torch.Tensor
+        Ground truth
+    Returns:
+    --------
+    error: float
+        Calculated relative L2 error norm (percentage) on cpu
+    """
+
+    error = (
+        torch.mean(torch.linalg.norm(pred - y, ord=p) / torch.linalg.norm(y, ord=p))
+        .cpu()
+        .numpy()
+    )
+    return error * 100
