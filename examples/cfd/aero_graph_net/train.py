@@ -200,7 +200,7 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    init_python_logging(cfg)
+    init_python_logging(cfg, dist.rank)
     logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
 
     torch.set_float32_matmul_precision("high")

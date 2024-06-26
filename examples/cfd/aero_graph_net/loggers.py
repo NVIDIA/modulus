@@ -27,7 +27,7 @@ import wandb
 from modulus.distributed import DistributedManager
 
 
-def init_python_logging(config: DictConfig) -> None:
+def init_python_logging(config: DictConfig, rank: int = 0) -> None:
     """Initializes Python logging."""
 
     pylog_cfg = OmegaConf.select(config, "logging.python")
@@ -36,7 +36,7 @@ def init_python_logging(config: DictConfig) -> None:
 
     # Set up Python loggers.
     pylog_cfg.output = config.output
-    pylog_cfg.rank = DistributedManager().rank
+    pylog_cfg.rank = rank
     # Enable logging only on rank 0, if requested.
     if pylog_cfg.rank0_only and pylog_cfg.rank != 0:
         pylog_cfg.handlers = {}

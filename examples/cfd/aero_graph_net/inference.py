@@ -169,7 +169,7 @@ def main(cfg: DictConfig) -> None:
     # initialize distributed manager
     DistributedManager.initialize()
 
-    init_python_logging(cfg)
+    init_python_logging(cfg, DistributedManager().rank)
 
     logger.info("Rollout started...")
     rollout = EvalRollout(cfg)
