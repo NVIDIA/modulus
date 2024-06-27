@@ -23,6 +23,7 @@ import datetime
 import cftime
 from einops import rearrange
 import hydra
+from hydra.core.config_store import ConfigStore
 import netCDF4 as nc
 import nvtx
 from omegaconf import OmegaConf, DictConfig
@@ -30,6 +31,8 @@ import torch
 from torch.distributed import gather
 import torch._dynamo
 import tqdm
+from typing import Optional
+from dataclasses import dataclass
 
 
 from modulus.distributed import DistributedManager
@@ -48,48 +51,87 @@ from training.time import convert_datetime_to_cftime, time_range
 time_format = "%Y-%m-%dT%H:%M:%S"
 
 
+@dataclass
+class SamplerConfig:
+    sigma_min: Optional[float] = None
+    sigma_max: Optional[float] = None
+    rho: int = 7
+    solver: str = "heun"
+    discretization: str = "edm"
+    schedule: str = "linear"
+    scaling: Optional[float] = None
+    S_churn: int = 0
+    S_min: int = 0
+    S_max: float = float("inf")
+    S_noise: int = 1
+    seeds: str = "0-63"
+    class_idx: int = None
+    num_steps: int = 18
+    sample_res: str = "full"
+    image_outdir: str
+    res_ckpt_filename: str
+    reg_ckpt_filename: str
+    sampling_method: str = "stochastic"
+    seed_batch_size: int = 1
+    force_fp16: bool = False
+    use_torch_compile: bool = True
+    regression_only: bool = False
+    diffusion_only: bool = False
+    time_range: Optional[str] = None
+    patch_size: int = 448
+    patch_shape_x: int = 448
+    patch_shape_y: int = 448
+    overlap_pixels: int = 0
+    boundary_pixels: int = 2
+    hr_mean_conditioning: bool = False
+
+
+cs = ConfigStore.instance()
+cs.store(name="config_generate", node=SamplerConfig)
+
+
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
-def main(cfg: DictConfig) -> None:
+def main(cfg: SamplerConfig) -> None:
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     """
 
     # Parse options
-    res_ckpt_filename = getattr(cfg, "res_ckpt_filename")
-    reg_ckpt_filename = getattr(cfg, "reg_ckpt_filename")
-    image_outdir = getattr(cfg, "image_outdir")
-    seeds = parse_int_list(getattr(cfg, "seeds", "0-63"))
-    class_idx = getattr(cfg, "class_idx", None)  # TODO: is this needed?
-    num_steps = getattr(cfg, "num_steps", 18)
-    sample_res = getattr(cfg, "sample_res", "full")
-    sampling_method = getattr(cfg, "sampling_method", "stochastic")
-    seed_batch_size = getattr(cfg, "seed_batch_size", 1)
-    force_fp16 = getattr(cfg, "force_fp16", False)
-    use_torch_compile = getattr(cfg, "use_torch_compile", True)
-    regression_only = getattr(cfg, "regression_only", False)
-    diffusion_only = getattr(cfg, "diffusion_only", False)
+    res_ckpt_filename = cfg.res_ckpt_filename
+    reg_ckpt_filename = cfg.reg_ckpt_filename
+    image_outdir = cfg.image_outdir
+    seeds = parse_int_list(cfg.seeds)
+    class_idx = cfg.class_idx  # TODO: is this needed?
+    num_steps = cfg.num_steps
+    sample_res = cfg.sample_res
+    sampling_method = cfg.sampling_method
+    seed_batch_size = cfg.seed_batch_size
+    force_fp16 = cfg.force_fp16
+    use_torch_compile = cfg.use_torch_compile
+    regression_only = cfg.regression_only
+    diffusion_only = cfg.diffusion_only
 
     # Parse deterministic sampler options
-    sigma_min = getattr(cfg, "sigma_min", None)
-    sigma_max = getattr(cfg, "sigma_max", None)
-    rho = getattr(cfg, "rho", 7)
-    solver = getattr(cfg, "solver", "heun")
-    discretization = getattr(cfg, "discretization", "edm")
-    schedule = getattr(cfg, "schedule", "linear")
-    scaling = getattr(cfg, "scaling", None)
-    S_churn = getattr(cfg, "S_churn", 0)
-    S_min = getattr(cfg, "S_min", 0)
-    S_max = getattr(cfg, "S_max", float("inf"))
-    S_noise = getattr(cfg, "S_noise", 1)
+    sigma_min = cfg.sigma_min
+    sigma_max = cfg.sigma_max
+    rho = cfg.rho
+    solver = cfg.solver
+    discretization = cfg.discretization
+    schedule = cfg.schedule
+    scaling = cfg.scaling
+    S_churn = cfg.S_churn
+    S_min = cfg.S_min
+    S_max = cfg.S_max
+    S_noise = cfg.S_noise
 
     # Parse data options
-    times_range = getattr(cfg, "time_range", None)
-    patch_size = getattr(cfg, "patch_size", 448)
-    patch_shape_x = getattr(cfg, "patch_shape_x", 448)
-    patch_shape_y = getattr(cfg, "patch_shape_y", 448)
-    overlap_pix = getattr(cfg, "overlap_pixels", 0)
-    boundary_pix = getattr(cfg, "boundary_pixels", 2)
-    hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
+    times_range = cfg.time_range
+    patch_size = cfg.patch_size
+    patch_shape_x = cfg.patch_shape_x
+    patch_shape_y = cfg.patch_shape_y
+    overlap_pix = cfg.overlap_pixels
+    boundary_pix = cfg.boundary_pixels
+    hr_mean_conditioning = cfg.hr_mean_conditioning
 
     # Initialize distributed manager
     DistributedManager.initialize()
