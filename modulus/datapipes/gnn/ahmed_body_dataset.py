@@ -604,6 +604,12 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                     (id_list.GetId(j), id_list.GetId(j + 1))
                 )
 
+            # Add the final edge between last and first vertex
+            edge_list.append(
+                    (id_list.GetId(id_list.GetNumberOfIds() - 1), id_list.GetId(0))
+            )
+
+
         # Create DGL graph using the connectivity information
         graph = dgl.graph(edge_list, idtype=dtype)
         if to_bidirected:
