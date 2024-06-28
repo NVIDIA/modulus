@@ -220,6 +220,10 @@ def main(cfg: DictConfig) -> None:
             model_type="DhariwalUNet", model_channels=192, channel_mult=[1, 2, 3, 4]
         )
 
+    c.loss_kwargs.P_mean = getattr(cfg, "P_mean", 0.0)
+    c.loss_kwargs.P_std = getattr(cfg, "P_std", 1.2)
+    c.loss_kwargs.sigma_data = getattr(cfg, "sigma_data", 0.5)
+
     # Preconditioning & loss function.
     if precond == "edmv2" or precond == "edm":
         c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
@@ -232,6 +236,9 @@ def main(cfg: DictConfig) -> None:
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.RegressionLoss"
     elif precond == "resloss":
         c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
+        c.loss_kwargs.class_name = "modulus.metrics.diffusion.ResLoss"
+    elif precond == "reslossv2":
+        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
         c.loss_kwargs.class_name = "modulus.metrics.diffusion.ResLoss"
 
     # Network options.

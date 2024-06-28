@@ -998,18 +998,6 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
             sigma_data=sigma_data,
         )
 
-    def forward(
-        self,
-        x,
-        condition=None,
-        sigma=None,
-        class_labels=None,
-        force_fp32=False,
-        **model_kwargs,
-    ):
-
-        return super().forward(x, sigma, class_labels, condition, force_fp32, **model_kwargs)
-
 
 class VEPrecond_dfsr(torch.nn.Module):
     """
