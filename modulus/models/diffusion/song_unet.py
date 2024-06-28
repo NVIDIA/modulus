@@ -135,7 +135,7 @@ class SongUNet(Module):
 
     def __init__(
         self,
-        img_resolution: int,
+        img_resolution: Union[List[int], int],
         in_channels: int,
         out_channels: int,
         label_dim: int = 0,

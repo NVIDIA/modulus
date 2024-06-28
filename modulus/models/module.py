@@ -227,8 +227,8 @@ class Module(torch.nn.Module):
             if verbose:
                 import git
 
-                repo = git.Repo(search_parent_directories=True)
                 try:
+                    repo = git.Repo(search_parent_directories=True)
                     metadata_info["git_hash"] = repo.head.object.hexsha
                 except git.InvalidGitRepositoryError:
                     metadata_info["git_hash"] = None
