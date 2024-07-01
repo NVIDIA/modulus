@@ -14,9 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
-
-__version__ = "0.7.0"
+_target_: torch.nn.MSELoss

@@ -14,9 +14,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+# Standard Python logging configuration, as described here:
+# https://docs.python.org/3.10/library/logging.config.html
 
-__version__ = "0.7.0"
+version: 1
+disable_existing_loggers: false
+
+output: ???
+rank: ???
+rank0_only: true
+
+formatters:
+  default:
+    format: "[%(asctime)s - %(name)s - %(levelname)s] %(message)s"
+    datefmt: "%H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: ${...loggers.agnet.level}
+    formatter: default
+
+  file:
+    class: logging.FileHandler
+    filename: ${...output}/train_${...rank}.log
+    level: ${...loggers.agnet.level}
+    formatter: default
+
+loggers:
+  agnet:
+    handlers: [console, file]
+    level: INFO
+    propagate: false

@@ -14,9 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
-
-__version__ = "0.7.0"
+from .combine_vtp_files import combine_vtp_files
+from .convert_file_formats import convert_tesselated_files_in_directory

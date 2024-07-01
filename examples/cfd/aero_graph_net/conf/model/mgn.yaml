@@ -14,9 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+_target_: modulus.models.meshgraphnet.MeshGraphNet
+_convert_: all
 
-__version__ = "0.7.0"
+input_dim_nodes: 11
+input_dim_edges: 4
+output_dim: 4
+processor_size: 15
+aggregation: sum
+hidden_dim_node_encoder: 256
+hidden_dim_edge_encoder: 256
+hidden_dim_node_decoder: 256
+mlp_activation_fn: relu
+do_concat_trick: False
+num_processor_checkpoint_segments: 0
+recompute_activation: false
+
+# See MeshGraphNet implementation for more details and additional arguments.

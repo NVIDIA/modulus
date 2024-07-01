@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,9 +16,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+defaults:
+  - drivaernet/mgn  # use MGN experiment as a base and change only required parameters.
+  - /loss@loss.c_d: mseloss
 
-__version__ = "0.7.0"
+model:
+  _target_: models.AeroGraphNet
