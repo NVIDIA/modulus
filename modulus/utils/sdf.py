@@ -27,6 +27,8 @@ def _bvh_query_distance(
     points: wp.array(dtype=wp.vec3f),
     max_dist: wp.float32,
     sdf: wp.array(dtype=wp.float32),
+    sdf_hit_point: wp.array(dtype=wp.vec3f),
+    sdf_hit_point_id: wp.array(dtype=wp.int32),
 ):
 
     """
@@ -41,6 +43,8 @@ def _bvh_query_distance(
         max_dist (wp.float32): The maximum distance within which to search
             for the closest point on the mesh.
         sdf (wp.array): An array to store the computed signed distances.
+        sdf_hit_point (wp.array): An array to store the computed hit points.
+        sdf_hit_point_id (wp.array): An array to store the computed hit point ids.
 
     Returns:
         None
@@ -58,6 +62,8 @@ def _bvh_query_distance(
     p_closest = res.u * p0 + res.v * p1 + (1.0 - res.u - res.v) * p2
 
     sdf[tid] = res.sign * wp.abs(wp.length(points[tid] - p_closest))
+    sdf_hit_point[tid] = p_closest
+    sdf_hit_point_id[tid] = res.face
 
 
 def signed_distance_field(
@@ -66,7 +72,7 @@ def signed_distance_field(
     input_points: list[tuple[float, float, float]],
     max_dist: float = 1e8,
     include_hit_points: bool = False,
-    include_hit_points_and_id: bool = False,
+    include_hit_points_id: bool = False,
 ) -> wp.array:
     """
     Computes the signed distance field (SDF) for a given mesh and input points.
@@ -80,8 +86,8 @@ def signed_distance_field(
             the closest point on the mesh. Default is 1e8.
         include_hit_points (bool, optional): Whether to include hit points in
             the output. Default is False.
-        include_hit_points_and_id (bool, optional): Whether to include hit points
-            and their corresponding IDs in the output. Default is False.
+        include_hit_points_id (bool, optional): Whether to include hit point
+            IDs in the output. Default is False.
 
     Returns:
     -------
@@ -100,13 +106,23 @@ def signed_distance_field(
     mesh = wp.Mesh(
         wp.array(mesh_vertices, dtype=wp.vec3), wp.array(mesh_indices, dtype=wp.int32)
     )
-    print(type(mesh))
+
     sdf_points = wp.array(input_points, dtype=wp.vec3)
     sdf = wp.zeros(shape=sdf_points.shape, dtype=wp.float32)
+    sdf_hit_point = wp.zeros(shape=sdf_points.shape, dtype=wp.vec3f)
+    sdf_hit_point_id = wp.zeros(shape=sdf_points.shape, dtype=wp.int32)
+
     wp.launch(
         kernel=_bvh_query_distance,
         dim=len(sdf_points),
-        inputs=[mesh.id, sdf_points, max_dist, sdf],
+        inputs=[mesh.id, sdf_points, max_dist, sdf, sdf_hit_point, sdf_hit_point_id],
     )
 
-    return sdf
+    if include_hit_points and include_hit_points_id:
+        return (sdf, sdf_hit_point, sdf_hit_point_id)
+    elif include_hit_points:
+        return (sdf, sdf_hit_point)
+    elif include_hit_points_id:
+        return (sdf, sdf_hit_point_id)
+    else:
+        return sdf
