@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Shallow-Water-Equation example.
 - 3D UNet
 - AeroGraphNet example of training of MeshGraphNet on Ahmed body and DrivAerNet datasets.
+- Warp SDF routine.
+- DLWP HEALPix model
+- Pangu Weather model
+- Fengwu model
+- SwinRNN model
 
 ### Changed
 
@@ -51,6 +56,8 @@ Shallow-Water-Equation example.
 ### Deprecated
 
 ### Removed
+
+- Remove mlflow from deployment image
 
 ### Fixed
 
@@ -74,14 +81,10 @@ intended for distributed message-passing.
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 - Warp neighbor search routine with a minimal example.
-- Warp SDF routine.
 - Strict option for loading Modulus checkpoints.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
 - Physics-Informed Magnetohydrodynamics example.
-- Pangu Weather model
-- Fengwu model
-- SwinRNN model
 
 ### Changed
 
