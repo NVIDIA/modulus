@@ -73,7 +73,8 @@ intended for distributed message-passing.
 - ClimateDatapipe: an improved datapipe for HDF5/NetCDF4 formatted climate data
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
-- Warp neighbor search routine with a minimal example
+- Warp neighbor search routine with a minimal example.
+- Warp SDF routine.
 - Strict option for loading Modulus checkpoints.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
