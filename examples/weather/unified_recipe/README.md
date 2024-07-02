@@ -64,6 +64,14 @@ resolved we will update instructions.
 
 ## Training the model
 
+### Prerequisites
+
+Install the required dependencies by running below:
+
+```bash
+pip install -r requirements.txt
+```
+
 Apart from the dataset configs the main configs for training are `model`,
 `training`, and `validation`. These can be adjusted accordingly and to train the
 model, run
