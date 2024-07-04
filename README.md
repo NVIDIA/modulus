@@ -153,3 +153,9 @@ discussions, collaboration, etc.
 
 Modulus is provided under the Apache License 2.0, please see [LICENSE.txt](./LICENSE.txt)
 for full license text.
+
+
+# known error
+
+
+Caught signal 7 (Bus error: nonexistent physical address) -> increase the docker shim size
