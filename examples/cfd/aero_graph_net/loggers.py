@@ -88,7 +88,7 @@ class WandBLogger(ExperimentLogger):
 class CompositeLogger(ExperimentLogger):
     """Wraps a list of loggers providing unified interface."""
 
-    loggers: dict[str, ExperimentLogger] = None
+    loggers: 'dict[str, ExperimentLogger]' = None
 
     def __init__(self, config: DictConfig) -> None:
         if DistributedManager().rank != 0:

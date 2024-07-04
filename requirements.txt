@@ -1,0 +1,6 @@
+mlflow
+vtk
+pyvista
+azureml-mlflow
+nvidia-modulus[all]
+#dgl==2.0.0 @ https://data.dgl.ai/wheels/cu121/repo.html 
