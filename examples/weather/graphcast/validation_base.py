@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import os
-import sys
 import torch
 import matplotlib.pyplot as plt
 
@@ -24,7 +23,6 @@ from modulus.datapipes.climate import ERA5HDF5Datapipe
 from train_utils import prepare_input
 
 
-import hydra
 import wandb
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
@@ -45,7 +43,6 @@ class Validation:
         self.cos_zenith_args = {
             "dt": 6.0,
             "start_year": 2017,
-            "latlon_bounds": ((90, -90), (0, 360)),
         }
         self.val_datapipe = ERA5HDF5Datapipe(
             data_dir=os.path.join(cfg.dataset_path, "test"),
@@ -55,7 +52,8 @@ class Validation:
             interpolation_type=self.interpolation_type,
             num_steps=cfg.num_val_steps,
             num_history=cfg.num_history,
-            use_cos_zenith=True,
+            use_cos_zenith=cfg.use_cos_zenith,
+            use_time_of_year_index=cfg.use_time_of_year_index,
             cos_zenith_args=self.cos_zenith_args,
             batch_size=1,
             num_samples_per_year=cfg.num_val_spy,
@@ -67,12 +65,23 @@ class Validation:
         )
         print(f"Loaded validation datapipe of size {len(self.val_datapipe)}")
         self.num_history = cfg.num_history
+        self.stride = cfg.stride
+        self.dt = cfg.dt
+        self.num_samples_per_year_train = cfg.num_samples_per_year_train
 
     @torch.no_grad()
-    def step(self, channels=[0, 1, 2], iter=0):
+    def step(self, channels=[0, 1, 2], iter=0, time_idx=None):
         torch.cuda.nvtx.range_push("Validation")
         os.makedirs(self.val_dir, exist_ok=True)
         loss_epoch = 0
+        prepare_input_vars = {
+            "num_history": self.num_history,
+            "static_data": self.static_data,
+            "stride": self.stride,
+            "dt": self.dt,
+            "num_samples_per_year": self.num_samples_per_year_train,
+            "device": self.dist.device,
+        }
         for i, data in enumerate(self.val_datapipe):
             invar = data[0]["invar"]
             outvar = data[0]["outvar"][0]
@@ -80,11 +89,15 @@ class Validation:
                 cos_zenith = data[0]["cos_zenith"]
             except KeyError:
                 cos_zenith = None
+            try:
+                time_idx = data[0]["time_of_year_idx"].item()
+            except KeyError:
+                time_idx = None
             invar_cat = prepare_input(
-                invar,
-                cos_zenith,
-                num_history=self.num_history,
-                static_data=self.static_data,
+                invar=invar,
+                cos_zenith=cos_zenith,
+                time_idx=time_idx,
+                **prepare_input_vars,
                 step=1,
             )
             invar_cat = invar_cat.to(dtype=self.dtype)
@@ -98,15 +111,16 @@ class Validation:
                 outpred = self.model(invar_cat)
                 pred[t] = outpred
                 if self.num_history > 0:
-                    invar[:, -1, ...] = outpred
+                    # drop the first time step, and append the prediction as the last time step in invar
+                    invar = torch.cat((invar[:, 1:, :, :], outpred), dim=1)
                 else:
                     invar = outpred
                 invar_cat = prepare_input(
-                    invar,
-                    cos_zenith,
-                    num_history=self.num_history,
-                    static_data=self.static_data,
-                    step=t + 1,
+                    invar=invar,
+                    cos_zenith=cos_zenith,
+                    time_idx=time_idx,
+                    **prepare_input_vars,
+                    step=t + 2,
                 )
                 invar_cat = invar_cat.to(dtype=self.dtype)
 

@@ -20,19 +20,9 @@ from torch import Tensor
 from modulus.utils.graphcast.graph_utils import deg2rad
 
 
-def grid_cell_area(lat: Tensor, unit="deg") -> Tensor:
+def normalized_grid_cell_area(lat: Tensor, unit="deg") -> Tensor:
     """Normalized area of the latitude-longitude grid cell"""
     if unit == "deg":
         lat = deg2rad(lat)
     area = torch.abs(torch.cos(lat))
     return area / torch.mean(area)
-
-
-def per_variable_level_weight() -> Tensor:
-    """Per variable-level weight"""
-    pass
-
-
-def per_variable_level_inverse_variance() -> Tensor:
-    """Per variable-level inverse variance weighting"""
-    pass

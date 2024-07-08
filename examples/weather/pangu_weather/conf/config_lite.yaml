@@ -14,46 +14,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+experiment_name: "Modulus-Launch-Dev"
+experiment_desc: "Modulus launch development"
+run_desc: "Pangu lite ERA5 Training"
+
 hydra:
   job:
     chdir: True
   run:
     dir: ./outputs/
 
-data_dir: ./dataset
-ckpt_path: ./checkpoints
+start_epoch: 0
+max_epoch: 100
 
-input_dim_nodes: 11
-input_dim_edges: 4
-output_dim: 4
-aggregation: sum
-hidden_dim_node_encoder: 256
-hidden_dim_edge_encoder: 256
-hidden_dim_node_decoder: 256
+train:
+  data_dir: "/data/train/"
+  stats_dir: "/data/stats/"
+  num_samples_per_year: 1456
+  batch_size: 1
+  patch_size: [1, 1]
+  num_workers: 8
+val:
+  data_dir: "/data/test/"
+  stats_dir: "/data/stats/"
+  num_samples_per_year: 4
+  batch_size: 1
+  patch_size: [1, 1]
+  num_workers: 8
 
-batch_size: 1
-epochs: 500
-num_training_samples: 683
-num_validation_samples: 100
-num_test_samples: 100
+pangu:
+  img_size: [721, 1440]
+  patch_size: [2, 8, 8]
+  embed_dim: 192
+  num_heads: [6, 12, 12, 6]
+  window_size: [2, 6, 12]
 
-lr: 0.0001
-lr_decay_rate: 0.99985
-
-# performance configs
-use_apex: True
-amp: False
-jit: False
-
-# number of workers used by data loader during training.
-num_dataloader_workers: 4
-# number of workers used by dataset during pre-loading (null - auto-select).
-num_dataset_workers: null
-
-do_concat_trick: False
-num_processor_checkpoint_segments: 0
-recompute_activation: False
-
-wandb_mode: disabled
-
-checkpoint_save_freq: 50
+mask_dir: "/data/constant_mask"
+mask_dtype: "float32"

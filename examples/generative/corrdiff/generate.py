@@ -146,15 +146,15 @@ def main(cfg: DictConfig) -> None:
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging("generate.log")
 
-    if patch_shape_x != patch_shape_y:
-        raise NotImplementedError("Rectangular patch not supported yet")
-    if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
-        raise ValueError("Patch shape needs to be a factor of 32")
-    if patch_shape_x > img_shape_x:
+    if (patch_shape_x is None) or (patch_shape_x > img_shape_x):
         patch_shape_x = img_shape_x
-    if patch_shape_y > img_shape_y:
+    if (patch_shape_y is None) or (patch_shape_y > img_shape_y):
         patch_shape_y = img_shape_y
     if patch_shape_x != img_shape_x or patch_shape_y != img_shape_y:
+        if patch_shape_x != patch_shape_y:
+            raise NotImplementedError("Rectangular patch not supported yet")
+        if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
+            raise ValueError("Patch shape needs to be a multiple of 32")
         if sampling_method == "deterministic":
             raise NotImplementedError(
                 "Patch-based deterministic sampler not supported yet. Please use stochastic sampler instead. "
@@ -485,8 +485,8 @@ def generate(
                 [
                     seed_batch_size,
                     net.img_out_channels,
-                    net.img_resolution,
-                    net.img_resolution,
+                    net.img_shape_x,
+                    net.img_shape_y,
                 ],
                 device=device,
             ).to(memory_format=torch.channels_last)
