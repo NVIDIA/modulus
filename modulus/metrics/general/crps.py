@@ -31,9 +31,13 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
     the kernel version of CRPS
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    Computes:
+    Approximates:
     .. math::
         CRPS(X, y) = E[X - y] - 0.5 E[X-X']
+
+    with
+    .. math::
+        sum_i=1^m |X_i - y| / m - 1/(2m^2) sum_i,j=1^m |x_i - x_j|
 
     Parameters
     ----------
@@ -407,3 +411,58 @@ def crps(
         bin_edges, cdf = cdf_function(pred, bins=number_of_bins)
         _crps = _crps_from_cdf(bin_edges, cdf, obs)
         return _crps
+
+
+def fair_crps(pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0) -> Tensor:
+    """Estimate the CRPS from a finite ensemble
+
+        E|X-y|/m - 1/(2m(m-1)) sum_(i,j=1)|x_i - x_j|
+
+    Uses the unbiased estimators described in (Zamo and Naveau, 2018). Unlike
+    ``crps`` this is fair for finite ensembles. Non-fair ``crps`` favors less
+    dispersive ensembles since it is biased high by E|X- X'|/ m where m is the
+    ensemble size.
+
+    Cost: O(m log m) in memory and compute
+
+    Args:
+        pred: (..., m) predictions with ensemble along final dimension
+        obs: (..., ) observations. sharing first dimensions of pred
+
+    Returns
+    -------
+    Tensor
+        Map of CRPS
+
+
+    Notes
+    -----
+    Zamo, M., & Naveau, P. (2018). Estimation of the Continuous Ranked
+    Probability Score with Limited Information and Applications to Ensemble
+    Weather Forecasts. Mathematical Geosciences, 50(2), 209–234.
+    https://doi.org/10.1007/s11004-017-9709-7
+    """
+    pred = pred.transpose(dim, -1)
+    return _fair_crps_implementation(pred, obs, unbiased=True)
+
+
+def _fair_crps_implementation(
+    pred: Tensor, obs: Union[Tensor, np.ndarray], unbiased: bool
+) -> Tensor:
+    skill = torch.abs(pred - obs[..., None]).mean(-1)
+    pred, _ = torch.sort(pred)
+
+    # unbiased formulation of spread:
+    #   1 / (2m * (m-1)) sum_(i,j=1)^m |x_i - x_j|
+    # derivation of fast implementation of spread-portion of CRPS formula when x is sorted
+    # sum_(i,j=1)^m |x_i - x_j| = sum_(i<j) |x_i -x_j| + sum_(i > j) |x_i - x_j|
+    #                           = 2 sum_(i <= j) |x_i -x_j|
+    #                           = 2 sum_(i <= j) (x_j - x_i)
+    #                           = 2 sum_(i <= j) x_j - 2 sum_(i <= j) x_i
+    #                           = 2 sum_(j=1)^m j x_j - 2 sum (m - i + 1) x_i
+    #                           = 2 sum_(i=1)^m (2i - m - 1) x_i
+    m = pred.size(-1)
+    i = torch.arange(1, m + 1, device=pred.device, dtype=pred.dtype)
+    denom = m * (m - 1) if unbiased else m ** 2
+    spread = torch.sum(((2 * i - m - 1) / denom) * pred, dim=-1)
+    return skill - spread
