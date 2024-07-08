@@ -557,7 +557,7 @@ class InfiniteSampler(torch.utils.data.Sampler):  # pragma: no cover
             raise ValueError("rank must be non-negative and less than num_replicas")
         if not 0 <= window_size <= 1:
             raise ValueError("window_size must be between 0 and 1")
-        super().__init__(dataset)
+        super().__init__()
         self.dataset = dataset
         self.rank = rank
         self.num_replicas = num_replicas

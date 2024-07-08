@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch import Tensor
+import dgl
 
 from .graph_utils import (
     add_edge_features,
@@ -29,6 +30,7 @@ from .graph_utils import (
     get_face_centroids,
     latlon2xyz,
     max_edge_length,
+    xyz2latlon,
 )
 from .icosahedral_mesh import (
     faces_to_edges,
@@ -47,30 +49,46 @@ class Graph:
     lat_lon_grid : Tensor
         Tensor with shape (lat, lon, 2) that includes the latitudes and longitudes
         meshgrid.
-    multimesh_level: int, optional
-        Level of the multi-mesh, by default 6
+    mesh_level: int, optional
+        Level of the latent mesh, by default 6
+    multimesh: bool, optional
+        If the latent mesh is a multimesh, by default True
+        If True, the latent mesh includes the nodes corresponding
+        to the specified `mesh_level`and incorporates the edges from
+        all mesh levels ranging from level 0 up to and including `mesh_level`.
+    khop_neighbors: int, optional
+        This option is used to retrieve a list of indices for the k-hop neighbors
+        of all mesh nodes. It is applicable when a graph transformer is used as the
+        processor. If set to 0, this list is not computed. By default 0.
     dtype : torch.dtype, optional
         Data type of the graph, by default torch.float
     """
 
     def __init__(
-        self, lat_lon_grid: Tensor, multimesh_level=6, dtype=torch.float
+        self, lat_lon_grid: Tensor, mesh_level:int = 6, multimesh: bool = True, khop_neighbors: int = 0, dtype=torch.float
     ) -> None:
+        self.khop_neighbors = khop_neighbors
         self.dtype = dtype
 
         # flatten lat/lon gird
         self.lat_lon_grid_flat = lat_lon_grid.permute(2, 0, 1).view(2, -1).permute(1, 0)
 
         # create the multi-mesh
-        _meshes = get_hierarchy_of_triangular_meshes_for_sphere(splits=multimesh_level)
-        merged_mesh = merge_meshes(_meshes)
-        self.multimesh_src, self.multimesh_dst = faces_to_edges(merged_mesh.faces)
-        self.multimesh_vertices = np.array(merged_mesh.vertices)
-        self.multimesh_faces = merged_mesh.faces
-        finest_mesh = _meshes[-1]
+        _meshes = get_hierarchy_of_triangular_meshes_for_sphere(splits=mesh_level)
+        finest_mesh = _meshes[-1]  # get the last one in the list of meshes
         self.finest_mesh_src, self.finest_mesh_dst = faces_to_edges(finest_mesh.faces)
         self.finest_mesh_vertices = np.array(finest_mesh.vertices)
+        if multimesh:
+            mesh = merge_meshes(_meshes)
+            self.mesh_src, self.mesh_dst = faces_to_edges(mesh.faces)
+            self.mesh_vertices = np.array(mesh.vertices)
+        else:
+            mesh = finest_mesh
+            self.mesh_src, self.mesh_dst = self.finest_mesh_src, self.finest_mesh_dst
+            self.mesh_vertices  = self.finest_mesh_vertices
+        self.mesh_faces = mesh.faces
 
+        
     def create_mesh_graph(self, verbose: bool = True) -> Tensor:
         """Create the multimesh graph.
 
@@ -81,12 +99,12 @@ class Graph:
 
         Returns
         -------
-        DGLGraph
-            Multimesh graph.
+        Tuple[DGLGraph, Optional[List[List[int]]]]
+            Multimesh graph, and a list of k-hop neighbor indices or None if k-hop computation is disabled.
         """
         mesh_graph = create_graph(
-            self.multimesh_src,
-            self.multimesh_dst,
+            self.mesh_src,
+            self.mesh_dst,
             to_bidirected=True,
             add_self_loop=False,
             dtype=torch.int32,
@@ -97,12 +115,17 @@ class Graph:
         )
         mesh_graph = add_edge_features(mesh_graph, mesh_pos)
         mesh_graph = add_node_features(mesh_graph, mesh_pos)
+        mesh_graph.ndata["lat_lon"] = xyz2latlon(mesh_pos)
         # ensure fields set to dtype to avoid later conversions
         mesh_graph.ndata["x"] = mesh_graph.ndata["x"].to(dtype=self.dtype)
         mesh_graph.edata["x"] = mesh_graph.edata["x"].to(dtype=self.dtype)
+        if self.khop_neighbors > 0:
+            khop_list = [dgl.khop_out_subgraph(mesh_graph, i, self.khop_neighbors)[0].nodes() for i in range(mesh_graph.num_nodes())]
+        else:
+            khop_list = None
         if verbose:
             print("mesh graph:", mesh_graph)
-        return mesh_graph
+        return mesh_graph, khop_list
 
     def create_g2m_graph(self, verbose: bool = True) -> Tensor:
         """Create the graph2mesh graph.
@@ -145,9 +168,13 @@ class Graph:
             self.multimesh_vertices,
             dtype=torch.float32,
         )
+        g2m_graph.srcdata["lat_lon"] = self.lat_lon_grid_flat
+        g2m_graph.dstdata["lat_lon"] = xyz2latlon(g2m_graph.dstdata["pos"])
+
         g2m_graph = add_edge_features(
             g2m_graph, (g2m_graph.srcdata["pos"], g2m_graph.dstdata["pos"])
         )
+
         # avoid potential conversions at later points
         g2m_graph.srcdata["pos"] = g2m_graph.srcdata["pos"].to(dtype=self.dtype)
         g2m_graph.dstdata["pos"] = g2m_graph.dstdata["pos"].to(dtype=self.dtype)
@@ -190,11 +217,16 @@ class Graph:
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
         )  # number of edges is 3,114,720, exactly matches with the paper
+
         m2g_graph.srcdata["pos"] = torch.tensor(
             self.multimesh_vertices,
             dtype=torch.float32,
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)
+
+        m2g_graph.srcdata["lat_lon"] = xyz2latlon(m2g_graph.srcdata["pos"])
+        m2g_graph.dstdata["lat_lon"] = self.lat_lon_grid_flat
+
         m2g_graph = add_edge_features(
             m2g_graph, (m2g_graph.srcdata["pos"], m2g_graph.dstdata["pos"])
         )
