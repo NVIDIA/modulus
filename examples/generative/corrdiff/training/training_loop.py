@@ -277,7 +277,7 @@ def training_loop(
                         augment_pipe=augment_pipe,
                     )
                 training_stats.report("Loss/loss", loss)
-                loss = loss.sum().mul(loss_scaling / batch_gpu_total)
+                loss = loss.sum().mul(loss_scaling / batch_size_gpu)
                 loss_accum += loss / num_accumulation_rounds
                 loss.backward()
 
@@ -331,7 +331,7 @@ def training_loop(
                         )
                         training_stats.report("Loss/validation loss", loss_valid)
                         loss_valid = loss_valid.sum().mul(
-                            loss_scaling / batch_gpu_total
+                            loss_scaling / batch_size_gpu
                         )
                         valid_loss_accum += loss_valid / num_validation_evals
                     valid_loss_sum = torch.tensor([valid_loss_accum], device=device)
