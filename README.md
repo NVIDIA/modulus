@@ -48,7 +48,7 @@ Detailed information on features and capabilities can be found in the [Modulus d
 Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
 
 Some examples of community contributors are highlighted here:
-Img1 | Img2 | Img 3
+<img src=https://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img/Modulus-850x720.svg alt="Modulus"/>| Img2 | Img 3
 ---|---|---|
 Link1|Link2|Link3
 
