@@ -275,13 +275,15 @@ def test_fair_crps_converges_to_crps(device):
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fair_crps_dim_arg_works(device):
-    pred = torch.randn((10, 100), device=device)
+    pred = torch.randn((5, 10, 100), device=device)
 
-    value = fair_crps(pred, torch.zeros([pred.size(0)], device=device), dim=1)
-    assert value.shape == (10,)
+    a, b, c = pred.shape
 
-    value = fair_crps(pred, torch.zeros([pred.size(1)], device=device), dim=0)
-    assert value.shape == (100,)
+    value = fair_crps(pred, torch.zeros([a, c], device=device), dim=1)
+    assert value.shape == (a, c)
+
+    value = fair_crps(pred, torch.zeros([b, c], device=device), dim=0)
+    assert value.shape == (b, c)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
