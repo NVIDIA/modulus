@@ -54,6 +54,12 @@ Link1|Link2|Link3
 
 ## Why are they using Modulus
 
+# How to get started
+The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
+* [Getting started Webinar] (https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
+* [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
+* [Reference Samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md)
+* [User guide Documentation](https://docs.nvidia.com/deeplearning/modulus/modulus-core/index.html)
   
 ## Installation
 
