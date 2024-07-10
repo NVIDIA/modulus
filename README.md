@@ -1,4 +1,4 @@
-# Modulus (Beta)
+# NVIDIA Modulus (Beta)
 
 <!-- markdownlint-disable -->
 [![Project Status: Active - The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
@@ -6,16 +6,17 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 <!-- markdownlint-enable -->
 
-Modulus is an open source deep-learning framework for building, training, and fine-tuning
-deep learning models using state-of-the-art Physics-ML methods.
+NVIDIA Modulus is an open source deep-learning framework for building, training, and fine-tuning
+deep learning models using state-of-the-art SciML methods for AI4science and engineering.
 
-Whether you are exploring the use of Neural operators like Fourier Neural Operators or
+Modulus provides utilities and optimized pipelines to develop AI models that combine physics-knowledge with data, enabling real-time predictions.
+Whether you are exploring the use of Neural operators or GNNs or transformers or
 interested in Physics informed Neural Networks or a hybrid approach in between, Modulus
 provides you with the optimized stack that will enable you to train your models at real
 world scale.
 
 This package is the core module that provides the core algorithms, network architectures
-and utilities that cover a broad spectrum of physics-constrained and data-driven
+and utilities with a pytorch like experience. Reference samples cover a broad spectrum of physics-constrained and data-driven
 workflows to suit the diversity of use cases in the science and engineering disciplines.
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
