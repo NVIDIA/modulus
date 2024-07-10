@@ -96,7 +96,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         **model_kwargs,
     ):
         super().__init__(meta=MetaData)
-        self.img_resolution = img_resolution
+
         self.img_channels = img_channels
 
         self.img_in_channels = img_in_channels
