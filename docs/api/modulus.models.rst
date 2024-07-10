@@ -38,7 +38,7 @@ Currently available models include:
    * - FourierNeuralOperator
      - torch.Tensor [N, in_channels, H, W]
      - torch.Tensor [N, out_channels, H, W]
-   * - AdaptiveFourierNeuralOperator
+   * - AFNO
      - torch.Tensor [N, in_channels, H, W]
      - torch.Tensor [N, out_channels, H, W]
    * - ModAFNO
