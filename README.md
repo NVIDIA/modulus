@@ -32,16 +32,28 @@ Detailed information on features and capabilities can be found in the [Modulus d
 - [Modulus (Beta)](https://github.com/NVIDIA/modulus): Open-source deep-learning
   framework for building, training, and fine-tuning deep learning models using
   state-of-the-art Physics-ML methods.
-- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): Framework
-  providing pythonic APIs, algorithms and utilities to be used with Modulus
+- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): Repository of 
+  algorithms and utilities to be used with Modulus
   core to physics inform model training as well as higher level abstraction
   for domain experts.
 
 ### Domain Specific Packages
 
-- [Earth-2 MIP (Beta)](https://github.com/NVIDIA/earth2mip): Python framework
+- [Earth-2 Studio)](https://github.com/NVIDIA/earth2studio): Open source project
   to enable climate researchers and scientists to explore and experiment with
   AI models for weather and climate.
+
+# Who is contributing to Modulus
+
+Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
+
+Some examples of community contributors are highlighted here:
+Img1 | Img2 | Img 3
+---|---|---|
+Link1|Link2|Link3
+
+## Why are they using Modulus
+
   
 ## Installation
 
