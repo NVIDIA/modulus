@@ -25,7 +25,7 @@ Tensor = torch.Tensor
 
 
 @torch.jit.script
-def _kernel_crps_implementation(pred: Tensor, obs: Tensor, unbiased: bool) -> Tensor:
+def _kernel_crps_implementation(pred: Tensor, obs: Tensor, biased: bool) -> Tensor:
     """An O(m log m) implementation of the kernel CRPS formulas"""
     skill = torch.abs(pred - obs[..., None]).mean(-1)
     pred, _ = torch.sort(pred)
@@ -39,16 +39,17 @@ def _kernel_crps_implementation(pred: Tensor, obs: Tensor, unbiased: bool) -> Te
     #                           = 2 sum_(i=1)^m (2i - m - 1) x_i
     m = pred.size(-1)
     i = torch.arange(1, m + 1, device=pred.device, dtype=pred.dtype)
-    denom = m * (m - 1) if unbiased else m * m
+    denom = m * m if biased else m * (m - 1)
     factor = (2 * i - m - 1) / denom
     spread = torch.sum(factor * pred, dim=-1)
     return skill - spread
 
 
-def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
-    """
+def kcrps(pred: Tensor, obs: Tensor, dim: int = 0, biased: bool = True):
+    """Estimate the CRPS from a finite ensemble
+
     Computes the local Continuous Ranked Probability Score (CRPS) by using
-    the kernel version of CRPS
+    the kernel version of CRPS. The cost is O(m log m).
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
     Approximates:
@@ -69,47 +70,22 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
         with respect to.
     dim : int, optional
         The dimension over which to compute the CRPS, assumed to be 0.
+    biased :
+        When False, uses the unbiased estimators described in (Zamo and Naveau, 2018)::
+
+            E|X-y|/m - 1/(2m(m-1)) sum_(i,j=1)|x_i - x_j|
+
+        Unlike ``crps`` this is fair for finite ensembles. Non-fair ``crps`` favors less
+        dispersive ensembles since it is biased high by E|X- X'|/ m where m is the
+        ensemble size.
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
-    pred = pred.transpose(dim, -1)
-    return _kernel_crps_implementation(pred, obs, unbiased=False)
-
-
-def fair_crps(pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0) -> Tensor:
-    """Estimate the CRPS from a finite ensemble
-
-        E|X-y|/m - 1/(2m(m-1)) sum_(i,j=1)|x_i - x_j|
-
-    Uses the unbiased estimators described in (Zamo and Naveau, 2018). Unlike
-    ``crps`` this is fair for finite ensembles. Non-fair ``crps`` favors less
-    dispersive ensembles since it is biased high by E|X- X'|/ m where m is the
-    ensemble size.
-
-    Cost: O(m log m) in memory and compute
-
-    Args:
-        pred: (..., m) predictions with ensemble along final dimension
-        obs: (..., ) observations. sharing first dimensions of pred
-
-    Returns
-    -------
-    Tensor
-        Map of CRPS
-
-
-    Notes
-    -----
-    Zamo, M., & Naveau, P. (2018). Estimation of the Continuous Ranked
-    Probability Score with Limited Information and Applications to Ensemble
-    Weather Forecasts. Mathematical Geosciences, 50(2), 209–234.
-    https://doi.org/10.1007/s11004-017-9709-7
-    """
-    pred = pred.transpose(dim, -1)
-    return _kernel_crps_implementation(pred, obs, unbiased=True)
+    pred = torch.movedim(pred, dim, -1)
+    return _kernel_crps_implementation(pred, obs, biased=biased)
 
 
 def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) -> Tensor:
