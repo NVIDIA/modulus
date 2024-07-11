@@ -410,7 +410,7 @@ class Block(nn.Module):
                 activation_fn=activation_fn,
                 drop=drop,
             )
-            self.apply_mlp = lambda x, mod_embed: self.filter(x, mod_embed)
+            self.apply_mlp = lambda x, mod_embed: self.mlp(x, mod_embed)
         else:
             self.mlp = AFNOMlp(
                 in_features=embed_dim,
@@ -419,7 +419,7 @@ class Block(nn.Module):
                 activation_fn=activation_fn,
                 drop=drop,
             )
-            self.apply_mlp = lambda x, mod_embed: self.filter(x)
+            self.apply_mlp = lambda x, mod_embed: self.mlp(x)
         self.double_skip = double_skip
         self.modulate_filter = modulate_filter
         self.modulate_mlp = modulate_mlp
