@@ -16,11 +16,12 @@
 
 import logging
 
+import dgl
+import networkx as nx
 import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch import Tensor
-import dgl
 
 from .graph_utils import (
     add_edge_features,
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class Graph:
-    """Graph class for creating the graph2mesh, multimesh, and mesh2graph graphs.
+    """Graph class for creating the graph2mesh, latent mesh, and mesh2graph graphs.
 
     Parameters
     ----------
@@ -59,13 +60,19 @@ class Graph:
     khop_neighbors: int, optional
         This option is used to retrieve a list of indices for the k-hop neighbors
         of all mesh nodes. It is applicable when a graph transformer is used as the
-        processor. If set to 0, this list is not computed. By default 0.
+        processor. If set to 0, this list is not computed. If a message passing
+        processor is used, it is forced to 0. By default 0.
     dtype : torch.dtype, optional
         Data type of the graph, by default torch.float
     """
 
     def __init__(
-        self, lat_lon_grid: Tensor, mesh_level:int = 6, multimesh: bool = True, khop_neighbors: int = 0, dtype=torch.float
+        self,
+        lat_lon_grid: Tensor,
+        mesh_level: int = 6,
+        multimesh: bool = True,
+        khop_neighbors: int = 0,
+        dtype=torch.float,
     ) -> None:
         self.khop_neighbors = khop_neighbors
         self.dtype = dtype
@@ -85,10 +92,9 @@ class Graph:
         else:
             mesh = finest_mesh
             self.mesh_src, self.mesh_dst = self.finest_mesh_src, self.finest_mesh_dst
-            self.mesh_vertices  = self.finest_mesh_vertices
+            self.mesh_vertices = self.finest_mesh_vertices
         self.mesh_faces = mesh.faces
 
-        
     def create_mesh_graph(self, verbose: bool = True) -> Tensor:
         """Create the multimesh graph.
 
@@ -99,8 +105,8 @@ class Graph:
 
         Returns
         -------
-        Tuple[DGLGraph, Optional[List[List[int]]]]
-            Multimesh graph, and a list of k-hop neighbor indices or None if k-hop computation is disabled.
+        DGLGraph
+            Multimesh graph
         """
         mesh_graph = create_graph(
             self.mesh_src,
@@ -110,7 +116,7 @@ class Graph:
             dtype=torch.int32,
         )
         mesh_pos = torch.tensor(
-            self.multimesh_vertices,
+            self.mesh_vertices,
             dtype=torch.float32,
         )
         mesh_graph = add_edge_features(mesh_graph, mesh_pos)
@@ -120,12 +126,19 @@ class Graph:
         mesh_graph.ndata["x"] = mesh_graph.ndata["x"].to(dtype=self.dtype)
         mesh_graph.edata["x"] = mesh_graph.edata["x"].to(dtype=self.dtype)
         if self.khop_neighbors > 0:
-            khop_list = [dgl.khop_out_subgraph(mesh_graph, i, self.khop_neighbors)[0].nodes() for i in range(mesh_graph.num_nodes())]
+            # Make a graph whose edges connect the k-hop neighbors of the original graph.
+            mesh_graph = dgl.khop_graph(
+                g=mesh_graph, k=self.khop_neighbors, copy_ndata=True
+            )
+            # khop_list = [dgl.khop_out_subgraph(mesh_graph, i, self.khop_neighbors)[0].nodes() for i in range(mesh_graph.num_nodes())]
+            mesh_graph_nx = mesh_graph.to_networkx()
+            A = nx.adjacency_matrix(mesh_graph_nx).todense()
+            mask = A == 0
         else:
-            khop_list = None
+            mask = None
         if verbose:
             print("mesh graph:", mesh_graph)
-        return mesh_graph, khop_list
+        return mesh_graph, mask
 
     def create_g2m_graph(self, verbose: bool = True) -> Tensor:
         """Create the graph2mesh graph.
@@ -149,7 +162,7 @@ class Graph:
         # create the grid2mesh bipartite graph
         cartesian_grid = latlon2xyz(self.lat_lon_grid_flat)
         n_nbrs = 4
-        neighbors = NearestNeighbors(n_neighbors=n_nbrs).fit(self.multimesh_vertices)
+        neighbors = NearestNeighbors(n_neighbors=n_nbrs).fit(self.mesh_vertices)
         distances, indices = neighbors.kneighbors(cartesian_grid)
 
         src, dst = [], []
@@ -165,7 +178,7 @@ class Graph:
         )
         g2m_graph.srcdata["pos"] = cartesian_grid.to(torch.float32)
         g2m_graph.dstdata["pos"] = torch.tensor(
-            self.multimesh_vertices,
+            self.mesh_vertices,
             dtype=torch.float32,
         )
         g2m_graph.srcdata["lat_lon"] = self.lat_lon_grid_flat
@@ -204,22 +217,20 @@ class Graph:
         """
         # create the mesh2grid bipartite graph
         cartesian_grid = latlon2xyz(self.lat_lon_grid_flat)
-        face_centroids = get_face_centroids(
-            self.multimesh_vertices, self.multimesh_faces
-        )
+        face_centroids = get_face_centroids(self.mesh_vertices, self.mesh_faces)
         n_nbrs = 1
         neighbors = NearestNeighbors(n_neighbors=n_nbrs).fit(face_centroids)
         _, indices = neighbors.kneighbors(cartesian_grid)
         indices = indices.flatten()
 
-        src = [p for i in indices for p in self.multimesh_faces[i]]
+        src = [p for i in indices for p in self.mesh_faces[i]]
         dst = [i for i in range(len(cartesian_grid)) for _ in range(3)]
         m2g_graph = create_heterograph(
             src, dst, ("mesh", "m2g", "grid"), dtype=torch.int32
         )  # number of edges is 3,114,720, exactly matches with the paper
 
         m2g_graph.srcdata["pos"] = torch.tensor(
-            self.multimesh_vertices,
+            self.mesh_vertices,
             dtype=torch.float32,
         )
         m2g_graph.dstdata["pos"] = cartesian_grid.to(dtype=torch.float32)

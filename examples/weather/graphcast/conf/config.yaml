@@ -26,10 +26,13 @@ hydra:
 # │            Model Configuration            │
 # └───────────────────────────────────────────┘
 
-processor_layers: 16         # Number of processor layers.
-hidden_dim: 512              # Size of each layer.
-multimesh_level: 6           # Max icosphere level in the multimesh.
-norm_type: TELayerNorm       # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
+processor_layers: 16              # Number of processor layers.
+hidden_dim: 512                   # Size of each layer.
+mesh_level: 6                     # Max icosphere level in the multimesh.
+multimesh: true                   # If true, uses multimesh for the processor.
+processor_type: MessagePassing    # "GraphTransformer" as in GenCast, or "MessagePassing" as in GraphCast.
+khop_neighbors: 0                 # Number of neighbors for each node used in the GraphTransformer. This option is ignored if the processor type is "MessagePassing".  
+norm_type: TELayerNorm            # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
 
 
 # ┌───────────────────────────────────────────┐

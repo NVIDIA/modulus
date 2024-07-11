@@ -40,7 +40,10 @@ from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.utils.graphcast.graph import Graph
 
-from .graph_cast_processor import GraphCastProcessor
+from .graph_cast_processor import (
+    GraphCastProcessorGraphTransformer,
+    GraphCastProcessorMessagePassing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +154,7 @@ class GraphCastNet(Module):
         Final output dimensionality of the edge features, by default 227
     processor_type: str, optional
         The type of processor used in this model. Available options are
-        'MessagePassing', and 'GraphTransformer', which correspond to the 
+        'MessagePassing', and 'GraphTransformer', which correspond to the
         processors in GraphCast and GenCast, respectively.
         By default 'MessagePassing'.
     khop_neighbors: int, optional
@@ -242,7 +245,7 @@ class GraphCastNet(Module):
         input_dim_mesh_nodes: int = 3,
         input_dim_edges: int = 4,
         output_dim_grid_nodes: int = 227,
-        processor_type: str = 'MessagePassing',
+        processor_type: str = "MessagePassing",
         khop_neighbors: int = 0,
         processor_layers: int = 16,
         hidden_layers: int = 1,
@@ -264,6 +267,9 @@ class GraphCastNet(Module):
         produce_aggregated_output_on_all_ranks: bool = True,
     ):
         super().__init__(meta=MetaData())
+        self.processor_type = processor_type
+        if self.processor_type == "MessagePassing":
+            khop_neighbors = 0
         self.is_distributed = False
         if partition_size > 1:
             self.is_distributed = True
@@ -288,14 +294,20 @@ class GraphCastNet(Module):
         # construct the graph
         self.graph = Graph(self.lat_lon_grid, mesh_level, multimesh, khop_neighbors)
 
-        self.mesh_graph, khop_list = self.graph.create_mesh_graph(verbose=False)
+        self.mesh_graph, self.attn_mask = self.graph.create_mesh_graph(verbose=False)
         self.g2m_graph = self.graph.create_g2m_graph(verbose=False)
         self.m2g_graph = self.graph.create_m2g_graph(verbose=False)
 
         self.g2m_edata = self.g2m_graph.edata["x"]
         self.m2g_edata = self.m2g_graph.edata["x"]
-        self.mesh_edata = self.mesh_graph.edata["x"]
         self.mesh_ndata = self.mesh_graph.ndata["x"]
+        if self.processor_type == "MessagePassing":
+            self.mesh_edata = self.mesh_graph.edata["x"]
+        elif self.processor_type == "GraphTransformer":
+            # Dummy tensor to avoid breaking the API
+            self.mesh_edata = torch.zeros((1, input_dim_edges))
+        else:
+            raise ValueError(f"Invalid processor type {processor_type}")
 
         if use_cugraphops_encoder or self.is_distributed:
             kwargs = {}
@@ -424,8 +436,8 @@ class GraphCastNet(Module):
         # icosahedron processor
         if processor_layers <= 2:
             raise ValueError("Expected at least 3 processor layers")
-        if processor_type is 'MessagePassing':
-            self.processor_encoder = GraphCastProcessor(
+        if processor_type == "MessagePassing":
+            self.processor_encoder = GraphCastProcessorMessagePassing(
                 aggregation=aggregation,
                 processor_layers=1,
                 input_dim_nodes=hidden_dim,
@@ -437,7 +449,7 @@ class GraphCastNet(Module):
                 do_concat_trick=do_concat_trick,
                 recompute_activation=recompute_activation,
             )
-            self.processor = GraphCastProcessor(
+            self.processor = GraphCastProcessorMessagePassing(
                 aggregation=aggregation,
                 processor_layers=processor_layers - 2,
                 input_dim_nodes=hidden_dim,
@@ -449,7 +461,7 @@ class GraphCastNet(Module):
                 do_concat_trick=do_concat_trick,
                 recompute_activation=recompute_activation,
             )
-            self.processor_decoder = GraphCastProcessor(
+            self.processor_decoder = GraphCastProcessorMessagePassing(
                 aggregation=aggregation,
                 processor_layers=1,
                 input_dim_nodes=hidden_dim,
@@ -461,10 +473,15 @@ class GraphCastNet(Module):
                 do_concat_trick=do_concat_trick,
                 recompute_activation=recompute_activation,
             )
-        elif processor_type is 'GraphTransformer':
-            pass
         else:
-            raise ValueError(f'Invalid processor type {processor_type}')
+            self.processor_encoder = torch.nn.Identity()
+            self.processor = GraphCastProcessorGraphTransformer(
+                attn_mask=self.attn_mask,
+                processor_layers=processor_layers,
+                input_dim_nodes=hidden_dim,
+                hidden_dim=hidden_dim,
+            )
+            self.processor_decoder = torch.nn.Identity()
 
         # mesh2grid decoder
         self.decoder = MeshGraphDecoder(
@@ -638,12 +655,17 @@ class GraphCastNet(Module):
         )
 
         # process multimesh graph
-        mesh_efeat_processed, mesh_nfeat_processed = self.processor_encoder(
-            mesh_efeat_embedded,
-            mesh_nfeat_encoded,
-            self.mesh_graph,
-        )
-
+        if self.processor_type == "MessagePassing":
+            mesh_efeat_processed, mesh_nfeat_processed = self.processor_encoder(
+                mesh_efeat_embedded,
+                mesh_nfeat_encoded,
+                self.mesh_graph,
+            )
+        else:
+            mesh_nfeat_processed = self.processor_encoder(
+                mesh_nfeat_encoded,
+            )
+            mesh_efeat_processed = None
         return mesh_efeat_processed, mesh_nfeat_processed, grid_nfeat_encoded
 
     def decoder_forward(
@@ -671,11 +693,16 @@ class GraphCastNet(Module):
         """
 
         # process multimesh graph
-        _, mesh_nfeat_processed = self.processor_decoder(
-            mesh_efeat_processed,
-            mesh_nfeat_processed,
-            self.mesh_graph,
-        )
+        if self.processor_type == "MessagePassing":
+            _, mesh_nfeat_processed = self.processor_decoder(
+                mesh_efeat_processed,
+                mesh_nfeat_processed,
+                self.mesh_graph,
+            )
+        else:
+            mesh_nfeat_processed = self.processor_decoder(
+                mesh_nfeat_processed,
+            )
 
         m2g_efeat_embedded = self.decoder_embedder(self.m2g_edata)
 
@@ -716,11 +743,16 @@ class GraphCastNet(Module):
         )
 
         # checkpoint of processor done in processor itself
-        mesh_efeat_processed, mesh_nfeat_processed = self.processor(
-            mesh_efeat_processed,
-            mesh_nfeat_processed,
-            self.mesh_graph,
-        )
+        if self.processor_type == "MessagePassing":
+            mesh_efeat_processed, mesh_nfeat_processed = self.processor(
+                mesh_efeat_processed,
+                mesh_nfeat_processed,
+                self.mesh_graph,
+            )
+        else:
+            mesh_efeat_processed, mesh_nfeat_processed = self.processor(
+                mesh_nfeat_processed,
+            )
 
         grid_nfeat_finale = self.decoder_checkpoint_fn(
             self.decoder_forward,

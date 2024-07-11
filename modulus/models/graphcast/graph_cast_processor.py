@@ -16,7 +16,9 @@
 
 from typing import Union
 
+import torch
 import torch.nn as nn
+import transformer_engine as te
 from dgl import DGLGraph
 from torch import Tensor
 
@@ -25,7 +27,7 @@ from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 
 
-class GraphCastProcessor(nn.Module):
+class GraphCastProcessorMessagePassing(nn.Module):
     """Processor block used in GraphCast operating on a latent space
     represented by hierarchy of icosahedral meshes.
 
@@ -177,3 +179,50 @@ class GraphCastProcessor(nn.Module):
             )
 
         return efeat, nfeat
+
+
+class GraphCastProcessorGraphTransformer(nn.Module):
+    """Processor block used in GenCast operating on a latent space
+    represented by hierarchy of icosahedral meshes.
+
+    Parameters
+    ----------
+    """
+
+    def __init__(
+        self,
+        attn_mask,
+        processor_layers: int = 16,
+        input_dim_nodes: int = 512,
+        hidden_dim: int = 512,
+    ):
+        super().__init__()
+
+        layers = [
+            te.pytorch.TransformerLayer(
+                hidden_size=input_dim_nodes,
+                ffn_hidden_size=hidden_dim,
+                num_attention_heads=4,
+                layer_number=i + 1,
+                fuse_qkv_params=False,
+            )
+            for i in range(processor_layers)
+        ]
+
+        self.processor_layers = nn.ModuleList(layers)
+        self.hidden_dim = hidden_dim
+        self.attn_mask = torch.tensor(attn_mask, dtype=torch.bool)
+
+    def forward(
+        self,
+        nfeat: Tensor,
+    ) -> Tensor:
+        nfeat = nfeat.unsqueeze(1)
+        for module in self.processor_layers:
+            nfeat = module(
+                nfeat,
+                attention_mask=self.attn_mask.to(nfeat.device),
+                self_attn_mask_type="arbitrary",
+            )
+
+        return None, torch.squeeze(nfeat, 1)
