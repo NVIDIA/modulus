@@ -27,7 +27,7 @@ from modulus.models.gnn_layers.mesh_node_block import MeshNodeBlock
 from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 
 
-class GraphCastProcessorMessagePassing(nn.Module):
+class GraphCastProcessor(nn.Module):
     """Processor block used in GraphCast operating on a latent space
     represented by hierarchy of icosahedral meshes.
 
@@ -187,42 +187,53 @@ class GraphCastProcessorGraphTransformer(nn.Module):
 
     Parameters
     ----------
+    attn_mask : torch.Tensor
+        Attention mask to be applied within the transformer layers.
+    processor_layers : int, optional (default=16)
+        Number of processing layers.
+    input_dim_nodes : int, optional (default=512)
+        Dimension of the input features for each node.
+    hidden_dim : int, optional (default=512)
+        Dimension of the hidden features within the transformer layers.
     """
 
     def __init__(
         self,
-        attn_mask,
+        attention_mask: torch.Tensor,
+        num_attention_heads: int = 4,
         processor_layers: int = 16,
         input_dim_nodes: int = 512,
         hidden_dim: int = 512,
     ):
         super().__init__()
+        self.num_attention_heads = num_attention_heads
+        self.hidden_dim = hidden_dim
+        self.attention_mask = torch.tensor(attention_mask, dtype=torch.bool)
+        self.register_buffer("mask", self.attention_mask, persistent=False)
 
         layers = [
             te.pytorch.TransformerLayer(
                 hidden_size=input_dim_nodes,
                 ffn_hidden_size=hidden_dim,
-                num_attention_heads=4,
+                num_attention_heads=num_attention_heads,
                 layer_number=i + 1,
                 fuse_qkv_params=False,
             )
             for i in range(processor_layers)
         ]
-
         self.processor_layers = nn.ModuleList(layers)
-        self.hidden_dim = hidden_dim
-        self.attn_mask = torch.tensor(attn_mask, dtype=torch.bool)
 
     def forward(
         self,
         nfeat: Tensor,
     ) -> Tensor:
         nfeat = nfeat.unsqueeze(1)
+        # TODO make sure reshaping the last dim to (h, d) is done automatically in the transformer layer
         for module in self.processor_layers:
             nfeat = module(
                 nfeat,
-                attention_mask=self.attn_mask.to(nfeat.device),
+                attention_mask=self.mask,
                 self_attn_mask_type="arbitrary",
             )
 
-        return None, torch.squeeze(nfeat, 1)
+        return torch.squeeze(nfeat, 1)

@@ -16,8 +16,6 @@
 
 import logging
 
-import dgl
-import networkx as nx
 import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
@@ -95,6 +93,22 @@ class Graph:
             self.mesh_vertices = self.finest_mesh_vertices
         self.mesh_faces = mesh.faces
 
+    @staticmethod
+    def khop_adj_all_k(g, kmax):
+        if not g.is_homogeneous:
+            raise NotImplementedError("only homogeneous graph is supported")
+        min_degree = g.in_degrees().min()
+        with torch.no_grad():
+            adj = g.adj_external(transpose=True, scipy_fmt=None)
+            adj_k = adj
+            adj_all = adj.clone()
+            for _ in range(2, kmax + 1):
+                # scale with min-degree to avoid too large values
+                # but >= 1.0
+                adj_k = (adj @ adj_k) / min_degree
+                adj_all += adj_k
+        return adj_all.to_dense().bool()
+
     def create_mesh_graph(self, verbose: bool = True) -> Tensor:
         """Create the multimesh graph.
 
@@ -127,13 +141,8 @@ class Graph:
         mesh_graph.edata["x"] = mesh_graph.edata["x"].to(dtype=self.dtype)
         if self.khop_neighbors > 0:
             # Make a graph whose edges connect the k-hop neighbors of the original graph.
-            mesh_graph = dgl.khop_graph(
-                g=mesh_graph, k=self.khop_neighbors, copy_ndata=True
-            )
-            # khop_list = [dgl.khop_out_subgraph(mesh_graph, i, self.khop_neighbors)[0].nodes() for i in range(mesh_graph.num_nodes())]
-            mesh_graph_nx = mesh_graph.to_networkx()
-            A = nx.adjacency_matrix(mesh_graph_nx).todense()
-            mask = A == 0
+            khop_adj_bool = self.khop_adj_all_k(g=mesh_graph, kmax=self.khop_neighbors)
+            mask = ~khop_adj_bool
         else:
             mask = None
         if verbose:

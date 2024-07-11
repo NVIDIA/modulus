@@ -31,7 +31,8 @@ hidden_dim: 512                   # Size of each layer.
 mesh_level: 6                     # Max icosphere level in the multimesh.
 multimesh: true                   # If true, uses multimesh for the processor.
 processor_type: MessagePassing    # "GraphTransformer" as in GenCast, or "MessagePassing" as in GraphCast.
-khop_neighbors: 0                 # Number of neighbors for each node used in the GraphTransformer. This option is ignored if the processor type is "MessagePassing".  
+khop_neighbors: 32                # Number of neighbors for each node used in the GraphTransformer. Only used if the processor type is "GraphTransformer".  
+num_attention_heads: 4            # Number of attention heads. Only used if the processor type is "GraphTransformer".
 norm_type: TELayerNorm            # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
 
 

@@ -41,8 +41,8 @@ from modulus.models.module import Module
 from modulus.utils.graphcast.graph import Graph
 
 from .graph_cast_processor import (
+    GraphCastProcessor,
     GraphCastProcessorGraphTransformer,
-    GraphCastProcessorMessagePassing,
 )
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,8 @@ class GraphCastNet(Module):
         input_dim_edges: int = 4,
         output_dim_grid_nodes: int = 227,
         processor_type: str = "MessagePassing",
-        khop_neighbors: int = 0,
+        khop_neighbors: int = 32,
+        num_attention_heads: int = 4,
         processor_layers: int = 16,
         hidden_layers: int = 1,
         hidden_dim: int = 512,
@@ -437,7 +438,7 @@ class GraphCastNet(Module):
         if processor_layers <= 2:
             raise ValueError("Expected at least 3 processor layers")
         if processor_type == "MessagePassing":
-            self.processor_encoder = GraphCastProcessorMessagePassing(
+            self.processor_encoder = GraphCastProcessor(
                 aggregation=aggregation,
                 processor_layers=1,
                 input_dim_nodes=hidden_dim,
@@ -449,7 +450,7 @@ class GraphCastNet(Module):
                 do_concat_trick=do_concat_trick,
                 recompute_activation=recompute_activation,
             )
-            self.processor = GraphCastProcessorMessagePassing(
+            self.processor = GraphCastProcessor(
                 aggregation=aggregation,
                 processor_layers=processor_layers - 2,
                 input_dim_nodes=hidden_dim,
@@ -461,7 +462,7 @@ class GraphCastNet(Module):
                 do_concat_trick=do_concat_trick,
                 recompute_activation=recompute_activation,
             )
-            self.processor_decoder = GraphCastProcessorMessagePassing(
+            self.processor_decoder = GraphCastProcessor(
                 aggregation=aggregation,
                 processor_layers=1,
                 input_dim_nodes=hidden_dim,
@@ -476,7 +477,8 @@ class GraphCastNet(Module):
         else:
             self.processor_encoder = torch.nn.Identity()
             self.processor = GraphCastProcessorGraphTransformer(
-                attn_mask=self.attn_mask,
+                attention_mask=self.attn_mask,
+                num_attention_heads=num_attention_heads,
                 processor_layers=processor_layers,
                 input_dim_nodes=hidden_dim,
                 hidden_dim=hidden_dim,
@@ -750,9 +752,10 @@ class GraphCastNet(Module):
                 self.mesh_graph,
             )
         else:
-            mesh_efeat_processed, mesh_nfeat_processed = self.processor(
+            mesh_nfeat_processed = self.processor(
                 mesh_nfeat_processed,
             )
+            mesh_efeat_processed = None
 
         grid_nfeat_finale = self.decoder_checkpoint_fn(
             self.decoder_forward,

@@ -27,7 +27,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, 
 
 import torch._dynamo
 
-torch._dynamo.config.suppress_errors = True
+torch._dynamo.config.suppress_errors = True  # TODO check if this can be removed
 
 # import modules
 import os
@@ -118,6 +118,7 @@ class GraphCastTrainer(BaseTrainer):
             output_dim_grid_nodes=cfg.num_channels_climate,
             processor_type=cfg.processor_type,
             khop_neighbors=cfg.khop_neighbors,
+            num_attention_heads=cfg.num_attention_heads,
             processor_layers=cfg.processor_layers,
             hidden_dim=cfg.hidden_dim,
             norm_type=cfg.norm_type,
