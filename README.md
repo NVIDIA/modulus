@@ -21,12 +21,6 @@ workflows to suit the diversity of use cases in the science and engineering disc
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
-<!-- markdownlint-disable -->
-<p align="center">
-  <img src=https://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img/Modulus-850x720.svg alt="Modulus"/>
-</p>
-<!-- markdownlint-enable -->
-
 ## Modulus Packages
 
 - [Modulus (Beta)](https://github.com/NVIDIA/modulus): Open-source deep-learning
@@ -60,7 +54,8 @@ Img1 | Img2 | Img 3
 ---|---|---|
 Link1|Link2|Link3
 
-You can find more details in the link here.
+See what SciML reseachers are saying about Modulus
+
 
 # How to get started
 The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
