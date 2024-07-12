@@ -4,4 +4,5 @@ title: NVIDIA Modulus
 authors:
   - family-names: Modulus Contributors
 year: 2023
+license: Apache-2.0
 url: https://github.com/NVIDIA/modulus
