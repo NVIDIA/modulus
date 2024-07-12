@@ -82,7 +82,7 @@ Detailed information on features and capabilities can be found in the [Modulus d
 
 ### Domain Specific Packages
 The following are packages dedicated for domain experts of specific communities catering to their unique exploration needs.  
-- [Earth-2 Studio)](https://github.com/NVIDIA/earth2studio): Open source project
+- [Earth-2 Studio](https://github.com/NVIDIA/earth2studio): Open source project
   to enable climate researchers and scientists to explore and experiment with
   AI models for weather and climate.
 
@@ -98,7 +98,7 @@ Modulus is open source project and gets contributions from researchers in the Sc
 
 Some examples of community contributors are highlighted here:
 
-<img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Contributor/AI-Surrogates-Modulus.png alt="cardiovascular sim"/>| <img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/earth-2-generative-ai-featured.png alt="AI Weather Forecasting"/> | Img 3|
+<img src="https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Contributor/AI-Surrogates-Modulus.png" alt="cardiovascular sim"/>| <img src="https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/earth-2-generative-ai-featured.png" alt="AI Weather Forecasting"/> | Img 3|
 ---|---|---|
 Stanford team|NV Research team|HP Labs team
 
@@ -106,7 +106,7 @@ Stanford team|NV Research team|HP Labs team
 
 Here are some of the key benefits of Modulus for SciML model development:
 
-Img1 | Img2 | Img 3
+![Physcis based benchmarking](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
 ---|---|---|
 Physcis based benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets|Out of the box performance and scalability 
 
