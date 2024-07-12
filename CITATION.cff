@@ -4,4 +4,4 @@ title: "NVIDIA Modulus: Open-source deep-learning framework for building, traini
 date-released: "2023-02-24"
 authors:
   - name: "Modulus Contributors"
-url: "https://github.com/NVIDIA/modulus"
+repository-code: "https://github.com/NVIDIA/modulus"
