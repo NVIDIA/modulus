@@ -92,15 +92,22 @@ The following are research packages that get packaged into Modulus once they are
 - [Earth2 Grid](https://github.com/NVlabs/earth2grid): Experimental library with utilities for working geographic data defined on various grids.
 - [Earth-2 MIP](https://github.com/NVIDIA/earth2mip): Experimental library with utilities for model intercomparison for weather and climate models.
 
-# Who is contributing to Modulus
+# Who is using and contributing to Modulus
 
 Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
 
 Some examples of community contributors are highlighted here:
 
-<img src="https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Contributor/AI-Surrogates-Modulus.png" alt="cardiovascular sim"/>| <img src="https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/earth-2-generative-ai-featured.png" alt="AI Weather Forecasting"/> | Img 3|
----|---|---|
-Stanford team|NV Research team|HP Labs team
+- Stanford team
+- HP Labs team
+- NV Research team
+
+Examples of research teams using Modulus here:
+- ORNL team Team
+- TU Munich team
+- CMU team
+
+Please go to this page for a complete list of research work leveraging Modulus.
 
 ## Why are they using Modulus
 
