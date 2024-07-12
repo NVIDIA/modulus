@@ -22,7 +22,6 @@ world scale.
     - [AI4Science Library](#AI4Science-Library)
       - [Domain Specific Packages](#Domain-Specific-Packages) 
     - [Python First](#python-first)
- 
 - [Who is contributing to Modulus](#Who-is-contributing-to-Modulus)
 - [Why use Modulus](###Why-are-they-using-Modulus)
 - [Getting Started](#getting-started)
@@ -57,10 +56,10 @@ Component | Description |
 | [**torch.multiprocessing**](https://pytorch.org/docs/stable/multiprocessing.html) | Python multiprocessing, but with magical memory sharing of torch Tensors across processes. Useful for data loading and Hogwild training |
 | [**torch.utils**](https://pytorch.org/docs/stable/data.html) | DataLoader and other utility functions for convenience |
 
-Usually, PyTorch is used either as:
+Usually, Modulus is used either as:
 
-- A replacement for NumPy to use the power of GPUs.
-- A deep learning research platform that provides maximum flexibility and speed.
+- A complementary tool to Pytorch when exploring AI for SciML and AI4Science applications.
+- A deep learning research platform that provides scale and optimal performance on NVIDIA GPUs.
 
 Elaborating Further:
 
@@ -93,9 +92,10 @@ Detailed information on features and capabilities can be found in the [Modulus d
 Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
 
 Some examples of community contributors are highlighted here:
-<img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Contributor/AI-Surrogates-Modulus.png alt="cardiovascular sim"/>| <img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/earth-2-generative-ai-featured.png alt="cardiovascular sim"/> | Img 3
+
+<img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Contributor/AI-Surrogates-Modulus.png alt="cardiovascular sim"/>| <img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/earth-2-generative-ai-featured.png alt="AI Weather Forecasting"/> | Img 3|
 ---|---|---|
-Link1|Links|Link3
+Stanford team|NV Research team|HP Labs team
 
 ## Why are they using Modulus
 
