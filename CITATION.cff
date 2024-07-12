@@ -1,8 +1,12 @@
 cff-version: 1.2.0
-message: If you use this software, please cite it as below.
-title: NVIDIA Modulus
+message: "If you use this software, please cite it as below."
+title: "NVIDIA Modulus"
+version: "0.6.0"
+date-released: "2024-07-11"
 authors:
-  - family-names: {Modulus Contributors}
-year: 2023
-license: Apache-2.0
-url: https://github.com/NVIDIA/modulus
+  - name: "NVIDIA Modulus Team"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.0000000"  # Replace with your actual DOI
+repository-code: "https://github.com/NVIDIA/modulus"
+url: "https://github.com/NVIDIA/modulus"
