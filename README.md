@@ -42,7 +42,7 @@ provides you with the optimized stack that will enable you to train your models 
 
 ## More About Modulus
 
-[Learn the basics of Modulus](??)
+[Learn the basics with using Modulus in your PyTorch code](??)
 
 At a granular level, Modulus is a library that consists of the following components:
 
@@ -100,9 +100,10 @@ Please go to this page for a complete list of research work leveraging Modulus.
 
 Here are some of the key benefits of Modulus for SciML model development:
 
-![Physcis based benchmarking](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
+![Benchmarking](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
 ---|---|---|
-Physcis based benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets|Out of the box performance and scalability 
+SciML Benchmarking and validation (Link)|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
+xxxx For more details (Link)|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase. For more details (Link)|xxx For more details (Link)
 
 See what SciML reseachers are saying about Modulus
 
