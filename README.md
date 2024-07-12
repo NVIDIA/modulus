@@ -42,18 +42,13 @@ provides you with the optimized stack that will enable you to train your models 
 
 ## More About Modulus
 
-[Learn the basics of Modulus](https://pytorch.org/tutorials/beginner/basics/intro.html)
+[Learn the basics of Modulus](??)
 
 At a granular level, Modulus is a library that consists of the following components:
 
 Component | Description |
 | ---- | --- |
-| [**torch**](https://pytorch.org/docs/stable/torch.html) | A Tensor library like NumPy, with strong GPU support |
-| [**torch.autograd**](https://pytorch.org/docs/stable/autograd.html) | A tape-based automatic differentiation library that supports all differentiable Tensor operations in torch |
-| [**torch.jit**](https://pytorch.org/docs/stable/jit.html) | A compilation stack (TorchScript) to create serializable and optimizable models from PyTorch code  |
-| [**torch.nn**](https://pytorch.org/docs/stable/nn.html) | A neural networks library deeply integrated with autograd designed for maximum flexibility |
-| [**torch.multiprocessing**](https://pytorch.org/docs/stable/multiprocessing.html) | Python multiprocessing, but with magical memory sharing of torch Tensors across processes. Useful for data loading and Hogwild training |
-| [**torch.utils**](https://pytorch.org/docs/stable/data.html) | DataLoader and other utility functions for convenience |
+
 
 Usually, Modulus is used either as:
 
@@ -72,9 +67,6 @@ Detailed information on features and capabilities can be found in the [Modulus d
 
 ## AI4Science Library
 
-- [Modulus (Beta)](https://github.com/NVIDIA/modulus): Open-source deep-learning
-  framework for building, training, and fine-tuning deep learning models using
-  state-of-the-art Physics-ML methods.
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): Repository of 
   algorithms and utilities to be used with Modulus
   core to physics inform model training as well as higher level abstraction
