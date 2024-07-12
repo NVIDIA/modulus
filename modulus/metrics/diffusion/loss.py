@@ -333,7 +333,7 @@ class EDMLossSR:
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         n = torch.randn_like(y) * sigma
-        D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
+        D_yn = net(y + n, sigma, labels, y_lr, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
@@ -505,7 +505,7 @@ class ResLoss:
         b = y.shape[0]
         Nx = torch.arange(self.img_shape_x).int()
         Ny = torch.arange(self.img_shape_y).int()
-        grid = torch.stack(torch.meshgrid(Nx, Ny, indexing="ij"), dim=0)[
+        grid = torch.stack(torch.meshgrid(Ny, Nx, indexing="ij"), dim=0)[
             None,
         ].expand(b, -1, -1, -1)
 
@@ -542,7 +542,7 @@ class ResLoss:
             # global interpolation
             input_interp = torch.nn.functional.interpolate(
                 img_lr,
-                (self.patch_shape_x, self.patch_shape_y),
+                (self.patch_shape_y, self.patch_shape_x),
                 mode="bilinear",
             )
 
@@ -550,22 +550,22 @@ class ResLoss:
             y_new = torch.zeros(
                 b * self.patch_num,
                 c_out,
-                self.patch_shape_x,
                 self.patch_shape_y,
+                self.patch_shape_x,
                 device=img_clean.device,
             )
             y_lr_new = torch.zeros(
                 b * self.patch_num,
                 c_in + input_interp.shape[1],
-                self.patch_shape_x,
                 self.patch_shape_y,
+                self.patch_shape_x,
                 device=img_clean.device,
             )
             global_index = torch.zeros(
                 b * self.patch_num,
                 2,
-                self.patch_shape_x,
                 self.patch_shape_y,
+                self.patch_shape_x,
                 dtype=torch.int,
                 device=img_clean.device,
             )
@@ -575,22 +575,22 @@ class ResLoss:
                 y_new[b * i : b * (i + 1),] = y[
                     :,
                     :,
-                    rnd_x : rnd_x + self.patch_shape_x,
                     rnd_y : rnd_y + self.patch_shape_y,
+                    rnd_x : rnd_x + self.patch_shape_x,
                 ]
                 global_index[b * i : b * (i + 1),] = grid[
                     :,
                     :,
-                    rnd_x : rnd_x + self.patch_shape_x,
                     rnd_y : rnd_y + self.patch_shape_y,
+                    rnd_x : rnd_x + self.patch_shape_x,
                 ]
                 y_lr_new[b * i : b * (i + 1),] = torch.cat(
                     (
                         y_lr[
                             :,
                             :,
-                            rnd_x : rnd_x + self.patch_shape_x,
                             rnd_y : rnd_y + self.patch_shape_y,
+                            rnd_x : rnd_x + self.patch_shape_x,
                         ],
                         input_interp,
                     ),

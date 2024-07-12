@@ -25,15 +25,40 @@ Tensor = torch.Tensor
 
 
 @torch.jit.script
-def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
-    """
+def _kernel_crps_implementation(pred: Tensor, obs: Tensor, biased: bool) -> Tensor:
+    """An O(m log m) implementation of the kernel CRPS formulas"""
+    skill = torch.abs(pred - obs[..., None]).mean(-1)
+    pred, _ = torch.sort(pred)
+
+    # derivation of fast implementation of spread-portion of CRPS formula when x is sorted
+    # sum_(i,j=1)^m |x_i - x_j| = sum_(i<j) |x_i -x_j| + sum_(i > j) |x_i - x_j|
+    #                           = 2 sum_(i <= j) |x_i -x_j|
+    #                           = 2 sum_(i <= j) (x_j - x_i)
+    #                           = 2 sum_(i <= j) x_j - 2 sum_(i <= j) x_i
+    #                           = 2 sum_(j=1)^m j x_j - 2 sum (m - i + 1) x_i
+    #                           = 2 sum_(i=1)^m (2i - m - 1) x_i
+    m = pred.size(-1)
+    i = torch.arange(1, m + 1, device=pred.device, dtype=pred.dtype)
+    denom = m * m if biased else m * (m - 1)
+    factor = (2 * i - m - 1) / denom
+    spread = torch.sum(factor * pred, dim=-1)
+    return skill - spread
+
+
+def kcrps(pred: Tensor, obs: Tensor, dim: int = 0, biased: bool = True):
+    """Estimate the CRPS from a finite ensemble
+
     Computes the local Continuous Ranked Probability Score (CRPS) by using
-    the kernel version of CRPS
+    the kernel version of CRPS. The cost is O(m log m).
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    Computes:
+    Approximates:
     .. math::
         CRPS(X, y) = E[X - y] - 0.5 E[X-X']
+
+    with
+    .. math::
+        sum_i=1^m |X_i - y| / m - 1/(2m^2) sum_i,j=1^m |x_i - x_j|
 
     Parameters
     ----------
@@ -45,29 +70,22 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
         with respect to.
     dim : int, optional
         The dimension over which to compute the CRPS, assumed to be 0.
+    biased :
+        When False, uses the unbiased estimators described in (Zamo and Naveau, 2018)::
+
+            E|X-y|/m - 1/(2m(m-1)) sum_(i,j=1)|x_i - x_j|
+
+        Unlike ``crps`` this is fair for finite ensembles. Non-fair ``crps`` favors less
+        dispersive ensembles since it is biased high by E|X- X'|/ m where m is the
+        ensemble size.
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
-    n = pred.shape[dim]
-    device = pred.device
-    _crps = 0.0 * obs
-    for i in range(n):
-        x_i = torch.index_select(
-            pred, dim, torch.tensor([i], device=device, dtype=torch.int32)
-        )
-
-        x_j = torch.index_select(
-            pred,
-            dim,
-            torch.tensor([j for j in range(i, n)], device=device, dtype=torch.int32),
-        )
-
-        _crps += torch.abs(x_i.squeeze(dim) - obs) / n
-        _crps -= torch.sum(torch.abs(x_i - x_j) / n, dim=dim) / n
-    return _crps
+    pred = torch.movedim(pred, dim, -1)
+    return _kernel_crps_implementation(pred, obs, biased=biased)
 
 
 def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) -> Tensor:
@@ -131,83 +149,6 @@ def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) ->
     Phi = torch.erf(d / torch.sqrt(torch.as_tensor(2.0)))
 
     return std * (2 * phi + d * Phi - 1.0 / torch.sqrt(torch.as_tensor(torch.pi)))
-
-
-@torch.jit.script
-def _crps_from_empirical_cdf(
-    pred: torch.Tensor, obs: torch.Tensor, dim: int = 0
-) -> torch.Tensor:
-    """Compute the exact CRPS using the CDF method
-
-    Uses this formula
-    .. math::
-        \\int [F(x) - 1(x-y)]^2 dx
-
-    where F is the emperical CDF and 1(x-y) = 1 if x > y.
-
-    This method is more memory efficient than the kernel method, and uses O(n
-    log n) compute instead of O(n^2), where n is the number of ensemble members.
-
-    Parameters
-    ----------
-    pred : torch.Tensor
-        tensor of ensemble members / predictions
-    obs : torch.Tensor
-        tensor of observations
-    dim : int
-        Dimension to perform CRPS reduction over.
-
-    Returns
-    -------
-        tensor of CRPS scores
-
-    """
-    n = pred.shape[dim]
-    device = pred.device
-    pred, _ = torch.sort(pred, dim=dim)
-    ans = torch.zeros_like(obs)
-
-    # dx [F(x) - H(x-y)]^2 = dx [0 - 1]^2 = dx
-    # val = ensemble[0] - truth
-    val = (
-        torch.index_select(
-            pred, dim, torch.tensor([0], device=device, dtype=torch.int32)
-        ).squeeze(dim)
-        - obs
-    )
-    ans += torch.where(val > 0, val, 0.0)
-
-    for i in range(n - 1):
-        x0 = torch.index_select(
-            pred, dim, torch.tensor([i], device=device, dtype=torch.int32)
-        ).squeeze(dim)
-        x1 = torch.index_select(
-            pred, dim, torch.tensor([i + 1], device=device, dtype=torch.int32)
-        ).squeeze(dim)
-
-        cdf = (i + 1) / n
-
-        # a. case y < x0
-        val = (x1 - x0) * (cdf - 1) ** 2
-        mask = obs < x0
-        ans += torch.where(mask, val, 0.0)
-
-        # b. case x0 <= y <= x1
-        val = (obs - x0) * cdf**2 + (x1 - obs) * (cdf - 1) ** 2
-        mask = (obs >= x0) & (obs <= x1)
-        ans += torch.where(mask, val, 0.0)
-
-        # c. case x1 < t
-        mask = obs > x1
-        val = (x1 - x0) * cdf**2
-        ans += torch.where(mask, val, 0.0)
-
-    # dx [F(x) - H(x-y)]^2 = dx [1 - 0]^2 = dx
-    val = obs - torch.index_select(
-        pred, dim, torch.tensor([n - 1], device=device, dtype=torch.int32)
-    ).squeeze(dim)
-    ans += torch.where(val > 0, val, 0.0)
-    return ans
 
 
 def _crps_from_cdf(
@@ -397,10 +338,8 @@ def crps(
 
     n = pred.shape[dim]
     obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
-    if method == "kernel":
+    if method in ["kernel", "sort"]:
         return kcrps(pred, obs, dim=dim)
-    elif method == "sort":
-        return _crps_from_empirical_cdf(pred, obs, dim=dim)
     else:
         pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
         number_of_bins = max(int(np.sqrt(n)), 100)

@@ -78,6 +78,7 @@ def training_loop(
     wandb_project="Modulus-Generative",
     wandb_entity="CorrDiff-DDP-Group",
     wandb_name="CorrDiff",
+    wandb_group="CorrDiff-Group",
     fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
     hr_mean_conditioning=False,
@@ -107,6 +108,7 @@ def training_loop(
             entity=wandb_entity,
             name=wandb_name,
             mode=wandb_mode,
+            group=wandb_group,
             save_code=True,
         )
         # log code
@@ -154,7 +156,7 @@ def training_loop(
     # Construct network.
     logger0.info("Constructing network...")
     interface_kwargs = dict(
-        img_resolution=img_shape_x,
+        img_resolution=[img_shape_y, img_shape_x],
         img_channels=img_out_channels,
         img_in_channels=img_in_channels,
         img_out_channels=img_out_channels,
@@ -175,15 +177,19 @@ def training_loop(
             )
         net_reg = Module.from_checkpoint(regression_checkpoint_path)
         net_reg.eval().requires_grad_(False).to(device)
-        interface_kwargs = dict(
-            regression_net=net_reg,
-            img_shape_x=img_shape_x,
-            img_shape_y=img_shape_y,
-            patch_shape_x=patch_shape_x,
-            patch_shape_y=patch_shape_y,
-            patch_num=patch_num,
-            hr_mean_conditioning=hr_mean_conditioning,
-        )
+
+        if loss_kwargs["class_name"] == "modulus.metrics.diffusion.ResLoss":
+            interface_kwargs = dict(
+                regression_net=net_reg,
+                img_shape_x=img_shape_x,
+                img_shape_y=img_shape_y,
+                patch_shape_x=patch_shape_x,
+                patch_shape_y=patch_shape_y,
+                patch_num=patch_num,
+                hr_mean_conditioning=hr_mean_conditioning,
+            )
+        else:
+            interface_kwargs = {}
         logger0.success("Loaded the pre-trained regression network")
     else:
         interface_kwargs = {}

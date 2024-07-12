@@ -44,7 +44,8 @@ class MeshEdgeBlock(nn.Module):
     activation_fn : nn.Module, optional
         Type of activation function, by default nn.SiLU()
     norm_type : str, optional
-        normalization type, by default "LayerNorm"
+        Normalization type ["TELayerNorm", "LayerNorm"].
+        Use "TELayerNorm" for optimal performance. By default "LayerNorm".
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
     recompute_activation : bool, optional

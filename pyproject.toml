@@ -18,7 +18,7 @@ dependencies = [
     "zarr>=2.14.2",
     "fsspec>=2023.1.0",
     "s3fs>=2023.5.0",
-    "nvidia_dali_cuda110>=1.16.0",
+    "nvidia_dali_cuda120>=1.35.0",
     "setuptools>=67.6.0",
     "certifi>=2023.7.22",
     "pytz>=2023.3",
@@ -26,6 +26,7 @@ dependencies = [
     "tqdm>=4.60.0",
     "nvtx>=0.2.8",
     "onnx>=1.14.0",
+    "timm>=0.9.12",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -130,3 +131,6 @@ FullyConnected = "modulus.models.mlp:FullyConnected"
 Pix2Pix = "modulus.models.pix2pix:Pix2Pix"
 One2ManyRNN = "modulus.models.rnn:One2ManyRNN"
 SRResNet = "modulus.models.srrn:SRResNet"
+Pangu = "modulus.models.pangu:Pangu"
+Fengwu = "modulus.models.fengwu:Fengwu"
+SwinRNN = "modulus.models.swinvrnn:SwinRNN"
