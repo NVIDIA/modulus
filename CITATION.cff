@@ -1,8 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "NVIDIA Modulus: Open-source deep-learning framework for building, training, and fine-tuning deep learning models using state-of-the-art Physics-ML methods"
-date-released: "2023"
-year: "2023"
+date-released: "2023-02-24"
 authors:
-  - name: "NVIDIA Modulus Team"
+  - name: "Modulus Contributors"
 url: "https://github.com/NVIDIA/modulus"
