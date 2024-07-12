@@ -90,7 +90,7 @@ Modulus is open source project and gets contributions from researchers in the Sc
 
 Some latest examples of community contributors are CMU team, Stanford Cardiovascular research team, HP Labs 3D Printing team etc.
 
-Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE, UW etc.
+Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE etc.
 
 Please go to this page for a complete list of research work leveraging Modulus. For a list of enterprises using Modulud refer here.
 
