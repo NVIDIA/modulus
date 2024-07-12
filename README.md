@@ -12,8 +12,7 @@ deep learning models using state-of-the-art SciML methods for AI4science and eng
 Modulus provides utilities and optimized pipelines to develop AI models that combine physics-knowledge with data, enabling real-time predictions.
 Whether you are exploring the use of Neural operators or GNNs or transformers or
 interested in Physics informed Neural Networks or a hybrid approach in between, Modulus
-provides you with the optimized stack that will enable you to train your models at real
-world scale.
+provides you with the optimized stack that will enable you to train your models at scale.
 
 <!-- toc -->
 
@@ -82,10 +81,16 @@ Detailed information on features and capabilities can be found in the [Modulus d
   for domain experts.
 
 ### Domain Specific Packages
-
+The following are packages dedicated for domain experts of specific communities catering to their unique exploration needs.  
 - [Earth-2 Studio)](https://github.com/NVIDIA/earth2studio): Open source project
   to enable climate researchers and scientists to explore and experiment with
   AI models for weather and climate.
+
+### Research packages
+The following are research packages that get packaged into Modulus once they are stable. 
+- [Modulus Makani](https://github.com/NVIDIA/modulus-makani): Experimental library designed to enable the research and development of machine-learning based weather and climate models.
+- [Earth2 Grid] (https://github.com/NVlabs/earth2grid): Utilities for working geographic data defined on various grids.
+- [Earth-2 MIP](https://github.com/NVIDIA/earth2mip): Utilities for model intercomparison for weather and climate models.
 
 # Who is contributing to Modulus
 
