@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: /code/examples/cfd/ahmed_body_mgn/outputs/
+
+data_dir: /code/examples/cfd/ahmed_body_mgn/ahmed_body_dataset #./dataset
+multi_mesh_data_dir: /code/examples/cfd/ahmed_body_mgn/multi_mesh_dataset #./dataset
+mesh_layer: 6
+ckpt_path: /code/examples/cfd/ahmed_body_mgn/checkpoints_BiStride
+
+input_dim_nodes: 11
+input_dim_edges: 4
+output_dim: 4
+aggregation: sum
+hidden_dim_node_encoder: 256
+hidden_dim_edge_encoder: 256
+hidden_dim_node_decoder: 256
+
+batch_size: 1
+epochs: 500
+num_training_samples: 583 #683
+num_validation_samples: 100 # 100
+num_test_samples: 100 #100
+
+lr: 0.0001
+lr_decay_rate: 0.99985
+
+# performance configs
+use_apex: True
+amp: False
+jit: False
+
+# number of workers used by data loader during training.
+num_dataloader_workers: 4
+# number of workers used by dataset during pre-loading (null - auto-select).
+num_dataset_workers: null
+
+do_concat_trick: False
+num_processor_checkpoint_segments: 0
+recompute_activation: False
+
+wandb_mode: disabled
+
+checkpoint_save_freq: 10
