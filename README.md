@@ -88,13 +88,11 @@ The following are research packages that get packaged into Modulus once they are
 
 Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
 
-Some latest examples of community contributors are Stanford Cardiovascular research team, HP Labs 3D Printing team, etc.
+Some latest examples of community contributors are CMU team, Stanford Cardiovascular research team, HP Labs 3D Printing team etc.
 
-Latest examples of research teams using Modulus are ORNL team, 
-- TU Munich team
-- CMU team
+Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE, UW etc.
 
-Please go to this page for a complete list of research work leveraging Modulus.
+Please go to this page for a complete list of research work leveraging Modulus. For a list of enterprises using Modulud refer here.
 
 ## Why are they using Modulus
 
