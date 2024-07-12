@@ -89,8 +89,8 @@ The following are packages dedicated for domain experts of specific communities 
 ### Research packages
 The following are research packages that get packaged into Modulus once they are stable. 
 - [Modulus Makani](https://github.com/NVIDIA/modulus-makani): Experimental library designed to enable the research and development of machine-learning based weather and climate models.
-- [Earth2 Grid] (https://github.com/NVlabs/earth2grid): Utilities for working geographic data defined on various grids.
-- [Earth-2 MIP](https://github.com/NVIDIA/earth2mip): Utilities for model intercomparison for weather and climate models.
+- [Earth2 Grid](https://github.com/NVlabs/earth2grid): Experimental library with utilities for working geographic data defined on various grids.
+- [Earth-2 MIP](https://github.com/NVIDIA/earth2mip): Experimental library with utilities for model intercomparison for weather and climate models.
 
 # Who is contributing to Modulus
 
@@ -108,7 +108,7 @@ Here are some of the key benefits of Modulus for SciML model development:
 
 Img1 | Img2 | Img 3
 ---|---|---|
-Link1|Link2|Link3
+Physcis based benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets|Out of the box performance and scalability 
 
 See what SciML reseachers are saying about Modulus
 
