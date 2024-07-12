@@ -15,13 +15,64 @@ interested in Physics informed Neural Networks or a hybrid approach in between, 
 provides you with the optimized stack that will enable you to train your models at real
 world scale.
 
-This package is the core module that provides the core algorithms, network architectures
+<!-- toc -->
+
+- [More About Modulus](#more-about-modulus)
+    - [Scalable GPU optimized training Library](#Scalable-GPU-optimized-training-Library)
+    - [AI4Science Library](#AI4Science-Library)
+      - [Domain Specific Packages](#Domain-Specific-Packages) 
+    - [Python First](#python-first)
+ 
+- [Who is contributing to Modulus](#Who-is-contributing-to-Modulus)
+- [Why use Modulus](###Why-are-they-using-Modulus)
+- [Getting Started](#getting-started)
+- [Resources](#resources)
+- [Installation](#installation)
+  - [Binaries](#PyPi)
+    - [Optional dependencies](#Optional-dependencies)
+    - [NVCR Container](#NVCR-Container)
+  - [From Source](#from-source)
+    - [Package](#Package)
+      - [Source Container](#Source-Container)
+    - [Docker Image](#docker-image)
+      - [Using pre-built images](#using-pre-built-images)
+- [Contributing](#Contributing-to-Modulus)
+- [Communication](#communication)
+- [License](#license)
+
+<!-- tocstop -->
+
+## More About Modulus
+
+[Learn the basics of Modulus](https://pytorch.org/tutorials/beginner/basics/intro.html)
+
+At a granular level, Modulus is a library that consists of the following components:
+
+Component | Description |
+| ---- | --- |
+| [**torch**](https://pytorch.org/docs/stable/torch.html) | A Tensor library like NumPy, with strong GPU support |
+| [**torch.autograd**](https://pytorch.org/docs/stable/autograd.html) | A tape-based automatic differentiation library that supports all differentiable Tensor operations in torch |
+| [**torch.jit**](https://pytorch.org/docs/stable/jit.html) | A compilation stack (TorchScript) to create serializable and optimizable models from PyTorch code  |
+| [**torch.nn**](https://pytorch.org/docs/stable/nn.html) | A neural networks library deeply integrated with autograd designed for maximum flexibility |
+| [**torch.multiprocessing**](https://pytorch.org/docs/stable/multiprocessing.html) | Python multiprocessing, but with magical memory sharing of torch Tensors across processes. Useful for data loading and Hogwild training |
+| [**torch.utils**](https://pytorch.org/docs/stable/data.html) | DataLoader and other utility functions for convenience |
+
+Usually, PyTorch is used either as:
+
+- A replacement for NumPy to use the power of GPUs.
+- A deep learning research platform that provides maximum flexibility and speed.
+
+Elaborating Further:
+
+### Scalable GPU optimized training Library
+
+Modulus package is the core module that provides the core algorithms, network architectures
 and utilities with a pytorch like experience. Reference samples cover a broad spectrum of physics-constrained and data-driven
 workflows to suit the diversity of use cases in the science and engineering disciplines.
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
-## Modulus Packages
+## AI4Science Library
 
 - [Modulus (Beta)](https://github.com/NVIDIA/modulus): Open-source deep-learning
   framework for building, training, and fine-tuning deep learning models using
@@ -57,7 +108,7 @@ Link1|Link2|Link3
 See what SciML reseachers are saying about Modulus
 
 
-# How to get started
+# Getting started
 The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
 * [Getting started Webinar](https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
 * [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
@@ -155,11 +206,12 @@ Alternatively, you can run `make container-ci`.
 Currently only `linux/amd64` and `linux/arm64` platforms are supported. If using
 `linux/arm64`, some dependencies like `warp-lang` might not install correctly.
 
-## Contributing
+## Contributing to Modulus
 
 Modulus is an open source collaboration and its success is rooted in community
 contribution to further the field of Physics-ML. Thank you for contributing to the
 project so others can build on your contribution.
+
 For guidance on making a contribution to Modulus, please refer to the
 [contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
 
