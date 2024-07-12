@@ -126,6 +126,10 @@ The following resources will help you in learning how to use Modulus. The best w
 * [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
 * [Reference Samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md)
 * [User guide Documentation](https://docs.nvidia.com/deeplearning/modulus/modulus-core/index.html)
+
+## Resources
+* [AI4Science Bootcamp]()
+* []()
   
 ## Installation
 
