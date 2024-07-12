@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: If you use this software, please cite it as below.
 title: NVIDIA Modulus
 authors:
-  - family-names: Modulus Contributors
+  - family-names: {Modulus Contributors}
 year: 2023
 license: Apache-2.0
 url: https://github.com/NVIDIA/modulus
