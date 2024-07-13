@@ -26,7 +26,6 @@ provides you with the optimized stack that will enable you to train your models 
     - [Scalable GPU optimized training Library](#Scalable-GPU-optimized-training-Library)
     - [AI4Science Library](#AI4Science-Library)
       - [Domain Specific Packages](#Domain-Specific-Packages) 
-    - [Python First](#python-first)
 - [Who is contributing to Modulus](#Who-is-contributing-to-Modulus)
 - [Why use Modulus](###Why-are-they-using-Modulus)
 - [Getting Started](#getting-started)
@@ -48,7 +47,19 @@ provides you with the optimized stack that will enable you to train your models 
 
 ## More About Modulus
 
-[Learn the basics with using Modulus in your PyTorch code](??)
+### Hello world
+You can start using Modulus in your PyTorch code as simple as shown here:
+
+```python
+python
+>>> import torch
+>>> from modulus.models.mlp.fully_connected import FullyConnected
+>>> model = FullyConnected(in_features=32, out_features=64)
+>>> input = torch.randn(128, 32)
+>>> output = model(input)
+>>> output.shape
+torch.Size([128, 64])
+```
 
 At a granular level, Modulus is a library that consists of the following components:
 
@@ -65,7 +76,7 @@ Elaborating Further:
 
 ### Scalable GPU optimized training Library
 
-Modulus package is the core module that provides the core algorithms, network architectures
+Modulus package has the core module in this repository, that provides the core algorithms, network architectures
 and utilities with a pytorch like experience. Reference samples cover a broad spectrum of physics-constrained and data-driven
 workflows to suit the diversity of use cases in the science and engineering disciplines.
 
@@ -73,10 +84,9 @@ Detailed information on features and capabilities can be found in the [Modulus d
 
 ## AI4Science Library
 
-- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): Repository of 
-  algorithms and utilities to be used with Modulus
-  core to physics inform model training as well as higher level abstraction
-  for domain experts.
+- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): This repository of 
+  algorithms and utilities allow SciML researchers and developers to physics inform model training and model validation. It also provides a higher level abstraction
+  for domain experts that is native to science and engineering.
 
 ### Domain Specific Packages
 The following are packages dedicated for domain experts of specific communities catering to their unique exploration needs.  
@@ -98,7 +108,7 @@ Some latest examples of community contributors are CMU team, Stanford Cardiovasc
 
 Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE etc.
 
-Please go to this page for a complete list of research work leveraging Modulus. For a list of enterprises using Modulud refer here.
+Please go to this page for a complete list of research work leveraging Modulus. For a list of enterprises using Modulus refer [here](https://developer.nvidia.com/modulus).
 
 ## Why are they using Modulus
 
@@ -106,22 +116,23 @@ Here are some of the key benefits of Modulus for SciML model development:
 
 ![Benchmarking](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
 ---|---|---|
-SciML Benchmarking and validation (Link)|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
-xxxx For more details (Link)|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase. For more details (Link)|xxx For more details (Link)
+SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
+Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
 
-See what SciML reseachers are saying about Modulus
+See what your peer SciML reseachers are saying about Modulus (Coming soon).
 
 
 # Getting started
 The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
+* [Hello world of using Modulus with PyTorch]( )
 * [Getting started Webinar](https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
 * [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
 * [Reference Samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md)
 * [User guide Documentation](https://docs.nvidia.com/deeplearning/modulus/modulus-core/index.html)
 
 ## Resources
-* [AI4Science Bootcamp]()
-* []()
+* [AI4Science Bootcamp](https://github.com/openhackathons-org/End-to-End-AI-for-Science)
+* [Pretrained models and datasets]()
   
 ## Installation
 
