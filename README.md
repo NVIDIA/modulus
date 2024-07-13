@@ -14,6 +14,12 @@ Whether you are exploring the use of Neural operators or GNNs or transformers or
 interested in Physics informed Neural Networks or a hybrid approach in between, Modulus
 provides you with the optimized stack that will enable you to train your models at scale.
 
+<!-- markdownlint-disable -->
+<p align="center">
+  <img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/Knowledge_guided_models.png alt="Modulus"/>
+</p>
+<!-- markdownlint-enable -->
+
 <!-- toc -->
 
 - [More About Modulus](#more-about-modulus)
