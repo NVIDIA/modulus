@@ -234,6 +234,9 @@ project so others can build on your contribution.
 For guidance on making a contribution to Modulus, please refer to the
 [contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
 
+## Cite Modulus
+If Modulus helped your research and you would like to cite it, please refer to the [guidelines](https://github.com/NVIDIA/modulus/blob/main/CITATION.cff)
+
 ## Communication
 
 - Github Discussions: Discuss new architectures, implementations, Physics-ML research, etc.
