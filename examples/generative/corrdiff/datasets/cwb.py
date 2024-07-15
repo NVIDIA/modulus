@@ -167,7 +167,7 @@ class _ZarrDataset(DownscalingDataset):
 
     def normalize_output(self, x, channels=None):
         """Convert output from physical units to normalized data."""
-        norm = self.get_target_normalization(self.group)
+        mean, scale = self.get_target_normalization(self.group)
         norm = self._select_norm_channels(*norm, channels)
         return normalize(x, *norm)
 
