@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Shallow-Water-Equation example.
 - 3D UNet
 - AeroGraphNet example of training of MeshGraphNet on Ahmed body and DrivAerNet datasets.
+- Add Transolver model.
 
 ### Changed
 
