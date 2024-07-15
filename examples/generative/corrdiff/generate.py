@@ -115,6 +115,7 @@ def main(cfg: DictConfig) -> None:
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     (img_shape_y, img_shape_x) = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
 
     # Sampler kwargs
     if sampling_method == "stochastic":
@@ -237,6 +238,8 @@ def main(cfg: DictConfig) -> None:
                         ),  # Only run regression model once
                         pretext="reg",
                         class_idx=class_idx,
+                        img_shape = (img_shape_x, img_shape_y),
+                        img_out_channels = img_out_channels,
                     )
             if net_res:
                 if hr_mean_conditioning and sampling_method == "stochastic":
@@ -253,6 +256,8 @@ def main(cfg: DictConfig) -> None:
                         pretext="gen",
                         class_idx=class_idx,
                         num_steps=num_steps,
+                        img_shape = (img_shape_x, img_shape_y),
+                        img_out_channels = img_out_channels,
                         **sampler_kwargs,
                     )
             if regression_only:
@@ -437,6 +442,8 @@ def generate(
     seeds,
     class_idx,
     seed_batch_size,
+    img_shape, # as (img_shape_x, img_shape_y)
+    img_out_channels,
     sampling_method=None,
     img_lr=None,
     pretext=None,
@@ -484,9 +491,9 @@ def generate(
             latents = rnd.randn(
                 [
                     seed_batch_size,
-                    net.img_out_channels,
-                    net.img_shape_x,
-                    net.img_shape_y,
+                    img_out_channels,
+                    img_shape[1],
+                    img_shape[0],
                 ],
                 device=device,
             ).to(memory_format=torch.channels_last)
