@@ -475,16 +475,6 @@ class ZarrDataset(DownscalingDataset):
         """Convert output from normalized data to physical units."""
         return self._dataset.denormalize_output(x, channels=self.out_channels)
 
-    def _create_highres_(self, x, shape):
-        # downsample the high res imag
-        x = x.transpose(1, 2, 0)
-        # upsample with bicubic interpolation to bring the image to the nominal size
-        x = cv2.resize(
-            x, (shape[0], shape[1]), interpolation=cv2.INTER_CUBIC
-        )  # 32x32x3
-        x = x.transpose(2, 0, 1)  # 3x32x32
-        return x
-
     def _create_lowres_(self, x, factor=4):
         # downsample the high res imag
         x = x.transpose(1, 2, 0)

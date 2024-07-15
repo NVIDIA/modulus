@@ -17,11 +17,13 @@
 from datasets.cwb import (
     _ZarrDataset,
     FilterTime,
+    get_zarr_dataset,
 )
 import torch
 import datetime
 import numpy as np
 import os
+import joblib
 
 
 import pytest
@@ -71,3 +73,17 @@ def test_filter_time():
     filtered = FilterTime(data, lambda time: time.year > 1990)
     assert filtered.time() == [datetime.datetime(2018, 1, 1)]
     assert filtered[0]
+
+
+def hash_array(arr, tol=1e-3):
+    intarray = (np.asarray(arr) * tol).astype(int)
+    return joblib.hash(intarray)
+
+
+def test_Zarr_Dataset(regtest):
+    # reset regression data with pytest --regtest-reset
+    ds = get_zarr_dataset(data_path=path)
+    inp, outp, idx = ds[0]
+    print("index", idx, file=regtest)
+    print("input", hash_array(inp), file=regtest)
+    print("output", hash_array(outp), file=regtest)
