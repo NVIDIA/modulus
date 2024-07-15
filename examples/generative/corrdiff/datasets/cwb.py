@@ -363,22 +363,6 @@ class ZarrDataset(DownscalingDataset):
         if self.ds_factor > 1:
             target = self._create_lowres_(target, factor=self.ds_factor)
 
-        reshape_args = (
-            None,
-            None,
-            None,
-            None,
-            None,
-            self.img_shape_x,
-            self.img_shape_y,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-
         target = target[:, : self.img_shape_x, : self.img_shape_y]
         input = input[:, : self.img_shape_x, : self.img_shape_y]
         return torch.as_tensor(target), torch.as_tensor(input), idx
