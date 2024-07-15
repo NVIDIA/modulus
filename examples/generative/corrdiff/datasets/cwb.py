@@ -337,8 +337,6 @@ class ZarrDataset(DownscalingDataset):
         n_history=0,
         min_path=None,
         max_path=None,
-        global_means_path=None,
-        global_stds_path=None,
         normalization="v1",
     ):
         if not all_times:
@@ -361,16 +359,6 @@ class ZarrDataset(DownscalingDataset):
         self.n_history = n_history
         self.min_path = min_path
         self.max_path = max_path
-        self.global_means_path = (
-            to_absolute_path(global_means_path)
-            if (global_means_path is not None)
-            else None
-        )
-        self.global_stds_path = (
-            to_absolute_path(global_stds_path)
-            if (global_stds_path is not None)
-            else None
-        )
         self.normalization = normalization
 
     def info(self):
@@ -401,14 +389,14 @@ class ZarrDataset(DownscalingDataset):
             self.out_channels,
             self.img_shape_x,
             self.img_shape_y,
-            self.min_path,
-            self.max_path,
-            self.global_means_path,
-            self.global_stds_path,
+            None,
+            None,
+            None,
+            None,
             self.normalization,
             self.roll,
         )
-        # SR
+
         input = reshape_fields(
             input,
             "inp",

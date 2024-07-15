@@ -51,23 +51,8 @@ def reshape_fields(
     n_history = n_history
 
     n_channels = np.shape(img)[1]  # this will either be N_in_channels or N_out_channels
-    channels = in_channels if inp_or_tar == "inp" else out_channels
-
-    if normalize and train:
-        mins = np.load(min_path)[:, channels]
-        maxs = np.load(max_path)[:, channels]
-        means = np.load(global_means_path)[:, channels]
-        stds = np.load(global_stds_path)[:, channels]
 
     img = img[:, :, :img_shape_x, :img_shape_y]
-
-    if normalize and train:
-        if normalization == "minmax":
-            img -= mins
-            img /= maxs - mins
-        elif normalization == "zscore":
-            img -= means
-            img /= stds
 
     if roll:
         img = np.roll(img, y_roll, axis=-1)
