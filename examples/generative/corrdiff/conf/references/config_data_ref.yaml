@@ -18,7 +18,6 @@ full_field: &FULL_FIELD
 
   batch_size: 1
   dt: 1
-  n_history: 0
   img_shape_x: 448
   img_shape_y: 448
   # era5_data_dir: '/lustre/fsw/sw_climate_fno/cwb-align'  #old
@@ -39,7 +38,6 @@ full_field_train_crop448_grid_12inchans_fcn_4outchans_4x_6layer: #config for sin
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19] 
   out_channels: [0,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -52,7 +50,6 @@ full_field_val_crop448_grid_12inchans_fcn_4outchans_4x_6layer: #config for singl
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19]
   out_channels: [0,17,18,19]  #[0,9,10,11] 
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -64,7 +61,6 @@ out_of_sample:
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19]
   out_channels: [0,17,18,19]  #[0,9,10,11] 
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -80,7 +76,6 @@ full_field_train_crop448_grid_12inchans_fcn_4outchans_4x_normv2: #config for sin
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19] 
   out_channels: [0,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -95,7 +90,6 @@ full_field_train_crop448_grid_12inchans_fcn_4outchans_4x: #config for single gpu
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19] 
   out_channels: [0,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -108,7 +102,6 @@ full_field_val_crop448_grid_12inchans_fcn_4outchans_4x:  &validation #config for
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,9,10,11,12,17,18,19]
   out_channels: [0,17,18,19]  #[0,9,10,11] 
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -122,7 +115,6 @@ full_field_train_crop448_grid_20inchans_4outchans_4x: #config for single gpu tra
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [0,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -135,7 +127,6 @@ full_field_val_crop448_grid_20inchans_4outchans_4x: #config for single gpu train
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [0,17,18,19]   #[17, 18, 19]
-  roll: !!bool False
   patch_size: 448
   crop_size_x: 448
   crop_size_y: 448
@@ -149,7 +140,6 @@ full_field_train_crop112_grid_20inchans_4outchans_4x: #config for single gpu tra
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [0,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 112
   crop_size_y: 112
@@ -162,7 +152,6 @@ full_field_val_crop112_grid_20inchans_4outchans_4x: #config for single gpu train
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [0,17,18,19]   #[17, 18, 19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 448
   crop_size_y: 448
@@ -176,7 +165,6 @@ full_field_train_crop112_grid_20inchans_19outchans_4x: #config for single gpu tr
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]   #[17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 112
   crop_size_y: 112
@@ -189,7 +177,6 @@ full_field_val_crop112_grid_20inchans_19outchans_4x: #config for single gpu trai
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]   #[17, 18, 19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 448
   crop_size_y: 448
@@ -204,7 +191,6 @@ full_field_train_crop112_grid_20inchans_4x: #config for single gpu training to c
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17,18,19]  #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 112
   crop_size_y: 112
@@ -217,7 +203,6 @@ full_field_val_crop112_grid_20inchans_4x: #config for single gpu training to cat
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 448
   crop_size_y: 448
@@ -231,7 +216,6 @@ full_field_train_crop64_grid_20inchans_4x: #config for single gpu training to ca
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 64
   crop_size_y: 64
@@ -244,7 +228,6 @@ full_field_val_crop64_grid_20inchans_4x: #config for single gpu training to catc
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 448
   crop_size_y: 448
@@ -257,7 +240,6 @@ full_field_train_crop64_grid_20inchans: #config for single gpu training to catch
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 64
   crop_size_y: 64
@@ -269,7 +251,6 @@ full_field_val_crop64_grid_20inchans: #config for single gpu training to catch b
   <<: *FULL_FIELD
   in_channels: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 448
   crop_size_y: 448
@@ -282,7 +263,6 @@ full_field_train_crop64_grid: #config for single gpu training to catch bugs and 
   <<: *FULL_FIELD
   in_channels: [17, 18, 19]  #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 64
   crop_size_y: 64
@@ -294,7 +274,6 @@ full_field_val_crop64_grid: #config for single gpu training to catch bugs and ov
   <<: *FULL_FIELD
   in_channels: [17, 18, 19]      #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 448
   crop_size_y: 448
@@ -308,7 +287,6 @@ full_field_train_crop64: #config for single gpu training to catch bugs and overf
   <<: *FULL_FIELD
   in_channels: [17.18,19]        #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 64
   crop_size_y: 64
@@ -318,7 +296,6 @@ full_field_val_crop64: #config for single gpu training to catch bugs and overfit
   <<: *FULL_FIELD
   in_channels: [17, 18, 19]      #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 64
   crop_size_x: 448
   crop_size_y: 448
@@ -329,7 +306,6 @@ full_field_train_crop112: #config for single gpu training to catch bugs and over
   <<: *FULL_FIELD
   in_channels: [17.18,19]        #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 112
   crop_size_y: 112
@@ -339,7 +315,6 @@ full_field_val_crop112: #config for single gpu training to catch bugs and overfi
   <<: *FULL_FIELD
   in_channels: [17, 18, 19]      #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 112
   crop_size_x: 112
   crop_size_y: 112
@@ -350,7 +325,6 @@ full_field_train_crop224: #config for single gpu training to catch bugs and over
   <<: *FULL_FIELD
   in_channels: [17.18,19]        #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 224
   crop_size_x: 224
   crop_size_y: 224
@@ -360,7 +334,6 @@ full_field_val_crop224: #config for single gpu training to catch bugs and overfi
   <<: *FULL_FIELD
   in_channels: [17, 18, 19]      #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
   out_channels: [17, 18, 19]     #[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
-  roll: !!bool False
   patch_size: 224
   crop_size_x: 224
   crop_size_y: 224

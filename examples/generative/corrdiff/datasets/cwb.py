@@ -17,7 +17,7 @@
 """Streaming images and labels from datasets created with dataset_tool.py."""
 
 import logging
-import random
+import torch
 
 import cftime
 import cv2
@@ -26,7 +26,6 @@ import numpy as np
 import zarr
 
 from .base import ChannelMetadata, DownscalingDataset
-from .img_utils import reshape_fields
 from .norm import denormalize, normalize
 
 logger = logging.getLogger(__file__)
@@ -329,15 +328,10 @@ class ZarrDataset(DownscalingDataset):
         out_channels=(0, 17, 18, 19),
         img_shape_x=448,
         img_shape_y=448,
-        roll=False,
         add_grid=True,
         ds_factor=1,
         train=True,
         all_times=False,
-        n_history=0,
-        min_path=None,
-        max_path=None,
-        normalization="v1",
     ):
         if not all_times:
             self._dataset = (
@@ -351,15 +345,10 @@ class ZarrDataset(DownscalingDataset):
         self.train = train
         self.img_shape_x = img_shape_x
         self.img_shape_y = img_shape_y
-        self.roll = roll
         self.grid = add_grid
         self.ds_factor = ds_factor
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.n_history = n_history
-        self.min_path = min_path
-        self.max_path = max_path
-        self.normalization = normalization
 
     def info(self):
         """Check if the given time is not in the year 2021."""
@@ -367,13 +356,6 @@ class ZarrDataset(DownscalingDataset):
 
     def __getitem__(self, idx):
         (target, input, _) = self._dataset[idx]
-        # crop and downsamples
-        # rolling
-        if self.train and self.roll:
-            y_roll = random.randint(0, self.img_shape_y)
-        else:
-            y_roll = 0
-
         # channels
         input = input[self.in_channels, :, :]
         target = target[self.out_channels, :, :]
@@ -382,32 +364,24 @@ class ZarrDataset(DownscalingDataset):
             target = self._create_lowres_(target, factor=self.ds_factor)
 
         reshape_args = (
-            y_roll,
-            self.train,
-            self.n_history,
-            self.in_channels,
-            self.out_channels,
+            None,
+            None,
+            None,
+            None,
+            None,
             self.img_shape_x,
             self.img_shape_y,
             None,
             None,
             None,
             None,
-            self.normalization,
-            self.roll,
+            None,
+            None,
         )
 
-        input = reshape_fields(
-            input,
-            "inp",
-            *reshape_args,
-            normalize=False,
-        )  # 3x720x1440
-        target = reshape_fields(
-            target, "tar", *reshape_args, normalize=False
-        )  # 3x720x1440
-
-        return target, input, idx
+        target = target[:, : self.img_shape_x, : self.img_shape_y]
+        input = input[:, : self.img_shape_x, : self.img_shape_y]
+        return torch.as_tensor(target), torch.as_tensor(input), idx
 
     def input_channels(self):
         """Metadata for the input channels. A list of dictionaries, one for each channel"""
