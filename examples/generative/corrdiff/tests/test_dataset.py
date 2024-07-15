@@ -17,8 +17,6 @@
 from datasets.cwb import (
     _ZarrDataset,
     FilterTime,
-    get_target_normalizations_v1,
-    get_target_normalizations_v2,
 )
 import torch
 import datetime
@@ -73,14 +71,3 @@ def test_filter_time():
     filtered = FilterTime(data, lambda time: time.year > 1990)
     assert filtered.time() == [datetime.datetime(2018, 1, 1)]
     assert filtered[0]
-
-
-def test_v1_and_v2_norm_the_same():
-    import zarr
-
-    group = zarr.open_group(path)
-    mean, scale = get_target_normalizations_v2(group)
-    mean1, scale1 = get_target_normalizations_v1(group)
-
-    np.testing.assert_equal(mean, mean1)
-    np.testing.assert_equal(scale, scale1)

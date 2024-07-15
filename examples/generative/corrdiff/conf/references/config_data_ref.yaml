@@ -21,7 +21,6 @@ full_field: &FULL_FIELD
   n_history: 0
   img_shape_x: 448
   img_shape_y: 448
-  normalization: v1     #minmax
   # era5_data_dir: '/lustre/fsw/sw_climate_fno/cwb-align'  #old
   # cwb_data_dir: '/lustre/fsw/sw_climate_fno/cwb-rwrf-pad-2212/all_ranges'  #old
   # relative to CWB_ROOT environment variable
@@ -88,7 +87,6 @@ full_field_train_crop448_grid_12inchans_fcn_4outchans_4x_normv2: #config for sin
   N_grid_channels: 4
   add_grid: True
   ds_factor: 4
-  normalization: v2
 
 
 

@@ -99,7 +99,6 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  normalization: "v1"
 
 # Validation dataset options
 # (need to set dataset.train_test_split == true to have an effect)

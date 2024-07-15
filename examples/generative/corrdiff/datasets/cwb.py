@@ -32,27 +32,6 @@ from .norm import denormalize, normalize
 logger = logging.getLogger(__file__)
 
 
-def get_target_normalizations_v1(group):
-    """Get target normalizations using center and scale values from the 'group'."""
-    return group["cwb_center"][:], group["cwb_scale"][:]
-
-
-def get_target_normalizations_v2(group):
-    """Change the normalizations of the non-gaussian output variables"""
-    center = group["cwb_center"]
-    scale = group["cwb_scale"]
-    variable = group["cwb_variable"]
-
-    center = np.where(variable == "maximum_radar_reflectivity", 25.0, center)
-    center = np.where(variable == "eastward_wind_10m", 0.0, center)
-    center = np.where(variable == "northward_wind_10m", 0, center)
-
-    scale = np.where(variable == "maximum_radar_reflectivity", 25.0, scale)
-    scale = np.where(variable == "eastward_wind_10m", 20.0, scale)
-    scale = np.where(variable == "northward_wind_10m", 20.0, scale)
-    return center, scale
-
-
 class _ZarrDataset(DownscalingDataset):
     """A Dataset for loading paired training data from a Zarr-file
 
@@ -62,11 +41,11 @@ class _ZarrDataset(DownscalingDataset):
     path: str
 
     def __init__(
-        self, path: str, get_target_normalization=get_target_normalizations_v1
+        self,
+        path: str,
     ):
         self.path = path
         self.group = zarr.open_consolidated(path)
-        self.get_target_normalization = get_target_normalization
 
         # valid indices
         cwb_valid = self.group["cwb_valid"]
@@ -81,6 +60,11 @@ class _ZarrDataset(DownscalingDataset):
         valid_times = cwb_valid & era5_all_channels_valid
         # need to cast to bool since cwb_valis is stored as an int8 type in zarr.
         self.valid_times = valid_times != 0
+
+        self.cwb_center, self.cwb_scale = (
+            self.group["cwb_center"][:],
+            self.group["cwb_scale"][:],
+        )
 
         logger.info("Number of valid times: %d", len(self))
         logger.info("input_channels:%s", self.input_channels())
@@ -167,14 +151,12 @@ class _ZarrDataset(DownscalingDataset):
 
     def normalize_output(self, x, channels=None):
         """Convert output from physical units to normalized data."""
-        mean, scale = self.get_target_normalization(self.group)
-        norm = self._select_norm_channels(*norm, channels)
+        norm = self._select_norm_channels(self.cwb_center, self.cwb_scale, channels)
         return normalize(x, *norm)
 
     def denormalize_output(self, x, channels=None):
         """Convert output from normalized data to physical units."""
-        norm = self.get_target_normalization(self.group)
-        norm = self._select_norm_channels(*norm, channels)
+        norm = self._select_norm_channels(self.cwb_center, self.cwb_scale, channels)
         return denormalize(x, *norm)
 
     def info(self):
@@ -515,17 +497,8 @@ class ZarrDataset(DownscalingDataset):
         return x
 
 
-def get_zarr_dataset(*, data_path, normalization="v1", all_times=False, **kwargs):
+def get_zarr_dataset(*, data_path, all_times=False, **kwargs):
     """Get a Zarr dataset for training or evaluation."""
     data_path = to_absolute_path(data_path)
-    get_target_normalization = {
-        "v1": get_target_normalizations_v1,
-        "v2": get_target_normalizations_v2,
-    }[normalization]
-    logger.info(f"Normalization: {normalization}")
-    zdataset = _ZarrDataset(
-        data_path, get_target_normalization=get_target_normalization
-    )
-    return ZarrDataset(
-        dataset=zdataset, normalization=normalization, all_times=all_times, **kwargs
-    )
+    zdataset = _ZarrDataset(data_path)
+    return ZarrDataset(dataset=zdataset, all_times=all_times, **kwargs)

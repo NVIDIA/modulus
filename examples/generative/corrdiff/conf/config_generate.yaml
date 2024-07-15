@@ -94,7 +94,6 @@ dataset:
   max_path: null
   global_means_path: null
   global_stds_path: null
-  normalization: "v1"
 
 ## Deterministic sampler options
 sigma_min: null
