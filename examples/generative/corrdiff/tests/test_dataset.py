@@ -16,7 +16,6 @@
 
 from datasets.cwb import (
     _ZarrDataset,
-    FilterTime,
     get_zarr_dataset,
 )
 import torch
@@ -61,18 +60,12 @@ def test_zarr_dataset_get_valid_time_index(dataset):
     assert isinstance(ans, np.int64)
 
 
-def test_filter_time():
-    class MockData(torch.utils.data.Dataset):
-        def __getitem__(self, idx):
-            return self.time()[idx]
+def test_train_test_split():
+    ds = get_zarr_dataset(data_path=path, train=True)
+    assert not any(t.year == 2021 for t in ds.time())
 
-        def time(self):
-            return [datetime.datetime(2018, 1, 1), datetime.datetime(1970, 1, 1)]
-
-    data = MockData()
-    filtered = FilterTime(data, lambda time: time.year > 1990)
-    assert filtered.time() == [datetime.datetime(2018, 1, 1)]
-    assert filtered[0]
+    ds = get_zarr_dataset(data_path=path, train=False)
+    assert all(t.year == 2021 for t in ds.time())
 
 
 def hash_array(arr, tol=1e-3):
