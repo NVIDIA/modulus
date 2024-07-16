@@ -132,7 +132,8 @@ See what your peer SciML reseachers are saying about Modulus (Coming soon).
 
 # Getting started
 The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
-* [Hello world of using Modulus with PyTorch]( )
+* [Using Modulus with your PyTorch model]( https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-custom-models-in-modulus)
+* [Using Modulus built-in models](https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-built-in-models)
 * [Getting started Webinar](https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
 * [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
 * [Reference Samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md)
@@ -141,6 +142,8 @@ The following resources will help you in learning how to use Modulus. The best w
 ## Resources
 * [AI4Science Bootcamp](https://github.com/openhackathons-org/End-to-End-AI-for-Science)
 * [Pretrained models and datasets]()
+* [Self-paced DLI training](https://learn.nvidia.com/courses/course-detail?course_id=course-v1:DLI+S-OV-04+V1)
+* [Deep Learnning for Scient and Engineerin](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
   
 ## Installation
 
