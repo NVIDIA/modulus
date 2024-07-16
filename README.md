@@ -5,7 +5,15 @@
 [![GitHub](https://img.shields.io/github/license/NVIDIA/modulus)](https://github.com/NVIDIA/modulus/blob/master/LICENSE.txt)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 <!-- markdownlint-enable -->
+[**Quickstart**](#quickstart-colab-in-the-cloud)
+| [**Getting Started**](#getting-started)
+| [**Install guide**](#installation)
+| [**Contributing Guidelines**](#contributing-to-modulus)
+| [**Resources**](#resources)
+| [**Communication**](#communication)
+| [**Reference docs**](https://jax.readthedocs.io/en/latest/)
 
+## What is Modulus?
 NVIDIA Modulus is an open source deep-learning framework for building, training, and fine-tuning
 deep learning models using state-of-the-art SciML methods for AI4science and engineering.
 
@@ -20,30 +28,6 @@ provides you with the optimized stack that will enable you to train your models 
 </p>
 <!-- markdownlint-enable -->
 
-<!-- toc -->
-
-- [More About Modulus](#more-about-modulus)
-    - [Scalable GPU optimized training Library](#Scalable-GPU-optimized-training-Library)
-    - [AI4Science Library](#AI4Science-Library)
-      - [Domain Specific Packages](#Domain-Specific-Packages) 
-- [Who is contributing to Modulus](#Who-is-contributing-to-Modulus)
-- [Why use Modulus](###Why-are-they-using-Modulus)
-- [Getting Started](#getting-started)
-- [Resources](#resources)
-- [Installation](#installation)
-  - [Binaries](#PyPi)
-    - [Optional dependencies](#Optional-dependencies)
-    - [NVCR Container](#NVCR-Container)
-  - [From Source](#from-source)
-    - [Package](#Package)
-      - [Source Container](#Source-Container)
-    - [Docker Image](#docker-image)
-      - [Using pre-built images](#using-pre-built-images)
-- [Contributing](#Contributing-to-Modulus)
-- [Communication](#communication)
-- [License](#license)
-
-<!-- tocstop -->
 
 ## More About Modulus
 
@@ -65,7 +49,11 @@ At a granular level, Modulus is a library that consists of the following compone
 
 Component | Description |
 | ---- | --- |
-
+| [**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators,Graph Neural Networks and many more|
+| [**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline library, including benchmark datapipes, wheather daptapipes and graph datapipes|
+| [**modulus.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of troch.distributed to enable parallel training with just a few steps|
+| [**modulus.utils**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html) | Utilitis for optimization, checkpointing, logging to simplify model development and deployment|
+| [**modulus.metrics**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.metrics.html) | A library of optimized metric calculations for custom training and inference workflows, operating directly on PyTorch tensors|
 
 Usually, Modulus is used either as:
 
