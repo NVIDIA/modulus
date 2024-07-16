@@ -5,21 +5,19 @@
 [![GitHub](https://img.shields.io/github/license/NVIDIA/modulus)](https://github.com/NVIDIA/modulus/blob/master/LICENSE.txt)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 <!-- markdownlint-enable -->
-[**Quickstart**](#quickstart-colab-in-the-cloud)
-| [**Getting Started**](#getting-started)
+[**Getting Started**](#getting-started)
 | [**Install guide**](#installation)
 | [**Contributing Guidelines**](#contributing-to-modulus)
 | [**Resources**](#resources)
 | [**Communication**](#communication)
-| [**Reference docs**](https://jax.readthedocs.io/en/latest/)
 
 ## What is Modulus?
 NVIDIA Modulus is an open source deep-learning framework for building, training, and fine-tuning
 deep learning models using state-of-the-art SciML methods for AI4science and engineering.
 
 Modulus provides utilities and optimized pipelines to develop AI models that combine physics-knowledge with data, enabling real-time predictions.
-Whether you are exploring the use of Neural operators or GNNs or transformers or
-interested in Physics informed Neural Networks or a hybrid approach in between, Modulus
+Whether you are exploring the use of Neural operators, GNNs or transformers or are
+interested in Physics-informed Neural Networks or a hybrid approach in between, Modulus
 provides you with the optimized stack that will enable you to train your models at scale.
 
 <!-- markdownlint-disable -->
@@ -28,22 +26,30 @@ provides you with the optimized stack that will enable you to train your models 
 </p>
 <!-- markdownlint-enable -->
 
+<!-- toc -->
+
+- [More About Modulus](#more-about-modulus)
+    - [Scalable GPU optimized training Library](#scalable-gpu-optimized-training-Library)
+    - [AI4Science Library](#ai4science-library)
+      - [Domain Specific Packages](#domain-specific-packages) 
+- [Who is contributing to Modulus](#who-is-using-and-contributing-to-modulus)
+- [Why use Modulus](#why-are-they-using-modulus)
+- [Getting Started](#getting-started)
+- [Resources](#resources)
+- [Installation](#installation)
+  - [Binaries](#pypi)
+    - [Optional dependencies](#optional-dependencies)
+    - [NVCR Container](#nvcr-container)
+  - [From Source](#from-source)
+    - [Package](#package)
+    - [Source Container](#source-container)
+- [Contributing](#contributing-to-modulus)
+- [Communication](#communication)
+- [License](#license)
+  
+<!-- tocstop -->
 
 ## More About Modulus
-
-### Hello world
-You can start using Modulus in your PyTorch code as simple as shown here:
-
-```python
-python
->>> import torch
->>> from modulus.models.mlp.fully_connected import FullyConnected
->>> model = FullyConnected(in_features=32, out_features=64)
->>> input = torch.randn(128, 32)
->>> output = model(input)
->>> output.shape
-torch.Size([128, 64])
-```
 
 At a granular level, Modulus is a library that consists of the following components:
 
@@ -69,6 +75,20 @@ and utilities with a pytorch like experience. Reference samples cover a broad sp
 workflows to suit the diversity of use cases in the science and engineering disciplines.
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
+
+### Hello world
+You can start using Modulus in your PyTorch code as simple as shown here:
+
+```python
+python
+>>> import torch
+>>> from modulus.models.mlp.fully_connected import FullyConnected
+>>> model = FullyConnected(in_features=32, out_features=64)
+>>> input = torch.randn(128, 32)
+>>> output = model(input)
+>>> output.shape
+torch.Size([128, 64])
+```
 
 ## AI4Science Library
 
@@ -102,7 +122,7 @@ Please go to this page for a complete list of research work leveraging Modulus. 
 
 Here are some of the key benefits of Modulus for SciML model development:
 
-![Benchmarking](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
+![Benchmarking](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
 ---|---|---|
 SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
 Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
