@@ -16,7 +16,7 @@ provides you with the optimized stack that will enable you to train your models 
 
 <!-- markdownlint-disable -->
 <p align="center">
-  <img src=https://github.com/NVIDIA/modulus/tree/ram-cherukuri-patch-1/docs/img/Value%20prop/Knowledge_guided_models.png alt="Modulus"/>
+  <img src=https://github.com/NVIDIA/modulus/tree/readme_update/docs/img/Value%20prop/Knowledge_guided_models.gif alt="Modulus"/>
 </p>
 <!-- markdownlint-enable -->
 
