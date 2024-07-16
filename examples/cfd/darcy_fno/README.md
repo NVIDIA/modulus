@@ -8,6 +8,14 @@ This example runs on a single GPU, go to the
 
 ## Getting Started
 
+### Prerequisites
+
+Install the required dependencies by running below:
+
+```bash
+pip install -r requirements.txt
+```
+
 To train the model, run
 
 ```bash
