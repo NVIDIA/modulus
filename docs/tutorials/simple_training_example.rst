@@ -190,7 +190,7 @@ For an deep-dive on Modulus Distributed utilities, refer :ref:`Modulus Distribut
 
 .. _running-inference-on-trained-models:
 
-Running infernece on trained models
+Running inference on trained models
 ------------------------------------
 
 Running inference on trained model is simple! This is shown by the code below. 
