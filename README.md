@@ -22,7 +22,7 @@ provides you with the optimized stack that will enable you to train your models 
 
 <!-- markdownlint-disable -->
 <p align="center">
-  <img src=https://github.com/NVIDIA/modulus/blob/readme_update/docs/img/Value%20prop/Knowledge%20_guided_models.gif alt="Modulus"/>
+  <img src=docs/img/Value%20prop/Knowledge%20_guided_models.gif alt="Modulus"/>
 </p>
 <!-- markdownlint-enable -->
 
@@ -52,7 +52,7 @@ At a granular level, Modulus is a library that consists of the following compone
 
 Component | Description |
 | ---- | --- |
-| [**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators,Graph Neural Networks and many more|
+| [**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks and many more|
 | [**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline library, including benchmark datapipes, wheather daptapipes and graph datapipes|
 | [**modulus.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of troch.distributed to enable parallel training with just a few steps|
 | [**modulus.utils**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html) | Utilitis for optimization, checkpointing, logging to simplify model development and deployment|
@@ -81,7 +81,7 @@ ResNet, [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deepl
 [Graph Neural Networks (GNNs)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/gnn_layers)
 and generative AI models like [Diffusion Models](https://github.com/NVIDIA/modulus/tree/main/modulus/models/diffusion)
 as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/dlwp)
-and [Super Resolution Network](https://github.com/NVIDIA/modulus/tree/d9e4801f8db92ffb69d28dcc34e788ed1547a72f/modulus/models/srrn) among others.
+and [Super Resolution Network (SrNN)](https://github.com/NVIDIA/modulus/tree/d9e4801f8db92ffb69d28dcc34e788ed1547a72f/modulus/models/srrn) among others.
 These pretrained models are optimized for various physics domains, such as computational fluid dynamics, structural mechanics,
 and electromagnetics. Users can download, customize, and build upon these models to suit their specific needs, significantly reducing the time
 required to develop high-fidelity simulations.
@@ -156,7 +156,7 @@ Please go to this page for a complete list of research work leveraging Modulus. 
 
 Here are some of the key benefits of Modulus for SciML model development:
 
-![Benchmarking](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/recipe.svg) | ![Performance](https://github.com/NVIDIA/modulus/blob/ram-cherukuri-patch-1/docs/img/Value%20prop/performance.svg)
+![Benchmarking](docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](docs/img/Value%20prop/recipe.svg) | ![Performance](docs/img/Value%20prop/performance.svg)
 ---|---|---|
 SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
 Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
@@ -166,18 +166,21 @@ See what your peer SciML reseachers are saying about Modulus (Coming soon).
 
 # Getting started
 The following resources will help you in learning how to use Modulus. The best way is to start with a reference sample and then update it for your own use case.
+* [Modulus: purpose and usage](https://www.nvidia.com/en-us/on-demand/session/dliteachingkit-setk5002/)
 * [Using Modulus with your PyTorch model]( https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-custom-models-in-modulus)
 * [Using Modulus built-in models](https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-built-in-models)
 * [Getting started Webinar](https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
 * [Getting started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html)
 * [Reference Samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md)
 * [User guide Documentation](https://docs.nvidia.com/deeplearning/modulus/modulus-core/index.html)
+* [Video Tutorials](https://www.nvidia.com/en-us/on-demand/search/?facet.mimetype[]=event%20session&layout=list&page=1&q=modulus&sort=relevance&sortDir=desc)
+
 
 ## Resources
 * [AI4Science Bootcamp](https://github.com/openhackathons-org/End-to-End-AI-for-Science)
 * [Pretrained models and datasets]()
 * [Self-paced DLI training](https://learn.nvidia.com/courses/course-detail?course_id=course-v1:DLI+S-OV-04+V1)
-* [Deep Learnning for Scient and Engineerin](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
+* [Deep Learnning for Science and Engineering](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
   
 ## Installation
 
@@ -289,6 +292,11 @@ If Modulus helped your research and you would like to cite it, please refer to t
 - Modulus Forum: The [Modulus Forum](https://forums.developer.nvidia.com/c/physics-simulation/modulus-physics-ml-model-framework)
 hosts an audience of new to moderate level users and developers for general chat, online
 discussions, collaboration, etc.
+
+## Feedback
+
+Want to suggest some improvements to Modulus? Use our feedback form
+[here](https://docs.google.com/forms/d/e/1FAIpQLSfX4zZ0Lp7MMxzi3xqvzX4IQDdWbkNh5H_a_clzIhclE2oSBQ/viewform?usp=sf_link).
 
 ## License
 
