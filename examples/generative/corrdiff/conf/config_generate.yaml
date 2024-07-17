@@ -28,16 +28,12 @@ image_outdir: "image_outdir"
   # Where to save the output images
 seeds: "0-63"
   # Random seeds used for generation
-class_idx: null  
-  # Class label. Null is random
 num_steps: 8
   # Number of sampling steps
 sample_res: "full"
   # Sampling resolution
-regression_only: false
-  # regression only inference
-diffusion_only: false
-  # diffusion only inference
+inference_mode: regression_and_diffusion
+  # Choose from [regression, diffusion, regression_and_diffusion]
 sampling_method: deterministic
   # Sampling method ["stochastic", "deterministic"]
 seed_batch_size: 32

@@ -16,18 +16,16 @@
 
 """Main training loop."""
 
-import copy
 import json
 import os
 import sys
 import time
-import wandb as wb
 
 import numpy as np
 import psutil
 import torch
 
-from hydra.utils import to_absolute_path
+from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from . import training_stats
 
@@ -37,7 +35,6 @@ from modulus.distributed import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_wandb,
 )
 from modulus.utils.generative import (
     construct_class_by_name,
@@ -51,7 +48,7 @@ from modulus.utils.generative import (
 def training_loop(
     dataset,
     dataset_iterator,
-    validation_dataset,
+    validation_dataset,  # TODO check if this is needed
     validation_dataset_iterator,
     *,
     task,
@@ -61,24 +58,16 @@ def training_loop(
     optimizer_kwargs={},  # Options for optimizer.
     augment_kwargs=None,  # Options for augmentation pipeline, None = disable.
     seed=0,  # Global random seed.
-    batch_size_global=512,  # Total batch size for one training iteration.
+    total_batch_size=512,  # Total batch size for one training iteration.
     batch_size_gpu=None,  # Limit batch size per GPU, None = no limit.
-    total_kimg=200000,  # Training duration, measured in thousands of training images.
-    ema_halflife_kimg=500,  # Half-life of the exponential moving average (EMA) of model weights.
-    ema_rampup_ratio=0.05,  # EMA ramp-up coefficient, None = no rampup.
+    training_duration=200000,  # Training duration, measured in thousands of training images.
     lr_rampup_kimg=10000,  # Learning rate ramp-up duration.
-    loss_scaling=1,  # Loss scaling factor for reducing FP16 under/overflows.
-    kimg_per_tick=50,  # Interval of progress prints.
-    state_dump_ticks=500,  # How often to dump training state, None = disable.
+    print_progress_freq=50,  # Interval of progress prints.
+    save_checkpoint_freq=500,  # How often to save the checkpoints, measured in kilo images. None = disable.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     patch_shape_x=448,
     patch_shape_y=448,
     patch_num=1,
-    wandb_mode="disabled",
-    wandb_project="Modulus-Generative",
-    wandb_entity="CorrDiff-DDP-Group",
-    wandb_name="CorrDiff",
-    wandb_group="CorrDiff-Group",
     fp_optimizations="fp32",  # The floating point optimization mode
     regression_checkpoint_path=None,
     hr_mean_conditioning=False,
@@ -87,12 +76,12 @@ def training_loop(
     in_channel=12,
     grad_clip_threshold=None,
     lr_decay=0.8,
-    valid_dump_ticks=5000,
+    validation_freq=5000,
     num_validation_evals=10,
 ):
     """CorrDiff training loop"""
 
-    # Instantiate distributed manager.
+    # Instantiate the distributed manager, to enable data parallelism.
     dist = DistributedManager()
     device = dist.device
 
@@ -101,44 +90,36 @@ def training_loop(
     logger0 = RankZeroLoggingWrapper(logger, dist)
     logger.file_logging(file_name=f"logs/training_loop_{dist.rank}.log")
 
-    # wandb logger
+    # Initialize tensorbaord to track scalars
     if dist.rank == 0:
-        initialize_wandb(
-            project=wandb_project,
-            entity=wandb_entity,
-            name=wandb_name,
-            mode=wandb_mode,
-            group=wandb_group,
-            save_code=True,
-        )
-        # log code
-        wb.run.log_code(
-            to_absolute_path("."),
-            exclude_fn=lambda path: ("outputs" in path) and (os.getcwd() not in path),
-        )
+        writer = SummaryWriter(log_dir='tensorboard')
 
+    # Identify whether AMP (Automatic Mixed Precision) should be used.
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
-    # Initialize.
+    # Record the current time to measure the duration of subsequent operations.
     start_time = time.time()
 
+    # Set seeds for NumPy and PyTorch to ensure reproducibility in distributed settings, and configure
+    # cuDNN and CUDA to disable TF32 and reduced precision settings for consistent precision.
     np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
     torch.backends.cudnn.benchmark = cudnn_benchmark
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
-
-    # Select batch size per GPU.
-    batch_gpu_total = batch_size_global // dist.world_size
+    
+    # Calculate the total batch size per GPU in a distributed setting, log the batch size per GPU, ensure it's within valid limits,
+    # determine the number of accumulation rounds, and validate that the global batch size matches the expected value.
+    batch_gpu_total = total_batch_size // dist.world_size
     logger0.info(f"batch_size_gpu: {batch_size_gpu}")
     if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
         batch_size_gpu = batch_gpu_total
     num_accumulation_rounds = batch_gpu_total // batch_size_gpu
-    if batch_size_global != batch_size_gpu * num_accumulation_rounds * dist.world_size:
+    if total_batch_size != batch_size_gpu * num_accumulation_rounds * dist.world_size:
         raise ValueError(
-            "batch_size_global must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
+            "total_batch_size must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
         )
 
     img_in_channels = (
@@ -212,7 +193,6 @@ def training_loop(
         )
     else:
         ddp = net
-    ema = copy.deepcopy(net).eval().requires_grad_(False)
 
     # Resume training from previous snapshot.
     max_index = -1
@@ -246,7 +226,7 @@ def training_loop(
         logger0.warning("Could not load network and optimizer states")
 
     # Train.
-    logger0.info(f"Training for {total_kimg} kimg...")
+    logger0.info(f"Training for {training_duration} kimg...")
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
@@ -277,7 +257,7 @@ def training_loop(
                         augment_pipe=augment_pipe,
                     )
                 training_stats.report("Loss/loss", loss)
-                loss = loss.sum().mul(loss_scaling / batch_gpu_total)
+                loss = loss.sum() / batch_gpu_total
                 loss_accum += loss / num_accumulation_rounds
                 loss.backward()
 
@@ -286,7 +266,9 @@ def training_loop(
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = loss_sum / dist.world_size
         if dist.rank == 0:
-            wb.log({"training loss": average_loss}, step=cur_nimg)
+            writer.add_scalar(
+                tag="training_loss", scalar_value=average_loss, global_step=cur_nimg
+                    )
 
         # Update weights.
         for g in optimizer.param_groups:
@@ -295,20 +277,22 @@ def training_loop(
             )  # TODO better handling (potential bug)
             g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
             if dist.rank == 0:
-                wb.log({"lr": g["lr"]}, step=cur_nimg)
+                writer.add_scalar(
+                tag="learning_rate", scalar_value=g["lr"], global_step=cur_nimg
+                    )
         for param in net.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
         if grad_clip_threshold:
-            grad_norm = torch.nn.utils.clip_grad_norm_(
+            torch.nn.utils.clip_grad_norm_(
                 net.parameters(), grad_clip_threshold
             )
         optimizer.step()
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
-            if cur_tick % valid_dump_ticks == 0:
+            if cur_tick % validation_freq * 1000 == 0:
                 with torch.no_grad():
                     for _ in range(num_validation_evals):
                         img_clean_valid, img_lr_valid, labels_valid = next(
@@ -330,9 +314,7 @@ def training_loop(
                             augment_pipe=augment_pipe,
                         )
                         training_stats.report("Loss/validation loss", loss_valid)
-                        loss_valid = loss_valid.sum().mul(
-                            loss_scaling / batch_gpu_total
-                        )
+                        loss_valid = loss_valid.sum() / batch_gpu_total
                         valid_loss_accum += loss_valid / num_validation_evals
                     valid_loss_sum = torch.tensor([valid_loss_accum], device=device)
                     if dist.world_size > 1:
@@ -341,23 +323,17 @@ def training_loop(
                         )
                     average_valid_loss = valid_loss_sum / dist.world_size
                     if dist.rank == 0:
-                        wb.log({"validation loss": average_valid_loss}, step=cur_nimg)
-
-        # Update EMA.
-        ema_halflife_nimg = ema_halflife_kimg * 1000
-        if ema_rampup_ratio is not None:
-            ema_halflife_nimg = min(ema_halflife_nimg, cur_nimg * ema_rampup_ratio)
-        ema_beta = 0.5 ** (batch_size_global / max(ema_halflife_nimg, 1e-8))
-        for p_ema, p_net in zip(ema.parameters(), net.parameters()):
-            p_ema.copy_(p_net.detach().lerp(p_ema, ema_beta))
+                        writer.add_scalar(
+                            tag="validation_loss", scalar_value=average_valid_loss, global_step=cur_nimg
+                    )
 
         # Perform maintenance tasks once per tick.
-        cur_nimg += batch_size_global
-        done = cur_nimg >= total_kimg * 1000
+        cur_nimg += total_batch_size
+        done = cur_nimg >= training_duration * 1000
         if (
             (not done)
             # and (cur_tick != 0)
-            and (cur_nimg < tick_start_nimg + kimg_per_tick * 1000)
+            and (cur_nimg < tick_start_nimg + print_progress_freq * 1000)
         ):
             continue
 
@@ -394,8 +370,8 @@ def training_loop(
 
         # Save full dump of the training state.
         if (
-            (state_dump_ticks is not None)
-            and (done or cur_tick % state_dump_ticks == 0)
+            (save_checkpoint_freq is not None)
+            and (done or cur_tick % save_checkpoint_freq == 0)
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
