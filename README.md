@@ -76,12 +76,12 @@ the training speed and reduce computational overhead.
 ### Suite of Physics Informed ML Models
 Modulus offers a comprehensive library of state-of-the-art models specifically designed for physics-ML applications.
 The [Model Zoo](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#model-zoo)
-include some very general models such as [Fourier Neural Operators (FNOs)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/fno),
+include some very general models such as [Fourier Neural Operators (FNOs)](modulus/models/fno),
 ResNet, [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
-[Graph Neural Networks (GNNs)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/gnn_layers)
-and generative AI models like [Diffusion Models](https://github.com/NVIDIA/modulus/tree/main/modulus/models/diffusion)
-as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/dlwp)
-and [Super Resolution Network (SrNN)](https://github.com/NVIDIA/modulus/tree/d9e4801f8db92ffb69d28dcc34e788ed1547a72f/modulus/models/srrn) among others.
+[Graph Neural Networks (GNNs)](modulus/models/gnn_layers)
+and generative AI models like [Diffusion Models](modulus/models/diffusion)
+as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](modulus/models/dlwp)
+and [Super Resolution Network (SrNN)](modulus/models/srrn) among others.
 These pretrained models are optimized for various physics domains, such as computational fluid dynamics, structural mechanics,
 and electromagnetics. Users can download, customize, and build upon these models to suit their specific needs, significantly reducing the time
 required to develop high-fidelity simulations.
@@ -106,7 +106,7 @@ You can write new neural network layers in Python using the Modulus API or PyTor
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
-[Reference samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md) cover a broad spectrum of physics-constrained and data-driven
+[Reference samples](examples/README.md) cover a broad spectrum of physics-constrained and data-driven
 workflows to suit the diversity of use cases in the science and engineering disciplines.
 
 
