@@ -66,18 +66,18 @@ Usually, Modulus is used either as:
 Elaborating Further:
 
 ### Scalable GPU optimized training Library
-Modulus leverages the power of NVIDIA GPUs to provide a highly optimized training library.
+Modulus provides a highly optimized and scalable training library for maximizing the power of NVIDIA GPUs.
 [Distributed computing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html)
 utilities allows for efficient scaling from a single GPU to multi-node GPU clusters with a few lines of code, ensuring that large-scale
 physics-informed machine learning (ML) models can be trained quickly and effectively. The framework includes support for advanced
-[optimization utilities](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html#module-modulus.utils.capture), [customized datapipes](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html), [optimized metric calculations](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) which collectively enhance
-the training speed and reduce computational overhead.
+[optimization utilities](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html#module-modulus.utils.capture), [tailor made datapipes](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html), [validation utilities](https://github.com/NVIDIA/modulus-sym/tree/main/modulus/sym/eq) to enhance
+the end to end training speed.
 
 ### Suite of Physics Informed ML Models
 Modulus offers a comprehensive library of state-of-the-art models specifically designed for physics-ML applications.
 The [Model Zoo](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#model-zoo)
-include some very general models such as [Fourier Neural Operators (FNOs)](modulus/models/fno),
-ResNet, [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
+includes generalizable model architectures such as [Fourier Neural Operators (FNOs)](modulus/models/fno), [Deep)Net](https://github.com/NVIDIA/modulus-sym/blob/main/modulus/sym/models/deeponet.py)
+[Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
 [Graph Neural Networks (GNNs)](modulus/models/gnn_layers)
 and generative AI models like [Diffusion Models](modulus/models/diffusion)
 as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](modulus/models/dlwp)
@@ -88,7 +88,7 @@ required to develop high-fidelity simulations.
 
 ### Seamless PyTorch Integration
 Modulus is built on top of PyTorch, providing a familiar and user-friendly experience for those already proficient with PyTorch.
-This includes a simple Python interface and modular design, making it easy to integrate with existing PyTorch workflows.
+This includes a simple Python interface and modular design, making it easy to use Modulus with existing PyTorch workflows.
 Users can leverage the extensive PyTorch ecosystem, including its libraries and tools, while benefiting from Modulus's
 specialized capabilities for physics-ML. This seamless integration ensures that users can quickly adopt Modulus without a steep learning curve.
 
@@ -158,8 +158,8 @@ Here are some of the key benefits of Modulus for SciML model development:
 
 ![Benchmarking](docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](docs/img/Value%20prop/recipe.svg) | ![Performance](docs/img/Value%20prop/performance.svg)
 ---|---|---|
-SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
-Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
+|SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
+|Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
 
 See what your peer SciML reseachers are saying about Modulus (Coming soon).
 
