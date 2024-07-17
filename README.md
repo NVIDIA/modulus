@@ -29,7 +29,10 @@ provides you with the optimized stack that will enable you to train your models 
 <!-- toc -->
 
 - [More About Modulus](#more-about-modulus)
-    - [Scalable GPU optimized training Library](#scalable-gpu-optimized-training-Library)
+    - [Scalable GPU optimized training Library](#scalable-gpu-optimized-training-library)
+    - [Suite of Physics-Informed ML Models](#suite-of-physics-informed-ml-models)
+    - [Seamless PyTorch Integration](#seamless-pytorch-integration)
+    - [Easy Customization and Extension](#easy-customization-and-extension)
     - [AI4Science Library](#ai4science-library)
       - [Domain Specific Packages](#domain-specific-packages) 
 - [Who is contributing to Modulus](#who-is-using-and-contributing-to-modulus)
@@ -37,12 +40,6 @@ provides you with the optimized stack that will enable you to train your models 
 - [Getting Started](#getting-started)
 - [Resources](#resources)
 - [Installation](#installation)
-  - [Binaries](#pypi)
-    - [Optional dependencies](#optional-dependencies)
-    - [NVCR Container](#nvcr-container)
-  - [From Source](#from-source)
-    - [Package](#package)
-    - [Source Container](#source-container)
 - [Contributing](#contributing-to-modulus)
 - [Communication](#communication)
 - [License](#license)
@@ -69,12 +66,49 @@ Usually, Modulus is used either as:
 Elaborating Further:
 
 ### Scalable GPU optimized training Library
+Modulus leverages the power of NVIDIA GPUs to provide a highly optimized training library.
+[Distributed computing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html)
+utilities allows for efficient scaling from a single GPU to multi-node GPU clusters with a few lines of code, ensuring that large-scale
+physics-informed machine learning (ML) models can be trained quickly and effectively. The framework includes support for advanced
+[optimization utilities](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html#module-modulus.utils.capture), [customized datapipes](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html), [optimized metric calculations](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) which collectively enhance
+the training speed and reduce computational overhead.
 
-Modulus package has the core module in this repository, that provides the core algorithms, network architectures
-and utilities with a pytorch like experience. Reference samples cover a broad spectrum of physics-constrained and data-driven
-workflows to suit the diversity of use cases in the science and engineering disciplines.
+### Suite of Physics Informed ML Models
+Modulus offers a comprehensive library of state-of-the-art models specifically designed for physics-ML applications.
+The [Model Zoo](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#model-zoo)
+include some very general models such as [Fourier Neural Operators (FNOs)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/fno),
+ResNet, [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
+[Graph Neural Networks (GNNs)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/gnn_layers)
+and generative AI models like [Diffusion Models](https://github.com/NVIDIA/modulus/tree/main/modulus/models/diffusion)
+as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](https://github.com/NVIDIA/modulus/tree/main/modulus/models/dlwp)
+and [Super Resolution Network](https://github.com/NVIDIA/modulus/tree/d9e4801f8db92ffb69d28dcc34e788ed1547a72f/modulus/models/srrn) among others.
+These pretrained models are optimized for various physics domains, such as computational fluid dynamics, structural mechanics,
+and electromagnetics. Users can download, customize, and build upon these models to suit their specific needs, significantly reducing the time
+required to develop high-fidelity simulations.
+
+### Seamless PyTorch Integration
+Modulus is built on top of PyTorch, providing a familiar and user-friendly experience for those already proficient with PyTorch.
+This includes a simple Python interface and modular design, making it easy to integrate with existing PyTorch workflows.
+Users can leverage the extensive PyTorch ecosystem, including its libraries and tools, while benefiting from Modulus's
+specialized capabilities for physics-ML. This seamless integration ensures that users can quickly adopt Modulus without a steep learning curve.
+
+### Easy Customization and Extension
+Modulus is designed to be highly extensible, allowing users to add new functionality with minimal effort. The framework provides Pythonic APIs for
+defining new physics models, geometries, and constraints, making it easy to extend its capabilities to new use cases.
+The adaptability of Modulus is further enhanced by key features such as [ONNX support](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.deploy.html)
+for flexible model deployment, robust [logging utilities](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.launch.logging.html) for streamlined error handling,
+and efficient [checkpointing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.launch.utils.html#module-modulus.launch.utils.checkpoint) to save valuable training time. 
+
+This extensibility ensures that Modulus can adapt to the evolving needs of researchers and engineers, facilitating the development of
+innovative solutions in the field of physics-ML
+
+You can write new neural network layers in Python using the Modulus API or PyTorch and NumPy-based libraries
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
+
+[Reference samples](https://github.com/NVIDIA/modulus/blob/main/examples/README.md) cover a broad spectrum of physics-constrained and data-driven
+workflows to suit the diversity of use cases in the science and engineering disciplines.
+
 
 ### Hello world
 You can start using Modulus in your PyTorch code as simple as shown here:
@@ -90,25 +124,25 @@ python
 torch.Size([128, 64])
 ```
 
-## AI4Science Library
+### AI4Science Library
 
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): This repository of 
   algorithms and utilities allow SciML researchers and developers to physics inform model training and model validation. It also provides a higher level abstraction
   for domain experts that is native to science and engineering.
 
-### Domain Specific Packages
+#### Domain Specific Packages
 The following are packages dedicated for domain experts of specific communities catering to their unique exploration needs.  
 - [Earth-2 Studio](https://github.com/NVIDIA/earth2studio): Open source project
   to enable climate researchers and scientists to explore and experiment with
   AI models for weather and climate.
 
-### Research packages
+#### Research packages
 The following are research packages that get packaged into Modulus once they are stable. 
 - [Modulus Makani](https://github.com/NVIDIA/modulus-makani): Experimental library designed to enable the research and development of machine-learning based weather and climate models.
 - [Earth2 Grid](https://github.com/NVlabs/earth2grid): Experimental library with utilities for working geographic data defined on various grids.
 - [Earth-2 MIP](https://github.com/NVIDIA/earth2mip): Experimental library with utilities for model intercomparison for weather and climate models.
 
-# Who is using and contributing to Modulus
+## Who is using and contributing to Modulus
 
 Modulus is open source project and gets contributions from researchers in the SciML and AI4science field. While Modulus team works on optimizing the underlying SW stack, the community collaborates and contributes model architectures, datasets and reference applications so we can innovate in the pursuit of developing generalizable model architectures and algorithms.
 
