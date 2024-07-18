@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,12 +16,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.data.DrivAerNetDataModule
-_convert_: all
+defaults:
+  - /data: drivaernet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
 
-data_path: ???
-num_points: 32768  # 2^15
+data:
+  num_points: 32768
 
-preprocessors:
-    - _target_: src.data.drivaernet_datamodule.DrivAerNetPreprocessor
-      num_points: ${...num_points}
+train:
+  num_epochs: 100
+  batch_size: 32
+
+model:
+  _target_: src.networks.openpoint_base.OpenPointDrivAer
+  _convert_: all
+  
+  NAME: PointMLP
+  in_channels: 3
+  points: 2048
+  num_classes: 1
+  embed_dim: 64
+  groups: 1
+  res_expansion: 1.0
+  activation: "relu"
+  bias: False
+  use_xyz: False
+  normalize: "anchor"
+  dim_expansion: [ 2, 2, 2, 2 ]
+  pre_blocks: [ 2, 2, 2, 2 ]
+  pos_blocks: [ 2, 2, 2, 2 ]
+  k_neighbors: [ 24, 24, 24, 24 ]
+  reducers: [ 2, 2, 2, 2 ]
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: PointMLP

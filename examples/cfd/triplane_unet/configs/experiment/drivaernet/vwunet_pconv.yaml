@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,12 +16,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: src.data.DrivAerNetDataModule
-_convert_: all
+defaults:
+  - /data: drivaernet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
 
-data_path: ???
-num_points: 32768  # 2^15
+train:
+  num_epochs: 100
+  batch_size: 32
 
-preprocessors:
-    - _target_: src.data.drivaernet_datamodule.DrivAerNetPreprocessor
-      num_points: ${...num_points}
+data:
+  num_points: 32768
+
+model:
+  _target_: src.networks.vwunet.VWUNetPrincipalConvDrivAer
+  bbox_max: [2.75, 1.5, 1]
+  bbox_min: [-2.75, -1.5, -1]
+  encoder_channels: [16, 32]
+  decoder_channels: [32, 16]
+  drag_mlp_channels: [128, 128]
+  resolution: [220, 120, 80]
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: VWUNetPrincipalConv

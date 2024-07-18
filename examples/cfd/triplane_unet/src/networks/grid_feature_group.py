@@ -400,6 +400,46 @@ class GridFeatureGroupToPoint(BaseModule):
         return out_point_features
 
 
+class AttentionPool(BaseModule):
+    """
+    Attention pooling for BxCxN.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        num_heads: int = 2,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = out_channels // num_heads
+        self.qkv = nn.Linear(in_channels, out_channels * 3)
+        self.out = nn.Linear(out_channels, out_channels)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        x: Float[Tensor, "B N C"],
+    ) -> Float[Tensor, "B C"]:
+        B, N, C = x.shape
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, self.head_dim)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        # max pool q
+        q = q.max(dim=2, keepdim=True).values
+        attn = (q @ k.transpose(-2, -1)) / (self.head_dim**0.5)
+        attn = F.softmax(attn, dim=-1)
+        attn = self.dropout(attn)
+        x = (attn @ v).reshape(B, -1)
+        x = self.out(x)
+        return x
+
+
 class GridFeaturePool(BaseModule):
     """
     Pooling the features of GridFeatures.
@@ -410,6 +450,7 @@ class GridFeaturePool(BaseModule):
         in_channels: int,
         out_channels: int,
         compressed_spatial_dim: int,
+        pooling_type: Literal["max", "mean", "attention"] = "max",
     ):
         super().__init__()
         self.conv = nn.Conv2d(
@@ -417,6 +458,16 @@ class GridFeaturePool(BaseModule):
             out_channels=out_channels,
             kernel_size=1,
         )
+        if pooling_type == "attention":
+            self.pool = AttentionPool(out_channels, out_channels)
+        elif pooling_type == "max":
+            self.pool = nn.AdaptiveMaxPool1d(1)
+        elif pooling_type == "mean":
+            self.pool = nn.AdaptiveAvgPool1d(1)
+        else:
+            raise NotImplementedError
+
+        self.pooling_type = pooling_type
         self.norm = nn.LayerNorm(out_channels)
 
     def forward(
@@ -427,7 +478,9 @@ class GridFeaturePool(BaseModule):
         assert features.ndim == 4, "Features must be compressed format with BxCxHxW."
         features = self.conv(features)
         features = features.flatten(2, 3)
-        pooled_feat = F.adaptive_max_pool1d(features, 1)
+        if self.pooling_type == "attention":
+            features = features.transpose(1, 2)
+        pooled_feat = self.pool(features)
         return self.norm(pooled_feat.squeeze(-1))
 
 
@@ -441,6 +494,7 @@ class GridFeatureGroupPool(BaseModule):
         in_channels: int,
         out_channels: int,
         compressed_spatial_dims: Tuple[int],
+        pooling_type: Literal["max", "mean", "attention"] = "max",
     ):
         super().__init__()
         self.pools = nn.ModuleList()
@@ -450,15 +504,36 @@ class GridFeatureGroupPool(BaseModule):
                     in_channels=in_channels,
                     out_channels=out_channels,
                     compressed_spatial_dim=compressed_spatial_dim,
+                    pooling_type=pooling_type,
                 )
             )
 
     def forward(
         self,
         grid_features_group: GridFeatureGroup,
-    ) -> Float[Tensor, "B C"]:
+    ) -> Float[Tensor, "B 3C"]:
         assert len(grid_features_group) == len(self.pools)
         pooled_features = []
         for grid_features, pool in zip(grid_features_group, self.pools):
             pooled_features.append(pool(grid_features))
         return torch.cat(pooled_features, dim=-1)
+
+
+if __name__ == "__main__":
+    # Test grid pool
+    grid_features = GridFeatures(
+        vertices=torch.rand(2, 4, 4, 3, 3),
+        features=torch.rand(2, 16, 4, 4, 3),
+        memory_format=GridFeaturesMemoryFormat.b_c_x_y_z,
+        grid_shape=(4, 4, 3),
+        num_channels=16,
+    )
+    grid_features = grid_features.to(memory_format=GridFeaturesMemoryFormat.b_yc_x_z)
+    grid_pool = GridFeaturePool(
+        in_channels=16,
+        out_channels=32,
+        compressed_spatial_dim=4,
+        pooling_type="attention",
+    )
+    pooled_features = grid_pool(grid_features)
+    print(pooled_features.shape)

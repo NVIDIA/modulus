@@ -146,6 +146,7 @@ class GridFeatureToPoint(nn.Module):
         out_channels: int,
         aabb_max: Tuple[float, float, float],
         aabb_min: Tuple[float, float, float],
+        hidden_dim: Optional[int] = None,
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = False,
         pos_embed_dim: int = 32,
@@ -163,6 +164,7 @@ class GridFeatureToPoint(nn.Module):
                 out_channels,
                 aabb_max,
                 aabb_min,
+                hidden_dim=hidden_dim,
                 use_rel_pos=use_rel_pos,
                 use_rel_pos_embed=use_rel_pos_embed,
                 pos_embed_dim=pos_embed_dim,
@@ -204,6 +206,7 @@ class GridFeatureToPointGraphConv(nn.Module):
         out_channels: int,
         aabb_max: Tuple[float, float, float],
         aabb_min: Tuple[float, float, float],
+        hidden_dim: Optional[int] = None,
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = False,
         pos_embed_dim: int = 32,
@@ -219,6 +222,7 @@ class GridFeatureToPointGraphConv(nn.Module):
             in_channels=grid_in_channels,
             out_channels=out_channels,
             provided_in_channels=point_in_channels,
+            hidden_dim=hidden_dim,
             use_rel_pos=use_rel_pos,
             use_rel_pos_encode=use_rel_pos_embed,
             pos_encode_dim=pos_embed_dim,
@@ -241,7 +245,7 @@ class GridFeatureToPointGraphConv(nn.Module):
             ]
         )
         out_point_features = self.conv(
-            grid_features.point_features,
+            grid_features.point_features.contiguous(),
             point_features,
             neighbor_search_vertices_scaler=vertices_scaler,
         )

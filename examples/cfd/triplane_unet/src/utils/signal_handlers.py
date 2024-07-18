@@ -108,6 +108,7 @@ class SignalHandler:
         # Global flag for signaling for all DDP processes
         self._DISTRIBUTED = torch.distributed.is_initialized()
         self._RANK = torch.distributed.get_rank() if self._DISTRIBUTED else 0
+        logger.debug(f"Setting rank to: {self._RANK}")
         self._STATUS = "RUNNING"
         self._ENTERED = False
 

@@ -22,15 +22,17 @@ import yaml
 import numpy as np
 import pandas as pd
 import pyvista as pv
+import webdataset as wds
 
 import torch
 from torch.utils.data import Dataset
 
-from src.data.base_datamodule import BaseDataModule
+from src.data.base_datamodule import WebdatasetDataModule
 from src.data.components.preprocessor_utils import (
     ComposePreprocessors,
     UnitGaussianNormalizer,
 )
+from src.data.components.webdataset_utils import from_numpy, split_by_node_equal
 from src.data.mesh_utils import (
     compute_drag_coefficient,
 )
@@ -69,6 +71,9 @@ class DrivAerNetPreprocessor:
 
     def __call__(self, sample: Mapping[str, Any]) -> dict[str, Any]:
         sample = {self.KEY_MAPPING.get(k, k): v for k, v in sample.items()}
+        # Remove unnecessary keys
+        if "design" in sample:
+            sample.pop("design")
 
         if self.num_points > 0:
             # Randomly sample points
@@ -193,40 +198,24 @@ class DrivAerNetDataset(Dataset):
         p_vtk_file = self.p_vtk_path / (key + ".vtk")
         mesh = pv.read(p_vtk_file)
 
-        wss_vtk_file = self.wss_vtk_path / (key + ".vtk")
-        wss = pv.read(wss_vtk_file).point_data["wallShearStress"]
+        # wss_vtk_file = self.wss_vtk_path / (key + ".vtk")
+        # wss = pv.read(wss_vtk_file).point_data["wallShearStress"]
 
-        # Estimate normals.
-        mesh.compute_normals(
-            cell_normals=True, point_normals=True, flip_normals=True, inplace=True
-        )
-
-        # Extract cell centers and areas.
-        cell_centers = np.array(mesh.cell_centers().points)
-        cell_normals = np.array(mesh.cell_normals)
-        cell_sizes = mesh.compute_cell_sizes(length=False, area=True, volume=False)
-        cell_sizes = np.array(cell_sizes.cell_data["Area"])
-
-        # Normalize cell normals.
-        cell_normals = (
-            cell_normals / np.linalg.norm(cell_normals, axis=1)[:, np.newaxis]
-        )
+        # cchoy: Cell pressure not defined on DrivAerNet. Use point pressure.
+        cell_centers = np.array(mesh.points)
+        pressure = mesh.point_data["p"]
 
         sample = {
-            "mesh_nodes": np.array(mesh.points),
             "cell_centers": cell_centers,
-            "cell_areas": cell_sizes,
-            "cell_normals": cell_normals,
             **coeffs.to_dict(),
-            "pressure": mesh.point_data["p"],
-            "wall_shear_stress": wss,
+            "pressure": pressure,
             "design": key,
         }
 
         return self.preprocessors(sample)
 
 
-class DrivAerNetDataModule(BaseDataModule):
+class DrivAerNetDataModule(WebdatasetDataModule):
     """DrivAerNet data module."""
 
     def __init__(
@@ -235,42 +224,43 @@ class DrivAerNetDataModule(BaseDataModule):
         preprocessors: Iterable[Callable] = None,
         **kwargs,
     ):
-        self._train_dataset = DrivAerNetDataset(
-            data_path,
-            "train",
-            preprocessors=preprocessors,
-        )
-        self._val_dataset = DrivAerNetDataset(
-            data_path,
-            "val",
-            preprocessors=preprocessors,
-        )
-        self._test_dataset = DrivAerNetDataset(
-            data_path,
-            "test",
-            preprocessors=preprocessors,
-        )
+        if isinstance(data_path, str):
+            data_path = Path(data_path)
+        assert data_path.is_dir(), f"{data_path} is not a directory."
+        assert (
+            data_path / "train.tar"
+        ).exists(), f"{data_path} does not contain train.tar"
+        self.data_path = data_path
+        if preprocessors is None:
+            preprocessors = []
+        self.preprocessors = ComposePreprocessors(preprocessors)
+        self._train_dataset = self._create_dataset("train")
+        self._val_dataset = self._create_dataset("val")
+        self._test_dataset = self._create_dataset("test")
+        for preproc in preprocessors:
+            if hasattr(preproc, "normalizer"):
+                self.normalizer = preproc.normalizer
+        else:
+            self.normalizer = UnitGaussianNormalizer(
+                mean=DRIVAERNET_PRESSURE_MEAN, std=DRIVAERNET_PRESSURE_STD
+            )
 
-        # TODO(akamenev): refactor.
-        self.normalizer = next(iter(preprocessors)).normalizer
+    def _create_dataset(self, prefix: str) -> wds.DataPipeline:
+        # Create dataset with the processing pipeline.
+        dataset = wds.DataPipeline(
+            wds.SimpleShardList([str(self.data_path / f"{prefix}.tar")]),
+            wds.tarfile_to_samples(),
+            split_by_node_equal,
+            wds.map(lambda x: from_numpy(x, "npz")),
+            wds.map(self.preprocessors),
+        )
+        return dataset
 
     def encode(self, x):
         return self.normalizer.encode(x)
 
     def decode(self, x):
         return self.normalizer.decode(x)
-
-    @property
-    def train_dataset(self):
-        return self._train_dataset
-
-    @property
-    def val_dataset(self):
-        return self._val_dataset
-
-    @property
-    def test_dataset(self):
-        return self._test_dataset
 
 
 def test_drivaernet_datamodule(data_path: str):
@@ -279,6 +269,7 @@ def test_drivaernet_datamodule(data_path: str):
     dm = DrivAerNetDataModule(data_path, preprocessors=preprocs)
 
     for x in dm.train_dataloader():
+        print(x)
         break
 
 
@@ -291,11 +282,6 @@ def test_drivaernet_dataset(data_path: str, phase: str, size: int):
 
 
 if __name__ == "__main__":
-    data_path = "/data/src/modulus/data/triplane_unet/DrivAerNet"
-    test_mod = True
-    if test_mod:
-        test_drivaernet_datamodule(data_path)
-    else:
-        test_drivaernet_dataset(data_path, "train", 2768)
-        test_drivaernet_dataset(data_path, "val", 593)
-        test_drivaernet_dataset(data_path, "test", 595)
+    import fire
+
+    fire.Fire(test_drivaernet_datamodule)

@@ -1,4 +1,4 @@
-# Triplane UNet for Computational Fluid Dynamics
+# Grid Group UNet
 
 Computational Fluid Dynamics (CFD) is central to automotive vehicle design, which involves
 studying how the car geometry affects the pressure field.

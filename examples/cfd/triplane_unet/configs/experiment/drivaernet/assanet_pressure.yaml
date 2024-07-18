@@ -1,0 +1,83 @@
+# @package _global_
+
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+defaults:
+  - /data: drivaernet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+data:
+  num_points: 32768
+
+train:
+  num_epochs: 100
+  batch_size: 32
+
+model:
+  _target_: src.networks.openpoint_base.OpenPointPressureDragDrivAer
+  _convert_: all
+
+  NAME: BaseSeg
+  encoder_args:
+    _target_: easydict.EasyDict
+    NAME: PointNet2Encoder
+    in_channels: 3
+    strides: [4, 4, 4, 4]
+    blocks: [3, 3, 3, 3]
+    width: 128
+    width_scaling: 3
+    double_last_channel: False
+    layers: 3
+    use_res: True 
+    query_as_support: True
+    mlps: null 
+    stem_conv: True
+    stem_aggr: True
+    radius: [[0.1, 0.2], [0.2, 0.4], [0.4, 0.8], [0.8, 1.6]]
+    num_samples: [[16, 32], [16, 32], [16, 32], [16, 32]]
+    sampler: fps
+    aggr_args:
+      NAME: 'ASSA'
+      feature_type: 'assa'
+      anisotropic: True 
+      reduction: 'mean'
+    group_args:
+      NAME: 'ballquery'
+      use_xyz: True
+      normalize_dp: True
+    conv_args:
+      order: conv-norm-act
+    act_args:
+      act: 'relu'
+    norm_args:
+      norm: 'bn'
+  decoder_args:
+    _target_: easydict.EasyDict
+    NAME: PointNet2Decoder
+    fp_mlps: [[64, 64], [128, 128], [256, 256], [512, 512]]
+
+  decoder_inputs: both
+  mlp_in_channels: 10368
+  decoder_out_channels: 64
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: AssaNet

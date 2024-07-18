@@ -141,7 +141,6 @@ class DrivAerTDFPreprocessingFunctor:
         bbox_resolution: Tuple[int, int, int] = (128, 128, 128),
         dist_compute_device: str = "cuda",
         dist_chunk_size: int = 16384,
-        point_sample_size: int = 16384,
         distance_threshold: float = 1.0,
     ):
         self.bbox_min = bbox_min
@@ -155,7 +154,6 @@ class DrivAerTDFPreprocessingFunctor:
             torch.Tensor(self.bbox_max),
             self.bbox_resolution,
         ).to(self.dist_compute_device)
-        self.point_sample_size = point_sample_size
         self.distance_threshold = distance_threshold
 
     def __call__(self, np_dict: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -164,13 +162,6 @@ class DrivAerTDFPreprocessingFunctor:
         ), "Please call DrivAerPreprocessingFunctor first"
 
         vertices = np_dict["cell_centers"]
-
-        # Point sample index
-        point_sample_idx = np.random.choice(
-            len(vertices), self.point_sample_size, replace=True
-        )
-
-        vertices = vertices[point_sample_idx]
         vertices_device = torch.Tensor(vertices).to(self.dist_compute_device)
 
         # Distance computation
@@ -182,8 +173,4 @@ class DrivAerTDFPreprocessingFunctor:
         dists = torch.clamp(dists, -self.distance_threshold, self.distance_threshold)
         dists = dists.view(self.bbox_resolution).cpu().numpy()
         np_dict["sdf"] = dists
-        np_dict["cell_centers"] = vertices
-        np_dict["time_avg_pressure_whitened"] = np_dict["time_avg_pressure_whitened"][
-            point_sample_idx
-        ]
         return np_dict

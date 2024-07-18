@@ -1,0 +1,83 @@
+# @package _global_
+
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+defaults:
+  - /data: drivaernet
+  - /loss: mseloss
+  - /optimizer: adam
+  - /lr_scheduler: steplr
+
+data:
+  num_points: 32768
+
+train:
+  num_epochs: 100
+  batch_size: 32
+
+model:
+  _target_: src.networks.openpoint_base.OpenPointPressureDragDrivAer
+  _convert_: all
+
+  NAME: BaseSeg
+  encoder_args:
+    _target_: easydict.EasyDict
+    NAME: PointNet2Encoder
+    in_channels: 3
+    width: null
+    strides: [2, 4, 1]
+    mlps: [[[64, 64, 128]],  # stage 1: 96
+          [[128, 128, 256]],
+          [[256, 512, 512]]
+          ] # stage 4: 1024
+    layers: 3
+    use_res: False
+    radius: 0.05
+    num_samples: 32
+    sampler: fps
+    aggr_args:
+      _target_: easydict.EasyDict
+      NAME: 'convpool'
+      feature_type: 'dp_fj'
+      anisotropic: False
+      reduction: 'max'
+    group_args:
+      _target_: easydict.EasyDict
+      NAME: 'ballquery'
+    conv_args: 
+      _target_: easydict.EasyDict
+      order: conv-norm-act
+    act_args:
+      _target_: easydict.EasyDict
+      act: 'relu'
+    norm_args:
+      _target_: easydict.EasyDict
+      norm: 'bn'
+  decoder_args:
+    _target_: easydict.EasyDict
+    NAME: PointNet2Decoder
+    fp_mlps: [[128, 128], [256, 128], [512, 128]]
+
+  decoder_inputs: both
+  mlp_in_channels: 512
+  decoder_out_channels: 128
+
+loggers:
+  wandb:
+    project_name: drivaernet
+    entity: nvr-ai-algo
+    run_name: PointNet++
