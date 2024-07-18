@@ -102,7 +102,7 @@ def _resume_from_checkpoint(model, optimizer, scheduler, scaler, config):
         rank = 0
         if torch.distributed.is_initialized():
             rank = torch.distributed.get_rank()
-        map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
+        map_location = {"cuda:0": f"cuda:{rank}"}
         checkpoint = torch.load(checkpoint_path, map_location=map_location)
 
         model.model().load_state_dict(checkpoint["model"])
