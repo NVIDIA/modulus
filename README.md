@@ -152,6 +152,8 @@ Latest examples of research teams using Modulus are ORNL team, TU Munich team, M
 
 Please go to this page for a complete list of research work leveraging Modulus. For a list of enterprises using Modulus refer [here](https://developer.nvidia.com/modulus).
 
+Using Modulus and interested in showcasing your work on [NVIDIA Blogs](https://developer.nvidia.com/blog/category/simulation-modeling-design/)? Fill this [proposal form](https://forms.gle/XsBdWp3ji67yZAUF7) and we will get back to you!
+
 ## Why are they using Modulus
 
 Here are some of the key benefits of Modulus for SciML model development:
@@ -280,7 +282,7 @@ contribution to further the field of Physics-ML. Thank you for contributing to t
 project so others can build on your contribution.
 
 For guidance on making a contribution to Modulus, please refer to the
-[contributing guidelines](https://github.com/NVIDIA/modulus/blob/main/CONTRIBUTING.md).
+[contributing guidelines](CONTRIBUTING.md).
 
 ## Cite Modulus
 If Modulus helped your research and you would like to cite it, please refer to the [guidelines](https://github.com/NVIDIA/modulus/blob/main/CITATION.cff)
