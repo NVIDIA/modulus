@@ -15,23 +15,27 @@
 # limitations under the License.
 
 defaults:
-  - modules/encoder@encoder: rec_unet_enc
-  - modules/decoder@decoder: rec_unet_dec
+  - module: sst-z1000-ws
+  - scaling: hpx32
+  - splits: default
 
-_target_: modulus.models.dlwp_healpix.HEALPixRecUNet
-_recursive_: false
-presteps: 1
-input_time_dim: ${data.input_time_dim}
-output_time_dim: ${data.output_time_dim}
-delta_time: ${data.time_step}
-couplings: ${..data.module.couplings}
-
-# Parameters automatically overridden in train code
-input_channels: 8
-output_channels: 8
-n_constants: 2
-decoder_input_channels: 1
-
-# some perf parameters
-enable_nhwc: false
-enable_healpixpad: false
+src_directory: /datasets/healpix/HPX32
+dst_directory: /datasets/healpix/HPX32
+dataset_name: hpx32_1979-2022_3h_sst_coupled 
+prefix: hpx32_1979-2021_3h_
+suffix: ''
+data_format: classic
+input_variables:
+  - sst
+output_variables: null
+constants:
+  land_sea_mask: lsm
+input_time_dim: 2
+output_time_dim: 4
+data_time_step: 3H
+time_step: 48H
+gap: 48H
+add_insolation: true
+nside: 32
+cube_dim: ${data.nside}
+prebuilt_dataset: true

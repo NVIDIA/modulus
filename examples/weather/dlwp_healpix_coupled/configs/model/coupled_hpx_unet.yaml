@@ -15,20 +15,19 @@
 # limitations under the License.
 
 defaults:
-  - modules/encoder@encoder: rec_unet_enc
-  - modules/decoder@decoder: rec_unet_dec
+  - modules/encoder@encoder: unet_enc
+  - modules/decoder@decoder: unet_dec
 
-_target_: modulus.models.dlwp_healpix.HEALPixRecUNet
+_target_: modulus.models.dlwp_healpix.HEALPixUNet
 _recursive_: false
-presteps: 1
+presteps: 0
 input_time_dim: ${data.input_time_dim}
 output_time_dim: ${data.output_time_dim}
-delta_time: ${data.time_step}
 couplings: ${..data.module.couplings}
 
 # Parameters automatically overridden in train code
-input_channels: 8
-output_channels: 8
+input_channels: 7
+output_channels: 7
 n_constants: 2
 decoder_input_channels: 1
 
