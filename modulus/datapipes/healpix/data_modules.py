@@ -959,7 +959,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
 
         if torch.distributed.is_initialized():
             if self.prebuilt_dataset:
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     create_fn(
                         src_directory=self.src_directory,
                         dst_directory=self.dst_directory,
