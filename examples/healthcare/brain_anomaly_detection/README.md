@@ -62,7 +62,7 @@ The simulations were obtained by using 2D acoustic
 wave propagator in [Devito](https://github.com/devitocodes/devito)
 
 To request access to the full dataset, please reach out to the
-[NVIDIA Modulus team](modulus-team@nvidia.com).
+[NVIDIA Modulus team](mailto:modulus-team@nvidia.com).
 
 <!-- markdownlint-disable -->
 <p align="center">
