@@ -14,23 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression_job
-  run:
-    dir: ./outputs/${hydra:job.name}
-
-defaults:
-  - config_train_base
-
-## Main options
-outdir: "./output_regression"   
-  # Where to save the results
-arch: ddpmpp-cwb-v0-regression
-  # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: unetregression
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: regression
-  # Which model to train [regression, diffusion]
-
+# Validation dataset options
+# (need to set dataset.train_test_split == true to have an effect)
+train: false
+all_times: false
