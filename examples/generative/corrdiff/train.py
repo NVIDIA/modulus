@@ -122,6 +122,8 @@ def main(cfg: DictConfig) -> None:
         }
     )
     model = model.to(dist.device)
+    print(model)
+    exit()
 
     # Initialize dataset
     data_loader_kwargs = {
