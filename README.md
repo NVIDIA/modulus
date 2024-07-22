@@ -32,8 +32,8 @@ provides you with an optimized stack that will enable you to train your models a
 <!-- toc -->
 
 - [More About Modulus](#more-about-modulus)
-  - [Scalable GPU optimized training Library](#scalable-gpu-optimized-training-library)
-  - [Suite of Physics-Informed ML Models](#suite-of-physics-informed-ml-models)
+  - [Scalable GPU-optimized training Library](#scalable-gpu-optimized-training-library)
+  - [A suite of Physics-Informed ML Models](#a-suite-of-physics-informed-ml-models)
   - [Seamless PyTorch Integration](#seamless-pytorch-integration)
   - [Easy Customization and Extension](#easy-customization-and-extension)
   - [AI4Science Library](#ai4science-library)
@@ -56,8 +56,8 @@ At a granular level, Modulus provides a library of a few key components:
 <!-- markdownlint-disable -->
 Component | Description |
 ---- | --- |
-[**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks and many more|
-[**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline and data loader library, including benchmark datapipes, weather daptapipes and graph datapipes|
+[**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks, and many more|
+[**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline and data loader library, including benchmark datapipes, weather daptapipes, and graph datapipes|
 [**modulus.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of `torch.distributed` to enable parallel training with just a few steps|
 [**modulus.sym.geometry**](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/features/csg_and_tessellated_module.html) | A library to handle geometry for DL training using the Constructive Solid Geometry modeling and CAD files in STL format.|
 [**modulus.sym.eq**](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/features/nodes.html) | A library to use PDEs in your DL training with several implementations of commonly observed equations and easy ways for customization.|
@@ -75,12 +75,12 @@ NVIDIA GPUs.
 
 Elaborating Further:
 
-### Scalable GPU optimized training Library
+### Scalable GPU-optimized training Library
 
 Modulus provides a highly optimized and scalable training library for maximizing the
 power of NVIDIA GPUs.
 [Distributed computing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html)
-utilities allows for efficient scaling from a single GPU to multi-node GPU clusters with
+utilities allow for efficient scaling from a single GPU to multi-node GPU clusters with
 a few lines of code, ensuring that large-scale.
 physics-informed machine learning (ML) models can be trained quickly and effectively.
 The framework includes support for advanced.
@@ -89,7 +89,7 @@ The framework includes support for advanced.
 [validation utilities](https://github.com/NVIDIA/modulus-sym/tree/main/modulus/sym/eq)
 to enhance the end to end training speed.
 
-### Suite of Physics Informed ML Models
+### A suite of Physics Informed ML Models
 
 Modulus offers a comprehensive library of state-of-the-art models specifically designed
 for physics-ML applications.
@@ -98,7 +98,7 @@ includes generalizable model architectures such as
 [Fourier Neural Operators (FNOs)](modulus/models/fno),
 [DeepONet](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/neural_operators/deeponet.html),
 [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
-[Graph Neural Networks (GNNs)](modulus/models/gnn_layers)
+[Graph Neural Networks (GNNs)](modulus/models/gnn_layers),
 and generative AI models like [Diffusion Models](modulus/models/diffusion)
 as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](modulus/models/dlwp)
 and [Super Resolution Network (SrNN)](modulus/models/srrn) among others.
@@ -113,9 +113,9 @@ Modulus is built on top of PyTorch, providing a familiar and user-friendly exper
 for those already proficient with PyTorch.
 This includes a simple Python interface and modular design, making it easy to use
 Modulus with existing PyTorch workflows.
-Users can leverage the extensive PyTorch ecosystem, including its libraries and tools,
+Users can leverage the extensive PyTorch ecosystem, including its libraries and tools
 while benefiting from Modulus's specialized capabilities for physics-ML. This seamless
-integration ensures that users can quickly adopt Modulus without a steep learning curve.
+integration ensures users can quickly adopt Modulus without a steep learning curve.
 
 For more information, refer [Converting PyTorch Models to Modulus Models](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#converting-pytorch-models-to-modulus-models)
 
@@ -161,7 +161,7 @@ torch.Size([128, 64])
 ### AI4Science Library
 
 - [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): This repository of
-  algorithms and utilities allow SciML researchers and developers to physics inform model
+  algorithms and utilities allows SciML researchers and developers to physics inform model
   training and model validation. It also provides a higher level abstraction
   for domain experts that is native to science and engineering.
 
@@ -188,23 +188,24 @@ The following are research packages that get packaged into Modulus once they are
 
 ## Who is using and contributing to Modulus
 
-Modulus is open source project and gets contributions from researchers in the SciML and
-AI4science field. While Modulus team works on optimizing the underlying SW stack, the
-community collaborates and contributes model architectures, datasets and reference
+Modulus is an open source project and gets contributions from researchers in the SciML and
+AI4science fields. While Modulus team works on optimizing the underlying SW stack, the
+community collaborates and contributes model architectures, datasets, and reference
 applications so we can innovate in the pursuit of developing generalizable model
 architectures and algorithms.
 
 Some latest examples of community contributors are CMU team, Stanford Cardiovascular
 research team, HP Labs 3D Printing team, UIUC team etc.
 
-Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE etc.
+Latest examples of research teams using Modulus are ORNL team, TU Munich team, MSOE, etc.
 
-Please go to this page for a complete list of research work leveraging Modulus. For a
-list of enterprises using Modulus refer [here](https://developer.nvidia.com/modulus).
+Please navigate to this page for a complete list of research work leveraging Modulus.
+For a list of enterprises using Modulus refer [here](https://developer.nvidia.com/modulus).
 
 Using Modulus and interested in showcasing your work on
 [NVIDIA Blogs](https://developer.nvidia.com/blog/category/simulation-modeling-design/)?
-Fill this [proposal form](https://forms.gle/XsBdWp3ji67yZAUF7) and we will get back to you!
+Fill out this [proposal form](https://forms.gle/XsBdWp3ji67yZAUF7) and we will get back
+to you!
 
 ## Why are they using Modulus
 
@@ -214,10 +215,10 @@ Here are some of the key benefits of Modulus for SciML model development:
 <img src="docs/img/Value%20prop/benchmarking.svg" width="100"> | <img src="docs/img/Value%20prop/recipe.svg" width="100"> | <img src="docs/img/Value%20prop/performance.svg" width="100">
 ---|---|---|
 |SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
-|Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
+|Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain-specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use built-in data pipelines for their use case.| Modulus provides out-of-the-box performant training pipelines including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
 <!-- markdownlint-enable -->
 
-See what your peer SciML reseachers are saying about Modulus (Coming soon).
+See what your peer SciML researchers are saying about Modulus (Coming soon).
 
 ## Getting started
 
@@ -259,7 +260,7 @@ Modulus has many optional dependencies that are used in specific components.
 When using pip, all dependencies used in Modulus can be installed with
 `pip install nvidia-modulus[all]`. If you are developing Modulus, developer dependencies
 can be installed using `pip install nvidia-modulus[dev]`. Otherwise, additional dependencies
-can be installed on a case by case basis. A detailed information on installing the
+can be installed on a case by case basis. Detailed information on installing the
 optional dependencies can be found in the
 [Getting Started Guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html).
 
@@ -272,8 +273,8 @@ The recommended Modulus docker image can be pulled from the
 docker pull nvcr.io/nvidia/modulus/modulus:24.04
 ```
 
-Inside the container you can clone the Modulus git repositories and get started with the
-examples. Below command show the instructions to launch the modulus container and run an
+Inside the container, you can clone the Modulus git repositories and get started with the
+examples. The below command shows the instructions to launch the modulus container and run
 examples from this repo.
 
 ```bash
@@ -320,7 +321,7 @@ docker build -t modulus:ci \
 
 Alternatively, you can run `make container-ci`.
 
-Currently only `linux/amd64` and `linux/arm64` platforms are supported. If using
+Currently, only `linux/amd64` and `linux/arm64` platforms are supported. If using
 `linux/arm64`, some dependencies like `warp-lang` might not install correctly.
 
 ## Contributing to Modulus
@@ -329,7 +330,7 @@ Modulus is an open source collaboration and its success is rooted in community
 contribution to further the field of Physics-ML. Thank you for contributing to the
 project so others can build on top of your contribution.
 
-For guidance on making a contribution to Modulus, please refer to the
+For guidance on contributing to Modulus, please refer to the
 [contributing guidelines](CONTRIBUTING.md).
 
 ## Cite Modulus
@@ -341,7 +342,7 @@ If Modulus helped your research and you would like to cite it, please refer to t
 - Github Discussions: Discuss new architectures, implementations, Physics-ML research, etc.
 - GitHub Issues: Bug reports, feature requests, install issues, etc.
 - Modulus Forum: The [Modulus Forum](https://forums.developer.nvidia.com/c/physics-simulation/modulus-physics-ml-model-framework)
-hosts an audience of new to moderate level users and developers for general chat, online
+hosts an audience of new to moderate-level users and developers for general chat, online
 discussions, collaboration, etc.
 
 ## Feedback
