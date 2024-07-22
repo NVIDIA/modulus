@@ -12,13 +12,13 @@
 | [**Communication**](#communication)
 
 ## What is Modulus?
-NVIDIA Modulus is an open source deep-learning framework for building, training, and fine-tuning
+NVIDIA Modulus is an open-source deep-learning framework for building, training, and fine-tuning
 deep learning models using state-of-the-art SciML methods for AI4science and engineering.
 
-Modulus provides utilities and optimized pipelines to develop AI models that combine physics-knowledge with data, enabling real-time predictions.
-Whether you are exploring the use of Neural operators, GNNs or transformers or are
+Modulus provides utilities and optimized pipelines to develop AI models that combine physics knowledge with data, enabling real-time predictions.
+Whether you are exploring the use of Neural operators, GNNs, or transformers or are
 interested in Physics-informed Neural Networks or a hybrid approach in between, Modulus
-provides you with the optimized stack that will enable you to train your models at scale.
+provides you with an optimized stack that will enable you to train your models at scale.
 
 <!-- markdownlint-disable -->
 <p align="center">
@@ -48,15 +48,17 @@ provides you with the optimized stack that will enable you to train your models 
 
 ## More About Modulus
 
-At a granular level, Modulus is a library that consists of the following components:
+At a granular level, Modulus provides a library of a few key components:
 
 Component | Description |
 | ---- | --- |
 | [**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks and many more|
-| [**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline library, including benchmark datapipes, wheather daptapipes and graph datapipes|
-| [**modulus.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of troch.distributed to enable parallel training with just a few steps|
-| [**modulus.utils**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.utils.html) | Utilitis for optimization, checkpointing, logging to simplify model development and deployment|
-| [**modulus.metrics**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.metrics.html) | A library of optimized metric calculations for custom training and inference workflows, operating directly on PyTorch tensors|
+| [**modulus.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline and data loader library, including benchmark datapipes, weather daptapipes and graph datapipes|
+| [**modulus.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of `torch.distributed` to enable parallel training with just a few steps|
+| [**modulus.sym.geometry**](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/features/csg_and_tessellated_module.html) | A library to handle geometry for DL training using the Constructive Solid Geometry modeling and CAD files in STL format.|
+| [**modulus.sym.eq**](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/features/nodes.html) | A library to use PDEs in your DL training with several implementations of commonly observed equations and easy ways for customization.|
+
+For a complete list, refer to the Modulus API documentation for [Modulus Core](https://docs.nvidia.com/deeplearning/modulus/modulus-core/index.html) and [Modulus Sym](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/api_index.html). 
 
 Usually, Modulus is used either as:
 
@@ -76,13 +78,13 @@ the end to end training speed.
 ### Suite of Physics Informed ML Models
 Modulus offers a comprehensive library of state-of-the-art models specifically designed for physics-ML applications.
 The [Model Zoo](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#model-zoo)
-includes generalizable model architectures such as [Fourier Neural Operators (FNOs)](modulus/models/fno), [Deep)Net](https://github.com/NVIDIA/modulus-sym/blob/main/modulus/sym/models/deeponet.py)
+includes generalizable model architectures such as [Fourier Neural Operators (FNOs)](modulus/models/fno), [DeepONet](https://github.com/NVIDIA/modulus-sym/blob/main/modulus/sym/models/deeponet.py)
 [Physics-Informed Neural Networks (PINNs)](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html),
 [Graph Neural Networks (GNNs)](modulus/models/gnn_layers)
 and generative AI models like [Diffusion Models](modulus/models/diffusion)
 as well as domain-specific models such as [Deep Learning Weather Prediction (DLWP)](modulus/models/dlwp)
 and [Super Resolution Network (SrNN)](modulus/models/srrn) among others.
-These pretrained models are optimized for various physics domains, such as computational fluid dynamics, structural mechanics,
+These models are optimized for various physics domains, such as computational fluid dynamics, structural mechanics,
 and electromagnetics. Users can download, customize, and build upon these models to suit their specific needs, significantly reducing the time
 required to develop high-fidelity simulations.
 
@@ -92,17 +94,17 @@ This includes a simple Python interface and modular design, making it easy to us
 Users can leverage the extensive PyTorch ecosystem, including its libraries and tools, while benefiting from Modulus's
 specialized capabilities for physics-ML. This seamless integration ensures that users can quickly adopt Modulus without a steep learning curve.
 
+For more information, refer [Converting PyTorch Models to Modulus Models](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#converting-pytorch-models-to-modulus-models)
+
 ### Easy Customization and Extension
 Modulus is designed to be highly extensible, allowing users to add new functionality with minimal effort. The framework provides Pythonic APIs for
 defining new physics models, geometries, and constraints, making it easy to extend its capabilities to new use cases.
 The adaptability of Modulus is further enhanced by key features such as [ONNX support](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.deploy.html)
 for flexible model deployment, robust [logging utilities](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.launch.logging.html) for streamlined error handling,
-and efficient [checkpointing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.launch.utils.html#module-modulus.launch.utils.checkpoint) to save valuable training time. 
+and efficient [checkpointing](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.launch.utils.html#module-modulus.launch.utils.checkpoint) to simplify model loading and saving. 
 
 This extensibility ensures that Modulus can adapt to the evolving needs of researchers and engineers, facilitating the development of
 innovative solutions in the field of physics-ML
-
-You can write new neural network layers in Python using the Modulus API or PyTorch and NumPy-based libraries
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
@@ -158,7 +160,7 @@ Using Modulus and interested in showcasing your work on [NVIDIA Blogs](https://d
 
 Here are some of the key benefits of Modulus for SciML model development:
 
-![Benchmarking](docs/img/Value%20prop/benchmarking.svg) | ![Generalized SciML recipes](docs/img/Value%20prop/recipe.svg) | ![Performance](docs/img/Value%20prop/performance.svg)
+<img src="docs/img/Value%20prop/benchmarking.svg" width="100"> | <img src="docs/img/Value%20prop/recipe.svg" width="100"> | <img src="docs/img/Value%20prop/performance.svg" width="100">
 ---|---|---|
 |SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
 |Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use builtin data pipelines for their usecase.| Modulus provides out of the box performant training pipeline including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
@@ -178,7 +180,8 @@ The following resources will help you in learning how to use Modulus. The best w
 ## Resources
 * [Getting started Webinar](https://www.nvidia.com/en-us/on-demand/session/gtc24-dlit61460/?playlistId=playList-bd07f4dc-1397-4783-a959-65cec79aa985)
 * [AI4Science Modulus Bootcamp](https://github.com/openhackathons-org/End-to-End-AI-for-Science)
-* [Modulus Pretrained models and datasets]()
+* [Modulus Pretrained models](https://catalog.ngc.nvidia.com/models?filters=&orderBy=scoreDESC&query=Modulus&page=&pageSize=)
+* [Modulus Datasets and Supplementary materials](https://catalog.ngc.nvidia.com/resources?filters=&orderBy=scoreDESC&query=Modulus&page=&pageSize=)
 * [Self-paced Modulus DLI training](https://learn.nvidia.com/courses/course-detail?course_id=course-v1:DLI+S-OV-04+V1)
 * [Deep Learnning for Science and Engineering Lecture Series with Modulus](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
   * [Modulus: purpose and usage](https://www.nvidia.com/en-us/on-demand/session/dliteachingkit-setk5002/)
@@ -194,18 +197,7 @@ The recommended method for installing the latest version of Modulus is using PyP
 pip install nvidia-modulus
 ```
 
-The installation can be verified by running a simple python code snippet as shown below:
-
-```python
-python
->>> import torch
->>> from modulus.models.mlp.fully_connected import FullyConnected
->>> model = FullyConnected(in_features=32, out_features=64)
->>> input = torch.randn(128, 32)
->>> output = model(input)
->>> output.shape
-torch.Size([128, 64])
-```
+The installation can be verified by running the hello world example as demonstrated [here](#hello-world).
 
 #### Optional dependencies
 
@@ -279,7 +271,7 @@ Currently only `linux/amd64` and `linux/arm64` platforms are supported. If using
 
 Modulus is an open source collaboration and its success is rooted in community
 contribution to further the field of Physics-ML. Thank you for contributing to the
-project so others can build on your contribution.
+project so others can build on top of your contribution.
 
 For guidance on making a contribution to Modulus, please refer to the
 [contributing guidelines](CONTRIBUTING.md).
