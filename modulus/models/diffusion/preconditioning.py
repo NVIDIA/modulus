@@ -961,9 +961,9 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
     def __init__(
         self,
         img_resolution,
-        img_channels,   # not used see above
         img_in_channels,
         img_out_channels,
+        img_channels=0,   # not used see above
         label_dim=0,
         use_fp16=False,
         sigma_min=0.0,
