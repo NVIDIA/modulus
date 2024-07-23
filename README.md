@@ -135,13 +135,18 @@ and efficient
 to simplify model loading and saving.
 
 This extensibility ensures that Modulus can adapt to the evolving needs of researchers
-and engineers, facilitating the development of innovative solutions in the field of physics-ML
+and engineers, facilitating the development of innovative solutions in the field of physics-ML.
 
 Detailed information on features and capabilities can be found in the [Modulus documentation](https://docs.nvidia.com/modulus/index.html#core).
 
 [Reference samples](examples/README.md) cover a broad spectrum of physics-constrained
 and data-driven
 workflows to suit the diversity of use cases in the science and engineering disciplines.
+
+> [!TIP]
+> Have questions about how Modulus can assist you? Try our [Experimental] chatbot,
+> [Modulus Guide](https://chatgpt.com/g/g-PXrBv20SC-modulus-guide), for answers.
+
 
 ### Hello world
 
