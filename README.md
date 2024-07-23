@@ -25,7 +25,7 @@ provides you with an optimized stack that will enable you to train your models a
 
 <!-- markdownlint-disable -->
 <p align="center">
-  <img src=docs/img/Value%20prop/Knowledge%20_guided_models.gif alt="Modulus"/>
+  <img src=docs/img/Value%20prop/Knowlegde%20Guided%20Models.gif alt="Modulus"/>
 </p>
 <!-- markdownlint-enable -->
 
