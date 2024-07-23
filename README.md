@@ -164,7 +164,7 @@ torch.Size([128, 64])
 
 ### AI4Science Library
 
-- [Modulus Symbolic (Beta)](https://github.com/NVIDIA/modulus-sym): This repository of
+- [Modulus Symbolic](https://github.com/NVIDIA/modulus-sym): This repository of
   algorithms and utilities allows SciML researchers and developers to physics inform model
   training and model validation. It also provides a higher level abstraction
   for domain experts that is native to science and engineering.
