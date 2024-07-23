@@ -25,7 +25,7 @@ provides you with an optimized stack that will enable you to train your models a
 
 <!-- markdownlint-disable -->
 <p align="center">
-  <img src=docs/img/Value%20prop/Knowlegde%20Guided%20Models.gif alt="Modulus"/>
+  <img src=https://raw.githubusercontent.com/NVIDIA/modulus/main/docs/img/value_prop/Knowledge_guided_models.gif alt="Modulus"/>
 </p>
 <!-- markdownlint-enable -->
 
@@ -147,7 +147,6 @@ workflows to suit the diversity of use cases in the science and engineering disc
 > Have questions about how Modulus can assist you? Try our [Experimental] chatbot,
 > [Modulus Guide](https://chatgpt.com/g/g-PXrBv20SC-modulus-guide), for answers.
 
-
 ### Hello world
 
 You can start using Modulus in your PyTorch code as simple as shown here:
@@ -199,10 +198,14 @@ community collaborates and contributes model architectures, datasets, and refere
 applications so we can innovate in the pursuit of developing generalizable model
 architectures and algorithms.
 
-Some latest examples of community contributors are [HP Labs 3D Printing team](https://developer.nvidia.com/blog/spotlight-hp-3d-printing-and-nvidia-modulus-collaborate-on-open-source-manufacturing-digital-twin/), [Stanford Cardiovascular
-research team](https://developer.nvidia.com/blog/enabling-greater-patient-specific-cardiovascular-care-with-ai-surrogates/), [UIUC team](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/mhd_pino), [CMU team](https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion) etc.
+Some latest examples of community contributors are [HP Labs 3D Printing team](https://developer.nvidia.com/blog/spotlight-hp-3d-printing-and-nvidia-modulus-collaborate-on-open-source-manufacturing-digital-twin/),
+[Stanford Cardiovascular research team](https://developer.nvidia.com/blog/enabling-greater-patient-specific-cardiovascular-care-with-ai-surrogates/),
+[UIUC team](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/mhd_pino),
+[CMU team](https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion) etc.
 
-Latest examples of research teams using Modulus are [ORNL team](https://arxiv.org/abs/2404.05768), [TU Munich CFD team](https://www.nvidia.com/en-us/on-demand/session/gtc24-s62237/) etc.
+Latest examples of research teams using Modulus are
+[ORNL team](https://arxiv.org/abs/2404.05768),
+[TU Munich CFD team](https://www.nvidia.com/en-us/on-demand/session/gtc24-s62237/) etc.
 
 Please navigate to this page for a complete list of research work leveraging Modulus.
 For a list of enterprises using Modulus refer [here](https://developer.nvidia.com/modulus).
