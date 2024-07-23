@@ -26,7 +26,6 @@ from .manager import DistributedManager
 
 
 def compute_split_shapes(size: int, num_chunks: int) -> List[int]:
-
     # treat trivial case first
     if num_chunks == 1:
         return [size]
@@ -181,8 +180,9 @@ def _reduce(input_, use_fp32=True, group=None):  # pragma: no cover
     if dist.get_world_size(group=group) == 1:
         return input_
 
-    # All-reduce.
-    if use_fp32:
+    # All-reduce, use_fp32 only relevant for lower precisions
+    # if input is already in double precision, nothing changes
+    if use_fp32 and (input_.dtype.itemsize < 4) and input_.dtype.is_floating_point:
         dtype = input_.dtype
         inputf_ = input_.float()
         dist.all_reduce(inputf_, group=group)
@@ -306,7 +306,8 @@ def all_gather_v_bwd_wrapper(
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     use_fp32 : bool, optional
-        flag to specify FP32 precision for the redcution, by default True
+        flag to specify reduction taking place at least in FP32 precision, by default True
+        only acts on floating point inputs in lower precision
     group : Optional[dist.ProcessGroup], optional
         process group along which global tensor is shared, by default None
 
@@ -319,6 +320,7 @@ def all_gather_v_bwd_wrapper(
 
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
+
     if len(sizes) != comm_size:
         raise ValueError()
     if dim >= tensor.dim():
@@ -335,12 +337,13 @@ def all_gather_v_bwd_wrapper(
         for _ in range(comm_size)
     ]
     scatter_list = list(torch.split(tensor, sizes, dim=dim))
+    scatter_list = [t.contiguous() for t in scatter_list]
 
     dist.all_to_all(tmp, scatter_list, group=group)
     stack_dim = tensor.dim()
     tmp = torch.stack(tmp, dim=stack_dim)
 
-    if use_fp32:
+    if use_fp32 and (tmp.dtype.itemsize < 4) and tmp.dtype.is_floating_point:
         # cast to float before sum and return float, then cast back
         output = tmp.sum(dim=stack_dim, dtype=torch.float32)
         output = output.to(dtype=tensor.dtype)
@@ -401,36 +404,48 @@ def gather_v_wrapper(
     if comm_size == 1:
         return tensor
 
-    gather_list = [None] * comm_size
     tensor_shape = list(tensor.shape)
+    x_recv = [None] * comm_size
+    x_send = [None] * comm_size
 
     for r in range(comm_size):
-        tensor_shape[dim] = sizes[r]
-        gather_list[r] = torch.empty(
+        if rank == dst:
+            tensor_shape[dim] = sizes[r]
+        else:
+            tensor_shape[dim] = 0
+
+        x_recv[r] = torch.empty(
             tensor_shape,
             dtype=tensor.dtype,
             device=tensor.device,
         )
 
-    # dist.scatter doesn't support tensors of different shape
-    # so this implementation is using explicit send/recv combinations
-    if rank == dst:
-        req_list = [None] * comm_size
+        if r == dst:
+            x_send[r] = tensor
+        else:
+            tensor_shape[dim] = 0
+            x_send[r] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+
+    dist.all_to_all(x_recv, x_send, group=group)
+
+    # TODO: clean gather/scatter and some examples up
+    # main question is around whether e.g. gather returns
+    # None for rank != dst or an empty dummy or an dummy
+    # containing meta-information like dtype/etc..
+    if rank != dst:
         for r in range(comm_size):
-            if r == dst:
-                gather_list[r] = tensor
-            else:
-                req_list[r] = dist.irecv(gather_list[r], src=r, group=group)
+            tensor_shape[dim] = sizes[r]
+            x_recv[r] = torch.empty(
+                tensor_shape,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
 
-        for r in range(comm_size):
-            if r != dst:
-                req_list[r].wait()
-
-    else:
-        req = dist.isend(tensor, dst=dst, group=group)
-        req.wait()
-
-    output = torch.cat(gather_list, dim=dim)
+    output = torch.cat(x_recv, dim=dim)
 
     return output
 
@@ -468,46 +483,41 @@ def scatter_v_wrapper(
     torch.Tensor
         corresponding local part of the global tensor on each rank
     """
-
     comm_size = dist.get_world_size(group=group)
     rank = dist.get_rank(group=group)
+
     if len(sizes) != comm_size:
         raise ValueError()
-    if dim >= tensor.dim():
+    if dist.get_rank(group=group) == 0 and dim >= tensor.dim():
         raise ValueError()
     if not (0 <= src < comm_size):
         raise ValueError()
 
+    # all_to_all is already all_to_all_v, use empty tensors to "mask"-out irrelevant parts
     tensor_shape = list(tensor.shape)
-    tensor_shape[dim] = sizes[rank]
-    output = torch.empty(
-        tensor_shape,
-        dtype=tensor.dtype,
-        device=tensor.device,
-    )
-
-    # dist.scatter doesn't support tensors of different shape
-    # so this implementation is using explicit send/recv combinations
-    scatter_list = None
+    x_send = [None] * comm_size
+    x_recv = [None] * comm_size
     if rank == src:
         scatter_list = torch.split(tensor, sizes, dim=dim)
-        req_list = [None] * comm_size
-        for r in range(comm_size):
-            tensor_to_scatter_to_r = scatter_list[r]
-            if r == src:
-                output = tensor_to_scatter_to_r
-            else:
-                req_list[r] = dist.isend(tensor_to_scatter_to_r, dst=r, group=group)
-
-        for r in range(comm_size):
-            if r != src:
-                req_list[r].wait()
-
+        scatter_list = [t.contiguous() for t in scatter_list]
+        x_send = scatter_list
     else:
-        req = dist.irecv(output, src=src, group=group)
-        req.wait()
+        for r in range(comm_size):
+            tensor_shape[dim] = 0
+            x_send[r] = torch.empty(
+                tensor_shape, device=tensor.device, dtype=tensor.dtype
+            )
 
-    return output
+    for r in range(comm_size):
+        if r == src:
+            tensor_shape[dim] = sizes[rank]
+        else:
+            tensor_shape[dim] = 0
+        x_recv[r] = torch.empty(tensor_shape, device=tensor.device, dtype=tensor.dtype)
+
+    dist.all_to_all(x_recv, x_send, group=group)
+
+    return x_recv[src]
 
 
 def indexed_all_to_all_v_wrapper(
@@ -559,19 +569,20 @@ def indexed_all_to_all_v_wrapper(
     if len(indices) != comm_size:
         raise ValueError()
 
-    indices = torch.cat(indices, dim=0)
-    tensor_to_send = torch.index_select(tensor, dim=dim, index=indices)
-
-    recv_list = [None] * comm_size
+    x_send = [tensor[idx] for idx in indices]
+    x_recv = [None] * comm_size
+    tensor_shape = list(tensor.shape)
     for r in range(comm_size):
-        recv_list[r] = scatter_v_wrapper(
-            tensor_to_send,
-            sizes=sizes[r],
-            src=r,
-            dim=dim,
-            group=group,
+        tensor_shape[dim] = sizes[r][rank]
+        x_recv[r] = torch.empty(
+            tensor_shape,
+            dtype=tensor.dtype,
+            device=tensor.device,
         )
-    tensor_to_recv = torch.cat(recv_list, dim=dim)
+
+    dist.all_to_all(x_recv, x_send, group=group)
+
+    tensor_to_recv = torch.cat(x_recv, dim=dim)
 
     return tensor_to_recv
 
@@ -603,7 +614,8 @@ def indexed_all_to_all_v_wrapper_bwd(
         size of original local tensor along specified dimension,
         i.e. from the corresponding forward pass
     use_fp32 : bool, optional
-        flag to specify FP32 precision, by default True
+        flag to specify reduction taking place at least in FP32 precision, by default True
+        only acts on floating point inputs in lower precision
     dim : int, optional
         dimension along with global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -627,23 +639,35 @@ def indexed_all_to_all_v_wrapper_bwd(
     if len(indices) != comm_size:
         raise ValueError()
 
-    indices = torch.cat(indices, dim=0)
     tensor_shape = list(tensor.shape)
 
     # scatter gradients, roles reversed compared to forward pass
-    recv_list = [None] * comm_size
+    # recv_sizes in forward pass
+    recv_sizes = [sizes[i][rank] for i in range(comm_size)]
+    # send_sizes in forward pass
+    send_sizes = [sizes[rank][i] for i in range(comm_size)]
+
+    x_send = torch.split(tensor, recv_sizes, dim=dim)
+    x_send = [t.contiguous() for t in x_send]
+    x_recv = [None] * comm_size
     for r in range(comm_size):
-        recv_sizes = [sizes[i][r] for i in range(comm_size)]
-        recv_list[r] = scatter_v_wrapper(
-            tensor, recv_sizes, dim=dim, src=r, group=group
+        tensor_shape[dim] = send_sizes[r]
+        x_recv[r] = torch.empty(
+            tensor_shape,
+            dtype=tensor.dtype,
+            device=tensor.device,
         )
-    tensor_to_recv = torch.cat(recv_list, dim=dim)
+
+    dist.all_to_all(x_recv, x_send, group=group)
+
+    tensor_to_recv = torch.cat(x_recv, dim=dim)
 
     # sum up gathered gradients and taking
     # care of precision handling as specified
     # by boolean flag
+    indices = torch.cat(indices, dim=0)
     tensor_shape[dim] = tensor_size_along_dim
-    if use_fp32:
+    if use_fp32 and (tensor.dtype.itemsize < 4) and tensor.dtype.is_floating_point:
         out = torch.zeros(
             tensor_shape,
             dtype=torch.float32,
@@ -658,7 +682,8 @@ def indexed_all_to_all_v_wrapper_bwd(
         )
 
     out.index_add_(source=tensor_to_recv, index=indices, dim=dim)
-    if use_fp32:
+
+    if out.dtype != tensor.dtype:
         out = out.to(tensor.dtype)
 
     return out
@@ -688,7 +713,7 @@ def mark_module_as_shared(
         as having shared parameters.
     use_fp32_reduction : bool, default=True
         Flag indicating whether the reduction for accumulating gradients
-        will be done in FP32 or the native datatype.
+        will be done in at least FP32 or the native datatype.
     """
 
     group = DistributedManager().group(process_group)

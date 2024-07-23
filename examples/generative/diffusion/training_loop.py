@@ -94,7 +94,7 @@ def training_loop(
     assert batch_size == batch_gpu * num_accumulation_rounds * dist.world_size
 
     # Load dataset
-    supported_datasets = ["cifar10"]
+    supported_datasets = ["cifar10", "dfsr"]
     if dataset is None:
         raise RuntimeError("Please specify the dataset.")
     if dataset not in supported_datasets:
@@ -169,6 +169,11 @@ def training_loop(
     )  # cifar10
     # interface_kwargs = dict(img_resolution=yparams.crop_size_x, img_channels=img_out_channels, img_in_channels=img_in_channels, img_out_channels=img_out_channels, label_dim=0)    #weather
 
+    if network_kwargs.class_name == "modulus.models.diffusion.VEPrecond_dfsr_cond":
+        # Load dataset scaling parameters to compute physics-informed conditioning variable (PDE residual w.r.t. vorticity)
+        interface_kwargs["dataset_mean"] = dataset_obj.stat["mean"]
+        interface_kwargs["dataset_scale"] = dataset_obj.stat["scale"]
+
     net = construct_class_by_name(
         **network_kwargs, **interface_kwargs
     )  # subclass of torch.nn.Module
@@ -186,18 +191,24 @@ def training_loop(
     else:
         ddp = net
 
-    if dist.rank == 0:
-        with torch.no_grad():
-            images = torch.zeros(
-                [batch_gpu, net.img_channels, net.img_resolution, net.img_resolution],
-                device=device,
-            )
-            # img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
-            # img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
-            sigma = torch.ones([batch_gpu], device=device)
-            labels = torch.zeros([batch_gpu, net.label_dim], device=device)
-            # print_module_summary(net, [img_clean, img_lr, sigma, labels], max_nesting=2)
-            print_module_summary(net, [images, sigma, labels], max_nesting=2)
+    if not network_kwargs.class_name == "modulus.models.diffusion.VEPrecond_dfsr_cond":
+        if dist.rank == 0:
+            with torch.no_grad():
+                images = torch.zeros(
+                    [
+                        batch_gpu,
+                        net.img_channels,
+                        net.img_resolution,
+                        net.img_resolution,
+                    ],
+                    device=device,
+                )
+                # img_clean = torch.zeros([batch_gpu, img_out_channels, net.img_resolution, net.img_resolution], device=device)
+                # img_lr = torch.zeros([batch_gpu, img_in_channels, net.img_resolution, net.img_resolution], device=device)
+                sigma = torch.ones([batch_gpu], device=device)
+                labels = torch.zeros([batch_gpu, net.label_dim], device=device)
+                # print_module_summary(net, [img_clean, img_lr, sigma, labels], max_nesting=2)
+                print_module_summary(net, [images, sigma, labels], max_nesting=2)
 
     # import pdb; pdb.set_trace()
     # breakpoint()
@@ -311,7 +322,12 @@ def training_loop(
                 # Fetch training data: cifar10
                 images, labels = next(dataset_iterator)
                 # Normalization: cifar10 (normalized already in the dataset)
-                images = images.to(device).to(torch.float32) / 127.5 - 1
+                # images = images.to(device).to(torch.float32) / 127.5 - 1
+                images = (
+                    images.to(device).to(torch.float32)
+                    if dataset == "dfsr"
+                    else images.to(device).to(torch.float32) / 127.5 - 1
+                )
                 labels = labels.to(device)
 
                 # loss = loss_fn(net=ddp, img_clean=img_clean, img_lr=img_lr, labels=labels, augment_pipe=augment_pipe)
@@ -320,6 +336,14 @@ def training_loop(
                 )
                 report("Loss/loss", loss)
                 loss.sum().mul(loss_scaling / batch_gpu_total).backward()
+                if dataset == "dfsr":
+                    loss_sample = (
+                        loss.sum()
+                        .mul(loss_scaling / batch_gpu_total)
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
 
         # Update weights.
         for g in optimizer.param_groups:
@@ -343,7 +367,24 @@ def training_loop(
 
         # Perform maintenance tasks once per tick.
         cur_nimg += batch_size
-        done = cur_nimg >= total_kimg * 1000
+        # done = cur_nimg >= total_kimg * 1000
+        if dataset == "dfsr":
+            done = cur_nimg >= total_kimg
+            if cur_nimg / batch_size % 500 == 0:
+                logger0.info(
+                    "Progress in training iterations: loss: {}, iter: {}, cur_nimg: {}, \
+                    cur_tick: {}, dist.rank: {}, nimg: {}/{}".format(
+                        loss_sample,
+                        cur_nimg / batch_size,
+                        cur_nimg,
+                        cur_tick,
+                        dist.rank,
+                        cur_nimg,
+                        total_kimg,
+                    )
+                )
+        else:
+            done = cur_nimg >= total_kimg * 1000
         if (
             (not done)
             and (cur_tick != 0)
@@ -410,6 +451,8 @@ def training_loop(
 
         # Save network snapshot.
         if (snapshot_ticks is not None) and (done or cur_tick % snapshot_ticks == 0):
+            if dataset == "dfsr":
+                logger0.info("Saving network snapshot.")
             data = dict(
                 ema=ema,
                 loss_fn=loss_fn,
@@ -432,13 +475,23 @@ def training_loop(
             del data  # conserve memory
 
         # Save full dump of the training state.
-        if (
-            (state_dump_ticks is not None)
-            and (done or cur_tick % state_dump_ticks == 0)
-            and cur_tick != 0
-            and dist.rank == 0
-        ):
+        if dataset == "dfsr":
+            save_full_dump = (
+                (state_dump_ticks is not None)
+                and (done or cur_tick % state_dump_ticks == 0)
+                and dist.rank == 0
+            )
+        else:
+            save_full_dump = (
+                (state_dump_ticks is not None)
+                and (done or cur_tick % state_dump_ticks == 0)
+                and cur_tick != 0
+                and dist.rank == 0
+            )
+
+        if save_full_dump:
             # if (state_dump_ticks is not None) and (done or cur_tick % state_dump_ticks == 0) and dist.get_rank() == 0:
+            logger0.info("Saving full dump of the training state.")
             torch.save(
                 dict(net=net, optimizer_state=optimizer.state_dict()),
                 os.path.join(run_dir, f"training-state-{cur_nimg//1000:06d}.pt"),
@@ -470,5 +523,6 @@ def training_loop(
             break
 
     # Done.
-    logger0.info()
+    if not dataset == "dfsr":
+        logger0.info()
     logger0.info("Exiting...")

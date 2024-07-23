@@ -141,9 +141,12 @@ def test_distributed_model_config():
     model_parallel_size = 2
     verbose = False  # Change to True for debug
 
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
     torch.multiprocessing.spawn(
         run_distributed_model_config,
         args=(model_parallel_size, verbose),
         nprocs=model_parallel_size,
-        start_method="spawn",
+        join=True,
+        daemon=True,
     )

@@ -2,6 +2,10 @@ install:
 	pip install --upgrade pip && \
 		pip install -e .
 
+editable-install:
+	pip install --upgrade pip && \
+		pip install -e .[dev] --config-settings editable_mode=strict
+
 get-data:
 	mkdir -p /data && \
 		mkdir -p /data/nfs/ && \
@@ -35,7 +39,7 @@ doctest:
 pytest: 
 	coverage run \
 		--rcfile='test/coverage.pytest.rc' \
-		-m pytest --ignore-glob=*docs* 
+		-m pytest --ignore-glob=*docs* --ignore-glob=*examples*
 
 pytest-internal:
 	cd test/internal && \

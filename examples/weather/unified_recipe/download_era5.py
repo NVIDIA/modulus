@@ -33,6 +33,12 @@ def main(cfg: DictConfig) -> None:
     # Resolve config so that all values are concrete
     OmegaConf.resolve(cfg)
 
+    # Make single and pressure level variables list if not already
+    if not cfg.dataset.single_level_variables:
+        cfg.dataset.single_level_variables = []
+    if not cfg.dataset.pressure_level_variables:
+        cfg.dataset.pressure_level_variables = []
+
     # Get ARCO ERA5 dataset
     arco_filename = (
         "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"

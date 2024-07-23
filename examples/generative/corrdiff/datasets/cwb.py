@@ -21,6 +21,7 @@ import random
 
 import cftime
 import cv2
+from hydra.utils import to_absolute_path
 import numpy as np
 import zarr
 
@@ -346,8 +347,6 @@ class ZarrDataset(DownscalingDataset):
         out_channels=(0, 17, 18, 19),
         img_shape_x=448,
         img_shape_y=448,
-        crop_size_x=448,
-        crop_size_y=448,
         roll=False,
         add_grid=True,
         ds_factor=1,
@@ -359,8 +358,6 @@ class ZarrDataset(DownscalingDataset):
         global_means_path=None,
         global_stds_path=None,
         normalization="v1",
-        gridtype="sinusoidal",
-        N_grid_channels=4,
     ):
         if not all_times:
             self._dataset = (
@@ -372,8 +369,6 @@ class ZarrDataset(DownscalingDataset):
             self._dataset = dataset
 
         self.train = train
-        self.crop_size_x = crop_size_x
-        self.crop_size_y = crop_size_y
         self.img_shape_x = img_shape_x
         self.img_shape_y = img_shape_y
         self.roll = roll
@@ -384,11 +379,17 @@ class ZarrDataset(DownscalingDataset):
         self.n_history = n_history
         self.min_path = min_path
         self.max_path = max_path
-        self.global_means_path = global_means_path
-        self.global_stds_path = global_stds_path
+        self.global_means_path = (
+            to_absolute_path(global_means_path)
+            if (global_means_path is not None)
+            else None
+        )
+        self.global_stds_path = (
+            to_absolute_path(global_stds_path)
+            if (global_stds_path is not None)
+            else None
+        )
         self.normalization = normalization
-        self.gridtype = gridtype
-        self.N_grid_channels = N_grid_channels
 
     def info(self):
         """Check if the given time is not in the year 2021."""
@@ -403,14 +404,6 @@ class ZarrDataset(DownscalingDataset):
         else:
             y_roll = 0
 
-        # cropping
-        if self.train and (self.crop_size_x or self.crop_size_y):
-            rnd_x = random.randint(0, self.img_shape_x - self.crop_size_x)
-            rnd_y = random.randint(0, self.img_shape_y - self.crop_size_y)
-        else:
-            rnd_x = 0
-            rnd_y = 0
-
         # channels
         input = input[self.in_channels, :, :]
         target = target[self.out_channels, :, :]
@@ -419,22 +412,18 @@ class ZarrDataset(DownscalingDataset):
             target = self._create_lowres_(target, factor=self.ds_factor)
 
         reshape_args = (
-            self.crop_size_x,
-            self.crop_size_y,
-            rnd_x,
-            rnd_y,
             y_roll,
             self.train,
             self.n_history,
             self.in_channels,
             self.out_channels,
+            self.img_shape_x,
+            self.img_shape_y,
             self.min_path,
             self.max_path,
             self.global_means_path,
             self.global_stds_path,
             self.normalization,
-            self.gridtype,
-            self.N_grid_channels,
             self.roll,
         )
         # SR
@@ -443,7 +432,6 @@ class ZarrDataset(DownscalingDataset):
             "inp",
             *reshape_args,
             normalize=False,
-            grid=self.grid,
         )  # 3x720x1440
         target = reshape_fields(
             target, "tar", *reshape_args, normalize=False
@@ -455,10 +443,6 @@ class ZarrDataset(DownscalingDataset):
         """Metadata for the input channels. A list of dictionaries, one for each channel"""
         in_channels = self._dataset.input_channels()
         in_channels = [in_channels[i] for i in self.in_channels]
-        in_channels.extend(
-            ChannelMetadata(name=f"grid{i}", auxiliary=True)
-            for i in range(self.N_grid_channels)
-        )
         return in_channels
 
     def output_channels(self):
@@ -472,12 +456,12 @@ class ZarrDataset(DownscalingDataset):
     def longitude(self):
         """Get longitude values from the dataset."""
         lon = self._dataset.longitude()
-        return lon if self.train else lon[..., : self.crop_size_y, : self.crop_size_x]
+        return lon if self.train else lon[..., : self.img_shape_y, : self.img_shape_x]
 
     def latitude(self):
         """Get latitude values from the dataset."""
         lat = self._dataset.latitude()
-        return lat if self.train else lat[..., : self.crop_size_y, : self.crop_size_x]
+        return lat if self.train else lat[..., : self.img_shape_y, : self.img_shape_x]
 
     def time(self):
         """Get time values from the dataset."""
@@ -485,21 +469,21 @@ class ZarrDataset(DownscalingDataset):
 
     def image_shape(self):
         """Get the shape of the image (same for input and output)."""
-        return (self.crop_size_y, self.crop_size_x)
+        return (self.img_shape_x, self.img_shape_y)
 
     def normalize_input(self, x):
         """Convert input from physical units to normalized data."""
         x_norm = self._dataset.normalize_input(
-            x[:, : -self.N_grid_channels], channels=self.in_channels
+            x[:, : len(self.in_channels)], channels=self.in_channels
         )
-        return np.concatenate((x_norm, x[:, -self.N_grid_channels :]), axis=1)
+        return np.concatenate((x_norm, x[:, self.in_channels :]), axis=1)
 
     def denormalize_input(self, x):
         """Convert input from normalized data to physical units."""
         x_denorm = self._dataset.denormalize_input(
-            x[:, : -self.N_grid_channels], channels=self.in_channels
+            x[:, : len(self.in_channels)], channels=self.in_channels
         )
-        return np.concatenate((x_denorm, x[:, -self.N_grid_channels :]), axis=1)
+        return np.concatenate((x_denorm, x[:, len(self.in_channels) :]), axis=1)
 
     def normalize_output(self, x):
         """Convert output from physical units to normalized data."""
@@ -533,6 +517,7 @@ class ZarrDataset(DownscalingDataset):
 
 def get_zarr_dataset(*, data_path, normalization="v1", all_times=False, **kwargs):
     """Get a Zarr dataset for training or evaluation."""
+    data_path = to_absolute_path(data_path)
     get_target_normalization = {
         "v1": get_target_normalizations_v1,
         "v2": get_target_normalizations_v2,

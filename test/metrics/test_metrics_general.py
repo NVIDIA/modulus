@@ -226,6 +226,131 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
         DistributedManager.cleanup()
 
 
+def fair_crps(pred, obs, dim=-1):
+    return crps.kcrps(pred, obs, dim=dim, biased=False)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_fair_crps_greater_than_zero(device):
+    pred = torch.randn(5, 10, device=device)
+    obs = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0], device=device)
+    assert torch.all(fair_crps(pred, obs, dim=-1) > 0)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_fair_crps_is_fair(device):
+    # fair means that a random prediction should outperform a non-random one on average
+    # This is not always true of ``crps``...try replacing fair_crps function
+    # below with ``crps``
+    n = 256
+    random_pred = torch.randn(n, 2, device=device)
+    cheating_pred = torch.zeros((n, 2), device=device)
+    obs = torch.randn(n, device=device)
+
+    score_of_random = fair_crps(random_pred, obs, dim=-1).mean()
+    score_of_cheating = fair_crps(cheating_pred, obs, dim=-1).mean()
+    assert score_of_random.item() < score_of_cheating.item()
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_fair_crps_converges_to_crps(device):
+    # for large ensemble fair cprs should be close to crps
+
+    # generate deterministic sample with normal pdf
+    # deterministic to ensure reproducibility for this test which
+    # has a specific tolerance
+    norm = torch.distributions.Normal(0, 1)
+    u = torch.linspace(0, 1, 10_000)[1:-1].to(device)
+    pred = norm.icdf(u)
+
+    # expected value using exact gaussian crps formula
+    zero = torch.tensor(0, device=device).float()
+    one = torch.tensor(1, device=device).float()
+    expected = crps._crps_gaussian(mean=zero, std=one, obs=zero).item()
+
+    fair_value = fair_crps(pred, zero).item()
+
+    assert pytest.approx(fair_value, rel=1e-3) == expected
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_fair_crps_dim_arg_works(device):
+    pred = torch.randn((5, 10, 100), device=device)
+
+    a, b, c = pred.shape
+
+    value = fair_crps(pred, torch.zeros([a, c], device=device), dim=1)
+    assert value.shape == (a, c)
+
+    value = fair_crps(pred, torch.zeros([b, c], device=device), dim=0)
+    assert value.shape == (b, c)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+@pytest.mark.parametrize("num", [10, 23, 59])
+@pytest.mark.parametrize("biased", [True, False])
+def test_crps_finite(device, num, biased):
+
+    # Test biased and unbiased on uniform data with analytic result
+    pred = torch.linspace(0, 1, num + 1).unsqueeze(-1).to(device)
+    obs = torch.zeros([1], device=device)
+
+    analytic = (2 * num + 1) / (6 * num + 6) if biased else (num - 1) / (3 * num)
+    analytic = torch.as_tensor([analytic], device=device)
+
+    assert torch.all(torch.isclose(analytic, crps.kcrps(pred, obs, biased=biased)))
+
+    # Test biased on random data
+    pred = torch.as_tensor(
+        [
+            -1.9293,
+            0.6454,
+            -0.3902,
+            -1.0438,
+            -1.3573,
+            -0.2942,
+            2.6269,
+            1.0405,
+            -0.5659,
+            -0.1438,
+            -0.3993,
+            0.7306,
+            -0.8229,
+            -0.8500,
+            -0.5732,
+            0.6746,
+            0.7208,
+            0.6172,
+            -1.6648,
+            0.5183,
+            -0.4850,
+            0.3033,
+            2.4232,
+            0.4714,
+            -0.6040,
+            -0.4617,
+            1.3324,
+            -0.7937,
+            0.8862,
+            -1.2291,
+            2.7559,
+            -1.0750,
+            -0.3882,
+            0.2331,
+            0.4886,
+            -0.3715,
+            -0.3438,
+            -0.4229,
+            0.7913,
+            1.0469,
+        ],
+        device=device,
+    ).reshape([-1, 1])
+    obs = torch.as_tensor([-1.1569], device=device)
+    analytic = torch.as_tensor([0.7027], device=device)
+    assert torch.all(torch.isclose(analytic, crps.kcrps(pred, obs, biased=True)))
+
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     # Uses eq (5) from Gneiting et al. https://doi.org/10.1175/MWR2904.1
@@ -279,6 +404,25 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
         true_crps * torch.ones([1], dtype=torch.float32, device=device),
         rtol=100 * rtol,
         atol=100 * atol,
+    )
+
+    # Test sorted crps
+    c = crps.crps(x[:10_000], y, method="sort")
+    true_crps = (np.sqrt(2) - 1.0) / np.sqrt(np.pi)
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
+    )
+
+    # Test when input is numpy array
+    c = crps.crps(x[:10_000], y.cpu().numpy(), method="sort")
+    assert torch.allclose(
+        c,
+        true_crps * torch.ones([1], dtype=torch.float32, device=device),
+        rtol=10 * rtol,
+        atol=10 * atol,
     )
 
     # Test Gaussian CRPS

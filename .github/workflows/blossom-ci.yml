@@ -38,9 +38,25 @@ jobs:
       
     # This job only runs for pull request comments
     # Comment must be `/blossom-ci`
-    if: |
-         contains( 'nickgeneva,ktangsali,dallasfoster,akshaysubr,loliverhennigh,mnabian,stadlmax,daviddpruitt,Alexey-Kamenev,', format('{0},', github.actor) ) && 
-         github.event.comment.body == '/blossom-ci'  
+    if: >
+         github.event.comment.body == '/blossom-ci' &&
+         (
+           github.actor == 'nickgeneva' ||
+           github.actor == 'ktangsali' ||
+           github.actor == 'dallasfoster' ||
+           github.actor == 'akshaysubr' ||
+           github.actor == 'loliverhennigh' ||
+           github.actor == 'mnabian' ||
+           github.actor == 'stadlmax' ||
+           github.actor == 'daviddpruitt' ||
+           github.actor == 'Alexey-Kamenev' ||
+           github.actor == 'jleinonen' ||
+           github.actor == 'MortezaMardani' ||
+           github.actor == 'tge25' ||
+           github.actor == 'nbren12' ||
+           github.actor == 'yairchn' ||
+           github.actor == 'hasethinvd'
+         )  
     steps:
       - name: Check if comment is issued by authorized person
         run: blossom-ci

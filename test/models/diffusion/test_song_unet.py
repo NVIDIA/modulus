@@ -99,6 +99,24 @@ def test_song_unet_constructor(device):
     output_image = model(input_image, noise_labels, class_labels)
     assert output_image.shape == (1, out_channels, img_resolution, img_resolution)
 
+    # test rectangular shape
+    model = UNet(
+        img_resolution=[img_resolution, img_resolution * 2],
+        in_channels=in_channels,
+        out_channels=out_channels,
+        embedding_type="fourier",
+        channel_mult_noise=2,
+        encoder_type="residual",
+        resample_filter=[1, 3, 3, 1],
+    ).to(device)
+    noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+    input_image = torch.ones([1, out_channels, img_resolution, img_resolution * 2]).to(
+        device
+    )
+    output_image = model(input_image, noise_labels, class_labels)
+    assert output_image.shape == (1, out_channels, img_resolution, img_resolution * 2)
+
     # Also test failure cases
     try:
         model = UNet(
@@ -217,3 +235,70 @@ def test_son_unet_deploy(device):
     assert common.validate_onnx_runtime(
         model, (*[input_image, noise_labels, class_labels],)
     )
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_song_unet_grad_checkpointing(device):
+    channels = 2
+    img_resolution = 64
+
+    # fix random seeds
+    seed = 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+    input_image = torch.ones([1, channels, img_resolution, img_resolution]).to(device)
+    noise_labels = noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+
+    # Construct the DDM++ UNet model
+    model = UNet(
+        img_resolution=img_resolution, in_channels=channels, out_channels=channels
+    ).to(device)
+    y_pred = model(input_image, noise_labels, class_labels)
+
+    # dummy loss
+    loss = y_pred.sum()
+
+    # compute gradients
+    loss.backward()
+    computed_grads = {}
+    for name, param in model.named_parameters():
+        computed_grads[name] = param.grad.clone()
+
+    # fix random seeds
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+    input_image = torch.ones([1, channels, img_resolution, img_resolution]).to(device)
+    noise_labels = noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+
+    # Model with checkpointing enabled
+    model_checkpointed = UNet(
+        img_resolution=img_resolution,
+        in_channels=channels,
+        out_channels=channels,
+        checkpoint_level=4,
+    ).to(device)
+    y_pred_checkpointed = model_checkpointed(input_image, noise_labels, class_labels)
+
+    # dummy loss
+    loss = y_pred_checkpointed.sum()
+
+    # compute gradients
+    loss.backward()
+    computed_grads_checkpointed = {}
+    for name, param in model.named_parameters():
+        computed_grads_checkpointed[name] = param.grad.clone()
+
+    # Check that the results are the same
+    assert torch.allclose(
+        y_pred_checkpointed, y_pred
+    ), "Outputs do not match. Checkpointing failed!"
+
+    # Compare the gradients
+    for name in computed_grads:
+        torch.allclose(
+            computed_grads_checkpointed[name], computed_grads[name]
+        ), "Gradient do not match. Checkpointing failed!"

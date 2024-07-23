@@ -84,3 +84,23 @@ training, run
 
 If running inside a docker container, you may need to include the
 `--allow-run-as-root` in the multi-GPU run command.
+
+## SFNO Training
+
+One of the showcased models available in the configs is [Spherical Fourier Neural Operators:
+Learning Stable Dynamics on the Sphere](https://arxiv.org/pdf/2306.03838.pdf). In order to
+train the SFNO model, [Modulus Makani](https://github.com/NVIDIA/modulus-makani)
+needs to be installed. This allows the model to be added to modulus's model registry.
+For more information on this process, please refer to [Modulus model registry](
+https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html#modulus-model-registry-and-entry-points).
+
+```bash
+git clone git@github.com:NVIDIA/makani.git
+cd makani
+pip install -e .
+```
+
+The config file can be modified to train the SFNO model by uncommenting all SFNO configs.
+Following the prior dataset fetching and curation steps, the model can be trained by running:
+
+```python train.py```

@@ -25,14 +25,40 @@ Tensor = torch.Tensor
 
 
 @torch.jit.script
-def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
-    """
+def _kernel_crps_implementation(pred: Tensor, obs: Tensor, biased: bool) -> Tensor:
+    """An O(m log m) implementation of the kernel CRPS formulas"""
+    skill = torch.abs(pred - obs[..., None]).mean(-1)
+    pred, _ = torch.sort(pred)
+
+    # derivation of fast implementation of spread-portion of CRPS formula when x is sorted
+    # sum_(i,j=1)^m |x_i - x_j| = sum_(i<j) |x_i -x_j| + sum_(i > j) |x_i - x_j|
+    #                           = 2 sum_(i <= j) |x_i -x_j|
+    #                           = 2 sum_(i <= j) (x_j - x_i)
+    #                           = 2 sum_(i <= j) x_j - 2 sum_(i <= j) x_i
+    #                           = 2 sum_(j=1)^m j x_j - 2 sum (m - i + 1) x_i
+    #                           = 2 sum_(i=1)^m (2i - m - 1) x_i
+    m = pred.size(-1)
+    i = torch.arange(1, m + 1, device=pred.device, dtype=pred.dtype)
+    denom = m * m if biased else m * (m - 1)
+    factor = (2 * i - m - 1) / denom
+    spread = torch.sum(factor * pred, dim=-1)
+    return skill - spread
+
+
+def kcrps(pred: Tensor, obs: Tensor, dim: int = 0, biased: bool = True):
+    """Estimate the CRPS from a finite ensemble
+
     Computes the local Continuous Ranked Probability Score (CRPS) by using
-    the kernel version of CRPS
+    the kernel version of CRPS. The cost is O(m log m).
 
     Creates a map of CRPS and does not accumulate over lat/lon regions.
-    Computes:
+    Approximates:
+    .. math::
         CRPS(X, y) = E[X - y] - 0.5 E[X-X']
+
+    with
+    .. math::
+        sum_i=1^m |X_i - y| / m - 1/(2m^2) sum_i,j=1^m |x_i - x_j|
 
     Parameters
     ----------
@@ -44,21 +70,22 @@ def kcrps(pred: Tensor, obs: Tensor, dim: int = 0):
         with respect to.
     dim : int, optional
         The dimension over which to compute the CRPS, assumed to be 0.
+    biased :
+        When False, uses the unbiased estimators described in (Zamo and Naveau, 2018)::
+
+            E|X-y|/m - 1/(2m(m-1)) sum_(i,j=1)|x_i - x_j|
+
+        Unlike ``crps`` this is fair for finite ensembles. Non-fair ``crps`` favors less
+        dispersive ensembles since it is biased high by E|X- X'|/ m where m is the
+        ensemble size.
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
-    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
-    n = pred.shape[0]
-    _crps = 0.0 * obs
-    for i in range(n):
-        x_i = pred[i]
-        x_j = pred[i:]
-        _crps += torch.abs(x_i - obs) / n
-        _crps -= torch.sum(torch.abs(x_i[None] - x_j) / n, dim=0) / n
-    return _crps
+    pred = torch.movedim(pred, dim, -1)
+    return _kernel_crps_implementation(pred, obs, biased=biased)
 
 
 def _crps_gaussian(mean: Tensor, std: Tensor, obs: Union[Tensor, np.ndarray]) -> Tensor:
@@ -136,7 +163,7 @@ def _crps_from_cdf(
 
     .. math::
 
-        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx
+        CRPS(X, y) = \\int[ (F(x) - 1[x - y])^2 ] dx
 
     where F is the empirical cdf of X.
 
@@ -258,20 +285,9 @@ def crps(
     pred: Tensor, obs: Union[Tensor, np.ndarray], dim: int = 0, method: str = "kernel"
 ) -> Tensor:
     """
-    Computes the local Continuous Ranked Probability Score (CRPS) by either
-    computing a histogram and CDF of the predictions, or using the kernel definition.
+    Computes the local Continuous Ranked Probability Score (CRPS).
 
-    Creates a map of CRPS and does not accumulate over lat/lon regions.
-
-    Computes:
-
-    .. math::
-
-        CRPS(x, y) = E[X-y] - 0.5*E[X-X'] if B < 100
-        CRPS(X, y) = int[ (F(x) - 1[x - y])^2 ] dx otherwise
-
-    where F is the empirical cdf of X.
-
+    Creates a map of CRPS and does not accumulate over any other dimensions (e.g., lat/lon regions).
 
     Parameters
     ----------
@@ -284,22 +300,48 @@ def crps(
         Dimension with which to calculate the CRPS over, the ensemble dimension.
         Assumed to be zero.
     method: str, Optional
-        The method to calculate the crps. Can either be "kernel" or "histogram".
+        The method to calculate the crps. Can either be "kernel", "sort" or "histogram".
+
+        The "kernel" method implements
+        .. math::
+            CRPS(x, y) = E[X-y] - 0.5*E[X-X']
+
+        This method scales as O(n^2) where n is the number of ensemble members and
+        can potentially induce large memory consumption as the algorithm attempts
+        to vectorize over this O(n^2) operation.
+
+        The "sort" method compute the exact CRPS using the CDF method
+        .. math::
+            CRPS(x, y) = int [F(x) - 1(x-y)]^2 dx
+
+        where F is the empirical CDF and 1(x-y) = 1 if x > y.
+
+        This method is more memory efficient than the kernel method, and uses O(n
+        log n) compute instead of O(n^2), where n is the number of ensemble members.
+
+        The "histogram" method computes an approximate CRPS using the CDF method
+        .. math::
+            CRPS(x, y) = int [F(x) - 1(x-y)]^2 dx
+
+        where F is the empirical CDF, estimated via a histogram of the samples. The
+        number of bins used is the lesser of the square root of the number of samples
+        and 100. For more control over the implementation of this method consider using
+        `cdf_function` to construct a cdf and `_crps_from_cdf` to compute CRPS.
 
     Returns
     -------
     Tensor
         Map of CRPS
     """
-    if method not in ["kernel", "histogram"]:
-        raise ValueError("Method must either be 'kernel' or 'histogram'.")
+    if method not in ["kernel", "sort", "histogram"]:
+        raise ValueError("Method must either be 'kernel', 'sort' or 'histogram'.")
 
     n = pred.shape[dim]
-    pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
     obs = torch.as_tensor(obs, device=pred.device, dtype=pred.dtype)
-    if method == "kernel":
-        return kcrps(pred, obs, dim=0)
+    if method in ["kernel", "sort"]:
+        return kcrps(pred, obs, dim=dim)
     else:
+        pred = pred.unsqueeze(0).transpose(0, dim + 1).squeeze(dim + 1)
         number_of_bins = max(int(np.sqrt(n)), 100)
         bin_edges, cdf = cdf_function(pred, bins=number_of_bins)
         _crps = _crps_from_cdf(bin_edges, cdf, obs)
