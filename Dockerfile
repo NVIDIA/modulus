@@ -38,26 +38,32 @@ COPY . /modulus/
 
 # Install Numcodecs (This needs a separate install because Numcodecs ARM pip install has issues)
 # A fix is being added here: https://github.com/zarr-developers/numcodecs/pull/315 but the public release is not ready yet.
+ARG NUMCODECS_ARM64_WHEEL
+ENV NUMCODECS_ARM64_WHEEL=${NUMCODECS_ARM64_WHEEL:-unknown}
+
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Pip install for numcodecs for $TARGETPLATFORM exists, installing!" && \
         pip install --no-cache-dir numcodecs; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl" ]; then \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$NUMCODECS_ARM64_WHEEL" != "unknown" ]; then \
         echo "Numcodecs wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/numcodecs-0.11.0-cp310-cp310-linux_aarch64.whl; \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/${NUMCODECS_ARM64_WHEEL}; \
     else \
-        echo "Numcodecs wheel for $TARGETPLATFORM is not present, attempting to build from pip, but might fail" && \
+        echo "Numcodecs wheel for $TARGETPLATFORM is not present. Will attempt to install from PyPi index, but might fail" && \
         pip install --no-cache-dir numcodecs; \
     fi
 
 # install vtk and pyvista
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --no-cache-dir /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
+ARG VTK_ARM64_WHEEL
+ENV VTK_ARM64_WHEEL=${VTK_ARM64_WHEEL:-unknown}
+
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$VTK_ARM64_WHEEL" != "unknown" ]; then \
+        echo "VTK wheel $VTK_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
+        pip install --no-cache-dir /modulus/deps/${VTK_ARM64_WHEEL}; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing vtk for: $TARGETPLATFORM" && \
         pip install --no-cache-dir "vtk>=9.2.6"; \
     else \
-        echo "Installing vtk for: $TARGETPLATFORM from source" && \
+        echo "No custom wheel or wheel on PyPi found. Installing vtk for: $TARGETPLATFORM from source" && \
         apt-get update && apt-get install -y libgl1-mesa-dev && \
         git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
         mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
@@ -73,15 +79,18 @@ ARG DGL_BACKEND=pytorch
 ENV DGL_BACKEND=$DGL_BACKEND
 ENV DGLBACKEND=$DGL_BACKEND
 
+ARG DGL_ARM64_WHEEL
+ENV DGL_ARM64_WHEEL=${DGL_ARM64_WHEEL:-unknown}
+
 # TODO: this is a workaround as dgl is not yet shipping arm compatible wheels for CUDA 12.x: https://github.com/NVIDIA/modulus/issues/432
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-2.0.0-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "DGL wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --no-cache-dir --no-deps /modulus/deps/dgl-2.0.0-cp310-cp310-linux_aarch64.whl; \
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown" ]; then \
+        echo "Custom DGL wheel $DGL_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
+        pip install --no-cache-dir --no-deps /modulus/deps/${DGL_ARM64_WHEEL}; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing DGL for: $TARGETPLATFORM" && \
         pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; \
     else \
-        echo "Installing DGL for: $TARGETPLATFORM from source" && \
+        echo "No custom wheel or wheel on PyPi found. Installing DGL for: $TARGETPLATFORM from source" && \
         git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
         DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
         cd python && \
@@ -91,17 +100,21 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-2.0.0-cp
     fi
 
 # Install custom onnx
-# TODO: Find a fix to eliminate the custom build
-# Forcing numpy update to over ride numba 0.56.4 max numpy constraint
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_x86_64.whl" ]; then \
-        echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_x86_64.whl; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "Custom onnx wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/onnxruntime_gpu-1.18.0-cp310-cp310-linux_aarch64.whl; \
+ARG ONNX_AMD64_WHEEL
+ENV ONNX_AMD64_WHEEL=${ONNX_AMD64_WHEEL:-unknown}
+
+ARG ONNX_ARM64_WHEEL
+ENV ONNX_ARM64_WHEEL=${ONNX_ARM64_WHEEL:-unknown}
+
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ "$ONNX_AMD64_WHEEL" != "unknown" ]; then \
+        echo "Custom onnx wheel $ONNX_AMD64_WHEEL for $TARGETPLATFORM exists, installing!" && \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/${ONNX_AMD64_WHEEL}; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$ONNX_ARM64_WHEEL" != "unknown" ]; then \
+        echo "Custom onnx wheel $ONNX_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/${ONNX_ARM64_WHEEL}; \
     else \
-        echo "No custom wheel present, skipping" && \
-        pip install --no-cache-dir "numpy==1.22.4"; \
+        echo "No custom wheel found. Will attempt to install from PyPi index (installation/functionality might break!)" && \
+        pip install --no-cache-dir onnxruntime-gpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ ; \
     fi
 
 # cleanup of stage
