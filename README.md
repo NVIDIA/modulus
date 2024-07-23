@@ -195,7 +195,7 @@ applications so we can innovate in the pursuit of developing generalizable model
 architectures and algorithms.
 
 Some latest examples of community contributors are [HP Labs 3D Printing team](https://developer.nvidia.com/blog/spotlight-hp-3d-printing-and-nvidia-modulus-collaborate-on-open-source-manufacturing-digital-twin/), [Stanford Cardiovascular
-research team](https://developer.nvidia.com/blog/enabling-greater-patient-specific-cardiovascular-care-with-ai-surrogates/), [UIUC team](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/mhd_pino), [CMU team] (https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion) etc.
+research team](https://developer.nvidia.com/blog/enabling-greater-patient-specific-cardiovascular-care-with-ai-surrogates/), [UIUC team](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/mhd_pino), [CMU team](https://github.com/NVIDIA/modulus/tree/main/examples/generative/diffusion) etc.
 
 Latest examples of research teams using Modulus are [ORNL team](https://arxiv.org/abs/2404.05768), [TU Munich CFD team](https://www.nvidia.com/en-us/on-demand/session/gtc24-s62237/) etc.
 
