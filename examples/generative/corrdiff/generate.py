@@ -120,10 +120,16 @@ def main(cfg: DictConfig) -> None:
     # Sampler kwargs
     if sampling_method == "stochastic":
         sampler_kwargs = {
-            "img_shape": img_shape_x,
             "patch_shape": patch_shape_x,
             "overlap_pix": overlap_pix,
             "boundary_pix": boundary_pix,
+            "sigma_min": sigma_min,
+            "sigma_max": sigma_max,
+            "rho": rho,
+            "S_churn": S_churn,
+            "S_min": S_min,
+            "S_max": S_max,
+            "S_noise": S_noise,
         }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
@@ -461,6 +467,7 @@ def generate(
             raise ImportError(
                 "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
             )
+        sampler_kwargs.update(({"img_shape": img_shape}))
 
     # Instantiate distributed manager.
     dist = DistributedManager()
@@ -535,7 +542,7 @@ def generate(
                     latents,
                     img_lr,
                     class_labels,
-                    randn_like=rnd.randn_like,
+                    randn_like=torch.randn_like,
                     **sampler_kwargs,
                 )
             all_images.append(images)
