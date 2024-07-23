@@ -47,7 +47,7 @@ consist of 7.2 million mesh points on average, but we use the surface mesh as th
 to training which is roughly around 70k mesh nodes.
 
 To request access to the full dataset, please reach out to the
-[NVIDIA Modulus team](modulus-team@nvidia.com).
+[NVIDIA Modulus team](mailto:modulus-team@nvidia.com).
 
 ### DrivAerNet
 
@@ -123,7 +123,7 @@ pip install pyvista vtk
 ### Ahmed Body training
 
 The Ahmed Body dataset for this example is not publicly available. To get access,
-please reach out to the [NVIDIA Modulus team](modulus-team@nvidia.com).
+please reach out to the [NVIDIA Modulus team](mailto:modulus-team@nvidia.com).
 
 To train the model, run
 
