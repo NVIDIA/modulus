@@ -71,6 +71,7 @@ intended for distributed message-passing.
 ### Dependencies
 
 - Update DALI to CUDA 12 compatible version.
+- Update minimum python version to 3.10
 
 ## [0.6.0] - 2024-04-17
 
