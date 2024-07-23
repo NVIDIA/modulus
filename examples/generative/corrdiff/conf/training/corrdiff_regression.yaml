@@ -14,9 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-task: regression
-  # Which model to train [regression, diffusion]
-
 hp:
     training_duration: 200000
     # Training duration based on the number of processed images, measured in kilo images (thousands of images)
@@ -26,8 +23,6 @@ hp:
     # Batch size per GPU
     lr: 0.0002
     # Learning rate
-    dropout: 0.13
-    # Dropout probability
     grad_clip_threshold: false
     # no gradient clipping for defualt non-patch-based training
     lr_decay: 1

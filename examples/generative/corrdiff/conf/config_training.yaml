@@ -26,8 +26,8 @@ defaults:
   #- dataset/hrrr # uncomment for full dataset
 
   # Model
-  - model/corrdiff_regression
-  #- model/corrdiff_diffusion
+  #- model/corrdiff_regression
+  - model/corrdiff_diffusion
   #- model/corrdiff_diffusion_patch
 
   # Training

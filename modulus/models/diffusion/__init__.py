@@ -26,7 +26,7 @@ from .layers import (
 )
 from .song_unet import SongUNet, SongUNetPosEmbd
 from .dhariwal_unet import DhariwalUNet
-from .unet import UNet
+from .unet import UNetWrapper
 from .preconditioning import (
     EDMPrecond,
     EDMPrecondSR,

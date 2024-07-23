@@ -14,14 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+name: UNetWrapper
+  # Name of the preconditioner
 arch: ddpmpp-cwb-v0-regression
   # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
 precond: unetregression
   # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
 hr_mean_conditioning: False
   # High-res mean (regression's output) as additional condition
-gridtype: "sinusoidal"
-  # can be either linear, sinusoidal, or learnable
-N_grid_channels: 4
-  # Number of grid channels
+
+args:
+  img_resolution: [256, 256]
+  img_channels: 4
+  img_in_channels: 16
+  img_out_channels: 4  # TODO why "img_channels" is necessary?
+  gridtype: "sinusoidal"
+    # can be either linear, sinusoidal, or learnable
+  N_grid_channels: 4
+    # Number of grid channels
+  embedding_type: zero
+    # Timestep embedding type
+

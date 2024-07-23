@@ -27,7 +27,7 @@ network_module = importlib.import_module("modulus.models.diffusion")
 
 @dataclass
 class MetaData(ModelMetaData):
-    name: str = "UNet"
+    name: str = "UNeWrapper"
     # Optimization
     jit: bool = False
     cuda_graphs: bool = False
@@ -43,9 +43,9 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class UNet(Module):  # TODO a lot of redundancy, need to clean up
+class UNetWrapper(Module):  # TODO a lot of redundancy, need to clean up
     """
-    U-Net architecture.
+    U-Net Wrapper for CorrDiff.
 
     Parameters:
     -----------
@@ -140,15 +140,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             else torch.float32
         )
 
-        # c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        # c_skip = 0.0 * c_skip
-        # c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        # c_out = torch.ones_like(c_out)
-        # c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        # c_in = torch.ones_like(c_in)
-        # c_noise = sigma.log() / 4
-        # c_noise = 0.0 * c_noise
-
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
             torch.zeros(
@@ -164,8 +155,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             )
 
         # skip connection - for SR there's size mismatch bwtween input and output
-        # x = x[:, 0 : self.img_out_channels, :, :]
-        # D_x = c_skip * x + c_out * F_x.to(torch.float32)
         D_x = F_x.to(torch.float32)
         return D_x
 

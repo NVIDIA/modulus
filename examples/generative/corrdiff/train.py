@@ -22,7 +22,7 @@ import numpy as np
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from torch.nn.parallel import DistributedDataParallel
-from . import training_stats
+#from . import training_stats
 
 from modulus.utils.generative import (
     construct_class_by_name,
@@ -34,6 +34,7 @@ from modulus import Module
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.utils.generative import EasyDict
+from modulus.metrics.diffusion import RegressionLoss, ResLoss
 
 from modulus.launch.logging import (
     LaunchLogger,
@@ -53,8 +54,8 @@ def main(cfg: DictConfig) -> None:
 
     # Resolve and dump configs
     OmegaConf.resolve(cfg)
-    os.makedirs(cfg.outdir, exist_ok=True)
-    OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
+    #os.makedirs(cfg.outdir, exist_ok=True)
+    #OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
 
     # Parse regression checkpoint options
     regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
@@ -64,13 +65,10 @@ def main(cfg: DictConfig) -> None:
         regression_checkpoint_path = None
 
     # Parse performance options
-    if hasattr(cfg.training.perf, "fp_optimizations"):
-        fp_optimizations = cfg.training.perf.fp_optimizations
-        fp16 = fp_optimizations == "fp16"
-    else:
-        # look for legacy "fp16" parameter
-        fp16 = getattr(cfg.training.perf, "fp16", False)
-        fp_optimizations = "fp16" if fp16 else "fp32"
+    fp_optimizations = cfg.training.perf.fp_optimizations
+    fp16 = fp_optimizations == "fp16"
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     # Parse dataset options
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
@@ -83,6 +81,7 @@ def main(cfg: DictConfig) -> None:
     # Initialize distributed environment for training
     DistributedManager.initialize()
     dist = DistributedManager()
+    device = dist.device
 
     # Set seeds for NumPy and PyTorch to ensure reproducibility in distributed settings, and configure
     # cuDNN and CUDA to disable TF32 and reduced precision settings for consistent precision.
@@ -97,7 +96,7 @@ def main(cfg: DictConfig) -> None:
     initialize_mlflow(
         experiment_name=cfg.experiment_name,
         experiment_desc=cfg.experiment_desc,
-        run_name=f"{cfg.model.name}-trainng",  #TODO add name
+        run_name=f"{cfg.model.name}-trainng",
         run_desc=cfg.experiment_desc,
         user_name="Modulus User",
         mode="offline",
@@ -111,8 +110,54 @@ def main(cfg: DictConfig) -> None:
         f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
     )
 
-    # Initialize model
-    model = Module.instantiate(  # TODO register and name models
+    # Instantiate the dataset
+    data_loader_kwargs = {
+        'pin_memory': True, 'num_workers': cfg.training.perf.dataloader_workers, 'prefetch_factor': 2
+    }
+    (
+        dataset,
+        dataset_iterator,
+        validation_dataset,
+        validation_dataset_iterator,
+    ) = init_train_valid_datasets_from_config(
+        dataset_cfg,
+        data_loader_kwargs,
+        batch_size=cfg.training.hp.batch_size_per_gpu,
+        seed=0,
+        validation_dataset_cfg=validation_dataset_cfg,
+    )
+
+    # Parse image configuration & update model args
+    dataset_channels =  len(dataset.input_channels())
+    img_in_channels = (
+        dataset_channels + cfg.model.args.N_grid_channels
+    )  # noise + low-res input
+    img_shape = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
+    if cfg.model.hr_mean_conditioning:
+        img_in_channels += img_out_channels
+
+    # Parse the patch shape
+    if not hasattr(cfg.training.hp.patch_shape_x):
+        cfg.training.hp.patch_shape_x = None
+    if not hasattr(cfg.training.hp.patch_shape_y):
+        cfg.training.hp.patch_shape_y = None
+    patch_shape = (cfg.patch_shape_y, cfg.patch_shape_x)
+    patch_shape , img_shape = set_patch_shape(img_shape, patch_shape)
+    if patch_shape != img_shape:
+        logger0.info("Patch-based training enabled")
+    else:
+        logger0.info("Patch-based training disabled")
+    # interpolate global channel if patch-based model is used
+    if img_shape[1] != patch_shape[1]:
+        img_in_channels += dataset_channels
+
+    # Instantiate the model
+    cfg.model.args.img_in_channels = img_in_channels
+    cfg.model.args.img_out_channels = img_out_channels
+    cfg.model.args.img_resolution = list(img_shape)
+    cfg.model.args.use_fp1 = fp16
+    model = Module.instantiate(
         {
             "__name__": cfg.model.name,
             "__args__": {
@@ -121,252 +166,59 @@ def main(cfg: DictConfig) -> None:
             },
         }
     )
-    model = model.to(dist.device)
-    print(model)
-    exit()
+    model.train().requires_grad_(True).to(device)
 
-    # Initialize dataset
-    data_loader_kwargs = {
-        'pin_memory': True, 'num_workers': cfg.training.perf.dataloader_workers, 'prefetch_factor': 2
-    }
-    (
-    dataset,
-    dataset_iter,
-    valid_dataset,
-    valid_dataset_iter,
-    ) = init_train_valid_datasets_from_config(
-        dataset_cfg,
-        data_loader_kwargs,
-        batch_size=cfg.training.hp.batch_size_per_gpu,
-        validation_dataset_cfg=validation_dataset_cfg,
-    )
-    
-
-### Stopping here ###
-
-    # Sanity check
-    if not hasattr(cfg, "task"):
-        raise ValueError(
-            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
-            For example, for regression training, run python train.py --config-name=config_train_regression.
-            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
-        )    
-
-    # Parse weather data options
-    c = EasyDict()
-
-   
-    
-    data_loader_kwargs = EasyDict(
-        pin_memory=True, num_workers=dataloader_workers, prefetch_factor=2
-    )
-    c.in_channel = len(dataset_cfg["in_channels"])
-
-
-    
-
-    # Initialize config dict.
-    c.network_kwargs = EasyDict()
-    c.loss_kwargs = EasyDict()
-    c.optimizer_kwargs = EasyDict(
-        class_name="torch.optim.Adam", lr=lr, betas=[0.9, 0.999], eps=1e-8
-    )
-
-    # Network architecture.
-    valid_archs = {
-        "ddpmpp-cwb",
-        "ddpmpp-cwb-v0-regression",
-    }
-    if arch not in valid_archs:
-        raise ValueError(
-            f"Invalid network architecture {arch}; " f"valid choices are {valid_archs}"
-        )
-
-    if arch == "ddpmpp-cwb":
-        c.network_kwargs.update(
-            model_type="SongUNetPosEmbd",
-            embedding_type="positional",
-            encoder_type="standard",
-            decoder_type="standard",
-            checkpoint_level=songunet_checkpoint_level,
-        )
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
-    elif arch == "ddpmpp-cwb-v0-regression":
-        c.network_kwargs.update(
-            model_type="SongUNetPosEmbd",
-            embedding_type="zero",
-            encoder_type="standard",
-            decoder_type="standard",
-            checkpoint_level=songunet_checkpoint_level,
-        )
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
-    else:
-        c.network_kwargs.update(
-            model_type="DhariwalUNet", model_channels=192, channel_mult=[1, 2, 3, 4]
-        )
-
-    # Preconditioning & loss function.
-    if precond == "edmv2" or precond == "edm":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
-    elif precond == "edmv1":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
-    elif precond == "unetregression":
-        c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.RegressionLoss"
-    elif precond == "resloss":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.ResLoss"
-
-    c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
-
-    # Training options.
-    c.training_duration = max(int(training_duration), 1)
-    c.update(batch_size_per_gpu=batch_size_per_gpu, total_batch_size=total_batch_size)
-    c.update(cudnn_benchmark=enable_cudnn_benchmark)
-    c.update(
-        print_progress_freq=print_progress_freq,
-        save_checkpoint_freq=save_checkpoint_freq,
-        validation_freq=validation_freq,
-        num_validation_evals=validation_steps,
-    )
-    if regression_checkpoint_path:
-        c.regression_checkpoint_path = regression_checkpoint_path
-
-    c.run_dir = outdir
-
-    (
-        dataset,
-        dataset_iter,
-        valid_dataset,
-        valid_dataset_iter,
-    ) = init_train_valid_datasets_from_config(
-        dataset_cfg,
-        data_loader_kwargs,
-        batch_size=batch_size_per_gpu,
-        seed=0,
-        validation_dataset_cfg=validation_dataset_cfg,
-    )
-
-    # Set the patch shape
-    img_shape = dataset.image_shape()
-    patch_shape = (cfg.patch_shape_y, cfg.patch_shape_x)
-    patch_shape , img_shape = set_patch_shape(img_shape ,patch_shape)
-    if patch_shape != img_shape:
-        logger0.info("Patch-based training enabled")
-    else:
-        logger0.info("Patch-based training disabled")
-
-
-    """CorrDiff training loop"""
-    # Initialize tensorbaord to track scalars
-    if dist.rank == 0:
-        writer = SummaryWriter(log_dir='tensorboard')
-
-    # Record the current time to measure the duration of subsequent operations.
-    start_time = time.time()
-
-    
-    # Calculate the total batch size per GPU in a distributed setting, log the batch size per GPU, ensure it's within valid limits,
-    # determine the number of accumulation rounds, and validate that the global batch size matches the expected value.
-    batch_gpu_total = total_batch_size // dist.world_size
-    logger0.info(f"batch_size_gpu: {batch_size_gpu}")
-    if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
-        batch_size_gpu = batch_gpu_total
-    num_accumulation_rounds = batch_gpu_total // batch_size_gpu
-    if total_batch_size != batch_size_gpu * num_accumulation_rounds * dist.world_size:
-        raise ValueError(
-            "total_batch_size must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
-        )
-
-    img_in_channels = (
-        len(dataset.input_channels()) + N_grid_channels
-    )  # noise + low-res input
-    (img_shape_y, img_shape_x) = dataset.image_shape()
-    img_out_channels = len(dataset.output_channels())
-    if hr_mean_conditioning:
-        img_in_channels += img_out_channels
-
-    # interpolate global channel if patch-based model is used
-    if img_shape_x != patch_shape_x:
-        img_in_channels += in_channel
-
-    # Construct network.
-    logger0.info("Constructing network...")
-    interface_kwargs = dict(
-        img_resolution=[img_shape_y, img_shape_x],
-        img_channels=img_out_channels,
-        img_in_channels=img_in_channels,
-        img_out_channels=img_out_channels,
-        label_dim=0,
-        gridtype=gridtype,
-        N_grid_channels=N_grid_channels,
-    )  # weather
-    merged_args = {**network_kwargs, **interface_kwargs}
-    net = construct_class_by_name(**merged_args)  # subclass of torch.nn.Module
-    net.train().requires_grad_(True).to(device)
-
-    # Setup optimizer.
-    logger0.info("Setting up optimizer...")
-    if task == "diffusion":
-        if regression_checkpoint_path is None:
-            raise FileNotFoundError(
-                "Need to specify regression_checkpoint_path for training the diffusion model"
-            )
-        net_reg = Module.from_checkpoint(regression_checkpoint_path)
-        net_reg.eval().requires_grad_(False).to(device)
-
-        if loss_kwargs["class_name"] == "modulus.metrics.diffusion.ResLoss":
-            interface_kwargs = dict(
-                regression_net=net_reg,
-                img_shape_x=img_shape_x,
-                img_shape_y=img_shape_y,
-                patch_shape_x=patch_shape_x,
-                patch_shape_y=patch_shape_y,
-                patch_num=patch_num,
-                hr_mean_conditioning=hr_mean_conditioning,
-            )
-        else:
-            interface_kwargs = {}
-        logger0.success("Loaded the pre-trained regression network")
-    else:
-        interface_kwargs = {}
-    loss_fn = construct_class_by_name(**loss_kwargs, **interface_kwargs)
-    optimizer = construct_class_by_name(
-        params=net.parameters(), **optimizer_kwargs
-    )  # subclass of torch.optim.Optimizer
-
+    # Enable distributed data parallel if applicable
     if dist.world_size > 1:
-        ddp = DistributedDataParallel(
-            net,
+        model = DistributedDataParallel(
+            model,
             device_ids=[dist.local_rank],
             broadcast_buffers=True,
             output_device=dist.device,
             find_unused_parameters=dist.find_unused_parameters,
         )
-    else:
-        ddp = net
+
+    # Load the regression checkpoint if applicable
+    if hasattr(cfg.training.io, 'regression_checkpoint_path'):
+        if not os.path.exists(cfg.regression_checkpoint_path):
+            raise FileNotFoundError("The specified regression_checkpoint_path does not exist for training the diffusion model")
+        regression_net = Module.from_checkpoint(regression_checkpoint_path)
+        regression_net.eval().requires_grad_(False).to(device)
+        logger0.success("Loaded the pre-trained regression model")    
+
+
+    # Instantiate the loss function
+    patch_num = getattr(cfg.training, 'patch_num', 1)
+    if cfg.model.name=="EDMPrecondSR":
+        loss_fn = ResLoss(regression_net=regression_net, img_shape_x=img_shape[1], img_shape_y=img_shape[0], patch_shape_x=patch_shape[1], patch_shape_y=patch_shape[0], patch_num=patch_num, hr_mean_conditioning=cfg.model.hr_mean_conditioning)
+    elif cfg.model.name=="UNetWrapper":  # TODO this breaks old checkpoints
+        loss_fn = RegressionLoss()
+
+    # Instantiate the optimizer
+    optimizer = torch.optim.Adam(
+        params=model.parameters(), lr=cfg.training.io.lr, betas=[0.9, 0.999], eps=1e-8
+    )
+    
+    # Record the current time to measure the duration of subsequent operations.
+    start_time = time.time()
+
+    # Calculate the total batch size per GPU in a distributed setting, log the batch size per GPU, ensure it's within valid limits,
+    # determine the number of accumulation rounds, and validate that the global batch size matches the expected value.
+    batch_gpu_total = cfg.training.hp.total_batch_size // dist.world_size
+    logger0.info(f"batch_size_gpu: {batch_size_gpu}")
+    if batch_size_gpu is None or batch_size_gpu > batch_gpu_total:
+        batch_size_gpu = batch_gpu_total
+    num_accumulation_rounds = batch_gpu_total // batch_size_gpu
+    if cfg.training.hp.total_batch_size != batch_size_gpu * num_accumulation_rounds * dist.world_size:
+        raise ValueError(
+            "total_batch_size must be equal to batch_size_gpu * num_accumulation_rounds * dist.world_size"
+        )
 
     # Resume training from previous snapshot.
     max_index = -1
     max_index_file = " "
-    for filename in os.listdir(run_dir):
-        if filename.startswith(f"training-state-{task}-") and filename.endswith(
+    for filename in os.listdir(cfg.training.io.outdir):
+        if filename.startswith(f"training-state-") and filename.endswith(
             ".mdlus"
         ):
             index_str = filename.split("-")[-1].split(".")[0]
@@ -375,16 +227,16 @@ def main(cfg: DictConfig) -> None:
                 if index > max_index:
                     max_index = index
                     max_index_file = filename
-                    max_index_file_optimizer = f"optimizer-state-{task}-{index_str}.pt"
+                    max_index_file_optimizer = f"optimizer-state-{index_str}.pt"
             except ValueError:
                 continue
 
     try:
-        net.load(os.path.join(run_dir, max_index_file))
+        model.load(os.path.join(cfg.training.io.outdir, max_index_file))
         # load state directly to each gpu to reduce memory usage
         map_location = {"cuda:%d" % 0: "cuda:%d" % int(dist.local_rank)}
         optimizer_state_dict = torch.load(
-            os.path.join(run_dir, max_index_file_optimizer), map_location=map_location
+            os.path.join(cfg.training.io.outdir, max_index_file_optimizer), map_location=map_location
         )
         optimizer.load_state_dict(optimizer_state_dict["optimizer_state_dict"])
         cur_nimg = max_index * 1000
@@ -394,9 +246,7 @@ def main(cfg: DictConfig) -> None:
         logger0.warning("Could not load network and optimizer states")
 
     ########################################################
-
     #                  MAIN TRAINING LOOP                  #
-
     ########################################################
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} kimgs...")
@@ -409,8 +259,11 @@ def main(cfg: DictConfig) -> None:
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
+
+        ##### Continue refactoring from here
+
         for round_idx in range(num_accumulation_rounds):
-            with ddp_sync(ddp, (round_idx == num_accumulation_rounds - 1)):
+            with ddp_sync(model, (round_idx == num_accumulation_rounds - 1)):
                 # Fetch training data: weather
                 img_clean, img_lr, labels = next(dataset_iterator)
 
@@ -438,34 +291,26 @@ def main(cfg: DictConfig) -> None:
         if dist.world_size > 1:
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = loss_sum / dist.world_size
-        if dist.rank == 0:
-            writer.add_scalar(
-                tag="training_loss", scalar_value=average_loss, global_step=cur_nimg
-                    )
 
         # Update weights.
         for g in optimizer.param_groups:
             g["lr"] = optimizer_kwargs["lr"] * min(
                 cur_nimg / max(lr_rampup_kimg * 1000, 1e-8), 1
             )  # TODO better handling (potential bug)
-            g["lr"] *= lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
-            if dist.rank == 0:
-                writer.add_scalar(
-                tag="learning_rate", scalar_value=g["lr"], global_step=cur_nimg
-                    )
-        for param in net.parameters():
+            g["lr"] *= cfg.training.io.lr_decay ** ((cur_nimg - lr_rampup_kimg * 1000) // 5e6)
+        for param in model.parameters():
             if param.grad is not None:
                 torch.nan_to_num(
                     param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                 )
-        if grad_clip_threshold:
+        if cfg.training.hp.grad_clip_threshold:
             torch.nn.utils.clip_grad_norm_(
-                net.parameters(), grad_clip_threshold
+                model.parameters(), cfg.training.hp.grad_clip_threshold
             )
         optimizer.step()
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
-            if cur_tick % validation_freq * 1000 == 0:
+            if cur_tick % cfg.training.io.validation_freq * 1000 == 0:
                 with torch.no_grad():
                     for _ in range(num_validation_evals):
                         img_clean_valid, img_lr_valid, labels_valid = next(
@@ -495,14 +340,10 @@ def main(cfg: DictConfig) -> None:
                             valid_loss_sum, op=torch.distributed.ReduceOp.SUM
                         )
                     average_valid_loss = valid_loss_sum / dist.world_size
-                    if dist.rank == 0:
-                        writer.add_scalar(
-                            tag="validation_loss", scalar_value=average_valid_loss, global_step=cur_nimg
-                    )
 
         # Perform maintenance tasks once per tick.
-        cur_nimg += total_batch_size
-        done = cur_nimg >= training_duration * 1000
+        cur_nimg += cfg.training.hp.total_batch_size
+        done = cur_nimg >= cfg.training.hp.training_duration * 1000
         if (
             (not done)
             # and (cur_tick != 0)
@@ -543,8 +384,8 @@ def main(cfg: DictConfig) -> None:
 
         # Save full dump of the training state.
         if (
-            (save_checkpoint_freq is not None)
-            and (done or cur_tick % save_checkpoint_freq == 0)
+            (cfg.training.io.save_checkpoint_freq is not None)
+            and (done or cur_tick % cfg.training.io.save_checkpoint_freq == 0)
             and dist.rank == 0
         ):
             filename = f"training-state-{task}-{cur_nimg//1000:06d}.mdlus"
@@ -583,4 +424,7 @@ def main(cfg: DictConfig) -> None:
             break
 
     # Done.
-    logger0.info("Exiting...")
+    logger0.info("Training Completed.")
+
+if __name__ == "__main__":
+    main()

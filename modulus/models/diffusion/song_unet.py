@@ -429,7 +429,7 @@ class SongUNetPosEmbd(SongUNet):
     attn_resolutions : List[int], optional
         Resolutions at which self-attention layers are applied. By default [16].
     dropout : float, optional
-        Dropout probability applied to intermediate activations. By default 0.10.
+        Dropout probability applied to intermediate activations. By default 0.13.
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
@@ -477,11 +477,11 @@ class SongUNetPosEmbd(SongUNet):
         label_dim: int = 0,
         augment_dim: int = 0,
         model_channels: int = 128,
-        channel_mult: List[int] = [1, 2, 2, 2],
+        channel_mult: List[int] = [1, 2, 2, 2, 2],
         channel_mult_emb: int = 4,
         num_blocks: int = 4,
-        attn_resolutions: List[int] = [16],
-        dropout: float = 0.10,
+        attn_resolutions: List[int] = [28],
+        dropout: float = 0.13,
         label_dropout: float = 0.0,
         embedding_type: str = "positional",
         channel_mult_noise: int = 1,
