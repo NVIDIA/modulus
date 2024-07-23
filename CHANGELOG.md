@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-## [0.7.0] - 2024-07-XX
+## [0.7.0] - 2024-07-23
 
 ### Added
 
@@ -54,8 +54,6 @@ Shallow-Water-Equation example.
 - Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `modulus` loss function
 - Safeguarding against uninitialized usage of `DistributedManager`
 
-### Deprecated
-
 ### Removed
 
 - Remove mlflow from deployment image
@@ -65,8 +63,6 @@ Shallow-Water-Equation example.
 - Fixed bug in the partitioning logic for distributing graph structures
 intended for distributed message-passing.
 - Fixed bugs for corrdiff diffusion training of `EDMv1` and `EDMv2`
-
-### Security
 
 ### Dependencies
 
