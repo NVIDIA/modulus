@@ -22,6 +22,7 @@ issue to resolve that will help, refer to the
 If you are considering collaborating with NVIDIA Modulus team to enhance Modulus, fill this
 [proposal form](https://forms.gle/fYsbZEtgRWJUQ3oQ9) and
 we will get back to you.
+
 ## Contribute to Modulus-Core
 
 ### Pull Requests
