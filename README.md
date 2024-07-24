@@ -220,7 +220,7 @@ to you!
 Here are some of the key benefits of Modulus for SciML model development:
 
 <!-- markdownlint-disable -->
-<img src="docs/img/Value%20prop/benchmarking.svg" width="100"> | <img src="docs/img/Value%20prop/recipe.svg" width="100"> | <img src="docs/img/Value%20prop/performance.svg" width="100">
+<img src="docs/img/value_prop/benchmarking.svg" width="100"> | <img src="docs/img/value_prop/recipe.svg" width="100"> | <img src="docs/img/value_prop/performance.svg" width="100">
 ---|---|---|
 |SciML Benchmarking and validation|Ease of using generalized SciML recipes with heterogenous datasets |Out of the box performance and scalability
 |Modulus enables researchers to benchmark their AI model against proven architectures for standard benchmark problems with detailed domain-specific validation criteria.|Modulus enables researchers to pick from SOTA SciML architectures and use built-in data pipelines for their use case.| Modulus provides out-of-the-box performant training pipelines including optimized ETL pipelines for heterogrneous engineering and scientific datasets and out of the box scaling across multi-GPU and multi-node GPUs.
