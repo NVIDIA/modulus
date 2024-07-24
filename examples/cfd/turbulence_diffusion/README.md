@@ -1,17 +1,23 @@
-# Diffusion for a 2d Kármán vortex street about a fixed cylinder
+# A Diffusion model for a 2d Kármán vortex street about a fixed cylinder
 
-This example uses a Pytorch implementation of DDPM (package link) 
+This example uses a Pytorch implementation of DDPM which can be found [here](https://github.com/lucidrains/denoising-diffusion-pytorch/). 
 
 ## Problem overview
 
-Problem Overview
+Turbulent flows are notoriously difficult to model. The structures involved can be found across a 
+wide range of both temporal and spatial lengthscales, and the high degree of non-linearity and sensitivity to the initial conditions
+make this an especially challenging problem. There is even a dependence on dimension, meaning even when syemmtry is present 
+one cannot simulate each 2d slice independently. The prohibitive cost of modern simulation methods (notably DNS, RANS and LES) makes this field ripe for modern
+machine learning, especially generative probabilistic AI, since potential applications often only require the distribution of the resulting flow from stochastic
+initial conditions. This example applies a modern DDPM implementation to a 2d Kármán vortex street about a fixed cylinder, and
+is able to effectively capture the flow distribution.
 
 ## Dataset
 
-Produced by Prof. Francesca Di Mare et. al. at the University of Bochum, the dataset consists of $` 100,000 `$ images 
+Produced by Prof. Francesca Di Mare et. al. at the Ruhr University Bochum, the dataset consists of $` 100,000 `$ images 
 produced by traditional computational fluid dynamics methods (LES).
 The simulation ran with a total of $` 15 \times 10^6 `$ cells; the flow lasts approximately $` 1.45 `$s in real time.
-The images are greyscale, so that the pixel colour represents the difference between the velocity at that point the mean flow field.
+The images are greyscale, so that the pixel colour represents the difference between the velocity at that point and the mean flow field.
 The code provided here can also further process the images, removing excess white pixels and compressing to $` 512 \times 512 `$ before training.
 The full dataset is available upon request from [ross@math.tu-berlin.de](mailto:ross@math.tu-berlin.de).
 
@@ -28,7 +34,7 @@ The scripts provided include code for training, sampling and preprocessing the d
 For training, to view the available command line arguments, run
 
 ```bash
-python train.py -h
+python main.py -h
 ```
 
 and for sampling
@@ -37,7 +43,7 @@ and for sampling
 python sample.py -h
 ```
 
-For training, the only required argument is ```experiment_name```. 
+Arguments can be provided on the command line or in ```config.json```. For training, the only required argument is ```experiment_name```. 
 For sampling, ```model``` is also required. 
 Providing this argument to the training script resumes training from where you left off.
 
@@ -48,8 +54,6 @@ export CUDA_VISIBLE_DEVICES=$N
 ```
 for some `$N` equivalent to the number of available GPUs.
 
-## References //TODO:
- - DDPM Pytorch Implementation
- - Exponential Moving average
- - Di Maare Dataset
- - Claudia GAN paper
+## References
+ - [Denoising Diffusion Probabilistic Models](https://proceedings.neurips.cc/paper/2020/file/4c5bcfec8584af0d967f1ab10179ca4b-Paper.pdf)
+ - [Generative Modelling of Turbulence](https://arxiv.org/abs/2112.02548)
