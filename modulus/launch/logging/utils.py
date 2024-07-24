@@ -30,7 +30,7 @@ def create_ddp_group_tag(group_name: str = None) -> str:
     Parameters
     ----------
     group_name : str, optional
-        Optional group name prefix. If None will use "DDP_Group_", by default None
+        Optional group name prefix. If None will use ``"DDP_Group_"``, by default None
 
     Returns
     -------

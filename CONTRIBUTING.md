@@ -19,12 +19,9 @@ your thoughts. It might be that a very similar feature is under development or
 already exists, so an issue is a great starting point. If you are looking for an
 issue to resolve that will help, refer to the
 [issue](https://github.com/NVIDIA/modulus/issues) section.
-
-We are happy to talk with you about your needs for Modulus and your ideas for
-contributing to the project. One way to do this is to create an issue discussing your
-thoughts. It might be that a very similar feature is under development or already
-exists, so an issue is a great starting point. If you are looking for an issue to
-resolve that will help, refer to the [issue](https://github.com/NVIDIA/modulus/issues) section.
+If you are considering collaborating with NVIDIA Modulus team to enhance Modulus, fill this
+[proposal form](https://forms.gle/fYsbZEtgRWJUQ3oQ9) and
+we will get back to you.
 
 ## Contribute to Modulus-Core
 
