@@ -9,6 +9,14 @@ This case is parallelised to run in multi-GPU settings.
 
 ## Getting Started
 
+### Prerequisites
+
+Install the required dependencies by running below:
+
+```bash
+pip install -r requirements.txt
+```
+
 Start with generating the dataset for training:
 
 ```bash
