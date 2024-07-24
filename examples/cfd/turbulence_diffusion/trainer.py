@@ -1,3 +1,29 @@
+# ignore_header_test
+# coding=utf-8
+#
+# SPDX-FileCopyrightText: Copyright (c) 2024 - Edmund Ross
+# SPDX-License-Identifier: MIT
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import distribute
 import model
 
@@ -35,6 +61,7 @@ class DiffusionTrainer:
         self.ddp_diffusion.train() if train else self.ddp_diffusion.eval()
 
     def get_train_loader(self):
+        """Create and return the data loader and distributed sampler for training"""
         preprocess = transforms.Compose([transforms.Resize((self.args.image_size, self.args.image_size)),
                                          transforms.Grayscale(),
                                          transforms.ToTensor()
@@ -62,6 +89,7 @@ class DiffusionTrainer:
         return train_loader, sampler
 
     def train(self, bar, j, images):
+        """Basic training loop"""
         total_loss = 0
         images = images.to(self.rank)
 
@@ -94,5 +122,6 @@ class DiffusionTrainer:
         return total_loss
 
     def save(self, epoch):
+        """Save the current model to disk"""
         distribute.save(self.experiment_path, epoch, self.ddp_diffusion, self.optimizer, self.ema)
         print(f'[{self.args.experiment_name}] [{epoch}/{self.args.num_epochs}] Saved model')

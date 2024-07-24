@@ -1,3 +1,29 @@
+# ignore_header_test
+# coding=utf-8
+#
+# SPDX-FileCopyrightText: Copyright (c) 2024 - Edmund Ross
+# SPDX-License-Identifier: MIT
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import matplotlib.pyplot as plt
 
 import shutil
@@ -11,6 +37,7 @@ from PIL import Image
 
 
 def show_random_datum(train_loader):
+    """Display a random image from the dataset"""
     # Get a random batch
     data_iterator = iter(train_loader)
     images, labels = next(data_iterator)
@@ -47,6 +74,7 @@ def initialise_experiment(args):
 
 
 def crop_image(input_path, output_folder, crop_left_width=150):
+    """Crop an image to remove useless white space to the left of the cylinder """
     # Get and open image
     filename = os.path.basename(input_path)
     img = Image.open(input_path)
@@ -67,6 +95,7 @@ def crop_image(input_path, output_folder, crop_left_width=150):
 
 
 def crop_images_parallel(input_folder, output_folder, crop_left_width=150, num_workers=8):
+    """Call crop_image for all images in the dataset, parallelised across multiple CPU cores"""
     os.makedirs(output_folder, exist_ok=True)
 
     input_paths = [to_path(input_folder, filename) for filename in os.listdir(input_folder)
@@ -85,6 +114,7 @@ def crop_images_parallel(input_folder, output_folder, crop_left_width=150, num_w
 
 
 def resize_images(input_path, output_path, width=850, height=600):
+    """Resize an image to the specified size"""
     # Create the output folder if it doesn't exist
     os.makedirs(output_path, exist_ok=True)
 
@@ -108,6 +138,7 @@ def resize_images(input_path, output_path, width=850, height=600):
 
 
 def plot_loss_curve(data, epoch, path):
+    """Plot the loss curve for an epoch"""
     plt.figure()
     plt.plot(data, label=f'Epoch {epoch}')
     plt.xlabel('Step')
@@ -117,6 +148,7 @@ def plot_loss_curve(data, epoch, path):
 
 
 def plot_loss_curves(data, path):
+    """Plot the loss curves for all epochs"""
     plt.figure()
     for i, curve in enumerate(data):
         plt.plot(curve, label=f'Epoch {i}')
@@ -128,4 +160,5 @@ def plot_loss_curves(data, path):
 
 
 def to_path(*args):
+    """OS safe path helper function"""
     return os.path.join(*args)
