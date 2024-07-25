@@ -53,7 +53,7 @@ fields evolves in space and time according to the PINO predictions and the
 simulated data.  We observe that the error in each of these cases is relatively small.
 
 <!-- {: .center} -->
-![MHD predictions](figures/MHD_0_0.png)
+![MHD predictions](../../../docs/img/MHD_0_0.png)
 
 We will demonstrate the use of data loss and physics constraints,
 specifically the equation residual loss, to create accurate predictions.
