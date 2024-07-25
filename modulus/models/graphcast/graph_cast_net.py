@@ -207,6 +207,7 @@ class GraphCastNet(Module):
     Note
     ----
     Based on these papers:
+    
     "GraphCast: Learning skillful medium-range global weather forecasting"
     https://arxiv.org/abs/2212.12794
     "Forecasting Global Weather with Graph Neural Networks"

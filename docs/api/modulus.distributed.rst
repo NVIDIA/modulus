@@ -95,8 +95,8 @@ or
 
 .. code-block:: bash
 
-   mpirun -np <num_gpus> python train.py
-    
+   mpirun -np <num_gpus> python train.py 
+
 if using OpenMPI. The script can also 
 be run on a SLURM cluster using 
 
