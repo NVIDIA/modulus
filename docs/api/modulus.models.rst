@@ -38,8 +38,11 @@ Currently available models include:
    * - FourierNeuralOperator
      - torch.Tensor [N, in_channels, H, W]
      - torch.Tensor [N, out_channels, H, W]
-   * - AdaptiveFourierNeuralOperator
+   * - AFNO
      - torch.Tensor [N, in_channels, H, W]
+     - torch.Tensor [N, out_channels, H, W]
+   * - ModAFNO
+     - torch.Tensor [N, in_channels, H, W], torch.Tensor [N, 1]
      - torch.Tensor [N, out_channels, H, W]
    * - MeshGraphNet
      - torch.Tensor [num_nodes, input_dim_nodes], torch.Tensor [num_edges, input_dim_edges], dgl.DGLGraph [num_nodes, num_edges]
@@ -460,6 +463,10 @@ Fourier Neural Operators
     :show-inheritance:
 
 .. automodule:: modulus.models.afno.afno
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.afno.modafno
     :members:
     :show-inheritance:
 

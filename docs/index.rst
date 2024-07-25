@@ -1,4 +1,4 @@
-Welcome to Modulus Core's documentation!
+NVIDIA Modulus Core (Latest Release)
 ========================================
 
 .. toctree::
