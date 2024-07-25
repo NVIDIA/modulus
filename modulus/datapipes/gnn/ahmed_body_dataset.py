@@ -415,7 +415,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         """
         Denormalize the graph node data.
 
-        Parameters:
+        Parameters
         -----------
         pred: Tensor
             Normalized prediction
@@ -424,7 +424,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         device: Any
             The device
 
-        Returns:
+        Returns
         --------
         Tuple(Tensor, Tensor)
             Denormalized prediction and ground truth
