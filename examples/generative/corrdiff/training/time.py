@@ -26,14 +26,4 @@ def convert_datetime_to_cftime(
     return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
 
 
-def time_range(
-    start_time: datetime.datetime,
-    end_time: datetime.datetime,
-    step: datetime.timedelta,
-    inclusive: bool = False,
-):
-    """Like the Python `range` iterator, but with datetimes."""
-    t = start_time
-    while (t <= end_time) if inclusive else (t < end_time):
-        yield t
-        t += step
+

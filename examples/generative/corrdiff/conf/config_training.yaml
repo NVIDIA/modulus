@@ -14,9 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-experiment_name: "CorrDiff-Training"
-experiment_desc: "CorrDiff training recipe for atmospheric downscaling"
-run_desc: "Default training recipe"
+hydra:
+  job:
+    chdir: true
+    name: regression
+  run:
+    dir: ./outputs/${hydra:job.name}
 
 # Get defaults
 defaults:
@@ -26,8 +29,8 @@ defaults:
   #- dataset/hrrr # uncomment for full dataset
 
   # Model
-  #- model/corrdiff_regression
-  - model/corrdiff_diffusion
+  - model/corrdiff_regression
+  #- model/corrdiff_diffusion
   #- model/corrdiff_diffusion_patch
 
   # Training

@@ -24,12 +24,10 @@ hr_mean_conditioning: False
   # High-res mean (regression's output) as additional condition
 
 args:
-  img_resolution: [256, 256]
+  #img_resolution: [256, 256]
   img_channels: 4
-  img_in_channels: 16
-  img_out_channels: 4  # TODO why "img_channels" is necessary?
-  gridtype: "sinusoidal"
-    # can be either linear, sinusoidal, or learnable
+  #img_in_channels: 16
+  #img_out_channels: 4  # TODO why "img_channels" is necessary?
   N_grid_channels: 4
     # Number of grid channels
   embedding_type: zero
