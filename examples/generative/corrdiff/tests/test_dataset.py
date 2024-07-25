@@ -80,3 +80,17 @@ def test_Zarr_Dataset(regtest):
     print("index", idx, file=regtest)
     print("input", hash_array(inp), file=regtest)
     print("output", hash_array(outp), file=regtest)
+
+
+def test_input_normalization():
+    ds = get_zarr_dataset(data_path=path)
+    input = np.ones([1, len(ds.input_channels()), 3, 3])
+    round_trip = ds.denormalize_input(ds.normalize_input(input))
+    np.testing.assert_array_almost_equal(round_trip, input)
+
+
+def test_output_normalization():
+    ds = get_zarr_dataset(data_path=path)
+    input = np.ones([1, len(ds.output_channels()), 3, 3])
+    round_trip = ds.denormalize_output(ds.normalize_output(input))
+    np.testing.assert_array_almost_equal(round_trip, input)

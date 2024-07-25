@@ -275,8 +275,9 @@ class ZarrDataset(DownscalingDataset):
         self.img_shape_y = img_shape_y
         self.grid = add_grid
         self.ds_factor = ds_factor
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        # zarr indexing requires a list, not tuple
+        self.in_channels = list(in_channels)
+        self.out_channels = list(out_channels)
 
     def info(self):
         """Check if the given time is not in the year 2021."""
@@ -333,7 +334,7 @@ class ZarrDataset(DownscalingDataset):
         x_norm = self._dataset.normalize_input(
             x[:, : len(self.in_channels)], channels=self.in_channels
         )
-        return np.concatenate((x_norm, x[:, self.in_channels :]), axis=1)
+        return np.concatenate((x_norm, x[:, len(self.in_channels) :]), axis=1)
 
     def denormalize_input(self, x):
         """Convert input from normalized data to physical units."""
