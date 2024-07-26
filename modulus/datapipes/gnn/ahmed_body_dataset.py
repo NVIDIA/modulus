@@ -156,8 +156,13 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         )
         self.split = split
         self.num_samples = num_samples
-        self.data_dir = Path(data_dir) / self.split
-        self.info_dir = Path(data_dir) / (self.split + "_info")
+        data_dir = Path(data_dir)
+        self.data_dir = data_dir / self.split
+        if not self.data_dir.is_dir():
+            raise IOError(f"Directory not found {self.data_dir}")
+        self.info_dir = data_dir / (self.split + "_info")
+        if not self.info_dir.is_dir():
+            raise IOError(f"Directory not found {self.info_dir}")
         self.input_keys = list(invar_keys)
         self.output_keys = list(outvar_keys)
         self.normalize_keys = list(normalize_keys)
@@ -173,7 +178,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             # Check if there is a corresponding info file.
             case_info_file = self.info_dir / f"case{case_id}_info.txt"
             if not case_info_file.is_file():
-                raise ValueError(f"File not found {case_info_file}")
+                raise IOError(f"File not found {case_info_file}")
             case_files.append(str(case_file))
             case_info_files.append(str(case_info_file))
             self.case_ids.append(case_id)
