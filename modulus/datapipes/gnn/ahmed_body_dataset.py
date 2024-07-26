@@ -287,7 +287,6 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
     def __getitem__(self, idx):
         graph = self.graphs[idx]
         if self.compute_drag:
-            # sid = self.numbers[idx]
             case_id = self.case_ids[idx]
             return graph, case_id, self.normals[idx], self.areas[idx], self.coeff[idx]
         return graph
