@@ -18,6 +18,3 @@ from .grid_feature_group_unet import (
     PointFeatureToGridGroupUNetAhmedBody,
     PointFeatureToGridGroupUNetDrivAer,
 )
-from .dgcnn import DrivAerNet, DGCNNModelNet40
-from .vwunet import VWUNetDrivAer
-from .fig_conv import FIGConvNetModelNet
