@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-type: cwb
+type: cwa
 train_test_split: false
 data_path: /data/cwb-diffusions/data2/2023-01-24-cwb-4years.zarr
 n_history: 0

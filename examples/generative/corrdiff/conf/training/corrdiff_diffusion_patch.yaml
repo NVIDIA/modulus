@@ -45,11 +45,11 @@ perf:
 io:
     regression_checkpoint_path: checkpoints/regression.mdlus
     # Where to load the regression checkpoint
-    print_progress_freq: 1
-    # How often to print progress, measured in kilo images (thousands of images)
-    save_checkpoint_freq: 500
-    # How often to save the checkpoints, measured in kilo images (thousands of images)
-    validation_freq: 50
-    # how often to record the validation loss, measured in kilo images (thousands of images)
+    print_progress_freq: 1000
+    # How often to print progress
+    save_checkpoint_freq: 500000
+    # How often to save the checkpoints, measured in number of processed samples
+    validation_freq: 50000
+    # how often to record the validation loss, measured in number of processed samples
     validation_steps: 10
     # how many loss evaluations are used to compute the validation loss per checkpoint 

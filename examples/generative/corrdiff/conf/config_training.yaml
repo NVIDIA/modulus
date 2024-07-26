@@ -26,7 +26,6 @@ defaults:
 
   # Dataset
   - dataset/cwa
-  #- dataset/hrrr # uncomment for full dataset
 
   # Model
   - model/corrdiff_regression

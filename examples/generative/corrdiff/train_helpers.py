@@ -16,6 +16,7 @@
 
 import torch
 import numpy as np
+from omegaconf import ListConfig
 
 def set_patch_shape(img_shape, patch_shape):
     img_shape_y, img_shape_x = img_shape
@@ -64,3 +65,28 @@ def compute_num_accumulation_rounds(total_batch_size, batch_size_per_gpu, world_
         )
     return batch_gpu_total, num_accumulation_rounds
 
+def handle_and_clip_gradients(model, grad_clip_threshold=None):
+    """
+    Handles NaNs and infinities in the gradients and optionally clips the gradients.
+
+    Parameters:
+    - model (torch.nn.Module): The model whose gradients need to be processed.
+    - grad_clip_threshold (float, optional): The threshold for gradient clipping. If None, no clipping is performed.
+    """
+    # Replace NaNs and infinities in gradients
+    for param in model.parameters():
+        if param.grad is not None:
+            torch.nan_to_num(
+                param.grad, nan=0.0, posinf=1e5, neginf=-1e5, out=param.grad
+            )
+    
+    # Clip gradients if a threshold is provided
+    if grad_clip_threshold is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_threshold)
+
+def parse_model_args(args):
+    """Convert ListConfig values in args to tuples."""
+    return {
+        k: tuple(v) if isinstance(v, ListConfig) else v
+        for k, v in args.items()
+    }

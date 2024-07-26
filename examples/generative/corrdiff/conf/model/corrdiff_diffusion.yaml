@@ -25,10 +25,8 @@ hr_mean_conditioning: False
 
 
 args:
-  #img_resolution: [256, 256]
   img_channels: 4
-  #img_in_channels: 16
-  #img_out_channels: 4  # TODO why "img_channels" is necessary?
+  # Number of input channels
   gridtype: "sinusoidal"
   # can be either linear, sinusoidal, or learnable
   N_grid_channels: 4
