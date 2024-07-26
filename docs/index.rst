@@ -23,7 +23,6 @@ NVIDIA Modulus Core (Latest Release)
    api/modulus.launch.logging.rst
    api/modulus.launch.utils.rst
 
-
 .. toctree::
    :maxdepth: 1
    :caption: Examples: Weather and Climate
@@ -33,7 +32,8 @@ NVIDIA Modulus Core (Latest Release)
    examples/weather/fcn_afno/README.rst
    examples/weather/dlwp/README.rst
    examples/weather/graphcast/README.rst
-
+   examples/weather/dlwp_healpix/README.rst
+   examples/weather/unified_recipe/README.rst
 
 .. toctree::
    :maxdepth: 1
@@ -42,11 +42,13 @@ NVIDIA Modulus Core (Latest Release)
 
    examples/cfd/aero_graph_net/README.rst
    examples/cfd/vortex_shedding_mgn/README.rst
+   examples/cfd/vortex_shedding_mesh_reduced/README.rst
    examples/cfd/darcy_fno/README.rst
    examples/cfd/darcy_nested_fnos/README.rst
+   examples/cfd/darcy_physics_informed/README.rst
    examples/cfd/navier_stokes_rnn/README.rst
    examples/cfd/gray_scott_rnn/README.rst
-
+   examples/cfd/swe_nonlinear_pino/README.rst
 
 .. toctree::
    :maxdepth: 1
@@ -69,6 +71,12 @@ NVIDIA Modulus Core (Latest Release)
 
    examples/generative/corrdiff/README.rst
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples: Additive Manufacturing
+   :name: Examples: Additive Manufacturing
+
+   examples/additive_manufacturing/sintering_physics/README.rst
 
 Indices and tables
 ==================

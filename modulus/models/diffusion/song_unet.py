@@ -68,7 +68,7 @@ class SongUNet(Module):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : Union[List[int], int]
         The resolution of the input/output image, 1 value represents a square image.
@@ -111,18 +111,18 @@ class SongUNet(Module):
         How many layers should use gradient checkpointing, 0 is None
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
@@ -406,7 +406,7 @@ class SongUNetPosEmbd(SongUNet):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : Union[List[int], int]
         The resolution of the input/output image, 1 value represents a square image.
@@ -447,18 +447,18 @@ class SongUNetPosEmbd(SongUNet):
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
