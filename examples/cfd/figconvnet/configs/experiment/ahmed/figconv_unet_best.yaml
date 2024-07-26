@@ -18,7 +18,7 @@
 
 defaults:
   - /data: ahmed
-  - /model: triplane_unet_ahmed
+  - /model: figconv_unet_ahmed
   - /loss: mseloss
   - /optimizer: adam
   - /lr_scheduler: steplr
@@ -48,6 +48,6 @@ loggers:
   wandb:
     project_name: ahmed_body
     entity: nvr-ai-algo
-    run_name: TriplaneUNet-level1-32-res186-70-60-ks11
+    run_name: FIGConvUNet-level1-32-res186-70-60-ks11
 
 seed: 0

@@ -31,17 +31,17 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: ${...loggers.tpunet.level}
+    level: ${...loggers.figconv.level}
     formatter: default
 
   file:
     class: logging.FileHandler
     filename: ${...output}/train_${...rank}.log
-    level: ${...loggers.tpunet.level}
+    level: ${...loggers.figconv.level}
     formatter: default
 
 loggers:
-  tpunet:
+  figconv:
     handlers: [console, file]
     level: INFO
     propagate: false

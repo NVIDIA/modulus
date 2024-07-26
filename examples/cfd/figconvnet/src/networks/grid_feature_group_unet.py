@@ -488,7 +488,7 @@ class PointFeatureToGridGroupUNetAhmedBody(AhmedBodyBase, PointFeatureToGridGrou
         down_point_feature = point_feature.voxel_down_sample(
             self.min_voxel_edge_length.min()
         )
-        # TriplaneUNet
+        # FIGConvUNet
         grid_features, drag_pred = self._grid_forward(down_point_feature)
         out_point_feature = self.to_point(grid_features, point_feature)
         return self.projection(out_point_feature.features), drag_pred

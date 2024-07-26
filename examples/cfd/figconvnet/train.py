@@ -44,7 +44,7 @@ from src.utils.signal_handlers import SignalHandler
 from src.networks.point_feature_ops import GridFeaturesMemoryFormat
 
 
-logger = logging.getLogger("tpunet")
+logger = logging.getLogger("figconv")
 
 
 def _delete_previous_checkpoints(config):
@@ -414,7 +414,7 @@ def _init_python_logging(config: DictConfig) -> None:
         # Enable logging only on rank 0, if requested.
         if pylog_cfg.rank0_only and pylog_cfg.rank != 0:
             pylog_cfg.handlers = {}
-            pylog_cfg.loggers.tpunet.handlers = []
+            pylog_cfg.loggers.figconv.handlers = []
         # Configure logging.
         logging.config.dictConfig(OmegaConf.to_container(pylog_cfg, resolve=True))
 
