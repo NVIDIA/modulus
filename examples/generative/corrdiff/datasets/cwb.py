@@ -17,7 +17,7 @@
 """Streaming images and labels from datasets created with dataset_tool.py."""
 
 import logging
-import random
+import torch
 
 import cftime
 import cv2
@@ -26,31 +26,9 @@ import numpy as np
 import zarr
 
 from .base import ChannelMetadata, DownscalingDataset
-from .img_utils import reshape_fields
 from .norm import denormalize, normalize
 
 logger = logging.getLogger(__file__)
-
-
-def get_target_normalizations_v1(group):
-    """Get target normalizations using center and scale values from the 'group'."""
-    return group["cwb_center"][:], group["cwb_scale"][:]
-
-
-def get_target_normalizations_v2(group):
-    """Change the normalizations of the non-gaussian output variables"""
-    center = group["cwb_center"]
-    scale = group["cwb_scale"]
-    variable = group["cwb_variable"]
-
-    center = np.where(variable == "maximum_radar_reflectivity", 25.0, center)
-    center = np.where(variable == "eastward_wind_10m", 0.0, center)
-    center = np.where(variable == "northward_wind_10m", 0, center)
-
-    scale = np.where(variable == "maximum_radar_reflectivity", 25.0, scale)
-    scale = np.where(variable == "eastward_wind_10m", 20.0, scale)
-    scale = np.where(variable == "northward_wind_10m", 20.0, scale)
-    return center, scale
 
 
 class _ZarrDataset(DownscalingDataset):
@@ -62,11 +40,11 @@ class _ZarrDataset(DownscalingDataset):
     path: str
 
     def __init__(
-        self, path: str, get_target_normalization=get_target_normalizations_v1
+        self,
+        path: str,
     ):
         self.path = path
         self.group = zarr.open_consolidated(path)
-        self.get_target_normalization = get_target_normalization
 
         # valid indices
         cwb_valid = self.group["cwb_valid"]
@@ -81,6 +59,11 @@ class _ZarrDataset(DownscalingDataset):
         valid_times = cwb_valid & era5_all_channels_valid
         # need to cast to bool since cwb_valis is stored as an int8 type in zarr.
         self.valid_times = valid_times != 0
+
+        self.cwb_center, self.cwb_scale = (
+            self.group["cwb_center"][:],
+            self.group["cwb_scale"][:],
+        )
 
         logger.info("Number of valid times: %d", len(self))
         logger.info("input_channels:%s", self.input_channels())
@@ -167,14 +150,12 @@ class _ZarrDataset(DownscalingDataset):
 
     def normalize_output(self, x, channels=None):
         """Convert output from physical units to normalized data."""
-        norm = self.get_target_normalization(self.group)
-        norm = self._select_norm_channels(*norm, channels)
+        norm = self._select_norm_channels(self.cwb_center, self.cwb_scale, channels)
         return normalize(x, *norm)
 
     def denormalize_output(self, x, channels=None):
         """Convert output from normalized data to physical units."""
-        norm = self.get_target_normalization(self.group)
-        norm = self._select_norm_channels(*norm, channels)
+        norm = self._select_norm_channels(self.cwb_center, self.cwb_scale, channels)
         return denormalize(x, *norm)
 
     def info(self):
@@ -188,80 +169,6 @@ class _ZarrDataset(DownscalingDataset):
 
     def __len__(self):
         return self.valid_times.sum()
-
-
-class FilterTime(DownscalingDataset):
-    """Filter a time dependent dataset"""
-
-    def __init__(self, dataset, filter_fn):
-        """
-        Args:
-            filter_fn: if filter_fn(time) is True then return point
-        """
-        self._dataset = dataset
-        self._filter_fn = filter_fn
-        self._indices = [i for i, t in enumerate(self._dataset.time()) if filter_fn(t)]
-
-    def longitude(self):
-        """Get longitude values from the dataset."""
-        return self._dataset.longitude()
-
-    def latitude(self):
-        """Get latitude values from the dataset."""
-        return self._dataset.latitude()
-
-    def input_channels(self):
-        """Metadata for the input channels. A list of dictionaries, one for each channel"""
-        return self._dataset.input_channels()
-
-    def output_channels(self):
-        """Metadata for the output channels. A list of dictionaries, one for each channel"""
-        return self._dataset.output_channels()
-
-    def time(self):
-        """Get time values from the dataset."""
-        time = self._dataset.time()
-        return [time[i] for i in self._indices]
-
-    def info(self):
-        """Get information about the dataset."""
-        return self._dataset.info()
-
-    def image_shape(self):
-        """Get the shape of the image (same for input and output)."""
-        return self._dataset.image_shape()
-
-    def normalize_input(self, x, channels=None):
-        """Convert input from physical units to normalized data."""
-        return self._dataset.normalize_input(x, channels=channels)
-
-    def denormalize_input(self, x, channels=None):
-        """Convert input from normalized data to physical units."""
-        return self._dataset.denormalize_input(x, channels=channels)
-
-    def normalize_output(self, x, channels=None):
-        """Convert output from physical units to normalized data."""
-        return self._dataset.normalize_output(x, channels=channels)
-
-    def denormalize_output(self, x, channels=None):
-        """Convert output from normalized data to physical units."""
-        return self._dataset.denormalize_output(x, channels=channels)
-
-    def __getitem__(self, idx):
-        return self._dataset[self._indices[idx]]
-
-    def __len__(self):
-        return len(self._indices)
-
-
-def is_2021(time):
-    """Check if the given time is in the year 2021."""
-    return time.year == 2021
-
-
-def is_not_2021(time):
-    """Check if the given time is not in the year 2021."""
-    return not is_2021(time)
 
 
 class ZarrDataset(DownscalingDataset):
@@ -347,23 +254,18 @@ class ZarrDataset(DownscalingDataset):
         out_channels=(0, 17, 18, 19),
         img_shape_x=448,
         img_shape_y=448,
-        roll=False,
         add_grid=True,
         ds_factor=1,
         train=True,
         all_times=False,
-        n_history=0,
-        min_path=None,
-        max_path=None,
-        global_means_path=None,
-        global_stds_path=None,
-        normalization="v1",
     ):
+
+        self._dataset = dataset
         if not all_times:
-            self._dataset = (
-                FilterTime(dataset, is_not_2021)
+            self._time_indices = (
+                [i for i, t in enumerate(self._dataset.time()) if t.year != 2021]
                 if train
-                else FilterTime(dataset, is_2021)
+                else [i for i, t in enumerate(self._dataset.time()) if t.year == 2021]
             )
         else:
             self._dataset = dataset
@@ -371,39 +273,18 @@ class ZarrDataset(DownscalingDataset):
         self.train = train
         self.img_shape_x = img_shape_x
         self.img_shape_y = img_shape_y
-        self.roll = roll
         self.grid = add_grid
         self.ds_factor = ds_factor
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.n_history = n_history
-        self.min_path = min_path
-        self.max_path = max_path
-        self.global_means_path = (
-            to_absolute_path(global_means_path)
-            if (global_means_path is not None)
-            else None
-        )
-        self.global_stds_path = (
-            to_absolute_path(global_stds_path)
-            if (global_stds_path is not None)
-            else None
-        )
-        self.normalization = normalization
+        # zarr indexing requires a list, not tuple
+        self.in_channels = list(in_channels)
+        self.out_channels = list(out_channels)
 
     def info(self):
         """Check if the given time is not in the year 2021."""
         return self._dataset.info()
 
-    def __getitem__(self, idx):
-        (target, input, _) = self._dataset[idx]
-        # crop and downsamples
-        # rolling
-        if self.train and self.roll:
-            y_roll = random.randint(0, self.img_shape_y)
-        else:
-            y_roll = 0
-
+    def __getitem__(self, idx_in_split):
+        (target, input, _) = self._dataset[self._time_indices[idx_in_split]]
         # channels
         input = input[self.in_channels, :, :]
         target = target[self.out_channels, :, :]
@@ -411,33 +292,9 @@ class ZarrDataset(DownscalingDataset):
         if self.ds_factor > 1:
             target = self._create_lowres_(target, factor=self.ds_factor)
 
-        reshape_args = (
-            y_roll,
-            self.train,
-            self.n_history,
-            self.in_channels,
-            self.out_channels,
-            self.img_shape_x,
-            self.img_shape_y,
-            self.min_path,
-            self.max_path,
-            self.global_means_path,
-            self.global_stds_path,
-            self.normalization,
-            self.roll,
-        )
-        # SR
-        input = reshape_fields(
-            input,
-            "inp",
-            *reshape_args,
-            normalize=False,
-        )  # 3x720x1440
-        target = reshape_fields(
-            target, "tar", *reshape_args, normalize=False
-        )  # 3x720x1440
-
-        return target, input, idx
+        target = target[:, : self.img_shape_x, : self.img_shape_y]
+        input = input[:, : self.img_shape_x, : self.img_shape_y]
+        return torch.as_tensor(target), torch.as_tensor(input), idx_in_split
 
     def input_channels(self):
         """Metadata for the input channels. A list of dictionaries, one for each channel"""
@@ -465,7 +322,8 @@ class ZarrDataset(DownscalingDataset):
 
     def time(self):
         """Get time values from the dataset."""
-        return self._dataset.time()
+        src_times = self._dataset.time()
+        return [src_times[i] for i in self._time_indices]
 
     def image_shape(self):
         """Get the shape of the image (same for input and output)."""
@@ -476,7 +334,7 @@ class ZarrDataset(DownscalingDataset):
         x_norm = self._dataset.normalize_input(
             x[:, : len(self.in_channels)], channels=self.in_channels
         )
-        return np.concatenate((x_norm, x[:, self.in_channels :]), axis=1)
+        return np.concatenate((x_norm, x[:, len(self.in_channels) :]), axis=1)
 
     def denormalize_input(self, x):
         """Convert input from normalized data to physical units."""
@@ -493,16 +351,6 @@ class ZarrDataset(DownscalingDataset):
         """Convert output from normalized data to physical units."""
         return self._dataset.denormalize_output(x, channels=self.out_channels)
 
-    def _create_highres_(self, x, shape):
-        # downsample the high res imag
-        x = x.transpose(1, 2, 0)
-        # upsample with bicubic interpolation to bring the image to the nominal size
-        x = cv2.resize(
-            x, (shape[0], shape[1]), interpolation=cv2.INTER_CUBIC
-        )  # 32x32x3
-        x = x.transpose(2, 0, 1)  # 3x32x32
-        return x
-
     def _create_lowres_(self, x, factor=4):
         # downsample the high res imag
         x = x.transpose(1, 2, 0)
@@ -515,17 +363,8 @@ class ZarrDataset(DownscalingDataset):
         return x
 
 
-def get_zarr_dataset(*, data_path, normalization="v1", all_times=False, **kwargs):
+def get_zarr_dataset(*, data_path, all_times=False, **kwargs):
     """Get a Zarr dataset for training or evaluation."""
     data_path = to_absolute_path(data_path)
-    get_target_normalization = {
-        "v1": get_target_normalizations_v1,
-        "v2": get_target_normalizations_v2,
-    }[normalization]
-    logger.info(f"Normalization: {normalization}")
-    zdataset = _ZarrDataset(
-        data_path, get_target_normalization=get_target_normalization
-    )
-    return ZarrDataset(
-        dataset=zdataset, normalization=normalization, all_times=all_times, **kwargs
-    )
+    zdataset = _ZarrDataset(data_path)
+    return ZarrDataset(dataset=zdataset, all_times=all_times, **kwargs)
