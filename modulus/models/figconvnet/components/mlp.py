@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from src.networks.base_model import BaseModule
+from modulus.models.figconvnet.base_model import BaseModule
 
 
 class LinearBlock(BaseModule):

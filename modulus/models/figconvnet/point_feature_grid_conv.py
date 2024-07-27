@@ -24,9 +24,9 @@ import torch.nn.functional as F
 # from fft_conv_pytorch import fft_conv
 from torch import Tensor
 
-from src.networks.point_feature_ops import GridFeatures, GridFeaturesMemoryFormat
+from modulus.models.figconvnet.point_feature_ops import GridFeatures, GridFeaturesMemoryFormat
 
-from .base_model import BaseModule
+from modulus.models.figconvnet.base_model import BaseModule
 
 
 def to_ntuple(val: Union[int, Iterable[int]], n: int) -> Tuple[int, ...]:

@@ -18,7 +18,6 @@ from functools import partial
 import logging
 import logging.config
 import os
-import sys
 from timeit import default_timer
 
 import hydra
@@ -41,7 +40,7 @@ from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
 from src.utils.signal_handlers import SignalHandler
-from src.networks.point_feature_ops import GridFeaturesMemoryFormat
+from modulus.models.figconvnet.point_feature_ops import GridFeaturesMemoryFormat
 
 
 logger = logging.getLogger("figconv")
@@ -197,6 +196,7 @@ def train(config: DictConfig, signal_handler: SignalHandler):
     device = dist.device if dist.distributed else torch.device(config.device)
     # Set default devices.
     torch.cuda.device(device)
+    wp.init()
     wp.set_device(str(device))
 
     loggers = init_logger(config)
@@ -444,6 +444,13 @@ def _init_hydra_resolvers():
 
 if __name__ == "__main__":
     DistributedManager.initialize()
+
+    # from modulus.models.figconvnet.figconvunet import FIGConvUNet
+    # from src.networks import PointFeatureToGridGroupUNetDrivAer
+    # from src.networks.grid_feature_group_unet import PointFeatureToGridGroupUNetDrivAer
+
+    # PointFeatureToGridGroupUNetDrivAer(1, 1, 3, [8, 8, 8, 8])
+    # print("Done")
 
     _init_hydra_resolvers()
 

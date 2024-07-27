@@ -388,7 +388,7 @@ class GridFeatureToPointFeature(BaseModule):
         self.in_channels = in_channels
         self.encoder = SinusoidalEncoding(pos_encode_dim, data_range=pos_encode_range)
         self.pos_encode_point = pos_encode_point
-            self.pos_encode_dim = pos_encode_dim
+        self.pos_encode_dim = pos_encode_dim
 
     @property
     def num_channels(self):

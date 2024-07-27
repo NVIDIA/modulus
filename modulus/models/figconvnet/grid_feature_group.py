@@ -23,21 +23,21 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 
-from src.networks.base_model import BaseModule
-from src.networks.point_feature_grid_conv import (
+from modulus.models.figconvnet.base_model import BaseModule
+from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureConv2d,
     GridFeatureConv2dBlock,
     GridFeaturePadToMatch,
     GridFeatureTransform,
     LayerNorm2d,
 )
-from src.networks.point_feature_ops import (
+from modulus.models.figconvnet.point_feature_ops import (
     GridFeatures,
     GridFeaturesMemoryFormat,
     PointFeatures,
 )
 
-from .components.reductions import REDUCTION_TYPES
+from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from .point_feature_grid_ops import (
     GridFeatureCat,
     GridFeatureToPoint,

@@ -24,9 +24,9 @@ from torch import Tensor
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
-from .base_model import BaseModel
+from modulus.models.figconvnet.base_model import BaseModel
+from modulus.models.figconvnet.net_utils import SinusoidalEncoding
 
-from src.networks.net_utils import SinusoidalEncoding
 from src.utils.visualization import fig_to_numpy
 from src.utils.eval_funcs import eval_all_metrics
 
