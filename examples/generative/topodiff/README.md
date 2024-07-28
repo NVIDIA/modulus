@@ -1,7 +1,7 @@
 # TopoDiff
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/topodiff.png" width="840" />
+<img src="../../../docs/img/topodiff_doc/topodiff.png" width="840" />
 </p>
 
 ## Dataset
