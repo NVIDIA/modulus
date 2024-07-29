@@ -82,16 +82,19 @@ dataset:
   train: False
   all_times: True
   data_path: /data/data2/2023-01-24-cwb-4years.zarr
+  n_history: 0
   in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
   out_channels: [0, 17, 18, 19]
   img_shape_x: 448
   img_shape_y: 448
+  roll: false
   add_grid: true
   ds_factor: 4
   min_path: null
   max_path: null
   global_means_path: null
   global_stds_path: null
+  normalization: "v1"
 
 ## Deterministic sampler options
 sigma_min: null
