@@ -21,6 +21,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
+from modulus.models.diffusion import UNet, EDMPrecondSRV2
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -89,9 +90,7 @@ def main(cfg: DictConfig) -> None:
 
     # Parse image configuration & update model args
     dataset_channels = len(dataset.input_channels())
-    img_in_channels = (
-        dataset_channels + cfg.model.args.N_grid_channels
-    )  # noise + low-res input
+    img_in_channels = dataset_channels
     img_shape = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
     if cfg.model.hr_mean_conditioning:
@@ -116,22 +115,20 @@ def main(cfg: DictConfig) -> None:
     if img_shape[1] != patch_shape[1]:
         img_in_channels += dataset_channels
 
-    # Parse model args, append additional required args from dataset configs.
-    # Then instantiate the model and move to device.
-    model_args = parse_model_args(cfg.model.args)
+    # Instantiate the model and move to device.
     additional_model_args = {
-        "img_in_channels": img_in_channels,
         "img_out_channels": img_out_channels,
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
-    model_args.update(additional_model_args)
-    model = Module.instantiate(
-    {
-        "__name__": cfg.model.name,
-        "__args__": model_args,
-    }
-)
+    if cfg.model.name == 'regression':
+        model = UNet(img_channels=4, N_grid_channels=4, embedding_type='zero', img_in_channels=img_in_channels+4, **additional_model_args)
+    elif cfg.model.name == 'diffusion':
+        model = EDMPrecondSRV2(img_channels=4, gridtype="sinusoidal", N_grid_channels=4, img_in_channels=img_in_channels+4, **additional_model_args)
+    elif cfg.model.name == 'patched_diffusion':
+        model = EDMPrecondSRV2(img_channels=4, gridtype="learnable", N_grid_channels=100, img_in_channels=img_in_channels+100, **additional_model_args)
+    else:
+        raise ValueError("Invalid model")
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -159,7 +156,7 @@ def main(cfg: DictConfig) -> None:
 
     # Instantiate the loss function
     patch_num = getattr(cfg.training, "patch_num", 1)
-    if cfg.model.name == "EDMPrecondSR":  # TODO use v2
+    if cfg.model.name in ("diffusion", "patched_diffusion"):
         loss_fn = ResLoss(
             regression_net=regression_net,
             img_shape_x=img_shape[1],
@@ -169,7 +166,7 @@ def main(cfg: DictConfig) -> None:
             patch_num=patch_num,
             hr_mean_conditioning=cfg.model.hr_mean_conditioning,
         )
-    elif cfg.model.name == "UNetWrapper":  # TODO this breaks old checkpoints
+    elif cfg.model.name == "regression":
         loss_fn = RegressionLoss()
 
     # Instantiate the optimizer
@@ -200,7 +197,7 @@ def main(cfg: DictConfig) -> None:
     #                            MAIN TRAINING LOOP                            #
     ############################################################################
 
-    logger0.info(f"Training for {cfg.training.hp.training_duration} kimgs...")
+    logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()

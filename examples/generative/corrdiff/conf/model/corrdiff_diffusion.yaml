@@ -16,18 +16,5 @@
 
 name: EDMPrecondSRV2
   # Name of the preconditioner
-arch: ddpmpp-cwb
-  # Network architecture [ddpmpp, ddpmpp-cwb, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: resloss
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
 hr_mean_conditioning: False
   # High-res mean (regression's output) as additional condition
-
-
-args:
-  img_channels: 4
-  # Number of input channels
-  gridtype: "sinusoidal"
-  # can be either linear, sinusoidal, or learnable
-  N_grid_channels: 4
-    # Number of grid channels
