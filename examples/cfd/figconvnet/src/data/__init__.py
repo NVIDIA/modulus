@@ -15,7 +15,5 @@
 # limitations under the License.
 
 from .base_datamodule import BaseDataModule
-from .ahmedbody_datamodule import AhmedBodyDataModule
 from .drivaer_datamodule import DrivAerDataModule
 from .drivaernet_datamodule import DrivAerNetDataModule
-from .modelnet_datamodule import ModelNet40DataModule

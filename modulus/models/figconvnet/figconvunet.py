@@ -19,24 +19,20 @@ from typing import List, Literal, Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from jaxtyping import Float
 from torch import Tensor
 
-from modulus.models.figconvnet.point_feature_conv import PointFeatureConv, PointFeatureTransform
+from modulus.models.figconvnet.point_feature_conv import PointFeatureTransform
 from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureMemoryFormatConverter,
 )
 from modulus.models.figconvnet.point_feature_ops import (
     GridFeaturesMemoryFormat,
     PointFeatures,
-    VerticesToPointFeatures,
 )
 
-# from .ahmedbody_base import AhmedBodyBase
 from modulus.models.figconvnet.base_model import BaseModel
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.components.mlp import MLP
-# from .drivaer_base import DrivAerBase
 from modulus.models.figconvnet.grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
     GridFeatureGroup,
@@ -44,9 +40,15 @@ from modulus.models.figconvnet.grid_feature_group import (
     GridFeatureGroupToPoint,
     GridFeatureGroupPool,
 )
-from modulus.models.figconvnet.grid_feature_unet import memory_format_to_axis_index
 from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
 
+
+memory_format_to_axis_index = {
+    GridFeaturesMemoryFormat.b_xc_y_z: 0,
+    GridFeaturesMemoryFormat.b_yc_x_z: 1,
+    GridFeaturesMemoryFormat.b_zc_x_y: 2,
+    GridFeaturesMemoryFormat.b_x_y_z_c: -1,
+}
 
 class FIGConvUNet(BaseModel):
     """FIGConvUNet."""

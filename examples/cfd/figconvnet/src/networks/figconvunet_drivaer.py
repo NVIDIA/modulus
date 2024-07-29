@@ -14,59 +14,100 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Tuple, List
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import matplotlib
 import torch
 from torch import Tensor
 
+from jaxtyping import Float
+
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
-from modulus.models.figconvnet.base_model import BaseModel
+from modulus.models.figconvnet.figconvunet import FIGConvUNet
+
+from modulus.models.figconvnet.point_feature_ops import (
+    GridFeaturesMemoryFormat,
+    PointFeatures,
+    VerticesToPointFeatures,
+)
+
+from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 
 from src.utils.visualization import fig_to_numpy
 from src.utils.eval_funcs import eval_all_metrics
 
 
-def drivaer_create_subplot(ax, vertices, data, title):
-    # Flip along x axis
-    vertices = vertices.clone()
-    vertices[:, 0] = -vertices[:, 0]
+class FIGConvUNetDrivAer(FIGConvUNet):
+    """FIGConvUNetDrivAer"""
 
-    sc = ax.scatter(
-        vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
-    )
-    # Make the colorbar smaller
-    # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
-    # Show the numbers on the colorbar
-    cbar = plt.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
-    cbar.set_label(title, rotation=270, labelpad=20)
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        hidden_channels: List[int],
+        num_levels: int = 3,
+        num_down_blocks: Union[int, List[int]] = 1,
+        num_up_blocks: Union[int, List[int]] = 1,
+        aabb_max: Tuple[float, float, float] = (2.5, 1.5, 1.0),
+        aabb_min: Tuple[float, float, float] = (-2.5, -1.5, -1.0),
+        voxel_size: Optional[float] = None,
+        resolution_memory_format_pairs: List[
+            Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
+        ] = [
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
+        ],
+        use_rel_pos: bool = True,
+        use_rel_pos_encode: bool = True,
+        pos_encode_dim: int = 32,
+        communication_types: List[Literal["mul", "sum"]] = ["sum"],
+        to_point_sample_method: Literal["graphconv", "interp"] = "graphconv",
+        neighbor_search_type: Literal["knn", "radius"] = "knn",
+        knn_k: int = 16,
+        reductions: List[REDUCTION_TYPES] = ["mean"],
+        drag_loss_weight: Optional[float] = None,
+        pooling_type: Literal["attention", "max", "mean"] = "max",
+        pooling_layers: List[int] = None,
+    ):
+        super().__init__(
+            in_channels=hidden_channels[0],
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            hidden_channels=hidden_channels,
+            num_levels=num_levels,
+            num_down_blocks=num_down_blocks,
+            num_up_blocks=num_up_blocks,
+            aabb_max=aabb_max,
+            aabb_min=aabb_min,
+            voxel_size=voxel_size,
+            resolution_memory_format_pairs=resolution_memory_format_pairs,
+            use_rel_pos=use_rel_pos,
+            use_rel_pos_embed=use_rel_pos_encode,
+            pos_encode_dim=pos_encode_dim,
+            communication_types=communication_types,
+            to_point_sample_method=to_point_sample_method,
+            neighbor_search_type=neighbor_search_type,
+            knn_k=knn_k,
+            reductions=reductions,
+            pooling_type=pooling_type,
+            pooling_layers=pooling_layers,
+        )
 
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_aspect("equal")
-    # remove grid and background
-    ax.grid(False)
-    # ax.xaxis.pane.set_edgecolor('black')
-    # ax.yaxis.pane.set_edgecolor('black')
-    # remove bounding wireframe
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
+        vertex_to_point_features = VerticesToPointFeatures(
+            embed_dim=pos_encode_dim,
+            out_features=hidden_channels[0],
+            use_mlp=True,
+            pos_embed_range=aabb_max[0] - aabb_min[0],
+        )
 
-    # remove all ticks
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_zticks([])
+        self.vertex_to_point_features = vertex_to_point_features
+        if drag_loss_weight is not None:
+            self.drag_loss_weight = drag_loss_weight
 
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
-
-
-class DrivAerBase(BaseModel):
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].float()  # (n_in, 3)
 
@@ -211,28 +252,53 @@ class DrivAerBase(BaseModel):
 
         # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}
 
+    def forward(
+        self,
+        vertices: Float[Tensor, "B N 3"],
+        features: Optional[Float[Tensor, "B N C"]] = None,
+    ) -> Tensor:
+        if features is None:
+            point_features = self.vertex_to_point_features(vertices)
+        else:
+            point_features = PointFeatures(vertices, features)
+        out_point_features, drag_pred = FIGConvUNet.forward(
+            self, point_features
+        )
+        return out_point_features.features, drag_pred
 
-class DrivAerDragRegressionBase(DrivAerBase):
-    """
-    Base class for drag regression networks
-    """
 
-    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
-        vertices = self.data_dict_to_input(data_dict)
-        pred_drag = self(vertices)
-        gt_drag = data_dict["c_d"].float().to(self.device)
-        return {"drag_loss": loss_fn(pred_drag, gt_drag)}
+def drivaer_create_subplot(ax, vertices, data, title):
+    # Flip along x axis
+    vertices = vertices.clone()
+    vertices[:, 0] = -vertices[:, 0]
 
-    @torch.no_grad()
-    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
-        vertices = self.data_dict_to_input(data_dict)
-        drag_pred = self(vertices)
-        out_dict = {}
-        # collect all drag outputs. All _ prefixed keys are collected in the meter
-        gt_drag = data_dict["c_d"].float()
-        out_dict["_gt_drag"] = gt_drag.cpu().flatten()
-        out_dict["_pred_drag"] = drag_pred.detach().cpu().flatten()
-        return out_dict
+    sc = ax.scatter(
+        vertices[:, 0], vertices[:, 1], vertices[:, 2], c=data, cmap="viridis"
+    )
+    # Make the colorbar smaller
+    # fig.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+    # Show the numbers on the colorbar
+    cbar = plt.colorbar(sc, ax=ax, shrink=0.25, aspect=5)
+    cbar.set_label(title, rotation=270, labelpad=20)
 
-    def image_pointcloud_dict(self, data_dict, datamodule):
-        return {}, {}
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_aspect("equal")
+    # remove grid and background
+    ax.grid(False)
+    # ax.xaxis.pane.set_edgecolor('black')
+    # ax.yaxis.pane.set_edgecolor('black')
+    # remove bounding wireframe
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    # remove all ticks
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
