@@ -76,7 +76,7 @@ class ERA5HDF5Datapipe(Datapipe):
         Number of previous timesteps included in the input variables, by default 0
     latlon_resolution: Tuple[int, int], optional
         The resolution for the latitude-longitude grid (H, W). Needs to be specified
-         for cos zenith angle computation, or interpolation. By default None
+        for cos zenith angle computation, or interpolation. By default None
     interpolation_type: str, optional
         Interpolation type for resizing. Supports ["INTERP_NN", "INTERP_LINEAR", "INTERP_CUBIC",
         "INTERP_LANCZOS3", "INTERP_TRIANGULAR", "INTERP_GAUSSIAN"]. By default None
@@ -91,11 +91,11 @@ class ERA5HDF5Datapipe(Datapipe):
         by default False
     cos_zenith_args: Dict, optional
         Dictionary containing the following
-        - dt: float, optional
+        dt: float, optional
             Time in hours between each timestep in the dataset, by default 6 hr
-        - start_year: int, optional
+        start_year: int, optional
             Start year of dataset, by default 1980
-        - latlon_bounds : Tuple[Tuple[float, float], Tuple[float, float]], optional
+        latlon_bounds : Tuple[Tuple[float, float], Tuple[float, float]], optional
             Bounds of latitude and longitude in the data, in the format
             ((lat_start, lat_end,), (lon_start, lon_end)).
             By default ((90, -90), (0, 360)).
@@ -482,9 +482,9 @@ class ERA5DaliExternalSource:
         If True, the cosine zenith angles corresponding to the coordinates will be produced,
     cos_zenith_args: Dict
         Dictionary containing the following
-        - dt: float
+        dt: float
             Time in hours between each timestep in the dataset
-        - start_year
+        start_year
             Start year of dataset
     shuffle : bool, optional
         Shuffle dataset, by default True
