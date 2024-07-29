@@ -27,7 +27,7 @@ network_module = importlib.import_module("modulus.models.diffusion")
 
 @dataclass
 class MetaData(ModelMetaData):
-    name: str = "UNeWrapper"
+    name: str = "UNet"
     # Optimization
     jit: bool = False
     cuda_graphs: bool = False
@@ -43,7 +43,7 @@ class MetaData(ModelMetaData):
     auto_grad: bool = False
 
 
-class UNetWrapper(Module):  # TODO a lot of redundancy, need to clean up
+class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
     U-Net Wrapper for CorrDiff.
 

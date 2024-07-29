@@ -54,11 +54,10 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
-    validation_dataset_cfg = (
-        OmegaConf.to_container(cfg.validation_dataset)
-        if hasattr(cfg, "validation_dataset")
-        else None
-    )
+    if hasattr(cfg, "validation_dataset"):
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    else:
+        validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
@@ -214,7 +213,6 @@ def main(cfg: DictConfig) -> None:
             img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
             img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
             labels = labels.to(dist.device).contiguous()
-
             with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
                 loss = loss_fn(
                     net=model,

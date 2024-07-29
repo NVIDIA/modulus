@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: UNetWrapper
+name: UNet
   # Name of the preconditioner
 arch: ddpmpp-cwb-v0-regression
   # Network architecture [ddpmpp, ddpmpp-cwb-v2, ncsnpp, adm, ddpmpp-cwb-v0-regression]
