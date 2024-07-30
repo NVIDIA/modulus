@@ -50,6 +50,7 @@ from datetime import datetime
 import pandas as pd
 import xskillscore
 
+
 def open_samples(f):
     """
     Open prediction and truth samples from a dataset file.
@@ -71,6 +72,7 @@ def open_samples(f):
     truth = truth.set_coords(["lon", "lat"])
     pred = pred.set_coords(["lon", "lat"])
     return truth, pred, root
+
 
 def compute_and_save_metrics(netcdf_file, output_dir):
     truth, pred, root = open_samples(netcdf_file)
@@ -96,19 +98,19 @@ def compute_and_save_metrics(netcdf_file, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     print(f"Saving metrics to {output_dir}/scores.nc")
     with dask.diagnostics.ProgressBar():
-        metrics.to_netcdf(os.path.join(output_dir, 'scores.nc'), mode="w")
+        metrics.to_netcdf(os.path.join(output_dir, "scores.nc"), mode="w")
 
 
 def write_metrics_to_txt(netcdf_file, output_dir):
     """Read and save metrics from a NetCDF file to a text file, CSV file, and XLS file in transposed table format."""
     ds = xr.open_dataset(netcdf_file)
-    
-    metrics = ds.coords['metric'].values
+
+    metrics = ds.coords["metric"].values
     variables = list(ds.data_vars)
-    
+
     # Initialize a dictionary to hold the average values
     avg_values = {variable: [] for variable in variables}
-    
+
     # Calculate average values for each variable and metric
     for variable in variables:
         data = ds[variable]
@@ -116,26 +118,30 @@ def write_metrics_to_txt(netcdf_file, output_dir):
             metric_values = data[i, :].values
             average_value = metric_values.mean()
             avg_values[variable].append(average_value)
-    
+
     # Convert to DataFrame for easier writing to file
     df = pd.DataFrame(avg_values, index=metrics)
-    
+
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Write the transposed table to the output text file with the previous format
-    with open(os.path.join(output_dir, 'metrics.txt'), 'w') as f:
+    with open(os.path.join(output_dir, "metrics.txt"), "w") as f:
         # Write the header
-        header = "Variable".ljust(30) + "".join([metric.ljust(15) for metric in metrics])
+        header = "Variable".ljust(30) + "".join(
+            [metric.ljust(15) for metric in metrics]
+        )
         f.write(header + "\n")
         f.write("-" * len(header) + "\n")
-        
+
         # Write each row of the table
         for variable in df.columns:
-            row = variable.ljust(30) + "".join([f"{value:.3f}".ljust(15) for value in df[variable]])
+            row = variable.ljust(30) + "".join(
+                [f"{value:.3f}".ljust(15) for value in df[variable]]
+            )
             f.write(row + "\n")
-    
-    df.to_csv(os.path.join(output_dir, 'metrics.csv'), float_format='%.3f')
-    df.to_excel(os.path.join(output_dir, 'metrics.xls'), float_format='%.3f')
+
+    df.to_csv(os.path.join(output_dir, "metrics.csv"), float_format="%.3f")
+    df.to_excel(os.path.join(output_dir, "metrics.xls"), float_format="%.3f")
 
 
 if __name__ == "__main__":
@@ -146,4 +152,4 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", help="Path to the output directory")
     args = parser.parse_args()
     compute_and_save_metrics(args.netcdf_file, args.output_dir)
-    write_metrics_to_txt(os.path.join(args.output_dir, 'scores.nc'), args.output_dir)
+    write_metrics_to_txt(os.path.join(args.output_dir, "scores.nc"), args.output_dir)
