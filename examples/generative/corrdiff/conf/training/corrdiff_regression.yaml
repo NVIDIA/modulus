@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Hyperparameters
 hp:
     training_duration: 200000000
     # Training duration based on the number of processed samples
@@ -28,6 +29,7 @@ hp:
     lr_decay: 1
     # LR decay rate
 
+# Performance
 perf:
     fp_optimizations: fp32
     # Floating point mode, one of ["fp32", "fp16", "amp-fp16", "amp-bf16"]
@@ -37,6 +39,7 @@ perf:
     songunet_checkpoint_level: 0 # 0 means no checkpointing
     # Gradient checkpointing level, value is number of layers to checkpoint
 
+# I/O
 io:
     print_progress_freq: 1000
     # How often to print progress
