@@ -35,8 +35,9 @@ class GeometricL2Loss(nn.Module):
         super().__init__()
 
         lats = torch.linspace(lat_range[0], lat_range[1], num_lats)
-        lats[0] = _correct_lat_at_pole(lats[0], lat_range)
-        lats[1] = _correct_lat_at_pole(lats[1], lat_range)
+        dlat = lats[1] - lats[0]
+        lats[0] = _correct_lat_at_pole(lats[0], dlat)
+        lats[-1] = _correct_lat_at_pole(lats[-1], dlat)
         lats = torch.deg2rad(lats[lat_indices_used[0] : lat_indices_used[1]])
         weights = torch.cos(lats)
         weights = weights / torch.sum(weights)
@@ -52,9 +53,8 @@ class GeometricL2Loss(nn.Module):
         return torch.mean(err)
 
 
-def _correct_lat_at_pole(lat, lat_range):
-    """Adjust latitude at the poles to avoid sin(lat)==0."""
-    dlat = lat_range[1] - lat_range[0]
+def _correct_lat_at_pole(lat, dlat):
+    """Adjust latitude at the poles to avoid zero weight at pole."""
     correction = dlat / 4
     if lat == 90:
         lat -= correction

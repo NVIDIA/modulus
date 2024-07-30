@@ -207,14 +207,16 @@ class GraphCastNet(Module):
     Note
     ----
     Based on these papers:
-    - "GraphCast: Learning skillful medium-range global weather forecasting"
-        https://arxiv.org/abs/2212.12794
-    - "Forecasting Global Weather with Graph Neural Networks"
-        https://arxiv.org/abs/2202.07575
-    - "Learning Mesh-Based Simulation with Graph Networks"
-        https://arxiv.org/abs/2010.03409
-    - "MultiScale MeshGraphNets"
-        https://arxiv.org/abs/2210.00612
+
+    "GraphCast: Learning skillful medium-range global weather forecasting"
+    https://arxiv.org/abs/2212.12794
+    "Forecasting Global Weather with Graph Neural Networks"
+    https://arxiv.org/abs/2202.07575
+    "Learning Mesh-Based Simulation with Graph Networks"
+    https://arxiv.org/abs/2010.03409
+    "MultiScale MeshGraphNets"
+    https://arxiv.org/abs/2210.00612
+
     """
 
     def __init__(
@@ -504,7 +506,7 @@ class GraphCastNet(Module):
 
         This function returns the appropriate checkpoint function based on the
         provided `checkpoint_segments` flag. If `checkpoint_segments` is positive,
-         the function returns the checkpoint function from PyTorch's
+        the function returns the checkpoint function from PyTorch's
         `torch.utils.checkpoint`, with number of checkpointing segments equal to
         `checkpoint_segments`. Otherwise, it returns an identity function
         that simply passes the inputs through the given layer.
