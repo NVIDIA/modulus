@@ -163,6 +163,7 @@ nsight-systems*
 build/
 mlruns/
 checkpoints/
+examples/weather/dataset_download/credentials/
 
 # Hydra
 outputs/
