@@ -29,7 +29,9 @@ def plot_samples(netcdf_file, output_dir, n_samples):
         .set_coords(["lat", "lon"])
     )
     truth = (
-        xarray.open_dataset(netcdf_file, group="truth").merge(root).set_coords(["lat", "lon"])
+        xarray.open_dataset(netcdf_file, group="truth")
+        .merge(root)
+        .set_coords(["lat", "lon"])
     )
     os.makedirs(output_dir, exist_ok=True)
 
@@ -53,6 +55,7 @@ def plot_samples(netcdf_file, output_dir, n_samples):
         plt.savefig(f"{output_dir}/{v}.png")
 
     joblib.Parallel(n_jobs=8)(joblib.delayed(plot)(v) for v in merged)
+
 
 if __name__ == "__main__":
     # Create the parser
