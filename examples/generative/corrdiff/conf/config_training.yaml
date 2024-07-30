@@ -14,26 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
+hydra:
+  job:
+    chdir: true
+    name: regression
+  run:
+    dir: ./outputs/${hydra:job.name}
 
-import cftime
+# Get defaults
+defaults:
 
+  # Dataset
+  - dataset/cwb
 
-def convert_datetime_to_cftime(
-    time: datetime.datetime, cls=cftime.DatetimeGregorian
-) -> cftime.DatetimeGregorian:
-    """Convert a Python datetime object to a cftime DatetimeGregorian object."""
-    return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
+  # Model
+  - model/corrdiff_regression
+  #- model/corrdiff_diffusion
+  #- model/corrdiff_patched_diffusion
 
+  # Training
+  - training/corrdiff_regression
+  #- training/corrdiff_diffusion
+  #- training/corrdiff_patched_diffusion
 
-def time_range(
-    start_time: datetime.datetime,
-    end_time: datetime.datetime,
-    step: datetime.timedelta,
-    inclusive: bool = False,
-):
-    """Like the Python `range` iterator, but with datetimes."""
-    t = start_time
-    while (t <= end_time) if inclusive else (t < end_time):
-        yield t
-        t += step
+  # Validation
+  - validation/basic

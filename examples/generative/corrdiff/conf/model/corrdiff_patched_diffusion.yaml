@@ -14,4 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# empty
+name: EDMPrecondSRV2
+  # Name of the preconditioner
+hr_mean_conditioning: True
+  # High-res mean (regression's output) as additional condition
