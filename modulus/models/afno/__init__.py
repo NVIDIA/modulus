@@ -16,3 +16,4 @@
 
 from .afno import AFNO
 from .distributed import DistributedAFNO
+from .modafno import ModAFNO
