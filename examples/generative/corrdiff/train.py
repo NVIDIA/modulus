@@ -34,7 +34,7 @@ from train_helpers import (
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
-    parse_model_args
+    parse_model_args,
 )
 
 
@@ -121,12 +121,30 @@ def main(cfg: DictConfig) -> None:
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
-    if cfg.model.name == 'regression':
-        model = UNet(img_channels=4, N_grid_channels=4, embedding_type='zero', img_in_channels=img_in_channels+4, **additional_model_args)
-    elif cfg.model.name == 'diffusion':
-        model = EDMPrecondSRV2(img_channels=4, gridtype="sinusoidal", N_grid_channels=4, img_in_channels=img_in_channels+4, **additional_model_args)
-    elif cfg.model.name == 'patched_diffusion':
-        model = EDMPrecondSRV2(img_channels=4, gridtype="learnable", N_grid_channels=100, img_in_channels=img_in_channels+100, **additional_model_args)
+    if cfg.model.name == "regression":
+        model = UNet(
+            img_channels=4,
+            N_grid_channels=4,
+            embedding_type="zero",
+            img_in_channels=img_in_channels + 4,
+            **additional_model_args,
+        )
+    elif cfg.model.name == "diffusion":
+        model = EDMPrecondSRV2(
+            img_channels=4,
+            gridtype="sinusoidal",
+            N_grid_channels=4,
+            img_in_channels=img_in_channels + 4,
+            **additional_model_args,
+        )
+    elif cfg.model.name == "patched_diffusion":
+        model = EDMPrecondSRV2(
+            img_channels=4,
+            gridtype="learnable",
+            N_grid_channels=100,
+            img_in_channels=img_in_channels + 100,
+            **additional_model_args,
+        )
     else:
         raise ValueError("Invalid model")
     model.train().requires_grad_(True).to(dist.device)

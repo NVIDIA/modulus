@@ -167,9 +167,9 @@ def main(cfg: DictConfig) -> None:
     elif inference_mode == "diffusion":
         load_net_reg, load_net_res = False, True
     elif inference_mode == "regression_and_diffusion":
-        load_net_reg, load_net_res = True, True 
+        load_net_reg, load_net_res = True, True
     else:
-        raise ValueError(f"Invalid inference mode {inference_mode}")  
+        raise ValueError(f"Invalid inference mode {inference_mode}")
 
     # Load diffusion network, move to device, change precision
     if load_net_res:

@@ -122,6 +122,7 @@ def convert_datetime_to_cftime(
     """Convert a Python datetime object to a cftime DatetimeGregorian object."""
     return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
 
+
 def time_range(
     start_time: datetime.datetime,
     end_time: datetime.datetime,
