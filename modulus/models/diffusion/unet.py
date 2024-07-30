@@ -47,7 +47,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
     U-Net architecture.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : int
         The resolution of the input/output image.
@@ -73,8 +73,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Keyword arguments for the underlying model.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
     Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
