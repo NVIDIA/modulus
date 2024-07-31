@@ -42,7 +42,7 @@ def import_or_fail(
                 raise ValueError(
                     "pytestconfig must be passed as an argument when using the import_or_fail_decorator."
                 )
-            _import_or_fail(module_names, min_versions, pytestconfig)
+            _import_or_fail(module_names, pytestconfig, min_versions)
 
             return test_func(*args, **kwargs)
 
@@ -51,7 +51,7 @@ def import_or_fail(
     return decorator
 
 
-def _import_or_fail(module_names, min_versions, config):
+def _import_or_fail(module_names, config, min_versions=None):
     if not isinstance(module_names, (list, tuple)):
         module_names = [module_names]  # allow single names
     if not isinstance(min_versions, (list, tuple)):
