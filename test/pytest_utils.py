@@ -20,7 +20,19 @@ from functools import wraps
 import pytest
 
 
-def import_or_fail(module_names):
+def import_or_fail(
+    module_names: str | list[str] | tuple,
+    min_versions: str | list[str] | tuple | None = None,
+):
+    """
+    Try to import a module and skip the test if the module is not available
+    or if the version is below the minimum required version.
+
+    Args:
+        module_names (str): Name of the modules to import.
+        min_versions (str, optional): Minimum required versions of the modules.
+    """
+
     def decorator(test_func):
         @pytest.mark.usefixtures("pytestconfig")
         @wraps(test_func)
@@ -30,7 +42,7 @@ def import_or_fail(module_names):
                 raise ValueError(
                     "pytestconfig must be passed as an argument when using the import_or_fail_decorator."
                 )
-            _import_or_fail(module_names, pytestconfig)
+            _import_or_fail(module_names, pytestconfig, min_versions)
 
             return test_func(*args, **kwargs)
 
@@ -39,15 +51,17 @@ def import_or_fail(module_names):
     return decorator
 
 
-def _import_or_fail(module_names, config):
+def _import_or_fail(module_names, config, min_versions=None):
     if not isinstance(module_names, (list, tuple)):
         module_names = [module_names]  # allow single names
+    if not isinstance(min_versions, (list, tuple)):
+        min_versions = [min_versions]  # allow single names
 
-    for module_name in module_names:
+    for module_name, min_version in zip(module_names, min_versions):
         if config.getoption("--fail-on-missing-modules"):
             __import__(module_name)
         else:
-            pytest.importorskip(module_name)
+            pytest.importorskip(module_name, min_version)
 
 
 def nfsdata_or_fail(test_func):

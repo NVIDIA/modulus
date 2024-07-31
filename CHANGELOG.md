@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Graph Transformer processor for GraphCast/GenCast.
+
 ### Changed
 
 - Refactored CorrDiff training recipe for improved usability
