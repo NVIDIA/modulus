@@ -243,7 +243,6 @@ def main(cfg: DictConfig) -> None:
                             range(dist.world_size)
                         ),  # Only run regression model once
                         pretext="reg",
-                        class_idx=class_idx,
                         img_shape = (img_shape_x, img_shape_y),
                         img_out_channels = img_out_channels,
                     )
