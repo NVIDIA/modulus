@@ -704,7 +704,7 @@ class EDMPrecondSR(Module):
     sigma_data : float
         Expected standard deviation of the training data, by default 0.5.
     model_type :str
-        Class name of the underlying model, by default "DhariwalUNet".
+        Class name of the underlying model, by default "SongUNetPosEmbd".
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 
@@ -731,7 +731,7 @@ class EDMPrecondSR(Module):
         sigma_min=0.0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ):
         warnings.warn(

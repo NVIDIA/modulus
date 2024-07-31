@@ -59,15 +59,13 @@ def main(cfg: DictConfig) -> None:
     reg_ckpt_filename = getattr(cfg, "reg_ckpt_filename")
     image_outdir = getattr(cfg, "image_outdir")
     seeds = parse_int_list(getattr(cfg, "seeds", "0-63"))
-    class_idx = getattr(cfg, "class_idx", None)  # TODO: is this needed?
     num_steps = getattr(cfg, "num_steps", 18)
     sample_res = getattr(cfg, "sample_res", "full")
     sampling_method = getattr(cfg, "sampling_method", "stochastic")
     seed_batch_size = getattr(cfg, "seed_batch_size", 1)
     force_fp16 = getattr(cfg, "force_fp16", False)
     use_torch_compile = getattr(cfg, "use_torch_compile", True)
-    regression_only = getattr(cfg, "regression_only", False)
-    diffusion_only = getattr(cfg, "diffusion_only", False)
+    inference_mode = getattr(cfg, "inference_mode", "regression_and_diffusion")
 
     # Parse deterministic sampler options
     sigma_min = getattr(cfg, "sigma_min", None)
@@ -170,33 +168,35 @@ def main(cfg: DictConfig) -> None:
     else:
         logger0.info("Patch-based generation disabled")
 
-    logger0.info(f"torch.__version__: {torch.__version__}")
-
-    # Sanity check for the type of requested inference
-    if regression_only and diffusion_only:
-        raise ValueError(
-            "Both regression_only and diffusion_only cannot be set to True."
-        )
-    if regression_only:
-        net_res = None
-    if diffusion_only:
-        net_reg = None
+    # Parse the inference mode
+    if inference_mode == "regression":
+        load_net_reg, load_net_res = True, False
+    elif inference_mode == "diffusion":
+        load_net_reg, load_net_res = False, True
+    elif inference_mode == "regression_and_diffusion":
+        load_net_reg, load_net_res = True, True
+    else:
+        raise ValueError(f"Invalid inference mode {inference_mode}")
 
     # Load diffusion network, move to device, change precision
-    if not regression_only:
+    if load_net_res:
         logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
         net_res = Module.from_checkpoint(res_ckpt_filename)
         net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
             net_res.use_fp16 = True
+    else:
+        net_res = None
 
     # load regression network, move to device, change precision
-    if not diffusion_only:
+    if load_net_reg:
         logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
         net_reg = Module.from_checkpoint(reg_ckpt_filename)
         net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
         if force_fp16:
             net_reg.use_fp16 = True
+    else:
+        net_reg = None
 
     # Reset since we are using a different mode.
     if use_torch_compile:
@@ -260,15 +260,14 @@ def main(cfg: DictConfig) -> None:
                         sampling_method=sampling_method,
                         seeds=sample_seeds,
                         pretext="gen",
-                        class_idx=class_idx,
                         num_steps=num_steps,
                         img_shape = (img_shape_x, img_shape_y),
                         img_out_channels = img_out_channels,
                         **sampler_kwargs,
                     )
-            if regression_only:
+            if inference_mode == "regression":
                 image_out = image_reg
-            elif diffusion_only:
+            elif inference_mode == "diffusion":
                 image_out = image_res
             else:
                 image_out = image_reg + image_res
@@ -446,7 +445,6 @@ def generate_and_save(
 def generate(
     net,
     seeds,
-    class_idx,
     seed_batch_size,
     img_shape, # as (img_shape_x, img_shape_y)
     img_out_channels,
@@ -510,9 +508,6 @@ def generate(
                 class_labels = torch.eye(net.label_dim, device=device)[
                     rnd.randint(net.label_dim, size=[seed_batch_size], device=device)
                 ]
-            if class_idx is not None:
-                class_labels[:, :] = 0
-                class_labels[:, class_idx] = 1
 
             # Generate images.
             sampler_kwargs = {

@@ -1,4 +1,4 @@
-# Deep Learning Weather Prediction (DLWP) model for weather forecasting
+# Deep Learning Weather Prediction (DLWP-HEALPIX) model for weather forecasting
 
 This example is an implementation of the
 [DLWP HEALPix](https://arxiv.org/abs/2311.06253)

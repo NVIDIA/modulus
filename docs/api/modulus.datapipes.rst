@@ -22,6 +22,18 @@ Weather and climate datapipes
     :members:
     :show-inheritance:
 
+.. automodule:: modulus.datapipes.climate.climate
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.datapipes.climate.synthetic
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.datapipes.healpix.timeseries_dataset
+    :members:
+    :show-inheritance:
+
 Graph datapipes
 ---------------
 
@@ -33,6 +45,21 @@ Graph datapipes
     :members:
     :show-inheritance:
 
+.. automodule:: modulus.datapipes.gnn.drivaernet_dataset
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.datapipes.gnn.stokes_dataset
+    :members:
+    :show-inheritance:
+
 .. automodule:: modulus.datapipes.gnn.utils
+    :members:
+    :show-inheritance:
+
+CAE datapipes
+-------------
+
+.. automodule:: modulus.datapipes.cae.mesh_datapipe
     :members:
     :show-inheritance:

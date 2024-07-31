@@ -60,7 +60,7 @@ be predicted based on the other channels, making its prediction strictly generat
 
 The Zarr dataset used for training and testing the CorrDiff model is available for
 non-commercial use under the [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
-and can be downloaded from https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset.
+and can be downloaded from [https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets_cwa) by `ngc registry resource download-version "nvidia/modulus/modulus_datasets_cwa:v1"`.
 
 ## Model overview and architecture
 

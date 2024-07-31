@@ -65,7 +65,7 @@ class DhariwalUNet(Module):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : int
         The resolution of the input/output image.
@@ -92,17 +92,17 @@ class DhariwalUNet(Module):
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Dhariwal, P. and Nichol, A., 2021. Diffusion models beat gans on image
     synthesis. Advances in neural information processing systems, 34, pp.8780-8794.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Dhariwal and Nichol, available at
     https://github.com/openai/guided-diffusion
 
-    Example:
+    Example
     --------
     >>> model = DhariwalUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])

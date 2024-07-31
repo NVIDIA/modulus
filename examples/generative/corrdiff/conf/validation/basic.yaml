@@ -14,26 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: diffusion_job
-  run:
-    dir: ./outputs/${hydra:job.name}
-      
-defaults:
-  - config_train_base
-
-## Main options
-outdir: "./output_diffusion"   
-  # Where to save the results
-arch: ddpmpp-cwb
-  # Network architecture [ddpmpp, ddpmpp-cwb, ncsnpp, adm, ddpmpp-cwb-v0-regression]
-precond: resloss
-  # Preconditioning & loss function [vp, ve, edm, unetregression, resloss]
-task: diffusion
-  # Which model to train [regression, diffusion]
-
-## I/O
-regression_checkpoint_path: checkpoints/regression.mdlus
-  # Where to save the checkpoints
+# Validation dataset options
+# (need to set dataset.train_test_split == true to have an effect)
+train: false
+all_times: false
