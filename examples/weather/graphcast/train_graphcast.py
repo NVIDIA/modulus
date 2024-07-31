@@ -25,11 +25,18 @@ import wandb
 import torch.cuda.profiler as profiler
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, LambdaLR
 
+import torch._dynamo
+
+torch._dynamo.config.suppress_errors = True  # TODO check if this can be removed
+
 # import modules
 import os
 
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.utils.graphcast.loss import GraphCastLossFunction
+from modulus.utils.graphcast.loss import (
+    CellAreaWeightedLossFunction,
+    GraphCastLossFunction,
+)
 from modulus.launch.logging import (
     PythonLogger,
     initialize_wandb,
@@ -96,7 +103,8 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the model
         self.model = GraphCastNet(
-            multimesh_level=cfg.multimesh_level,
+            mesh_level=cfg.mesh_level,
+            multimesh=cfg.multimesh,
             input_res=tuple(cfg.latlon_res),
             input_dim_grid_nodes=(
                 cfg.num_channels_climate
@@ -108,6 +116,9 @@ class GraphCastTrainer(BaseTrainer):
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
             output_dim_grid_nodes=cfg.num_channels_climate,
+            processor_type=cfg.processor_type,
+            khop_neighbors=cfg.khop_neighbors,
+            num_attention_heads=cfg.num_attention_heads,
             processor_layers=cfg.processor_layers,
             hidden_dim=cfg.hidden_dim,
             norm_type=cfg.norm_type,
@@ -208,12 +219,15 @@ class GraphCastTrainer(BaseTrainer):
         self.area = self.area.to(dtype=self.dtype).to(device=dist.device)
 
         # instantiate loss, optimizer, and scheduler
-        self.criterion = GraphCastLossFunction(
-            self.area,
-            self.channels_list,
-            cfg.dataset_metadata_path,
-            cfg.time_diff_std_path,
-        )
+        if cfg.synthetic_dataset:
+            self.criterion = CellAreaWeightedLossFunction(self.area)
+        else:
+            self.criterion = GraphCastLossFunction(
+                self.area,
+                self.channels_list,
+                cfg.dataset_metadata_path,
+                cfg.time_diff_std_path,
+            )
         try:
             self.optimizer = apex.optimizers.FusedAdam(
                 self.model.parameters(),
@@ -339,8 +353,8 @@ def main(cfg: DictConfig) -> None:
         cfg.num_history = 0
         cfg.num_workers = 0
         rank_zero_logger.warning(
-            "Using Dummy dataset. Ignoring static dataset, cosine zenith angle,\
-                                time of the year, and history. Also setting num_workers to 0."
+            "Using synthetic dataset. Ignoring static dataset, cosine zenith angle,"
+            + " time of the year, and history. Also setting num_workers to 0."
         )
     else:
         DataPipe = ERA5HDF5Datapipe
