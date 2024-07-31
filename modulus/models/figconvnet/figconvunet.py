@@ -14,12 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ruff: noqa: S101
+# ruff: noqa: S101,F722
+from dataclasses import dataclass
 from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+from jaxtyping import Float
 from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModel
@@ -40,7 +42,9 @@ from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
 from modulus.models.figconvnet.point_feature_ops import (
     GridFeaturesMemoryFormat,
     PointFeatures,
+    VerticesToPointFeatures,
 )
+from modulus.models.meta import ModelMetaData
 
 memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_xc_y_z: 0,
@@ -48,6 +52,24 @@ memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_zc_x_y: 2,
     GridFeaturesMemoryFormat.b_x_y_z_c: -1,
 }
+
+
+@dataclass
+class MetaData(ModelMetaData):
+    name: str = "FIGConvUNet"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = False
+    amp_cpu: bool = False
+    amp_gpu: bool = True
+    torch_fx: bool = False
+    # Data type
+    bf16: bool = False
+    # Inference
+    onnx: bool = False
+    # Physics informed
+    func_torch: bool = False
+    auto_grad: bool = False
 
 
 class FIGConvUNet(BaseModel):
@@ -81,10 +103,11 @@ class FIGConvUNet(BaseModel):
         neighbor_search_type: Literal["knn", "radius"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        drag_loss_weight: Optional[float] = None,
         pooling_type: Literal["attention", "max", "mean"] = "max",
         pooling_layers: List[int] = None,
     ):
-        BaseModel.__init__(self)
+        super().__init__(meta=MetaData())
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
@@ -242,6 +265,17 @@ class FIGConvUNet(BaseModel):
 
         self.pad_to_match = GridFeatureGroupPadToMatch()
 
+        vertex_to_point_features = VerticesToPointFeatures(
+            embed_dim=pos_encode_dim,
+            out_features=hidden_channels[0],
+            use_mlp=True,
+            pos_embed_range=aabb_max[0] - aabb_min[0],
+        )
+
+        self.vertex_to_point_features = vertex_to_point_features
+        if drag_loss_weight is not None:
+            self.drag_loss_weight = drag_loss_weight
+
     def _grid_forward(self, point_features: PointFeatures):
         grid_feature_group = GridFeatureGroup(
             [to_grid(point_features) for to_grid in self.point_feature_to_grids]
@@ -276,9 +310,15 @@ class FIGConvUNet(BaseModel):
 
     def forward(
         self,
-        point_features: PointFeatures,
-    ) -> Tuple[PointFeatures, Tensor]:
+        vertices: Float[Tensor, "B N 3"],
+        features: Optional[Float[Tensor, "B N C"]] = None,
+    ) -> Tensor:
+        if features is None:
+            point_features = self.vertex_to_point_features(vertices)
+        else:
+            point_features = PointFeatures(vertices, features)
+
         grid_features, drag_pred = self._grid_forward(point_features)
         out_point_features = self.to_point(grid_features, point_features)
         out_point_features = self.projection(out_point_features)
-        return out_point_features, drag_pred
+        return out_point_features.features, drag_pred

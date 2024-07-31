@@ -24,9 +24,8 @@ from jaxtyping import Int
 from torch import Tensor
 from torch.nn import functional as F
 
-from modulus.models.figconvnet.base_model import BaseModule
+from modulus.models.figconvnet.components.encodings import SinusoidalEncoding
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
-from modulus.models.figconvnet.net_utils import SinusoidalEncoding
 from modulus.models.figconvnet.point_feature_conv import (
     PointFeatureCat,
     PointFeatureConv,
@@ -303,7 +302,7 @@ class GridFeatureToPointInterp(nn.Module):
         return out_point_features
 
 
-class GridFeatureCat(BaseModule):
+class GridFeatureCat(nn.Module):
     """GridFeatureCat."""
 
     def forward(

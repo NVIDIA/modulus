@@ -23,7 +23,6 @@ import torch.nn.functional as F
 from jaxtyping import Float
 from torch import Tensor
 
-from modulus.models.figconvnet.base_model import BaseModule
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureConv2d,
@@ -185,7 +184,7 @@ class GridFeatureGroupIntraCommunications(nn.Module):
             raise NotImplementedError
 
 
-class GridFeatureGroupConv2dNorm(BaseModule):
+class GridFeatureGroupConv2dNorm(nn.Module):
     """GridFeatureGroupConv2dNorm."""
 
     def __init__(
@@ -223,7 +222,7 @@ class GridFeatureGroupConv2dNorm(BaseModule):
         return GridFeatureGroup(grid_feats)
 
 
-class GridFeatureGroupTransform(BaseModule):
+class GridFeatureGroupTransform(nn.Module):
     """GridFeatureGroupTransform."""
 
     def __init__(self, transform: nn.Module, in_place: bool = True) -> None:
@@ -297,7 +296,7 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
         return grid_features_group
 
 
-class GridFeatureGroupCat(BaseModule):
+class GridFeatureGroupCat(nn.Module):
     """GridFeatureGroupCat."""
 
     def __init__(self):
@@ -313,7 +312,7 @@ class GridFeatureGroupCat(BaseModule):
         )
 
 
-class GridFeatureGroupPadToMatch(BaseModule):
+class GridFeatureGroupPadToMatch(nn.Module):
     """GridFeatureGroupPadToMatch."""
 
     def __init__(self) -> None:
@@ -333,7 +332,7 @@ class GridFeatureGroupPadToMatch(BaseModule):
         return GridFeatureGroup(grid_features_group_out)
 
 
-class GridFeatureGroupToPoint(BaseModule):
+class GridFeatureGroupToPoint(nn.Module):
     """GridFeatureGroupToPoint."""
 
     def __init__(
@@ -397,7 +396,7 @@ class GridFeatureGroupToPoint(BaseModule):
         return out_point_features
 
 
-class AttentionPool(BaseModule):
+class AttentionPool(nn.Module):
     """
     Attention pooling for BxCxN.
     """
@@ -437,7 +436,7 @@ class AttentionPool(BaseModule):
         return x
 
 
-class GridFeaturePool(BaseModule):
+class GridFeaturePool(nn.Module):
     """
     Pooling the features of GridFeatures.
     """
@@ -481,7 +480,7 @@ class GridFeaturePool(BaseModule):
         return self.norm(pooled_feat.squeeze(-1))
 
 
-class GridFeatureGroupPool(BaseModule):
+class GridFeatureGroupPool(nn.Module):
     """
     Pooling the features of GridFeatureGroup.
     """

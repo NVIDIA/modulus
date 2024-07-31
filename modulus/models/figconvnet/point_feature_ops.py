@@ -20,12 +20,13 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float
 from torch import Tensor
 
-from .base_model import BaseModule
-from .net_utils import MLP, SinusoidalEncoding
+from .components.encodings import SinusoidalEncoding
+from .components.mlp import MLP
 
 
 def grid_init(bb_max, bb_min, resolution):
@@ -413,7 +414,7 @@ class GridFeatures:
         return vertices
 
 
-class VerticesToPointFeatures(BaseModule):
+class VerticesToPointFeatures(nn.Module):
     """VerticesToPointFeatures."""
 
     def __init__(
@@ -427,13 +428,12 @@ class VerticesToPointFeatures(BaseModule):
         self.pos_embed = SinusoidalEncoding(embed_dim, pos_embed_range)
         self.use_mlp = use_mlp
         if self.use_mlp:
-            self.mlp = MLP([3 * embed_dim, out_features], torch.nn.GELU)
+            self.mlp = MLP(3 * embed_dim, out_features, [])
 
     def forward(self, vertices: Float[Tensor, "B N 3"]) -> PointFeatures:
         assert (
             vertices.ndim == 3
         ), f"Expected 3D vertices of shape BxNx3, got {vertices.shape}"
-        vertices = vertices.to(self.device)
         vert_embed = self.pos_embed(vertices)
         if self.use_mlp:
             vert_embed = self.mlp(vert_embed)

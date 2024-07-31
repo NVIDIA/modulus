@@ -20,8 +20,6 @@ import matplotlib
 import torch
 from torch import Tensor
 
-from jaxtyping import Float
-
 matplotlib.use("Agg")  # use non-interactive backend
 import matplotlib.pyplot as plt
 
@@ -29,8 +27,6 @@ from modulus.models.figconvnet.figconvunet import FIGConvUNet
 
 from modulus.models.figconvnet.point_feature_ops import (
     GridFeaturesMemoryFormat,
-    PointFeatures,
-    VerticesToPointFeatures,
 )
 
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
@@ -39,8 +35,8 @@ from src.utils.visualization import fig_to_numpy
 from src.utils.eval_funcs import eval_all_metrics
 
 
-class FIGConvUNetDrivAer(FIGConvUNet):
-    """FIGConvUNetDrivAer"""
+class FIGConvUNetDrivAerNet(FIGConvUNet):
+    """FIGConvUNetDrivAerNet"""
 
     def __init__(
         self,
@@ -93,20 +89,21 @@ class FIGConvUNetDrivAer(FIGConvUNet):
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
             reductions=reductions,
+            drag_loss_weight=drag_loss_weight,
             pooling_type=pooling_type,
             pooling_layers=pooling_layers,
         )
 
-        vertex_to_point_features = VerticesToPointFeatures(
-            embed_dim=pos_encode_dim,
-            out_features=hidden_channels[0],
-            use_mlp=True,
-            pos_embed_range=aabb_max[0] - aabb_min[0],
-        )
+        # vertex_to_point_features = VerticesToPointFeatures(
+        #     embed_dim=pos_encode_dim,
+        #     out_features=hidden_channels[0],
+        #     use_mlp=True,
+        #     pos_embed_range=aabb_max[0] - aabb_min[0],
+        # )
 
-        self.vertex_to_point_features = vertex_to_point_features
-        if drag_loss_weight is not None:
-            self.drag_loss_weight = drag_loss_weight
+        # self.vertex_to_point_features = vertex_to_point_features
+        # if drag_loss_weight is not None:
+        #     self.drag_loss_weight = drag_loss_weight
 
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].float()  # (n_in, 3)
@@ -252,17 +249,17 @@ class FIGConvUNetDrivAer(FIGConvUNet):
 
         # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}
 
-    def forward(
-        self,
-        vertices: Float[Tensor, "B N 3"],
-        features: Optional[Float[Tensor, "B N C"]] = None,
-    ) -> Tensor:
-        if features is None:
-            point_features = self.vertex_to_point_features(vertices)
-        else:
-            point_features = PointFeatures(vertices, features)
-        out_point_features, drag_pred = FIGConvUNet.forward(self, point_features)
-        return out_point_features.features, drag_pred
+    # def forward(
+    #     self,
+    #     vertices: Float[Tensor, "B N 3"],
+    #     features: Optional[Float[Tensor, "B N C"]] = None,
+    # ) -> Tensor:
+    #     if features is None:
+    #         point_features = self.vertex_to_point_features(vertices)
+    #     else:
+    #         point_features = PointFeatures(vertices, features)
+    #     out_point_features, drag_pred = FIGConvUNet.forward(self, point_features)
+    #     return out_point_features.features, drag_pred
 
 
 def drivaer_create_subplot(ax, vertices, data, title):

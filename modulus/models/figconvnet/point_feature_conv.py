@@ -22,14 +22,14 @@ import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
 
-from .base_model import BaseModule
+from .components.encodings import SinusoidalEncoding
+from .components.mlp import MLPBlock
 from .components.reductions import REDUCTION_TYPES, row_reduction
 from .neighbor_ops import batched_neighbor_knn_search, batched_neighbor_radius_search
-from .net_utils import MLPBlock, SinusoidalEncoding
 from .point_feature_ops import PointFeatures
 
 
-class PointFeatureTransform(BaseModule):
+class PointFeatureTransform(nn.Module):
     """PointFeatureTransform."""
 
     def __init__(
@@ -45,7 +45,7 @@ class PointFeatureTransform(BaseModule):
         )
 
 
-class PointFeatureCat(BaseModule):
+class PointFeatureCat(nn.Module):
     """PointFeatureCat."""
 
     def forward(
@@ -82,7 +82,7 @@ class PointFeatureMLP(PointFeatureTransform):
         )
 
 
-class PointFeatureConv(BaseModule):
+class PointFeatureConv(nn.Module):
     """PointFeatureConv."""
 
     def __init__(
@@ -325,7 +325,7 @@ class PointFeatureConv(BaseModule):
         return PointFeatures(out_point_features.vertices, out_features)
 
 
-class PointFeatureConvBlock(BaseModule):
+class PointFeatureConvBlock(nn.Module):
     """ConvBlock has two convolutions with a residual connection."""
 
     def __init__(

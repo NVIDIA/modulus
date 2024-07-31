@@ -21,7 +21,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from modulus.models.figconvnet.base_model import BaseModule
 from modulus.models.figconvnet.point_feature_ops import (
     GridFeatures,
     GridFeaturesMemoryFormat,
@@ -164,7 +163,7 @@ class LayerNorm2d(nn.LayerNorm):
         return x
 
 
-class GridFeatureTransform(BaseModule):
+class GridFeatureTransform(nn.Module):
     """GridFeatureTransform."""
 
     def __init__(self, transform: nn.Module) -> None:
@@ -275,7 +274,7 @@ class GridFeatureConv2dBlock(nn.Module):
         return out
 
 
-class GridFeatureMemoryFormatConverter(BaseModule):
+class GridFeatureMemoryFormatConverter(nn.Module):
     """GridFeatureMemoryFormatConverter."""
 
     def __init__(self, memory_format: GridFeaturesMemoryFormat) -> None:

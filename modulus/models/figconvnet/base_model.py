@@ -17,23 +17,11 @@
 from typing import Any, Dict, Tuple
 
 import torch
-import torch.nn as nn
+
+from modulus.models.module import Module
 
 
-class BaseModule(nn.Module):
-    """Base module for models."""
-
-    def __init__(self):
-        super().__init__()
-        self.device_indicator_param = nn.Parameter(torch.empty(0))
-
-    @property
-    def device(self):
-        """Returns the device that the model is on."""
-        return self.device_indicator_param.device
-
-
-class BaseModel(BaseModule):
+class BaseModel(Module):
     """Base model class."""
 
     def data_dict_to_input(self, data_dict, **kwargs) -> Any:

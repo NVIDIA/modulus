@@ -21,10 +21,8 @@ import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
 
-from modulus.models.figconvnet.base_model import BaseModule
 
-
-class LinearBlock(BaseModule):
+class LinearBlock(nn.Module):
     """
     Simple linear block with ReLU and dropout
     """
@@ -40,7 +38,7 @@ class LinearBlock(BaseModule):
         :param out_channels: output channels
         :param dropout: dropout rate
         """
-        BaseModule.__init__(self)
+        super().__init__()
         self.block = nn.Sequential(
             nn.Linear(in_channels, out_channels, bias=False),
             nn.LayerNorm(out_channels),
@@ -88,7 +86,7 @@ class ResidualLinearBlock(nn.Module):
         return out
 
 
-class MLP(BaseModule):
+class MLP(nn.Module):
     """
     Multi-layer perceptron
     """
@@ -105,7 +103,7 @@ class MLP(BaseModule):
         :param channels: list of channels
         :param dropout: dropout rate
         """
-        BaseModule.__init__(self)
+        super().__init__()
 
         self.layers = nn.ModuleList()
         channels = [in_channels] + hidden_channels + [out_channels]
@@ -130,3 +128,34 @@ class MLP(BaseModule):
         for layer in self.layers:
             x = layer(x)
         return x
+
+
+class MLPBlock(nn.Module):
+    """MLPBlock."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        hidden_channels: int = None,
+        out_channels: int = None,
+        activation=nn.GELU,
+    ):
+        super().__init__()
+        if hidden_channels is None:
+            hidden_channels = in_channels
+        if out_channels is None:
+            out_channels = in_channels
+        self.in_channels = in_channels
+        self.fc1 = nn.Linear(in_channels, hidden_channels)
+        self.norm1 = nn.LayerNorm(hidden_channels)
+        self.fc2 = nn.Linear(hidden_channels, out_channels)
+        self.norm2 = nn.LayerNorm(out_channels)
+        self.shortcut = nn.Linear(in_channels, out_channels)
+        self.activation = activation()
+
+    def forward(self, x):
+        out = self.activation(self.norm1(self.fc1(x)))
+        out = self.norm2(self.fc2(out))
+        # add skip connection
+        out = self.activation(out + self.shortcut(x))
+        return out
