@@ -144,7 +144,7 @@ class FIGConvUNet(BaseModel):
                 )
             ]
             for _ in range(1, num_down_blocks[level]):
-                down_block.append(
+                down_block.append(  # noqa: PERF401
                     GridFeatureConv2DBlocksAndIntraCommunication(
                         in_channels=hidden_channels[level + 1],
                         out_channels=hidden_channels[level + 1],
@@ -168,7 +168,7 @@ class FIGConvUNet(BaseModel):
                 )
             ]
             for _ in range(1, num_up_blocks[level]):
-                up_block.append(
+                up_block.append(  # noqa: PERF401
                     GridFeatureConv2DBlocksAndIntraCommunication(
                         in_channels=hidden_channels[level],
                         out_channels=hidden_channels[level],

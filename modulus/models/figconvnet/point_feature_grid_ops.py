@@ -18,10 +18,6 @@
 from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
-
-# TODO(akamenev): migration
-# import open3d as o3d
-# import open3d.ml.torch as ml3d
 import torch
 import torch.nn as nn
 from jaxtyping import Int

@@ -19,9 +19,6 @@ from typing import Optional
 
 import torch.nn as nn
 import torch.nn.functional as F
-
-# TODO(akamenev): migration
-# from fft_conv_pytorch import fft_conv
 from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModule

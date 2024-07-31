@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ruff: noqa: S101
+# ruff: noqa: S101,F722
 from typing import List, Literal, Optional, Tuple, Union
 
 import torch
@@ -86,9 +86,7 @@ class GridFeatureGroup:
 
     def __add__(self, other: "GridFeatureGroup") -> "GridFeatureGroup":
         assert len(self) == len(other)
-        grid_features = []
-        for i in range(len(self)):
-            grid_features.append(self[i] + other[i])
+        grid_features = [item + other[i] for i, item in enumerate(self)]
         return GridFeatureGroup(grid_features)
 
 
@@ -328,11 +326,10 @@ class GridFeatureGroupPadToMatch(BaseModule):
         grid_features_group_target: GridFeatureGroup,
     ) -> GridFeatureGroup:
         assert len(grid_features_group_ref) == len(grid_features_group_target)
-        grid_features_group_out = []
-        for i in range(len(grid_features_group_ref)):
-            grid_features_group_out.append(
-                self.match(grid_features_group_ref[i], grid_features_group_target[i])
-            )
+        grid_features_group_out = [
+            self.match(ref, grid_features_group_target[i])
+            for i, ref in enumerate(grid_features_group_ref)
+        ]
         return GridFeatureGroup(grid_features_group_out)
 
 

@@ -69,7 +69,7 @@ makani = [
     "tensorly-torch>=0.4.0",
 ]
 
-tpunet = [
+fignet = [
     "jaxtyping>=0.2",
     "torch_scatter>=2.1",
     "torchinfo>=1.8",
@@ -82,7 +82,7 @@ all = [
     "netcdf4>=1.6.3",
     "ruamel.yaml>=0.17.22",
     "scikit-learn>=1.0.2",
-    "warp-lang>=0.6.0",
+    "warp-lang>=1.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
     "cftime>=1.6.2",
@@ -91,6 +91,7 @@ all = [
     "nvidia-modulus[launch]",
     "nvidia-modulus[dev]",
     "nvidia-modulus[makani]",
+    "nvidia-modulus[fignet]",
 ]
 
 

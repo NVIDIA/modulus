@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ruff: noqa: S101
+# ruff: noqa: S101,F722
 from typing import List, Literal, Optional
 
 import torch
@@ -310,11 +310,10 @@ class PointFeatureConv(BaseModule):
         #     rep_weights = in_weight[neighbors_index]
         #     edge_features = edge_features * rep_weights.squeeze().unsqueeze(-1)
 
-        out_features = []
-        for reduction in self.reductions:
-            out_features.append(
-                row_reduction(edge_features, neighbors_row_splits, reduction=reduction)
-            )
+        out_features = [
+            row_reduction(edge_features, neighbors_row_splits, reduction=reduction)
+            for reduction in self.reductions
+        ]
         out_features = torch.cat(out_features, dim=-1)
         out_features = self.out_transform_mlp(out_features)
         # Convert back to the original shape
