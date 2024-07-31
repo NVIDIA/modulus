@@ -94,17 +94,6 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
             pooling_layers=pooling_layers,
         )
 
-        # vertex_to_point_features = VerticesToPointFeatures(
-        #     embed_dim=pos_encode_dim,
-        #     out_features=hidden_channels[0],
-        #     use_mlp=True,
-        #     pos_embed_range=aabb_max[0] - aabb_min[0],
-        # )
-
-        # self.vertex_to_point_features = vertex_to_point_features
-        # if drag_loss_weight is not None:
-        #     self.drag_loss_weight = drag_loss_weight
-
     def data_dict_to_input(self, data_dict) -> torch.Tensor:
         vertices = data_dict["cell_centers"].float()  # (n_in, 3)
 
@@ -248,18 +237,6 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
         # diff_points = torch.cat((vertices, norm_diff_colors), dim=1)
 
         # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}
-
-    # def forward(
-    #     self,
-    #     vertices: Float[Tensor, "B N 3"],
-    #     features: Optional[Float[Tensor, "B N C"]] = None,
-    # ) -> Tensor:
-    #     if features is None:
-    #         point_features = self.vertex_to_point_features(vertices)
-    #     else:
-    #         point_features = PointFeatures(vertices, features)
-    #     out_point_features, drag_pred = FIGConvUNet.forward(self, point_features)
-    #     return out_point_features.features, drag_pred
 
 
 def drivaer_create_subplot(ax, vertices, data, title):
