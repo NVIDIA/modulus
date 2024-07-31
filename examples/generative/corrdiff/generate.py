@@ -243,8 +243,8 @@ def main(cfg: DictConfig) -> None:
                             range(dist.world_size)
                         ),  # Only run regression model once
                         pretext="reg",
-                        img_shape = (img_shape_x, img_shape_y),
-                        img_out_channels = img_out_channels,
+                        img_shape=(img_shape_x, img_shape_y),
+                        img_out_channels=img_out_channels,
                     )
             if net_res:
                 if hr_mean_conditioning and sampling_method == "stochastic":
@@ -260,8 +260,8 @@ def main(cfg: DictConfig) -> None:
                         seeds=sample_seeds,
                         pretext="gen",
                         num_steps=num_steps,
-                        img_shape = (img_shape_x, img_shape_y),
-                        img_out_channels = img_out_channels,
+                        img_shape=(img_shape_x, img_shape_y),
+                        img_out_channels=img_out_channels,
                         **sampler_kwargs,
                     )
             if inference_mode == "regression":
@@ -445,7 +445,7 @@ def generate(
     net,
     seeds,
     seed_batch_size,
-    img_shape, # as (img_shape_x, img_shape_y)
+    img_shape,  # as (img_shape_x, img_shape_y)
     img_out_channels,
     sampling_method=None,
     img_lr=None,

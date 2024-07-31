@@ -158,7 +158,7 @@ def main(cfg: DictConfig) -> None:
             output_device=dist.device,
             find_unused_parameters=dist.find_unused_parameters,
         )
-        
+
     # Load the regression checkpoint if applicable
     if hasattr(cfg.training.io, "regression_checkpoint_path"):
         regression_checkpoint_path = to_absolute_path(
