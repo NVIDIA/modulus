@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import logging
+import warnings
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -135,7 +136,7 @@ class GraphCastNet(Module):
 
     Parameters
     ----------
-    mesh_level: int, optional
+    multimesh_level: int, optional
         Level of the latent mesh, by default 6
     multimesh: bool, optional
         If the latent mesh is a multimesh, by default True
@@ -238,7 +239,8 @@ class GraphCastNet(Module):
 
     def __init__(
         self,
-        mesh_level: int = 6,
+        mesh_level: Optional[int] = 6,
+        multimesh_level: Optional[int] = None,
         multimesh: bool = True,
         input_res: tuple = (721, 1440),
         input_dim_grid_nodes: int = 474,
@@ -268,6 +270,16 @@ class GraphCastNet(Module):
         produce_aggregated_output_on_all_ranks: bool = True,
     ):
         super().__init__(meta=MetaData())
+
+        # 'multimesh_level' deprecation handling
+        if multimesh_level is not None:
+            warnings.warn(
+                "'multimesh_level' is deprecated and will be removed in a future version. Use 'mesh_level' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            mesh_level = multimesh_level
+
         self.processor_type = processor_type
         if self.processor_type == "MessagePassing":
             khop_neighbors = 0

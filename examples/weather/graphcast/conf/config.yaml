@@ -71,7 +71,7 @@ use_apex: true              # If true, uses Apex for fused Adam optimizer, typic
 dataset_path: /data/era5_75var             # Path to the dataset.
 static_dataset_path: static                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
 dataset_metadata_path: /data/era5_75var/metadata/data.json  # Path to the dataset metadata, containing channel names.
-time_diff_std_path: time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
+time_diff_std_path: /code/mnabian/gencast/modulus/examples/weather/graphcast/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
 
 
 # ┌───────────────────────────────────────────┐
