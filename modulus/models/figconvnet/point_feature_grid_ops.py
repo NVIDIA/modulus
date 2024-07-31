@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: S101
 from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -30,7 +31,11 @@ from torch.nn import functional as F
 from modulus.models.figconvnet.base_model import BaseModule
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.net_utils import SinusoidalEncoding
-from modulus.models.figconvnet.point_feature_conv import PointFeatureCat, PointFeatureConv, PointFeatureTransform
+from modulus.models.figconvnet.point_feature_conv import (
+    PointFeatureCat,
+    PointFeatureConv,
+    PointFeatureTransform,
+)
 from modulus.models.figconvnet.point_feature_ops import (
     GridFeatures,
     GridFeaturesMemoryFormat,
@@ -300,132 +305,6 @@ class GridFeatureToPointInterp(nn.Module):
         if self.cat_in_point_features:
             out_point_features = self.cat(point_features, out_point_features)
         return out_point_features
-
-
-class PointFeatureToDistanceGridFeature(BaseModule):
-    """PointFeatureToDistanceGridFeature."""
-
-    def __init__(
-        self,
-        aabb_max: Tuple[float, float, float],
-        aabb_min: Tuple[float, float, float],
-        grid_resolution: Optional[Tuple[int, int, int]] = None,
-        voxel_size: Optional[float] = None,
-        pos_encode_dist: bool = True,
-        pos_encode_grid: bool = True,
-        pos_encode_dim: int = 32,
-    ):
-        super().__init__()
-        self.aabb_max = aabb_max
-        self.aabb_min = aabb_min
-        self.pos_encoding = SinusoidalEncoding(
-            pos_encode_dim,
-            data_range=aabb_max[0] - aabb_min[0],
-        )
-        self.pos_encode_dist = pos_encode_dist
-        self.pos_encode_grid = pos_encode_grid
-        self.pos_encode_dim = pos_encode_dim
-        if voxel_size is not None:
-            assert grid_resolution is None
-        if grid_resolution is None:
-            assert voxel_size is not None
-            grid_resolution = (
-                int((aabb_max[0] - aabb_min[0]) / voxel_size),
-                int((aabb_max[1] - aabb_min[1]) / voxel_size),
-                int((aabb_max[2] - aabb_min[2]) / voxel_size),
-            )
-        print(f"Using grid resolution: {grid_resolution}")
-        self.grid_resolution = grid_resolution
-        self.grid_features = AABBGridFeatures(
-            aabb_max, aabb_min, grid_resolution, pos_encode_dim=pos_encode_dim
-        )
-
-    @property
-    def num_channels(self):
-        return (self.pos_encode_dim if self.pos_encode_dist else 1) + int(
-            self.pos_encode_grid
-        ) * 3 * self.pos_encode_dim
-
-    def forward(self, point_features: PointFeatures) -> GridFeatures:
-        # Use open3d to find distance
-        vertices = point_features.vertices.cpu()
-        query_pts = self.grid_features.vertices.reshape(-1, 3).cpu()
-        k = 1
-        knn_result = ml3d.ops.knn_search(
-            vertices,
-            query_pts,
-            k=k,
-            points_row_splits=torch.LongTensor([0, len(vertices)]),
-            queries_row_splits=torch.LongTensor([0, len(query_pts)]),
-            return_distances=True,
-        )
-        distances = knn_result.neighbors_distance.reshape(*self.grid_resolution, 1)
-        if self.pos_encode_dist:
-            distances = self.pos_encoding(distances)
-        if self.pos_encode_grid:
-            distances = torch.cat(
-                [distances, self.grid_features.features],
-                dim=-1,
-            )
-        grid_features = GridFeatures(
-            self.grid_features.vertices,
-            distances,
-        ).to(device=point_features.vertices.device)
-        return grid_features
-
-
-class GridFeatureToPointFeature(BaseModule):
-    """GridFeatureToPointFeature."""
-
-    def __init__(
-        self,
-        in_channels: int,
-        pos_encode_point: bool = True,
-        pos_encode_range: float = 1.0,
-        pos_encode_dim: int = 32,
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.encoder = SinusoidalEncoding(pos_encode_dim, data_range=pos_encode_range)
-        self.pos_encode_point = pos_encode_point
-        self.pos_encode_dim = pos_encode_dim
-
-    @property
-    def num_channels(self):
-        return self.in_channels + (
-            self.pos_encode_dim * 3 if self.pos_encode_point else 0
-        )
-
-    def forward(
-        self, grid_features: GridFeatures, point_features: PointFeatures
-    ) -> PointFeatures:
-        # Use F.interpolate to interpolate grid features to point features
-        assert grid_features.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z
-        batch_grid_features = grid_features.batch_features  # B x C x X x Y x Z
-        # normalize the point_features.vertices to [-1, 1] using grid_features.vertices min max
-        vertices = point_features.vertices
-        grid_min = grid_features.vertices[0, 0, 0]
-        grid_max = grid_features.vertices[-1, -1, -1]
-        vertices = (vertices - grid_min) / (grid_max - grid_min) * 2 - 1
-        # interpolate
-        batch_point_features = (
-            torch.nn.functional.grid_sample(
-                batch_grid_features,
-                vertices.view(1, 1, 1, -1, 3),
-                align_corners=True,
-            )
-            .squeeze()
-            .permute(1, 0)
-        )
-        if self.pos_encode_point:
-            vert_pos = self.encoder(point_features.vertices)
-            # concat vert_pos to batch_point_features
-            batch_point_features = torch.cat([batch_point_features, vert_pos], dim=-1)
-        point_features = PointFeatures(
-            point_features.vertices,
-            batch_point_features,
-        )
-        return point_features
 
 
 class GridFeatureCat(BaseModule):

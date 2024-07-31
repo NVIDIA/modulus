@@ -261,9 +261,7 @@ class FIGConvUNetDrivAer(FIGConvUNet):
             point_features = self.vertex_to_point_features(vertices)
         else:
             point_features = PointFeatures(vertices, features)
-        out_point_features, drag_pred = FIGConvUNet.forward(
-            self, point_features
-        )
+        out_point_features, drag_pred = FIGConvUNet.forward(self, point_features)
         return out_point_features.features, drag_pred
 
 

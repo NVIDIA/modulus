@@ -14,11 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Any, Optional
-from jaxtyping import Float
+from typing import List
 
-import torch
 import torch.nn as nn
+from jaxtyping import Float
 from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModule

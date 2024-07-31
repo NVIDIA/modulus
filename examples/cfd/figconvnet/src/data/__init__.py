@@ -15,5 +15,4 @@
 # limitations under the License.
 
 from .base_datamodule import BaseDataModule
-from .drivaer_datamodule import DrivAerDataModule
 from .drivaernet_datamodule import DrivAerNetDataModule

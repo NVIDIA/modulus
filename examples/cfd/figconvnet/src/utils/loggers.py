@@ -34,7 +34,7 @@ except ImportError:
     warnings.warn("wandb is not installed. wandb logger is not available.")
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np

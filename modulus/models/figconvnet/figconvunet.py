@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: S101
 from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -21,27 +22,25 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from modulus.models.figconvnet.point_feature_conv import PointFeatureTransform
-from modulus.models.figconvnet.point_feature_grid_conv import (
-    GridFeatureMemoryFormatConverter,
-)
-from modulus.models.figconvnet.point_feature_ops import (
-    GridFeaturesMemoryFormat,
-    PointFeatures,
-)
-
 from modulus.models.figconvnet.base_model import BaseModel
-from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.components.mlp import MLP
+from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
     GridFeatureGroup,
     GridFeatureGroupPadToMatch,
-    GridFeatureGroupToPoint,
     GridFeatureGroupPool,
+    GridFeatureGroupToPoint,
+)
+from modulus.models.figconvnet.point_feature_conv import PointFeatureTransform
+from modulus.models.figconvnet.point_feature_grid_conv import (
+    GridFeatureMemoryFormatConverter,
 )
 from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
-
+from modulus.models.figconvnet.point_feature_ops import (
+    GridFeaturesMemoryFormat,
+    PointFeatures,
+)
 
 memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_xc_y_z: 0,
@@ -49,6 +48,7 @@ memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_zc_x_y: 2,
     GridFeaturesMemoryFormat.b_x_y_z_c: -1,
 }
+
 
 class FIGConvUNet(BaseModel):
     """FIGConvUNet."""

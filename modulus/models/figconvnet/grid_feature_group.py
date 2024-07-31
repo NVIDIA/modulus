@@ -14,16 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: S101
 from typing import List, Literal, Optional, Tuple, Union
-
-from jaxtyping import Float
 
 import torch
 import torch.nn as nn
-from torch import Tensor
 import torch.nn.functional as F
+from jaxtyping import Float
+from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModule
+from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureConv2d,
     GridFeatureConv2dBlock,
@@ -37,7 +38,6 @@ from modulus.models.figconvnet.point_feature_ops import (
     PointFeatures,
 )
 
-from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
 from .point_feature_grid_ops import (
     GridFeatureCat,
     GridFeatureToPoint,
@@ -517,23 +517,3 @@ class GridFeatureGroupPool(BaseModule):
         for grid_features, pool in zip(grid_features_group, self.pools):
             pooled_features.append(pool(grid_features))
         return torch.cat(pooled_features, dim=-1)
-
-
-if __name__ == "__main__":
-    # Test grid pool
-    grid_features = GridFeatures(
-        vertices=torch.rand(2, 4, 4, 3, 3),
-        features=torch.rand(2, 16, 4, 4, 3),
-        memory_format=GridFeaturesMemoryFormat.b_c_x_y_z,
-        grid_shape=(4, 4, 3),
-        num_channels=16,
-    )
-    grid_features = grid_features.to(memory_format=GridFeaturesMemoryFormat.b_yc_x_z)
-    grid_pool = GridFeaturePool(
-        in_channels=16,
-        out_channels=32,
-        compressed_spatial_dim=4,
-        pooling_type="attention",
-    )
-    pooled_features = grid_pool(grid_features)
-    print(pooled_features.shape)

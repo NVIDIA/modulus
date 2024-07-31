@@ -20,8 +20,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-# TODO(akamenev): migration
-# import open3d as o3d
 from matplotlib import cm
 from PIL import Image
 
@@ -56,28 +54,3 @@ class MplColorHelper:
 
     def get_rgb(self, val):
         return self.scalarMap.to_rgba(val)[:, 0:3]
-
-
-def vis_pressure(mesh_path, pressures, colormap="plasma", eps=0.5):
-    mesh = o3d.io.read_triangle_mesh(mesh_path)
-
-    color_mapper = MplColorHelper(colormap, pressures.min(), pressures.max())
-    mesh.vertex_colors = o3d.utility.Vector3dVector(
-        color_mapper.get_rgb(pressures[0, :])
-    )
-
-    meshes = [mesh]
-    if pressures.shape[0] > 1:
-        min_b = np.asarray(mesh.get_min_bound())
-        max_b = np.asarray(mesh.get_max_bound())
-        translation = np.array([max_b[0] - min_b[0] + eps, 0, 0])
-        for j in range(1, pressures.shape[0]):
-            new_mesh = o3d.io.read_triangle_mesh(mesh_path)
-            new_mesh.translate(j * translation)
-            new_mesh.vertex_colors = o3d.utility.Vector3dVector(
-                color_mapper.get_rgb(pressures[j, :])
-            )
-
-            meshes.append(new_mesh)
-
-    o3d.visualization.draw_geometries(meshes)

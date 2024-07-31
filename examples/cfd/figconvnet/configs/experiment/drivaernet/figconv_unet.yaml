@@ -26,10 +26,6 @@ defaults:
 train:
   batch_size: 1
 
-# data:
-#   preprocessors:
-#     - _target_: src.data.components.DrivAerDragPreprocessingFunctor
-
 model:
   num_levels: 1
   kernel_size: 9

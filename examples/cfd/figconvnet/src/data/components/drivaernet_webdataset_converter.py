@@ -19,13 +19,12 @@ import tarfile
 import uuid
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 import webdataset as wds
 import numpy as np
 from src.data.drivaernet_datamodule import DrivAerNetDataset, DrivAerNetPreprocessor
 from src.data.components.webdataset_utils import from_numpy
 from torch.multiprocessing import set_start_method
-from src.data.components.drivaer_preprocessors import DrivAerTDFPreprocessingFunctor
 
 
 class DrivAerNetToWebdataset:
@@ -98,12 +97,6 @@ def convert_to_webdataset(
     # Please modify this to create appropriate data. Make sure to not use normalizer twice.
     preprocessors = [
         DrivAerNetPreprocessor(num_points=-1),
-        DrivAerTDFPreprocessingFunctor(
-            bbox_max=[2.5, 2.5, 2.5],
-            bbox_min=[-2.5, -2.5, -2.5],
-            bbox_resolution=[128, 128, 128],
-            dist_chunk_size=128 * 128 * 16,
-        ),
     ]
 
     # Create separate paths for train/text, with and without spoiler
@@ -146,8 +139,6 @@ def compute_pressure_stats(*data_paths: List[str]):
 
 
 if __name__ == "__main__":
-    __spec__ = None
-
     import fire
 
-    fire.Fire()
+    fire.Fire(convert_to_webdataset)

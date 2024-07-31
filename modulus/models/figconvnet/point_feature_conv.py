@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ruff: noqa: S101
 from typing import List, Literal, Optional
 
 import torch
@@ -23,14 +24,9 @@ from torch import Tensor
 
 from .base_model import BaseModule
 from .components.reductions import REDUCTION_TYPES, row_reduction
-from .neighbor_ops import batched_neighbor_radius_search, batched_neighbor_knn_search
+from .neighbor_ops import batched_neighbor_knn_search, batched_neighbor_radius_search
 from .net_utils import MLPBlock, SinusoidalEncoding
 from .point_feature_ops import PointFeatures
-
-
-def normalize_aabb(pts, aabb_min, aabb_max):
-    """Return the normalized points in the range [-1, 1]"""
-    return (pts - aabb_min) * (2.0 / (aabb_max - aabb_min)) - 1.0
 
 
 class PointFeatureTransform(BaseModule):
