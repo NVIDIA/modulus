@@ -381,21 +381,19 @@ def train(config: DictConfig, signal_handler: SignalHandler):
 
 
 def _slurm_setup(config: DictConfig) -> None:
+    # Hydra config contains properly resolved absolute path.
+    config.output = HydraConfig.get().runtime.output_dir
+
     # Detect if it is running on a SLURM cluster.
     if "SLURM_JOB_ID" in os.environ:
-        # The output directory is set to simply outputs/SLURM_JOB_ID.
-        config.output = to_absolute_path(
-            os.path.join("outputs", os.environ["SLURM_JOB_ID"])
-        )
+        # The output directory is set to simply ${output}/SLURM_JOB_ID.
+        config.output = os.path.join(config.output, os.environ["SLURM_JOB_ID"])
         # Check for the checkpoints and model_*.pth files in the output directory.
         if os.path.exists(config.output) and any(
             f.startswith("model_") and f.endswith(".pth")
             for f in os.listdir(config.output)
         ):
             config.train.resume = True
-    else:
-        # Hydra config contains properly resolved absolute path.
-        config.output = HydraConfig.get().runtime.output_dir
 
 
 def _init_python_logging(config: DictConfig) -> None:
@@ -444,13 +442,6 @@ def _init_hydra_resolvers():
 
 if __name__ == "__main__":
     DistributedManager.initialize()
-
-    # from modulus.models.figconvnet.figconvunet import FIGConvUNet
-    # from src.networks import PointFeatureToGridGroupUNetDrivAer
-    # from src.networks.grid_feature_group_unet import PointFeatureToGridGroupUNetDrivAer
-
-    # PointFeatureToGridGroupUNetDrivAer(1, 1, 3, [8, 8, 8, 8])
-    # print("Done")
 
     _init_hydra_resolvers()
 
