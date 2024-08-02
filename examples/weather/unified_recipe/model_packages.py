@@ -19,6 +19,8 @@ import json
 from omegaconf import OmegaConf
 import numpy as np
 
+from modulus import Module
+
 
 def save_inference_model_package(
     model,
@@ -62,6 +64,10 @@ def save_inference_model_package(
     readme : str
         readme text for model card.
     """
+
+    # DDP fix
+    if not isinstance(model, Module) and hasattr(model, "module"):
+        model = model.module
 
     # Create model card directory
     os.makedirs(save_path, exist_ok=True)

@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Graph Transformer processor for GraphCast/GenCast.
+
 ### Changed
+
+- Refactored CorrDiff training recipe for improved usability
 
 ### Deprecated
 
@@ -63,6 +67,7 @@ Shallow-Water-Equation example.
 - Fixed bug in the partitioning logic for distributing graph structures
 intended for distributed message-passing.
 - Fixed bugs for corrdiff diffusion training of `EDMv1` and `EDMv2`
+- Fixed bug when trying to save DDP model trained through unified recipe
 
 ### Dependencies
 

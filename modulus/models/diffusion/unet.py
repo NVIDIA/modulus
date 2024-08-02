@@ -45,9 +45,9 @@ class MetaData(ModelMetaData):
 
 class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
-    U-Net architecture.
+    U-Net Wrapper for CorrDiff.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : int
         The resolution of the input/output image.
@@ -73,8 +73,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Keyword arguments for the underlying model.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
     Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
@@ -92,7 +92,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         sigma_min=0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ):
         super().__init__(meta=MetaData)
@@ -140,15 +140,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             else torch.float32
         )
 
-        # c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        # c_skip = 0.0 * c_skip
-        # c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        # c_out = torch.ones_like(c_out)
-        # c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        # c_in = torch.ones_like(c_in)
-        # c_noise = sigma.log() / 4
-        # c_noise = 0.0 * c_noise
-
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
             torch.zeros(
@@ -164,8 +155,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             )
 
         # skip connection - for SR there's size mismatch bwtween input and output
-        # x = x[:, 0 : self.img_out_channels, :, :]
-        # D_x = c_skip * x + c_out * F_x.to(torch.float32)
         D_x = F_x.to(torch.float32)
         return D_x
 

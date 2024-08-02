@@ -15,9 +15,10 @@
 # limitations under the License.
 
 import concurrent.futures as cf
+import logging
 import os
-import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -47,6 +48,8 @@ except ImportError:
         "Ahmed Body Dataset requires the vtk and pyvista libraries. Install with "
         + "pip install vtk pyvista"
     )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -153,56 +156,35 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         )
         self.split = split
         self.num_samples = num_samples
-        self.data_dir = os.path.join(data_dir, self.split)
-        self.info_dir = os.path.join(data_dir, self.split + "_info")
+        data_dir = Path(data_dir)
+        self.data_dir = data_dir / self.split
+        if not self.data_dir.is_dir():
+            raise IOError(f"Directory not found {self.data_dir}")
+        self.info_dir = data_dir / (self.split + "_info")
+        if not self.info_dir.is_dir():
+            raise IOError(f"Directory not found {self.info_dir}")
         self.input_keys = list(invar_keys)
         self.output_keys = list(outvar_keys)
         self.normalize_keys = list(normalize_keys)
         self.normalization_bound = normalization_bound
         self.compute_drag = compute_drag
 
-        # get the list of all files in the data_dir
-        all_entries = os.listdir(self.data_dir)
-        all_info = os.listdir(self.info_dir)
+        # Get case ids from the list of .vtp files.
+        case_files = []
+        case_info_files = []
+        self.case_ids = []
+        for case_file in sorted(self.data_dir.glob("*.vtp")):
+            case_id = int(str(case_file.stem).removeprefix("case"))
+            # Check if there is a corresponding info file.
+            case_info_file = self.info_dir / f"case{case_id}_info.txt"
+            if not case_info_file.is_file():
+                raise IOError(f"File not found {case_info_file}")
+            case_files.append(str(case_file))
+            case_info_files.append(str(case_info_file))
+            self.case_ids.append(case_id)
 
-        data_list = [
-            os.path.join(self.data_dir, entry)
-            for entry in all_entries
-            if os.path.isfile(os.path.join(self.data_dir, entry))
-        ]
-        info_list = [
-            os.path.join(self.info_dir, entry)
-            for entry in all_info
-            if os.path.isfile(os.path.join(self.info_dir, entry))
-        ]
-
-        numbers = []
-        for directory in data_list:
-            match = re.search(r"\d+", directory)
-            if match:
-                numbers.append(int(match.group()))
-        numbers_info = []
-        for directory in info_list:
-            match = re.search(r"\d+", directory)
-            if match:
-                numbers_info.append(int(match.group()))
-        numbers = [int(n) for n in numbers]
-        numbers_info = [int(n) for n in numbers_info]
-
-        # sort the data_list and info_list according to the numbers
-        args = np.argsort(numbers)
-        data_list = [data_list[index] for index in args]
-        numbers = [numbers[index] for index in args]
-        args = np.argsort(numbers_info)
-        info_list = [info_list[index] for index in args]
-        numbers_info = [numbers_info[index] for index in args]
-
-        if sorted(numbers) != sorted(numbers_info):
-            raise AssertionError
-        self.numbers = numbers
-
-        # create the graphs and add the node and features
-        self.length = min(len(data_list), self.num_samples)
+        self.length = min(len(self.case_ids), self.num_samples)
+        logging.info(f"Using {self.length} {split} samples.")
 
         if self.num_samples > self.length:
             raise ValueError(
@@ -237,8 +219,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             for (i, graph, coeff, normal, area) in executor.map(
                 self.create_graph,
                 range(self.length),
-                data_list[: self.length],
-                info_list[: self.length],
+                case_files[: self.length],
+                case_info_files[: self.length],
                 chunksize=max(1, self.length // num_workers),
             ):
                 self.graphs[i] = graph
@@ -310,8 +292,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
     def __getitem__(self, idx):
         graph = self.graphs[idx]
         if self.compute_drag:
-            sid = self.numbers[idx]
-            return graph, sid, self.normals[idx], self.areas[idx], self.coeff[idx]
+            case_id = self.case_ids[idx]
+            return graph, case_id, self.normals[idx], self.areas[idx], self.coeff[idx]
         return graph
 
     def __len__(self):
@@ -415,7 +397,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         """
         Denormalize the graph node data.
 
-        Parameters:
+        Parameters
         -----------
         pred: Tensor
             Normalized prediction
@@ -424,7 +406,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         device: Any
             The device
 
-        Returns:
+        Returns
         --------
         Tuple(Tensor, Tensor)
             Denormalized prediction and ground truth

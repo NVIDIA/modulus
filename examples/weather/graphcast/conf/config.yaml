@@ -26,10 +26,14 @@ hydra:
 # │            Model Configuration            │
 # └───────────────────────────────────────────┘
 
-processor_layers: 16         # Number of processor layers.
-hidden_dim: 512              # Size of each layer.
-multimesh_level: 6           # Max icosphere level in the multimesh.
-norm_type: TELayerNorm       # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
+processor_layers: 16              # Number of processor layers.
+hidden_dim: 512                   # Size of each layer.
+mesh_level: 6                     # Max icosphere level in the multimesh.
+multimesh: true                   # If true, uses multimesh for the processor.
+processor_type: MessagePassing    # "GraphTransformer" as in GenCast, or "MessagePassing" as in GraphCast.
+khop_neighbors: 32                # Number of neighbors for each node used in the GraphTransformer. Only used if the processor type is "GraphTransformer".  
+num_attention_heads: 4            # Number of attention heads. Only used if the processor type is "GraphTransformer".
+norm_type: TELayerNorm            # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
 
 
 # ┌───────────────────────────────────────────┐
@@ -67,7 +71,7 @@ use_apex: true              # If true, uses Apex for fused Adam optimizer, typic
 dataset_path: /data/era5_75var             # Path to the dataset.
 static_dataset_path: static                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
 dataset_metadata_path: /data/era5_75var/metadata/data.json  # Path to the dataset metadata, containing channel names.
-time_diff_std_path: time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
+time_diff_std_path: /time_diff_std.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
 
 
 # ┌───────────────────────────────────────────┐
