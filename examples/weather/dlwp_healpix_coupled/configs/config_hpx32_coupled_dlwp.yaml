@@ -18,7 +18,7 @@ defaults:
   - _self_
   - data: era5_hpx32_8var-coupled_6h_24h
   - model: coupled_hpx_rec_unet
-  - trainer: default
+  - trainer: dlwp
 
 experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
 output_dir: outputs/${experiment_name}
@@ -28,8 +28,8 @@ load_weights_only: false
 seed: 0
 
 # Training specifications
-batch_size: 8
-learning_rate: 2e-4
+batch_size: 32
+learning_rate: 1e-3
 num_workers: 8
 
 # Distributed setup (multi GPU)

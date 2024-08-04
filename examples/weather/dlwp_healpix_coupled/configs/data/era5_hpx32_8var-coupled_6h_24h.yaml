@@ -21,7 +21,7 @@ defaults:
 
 src_directory: /datasets/healpix/HPX32
 dst_directory: /datasets/healpix/HPX32
-dataset_name: era5_hpx32_8var-coupled_6h_24h_temp
+dataset_name: era5_hpx32_8var-coupled_6h_24h
 prefix: era5_1deg_3h_HPX32_1979-2021_
 suffix: ''
 data_format: classic
