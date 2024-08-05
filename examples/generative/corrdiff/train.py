@@ -34,7 +34,6 @@ from train_helpers import (
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
-    parse_model_args,
 )
 
 
@@ -116,37 +115,26 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
-    additional_model_args = {
+    if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
+        raise ValueError("Invalid model")
+    model_cls = UNet if cfg.model.name == "regression" else EDMPrecondSRV2
+    model_args = {
+        "img_channels": 4,
         "img_out_channels": img_out_channels,
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
-    if cfg.model.name == "regression":
-        model = UNet(
-            img_channels=4,
-            N_grid_channels=4,
-            embedding_type="zero",
-            img_in_channels=img_in_channels + 4,
-            **additional_model_args,
-        )
-    elif cfg.model.name == "diffusion":
-        model = EDMPrecondSRV2(
-            img_channels=4,
-            gridtype="sinusoidal",
-            N_grid_channels=4,
-            img_in_channels=img_in_channels + 4,
-            **additional_model_args,
-        )
-    elif cfg.model.name == "patched_diffusion":
-        model = EDMPrecondSRV2(
-            img_channels=4,
-            gridtype="learnable",
-            N_grid_channels=100,
-            img_in_channels=img_in_channels + 100,
-            **additional_model_args,
-        )
-    else:
-        raise ValueError("Invalid model")
+    standard_model_cfgs = {
+        "regression": {"N_grid_channels": 4, "embedding_type": "zero"},
+        "diffusion": {"gridtype": "sinusoidal", "N_grid_channels": 4},
+        "patched_diffusion": {"gridtype": "learnable", "N_grid_channels": 100},
+    }
+    model_args.update(standard_model_cfgs[cfg.model.name])
+    if hasattr(cfg.model, "model_args"):
+        model_args.update(cfg.model.model_args)
+    model = model_cls(
+        img_in_channels=img_in_channels + model_args["N_grid_channels"], **model_args
+    )
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -211,15 +199,24 @@ def main(cfg: DictConfig) -> None:
         path="checkpoints", models=model, optimizer=optimizer, device=dist.device
     )
 
+    def is_time_for_periodic_task(freq, rank_0_only=False):
+        """Should we perform a task that is done every `freq` samples?"""
+        if rank_0_only and dist.rank != 0:
+            return False
+        elif done:  # Run periodic tasks also at the end of training
+            return True
+        else:
+            return cur_nimg % freq < cfg.training.hp.total_batch_size
+
     ############################################################################
     #                            MAIN TRAINING LOOP                            #
     ############################################################################
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
-    cur_tick = 0
-    tick_start_nimg = cur_nimg
-    tick_start_time = time.time()
-    while True:
+    done = False
+    while not done:
+        tick_start_nimg = cur_nimg
+        tick_start_time = time.time()
         # Compute & accumulate gradients
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
@@ -260,10 +257,13 @@ def main(cfg: DictConfig) -> None:
         )
         optimizer.step()
 
+        cur_nimg += cfg.training.hp.total_batch_size
+        done = cur_nimg >= cfg.training.hp.training_duration
+
         # Validation
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
-            if cur_tick % cfg.training.io.validation_freq == 0:
+            if is_time_for_periodic_task(cfg.training.io.validation_freq):
                 with torch.no_grad():
                     for _ in range(cfg.training.io.validation_steps):
                         img_clean_valid, img_lr_valid, labels_valid = next(
@@ -303,56 +303,42 @@ def main(cfg: DictConfig) -> None:
                             "validation_loss", average_valid_loss, cur_nimg
                         )
 
-        cur_nimg += cfg.training.hp.total_batch_size
-        done = cur_nimg >= cfg.training.hp.training_duration
-        if (not done) and (
-            cur_nimg < tick_start_nimg + cfg.training.io.print_progress_freq
-        ):  # TODO revert
-            continue
-
-        # Print stats
-        tick_end_time = time.time()
-        if dist.rank == 0:
-            fields = []
-            fields += [f"tick {cur_tick:<5d}"]
-            fields += [f"samples {(cur_nimg):<9.1f}"]
-            fields += [f"training_loss {average_loss:<7.2f}"]
-            fields += [f"learning_rate {current_lr:<7.8f}"]
-            fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
-            fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
-            fields += [
-                f"sec_per_sample {((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg)):<7.2f}"
-            ]
-            fields += [
-                f"cpu_mem_gb {(psutil.Process(os.getpid()).memory_info().rss / 2**30):<6.2f}"
-            ]
-            fields += [
-                f"peak_gpu_mem_gb {(torch.cuda.max_memory_allocated(dist.device) / 2**30):<6.2f}"
-            ]
-            fields += [
-                f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
-            ]
-            logger0.info(" ".join(fields))
-        torch.cuda.reset_peak_memory_stats()
+        if is_time_for_periodic_task(
+            cfg.training.io.print_progress_freq, rank_0_only=True
+        ):
+            # Print stats if we crossed the printing threshold with this batch
+            tick_end_time = time.time()
+            if dist.rank == 0:
+                fields = []
+                fields += [f"samples {(cur_nimg):<9.1f}"]
+                fields += [f"training_loss {average_loss:<7.2f}"]
+                fields += [f"learning_rate {current_lr:<7.8f}"]
+                fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
+                fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
+                fields += [
+                    f"sec_per_sample {((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg)):<7.2f}"
+                ]
+                fields += [
+                    f"cpu_mem_gb {(psutil.Process(os.getpid()).memory_info().rss / 2**30):<6.2f}"
+                ]
+                fields += [
+                    f"peak_gpu_mem_gb {(torch.cuda.max_memory_allocated(dist.device) / 2**30):<6.2f}"
+                ]
+                fields += [
+                    f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
+                ]
+                logger0.info(" ".join(fields))
+            torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
-        if (
-            (cfg.training.io.save_checkpoint_freq is not None)
-            and (done or cur_tick % cfg.training.io.save_checkpoint_freq == 0)
-            and dist.rank == 0
+        if is_time_for_periodic_task(
+            cfg.training.io.save_checkpoint_freq, rank_0_only=True
         ):
             if dist.world_size > 1:
                 torch.distributed.barrier()
             save_checkpoint(
                 path="checkpoints", models=model, optimizer=optimizer, epoch=cur_nimg
             )
-
-        # Update state.
-        cur_tick += 1
-        tick_start_nimg = cur_nimg
-        tick_start_time = time.time()
-        if done:
-            break
 
     # Done.
     logger0.info("Training Completed.")
