@@ -31,15 +31,13 @@ from torch.distributed import gather
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
 from modulus.utils.generative import convert_datetime_to_cftime, time_range
-cccccbkvgujkkenrnnndnujvcdjuedfblnkgbfekgcje
-cccccbkvgujkdednrjicnvgttjkfhnuftirhcldbfikk
     
 
 ############################################################################
 #                           GENERATION HELPERS                             #
 ############################################################################
 
-def generate_forward(
+def _generate(
     net,
     sampler_fn,
     seed_batch_size,
@@ -95,7 +93,7 @@ def generate_forward(
     return torch.cat(all_images)
 
 
-def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, net_reg, net_res, seed_batch_size, rank_batches, inference_mode, mean_hr, rank, world_size, device):
+def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, net_reg, net_res, seed_batch_size, rank_batches, inference_mode, use_mean_hr, rank, world_size, device):
         """Function to generate an image
 
         Args:
@@ -123,7 +121,7 @@ def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, 
 
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
-                    image_reg = generate_forward(
+                    image_reg = _generate(
                         net=net_reg,
                         sampler_fn=None,
                         seed_batch_size=1,
@@ -138,7 +136,7 @@ def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, 
                 else:
                     mean_hr = None
                 with nvtx.annotate("diffusion model", color="purple"):
-                    image_res = generate_forward(
+                    image_res = _generate(
                         net=net_res,
                         sampler_fn=sampler_fn,
                         seed_batch_size=seed_batch_size,
@@ -147,7 +145,7 @@ def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, 
                             memory_format=torch.channels_last
                         ),
                         rank=rank,
-                        device=device
+                        device=device,
                         mean_hr=mean_hr
                     )
             if inference_mode == "regression":

@@ -130,8 +130,8 @@ def main(cfg: DictConfig) -> None:
             **additional_model_args,
         )
     elif cfg.model.name == "diffusion":
+        
         model = EDMPrecondSRV2(
-            img_channels=4,
             gridtype="sinusoidal",
             N_grid_channels=4,
             img_in_channels=img_in_channels + 4,
@@ -139,7 +139,6 @@ def main(cfg: DictConfig) -> None:
         )
     elif cfg.model.name == "patched_diffusion":
         model = EDMPrecondSRV2(
-            img_channels=4,
             gridtype="learnable",
             N_grid_channels=100,
             img_in_channels=img_in_channels + 100,

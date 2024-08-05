@@ -28,8 +28,8 @@ from functools import partial
 
 from modulus.utils.generative import ablation_sampler
 
-from generate_helpers import get_dataset_and_sampler, get_time_from_range,writer_from_input_dataset, save_images, generate_fn
-from training_helpers import set_patch_shape
+from generate_helpers import get_dataset_and_sampler, get_time_from_range, writer_from_input_dataset, save_images, generate_fn
+from train_helpers import set_patch_shape
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging("generate.log")
 
     # Handle the batch size
-    seeds = list(np.arrange(cfg.sampler.seeds))
+    seeds = list(np.arange(cfg.sampler.num_ensembles))
     num_batches = (
         (len(seeds) - 1) // (cfg.generation.seed_batch_size * dist.world_size) + 1
     ) * dist.world_size
@@ -61,7 +61,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
 
     # Parse the inference input times
-    if cfg.generate.times_range and times:
+    if cfg.generation.times_range and times:
         raise ValueError("Either times_range or times must be provided, but not both")
     if cfg.generation.times_range:
         times = get_time_from_range(cfg.generation.times_range)
@@ -131,7 +131,6 @@ def main(cfg: DictConfig) -> None:
             net_res = torch.compile(net_res, mode="reduce-overhead")
     
     # Partially instantiate the sampler based on the configs
-    if hr_mean_conditioning and sampling_method == "stochastic":
     if cfg.sampler.type == "deterministic":
         sampler_fn = partial(ablation_sampler,
                              num_steps=cfg.sampler.num_steps,
