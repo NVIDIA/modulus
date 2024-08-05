@@ -24,28 +24,36 @@ defaults:
   - /lr_scheduler: steplr
 
 train:
-  batch_size: 1
+  batch_size: 8
+  num_epochs: 200
 
 model:
-  num_levels: 1
-  kernel_size: 9
-  hidden_channels:
-    - 32
-    - 32
-    - 32
-    - 32
+  aabb_max: [ 2.75,  1.5,  1.0]
+  aabb_min: [-2.75, -1.5, -1.0]
+  hidden_channels: [16, 16, 16]
+  in_channels: 1
+  kernel_size: 5
+  neighbor_search_type: radius
+  num_down_blocks: 1
+  num_levels: 2
+  out_channels: 1
+  pooling_layers: [2]
+  pooling_type: max
+  reductions: [mean]
   resolution_memory_format_pairs:
     - ${res_mem_pair:b_xc_y_z, [  5, 150, 100]}
     - ${res_mem_pair:b_yc_x_z, [250,   3, 100]}
     - ${res_mem_pair:b_zc_x_y, [250, 150,   2]}
+  use_rel_pos_encode: true
 
 lr_scheduler:
-  step_size: 25
+  step_size: 50
 
 loggers:
   wandb:
-    project_name: drivaernet
-    entity: nvr-ai-algo
-    run_name: FIGConvUNet-level1-32-res250-150-100-ks9-step25-every10
+    entity: modulus
+    project_name: car-cfd
+    group_name: fignet
+    run_name: FIGConvNet-level2-16,16,16-res250-150-100-pool-max-2-aabb-275x15x1-ks5-np32768-b8x2
 
 seed: 0
