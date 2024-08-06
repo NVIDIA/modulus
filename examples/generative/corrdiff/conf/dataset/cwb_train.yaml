@@ -25,7 +25,7 @@ img_shape_x: 448
 img_shape_y: 448
 roll: false
 add_grid: true
-ds_factor: 1
+ds_factor: 4
 min_path: null
 max_path: null
 global_means_path: null

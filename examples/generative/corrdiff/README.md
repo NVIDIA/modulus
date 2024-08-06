@@ -97,7 +97,38 @@ Finally, to compute scalar deterministic and probabilistic scores, run:
 
 ```bash
 python score_samples.py samples.nc
+
 ```
+
+## Logging
+
+We use TensorBoard for logging training and validation losses, as well as 
+the learning rate during training. To visualize TensorBoard running in a 
+Docker container on a remote server from your local desktop, follow these steps:
+
+1. **Expose the Port in Docker:**
+     Expose port 6006 in the Docker container by including
+     `-p 6006:6006` in your docker run command.
+
+2. **Launch TensorBoard:**
+   Start TensorBoard within the Docker container:
+     ```bash
+     tensorboard --logdir=/path/to/logdir --port=6006
+     ```
+
+3. **Set Up SSH Tunneling:**
+   Create an SSH tunnel to forward port 6006 from the remote server to your local machine:
+     ```bash
+     ssh -L 6006:localhost:6006 <user>@<remote-server-ip>
+     ```
+    Replace `<user>` with your SSH username and `<remote-server-ip>` with the IP address 
+    of your remote server. You can use a different port if necessary.
+
+4. **Access TensorBoard:**
+   Open your web browser and navigate to `http://localhost:6006` to view TensorBoard.
+
+**Note:** Ensure the remote server’s firewall allows connections on port `6006`
+and that your local machine’s firewall allows outgoing connections.
 
   
 ## References
