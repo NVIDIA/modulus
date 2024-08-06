@@ -333,7 +333,7 @@ class EDMLossSR:
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         n = torch.randn_like(y) * sigma
-        D_yn = net(y + n, sigma, labels, y_lr, augment_labels=augment_labels)
+        D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 

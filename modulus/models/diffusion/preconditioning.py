@@ -856,12 +856,21 @@ class _ConditionalPrecond(torch.nn.Module):
     def forward(
         self,
         x,
-        sigma,
-        class_labels=None,
         condition=None,
+        sigma=None,
+        class_labels=None,
         force_fp32=False,
         **model_kwargs,
     ):
+        # workaround to to handle backward compatibility with EDMPrecond,
+        # argument ordering for EDMPrecond is x, condition, sigma
+        # EDMPrecond required condition to be passed, _ConditionalPrecond and
+        # thus EDMPrecondV2 allows it to be None. To be backward compatible with
+        # EDMPrecond based code argument ordering has to be maintained which means
+        # sigma has to change from a positional only to a positional-or-keyword arg
+        if sigma is None:
+            raise ValueError("sigma must be provided, it cannot be None")
+
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
@@ -915,6 +924,9 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
     ----------
     img_resolution : int
         Image resolution.
+    img_channels : int
+        Number of image channels, not used. Exists to maintain compatibility
+        with models trained using older EDMPrecondSR
     img_in_channels : int
         Number of input color channels.
     img_out_channels : int
@@ -951,6 +963,7 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
         img_resolution,
         img_in_channels,
         img_out_channels,
+        img_channels=0,  # not used see above
         label_dim=0,
         use_fp16=False,
         sigma_min=0.0,
