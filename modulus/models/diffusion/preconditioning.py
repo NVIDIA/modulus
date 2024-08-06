@@ -885,6 +885,9 @@ class _ConditionalPrecond(torch.nn.Module):
         c_noise = sigma.log() / 4
 
         if condition is None:
+            print(x.shape)
+            print(c_in)
+            exit()
             arg = c_in * x
         else:
             condition = condition.to(torch.float32)

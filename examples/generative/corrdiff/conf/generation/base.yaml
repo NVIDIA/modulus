@@ -14,9 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-seed_batch_size: 32
+num_ensembles: 64
+  # Number of ensembles to generate per input
+seed_batch_size: 1
   # Size of the batched inference
-inference_mode: regression_and_diffusion
+inference_mode: all
+  # Choose between "all" (regression + diffusion), "regression" or "diffusion"
 patch_size: 448
 patch_shape_x: 448
 patch_shape_y: 448
@@ -42,7 +45,7 @@ times:
   - 2021-09-12T12:00:00
 
 perf:
-  force_fp16: False
+  force_fp16: false
     # Whether to force fp16 precision for the model. If false, it'll use the precision
     # specified upon training.
   use_torch_compile: false
@@ -56,24 +59,5 @@ perf:
 io:
   res_ckpt_filename: diffusion_checkpoint.mdlus
     # Checkpoint filename for the diffusion model  
-  reg_ckpt_fimename: regression_checkpoint.mdlus
+  reg_ckpt_filename: regression_checkpoint.mdlus
     # Checkpoint filename for the mean predictor model
-
-dataset:
-  type: cwb
-  train: False
-  all_times: True
-  data_path: /data/data2/2023-01-24-cwb-4years.zarr
-  n_history: 0
-  in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
-  out_channels: [0, 17, 18, 19]
-  img_shape_x: 448
-  img_shape_y: 448
-  roll: false
-  add_grid: true
-  ds_factor: 4
-  min_path: null
-  max_path: null
-  global_means_path: null
-  global_stds_path: null
-  normalization: "v1"

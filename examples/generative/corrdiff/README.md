@@ -48,9 +48,10 @@ Apart from the dataset configs the main configs for training are `model`,
 whether you are training the regression, diffusion, or the patch-based 
 diffusion model. Note that training the varients of the diffusion model
 requres a trained regression checkpoint, and the path to that checkpoint should
-be included in the `training` config file.
-To train the
-model, run
+be included in the `training` config file. Therefore, you should start with training
+a regression model, followed by training a diffusion model. To choose which model 
+to train, simply change the configs in `conf/config_training.yaml`.
+To train the model, run
 
 ```python train.py```
 

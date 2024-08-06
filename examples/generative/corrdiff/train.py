@@ -21,7 +21,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
-from modulus.models.diffusion import UNet, EDMPrecondSRV2
+from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -130,18 +130,20 @@ def main(cfg: DictConfig) -> None:
             **additional_model_args,
         )
     elif cfg.model.name == "diffusion":
-        
-        model = EDMPrecondSRV2(
+
+        model = EDMPrecondSR(  # TODO need to use V2 but currently it is giving a shape mismatch error
             gridtype="sinusoidal",
             N_grid_channels=4,
             img_in_channels=img_in_channels + 4,
+            img_channels=img_out_channels,
             **additional_model_args,
         )
     elif cfg.model.name == "patched_diffusion":
-        model = EDMPrecondSRV2(
+        model = EDMPrecondSR(
             gridtype="learnable",
             N_grid_channels=100,
             img_in_channels=img_in_channels + 100,
+            img_channels=img_out_channels,
             **additional_model_args,
         )
     else:
@@ -206,9 +208,15 @@ def main(cfg: DictConfig) -> None:
     ## Resume training from previous checkpoints if exists
     if dist.world_size > 1:
         torch.distributed.barrier()
-    cur_nimg = load_checkpoint(
-        path="checkpoints", models=model, optimizer=optimizer, device=dist.device
-    )
+    try:
+        cur_nimg = load_checkpoint(
+            path=f"checkpoints_{cfg.model.name}",
+            models=model,
+            optimizer=optimizer,
+            device=dist.device,
+        )
+    except:
+        cur_nimg = 0
 
     ############################################################################
     #                            MAIN TRAINING LOOP                            #
@@ -343,7 +351,10 @@ def main(cfg: DictConfig) -> None:
             if dist.world_size > 1:
                 torch.distributed.barrier()
             save_checkpoint(
-                path="checkpoints", models=model, optimizer=optimizer, epoch=cur_nimg
+                path=f"checkpoints_{cfg.model.name}",
+                models=model,
+                optimizer=optimizer,
+                epoch=cur_nimg,
             )
 
         # Update state.

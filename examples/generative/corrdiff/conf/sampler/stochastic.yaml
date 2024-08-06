@@ -15,7 +15,5 @@
 # limitations under the License.
 
 type: stochastic
-num_ensembles: 64
-  # Number of ensembles to generate per input
-boundry_pix: 2
+boundary_pix: 2
 overlap_pix: 0

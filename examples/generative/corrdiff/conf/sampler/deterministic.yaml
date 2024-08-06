@@ -18,7 +18,5 @@
 type: deterministic
 num_steps: 9
   # Number of denoising steps
-num_ensembles: 64
-  # Number of ensembles to generate per input
 solver: euler
   # ODE solver [euler, heun]

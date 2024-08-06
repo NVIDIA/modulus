@@ -26,9 +26,16 @@ from modulus import Module
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
+from hydra.utils import to_absolute_path
 from modulus.utils.generative import ablation_sampler
 
-from generate_helpers import get_dataset_and_sampler, get_time_from_range, writer_from_input_dataset, save_images, generate_fn
+from generate_helpers import (
+    get_dataset_and_sampler,
+    get_time_from_range,
+    writer_from_input_dataset,
+    save_images,
+    generate_fn,
+)
 from train_helpers import set_patch_shape
 
 
@@ -72,6 +79,7 @@ def main(cfg: DictConfig) -> None:
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     img_shape = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
     use_mean_hr = False
 
     # Parse the patch shape
@@ -95,48 +103,49 @@ def main(cfg: DictConfig) -> None:
         load_net_reg, load_net_res = True, False
     elif cfg.generation.inference_mode == "diffusion":
         load_net_reg, load_net_res = False, True
-    elif cfg.generation.inference_mode == "regression_and_diffusion":
+    elif cfg.generation.inference_mode == "all":
         load_net_reg, load_net_res = True, True
     else:
         raise ValueError(f"Invalid inference mode {cfg.generation.inference_mode}")
-    
+
     # Load diffusion network, move to device, change precision
     if load_net_res:
-        res_ckpt_filename = cfg.generation.res_ckpt_filename
+        res_ckpt_filename = cfg.generation.io.res_ckpt_filename
         logger0.info(f'Loading residual network from "{res_ckpt_filename}"...')
-        net_res = Module.from_checkpoint(res_ckpt_filename)
+        net_res = Module.from_checkpoint(to_absolute_path(res_ckpt_filename))
         net_res = net_res.eval().to(device).to(memory_format=torch.channels_last)
-        if cfg.generation.force_fp16:
+        if cfg.generation.perf.force_fp16:
             net_res.use_fp16 = True
     else:
         net_res = None
 
     # load regression network, move to device, change precision
     if load_net_reg:
-        reg_ckpt_filename = cfg.generation.reg_ckpt_filename
+        reg_ckpt_filename = cfg.generation.io.reg_ckpt_filename
         logger0.info(f'Loading network from "{reg_ckpt_filename}"...')
-        net_reg = Module.from_checkpoint(reg_ckpt_filename)
+        net_reg = Module.from_checkpoint(to_absolute_path(reg_ckpt_filename))
         net_reg = net_reg.eval().to(device).to(memory_format=torch.channels_last)
-        if cfg.generation.force_fp16:
+        if cfg.generation.perf.force_fp16:
             net_reg.use_fp16 = True
     else:
         net_reg = None
 
     # Reset since we are using a different mode.
-    if cfg.generation.use_torch_compile:
+    if cfg.generation.perf.use_torch_compile:
         torch._dynamo.reset()
         # Only compile residual network
         # Overhead of compiling regression network outweights any benefits
         if net_res:
             net_res = torch.compile(net_res, mode="reduce-overhead")
-    
+
     # Partially instantiate the sampler based on the configs
     if cfg.sampler.type == "deterministic":
-        sampler_fn = partial(ablation_sampler,
-                             num_steps=cfg.sampler.num_steps,
-                             num_ensembles=cfg.sampler.num_ensembles,
-                             solver=cfg.sampler.solver
-                             )
+        sampler_fn = partial(
+            ablation_sampler,
+            num_steps=cfg.sampler.num_steps,
+            num_ensembles=cfg.sampler.num_ensembles,
+            solver=cfg.sampler.solver,
+        )
     elif cfg.sampler.type == "stochastic":
         try:
             from edmss import edm_sampler
@@ -146,29 +155,20 @@ def main(cfg: DictConfig) -> None:
             )
         if cfg.generation.hr_mean_conditioning:
             use_mean_hr = True
-        sampler_fn = partial(edm_sampler,
-                             img_shape=img_shape[1],
-                             patch_shape=patch_shape[1],
-                             boundary_pix=cfg.sampler.boundary_pix,
-                             overlap_pix=cfg.sampler.overlap_pix,
+        sampler_fn = partial(
+            edm_sampler,
+            img_shape=img_shape[1],
+            patch_shape=patch_shape[1],
+            boundary_pix=cfg.sampler.boundary_pix,
+            overlap_pix=cfg.sampler.overlap_pix,
         )
     else:
         raise ValueError(f"Unknown sampling method {cfg.sampling.type}")
 
-    # Initialize threadpool for writers
-    writer = writer_from_input_dataset(f, dataset)  # TODO what is f?
-    writer_executor = ThreadPoolExecutor(max_workers=cfg.generation.perf.num_writer_workers)
-    writer_threads = []
-
     # generate images
     logger0.info("Generating images...")
-    warmup_steps = 2
     batch_size = 1
-    time_index = -1
-    data_loader = torch.utils.data.DataLoader(
-                    dataset=dataset, sampler=sampler, batch_size=batch_size, pin_memory=True
-                )
-
+    warmup_steps = min(len(times), 2)
     # Generates model predictions from the input data using the specified
     # `generate_fn`, and save the predictions to the provided NetCDF file. It iterates
     # through the dataset using a data loader, computes predictions, and saves them along
@@ -177,9 +177,21 @@ def main(cfg: DictConfig) -> None:
         # add attributes
         f.cfg = str(cfg)
         with torch.cuda.profiler.profile():
-            with torch.autograd.profiler.emit_nvtx():            
+            with torch.autograd.profiler.emit_nvtx():     
+
+                data_loader = torch.utils.data.DataLoader(
+                dataset=dataset, sampler=sampler, batch_size=1, pin_memory=True
+                )
+                time_index = -1
+                writer = writer_from_input_dataset(f, dataset)
+                warmup_steps = 2
+
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
+
+                # Initialize threadpool for writers
+                writer_executor = ThreadPoolExecutor(max_workers=cfg.generation.perf.num_writer_workers)
+                writer_threads = []
 
                 times = dataset.time()
                 for image_tar, image_lr, index in iter(data_loader):
@@ -197,7 +209,7 @@ def main(cfg: DictConfig) -> None:
                         .to(memory_format=torch.channels_last)
                     )
                     image_tar = image_tar.to(device=device).to(torch.float32)
-                    image_out = generate_fn(sampler_fn, image_lr, cfg.generation.sample_res, img_shape, patch_size, seeds, net_reg, net_res, cfg.generation.seed_batch_size, rank_batches, cfg.generationinference_mode, use_mean_hr, dist.rank, dist.world_size, device)
+                    image_out = generate_fn(sampler_fn, image_lr, cfg.generation.sample_res, img_shape, img_out_channels, patch_shape, seeds, net_reg, net_res, cfg.generation.seed_batch_size, rank_batches, cfg.generation.inference_mode, use_mean_hr, dist.rank, dist.world_size, device)
 
                     if dist.rank == 0:
                         batch_size = image_out.shape[0]
@@ -235,6 +247,7 @@ def main(cfg: DictConfig) -> None:
                 writer_executor.shutdown()
 
     logger0.info("Generation Completed.")
+
 
 if __name__ == "__main__":
     main()

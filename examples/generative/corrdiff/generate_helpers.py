@@ -16,7 +16,6 @@
 
 import cftime
 import datetime
-import netCDF4 as nc
 import torch
 import tqdm
 import nvtx
@@ -27,11 +26,10 @@ from einops import rearrange
 from torch.distributed import gather
 
 
-
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
 from modulus.utils.generative import convert_datetime_to_cftime, time_range
-    
+
 
 ############################################################################
 #                           GENERATION HELPERS                             #
@@ -41,22 +39,27 @@ def _generate(
     net,
     sampler_fn,
     seed_batch_size,
+    img_shape,
+    img_out_channels,
     rank_batches,
     img_lr,
     rank,
     device,
-    mean_hr=None
+    mean_hr=None,
 ):
     """Generate random images using the techniques described in the paper
     "Elucidating the Design Space of Diffusion-Based Generative Models".
     """
 
     img_lr = img_lr.to(memory_format=torch.channels_last)
-    sig = inspect.signature(sampler_fn)
-    if "mean_hr" in sig.parameters:
-        additional_args = {"mean_hr": mean_hr}
+    if sampler_fn:  # TODO better handling
+        sig = inspect.signature(sampler_fn)
+        if "mean_hr" in sig.parameters:
+            additional_args = {"mean_hr": mean_hr}
+        else:
+            additional_args = {}
     else:
-        additional_args = {"mean_hr": mean_hr}
+        additional_args = {}
     # Loop over batches.
     all_images = []
     for batch_seeds in tqdm.tqdm(rank_batches, unit="batch", disable=(rank != 0)):
@@ -65,130 +68,149 @@ def _generate(
             if batch_size == 0:
                 continue
 
+            # Pick latents and labels.
+            rnd = StackedRandomGenerator(device, batch_seeds)
+
             if sampler_fn:
-                # Pick latents and labels.
-                rnd = StackedRandomGenerator(device, batch_seeds)
                 latents = rnd.randn(
                     [
                         seed_batch_size,
-                        net.img_out_channels,
-                        net.img_shape_x,
-                        net.img_shape_y,
+                        img_out_channels,
+                        img_shape[1],
+                        img_shape[0],
                     ],
                     device=device,
                 ).to(memory_format=torch.channels_last)
             else:
-                latents = torch.zeros_like(latents, memory_format=torch.channels_last)
+                latents = torch.zeros((1, img_out_channels, img_shape[1], img_shape[0])).to(device, memory_format=torch.channels_last)
                 sampler_fn = unet_regression
 
             with torch.inference_mode():
                 images = sampler_fn(
-                    net,
-                    latents,
-                    img_lr,
-                    randn_like=rnd.randn_like,
-                    ** additional_args
+                    net, latents, img_lr, randn_like=rnd.randn_like, **additional_args
                 )
             all_images.append(images)
     return torch.cat(all_images)
 
 
-def generate_fn(sampler_fn, image_lr, sample_res, img_shape, patch_size, seeds, net_reg, net_res, seed_batch_size, rank_batches, inference_mode, use_mean_hr, rank, world_size, device):
-        """Function to generate an image
+def generate_fn(
+    sampler_fn,
+    image_lr,
+    sample_res,
+    img_shape,
+    img_out_channels,
+    patch_shape,
+    seeds,
+    net_reg,
+    net_res,
+    seed_batch_size,
+    rank_batches,
+    inference_mode,
+    use_mean_hr,
+    rank,
+    world_size,
+    device,
+):
+    """Function to generate an image
 
-        Args:
-            image_lr: low resolution input. shape: (b, c, h, w)
+    Args:
+        image_lr: low resolution input. shape: (b, c, h, w)
 
-        Return
-            image_hr: high resolution output: shape (b, c, h, w)
-        """
-        img_shape_y, img_shape_x = img_shape
-        with nvtx.annotate("generate_fn", color="green"):
-            if sample_res == "full":
-                image_lr_patch = image_lr
-            else:
-                torch.cuda.nvtx.range_push("rearrange")
-                image_lr_patch = rearrange(
-                    image_lr,
-                    "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                    h1=img_shape_y // patch_size,
-                    w1=img_shape_x // patch_size,
+    Return
+        image_hr: high resolution output: shape (b, c, h, w)
+    """
+    img_shape_y, img_shape_x = img_shape
+    with nvtx.annotate("generate_fn", color="green"):
+        if sample_res == "full":
+            image_lr_patch = image_lr
+        else:
+            torch.cuda.nvtx.range_push("rearrange")
+            image_lr_patch = rearrange(
+                image_lr,
+                "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
+                h1=img_shape_y // patch_shape[0],
+                w1=img_shape_x // patch_shape[1],
+            )
+            torch.cuda.nvtx.range_pop()
+        image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
+
+        sample_seeds = seeds
+
+        if net_reg:
+            with nvtx.annotate("regression_model", color="yellow"):
+                image_reg = _generate(
+                    net=net_reg,
+                    sampler_fn=None,
+                    seed_batch_size=1,
+                    img_shape=img_shape,
+                    img_out_channels=img_out_channels,
+                    rank_batches=rank_batches,
+                    img_lr=image_lr_patch,
+                    rank=rank,
+                    device=device,
                 )
-                torch.cuda.nvtx.range_pop()
-            image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
+        if net_res:
+            if use_mean_hr:
+                mean_hr = image_reg[0:1]
+            else:
+                mean_hr = None
+            with nvtx.annotate("diffusion model", color="purple"):
+                image_res = _generate(
+                    net=net_res,
+                    sampler_fn=sampler_fn,
+                    seed_batch_size=seed_batch_size,
+                    img_shape=img_shape,
+                    img_out_channels=img_out_channels,
+                    rank_batches=rank_batches,
+                    img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
+                        memory_format=torch.channels_last
+                    ),
+                    rank=rank,
+                    device=device,
+                    mean_hr=mean_hr,
+                )
+        if inference_mode == "regression":
+            image_out = image_reg
+        elif inference_mode == "diffusion":
+            image_out = image_res
+        else:
+            image_out = image_reg + image_res
 
-            sample_seeds = seeds
+        if sample_res != "full":
+            image_out = rearrange(
+                image_out,
+                "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
+                h1=img_shape_y // patch_size,
+                w1=img_shape_x // patch_size,
+            )
 
-            if net_reg:
-                with nvtx.annotate("regression_model", color="yellow"):
-                    image_reg = _generate(
-                        net=net_reg,
-                        sampler_fn=None,
-                        seed_batch_size=1,
-                        rank_batches = rank_batches,
-                        img_lr=image_lr_patch,
-                        rank=rank,
-                        device=device
+        # Gather tensors on rank 0
+        if world_size > 1:
+            if rank == 0:
+                gathered_tensors = [
+                    torch.zeros_like(
+                        image_out, dtype=image_out.dtype, device=image_out.device
                     )
-            if net_res:
-                if use_mean_hr:
-                    mean_hr = image_reg[0:1]
-                else:
-                    mean_hr = None
-                with nvtx.annotate("diffusion model", color="purple"):
-                    image_res = _generate(
-                        net=net_res,
-                        sampler_fn=sampler_fn,
-                        seed_batch_size=seed_batch_size,
-                        rank_batches = rank_batches,
-                        img_lr=image_lr_patch.expand(seed_batch_size, -1, -1, -1).to(
-                            memory_format=torch.channels_last
-                        ),
-                        rank=rank,
-                        device=device,
-                        mean_hr=mean_hr
-                    )
-            if inference_mode == "regression":
-                image_out = image_reg
-            elif inference_mode == "diffusion":
-                image_out = image_res
+                    for _ in range(world_size)
+                ]
             else:
-                image_out = image_reg + image_res
+                gathered_tensors = None
 
-            if sample_res != "full":
-                image_out = rearrange(
-                    image_out,
-                    "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                    h1=img_shape_y // patch_size,
-                    w1=img_shape_x // patch_size,
-                )
+            torch.distributed.barrier()
+            gather(
+                image_out,
+                gather_list=gathered_tensors if rank == 0 else None,
+                dst=0,
+            )
 
-            # Gather tensors on rank 0
-            if world_size > 1:
-                if rank == 0:
-                    gathered_tensors = [
-                        torch.zeros_like(
-                            image_out, dtype=image_out.dtype, device=image_out.device
-                        )
-                        for _ in range(world_size)
-                    ]
-                else:
-                    gathered_tensors = None
-
-                torch.distributed.barrier()
-                gather(
-                    image_out,
-                    gather_list=gathered_tensors if rank == 0 else None,
-                    dst=0,
-                )
-
-                if rank == 0:
-                    return torch.cat(gathered_tensors)
-                else:
-                    return None
+            if rank == 0:
+                return torch.cat(gathered_tensors)
             else:
-                return image_out
-            
+                return None
+        else:
+            return image_out
+
+
 def unet_regression(  # TODO a lot of redundancy, need to clean up
     net,
     latents,
@@ -251,9 +273,11 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
 
     return x_next
 
+
 ############################################################################
 #                              DATA HELPERS                                #
 ############################################################################
+
 
 def get_dataset_and_sampler(dataset_cfg, times):
     """
@@ -261,7 +285,9 @@ def get_dataset_and_sampler(dataset_cfg, times):
     """
     (dataset, _) = init_dataset_from_config(dataset_cfg, batch_size=1)
     plot_times = [
-        convert_datetime_to_cftime(datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S"))
+        convert_datetime_to_cftime(
+            datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")
+        )
         for time in times
     ]
     all_times = dataset.time()
@@ -269,6 +295,7 @@ def get_dataset_and_sampler(dataset_cfg, times):
     sampler = time_indices
 
     return dataset, sampler
+
 
 def get_time_from_range(times_range, time_format="%Y-%m-%dT%H:%M:%S"):
     """Generates a list of times within a given range.
@@ -283,7 +310,11 @@ def get_time_from_range(times_range, time_format="%Y-%m-%dT%H:%M:%S"):
 
     start_time = datetime.datetime.strptime(times_range[0], time_format)
     end_time = datetime.datetime.strptime(times_range[1], time_format)
-    interval = datetime.timedelta(hours=times_range[2]) if len(times_range) > 2 else datetime.timedelta(hours=1)
+    interval = (
+        datetime.timedelta(hours=times_range[2])
+        if len(times_range) > 2
+        else datetime.timedelta(hours=1)
+    )
 
     times = [
         t.strftime(time_format)
@@ -291,12 +322,15 @@ def get_time_from_range(times_range, time_format="%Y-%m-%dT%H:%M:%S"):
     ]
     return times
 
+
 def _get_name(channel_info):
     return channel_info.name + channel_info.level
+
 
 ############################################################################
 #                              WRITER HELPERS                              #
 ############################################################################
+
 
 class NetCDFWriter:
     """NetCDF Writer"""
@@ -367,6 +401,7 @@ class NetCDFWriter:
             time, time_v.units, time_v.calendar
         )
 
+
 def writer_from_input_dataset(f, dataset):
     """Create a NetCDFWriter object from an input dataset."""
     return NetCDFWriter(
@@ -376,6 +411,7 @@ def writer_from_input_dataset(f, dataset):
         input_channels=dataset.input_channels(),
         output_channels=dataset.output_channels(),
     )
+
 
 def save_images(
     writer,
