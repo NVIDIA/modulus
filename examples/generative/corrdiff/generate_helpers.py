@@ -68,7 +68,7 @@ def _generate(
             if batch_size == 0:
                 continue
 
-            # Pick latents and labels.
+            # Pick latents
             rnd = StackedRandomGenerator(device, batch_seeds)
 
             if sampler_fn:
@@ -217,7 +217,6 @@ def unet_regression(
     net,
     latents,
     img_lr,
-    class_labels=None,
 ):
     """
     Perform U-Net regression with temporal sampling.
@@ -226,7 +225,6 @@ def unet_regression(
         net (torch.nn.Module): U-Net model for regression.
         latents (torch.Tensor): Latent representation.
         img_lr (torch.Tensor): Low-resolution input image.
-        class_labels (torch.Tensor, optional): Class labels for conditional generation.
 
     Returns:
         torch.Tensor: Predicted output at the next time step.
@@ -237,7 +235,7 @@ def unet_regression(
     t_hat = torch.tensor(1.0).to(torch.float64).cuda()
 
     # Run regression on just a single batch element and then repeat
-    x_next = net(x_hat[0:1], img_lr, t_hat, class_labels).to(torch.float64)
+    x_next = net(x_hat[0:1], img_lr, t_hat).to(torch.float64)
     if x_hat.shape[0] > 1:
         x_next = x_next.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
     return x_next
