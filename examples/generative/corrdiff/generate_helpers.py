@@ -81,14 +81,16 @@ def _generate(
                     ],
                     device=device,
                 ).to(memory_format=torch.channels_last)
+                with torch.inference_mode():
+                    images = sampler_fn(
+                        net, latents, img_lr, randn_like=rnd.randn_like, **additional_args
+                    )
             else:
                 latents = torch.zeros((1, img_out_channels, img_shape[1], img_shape[0])).to(device, memory_format=torch.channels_last)
-                sampler_fn = unet_regression
-
-            with torch.inference_mode():
-                images = sampler_fn(
-                    net, latents, img_lr, randn_like=rnd.randn_like, **additional_args
-                )
+                with torch.inference_mode():
+                    images = unet_regression(
+                        net, latents, img_lr
+                    )
             all_images.append(images)
     return torch.cat(all_images)
 
@@ -144,7 +146,7 @@ def generate_fn(
                     seed_batch_size=1,
                     img_shape=img_shape,
                     img_out_channels=img_out_channels,
-                    rank_batches=rank_batches,
+                    rank_batches=[torch.tensor([rank])],
                     img_lr=image_lr_patch,
                     rank=rank,
                     device=device,
@@ -211,16 +213,11 @@ def generate_fn(
             return image_out
 
 
-def unet_regression(  # TODO a lot of redundancy, need to clean up
+def unet_regression(
     net,
     latents,
     img_lr,
     class_labels=None,
-    num_steps=2,
-    sigma_min=0.0,
-    sigma_max=0.0,
-    rho=7,
-    **kwargs,
 ):
     """
     Perform U-Net regression with temporal sampling.
@@ -230,47 +227,19 @@ def unet_regression(  # TODO a lot of redundancy, need to clean up
         latents (torch.Tensor): Latent representation.
         img_lr (torch.Tensor): Low-resolution input image.
         class_labels (torch.Tensor, optional): Class labels for conditional generation.
-        randn_like (function, optional): Function for generating random noise.
-        num_steps (int, optional): Number of time steps for temporal sampling.
-        sigma_min (float, optional): Minimum noise level.
-        sigma_max (float, optional): Maximum noise level.
-        rho (int, optional): Exponent for noise level interpolation.
-        S_churn (float, optional): Churning parameter.
-        S_min (float, optional): Minimum churning value.
-        S_max (float, optional): Maximum churning value.
-        S_noise (float, optional): Noise level for churning.
 
     Returns:
         torch.Tensor: Predicted output at the next time step.
     """
 
-    # Adjust noise levels based on what's supported by the network.
-    sigma_min = max(sigma_min, net.sigma_min)
-    sigma_max = min(sigma_max, net.sigma_max)
 
-    # Time step discretization.
-    step_indices = torch.arange(num_steps, dtype=torch.float64, device=latents.device)
-    t_steps = (
-        sigma_max ** (1 / rho)
-        + step_indices
-        / (num_steps - 1)
-        * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
-    ) ** rho
-    t_steps = torch.cat(
-        [net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])]
-    )  # t_N = 0
-
-    x_lr = img_lr
-
-    # Main sampling loop.
-    x_hat = latents.to(torch.float64) * t_steps[0]
+    x_hat = torch.zeros_like(latents).to(torch.float64)
     t_hat = torch.tensor(1.0).to(torch.float64).cuda()
 
     # Run regression on just a single batch element and then repeat
-    x_next = net(x_hat[0:1], x_lr, t_hat, class_labels).to(torch.float64)
+    x_next = net(x_hat[0:1], img_lr, t_hat, class_labels).to(torch.float64)
     if x_hat.shape[0] > 1:
         x_next = x_next.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
-
     return x_next
 
 

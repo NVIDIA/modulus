@@ -56,7 +56,7 @@ def main(cfg: DictConfig) -> None:
     logger.file_logging("generate.log")
 
     # Handle the batch size
-    seeds = list(np.arange(cfg.sampler.num_ensembles))
+    seeds = list(np.arange(cfg.generation.num_ensembles))
     num_batches = (
         (len(seeds) - 1) // (cfg.generation.seed_batch_size * dist.world_size) + 1
     ) * dist.world_size
@@ -143,7 +143,7 @@ def main(cfg: DictConfig) -> None:
         sampler_fn = partial(
             ablation_sampler,
             num_steps=cfg.sampler.num_steps,
-            num_ensembles=cfg.sampler.num_ensembles,
+            num_ensembles=cfg.generation.num_ensembles,
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
