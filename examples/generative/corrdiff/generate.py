@@ -113,14 +113,21 @@ def main(cfg: DictConfig) -> None:
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     (img_shape_y, img_shape_x) = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
 
     # Sampler kwargs
     if sampling_method == "stochastic":
         sampler_kwargs = {
-            "img_shape": img_shape_x,
             "patch_shape": patch_shape_x,
             "overlap_pix": overlap_pix,
             "boundary_pix": boundary_pix,
+            "sigma_min": sigma_min,
+            "sigma_max": sigma_max,
+            "rho": rho,
+            "S_churn": S_churn,
+            "S_min": S_min,
+            "S_max": S_max,
+            "S_noise": S_noise,
         }
     elif sampling_method == "deterministic":
         sampler_kwargs = {
@@ -236,6 +243,8 @@ def main(cfg: DictConfig) -> None:
                             range(dist.world_size)
                         ),  # Only run regression model once
                         pretext="reg",
+                        img_shape=(img_shape_x, img_shape_y),
+                        img_out_channels=img_out_channels,
                     )
             if net_res:
                 if hr_mean_conditioning and sampling_method == "stochastic":
@@ -251,6 +260,8 @@ def main(cfg: DictConfig) -> None:
                         seeds=sample_seeds,
                         pretext="gen",
                         num_steps=num_steps,
+                        img_shape=(img_shape_x, img_shape_y),
+                        img_out_channels=img_out_channels,
                         **sampler_kwargs,
                     )
             if inference_mode == "regression":
@@ -434,6 +445,8 @@ def generate(
     net,
     seeds,
     seed_batch_size,
+    img_shape,  # as (img_shape_x, img_shape_y)
+    img_out_channels,
     sampling_method=None,
     img_lr=None,
     pretext=None,
@@ -451,6 +464,7 @@ def generate(
             raise ImportError(
                 "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
             )
+        sampler_kwargs.update(({"img_shape": img_shape}))
 
     # Instantiate distributed manager.
     dist = DistributedManager()
@@ -481,9 +495,9 @@ def generate(
             latents = rnd.randn(
                 [
                     seed_batch_size,
-                    net.img_out_channels,
-                    net.img_shape_x,
-                    net.img_shape_y,
+                    img_out_channels,
+                    img_shape[1],
+                    img_shape[0],
                 ],
                 device=device,
             ).to(memory_format=torch.channels_last)
@@ -522,7 +536,7 @@ def generate(
                     latents,
                     img_lr,
                     class_labels,
-                    randn_like=rnd.randn_like,
+                    randn_like=torch.randn_like,
                     **sampler_kwargs,
                 )
             all_images.append(images)
