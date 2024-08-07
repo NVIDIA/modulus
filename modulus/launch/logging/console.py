@@ -27,18 +27,6 @@ class PythonLogger:
 
     def __init__(self, name: str = "launch"):
         self.logger = logging.getLogger(name)
-        self.logger.handlers.clear()
-        formatter = logging.Formatter(
-            "[%(asctime)s - %(name)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
-        )
-        streamhandler = logging.StreamHandler()
-        streamhandler.setFormatter(formatter)
-        streamhandler.setLevel(logging.INFO)
-        self.logger.addHandler(streamhandler)
-
-        # Not sure if this works
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.propagate = False  # Prevent parent logging
 
     def file_logging(self, file_name: str = "launch.log"):
         """Log to file"""
