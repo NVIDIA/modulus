@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: EDMPrecondSRV2
+name: diffusion
   # Name of the preconditioner
 hr_mean_conditioning: False
   # High-res mean (regression's output) as additional condition

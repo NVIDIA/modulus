@@ -21,7 +21,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
-from modulus.models.diffusion import UNet, EDMPrecondSRV2
+from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -117,24 +117,41 @@ def main(cfg: DictConfig) -> None:
     # Instantiate the model and move to device.
     if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
         raise ValueError("Invalid model")
-    model_cls = UNet if cfg.model.name == "regression" else EDMPrecondSRV2
-    model_args = {
-        "img_channels": 4,
+    model_args = {  # default parameters for all networks
         "img_out_channels": img_out_channels,
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
-    standard_model_cfgs = {
-        "regression": {"N_grid_channels": 4, "embedding_type": "zero"},
-        "diffusion": {"gridtype": "sinusoidal", "N_grid_channels": 4},
-        "patched_diffusion": {"gridtype": "learnable", "N_grid_channels": 100},
+    standard_model_cfgs = {  # default parameters for different network types
+        "regression": {
+            "img_channels": 4,
+            "N_grid_channels": 4,
+            "embedding_type": "zero",
+        },
+        "diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "sinusoidal",
+            "N_grid_channels": 4,
+        },
+        "patched_diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "learnable",
+            "N_grid_channels": 100,
+        },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
-    if hasattr(cfg.model, "model_args"):
-        model_args.update(cfg.model.model_args)
-    model = model_cls(
-        img_in_channels=img_in_channels + model_args["N_grid_channels"], **model_args
-    )
+    if hasattr(cfg.model, "model_args"):  # override defaults from config file
+        model_args.update(OmegaConf.to_container(cfg.model.model_args))
+    if cfg.model.name == "regression":
+        model = UNet(
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
+        )
+    else:  # diffusion or patched diffusion
+        model = EDMPrecondSR(
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
+        )
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -195,9 +212,15 @@ def main(cfg: DictConfig) -> None:
     ## Resume training from previous checkpoints if exists
     if dist.world_size > 1:
         torch.distributed.barrier()
-    cur_nimg = load_checkpoint(
-        path="checkpoints", models=model, optimizer=optimizer, device=dist.device
-    )
+    try:
+        cur_nimg = load_checkpoint(
+            path=f"checkpoints_{cfg.model.name}",
+            models=model,
+            optimizer=optimizer,
+            device=dist.device,
+        )
+    except:
+        cur_nimg = 0
 
     def is_time_for_periodic_task(freq, rank_0_only=False):
         """Should we perform a task that is done every `freq` samples?"""
@@ -245,9 +268,10 @@ def main(cfg: DictConfig) -> None:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
 
         # Update weights.
+        lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
         for g in optimizer.param_groups:
-            lr_rampup = 10000000  # ramp up the learning rate within 10M images
-            g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
+            if lr_rampup > 0:
+                g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
             g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
             current_lr = g["lr"]
             if dist.rank == 0:
@@ -337,7 +361,10 @@ def main(cfg: DictConfig) -> None:
             if dist.world_size > 1:
                 torch.distributed.barrier()
             save_checkpoint(
-                path="checkpoints", models=model, optimizer=optimizer, epoch=cur_nimg
+                path=f"checkpoints_{cfg.model.name}",
+                models=model,
+                optimizer=optimizer,
+                epoch=cur_nimg,
             )
 
     # Done.
