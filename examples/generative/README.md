@@ -19,7 +19,7 @@ iterations, this process gradually eliminates noise, ultimately revealing a rand
 image hidden beneath the initial noise
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/diffusion_intuition.png" />
+<img src="../../docs/img/diffusion_doc/diffusion_intuition.png" />
 </p>
 
 ## Formulation of denoising diffusion via ordinary/stochastic differential equations
@@ -37,7 +37,7 @@ megapixel image requires a million pixel values. In this case, we are visualizin
 in 1D, even though our dataset is one-dimensional, the analogy remains valid.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/data_distribution.png" width="560" />
+<img src="../../docs/img/diffusion_doc/data_distribution.png" width="560" />
 </p>
 
 On the vertical axis, we represent pixel values, with different images corresponding
@@ -54,7 +54,7 @@ Specifically, we explore what transpires when we gradually introduce noise to th
 image.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/forward_diffusion.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/forward_diffusion.gif" width="560" />
 </p>
 
 In this example, the process corresponds to taking a random walk within the pixel value
@@ -66,7 +66,7 @@ Analyzing these trajectories reveals the emergence of a density in the XT plane.
 If we were to visualize this density, it would appear as follows:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/noise_distribution.png" width="560" />
+<img src="../../docs/img/diffusion_doc/noise_distribution.png" width="560" />
 </p>
 
 On the far-left end of the spectrum, we have the original probability density of
@@ -80,14 +80,14 @@ in time, retracing the path back to the original distribution from a random samp
 This process effectively implements the gradual denoising of the image.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/gradual_denoising.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/gradual_denoising.gif" width="560" />
 </p>
 
 This yields a random sample from the data distribution. Similarly, when dealing with
 multiple samples, they collectively approach the data distribution at time zero.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/multiple_gradual_denoising.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/multiple_gradual_denoising.gif" width="560" />
 </p>
 
 We can understand this formulation in terms of Stochastic Differential Equations (SDE).
@@ -125,7 +125,7 @@ In practice, this is often approximated using a Convolutional Neural Network (CN
 In essence, this is where the CNN is integrated into these models.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/sde.png" width="560" />
+<img src="../../docs/img/diffusion_doc/sde.png" width="560" />
 </p>
 
 [Song et al. 2021](https://arxiv.org/pdf/2011.13456.pdf) introduced an alternative
@@ -140,7 +140,7 @@ This formulation solely consists of a score-based term and does not involve a ra
 walk component.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/ode_backward.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/ode_backward.gif" width="560" />
 </p>
 
 Qualitatively, the evolution of the image follows a distinct pattern. Rather than
@@ -151,7 +151,7 @@ to the ODE. In practice, the ODE is solved through discretization in time. Given
 initial sample, we take finite-length time steps that aim to follow these trajectories.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/ode_time_step.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/ode_time_step.gif" width="560" />
 </p>
 
 Zooming in, the process involves determining how much the image should change over a
@@ -159,7 +159,7 @@ time interval $dx$ for a given change in time $dt$. These steps are repeated unt
 zero is reached, resulting in the generated sample.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/time_step.png" width="560" />
+<img src="../../docs/img/diffusion_doc/time_step.png" width="560" />
 </p>
 
 In SDEs, noise is also injected at each of these steps, but we'll explore that aspect
@@ -195,7 +195,7 @@ choice, drawing from the theory presented in the paper. It's important to note t
 these design choices are independent and can be studied in isolation.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/edm_table.png" width="840" />
+<img src="../../docs/img/diffusion_doc/edm_table.png" width="840" />
 </p>
 
 To assess the generation quality, the
@@ -214,7 +214,7 @@ the presence of discretization error. The discrete trajectory obtained through d
 sampling deviates from the ideal trajectory.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/discretization_error.png" width="560" />
+<img src="../../docs/img/diffusion_doc/discretization_error.png" width="560" />
 </p>
 
 As illustrated, the discrete samples do not precisely align with the ideal trajectory,
@@ -223,7 +223,7 @@ result in visually poor samples or incorrect variations. The most straightforwar
 solution to address this discretization error is to use shorter steps.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/refine_steps.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/refine_steps.gif" width="560" />
 </p>
 
 However, it is desirable to minimize the number of steps since each step involves
@@ -233,7 +233,7 @@ same length. Generally, longer steps are employed at high noise levels, while re
 shorter steps are used at low noise levels.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/variable_step_size.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/variable_step_size.gif" width="560" />
 </p>
 
 This concept can be generalized into a family of polynomial step length discretizations
@@ -247,7 +247,7 @@ The precise value doesn't significantly impact the results, as anything in the b
 of five to ten works well.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/time_steps_formula.png" width="840" />
+<img src="../../docs/img/diffusion_doc/time_steps_formula.png" width="840" />
 </p>
 
 The next step, which is fairly intuitive to those familiar with ODEs, is to employ
@@ -260,7 +260,7 @@ has led to the conclusion that the second-order Heun method strikes an excellent
 balance between computational cost and accuracy. The Heun step is formulated as follows:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/heun_step.png" width="560" />
+<img src="../../docs/img/diffusion_doc/heun_step.png" width="560" />
 </p>
 
 After performing the Euler step, an additional step is taken at the point where it
@@ -270,7 +270,7 @@ correction step. This approach closely follows the underlying trajectory and add
 another entry to our table:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/edm_table_heun.png" width="840" />
+<img src="../../docs/img/diffusion_doc/edm_table_heun.png" width="840" />
 </p>
 
 Now, let's examine another design choice, which is the noise schedule. There are
@@ -300,7 +300,7 @@ the noisy data density to remain within a horizontal tunnel of unit standard dev
 as time progresses:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/density_scaling.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/density_scaling.gif" width="560" />
 </p>
 
 There are numerous options for scaling and noise schedules, but fundamentally, they all
@@ -308,7 +308,7 @@ represent warps of the XT plane. These schedules do not alter the underlying den
 but rather distort the trajectories in different ways:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/distorted_trajectory.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/distorted_trajectory.gif" width="560" />
 </p>
 
 Given these observations, EDM has formulated a generalized ODE, expressed as follows:
@@ -329,7 +329,7 @@ them better? To explore this, let's consider higher noise levels, where we intro
 a substantial amount of noise:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/variable_schedule.gif" width="560" />
+<img src="../../docs/img/diffusion_doc/variable_schedule.gif" width="560" />
 </p>
 
 In this scenario, we interpolate between different schedules and examine the
@@ -348,7 +348,7 @@ output image. It represents the average of all possible images compatible with t
 current noisy image, and we can expect this to change slowly over time:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/single_shot.png" width="560" />
+<img src="../../docs/img/diffusion_doc/single_shot.png" width="560" />
 </p>
 
 As we step toward time zero, only minor corrections to the tangent's direction are
@@ -359,7 +359,7 @@ linearly with time. These insights contribute to the completion of the last two 
 the sampling portion of the EDM table:
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/noise_schedule_table.png" width="840" />
+<img src="../../docs/img/diffusion_doc/noise_schedule_table.png" width="840" />
 </p>
 
 ## Preconditioning and training
@@ -420,7 +420,7 @@ connection is disabled, and only the noise is predicted. This weighting can be f
 generalized to represent intermediate mixtures of the image and the noise, for example.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/diffusion_training.png" width="840" />
+<img src="../../docs/img/diffusion_doc/diffusion_training.png" width="840" />
 </p>
 
 Now let's address the open question regarding the skip
@@ -452,7 +452,7 @@ and should override it with the CNN's prediction, which means setting the skip t
 to predict the signal.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/skip_weight.png" width="840" />
+<img src="../../docs/img/diffusion_doc/skip_weight.png" width="840" />
 </p>
 
 With this understanding, we can smoothly transition between noise-level-dependent
@@ -461,7 +461,7 @@ transition can be represented as an explicit formula, and we can now fill in the
 for skip scaling, output scaling, and input scaling in the design table.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/table_training.png" width="840" />
+<img src="../../docs/img/diffusion_doc/table_training.png" width="840" />
 </p>
 
 Now, let's address the question of at which noise levels the network should be trained,
@@ -477,7 +477,7 @@ paper provides a helpful figure with the noise level on the horizontal axis and 
 value on the vertical axis.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/loss_weighting.png" width="840" />
+<img src="../../docs/img/diffusion_doc/loss_weighting.png" width="840" />
 </p>
 
 The loss value is initially set to one at initialization using loss weighting. Over
@@ -488,7 +488,7 @@ achieved. Training progress should be made proportional to the shape of this
 distribution of training samples.
 
 <p align="center">
-<img src="../../../docs/img/diffusion_doc/final_table.png" width="840" />
+<img src="../../docs/img/diffusion_doc/final_table.png" width="840" />
 </p>
 
 This concludes the last part of the tutorial. In summary, we have presented a tutorial
