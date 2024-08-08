@@ -14,7 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: patched_diffusion
-  # Name of the preconditioner
-hr_mean_conditioning: True
-  # High-res mean (regression's output) as additional condition
+defaults:
+  - corrdiff_regression
+
+model_args:
+  model_channels: 64
+  channel_mult: [1, 2, 2]
+  attn_resolutions: [16]

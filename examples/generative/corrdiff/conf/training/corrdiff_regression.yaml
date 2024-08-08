@@ -28,6 +28,8 @@ hp:
     # no gradient clipping for defualt non-patch-based training
     lr_decay: 1
     # LR decay rate
+    lr_rampup: 10000000
+    # Rampup for learning rate, in number of samples
 
 # Performance
 perf:

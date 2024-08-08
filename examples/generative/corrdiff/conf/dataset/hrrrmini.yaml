@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: patched_diffusion
-  # Name of the preconditioner
-hr_mean_conditioning: True
-  # High-res mean (regression's output) as additional condition
+type: hrrr_mini
+data_path: /data/corrdiff-mini/hrrr_mini_train.nc
+stats_path: /data/corrdiff-mini/stats.json
+output_variables: ['10u', '10v']

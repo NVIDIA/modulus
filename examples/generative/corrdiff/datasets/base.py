@@ -46,12 +46,12 @@ class DownscalingDataset(torch.utils.data.Dataset, ABC):
 
     @abstractmethod
     def input_channels(self) -> List[ChannelMetadata]:
-        """Metadata for the input channels. A list of dictionaries, one for each channel"""
+        """Metadata for the input channels. A list of ChannelMetadata, one for each channel"""
         pass
 
     @abstractmethod
     def output_channels(self) -> List[ChannelMetadata]:
-        """Metadata for the output channels. A list of dictionaries, one for each channel"""
+        """Metadata for the output channels. A list of ChannelMetadata, one for each channel"""
         pass
 
     @abstractmethod

@@ -969,7 +969,7 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
         sigma_min=0.0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ) -> None:
         # The use of multiple inheritance here is a workaround to make the

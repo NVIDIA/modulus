@@ -33,6 +33,8 @@ hp:
     # Patch size. Patch training is used if these dimensions differ from img_shape_x and img_shape_y
     patch_num: 10
     # Number of patches from a single sample. Total number of patches is patch_num * batch_size_global
+    lr_rampup: 10000000
+    # Rampup for learning rate, in number of samples
 
 # Performance
 perf:
