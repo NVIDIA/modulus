@@ -26,16 +26,16 @@ from torch.nn import functional as F
 
 from modulus.models.figconvnet.components.encodings import SinusoidalEncoding
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
-from modulus.models.figconvnet.point_feature_conv import (
-    PointFeatureCat,
-    PointFeatureConv,
-    PointFeatureTransform,
-)
-from modulus.models.figconvnet.point_feature_ops import (
+from modulus.models.figconvnet.geometries import (
     GridFeatures,
     GridFeaturesMemoryFormat,
     PointFeatures,
     grid_init,
+)
+from modulus.models.figconvnet.point_feature_conv import (
+    PointFeatureCat,
+    PointFeatureConv,
+    PointFeatureTransform,
 )
 
 

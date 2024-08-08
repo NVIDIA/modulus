@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from modulus.models.figconvnet.figconvunet import FIGConvUNet
 
-from modulus.models.figconvnet.point_feature_ops import (
+from modulus.models.figconvnet.geometries import (
     GridFeaturesMemoryFormat,
 )
 
@@ -36,7 +36,10 @@ from src.utils.eval_funcs import eval_all_metrics
 
 
 class FIGConvUNetDrivAerNet(FIGConvUNet):
-    """FIGConvUNetDrivAerNet"""
+    """FIGConvUNetDrivAerNet
+
+    DrivAerNet is a variant of FIGConvUNet that is specialized for the DrivAer dataset.
+    """
 
     def __init__(
         self,
@@ -47,6 +50,7 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
         num_levels: int = 3,
         num_down_blocks: Union[int, List[int]] = 1,
         num_up_blocks: Union[int, List[int]] = 1,
+        mlp_channels: List[int] = [512, 512],
         aabb_max: Tuple[float, float, float] = (2.5, 1.5, 1.0),
         aabb_min: Tuple[float, float, float] = (-2.5, -1.5, -1.0),
         voxel_size: Optional[float] = None,
@@ -77,6 +81,7 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
             num_levels=num_levels,
             num_down_blocks=num_down_blocks,
             num_up_blocks=num_up_blocks,
+            mlp_channels=mlp_channels,
             aabb_max=aabb_max,
             aabb_min=aabb_min,
             voxel_size=voxel_size,

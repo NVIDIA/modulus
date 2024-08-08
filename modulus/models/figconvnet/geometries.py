@@ -20,13 +20,9 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float
 from torch import Tensor
-
-from .components.encodings import SinusoidalEncoding
-from .components.mlp import MLP
 
 
 def grid_init(bb_max, bb_min, resolution):
@@ -43,7 +39,14 @@ def grid_init(bb_max, bb_min, resolution):
 
 
 class PointFeatures:
-    """PointFeatures."""
+    """
+    PointFeatures class represents the features defined on a set of points in 3D space.
+    The vertices are the set of 3D coordinates that define the points and the features
+    are defined at each point.
+
+    The point features have BxNx3 and BxNxC shape where B is the batch size, N is the
+    number of points, and C is the number of channels in the features.
+    """
 
     _shape_hint = None  # default value
     vertices: Float[Tensor, "B N 3"]
@@ -135,7 +138,16 @@ class PointFeatures:
 
 
 class GridFeaturesMemoryFormat(enum.Enum):
-    """Memory format for grid features."""
+    """Memory format used for GridFeatures class.
+
+    The memory format defines how the grid features are stored in memory.
+
+    b_x_y_z_c: Batch, X, Y, Z, Channels (3D Grid)
+    b_c_x_y_z: Batch, Channels, X, Y, Z (3D Grid)
+    b_zc_x_y: Batch, Z * Channels, X, Y (2D Grid)
+    b_xc_y_z: Batch, X * Channels, Y, Z (2D Grid)
+    b_yc_x_z: Batch, Y * Channels, X, Z (2D Grid)
+    """
 
     b_x_y_z_c = enum.auto()
     b_c_x_y_z = enum.auto()
@@ -192,7 +204,17 @@ def convert_from_b_x_y_z_c(tensor, to_memory_format):
 
 
 class GridFeatures:
-    """GridFeatures."""
+    """
+    Dense features defined on a grid. The vertices are the set of 3D coordinates
+    that define grid points and the features are defined at each grid point.
+
+    The grid features have BxCxHxWxD shape where B is the batch size, C is the number
+    of channels, H, W, D are the spatial dimensions of the grid.
+
+    In Factorized Implicit Global ConvNet (FIGConvNet), we use different memory formats
+    to store the grid features that compresses one low resolution spatial dimension
+    into the channel dimension.
+    """
 
     memory_format: GridFeaturesMemoryFormat
 
@@ -312,6 +334,7 @@ class GridFeatures:
 
     @property
     def point_features(self) -> PointFeatures:
+        """Convert the grid features to point features."""
         if self.memory_format == GridFeaturesMemoryFormat.b_c_x_y_z:
             permuted_features = self.features.permute(0, 2, 3, 4, 1)
         elif self.memory_format == GridFeaturesMemoryFormat.b_x_y_z_c:
@@ -339,6 +362,9 @@ class GridFeatures:
     def to(
         self, device=None, memory_format: GridFeaturesMemoryFormat = None
     ):  # -> GridFeatures
+        """
+        Convert the GridFeatures to the given device and memory format.
+        """
         assert device is not None or memory_format is not None
         if device is not None:
             self.vertices = self.vertices.to(device)
@@ -412,29 +438,3 @@ class GridFeatures:
 
         assert vertices.shape[-4:-1] == resolution
         return vertices
-
-
-class VerticesToPointFeatures(nn.Module):
-    """VerticesToPointFeatures."""
-
-    def __init__(
-        self,
-        embed_dim: int,
-        out_features: Optional[int] = 32,
-        use_mlp: Optional[bool] = True,
-        pos_embed_range: Optional[float] = 2.0,
-    ) -> None:
-        super().__init__()
-        self.pos_embed = SinusoidalEncoding(embed_dim, pos_embed_range)
-        self.use_mlp = use_mlp
-        if self.use_mlp:
-            self.mlp = MLP(3 * embed_dim, out_features, [])
-
-    def forward(self, vertices: Float[Tensor, "B N 3"]) -> PointFeatures:
-        assert (
-            vertices.ndim == 3
-        ), f"Expected 3D vertices of shape BxNx3, got {vertices.shape}"
-        vert_embed = self.pos_embed(vertices)
-        if self.use_mlp:
-            vert_embed = self.mlp(vert_embed)
-        return PointFeatures(vertices, vert_embed)

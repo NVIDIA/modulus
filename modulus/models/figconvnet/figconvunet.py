@@ -25,8 +25,13 @@ from jaxtyping import Float
 from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModel
+from modulus.models.figconvnet.components.encodings import SinusoidalEncoding
 from modulus.models.figconvnet.components.mlp import MLP
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
+from modulus.models.figconvnet.geometries import (
+    GridFeaturesMemoryFormat,
+    PointFeatures,
+)
 from modulus.models.figconvnet.grid_feature_group import (
     GridFeatureConv2DBlocksAndIntraCommunication,
     GridFeatureGroup,
@@ -34,16 +39,13 @@ from modulus.models.figconvnet.grid_feature_group import (
     GridFeatureGroupPool,
     GridFeatureGroupToPoint,
 )
-from modulus.models.figconvnet.point_feature_conv import PointFeatureTransform
+from modulus.models.figconvnet.point_feature_conv import (
+    PointFeatureTransform,
+)
 from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureMemoryFormatConverter,
 )
 from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
-from modulus.models.figconvnet.point_feature_ops import (
-    GridFeaturesMemoryFormat,
-    PointFeatures,
-    VerticesToPointFeatures,
-)
 from modulus.models.meta import ModelMetaData
 
 memory_format_to_axis_index = {
@@ -52,6 +54,37 @@ memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_zc_x_y: 2,
     GridFeaturesMemoryFormat.b_x_y_z_c: -1,
 }
+
+
+class VerticesToPointFeatures(nn.Module):
+    """
+    VerticesToPointFeatures module converts the 3D vertices (XYZ coordinates) to point features.
+
+    The module applies sinusoidal encoding to the vertices and optionally applies
+    an MLP to the encoded vertices.
+    """
+
+    def __init__(
+        self,
+        embed_dim: int,
+        out_features: Optional[int] = 32,
+        use_mlp: Optional[bool] = True,
+        pos_embed_range: Optional[float] = 2.0,
+    ) -> None:
+        super().__init__()
+        self.pos_embed = SinusoidalEncoding(embed_dim, pos_embed_range)
+        self.use_mlp = use_mlp
+        if self.use_mlp:
+            self.mlp = MLP(3 * embed_dim, out_features, [])
+
+    def forward(self, vertices: Float[Tensor, "B N 3"]) -> PointFeatures:
+        assert (
+            vertices.ndim == 3
+        ), f"Expected 3D vertices of shape BxNx3, got {vertices.shape}"
+        vert_embed = self.pos_embed(vertices)
+        if self.use_mlp:
+            vert_embed = self.mlp(vert_embed)
+        return PointFeatures(vertices, vert_embed)
 
 
 @dataclass
@@ -73,7 +106,13 @@ class MetaData(ModelMetaData):
 
 
 class FIGConvUNet(BaseModel):
-    """FIGConvUNet."""
+    """Factorized Implicit Global Convolutional U-Net.
+
+    The FIGConvUNet is a U-Net architecture that uses factorized implicit global
+    convolutional layers to create U-shaped architecture. The advantage of using
+    FIGConvolution is that it can handle high resolution 3D data efficiently
+    using a set of factorized grids.
+    """
 
     def __init__(
         self,
@@ -84,7 +123,7 @@ class FIGConvUNet(BaseModel):
         num_levels: int = 3,
         num_down_blocks: Union[int, List[int]] = 1,
         num_up_blocks: Union[int, List[int]] = 1,
-        mlp_channels: List[int] = [2048, 2048],
+        mlp_channels: List[int] = [512, 512],
         aabb_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         aabb_min: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         voxel_size: Optional[float] = None,

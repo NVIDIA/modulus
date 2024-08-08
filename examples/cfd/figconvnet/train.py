@@ -40,7 +40,7 @@ from src.utils.average_meter import AverageMeter, AverageMeterDict, Timer
 from src.utils.loggers import init_logger
 from src.utils.seed import set_seed
 from src.utils.signal_handlers import SignalHandler
-from modulus.models.figconvnet.point_feature_ops import GridFeaturesMemoryFormat
+from modulus.models.figconvnet.geometries import GridFeaturesMemoryFormat
 
 
 logger = logging.getLogger("figconv")

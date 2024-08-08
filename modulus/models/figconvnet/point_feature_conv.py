@@ -25,8 +25,8 @@ from torch import Tensor
 from .components.encodings import SinusoidalEncoding
 from .components.mlp import MLPBlock
 from .components.reductions import REDUCTION_TYPES, row_reduction
+from .geometries import PointFeatures
 from .neighbor_ops import batched_neighbor_knn_search, batched_neighbor_radius_search
-from .point_feature_ops import PointFeatures
 
 
 class PointFeatureTransform(nn.Module):

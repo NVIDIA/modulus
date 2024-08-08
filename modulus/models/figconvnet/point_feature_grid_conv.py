@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from modulus.models.figconvnet.point_feature_ops import (
+from modulus.models.figconvnet.geometries import (
     GridFeatures,
     GridFeaturesMemoryFormat,
 )
@@ -80,7 +80,18 @@ class GridFeaturePadToMatch(nn.Module):
 
 
 class GridFeatureConv2d(nn.Module):
-    """GridFeatureConv2d."""
+    """GridFeatureConv2d.
+
+    This module is equivalent to a 3D convolution with kernel size $K \times K
+    \times (2D + 1)$, where $K$ is the kernel size and $D$ is the size of low
+    resolution dimensions making it effectively a global convolution along the
+    low resolution dimensions.
+
+    The input argument `compressed_spatial_dim` specifies the size of the low
+    resolution axis and this module will apply local convolution along the high
+    resolution dimensions and global convolution along the low resolution
+    dimensions.
+    """
 
     def __init__(
         self,

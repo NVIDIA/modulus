@@ -24,17 +24,17 @@ from jaxtyping import Float
 from torch import Tensor
 
 from modulus.models.figconvnet.components.reductions import REDUCTION_TYPES
+from modulus.models.figconvnet.geometries import (
+    GridFeatures,
+    GridFeaturesMemoryFormat,
+    PointFeatures,
+)
 from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureConv2d,
     GridFeatureConv2dBlock,
     GridFeaturePadToMatch,
     GridFeatureTransform,
     LayerNorm2d,
-)
-from modulus.models.figconvnet.point_feature_ops import (
-    GridFeatures,
-    GridFeaturesMemoryFormat,
-    PointFeatures,
 )
 
 from .point_feature_grid_ops import (
@@ -44,7 +44,13 @@ from .point_feature_grid_ops import (
 
 
 class GridFeatureGroup:
-    """A group of GridFeatures."""
+    """Wrapper class for a set of GridFeatures.
+
+    Used to represent a set of implicit grid features with different resolutions such as
+    `[(high res x high res x low res), (high res x low res x high res), (low res x high res x high res)]`.
+    These GridFeatures can be used to synthesise a feature grid with `(high res x high res x high res)`
+    resolution through the GridFeatureGroupToPoint module.
+    """
 
     grid_features: List[GridFeatures]
 
@@ -90,7 +96,23 @@ class GridFeatureGroup:
 
 
 class GridFeaturesGroupIntraCommunication(nn.Module):
-    """A module that performs intra-communication between GridFeatures in a GridFeaturesGroup."""
+    """
+    GridFeaturesGroupIntraCommunication.
+
+    The set of grid features inside a GridFeatureGroup are distinct and do not
+    communicate with each other. This module computes the communication between
+    the grid features in the group. The communication can be either sum or
+    element-wise multiplication.
+
+    Mathematically, for a set of grid features $\mathcal{G} = {G_1, G_2, ...,
+    G_n}$, the communication between the grid features is computed as follows:
+
+    For each $G_i \in \mathcal{G}$, we compute the communication with all other
+    grid features $G_j \in \mathcal{G}$, $j \neq i$. This is done by sampling
+    the features of $G_j$ at the vertices of $G_i$ and adding or multiplying the
+    sampled features to the features of $G_i$: $G_i(v) = G_i(v) + \sum_{j \neq
+    i} G_j(v)$ where $v$ are the vertices of $G_i$.
+    """
 
     def __init__(self, communication_type: Literal["sum", "mul"] = "sum") -> None:
         super().__init__()
@@ -156,7 +178,14 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
 
 
 class GridFeatureGroupIntraCommunications(nn.Module):
-    """Multiple communication types e.g. ["sum", "mul"]"""
+    """
+    GridFeatureGroupIntraCommunications that supports multiple communication types.
+
+    This module is an extension of GridFeatureGroupIntraCommunication that supports
+    multiple communication types. When there are multiple communication types, the
+    features of the grid features are concatenated after applying the communication
+    operation.
+    """
 
     def __init__(
         self, communication_types: List[Literal["sum", "mul"]] = ["sum"]
@@ -241,7 +270,10 @@ class GridFeatureGroupTransform(nn.Module):
 
 
 class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
-    """GridFeatureConv2DBlocksAndIntraCommunication."""
+    """GridFeatureConv2DBlocksAndIntraCommunication.
+
+    This block defines one factorized implicit global convolution proposed in FIGConvNet.
+    """
 
     def __init__(
         self,
@@ -438,7 +470,9 @@ class AttentionPool(nn.Module):
 
 class GridFeaturePool(nn.Module):
     """
-    Pooling the features of GridFeatures.
+    GridFeature pooling layer.
+
+    Pool features from GridFeatures to a single feature vector.
     """
 
     def __init__(
