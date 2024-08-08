@@ -29,70 +29,11 @@ from torch.distributed import gather
 from datasets.base import DownscalingDataset
 from datasets.dataset import init_dataset_from_config
 from modulus.utils.generative import convert_datetime_to_cftime, time_range
-
+from modulus.utils.corrdiff import regression_step, diffusion_step
 
 ############################################################################
 #                           GENERATION HELPERS                             #
 ############################################################################
-
-def _generate(
-    net,
-    sampler_fn,
-    seed_batch_size,
-    img_shape,
-    img_out_channels,
-    rank_batches,
-    img_lr,
-    rank,
-    device,
-    mean_hr=None,
-):
-    """Generate random images using the techniques described in the paper
-    "Elucidating the Design Space of Diffusion-Based Generative Models".
-    """
-
-    img_lr = img_lr.to(memory_format=torch.channels_last)
-    if sampler_fn:  # TODO better handling
-        sig = inspect.signature(sampler_fn)
-        if "mean_hr" in sig.parameters:
-            additional_args = {"mean_hr": mean_hr}
-        else:
-            additional_args = {}
-    else:
-        additional_args = {}
-    # Loop over batches.
-    all_images = []
-    for batch_seeds in tqdm.tqdm(rank_batches, unit="batch", disable=(rank != 0)):
-        with nvtx.annotate(f"generate {len(all_images)}", color="rapids"):
-            batch_size = len(batch_seeds)
-            if batch_size == 0:
-                continue
-
-            # Pick latents
-            rnd = StackedRandomGenerator(device, batch_seeds)
-
-            if sampler_fn:
-                latents = rnd.randn(
-                    [
-                        seed_batch_size,
-                        img_out_channels,
-                        img_shape[1],
-                        img_shape[0],
-                    ],
-                    device=device,
-                ).to(memory_format=torch.channels_last)
-                with torch.inference_mode():
-                    images = sampler_fn(
-                        net, latents, img_lr, randn_like=rnd.randn_like, **additional_args
-                    )
-            else:
-                latents = torch.zeros((1, img_out_channels, img_shape[1], img_shape[0])).to(device, memory_format=torch.channels_last)
-                with torch.inference_mode():
-                    images = unet_regression(
-                        net, latents, img_lr
-                    )
-            all_images.append(images)
-    return torch.cat(all_images)
 
 
 def generate_fn(
@@ -140,16 +81,10 @@ def generate_fn(
 
         if net_reg:
             with nvtx.annotate("regression_model", color="yellow"):
-                image_reg = _generate(
+                image_reg = regression_step(
                     net=net_reg,
-                    sampler_fn=None,
-                    seed_batch_size=1,
-                    img_shape=img_shape,
-                    img_out_channels=img_out_channels,
-                    rank_batches=[torch.tensor([rank])],
                     img_lr=image_lr_patch,
-                    rank=rank,
-                    device=device,
+                    latents_shape=(seed_batch_size, img_out_channels, img_shape[1], img_shape[0]),
                 )
         if net_res:
             if use_mean_hr:
@@ -157,7 +92,7 @@ def generate_fn(
             else:
                 mean_hr = None
             with nvtx.annotate("diffusion model", color="purple"):
-                image_res = _generate(
+                image_res = diffusion_step(
                     net=net_res,
                     sampler_fn=sampler_fn,
                     seed_batch_size=seed_batch_size,
@@ -169,7 +104,7 @@ def generate_fn(
                     ),
                     rank=rank,
                     device=device,
-                    mean_hr=mean_hr,
+                    use_mean_hr=mean_hr,
                 )
         if inference_mode == "regression":
             image_out = image_reg
@@ -211,34 +146,6 @@ def generate_fn(
                 return None
         else:
             return image_out
-
-
-def unet_regression(
-    net,
-    latents,
-    img_lr,
-):
-    """
-    Perform U-Net regression with temporal sampling.
-
-    Parameters:
-        net (torch.nn.Module): U-Net model for regression.
-        latents (torch.Tensor): Latent representation.
-        img_lr (torch.Tensor): Low-resolution input image.
-
-    Returns:
-        torch.Tensor: Predicted output at the next time step.
-    """
-
-
-    x_hat = torch.zeros_like(latents).to(torch.float64)
-    t_hat = torch.tensor(1.0).to(torch.float64).cuda()
-
-    # Run regression on just a single batch element and then repeat
-    x_next = net(x_hat[0:1], img_lr, t_hat).to(torch.float64)
-    if x_hat.shape[0] > 1:
-        x_next = x_next.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
-    return x_next
 
 
 ############################################################################

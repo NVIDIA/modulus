@@ -140,6 +140,8 @@ def main(cfg: DictConfig) -> None:
 
     # Partially instantiate the sampler based on the configs
     if cfg.sampler.type == "deterministic":
+        if cfg.generation.hr_mean_conditioning:
+            raise NotImplementedError ("High-res mean conditioning is not yet implemented for the deterministic sampler")
         sampler_fn = partial(
             ablation_sampler,
             num_steps=cfg.sampler.num_steps,
@@ -153,8 +155,6 @@ def main(cfg: DictConfig) -> None:
             raise ImportError(
                 "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
             )
-        if cfg.generation.hr_mean_conditioning:
-            use_mean_hr = True
         sampler_fn = partial(
             edm_sampler,
             img_shape=img_shape[1],
@@ -209,7 +209,7 @@ def main(cfg: DictConfig) -> None:
                         .to(memory_format=torch.channels_last)
                     )
                     image_tar = image_tar.to(device=device).to(torch.float32)
-                    image_out = generate_fn(sampler_fn, image_lr, cfg.generation.sample_res, img_shape, img_out_channels, patch_shape, seeds, net_reg, net_res, cfg.generation.seed_batch_size, rank_batches, cfg.generation.inference_mode, use_mean_hr, dist.rank, dist.world_size, device)
+                    image_out = generate_fn(sampler_fn, image_lr, cfg.generation.sample_res, img_shape, img_out_channels, patch_shape, seeds, net_reg, net_res, cfg.generation.seed_batch_size, rank_batches, cfg.generation.inference_mode, cfg.generation.hr_mean_conditioning, dist.rank, dist.world_size, device)
 
                     if dist.rank == 0:
                         batch_size = image_out.shape[0]
