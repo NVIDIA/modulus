@@ -336,13 +336,13 @@ def main(cfg: DictConfig) -> None:
         torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
+        if dist.world_size > 1:
+            torch.distributed.barrier()
         if (
             (cfg.training.io.save_checkpoint_freq is not None)
             and (done or cur_tick % cfg.training.io.save_checkpoint_freq == 0)
             and dist.rank == 0
         ):
-            if dist.world_size > 1:
-                torch.distributed.barrier()
             save_checkpoint(
                 path="checkpoints", models=model, optimizer=optimizer, epoch=cur_nimg
             )
