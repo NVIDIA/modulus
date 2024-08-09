@@ -46,7 +46,7 @@ couplings:
       batch_size: ${batch_size}
       variables: 
         - 'z1000-48H'
-        - 'ws-48H'
+        - 'ws10-48H'
       presteps: ${model.presteps}
       input_time_dim: ${data.input_time_dim}
       output_time_dim: ${data.output_time_dim} 

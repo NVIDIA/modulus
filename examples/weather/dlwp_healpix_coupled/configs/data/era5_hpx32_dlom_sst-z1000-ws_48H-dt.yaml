@@ -31,7 +31,7 @@ output_variables: null
 constants:
   land_sea_mask: lsm
 input_time_dim: 2
-output_time_dim: 4
+output_time_dim: 2
 data_time_step: 3H
 time_step: 48H
 gap: 48H
