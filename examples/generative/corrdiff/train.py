@@ -17,7 +17,7 @@
 import os, time, psutil, hydra, torch
 import numpy as np
 from hydra.utils import to_absolute_path
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
@@ -28,13 +28,12 @@ from modulus.metrics.diffusion import RegressionLoss, ResLoss
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
-from train_helpers import (
+from helpers.train_helpers import (
     set_patch_shape,
     set_seed,
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
-    parse_model_args,
 )
 
 
@@ -249,6 +248,7 @@ def main(cfg: DictConfig) -> None:
 
         loss_sum = torch.tensor([loss_accum], device=dist.device)
         if dist.world_size > 1:
+            torch.distributed.barrier()
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = (loss_sum / dist.world_size).cpu().item()
         if dist.rank == 0:
@@ -301,6 +301,7 @@ def main(cfg: DictConfig) -> None:
                         [valid_loss_accum], device=dist.device
                     )
                     if dist.world_size > 1:
+                        torch.distributed.barrier()
                         torch.distributed.all_reduce(
                             valid_loss_sum, op=torch.distributed.ReduceOp.SUM
                         )
@@ -343,13 +344,13 @@ def main(cfg: DictConfig) -> None:
         torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
+        if dist.world_size > 1:
+            torch.distributed.barrier()
         if (
             (cfg.training.io.save_checkpoint_freq is not None)
             and (done or cur_tick % cfg.training.io.save_checkpoint_freq == 0)
             and dist.rank == 0
         ):
-            if dist.world_size > 1:
-                torch.distributed.barrier()
             save_checkpoint(
                 path=f"checkpoints_{cfg.model.name}",
                 models=model,

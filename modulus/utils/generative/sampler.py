@@ -27,6 +27,7 @@ def ablation_sampler(
     net,
     latents,
     img_lr,
+    class_labels=None,
     randn_like=torch.randn_like,
     num_steps=18,
     sigma_min=None,
@@ -183,7 +184,7 @@ def ablation_sampler(
 
         # Euler step.
         h = t_next - t_hat
-        denoised = net(x_hat / s(t_hat), x_lr, sigma(t_hat)).to(
+        denoised = net(x_hat / s(t_hat), x_lr, sigma(t_hat), class_labels).to(
             torch.float64
         )
         d_cur = (
@@ -196,7 +197,7 @@ def ablation_sampler(
         if solver == "euler" or i == num_steps - 1:
             x_next = x_hat + h * d_cur
         else:
-            denoised = net(x_prime / s(t_prime), x_lr, sigma(t_prime)).to(
+            denoised = net(x_prime / s(t_prime), x_lr, sigma(t_prime), class_labels).to(
                 torch.float64
             )
             d_prime = (

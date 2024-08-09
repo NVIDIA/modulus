@@ -14,16 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
+
+import cftime
+import nvtx
 import torch
 import tqdm
-import nvtx
 
-from modulus.utils.generative import StackedRandomGenerator
+from modulus.utils.generative import StackedRandomGenerator, time_range
+
+############################################################################
+#                     CorrDiff Generation Utilities                        #
+############################################################################
+
 
 def regression_step(
-    net: torch.nn.Module,
-    img_lr: torch.Tensor,
-    latents_shape: torch.Size
+    net: torch.nn.Module, img_lr: torch.Tensor, latents_shape: torch.Size
 ) -> torch.Tensor:
     """
     Given a low-res input, performs a regression step to produce ensemble mean.
@@ -50,9 +56,10 @@ def regression_step(
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
-        x  = x.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
+        x = x.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
 
     return x
+
 
 def diffusion_step(
     net: torch.nn.Module,
@@ -64,7 +71,7 @@ def diffusion_step(
     img_lr: torch.Tensor,
     rank: int,
     device: torch.device,
-    hr_mean: torch.Tensor = None
+    hr_mean: torch.Tensor = None,
 ) -> torch.Tensor:
 
     """
@@ -91,7 +98,7 @@ def diffusion_step(
     # Handling of the high-res mean
     additional_args = {}
     if hr_mean:
-        additional_args["mean_hr"] =  hr_mean
+        additional_args["mean_hr"] = hr_mean
 
     # Loop over batches
     all_images = []
@@ -104,13 +111,13 @@ def diffusion_step(
             # Initialize random generator, and generate latents
             rnd = StackedRandomGenerator(device, batch_seeds)
             latents = rnd.randn(
-                    [
-                        seed_batch_size,
-                        img_out_channels,
-                        img_shape[1],
-                        img_shape[0],
-                    ],
-                    device=device,
+                [
+                    seed_batch_size,
+                    img_out_channels,
+                    img_shape[1],
+                    img_shape[0],
+                ],
+                device=device,
             ).to(memory_format=torch.channels_last)
 
             with torch.inference_mode():
@@ -119,3 +126,109 @@ def diffusion_step(
                 )
             all_images.append(images)
     return torch.cat(all_images)
+
+
+############################################################################
+#                         CorrDiff writer utilities                        #
+############################################################################
+
+
+class NetCDFWriter:
+    """NetCDF Writer"""
+
+    def __init__(self, f, lat, lon, input_channels, output_channels):
+        self._f = f
+
+        # create unlimited dimensions
+        f.createDimension("time")
+        f.createDimension("ensemble")
+
+        if lat.shape != lon.shape:
+            raise ValueError("lat and lon must have the same shape")
+        ny, nx = lat.shape
+
+        # create lat/lon grid
+        f.createDimension("x", nx)
+        f.createDimension("y", ny)
+
+        v = f.createVariable("lat", "f", dimensions=("y", "x"))
+        v[:] = lat
+        v.standard_name = "latitude"
+        v.units = "degrees_north"
+
+        v = f.createVariable("lon", "f", dimensions=("y", "x"))
+        v[:] = lon
+        v.standard_name = "longitude"
+        v.units = "degrees_east"
+
+        # create time dimension
+        v = f.createVariable("time", "i8", ("time"))
+        v.calendar = "standard"
+        v.units = "hours since 1990-01-01 00:00:00"
+
+        self.truth_group = f.createGroup("truth")
+        self.prediction_group = f.createGroup("prediction")
+        self.input_group = f.createGroup("input")
+
+        for variable in output_channels:
+            name = variable.name + variable.level
+            self.truth_group.createVariable(name, "f", dimensions=("time", "y", "x"))
+            self.prediction_group.createVariable(
+                name, "f", dimensions=("ensemble", "time", "y", "x")
+            )
+
+        # setup input data in netCDF
+
+        for variable in input_channels:
+            name = variable.name + variable.level
+            self.input_group.createVariable(name, "f", dimensions=("time", "y", "x"))
+
+    def write_input(self, channel_name, time_index, val):
+        """Write input data to NetCDF file."""
+        self.input_group[channel_name][time_index] = val
+
+    def write_truth(self, channel_name, time_index, val):
+        """Write ground truth data to NetCDF file."""
+        self.truth_group[channel_name][time_index] = val
+
+    def write_prediction(self, channel_name, time_index, ensemble_index, val):
+        """Write prediction data to NetCDF file."""
+        self.prediction_group[channel_name][ensemble_index, time_index] = val
+
+    def write_time(self, time_index, time):
+        """Write time information to NetCDF file."""
+        time_v = self._f["time"]
+        self._f["time"][time_index] = cftime.date2num(
+            time, time_v.units, time_v.calendar
+        )
+
+
+############################################################################
+#                          CorrDiff time utilities                         #
+############################################################################
+
+
+def get_time_from_range(times_range, time_format="%Y-%m-%dT%H:%M:%S"):
+    """Generates a list of times within a given range.
+
+    Args:
+        times_range: A list containing start time, end time, and optional interval (hours).
+        time_format: The format of the input times (default: "%Y-%m-%dT%H:%M:%S").
+
+    Returns:
+        A list of times within the specified range.
+    """
+
+    start_time = datetime.datetime.strptime(times_range[0], time_format)
+    end_time = datetime.datetime.strptime(times_range[1], time_format)
+    interval = (
+        datetime.timedelta(hours=times_range[2])
+        if len(times_range) > 2
+        else datetime.timedelta(hours=1)
+    )
+
+    times = [
+        t.strftime(time_format)
+        for t in time_range(start_time, end_time, interval, inclusive=True)
+    ]
+    return times

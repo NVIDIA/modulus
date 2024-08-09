@@ -118,9 +118,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             **model_kwargs,
         )
 
-    def forward(
-        self, x, img_lr, sigma, force_fp32=False, **model_kwargs
-    ):
+    def forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
         # SR: concatenate input channels
         if img_lr is not None:
             x = torch.cat((x, img_lr), dim=1)

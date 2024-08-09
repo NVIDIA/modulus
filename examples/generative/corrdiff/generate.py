@@ -18,6 +18,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 import torch
 import torch._dynamo
+import nvtx
 import numpy as np
 import netCDF4 as nc
 from modulus.distributed import DistributedManager
@@ -25,18 +26,25 @@ from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus import Module
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from einops import rearrange
+from torch.distributed import gather
+
 
 from hydra.utils import to_absolute_path
 from modulus.utils.generative import ablation_sampler
-
-from generate_helpers import (
-    get_dataset_and_sampler,
+from modulus.utils.corrdiff import (
+    NetCDFWriter,
     get_time_from_range,
-    writer_from_input_dataset,
-    save_images,
-    generate_fn,
+    regression_step,
+    diffusion_step,
 )
-from train_helpers import set_patch_shape
+
+
+from helpers.generate_helpers import (
+    get_dataset_and_sampler,
+    save_images,
+)
+from helpers.train_helpers import set_patch_shape
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
@@ -80,7 +88,6 @@ def main(cfg: DictConfig) -> None:
     dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
     img_shape = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
-    use_mean_hr = False
 
     # Parse the patch shape
     if hasattr(cfg, "training.hp.patch_shape_x"):  # TODO better config handling
@@ -141,7 +148,9 @@ def main(cfg: DictConfig) -> None:
     # Partially instantiate the sampler based on the configs
     if cfg.sampler.type == "deterministic":
         if cfg.generation.hr_mean_conditioning:
-            raise NotImplementedError ("High-res mean conditioning is not yet implemented for the deterministic sampler")
+            raise NotImplementedError(
+                "High-res mean conditioning is not yet implemented for the deterministic sampler"
+            )
         sampler_fn = partial(
             ablation_sampler,
             num_steps=cfg.sampler.num_steps,
@@ -165,6 +174,96 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown sampling method {cfg.sampling.type}")
 
+    # Main generation definition
+    def generate_fn():
+        img_shape_y, img_shape_x = img_shape
+        with nvtx.annotate("generate_fn", color="green"):
+            if cfg.generation.sample_res == "full":
+                image_lr_patch = image_lr
+            else:
+                torch.cuda.nvtx.range_push("rearrange")
+                image_lr_patch = rearrange(
+                    image_lr,
+                    "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
+                    h1=img_shape_y // patch_shape[0],
+                    w1=img_shape_x // patch_shape[1],
+                )
+                torch.cuda.nvtx.range_pop()
+            image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
+
+            if net_reg:
+                with nvtx.annotate("regression_model", color="yellow"):
+                    image_reg = regression_step(
+                        net=net_reg,
+                        img_lr=image_lr_patch,
+                        latents_shape=(
+                            cfg.generation.seed_batch_size,
+                            img_out_channels,
+                            img_shape[1],
+                            img_shape[0],
+                        ),
+                    )
+            if net_res:
+                if cfg.generation.hr_mean_conditioning:
+                    mean_hr = image_reg[0:1]
+                else:
+                    mean_hr = None
+                with nvtx.annotate("diffusion model", color="purple"):
+                    image_res = diffusion_step(
+                        net=net_res,
+                        sampler_fn=sampler_fn,
+                        seed_batch_size=cfg.generation.seed_batch_size,
+                        img_shape=img_shape,
+                        img_out_channels=img_out_channels,
+                        rank_batches=rank_batches,
+                        img_lr=image_lr_patch.expand(
+                            cfg.generation.seed_batch_size, -1, -1, -1
+                        ).to(memory_format=torch.channels_last),
+                        rank=dist.rank,
+                        device=device,
+                        use_mean_hr=mean_hr,
+                    )
+            if cfg.generation.inference_mode == "regression":
+                image_out = image_reg
+            elif cfg.generation.inference_mode == "diffusion":
+                image_out = image_res
+            else:
+                image_out = image_reg + image_res
+
+            if cfg.generation.sample_res != "full":
+                image_out = rearrange(
+                    image_out,
+                    "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
+                    h1=img_shape_y // patch_shape[0],
+                    w1=img_shape_x // patch_shape[1],
+                )
+
+            # Gather tensors on rank 0
+            if dist.world_size > 1:
+                if dist.rank == 0:
+                    gathered_tensors = [
+                        torch.zeros_like(
+                            image_out, dtype=image_out.dtype, device=image_out.device
+                        )
+                        for _ in range(dist.world_size)
+                    ]
+                else:
+                    gathered_tensors = None
+
+                torch.distributed.barrier()
+                gather(
+                    image_out,
+                    gather_list=gathered_tensors if dist.rank == 0 else None,
+                    dst=0,
+                )
+
+                if dist.rank == 0:
+                    return torch.cat(gathered_tensors)
+                else:
+                    return None
+            else:
+                return image_out
+
     # generate images
     logger0.info("Generating images...")
     batch_size = 1
@@ -177,20 +276,28 @@ def main(cfg: DictConfig) -> None:
         # add attributes
         f.cfg = str(cfg)
         with torch.cuda.profiler.profile():
-            with torch.autograd.profiler.emit_nvtx():     
+            with torch.autograd.profiler.emit_nvtx():
 
                 data_loader = torch.utils.data.DataLoader(
-                dataset=dataset, sampler=sampler, batch_size=1, pin_memory=True
+                    dataset=dataset, sampler=sampler, batch_size=1, pin_memory=True
                 )
                 time_index = -1
-                writer = writer_from_input_dataset(f, dataset)
+                writer = NetCDFWriter(
+                    f,
+                    lat=dataset.latitude(),
+                    lon=dataset.longitude(),
+                    input_channels=dataset.input_channels(),
+                    output_channels=dataset.output_channels(),
+                )
                 warmup_steps = 2
 
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
 
                 # Initialize threadpool for writers
-                writer_executor = ThreadPoolExecutor(max_workers=cfg.generation.perf.num_writer_workers)
+                writer_executor = ThreadPoolExecutor(
+                    max_workers=cfg.generation.perf.num_writer_workers
+                )
                 writer_threads = []
 
                 times = dataset.time()
@@ -209,7 +316,7 @@ def main(cfg: DictConfig) -> None:
                         .to(memory_format=torch.channels_last)
                     )
                     image_tar = image_tar.to(device=device).to(torch.float32)
-                    image_out = generate_fn(sampler_fn, image_lr, cfg.generation.sample_res, img_shape, img_out_channels, patch_shape, seeds, net_reg, net_res, cfg.generation.seed_batch_size, rank_batches, cfg.generation.inference_mode, cfg.generation.hr_mean_conditioning, dist.rank, dist.world_size, device)
+                    image_out = generate_fn()
 
                     if dist.rank == 0:
                         batch_size = image_out.shape[0]
@@ -232,7 +339,9 @@ def main(cfg: DictConfig) -> None:
                 elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
                 timed_steps = time_index + 1 - warmup_steps
                 if dist.rank == 0:
-                    average_time_per_batch_element = elapsed_time / timed_steps / batch_size
+                    average_time_per_batch_element = (
+                        elapsed_time / timed_steps / batch_size
+                    )
                     logger.info(
                         f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
                     )
