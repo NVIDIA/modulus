@@ -41,7 +41,7 @@ perf:
 
 # I/O
 io:
-    regression_checkpoint_path: checkpoints/regression.mdlus
+    regression_checkpoint_path: reg_checkpoints/regression.mdlus
     # Where to load the regression checkpoint
     print_progress_freq: 1000
     # How often to print progress
