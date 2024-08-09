@@ -338,7 +338,7 @@ class TrailingAverageCoupler:
 
                 self._coupled_offsets[b, i, :] = (
                     b
-                    + ((self.input_time_dim * i) + 1) * interval
+                    + (self.input_time_dim * i) * interval
                     + np.array([ts / data_time_step for ts in self.input_times])
                 )
 
@@ -403,9 +403,17 @@ class TrailingAverageCoupler:
             i // pd.Timedelta(coupled_module.time_step) for i in self.input_times
         ]
         di = averaging_window_max_indices[0]
+        # TODO: Now support output_time_dim =/= input_time_dim, but presteps need to be 0, will add support for presteps>0
         averaging_slices = []
-        for i, r in enumerate(averaging_window_max_indices):
-            averaging_slices.append(slice(i * di, r))
+        for j in range(self.coupled_integration_dim):
+            averaging_slices.append([])
+            for i, r in enumerate(averaging_window_max_indices):
+                averaging_slices[j].append(
+                    slice(
+                        self.input_time_dim * j * di + i * di,
+                        self.input_time_dim * j * di + r,
+                    )
+                )
         self.averaging_slices = averaging_slices
 
     def reset_coupler(self):
@@ -417,13 +425,17 @@ class TrailingAverageCoupler:
     def set_coupled_fields(self, coupled_fields):
 
         coupled_fields = coupled_fields[:, :, :, self.coupled_channel_indices, :, :]
-        averaging_periods = [
-            coupled_fields[:, :, s, :, :, :].mean(dim=2, keepdim=True)
-            for s in self.averaging_slices
-        ]
-        self.preset_coupled_fields = th.concat(averaging_periods, dim=3).permute(
-            2, 0, 3, 1, 4, 5
-        )
+        # TODO: Now support output_time_dim =/= input_time_dim, but presteps need to be 0, will add support for presteps>0
+        coupled_averaging_periods = []
+        for j in range(self.coupled_integration_dim):
+            averaging_periods = [
+                coupled_fields[:, :, s, :, :, :].mean(dim=2, keepdim=True)
+                for s in self.averaging_slices[j]
+            ]
+            coupled_averaging_periods.append(th.concat(averaging_periods, dim=3))
+        self.preset_coupled_fields = th.concat(
+            coupled_averaging_periods, dim=2
+        ).permute(2, 0, 3, 1, 4, 5)
         # flag for construct integrated coupling method to use this array
         self.coupled_mode = True
 
