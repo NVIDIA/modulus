@@ -356,6 +356,8 @@ def main(cfg: DictConfig) -> None:
             torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
+        if dist.world_size > 1:
+            torch.distributed.barrier()
         if is_time_for_periodic_task(
             cur_nimg,
             cfg.training.io.save_checkpoint_freq,
@@ -364,8 +366,6 @@ def main(cfg: DictConfig) -> None:
             dist.rank,
             rank_0_only=True,
         ):
-            if dist.world_size > 1:
-                torch.distributed.barrier()
             save_checkpoint(
                 path=f"checkpoints_{cfg.model.name}",
                 models=model,
