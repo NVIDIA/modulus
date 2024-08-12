@@ -256,8 +256,10 @@ def main(cfg: DictConfig) -> None:
 
         # Update weights.
         for g in optimizer.param_groups:
-            lr_rampup = 10000000  # ramp up the learning rate within 10M images
-            g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
+            #lr_rampup = 10000000  # ramp up the learning rate within 10M images
+            lr_rampup = 0
+            if lr_rampup > 0:
+                g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
             g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
             current_lr = g["lr"]
             if dist.rank == 0:

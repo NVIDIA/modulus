@@ -16,7 +16,6 @@
 # limitations under the License.
 
 type: cwb
-train_test_split: false
 data_path: /code/2023-01-24-cwb-4years.zarr
 in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
 out_channels: [0, 17, 18, 19]
