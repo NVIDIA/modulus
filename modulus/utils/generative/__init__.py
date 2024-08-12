@@ -44,5 +44,6 @@ from .utils import (
     print_module_summary,
     profiled_function,
     suppress_tracer_warnings,
+    time_range,
     tuple_product,
 )

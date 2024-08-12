@@ -57,8 +57,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Number of input color channels.
     img_out_channels : int
         Number of output color channels.
-    label_dim : int, optional
-        Number of class labels; 0 indicates an unconditional model. By default 0.
     use_fp16: bool, optional
         Execute the underlying model at FP16 precision?, by default False.
     sigma_min: float, optional
@@ -87,7 +85,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         img_channels,
         img_in_channels,
         img_out_channels,
-        label_dim=0,
         use_fp16=False,
         sigma_min=0,
         sigma_max=float("inf"),
@@ -109,7 +106,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
 
-        self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
@@ -119,28 +115,16 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
-            label_dim=label_dim,
             **model_kwargs,
         )
 
-    def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
-    ):
+    def forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
         # SR: concatenate input channels
-        if img_lr is None:
-            x = x
-        else:
+        if img_lr is not None:
             x = torch.cat((x, img_lr), dim=1)
 
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = (
-            None
-            if self.label_dim == 0
-            else torch.zeros([1, self.label_dim], device=x.device)
-            if class_labels is None
-            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
-        )
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -152,7 +136,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             torch.zeros(
                 sigma.numel(), dtype=sigma.dtype, device=sigma.device
             ),  # c_noise.flatten()
-            class_labels=class_labels,
+            class_labels=None,
             **model_kwargs,
         )
 
