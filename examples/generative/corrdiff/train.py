@@ -15,13 +15,12 @@
 # limitations under the License.
 
 import os, time, psutil, hydra, torch
-import numpy as np
 from hydra.utils import to_absolute_path
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
-from modulus.models.diffusion import UNet, EDMPrecondSRV2
+from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -34,7 +33,7 @@ from train_helpers import (
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
-    parse_model_args,
+    is_time_for_periodic_task,
 )
 
 
@@ -116,37 +115,43 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
-    additional_model_args = {
+    if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
+        raise ValueError("Invalid model")
+    model_args = {  # default parameters for all networks
         "img_out_channels": img_out_channels,
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
+    standard_model_cfgs = {  # default parameters for different network types
+        "regression": {
+            "img_channels": 4,
+            "N_grid_channels": 4,
+            "embedding_type": "zero",
+        },
+        "diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "sinusoidal",
+            "N_grid_channels": 4,
+        },
+        "patched_diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "learnable",
+            "N_grid_channels": 100,
+        },
+    }
+    model_args.update(standard_model_cfgs[cfg.model.name])
+    if hasattr(cfg.model, "model_args"):  # override defaults from config file
+        model_args.update(OmegaConf.to_container(cfg.model.model_args))
     if cfg.model.name == "regression":
         model = UNet(
-            img_channels=4,
-            N_grid_channels=4,
-            embedding_type="zero",
-            img_in_channels=img_in_channels + 4,
-            **additional_model_args,
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
         )
-    elif cfg.model.name == "diffusion":
-        model = EDMPrecondSRV2(
-            img_channels=4,
-            gridtype="sinusoidal",
-            N_grid_channels=4,
-            img_in_channels=img_in_channels + 4,
-            **additional_model_args,
+    else:  # diffusion or patched diffusion
+        model = EDMPrecondSR(
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
         )
-    elif cfg.model.name == "patched_diffusion":
-        model = EDMPrecondSRV2(
-            img_channels=4,
-            gridtype="learnable",
-            N_grid_channels=100,
-            img_in_channels=img_in_channels + 100,
-            **additional_model_args,
-        )
-    else:
-        raise ValueError("Invalid model")
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -207,19 +212,25 @@ def main(cfg: DictConfig) -> None:
     ## Resume training from previous checkpoints if exists
     if dist.world_size > 1:
         torch.distributed.barrier()
-    cur_nimg = load_checkpoint(
-        path="checkpoints", models=model, optimizer=optimizer, device=dist.device
-    )
+    try:
+        cur_nimg = load_checkpoint(
+            path=f"checkpoints_{cfg.model.name}",
+            models=model,
+            optimizer=optimizer,
+            device=dist.device,
+        )
+    except:
+        cur_nimg = 0
 
     ############################################################################
     #                            MAIN TRAINING LOOP                            #
     ############################################################################
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
-    cur_tick = 0
-    tick_start_nimg = cur_nimg
-    tick_start_time = time.time()
-    while True:
+    done = False
+    while not done:
+        tick_start_nimg = cur_nimg
+        tick_start_time = time.time()
         # Compute & accumulate gradients
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
@@ -248,9 +259,10 @@ def main(cfg: DictConfig) -> None:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
 
         # Update weights.
+        lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
         for g in optimizer.param_groups:
-            lr_rampup = 10000000  # ramp up the learning rate within 10M images
-            g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
+            if lr_rampup > 0:
+                g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
             g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
             current_lr = g["lr"]
             if dist.rank == 0:
@@ -260,10 +272,19 @@ def main(cfg: DictConfig) -> None:
         )
         optimizer.step()
 
+        cur_nimg += cfg.training.hp.total_batch_size
+        done = cur_nimg >= cfg.training.hp.training_duration
+
         # Validation
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
-            if cur_tick % cfg.training.io.validation_freq == 0:
+            if is_time_for_periodic_task(
+                cur_nimg,
+                cfg.training.io.validation_freq,
+                done,
+                cfg.training.hp.total_batch_size,
+                dist.rank,
+            ):
                 with torch.no_grad():
                     for _ in range(cfg.training.io.validation_steps):
                         img_clean_valid, img_lr_valid, labels_valid = next(
@@ -303,19 +324,18 @@ def main(cfg: DictConfig) -> None:
                             "validation_loss", average_valid_loss, cur_nimg
                         )
 
-        cur_nimg += cfg.training.hp.total_batch_size
-        done = cur_nimg >= cfg.training.hp.training_duration
-        if (not done) and (
-            cur_nimg < tick_start_nimg + cfg.training.io.print_progress_freq
-        ):  # TODO revert
-            continue
-
-        # Print stats
-        tick_end_time = time.time()
-        if dist.rank == 0:
+        if is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        ):
+            # Print stats if we crossed the printing threshold with this batch
+            tick_end_time = time.time()
             fields = []
-            fields += [f"tick {cur_tick:<5d}"]
-            fields += [f"samples {(cur_nimg):<9.1f}"]
+            fields += [f"samples {cur_nimg:<9.1f}"]
             fields += [f"training_loss {average_loss:<7.2f}"]
             fields += [f"learning_rate {current_lr:<7.8f}"]
             fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
@@ -333,26 +353,25 @@ def main(cfg: DictConfig) -> None:
                 f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
             ]
             logger0.info(" ".join(fields))
-        torch.cuda.reset_peak_memory_stats()
+            torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if (
-            (cfg.training.io.save_checkpoint_freq is not None)
-            and (done or cur_tick % cfg.training.io.save_checkpoint_freq == 0)
-            and dist.rank == 0
+        if is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.save_checkpoint_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
         ):
             save_checkpoint(
-                path="checkpoints", models=model, optimizer=optimizer, epoch=cur_nimg
+                path=f"checkpoints_{cfg.model.name}",
+                models=model,
+                optimizer=optimizer,
+                epoch=cur_nimg,
             )
-
-        # Update state.
-        cur_tick += 1
-        tick_start_nimg = cur_nimg
-        tick_start_time = time.time()
-        if done:
-            break
 
     # Done.
     logger0.info("Training Completed.")

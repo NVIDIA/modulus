@@ -93,3 +93,15 @@ def handle_and_clip_gradients(model, grad_clip_threshold=None):
 def parse_model_args(args):
     """Convert ListConfig values in args to tuples."""
     return {k: tuple(v) if isinstance(v, ListConfig) else v for k, v in args.items()}
+
+
+def is_time_for_periodic_task(
+    cur_nimg, freq, done, batch_size, rank, rank_0_only=False
+):
+    """Should we perform a task that is done every `freq` samples?"""
+    if rank_0_only and rank != 0:
+        return False
+    elif done:  # Run periodic tasks also at the end of training
+        return True
+    else:
+        return cur_nimg % freq < batch_size
