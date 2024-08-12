@@ -19,10 +19,11 @@ import json
 import math
 from typing import List, Tuple, Union
 
-import cftime
 import numpy as np
 from numba import jit, prange
 import xarray as xr
+
+from modulus.utils.generative import convert_datetime_to_cftime
 
 from .base import ChannelMetadata, DownscalingDataset
 
@@ -111,7 +112,7 @@ class HRRRMiniDataset(DownscalingDataset):
         datetimes = (
             datetime.datetime.utcfromtimestamp(t.tolist() / 1e9) for t in self.times
         )
-        return [_convert_datetime_to_cftime(t) for t in datetimes]
+        return [convert_datetime_to_cftime(t) for t in datetimes]
 
     def image_shape(self) -> Tuple[int, int]:
         """Get the (height, width) of the data (same for input and output)."""
@@ -161,13 +162,6 @@ def _load_stats(stats, variables, group):
         np.float32
     )
     return (mean, std)
-
-
-def _convert_datetime_to_cftime(
-    time: datetime.datetime, cls=cftime.DatetimeGregorian
-) -> cftime.DatetimeGregorian:
-    """Convert a Python datetime object to a cftime DatetimeGregorian object."""
-    return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
 
 
 @jit(nopython=True, parallel=True)

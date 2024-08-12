@@ -15,9 +15,8 @@
 # limitations under the License.
 
 import os, time, psutil, hydra, torch
-import numpy as np
 from hydra.utils import to_absolute_path
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
@@ -34,6 +33,7 @@ from train_helpers import (
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
+    is_time_for_periodic_task,
 )
 
 
@@ -222,15 +222,6 @@ def main(cfg: DictConfig) -> None:
     except:
         cur_nimg = 0
 
-    def is_time_for_periodic_task(freq, rank_0_only=False):
-        """Should we perform a task that is done every `freq` samples?"""
-        if rank_0_only and dist.rank != 0:
-            return False
-        elif done:  # Run periodic tasks also at the end of training
-            return True
-        else:
-            return cur_nimg % freq < cfg.training.hp.total_batch_size
-
     ############################################################################
     #                            MAIN TRAINING LOOP                            #
     ############################################################################
@@ -287,7 +278,13 @@ def main(cfg: DictConfig) -> None:
         # Validation
         if validation_dataset_iterator is not None:
             valid_loss_accum = 0
-            if is_time_for_periodic_task(cfg.training.io.validation_freq):
+            if is_time_for_periodic_task(
+                cur_nimg,
+                cfg.training.io.validation_freq,
+                done,
+                cfg.training.hp.total_batch_size,
+                dist.rank,
+            ):
                 with torch.no_grad():
                     for _ in range(cfg.training.io.validation_steps):
                         img_clean_valid, img_lr_valid, labels_valid = next(
@@ -328,35 +325,44 @@ def main(cfg: DictConfig) -> None:
                         )
 
         if is_time_for_periodic_task(
-            cfg.training.io.print_progress_freq, rank_0_only=True
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
         ):
             # Print stats if we crossed the printing threshold with this batch
             tick_end_time = time.time()
-            if dist.rank == 0:
-                fields = []
-                fields += [f"samples {(cur_nimg):<9.1f}"]
-                fields += [f"training_loss {average_loss:<7.2f}"]
-                fields += [f"learning_rate {current_lr:<7.8f}"]
-                fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
-                fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
-                fields += [
-                    f"sec_per_sample {((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg)):<7.2f}"
-                ]
-                fields += [
-                    f"cpu_mem_gb {(psutil.Process(os.getpid()).memory_info().rss / 2**30):<6.2f}"
-                ]
-                fields += [
-                    f"peak_gpu_mem_gb {(torch.cuda.max_memory_allocated(dist.device) / 2**30):<6.2f}"
-                ]
-                fields += [
-                    f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
-                ]
-                logger0.info(" ".join(fields))
+            fields = []
+            fields += [f"samples {cur_nimg:<9.1f}"]
+            fields += [f"training_loss {average_loss:<7.2f}"]
+            fields += [f"learning_rate {current_lr:<7.8f}"]
+            fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
+            fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
+            fields += [
+                f"sec_per_sample {((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg)):<7.2f}"
+            ]
+            fields += [
+                f"cpu_mem_gb {(psutil.Process(os.getpid()).memory_info().rss / 2**30):<6.2f}"
+            ]
+            fields += [
+                f"peak_gpu_mem_gb {(torch.cuda.max_memory_allocated(dist.device) / 2**30):<6.2f}"
+            ]
+            fields += [
+                f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
+            ]
+            logger0.info(" ".join(fields))
             torch.cuda.reset_peak_memory_stats()
 
         # Save checkpoints
         if is_time_for_periodic_task(
-            cfg.training.io.save_checkpoint_freq, rank_0_only=True
+            cur_nimg,
+            cfg.training.io.save_checkpoint_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
         ):
             if dist.world_size > 1:
                 torch.distributed.barrier()
