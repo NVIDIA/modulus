@@ -96,16 +96,14 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += img_out_channels
 
     # Parse the patch shape
-    if hasattr(cfg, "training.hp.patch_shape_x"):
+    if cfg.model.name == "patched_diffusion":
         patch_shape_x = cfg.training.hp.patch_shape_x
-    else:
-        patch_shape_x = None
-    if hasattr(cfg, "training.hp.patch_shape_y"):
         patch_shape_y = cfg.training.hp.patch_shape_y
     else:
+        patch_shape_x = None
         patch_shape_y = None
     patch_shape = (patch_shape_y, patch_shape_x)
-    patch_shape, img_shape = set_patch_shape(img_shape, patch_shape)
+    img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if patch_shape != img_shape:
         logger0.info("Patch-based training enabled")
     else:
@@ -171,14 +169,14 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                "Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
         logger0.success("Loaded the pre-trained regression model")
 
     # Instantiate the loss function
-    patch_num = getattr(cfg.training, "patch_num", 1)
+    patch_num = getattr(cfg.training.hp, "patch_num", 1)
     if cfg.model.name in ("diffusion", "patched_diffusion"):
         loss_fn = ResLoss(
             regression_net=regression_net,
