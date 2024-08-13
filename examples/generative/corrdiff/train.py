@@ -27,7 +27,7 @@ from modulus.metrics.diffusion import RegressionLoss, ResLoss
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
-from train_helpers import (
+from helpers.train_helpers import (
     set_patch_shape,
     set_seed,
     configure_cuda_for_consistent_precision,
@@ -251,6 +251,7 @@ def main(cfg: DictConfig) -> None:
 
         loss_sum = torch.tensor([loss_accum], device=dist.device)
         if dist.world_size > 1:
+            torch.distributed.barrier()
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = (loss_sum / dist.world_size).cpu().item()
         if dist.rank == 0:
@@ -313,6 +314,7 @@ def main(cfg: DictConfig) -> None:
                         [valid_loss_accum], device=dist.device
                     )
                     if dist.world_size > 1:
+                        torch.distributed.barrier()
                         torch.distributed.all_reduce(
                             valid_loss_sum, op=torch.distributed.ReduceOp.SUM
                         )

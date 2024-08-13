@@ -14,28 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression
-  run:
-    dir: ./outputs/${hydra:job.name}
-
-# Get defaults
-defaults:
-
-  # Dataset
-  - dataset/cwb_train
-
-  # Model
-  - model/corrdiff_regression
-  #- model/corrdiff_diffusion
-  #- model/corrdiff_patched_diffusion
-
-  # Training
-  - training/corrdiff_regression
-    #- training/corrdiff_diffusion
-  #- training/corrdiff_patched_diffusion
-
-  # Validation
-  - validation/basic
+from .utils import NetCDFWriter, diffusion_step, get_time_from_range, regression_step
