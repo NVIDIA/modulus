@@ -24,10 +24,12 @@ hp:
     # Batch size per GPU
     lr: 0.0002
     # Learning rate
-    grad_clip_threshold: false
+    grad_clip_threshold: null
     # no gradient clipping for defualt non-patch-based training
     lr_decay: 1
     # LR decay rate
+    lr_rampup: 10000000
+    # Rampup for learning rate, in number of samples
 
 # Performance
 perf:
@@ -41,7 +43,7 @@ perf:
 
 # I/O
 io:
-    regression_checkpoint_path: checkpoints/regression.mdlus
+    regression_checkpoint_path: reg_checkpoints/regression.mdlus
     # Where to load the regression checkpoint
     print_progress_freq: 1000
     # How often to print progress

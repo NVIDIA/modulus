@@ -14,7 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: patched_diffusion
-  # Name of the preconditioner
-hr_mean_conditioning: True
-  # High-res mean (regression's output) as additional condition
+from .utils import NetCDFWriter, diffusion_step, get_time_from_range, regression_step
