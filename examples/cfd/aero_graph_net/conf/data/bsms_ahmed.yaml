@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,5 +16,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .meshgraphnet import MeshGraphNet  # noqa: I001
-from .bsms_mgn import BiStrideMeshGraphNet  # noqa: I001
+defaults:
+  - ahmed  # use Ahmed experiment as a base and change only required parameters.
+
+_target_: modulus.datapipes.gnn.bsms.BistrideMultiLayerGraphDataset
+
+# TODO(akamenev): is there a way to avoid duplication of configs?
+dataset:
+  _target_: modulus.datapipes.gnn.ahmed_body_dataset.AhmedBodyDataset
+  _convert_: all
+
+  name: ${..name}
+  data_dir: ${..data_dir}
+  split: ${..split}
+  num_samples: ${..num_samples}
+  # number of workers used by dataset during pre-loading (null - auto-select).
+  num_workers: ${..num_workers}
+
+num_layers: 2

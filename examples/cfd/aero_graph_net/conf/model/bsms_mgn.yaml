@@ -14,5 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .meshgraphnet import MeshGraphNet  # noqa: I001
-from .bsms_mgn import BiStrideMeshGraphNet  # noqa: I001
+defaults:
+  - mgn  # use MGN model as a base and change only required parameters.
+
+_target_: modulus.models.meshgraphnet.BiStrideMeshGraphNet
+
+num_mesh_levels: 2
+bistride_unet_levels: 1
