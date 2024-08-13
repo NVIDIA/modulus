@@ -176,7 +176,7 @@ def main(cfg: DictConfig) -> None:
         logger0.success("Loaded the pre-trained regression model")
 
     # Instantiate the loss function
-    patch_num = getattr(cfg.training, "patch_num", 1)
+    patch_num = getattr(cfg.training.hp, "patch_num", 1)
     if cfg.model.name in ("diffusion", "patched_diffusion"):
         loss_fn = ResLoss(
             regression_net=regression_net,
