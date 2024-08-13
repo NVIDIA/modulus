@@ -25,7 +25,8 @@ different models that are regression, diffusion, and patched-based diffusion
 models.
 The default configs are set to train the regression model.
 To train the other models, please adjust `conf/config_training.yaml`
-according to the comments.
+according to the comments. Alternatively, you can create a new config file
+and specify it using the `--config-name` option.
 
 
 ## Dataset

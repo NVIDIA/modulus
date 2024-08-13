@@ -61,7 +61,7 @@ def regression_step(
     return x
 
 
-def diffusion_step(
+def diffusion_step(  # TODO generalize the module and add defaults
     net: torch.nn.Module,
     sampler_fn: callable,
     seed_batch_size: int,
@@ -152,6 +152,7 @@ class NetCDFWriter:
         f.createDimension("y", ny)
 
         v = f.createVariable("lat", "f", dimensions=("y", "x"))
+        # NOTE rethink this for datasets whose samples don't have constant lat-lon.
         v[:] = lat
         v.standard_name = "latitude"
         v.units = "degrees_north"
