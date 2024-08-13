@@ -171,7 +171,7 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                "Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
