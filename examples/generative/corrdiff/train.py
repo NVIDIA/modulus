@@ -33,10 +33,7 @@ from helpers.train_helpers import (
     configure_cuda_for_consistent_precision,
     compute_num_accumulation_rounds,
     handle_and_clip_gradients,
-<<<<<<< HEAD
-=======
     is_time_for_periodic_task,
->>>>>>> 081f5ee4ff395ac5993eb65f0fa5e8713cd822ce
 )
 
 
@@ -147,30 +144,6 @@ def main(cfg: DictConfig) -> None:
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
     if cfg.model.name == "regression":
         model = UNet(
-<<<<<<< HEAD
-            img_channels=4,
-            N_grid_channels=4,
-            embedding_type="zero",
-            img_in_channels=img_in_channels + 4,
-            **additional_model_args,
-        )
-    elif cfg.model.name == "diffusion":
-
-        model = EDMPrecondSR(  # TODO need to use V2 but currently it is giving a shape mismatch error
-            gridtype="sinusoidal",
-            N_grid_channels=4,
-            img_in_channels=img_in_channels + 4,
-            img_channels=img_out_channels,
-            **additional_model_args,
-        )
-    elif cfg.model.name == "patched_diffusion":
-        model = EDMPrecondSR(
-            gridtype="learnable",
-            N_grid_channels=100,
-            img_in_channels=img_in_channels + 100,
-            img_channels=img_out_channels,
-            **additional_model_args,
-=======
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
@@ -178,7 +151,6 @@ def main(cfg: DictConfig) -> None:
         model = EDMPrecondSR(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
->>>>>>> 081f5ee4ff395ac5993eb65f0fa5e8713cd822ce
         )
     model.train().requires_grad_(True).to(dist.device)
 
