@@ -103,7 +103,7 @@ def main(cfg: DictConfig) -> None:
         patch_shape_x = None
         patch_shape_y = None
     patch_shape = (patch_shape_y, patch_shape_x)
-    patch_shape, img_shape = set_patch_shape(img_shape, patch_shape)
+    img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if patch_shape != img_shape:
         logger0.info("Patch-based training enabled")
     else:
