@@ -96,13 +96,11 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += img_out_channels
 
     # Parse the patch shape
-    if hasattr(cfg, "training.hp.patch_shape_x"):
+    if cfg.model.name == "patched_diffusion":
         patch_shape_x = cfg.training.hp.patch_shape_x
-    else:
-        patch_shape_x = None
-    if hasattr(cfg, "training.hp.patch_shape_y"):
         patch_shape_y = cfg.training.hp.patch_shape_y
     else:
+        patch_shape_x = None
         patch_shape_y = None
     patch_shape = (patch_shape_y, patch_shape_x)
     patch_shape, img_shape = set_patch_shape(img_shape, patch_shape)
