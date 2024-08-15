@@ -132,10 +132,10 @@ def test_stl_gen(pytestconfig, download_stl, tmp_path):
 
     res = {k: v[1] - v[0] for k, v in bounds.items()}
     min_res = min(res.values()) / 100
-    n = [int((bounds[k][1] - bounds[k][0] + 0.1) // min_res) for k in bounds.keys()]
-    x = np.linspace(bounds["x"][0] - 0.5, bounds["x"][1] + 0.5, n[0], dtype=np.float64)
-    y = np.linspace(bounds["y"][0] - 0.5, bounds["y"][1] + 0.5, n[1], dtype=np.float64)
-    z = np.linspace(bounds["z"][0] - 0.5, bounds["z"][1] + 0.5, n[2], dtype=np.float64)
+    n = [int((bounds[k][1] - bounds[k][0] + 2) // min_res) for k in bounds.keys()]
+    x = np.linspace(bounds["x"][0] - 1, bounds["x"][1] + 1, n[0], dtype=np.float64)
+    y = np.linspace(bounds["y"][0] - 1, bounds["y"][1] + 1, n[1], dtype=np.float64)
+    z = np.linspace(bounds["z"][0] - 1, bounds["z"][1] + 1, n[2], dtype=np.float64)
     xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
 
     coords = np.concatenate(
