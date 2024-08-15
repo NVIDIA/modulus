@@ -115,8 +115,9 @@ def test_sdf(pytestconfig):
     np.testing.assert_allclose(sdf_hit_point_id.numpy(), [3, 0], atol=1e-7)
 
 
-@import_or_fail("warp")
-def test_stl_gen(pytestconfig, download_stl, tmp_path):
+@import_or_fail(["warp", "skimage"])
+@pytest.mark.parametrize("backend", ["warp", "skimage"])
+def test_stl_gen(pytestconfig, backend, download_stl, tmp_path):
 
     bunny_mesh = mesh.Mesh.from_file(str(download_stl))
 
@@ -146,7 +147,12 @@ def test_stl_gen(pytestconfig, download_stl, tmp_path):
         vertices_3d, vert_indices, coords.flatten()
     ).numpy()
     output_filename = tmp_path / "output_stl.stl"
-    sdf_to_stl(sdf_test.reshape(n[0], n[1], n[2]), filename=output_filename)
+    sdf_to_stl(
+        sdf_test.reshape(n[0], n[1], n[2]),
+        threshold=0.0,
+        backend=backend,
+        filename=output_filename,
+    )
 
     # read the saved stl
     saved_stl = mesh.Mesh.from_file(str(output_filename))
