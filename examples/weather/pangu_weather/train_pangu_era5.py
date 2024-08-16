@@ -28,7 +28,8 @@ from modulus.datapipes.climate import ERA5HDF5Datapipe
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 
-from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_mlflow
+from modulus.launch.logging import LaunchLogger, PythonLogger
+from modulus.launch.logging.mlflow import initialize_mlflow
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 try:
