@@ -220,8 +220,17 @@ import numpy as np
 import scipy.sparse
 import torch
 from dgl import DGLGraph
-from sparse_dot_mkl import dot_product_mkl
 from torch.utils.data import Dataset
+
+try:
+    from sparse_dot_mkl import dot_product_mkl
+except ImportError:
+    import warnings
+
+    warnings.warn(
+        "sparse_dot_mkl is not installed, install using: pip install sparse_dot_mkl"
+    )
+
 
 _INF = 1 + 1e10
 
