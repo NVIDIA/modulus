@@ -31,7 +31,7 @@ from torch.distributed import gather
 
 
 from hydra.utils import to_absolute_path
-from modulus.utils.generative import ablation_sampler
+from modulus.utils.generative import deterministic_sampler, stochastic_sampler
 from modulus.utils.corrdiff import (
     NetCDFWriter,
     get_time_from_range,
@@ -152,20 +152,14 @@ def main(cfg: DictConfig) -> None:
                 "High-res mean conditioning is not yet implemented for the deterministic sampler"
             )
         sampler_fn = partial(
-            ablation_sampler,
+            deterministic_sampler,
             num_steps=cfg.sampler.num_steps,
             num_ensembles=cfg.generation.num_ensembles,
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
-        try:
-            from edmss import edm_sampler
-        except ImportError:
-            raise ImportError(
-                "Please get the edm_sampler by running: pip install git+https://github.com/mnabian/edmss.git"
-            )
         sampler_fn = partial(
-            edm_sampler,
+            stochastic_sampler,
             img_shape=img_shape[1],
             patch_shape=patch_shape[1],
             boundary_pix=cfg.sampler.boundary_pix,
