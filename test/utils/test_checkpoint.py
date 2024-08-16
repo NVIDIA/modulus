@@ -82,7 +82,7 @@ def test_model_checkpointing(
     output_1 = mlp_model_1(input_1)
     output_2 = mlp_model_2(input_2)
     # Save model weights to checkpoint
-    save_checkpoint(checkpoint_folder, models=[mlp_model_1, mlp_model_2])
+    save_checkpoint(checkpoint_folder, models=[mlp_model_1, mlp_model_2], metadata={"model_type": "MLP"})
 
     # Load twin set of models for importing weights
     mlp_model_1 = model_generator(8).to(device)
@@ -102,6 +102,12 @@ def test_model_checkpointing(
 
     assert torch.allclose(output_1, new_output_1, rtol, atol)
     assert torch.allclose(output_2, new_output_2, rtol, atol)
+
+    # Also load the model with metadata
+    epoch, metadata = load_checkpoint(checkpoint_folder, models=[mlp_model_1, mlp_model_2], return_metadata=True, device=device)
+
+    assert epoch == 0
+    assert metadata["model_type"] == "MLP"
 
     # Clean up
     shutil.rmtree(checkpoint_folder)

@@ -17,7 +17,7 @@
 import glob
 import re
 from pathlib import Path
-from typing import Dict, List, NewType, Union
+from typing import Dict, List, NewType, Union, Any, Tuple
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -185,6 +185,7 @@ def save_checkpoint(
     scheduler: Union[scheduler, None] = None,
     scaler: Union[scaler, None] = None,
     epoch: Union[int, None] = None,
+    metadata: Union[Dict[str, Any], None] = None,
 ) -> None:
     """Training checkpoint saving utility
 
@@ -208,6 +209,8 @@ def save_checkpoint(
     epoch : Union[int, None], optional
         Epoch checkpoint to load. If none this will save the checkpoint in the next
         valid index, by default None
+    metadata : Union[Dict[str, Any], None], optional
+        Additional metadata to save, by default None
     """
     # Create checkpoint directory if it does not exist
     if not Path(path).is_dir():
@@ -260,6 +263,8 @@ def save_checkpoint(
     )
     if epoch:
         checkpoint_dict["epoch"] = epoch
+    if metadata:
+        checkpoint_dict["metadata"] = metadata
 
     # Save checkpoint to memory
     if bool(checkpoint_dict):
@@ -277,8 +282,9 @@ def load_checkpoint(
     scheduler: Union[scheduler, None] = None,
     scaler: Union[scaler, None] = None,
     epoch: Union[int, None] = None,
+    return_metadata: bool = False,
     device: Union[str, torch.device] = "cpu",
-) -> int:
+) -> Union[int, Tuple[int, Dict[str, Any]]]:
     """Checkpoint loading utility
 
     This loader is designed to be used with the save checkpoint utility in Modulus
@@ -300,13 +306,17 @@ def load_checkpoint(
     epoch : Union[int, None], optional
         Epoch checkpoint to load. If none is provided this will attempt to load the
         checkpoint with the largest index, by default None
+    return_metadata : bool, optional
+        If True, will return metadata from the checkpoint, by default False
     device : Union[str, torch.device], optional
         Target device, by default "cpu"
 
     Returns
     -------
-    int
-        Loaded epoch
+    Union[int, Tuple[int, Dict[str, Any]]]
+        If `return_metadata` is False, returns the loaded epoch as an integer.
+        If `return_metadata` is True, returns a tuple containing the loaded epoch (int)
+        and metadata (dict) extracted from the checkpoint.
     """
     # Check if checkpoint directory exists
     if not Path(path).is_dir():
@@ -378,4 +388,8 @@ def load_checkpoint(
     epoch = 0
     if "epoch" in checkpoint_dict:
         epoch = checkpoint_dict["epoch"]
+
+    if return_metadata:
+        return epoch, checkpoint_dict.get("metadata", {})
+    
     return epoch
