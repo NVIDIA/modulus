@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .sampler import ablation_sampler
+from .deterministic_sampler import deterministic_sampler
+from .stochastic_sampler import image_batching, image_fuse, stochastic_sampler
 from .utils import (
     EasyDict,
     InfiniteSampler,
