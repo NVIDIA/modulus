@@ -40,22 +40,32 @@ def image_batching(
     This function takes a full image and splits it into patches, adding padding where necessary.
     It can also concatenate additional interpolated data to each patch if provided.
 
-    Args:
-        input (Tensor): The input tensor representing the full image with shape
-                        (batch_size, channels, img_shape_x, img_shape_y).
-        img_shape_x (int): The width (x-dimension) of the original full image.
-        img_shape_y (int): The height (y-dimension) of the original full image.
-        patch_shape_x (int): The width (x-dimension) of each image patch.
-        patch_shape_y (int): The height (y-dimension) of each image patch.
-        batch_size (int): The original batch size before patching.
-        overlap_pix (int): The number of overlapping pixels between adjacent patches.
-        boundary_pix (int): The number of pixels to crop as a boundary from each patch.
-        input_interp (Optional[Tensor]): Optional additional data to concatenate to each patch
-                                         with shape (batch_size, interp_channels, patch_shape_x, patch_shape_y).
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor representing the full image with shape (batch_size, channels, img_shape_x, img_shape_y).
+    img_shape_x : int
+        The width (x-dimension) of the original full image.
+    img_shape_y : int
+        The height (y-dimension) of the original full image.
+    patch_shape_x : int
+        The width (x-dimension) of each image patch.
+    patch_shape_y : int
+        The height (y-dimension) of each image patch.
+    batch_size : int
+        The original batch size before patching.
+    overlap_pix : int
+        The number of overlapping pixels between adjacent patches.
+    boundary_pix : int
+        The number of pixels to crop as a boundary from each patch.
+    input_interp : Optional[Tensor], optional
+        Optional additional data to concatenate to each patch with shape (batch_size, interp_channels, patch_shape_x, patch_shape_y).
+        By default None.
 
-    Returns:
-        Tensor: A tensor containing the image patches, with shape
-                (total_patches * batch_size, channels [+ interp_channels], patch_shape_x, patch_shape_y).
+    Returns
+    -------
+    Tensor
+        A tensor containing the image patches, with shape (total_patches * batch_size, channels [+ interp_channels], patch_shape_x, patch_shape_y).
     """
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
@@ -122,8 +132,6 @@ def image_batching(
                     x_start : x_start + patch_shape_x,
                     y_start : y_start + patch_shape_y,
                 ]
-            # print(x_index, y_index, torch.sum(torch.abs(input[:,:,x_start:x_start+patch_shape_x, y_start:y_start+patch_shape_y])), torch.sum(torch.abs(output)))
-    # print(torch.sum(torch.abs(output)))
     return output
 
 
@@ -144,20 +152,30 @@ def image_fuse(
     by stitching the patches together. The function accounts for overlapping and
     boundary pixels, ensuring that overlapping areas are averaged.
 
-    Args:
-        input (Tensor): The input tensor containing the image patches with shape
-                        (total_patches * batch_size, channels, patch_shape_x, patch_shape_y).
-        img_shape_x (int): The width (x-dimension) of the original full image.
-        img_shape_y (int): The height (y-dimension) of the original full image.
-        patch_shape_x (int): The width (x-dimension) of each image patch.
-        patch_shape_y (int): The height (y-dimension) of each image patch.
-        batch_size (int): The original batch size before patching.
-        overlap_pix (int): The number of overlapping pixels between adjacent patches.
-        boundary_pix (int): The number of pixels to crop as a boundary from each patch.
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor containing the image patches with shape (total_patches * batch_size, channels, patch_shape_x, patch_shape_y).
+    img_shape_x : int
+        The width (x-dimension) of the original full image.
+    img_shape_y : int
+        The height (y-dimension) of the original full image.
+    patch_shape_x : int
+        The width (x-dimension) of each image patch.
+    patch_shape_y : int
+        The height (y-dimension) of each image patch.
+    batch_size : int
+        The original batch size before patching.
+    overlap_pix : int
+        The number of overlapping pixels between adjacent patches.
+    boundary_pix : int
+        The number of pixels to crop as a boundary from each patch.
 
-    Returns:
-        Tensor: The reconstructed full image tensor with shape
-                (batch_size, channels, img_shape_x, img_shape_y).
+    Returns
+    -------
+    Tensor
+        The reconstructed full image tensor with shape (batch_size, channels, img_shape_x, img_shape_y).
+
     """
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
@@ -289,28 +307,50 @@ def stochastic_sampler(
     """
     Proposed EDM sampler (Algorithm 2) with minor changes to enable super-resolution and patch-based diffusion.
 
-    Args:
-        net (Any): The neural network model that generates denoised images from noisy inputs.
-        latents (Tensor): The latent variables (e.g., noise) used as the initial input for the sampler.
-        img_lr (Tensor): Low-resolution input image for conditioning the super-resolution process.
-        class_labels (Optional[Tensor]): Class labels for conditional generation, if required by the model.
-        randn_like (Callable[[Tensor], Tensor]): Function to generate random noise with the same shape as the input tensor.
-        img_shape (int): The height and width of the full image (assumed to be square).
-        patch_shape (int): The height and width of each patch (assumed to be square).
-        overlap_pix (int): Number of overlapping pixels between adjacent patches.
-        boundary_pix (int): Number of pixels to be cropped as a boundary from each patch.
-        mean_hr (Optional[Tensor]): Optional tensor containing mean high-resolution images for conditioning.
-        num_steps (int): Number of time steps for the sampler.
-        sigma_min (float): Minimum noise level.
-        sigma_max (float): Maximum noise level.
-        rho (float): Exponent used in the time step discretization.
-        S_churn (float): Churn parameter controlling the level of noise added in each step.
-        S_min (float): Minimum time step for applying churn.
-        S_max (float): Maximum time step for applying churn.
-        S_noise (float): Noise scaling factor applied during the churn step.
+    Parameters
+    ----------
+    net : Any
+        The neural network model that generates denoised images from noisy inputs.
+    latents : Tensor
+        The latent variables (e.g., noise) used as the initial input for the sampler.
+    img_lr : Tensor
+        Low-resolution input image for conditioning the super-resolution process.
+    class_labels : Optional[Tensor], optional
+        Class labels for conditional generation, if required by the model. By default None.
+    randn_like : Callable[[Tensor], Tensor]
+        Function to generate random noise with the same shape as the input tensor.
+        By default torch.randn_like.
+    img_shape : int
+        The height and width of the full image (assumed to be square). By default 448.
+    patch_shape : int
+        The height and width of each patch (assumed to be square). By default 448.
+    overlap_pix : int
+        Number of overlapping pixels between adjacent patches. By default 4.
+    boundary_pix : int
+        Number of pixels to be cropped as a boundary from each patch. By default 2.
+    mean_hr : Optional[Tensor], optional
+        Optional tensor containing mean high-resolution images for conditioning. By default None.
+    num_steps : int
+        Number of time steps for the sampler. By default 18.
+    sigma_min : float
+        Minimum noise level. By default 0.002.
+    sigma_max : float
+        Maximum noise level. By default 800.
+    rho : float
+        Exponent used in the time step discretization. By default 7.
+    S_churn : float
+        Churn parameter controlling the level of noise added in each step. By default 0.
+    S_min : float
+        Minimum time step for applying churn. By default 0.
+    S_max : float
+        Maximum time step for applying churn. By default float("inf").
+    S_noise : float
+        Noise scaling factor applied during the churn step. By default 1.
 
-    Returns:
-        Tensor: The final denoised image produced by the sampler.
+    Returns
+    -------
+    Tensor
+        The final denoised image produced by the sampler.
     """
 
     # Adjust noise levels based on what's supported by the network.
@@ -382,8 +422,6 @@ def stochastic_sampler(
         x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * randn_like(x_cur)
 
         # Euler step. Perform patching operation on score tensor if patch-based generation is used
-        # denoised = net(x_hat, t_hat, class_labels).to(torch.float64)    #x_lr
-
         if patch_shape != img_shape:
             x_hat_batch = image_batching(
                 x_hat,
