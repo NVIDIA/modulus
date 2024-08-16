@@ -34,3 +34,4 @@ dataset:
   num_workers: ${..num_workers}
 
 num_layers: 2
+cache_dir: ${.dataset.data_dir}/bsms_cache

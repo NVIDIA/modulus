@@ -62,15 +62,19 @@ def test_bsms_ahmed_dataset(pytestconfig, ahmed_data_dir):
     from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
     from modulus.datapipes.gnn.bsms import BistrideMultiLayerGraphDataset
 
+    split = "train"
     # Construct multi-scale dataset out of standard Ahmed Body dataset.
     ahmed_dataset = AhmedBodyDataset(
         data_dir=ahmed_data_dir,
-        split="train",
+        split=split,
         num_samples=2,
     )
 
     num_levels = 2
-    ms_dataset = BistrideMultiLayerGraphDataset(ahmed_dataset, num_levels)
+    ms_dataset = BistrideMultiLayerGraphDataset(
+        ahmed_dataset,
+        num_levels,
+    )
 
     assert len(ms_dataset) == 2
 
@@ -78,3 +82,42 @@ def test_bsms_ahmed_dataset(pytestconfig, ahmed_data_dir):
     assert g0["graph"].num_nodes() == 64310
     assert len(g0["ms_edges"]) == 3
     assert len(g0["ms_ids"]) == 2
+
+
+@import_or_fail("sparse_dot_mkl")
+def test_bsms_ahmed_dataset_caching(pytestconfig, ahmed_data_dir, tmp_path):
+    from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
+    from modulus.datapipes.gnn.bsms import BistrideMultiLayerGraphDataset
+
+    split = "train"
+    # Construct multi-scale dataset out of standard Ahmed Body dataset.
+    ahmed_dataset = AhmedBodyDataset(
+        data_dir=ahmed_data_dir,
+        split=split,
+        num_samples=2,
+    )
+
+    num_levels = 2
+
+    ms_dataset1 = BistrideMultiLayerGraphDataset(
+        ahmed_dataset,
+        num_levels,
+        cache_dir=None,
+    )
+
+    ms_dataset2 = BistrideMultiLayerGraphDataset(
+        ahmed_dataset,
+        num_levels,
+        cache_dir=tmp_path / split,
+    )
+
+    # Non-caching dataset.
+    g0_1 = ms_dataset1[0]
+    # First pass - cache is empty.
+    g0_2 = ms_dataset2[0]
+    assert (g0_1["ms_edges"][0] == g0_2["ms_edges"][0]).all()
+    assert (g0_1["ms_ids"][0] == g0_2["ms_ids"][0]).all()
+    # Second pass - should read from the cache.
+    g0_2 = ms_dataset2[0]
+    assert (g0_1["ms_edges"][0] == g0_2["ms_edges"][0]).all()
+    assert (g0_1["ms_ids"][0] == g0_2["ms_ids"][0]).all()

@@ -213,6 +213,8 @@ The following license is provided from their source,
 """
 
 from enum import Enum
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import scipy.sparse
@@ -227,14 +229,35 @@ _INF = 1 + 1e10
 class BistrideMultiLayerGraphDataset(Dataset):
     """Wrapper over graph dataset that enables multi-layer graphs."""
 
-    def __init__(self, dataset: Dataset, num_layers: int = 1, **kwargs):
+    def __init__(
+        self,
+        dataset: Dataset,
+        num_layers: int = 1,
+        cache_dir: Optional[str | Path] = None,
+        **kwargs,
+    ):
         self.dataset = dataset
         self.num_layers = num_layers
+        if cache_dir is None:
+            self.cache_dir = None
+        else:
+            self.cache_dir = Path(cache_dir) / self.dataset.split
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def __getitem__(self, idx):
         graph = self.dataset[idx]
-        ms_graph = BistrideMultiLayerGraph(graph, self.num_layers)
-        _, ms_edges, ms_ids = ms_graph.get_multi_layer_graphs()
+        # Check if MS graph is already in the cache.
+        edges_and_ids = None
+        if self.cache_dir is not None:
+            edges_and_ids = self._load_from_cache(idx)
+        if edges_and_ids is None:
+            ms_graph = BistrideMultiLayerGraph(graph, self.num_layers)
+            _, *edges_and_ids = ms_graph.get_multi_layer_graphs()
+
+            if self.cache_dir is not None:
+                self._save_to_cache(idx, edges_and_ids)
+        ms_edges, ms_ids = edges_and_ids
+
         return {
             "graph": graph,
             "ms_edges": [torch.tensor(e, dtype=torch.long) for e in ms_edges],
@@ -246,6 +269,28 @@ class BistrideMultiLayerGraphDataset(Dataset):
 
     def __getattr__(self, name):
         return getattr(self.dataset, name)
+
+    def _get_cache_filename(self, idx: int) -> str:
+        return f"{idx:03}.cache"
+
+    def _load_from_cache(self, idx: int) -> tuple[list, list]:
+        if self.cache_dir is None or not self.cache_dir.is_dir():
+            raise ValueError("Cache directory is not set or does not exist.")
+
+        filename = self.cache_dir / (self._get_cache_filename(idx) + ".npz")
+        if not filename.exists():
+            return None
+        return np.load(filename, allow_pickle=True)["edges_and_ids"]
+
+    def _save_to_cache(self, idx: int, edges_and_ids: tuple[list, list]) -> None:
+        if self.cache_dir is None or not self.cache_dir.is_dir():
+            raise ValueError("Cache directory is not set or does not exist.")
+
+        filename = self.cache_dir / self._get_cache_filename(idx)
+        return np.savez(
+            filename,
+            edges_and_ids=np.asanyarray(edges_and_ids, dtype=object),
+        )
 
 
 class BistrideMultiLayerGraph:
@@ -585,7 +630,9 @@ class Graph:
         edge_list = []
         for i in range(len(adj_list)):
             for n in adj_list[i]:
-                edge_list.append([i, n])
+                edge_list.append(  # noqa: PERF401 list comprehension makes the code less clear.
+                    [i, n]
+                )
         return np.array(edge_list).transpose()
 
     @staticmethod
