@@ -17,7 +17,6 @@
 from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
-import torch
 from dgl import DGLGraph
 from torch import Tensor
 
