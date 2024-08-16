@@ -13,6 +13,12 @@ To train the model, simply run
 python train_transolver_darcy.py
 ```
 
+To reproduce the results in the paper, run
+
+```bash
+python train_transolver_darcy_fix.py
+```
+
 ## Additional Information
 
 ## References
