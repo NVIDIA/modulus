@@ -17,7 +17,7 @@
 import glob
 import re
 from pathlib import Path
-from typing import Dict, List, NewType, Union, Any, Tuple
+from typing import Any, Dict, List, NewType, Tuple, Union
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -391,5 +391,5 @@ def load_checkpoint(
 
     if return_metadata:
         return epoch, checkpoint_dict.get("metadata", {})
-    
+
     return epoch
