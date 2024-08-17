@@ -33,9 +33,8 @@ from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
     LaunchLogger,
-    initialize_mlflow,
 )
-
+from modulus.launch.logging.mlflow import initialize_mlflow
 from utils import NestedDarcyDataset, GridValidator
 
 

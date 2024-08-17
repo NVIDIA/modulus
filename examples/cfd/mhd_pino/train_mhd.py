@@ -31,7 +31,6 @@ from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.launch.logging import (
     PythonLogger,
     LaunchLogger,
-    initialize_mlflow,
     initialize_wandb,
 )
 from modulus.sym.hydra import to_absolute_path

@@ -26,7 +26,8 @@ from modulus.datapipes.benchmarks.darcy import Darcy2D
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.launch.logging import PythonLogger, LaunchLogger, initialize_mlflow
+from modulus.launch.logging import PythonLogger, LaunchLogger
+from modulus.launch.logging.mlflow import initialize_mlflow
 
 from validator import GridValidator
 
