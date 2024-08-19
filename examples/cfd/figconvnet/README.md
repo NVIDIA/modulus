@@ -68,6 +68,20 @@ In this scenario:
 
 See [Hydra documentation](https://hydra.cc/docs/intro) for more details.
 
+For the full set of training script options, run the following command:
+
+```bash
+python train.py --help
+```
+
+In case of issues with Hydra config, you may get a Hydra error message
+that is not particularly useful. In such case, use `HYDRA_FULL_ERROR=1`
+environment variable:
+
+```bash
+HYDRA_FULL_ERROR=1 python train.py ...
+```
+
 ### Multi-GPU Training
 
 FIGConvUNet supports training and evaluation on multiple GPUs.
