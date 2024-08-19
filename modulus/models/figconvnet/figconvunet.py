@@ -18,10 +18,16 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Tuple, Union
 
+try:
+    from jaxtyping import Float
+except ImportError:
+    raise ImportError(
+        "FIGConvUNet requires jaxtyping package, install using `pip install jaxtyping`"
+    )
+
 import numpy as np
 import torch
 import torch.nn as nn
-from jaxtyping import Float
 from torch import Tensor
 
 from modulus.models.figconvnet.base_model import BaseModel

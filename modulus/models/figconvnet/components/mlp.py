@@ -23,21 +23,24 @@ from torch import Tensor
 
 
 class LinearBlock(nn.Module):
-    """
-    Simple linear block with ReLU and dropout
+    """Simple linear block with ReLU and dropout
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    activation : type[nn.Module]
+        Activation function, default nn.GELU
     """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        activation: nn.Module = nn.GELU,
+        activation: type[nn.Module] = nn.GELU,
     ):
-        """
-        :param in_channels: input channels
-        :param out_channels: output channels
-        :param dropout: dropout rate
-        """
         super().__init__()
         self.block = nn.Sequential(
             nn.Linear(in_channels, out_channels, bias=False),
@@ -46,9 +49,6 @@ class LinearBlock(nn.Module):
         )
 
     def forward(self, x: Float[Tensor, "... C1"]) -> Float[Tensor, "... C2"]:
-        """
-        Forward pass
-        """
         return self.block(x)
 
 
@@ -60,7 +60,7 @@ class ResidualLinearBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         hidden_channels: int = None,
-        activation=nn.GELU,
+        activation: type[nn.Module] = nn.GELU,
     ):
         super().__init__()
         if hidden_channels is None:
@@ -87,8 +87,20 @@ class ResidualLinearBlock(nn.Module):
 
 
 class MLP(nn.Module):
-    """
-    Multi-layer perceptron
+    """Multi-layer perceptron
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    hidden_channels : int
+        Number of inernal channels in the MLP.
+    use_residual : bool, optional
+        Whether to use residual connections, default False.
+    activation : type[nn.Module]
+        Activation function, default nn.GELU
     """
 
     def __init__(
@@ -97,7 +109,7 @@ class MLP(nn.Module):
         out_channels: int,
         hidden_channels: List[int],
         use_residual: bool = False,
-        activation: nn.Module = nn.GELU,
+        activation: type[nn.Module] = nn.GELU,
     ):
         """
         :param channels: list of channels
@@ -138,7 +150,7 @@ class MLPBlock(nn.Module):
         in_channels: int,
         hidden_channels: int = None,
         out_channels: int = None,
-        activation=nn.GELU,
+        activation: type[nn.Module] = nn.GELU,
     ):
         super().__init__()
         if hidden_channels is None:
