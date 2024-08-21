@@ -154,7 +154,7 @@ def main(cfg: DictConfig) -> None:
         sampler_fn = partial(
             deterministic_sampler,
             num_steps=cfg.sampler.num_steps,
-            #num_ensembles=cfg.generation.num_ensembles,
+            # num_ensembles=cfg.generation.num_ensembles,
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
