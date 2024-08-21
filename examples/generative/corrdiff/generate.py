@@ -154,7 +154,7 @@ def main(cfg: DictConfig) -> None:
         sampler_fn = partial(
             deterministic_sampler,
             num_steps=cfg.sampler.num_steps,
-            num_ensembles=cfg.generation.num_ensembles,
+            # num_ensembles=cfg.generation.num_ensembles,
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
@@ -215,7 +215,7 @@ def main(cfg: DictConfig) -> None:
                         ).to(memory_format=torch.channels_last),
                         rank=dist.rank,
                         device=device,
-                        use_mean_hr=mean_hr,
+                        hr_mean=mean_hr,
                     )
             if cfg.generation.inference_mode == "regression":
                 image_out = image_reg
