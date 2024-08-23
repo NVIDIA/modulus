@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import os
 from functools import wraps
 
 import pytest
+from packaging.version import Version
 
 
 def import_or_fail(
@@ -61,7 +63,20 @@ def _import_or_fail(module_names, config, min_versions=None):
         if config.getoption("--fail-on-missing-modules"):
             __import__(module_name)
         else:
-            pytest.importorskip(module_name, min_version)
+            module = importlib.import_module(module_name)
+            if hasattr(module, "__version__"):
+                if isinstance(module.__version__, str) or module.__version__ is None:
+                    pytest.importorskip(module_name, min_version)
+                elif isinstance(module.__version__, Version):
+                    # pytest importorskip only works for modulues that return the version as str.
+                    version_check = Version(min_version)
+                    if module.__version__ < version_check:
+                        pytest.skip(
+                            f"{module_name} {module.__version__} is less than the required version {version_check}"
+                        )
+            else:
+                # attempt to use regular pytest.importorskip - can potentially fail!
+                pytest.importorskip(module_name, min_version)
 
 
 def nfsdata_or_fail(test_func):

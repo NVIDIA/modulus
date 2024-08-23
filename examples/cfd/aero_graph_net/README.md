@@ -144,10 +144,10 @@ environment variable:
 HYDRA_FULL_ERROR=1 python train.py ...
 ```
 
-This example also requires the `pyvista` and `vtk` libraries. Install with
+This example also requires the `pyvista`, `shapely` and `vtk` libraries. Install with
 
 ```bash
-pip install pyvista vtk
+pip install pyvista shapely vtk
 ```
 
 BSMS MGN model requires additional dependency:

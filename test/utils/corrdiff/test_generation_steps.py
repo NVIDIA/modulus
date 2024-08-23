@@ -21,7 +21,7 @@ import torch
 
 from modulus.models.diffusion import EDMPrecondSRV2, UNet
 from modulus.utils.corrdiff import diffusion_step, regression_step
-from modulus.utils.generative import ablation_sampler
+from modulus.utils.generative import deterministic_sampler, stochastic_sampler
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -56,14 +56,36 @@ def test_diffusion_step(device):
         img_out_channels=2,
     ).to(device)
 
+    # Define the input parameters
+    img_lr = torch.randn(1, 4, 16, 16).to(device)
+
     # Define the sampler
     sampler_fn = partial(
-        ablation_sampler,
+        deterministic_sampler,
         num_steps=2,
     )
 
-    # Define the input parameters
-    img_lr = torch.randn(1, 4, 16, 16).to(device)
+    # Call the function
+    output = diffusion_step(
+        net=mock_precond,
+        sampler_fn=sampler_fn,
+        seed_batch_size=1,
+        img_shape=[16, 16],
+        img_out_channels=2,
+        rank_batches=[[0]],
+        img_lr=img_lr,
+        rank=0,
+        device=device,
+    )
+
+    # Assertions
+    assert output.shape == (1, 2, 16, 16), "Output shape mismatch"
+
+    # Also test with stochastic sampler
+    sampler_fn = partial(
+        stochastic_sampler,
+        num_steps=2,
+    )
 
     # Call the function
     output = diffusion_step(

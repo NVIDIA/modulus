@@ -17,7 +17,8 @@
 import hydra
 from omegaconf import OmegaConf
 
-from modulus.launch.logging import LaunchLogger, initialize_mlflow
+from modulus.launch.logging import LaunchLogger
+from modulus.launch.logging.mlflow import initialize_mlflow
 
 from diagnostic import data, distribute, loss, models, precip, train
 
