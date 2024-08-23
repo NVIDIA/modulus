@@ -388,15 +388,14 @@ class GraphMessagePassing(nn.Module):
         else:
             raise ValueError(f"Only implemented for dim 2 and 3, got {x.shape}")
 
-        # NOTE for zijie
-        #      Here is the biggest difference between BSMS's GMP and that of meshgraphnet.
-        #      in meshgraphnet, the edge information is 1)initialized using fiber=(dir, norm)
-        #      2) then it follows the MP times of MLP_edge, using the same graph connectivity
-
-        #      in BSMS's GMP, since there is only 1 time of MP per layer
-        #      then we dive into a deeper layer, ie the original edges are gone
-        #      it then doesnot make any sense to use 2) above
-        #      so we just use the fiber to cat with the in/out node features
+        # Here is the biggest difference between BSMS's GMP and that of MeshGraphNet.
+        # In MGN, the edge information is:
+        # 1)initialized using fiber=(dir, norm)
+        # 2)then it follows the MP times of MLP_edge, using the same graph connectivity.
+        # In BSMS's GMP, since there is only 1 time of MP per layer
+        # we dive into a deeper layer, i.e. the original edges are gone
+        # it then does not make any sense to use 2) above
+        # so we just use the fiber to cat with the in/out node features
         dir = pi - pj  # (B, N, pos_dim) or (N, pos_dim)
         norm = torch.norm(dir, dim=-1, keepdim=True)  # (B, N, 1) or (N, 1)
         fiber = torch.cat([dir, norm], dim=-1)  # (B, N, pos_dim+1) or (N, pos_dim+1)
