@@ -63,6 +63,7 @@ class HEALPixUNet(Module):
         presteps: int = 0,
         enable_nhwc: bool = False,
         enable_healpixpad: bool = False,
+        couplings: list = [],
     ):
         """
         Parameters
@@ -92,8 +93,14 @@ class HEALPixUNet(Module):
             Model with [N, H, W, C] instead of [N, C, H, W]. default: False
         enable_healpixpad: bool, optional
             Enable CUDA HEALPixPadding if installed. default: False
+        couplings: list, optional
+            sequence of dictionaries that describe coupling mechanisms
         """
         super().__init__()
+        # add coupled fields to input channels for model initialization
+        self.coupled_channels = self._compute_coupled_channels(couplings)
+        self.couplings = couplings
+        self.train_couplers = None
         self.input_channels = input_channels
         self.output_channels = output_channels
         self.n_constants = n_constants
@@ -139,7 +146,17 @@ class HEALPixUNet(Module):
         return (
             self.input_time_dim * (self.input_channels + self.decoder_input_channels)
             + self.n_constants
+            + self.coupled_channels
         )
+
+    def _compute_coupled_channels(self, couplings):
+
+        c_channels = 0
+        for c in couplings:
+            c_channels += len(c["params"]["variables"]) * len(
+                c["params"]["input_times"]
+            )
+        return c_channels
 
     def _compute_output_channels(self) -> int:
         """Compute the total number of output channels in the model"""
@@ -162,11 +179,86 @@ class HEALPixUNet(Module):
         torch.Tensor: reshaped Tensor in expected shape for model encoder
         """
 
-        if not (self.n_constants > 0 or self.decoder_input_channels > 0):
-            return inputs[0].flatten(
-                start_dim=self.channel_dim, end_dim=self.channel_dim + 1
-            )
-        if self.n_constants == 0:
+        if len(self.couplings) > 0:
+            if not (self.n_constants > 0 or self.decoder_input_channels > 0):
+                raise NotImplementedError(
+                    "support for coupled models with no constant fields \
+or decoder inputs (TOA insolation) is not available at this time."
+                )
+            if self.n_constants == 0:
+                raise NotImplementedError(
+                    "support for coupled models with no constant fields \
+or decoder inputs (TOA insolation) is not available at this time."
+                )
+            if self.decoder_input_channels == 0:
+                raise NotImplementedError(
+                    "support for coupled models with no constant fields \
+is not available at this time."
+                )
+
+            result = [
+                inputs[0].flatten(
+                    start_dim=self.channel_dim, end_dim=self.channel_dim + 1
+                ),
+                inputs[1][
+                    :,
+                    :,
+                    slice(step * self.input_time_dim, (step + 1) * self.input_time_dim),
+                    ...,
+                ].flatten(
+                    start_dim=self.channel_dim, end_dim=self.channel_dim + 1
+                ),  # DI
+                inputs[2].expand(
+                    *tuple([inputs[0].shape[0]] + len(inputs[2].shape) * [-1])
+                ),  # constants
+                inputs[3].permute(0, 2, 1, 3, 4),  # coupled inputs
+            ]
+            res = th.cat(result, dim=self.channel_dim)
+
+        else:
+            if not (self.n_constants > 0 or self.decoder_input_channels > 0):
+                return inputs[0].flatten(
+                    start_dim=self.channel_dim, end_dim=self.channel_dim + 1
+                )
+            if self.n_constants == 0:
+                result = [
+                    inputs[0].flatten(
+                        start_dim=self.channel_dim, end_dim=self.channel_dim + 1
+                    ),  # inputs
+                    inputs[1][
+                        :,
+                        :,
+                        slice(
+                            step * self.input_time_dim, (step + 1) * self.input_time_dim
+                        ),
+                        ...,
+                    ].flatten(
+                        self.channel_dim, self.channel_dim + 1
+                    ),  # DI
+                ]
+                res = th.cat(result, dim=self.channel_dim)
+
+                # fold faces into batch dim
+                res = self.fold(res)
+
+                return res
+            if self.decoder_input_channels == 0:
+                result = [
+                    inputs[0].flatten(
+                        start_dim=self.channel_dim, end_dim=self.channel_dim + 1
+                    ),  # inputs
+                    inputs[1].expand(
+                        *tuple([inputs[0].shape[0]] + len(inputs[1].shape) * [-1])
+                    )  # constants
+                    # th.tile(self.constants, (inputs[0].shape[0], 1, 1, 1, 1)) # constants
+                ]
+                res = th.cat(result, dim=self.channel_dim)
+
+                # fold faces into batch dim
+                res = self.fold(res)
+
+                return res
+
             result = [
                 inputs[0].flatten(
                     start_dim=self.channel_dim, end_dim=self.channel_dim + 1
@@ -179,48 +271,12 @@ class HEALPixUNet(Module):
                 ].flatten(
                     self.channel_dim, self.channel_dim + 1
                 ),  # DI
-            ]
-            res = th.cat(result, dim=self.channel_dim)
-
-            # fold faces into batch dim
-            res = self.fold(res)
-
-            return res
-        if self.decoder_input_channels == 0:
-            result = [
-                inputs[0].flatten(
-                    start_dim=self.channel_dim, end_dim=self.channel_dim + 1
-                ),  # inputs
-                inputs[1].expand(
-                    *tuple([inputs[0].shape[0]] + len(inputs[1].shape) * [-1])
+                inputs[2].expand(
+                    *tuple([inputs[0].shape[0]] + len(inputs[2].shape) * [-1])
                 )  # constants
                 # th.tile(self.constants, (inputs[0].shape[0], 1, 1, 1, 1)) # constants
             ]
             res = th.cat(result, dim=self.channel_dim)
-
-            # fold faces into batch dim
-            res = self.fold(res)
-
-            return res
-
-        result = [
-            inputs[0].flatten(
-                start_dim=self.channel_dim, end_dim=self.channel_dim + 1
-            ),  # inputs
-            inputs[1][
-                :,
-                :,
-                slice(step * self.input_time_dim, (step + 1) * self.input_time_dim),
-                ...,
-            ].flatten(
-                self.channel_dim, self.channel_dim + 1
-            ),  # DI
-            inputs[2].expand(
-                *tuple([inputs[0].shape[0]] + len(inputs[2].shape) * [-1])
-            )  # constants
-            # th.tile(self.constants, (inputs[0].shape[0], 1, 1, 1, 1)) # constants
-        ]
-        res = th.cat(result, dim=self.channel_dim)
 
         # fold faces into batch dim
         res = self.fold(res)
@@ -281,12 +337,15 @@ class HEALPixUNet(Module):
         outputs = []
         for step in range(self.integration_steps):
             if step == 0:
-                # inputs_0 = inputs[0]
-                input_tensor = self._reshape_inputs(inputs, step)
+                if len(self.couplings) > 0:
+                    input_tensor = self._reshape_inputs(
+                        list(inputs[0:3]) + [inputs[3][step]], step
+                    )
+                else:
+                    input_tensor = self._reshape_inputs(inputs, step)
             else:
-                # inputs_0 = outputs[-1]
                 input_tensor = self._reshape_inputs(
-                    [outputs[-1]] + list(inputs[1:]), step
+                    [outputs[-1]] + list(inputs[1:3]) + [inputs[3][step]], step
                 )
 
             encodings = self.encoder(input_tensor)
