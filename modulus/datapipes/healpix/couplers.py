@@ -338,7 +338,7 @@ class TrailingAverageCoupler:
 
                 self._coupled_offsets[b, i, :] = (
                     b
-                    + (self.input_time_dim * i) * interval
+                    + (self.input_time_dim * i + 1) * interval
                     + np.array([ts / data_time_step for ts in self.input_times])
                 )
 
