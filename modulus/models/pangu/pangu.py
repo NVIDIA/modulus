@@ -90,7 +90,7 @@ class Pangu(Module):
         embed_dim=192,
         num_heads=(6, 12, 12, 6),
         window_size=(2, 6, 12),
-        number_constant_variables=4,
+        number_constant_variables=3,
         number_surface_variables=4,
         number_atmosphere_variables=5,
         number_atmosphere_levels=13,

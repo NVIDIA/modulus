@@ -39,9 +39,9 @@ def test_pangu_forward(device):
 
     bsize = 2
     invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
-    invar_surface_mask = torch.randn(3, 32, 32).to(device)
-    invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
-    invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+    invar_surface_mask = torch.randn(bsize, 3, 32, 32).to(device)
+    invar_upper_air = torch.randn(bsize, 5 * 13, 32, 32).to(device)
+    invar = torch.concat((invar_surface, invar_surface_mask, invar_upper_air), dim=1)
     # Check output size
     with torch.no_grad():
         assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
@@ -77,13 +77,17 @@ def test_pangu_constructor(device):
             bsize, 4, kw_args["img_size"][0], kw_args["img_size"][1]
         ).to(device)
         invar_surface_mask = torch.randn(
-            3, kw_args["img_size"][0], kw_args["img_size"][1]
+            bsize, 3, kw_args["img_size"][0], kw_args["img_size"][1]
         ).to(device)
         invar_upper_air = torch.randn(
-            bsize, 5, 13, kw_args["img_size"][0], kw_args["img_size"][1]
+            bsize, 5 * 13, kw_args["img_size"][0], kw_args["img_size"][1]
         ).to(device)
-        invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
-        outvar_surface, outvar_upper_air = model(invar)
+        invar = torch.concat(
+            (invar_surface, invar_surface_mask, invar_upper_air), dim=1
+        )
+        outvar = model(invar)
+        outvar_surface = outvar[:, :4]
+        outvar_upper_air = outvar[:, 4:]
         assert outvar_surface.shape == (
             bsize,
             4,
@@ -92,8 +96,7 @@ def test_pangu_constructor(device):
         )
         assert outvar_upper_air.shape == (
             bsize,
-            5,
-            13,
+            5 * 13,
             kw_args["img_size"][0],
             kw_args["img_size"][1],
         )
@@ -116,9 +119,11 @@ def test_pangu_optims(device):
 
         bsize = random.randint(1, 5)
         invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
-        invar_surface_mask = torch.randn(3, 32, 32).to(device)
-        invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
-        invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+        invar_surface_mask = torch.randn(bsize, 3, 32, 32).to(device)
+        invar_upper_air = torch.randn(bsize, 5 * 13, 32, 32).to(device)
+        invar = torch.concat(
+            (invar_surface, invar_surface_mask, invar_upper_air), dim=1
+        )
         return model, invar
 
     # Ideally always check graphs first
@@ -126,13 +131,13 @@ def test_pangu_optims(device):
     assert common.validate_cuda_graphs(model, (invar,))
     # Check JIT
     # model, invar = setup_model()
-    # assert common.validate_jit(model, (invar,))
+    assert common.validate_jit(model, (invar,))
     # Check AMP
     # model, invar = setup_model()
-    # assert common.validate_amp(model, (invar,))
+    assert common.validate_amp(model, (invar,))
     # Check Combo
     # model, invar = setup_model()
-    # assert common.validate_combo_optims(model, (invar,))
+    assert common.validate_combo_optims(model, (invar,))
 
 
 @common.check_ort_version()
@@ -150,8 +155,8 @@ def test_pangu_deploy(device):
 
     bsize = random.randint(1, 5)
     invar_surface = torch.randn(bsize, 4, 32, 32).to(device)
-    invar_surface_mask = torch.randn(3, 32, 32).to(device)
-    invar_upper_air = torch.randn(bsize, 5, 13, 32, 32).to(device)
-    invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
+    invar_surface_mask = torch.randn(bsize, 3, 32, 32).to(device)
+    invar_upper_air = torch.randn(bsize, 5 * 13, 32, 32).to(device)
+    invar = torch.concat((invar_surface, invar_surface_mask, invar_upper_air), dim=1)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
