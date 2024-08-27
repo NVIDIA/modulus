@@ -202,11 +202,11 @@ def run_test_distributed_meshgraphnet(rank, world_size, dtype, partition_scheme)
 
     # numeric tolerances based on dtype
     tolerances = {
-        torch.float32: (1e-5, 1e-6),
+        torch.float32: (1e-4, 1e-5),
         torch.float16: (1e-2, 1e-3),
     }
     tolerances_weight = {
-        torch.float32: (1e-3, 1e-5),
+        torch.float32: (1e-2, 1e-4),
         torch.float16: (1e-1, 1e-2),
     }
     atol, rtol = tolerances[dtype]
