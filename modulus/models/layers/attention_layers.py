@@ -75,7 +75,8 @@ class EarthAttention3D(nn.Module):
         self.register_buffer("earth_position_index", earth_position_index)
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
+        self.attn_drop_p = attn_drop
+
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -97,10 +98,7 @@ class EarthAttention3D(nn.Module):
             .permute(3, 0, 4, 1, 2, 5)
         )
         q, k, v = qkv[0], qkv[1], qkv[2]
-
-        q = q * self.scale
-        attn = q @ k.transpose(-2, -1)
-
+        # print(v.shape[1:])
         earth_position_bias = self.earth_position_bias_table[
             self.earth_position_index.view(-1)
         ].view(
@@ -109,24 +107,36 @@ class EarthAttention3D(nn.Module):
             self.type_of_windows,
             -1,
         )  # Wpl*Wlat*Wlon, Wpl*Wlat*Wlon, num_pl*num_lat, nH
-        earth_position_bias = earth_position_bias.permute(
-            3, 2, 0, 1
-        ).contiguous()  # nH, num_pl*num_lat, Wpl*Wlat*Wlon, Wpl*Wlat*Wlon
-        attn = attn + earth_position_bias.unsqueeze(0)
+        earth_position_bias = (
+            earth_position_bias.permute(3, 2, 0, 1).contiguous().unsqueeze(0)
+        )
 
-        if mask is not None:
-            nLon = mask.shape[0]
-            attn = attn.view(
-                B_ // nLon, nLon, self.num_heads, nW_, N, N
-            ) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, nW_, N, N)
-            attn = self.softmax(attn)
+        if mask is None:
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=earth_position_bias,
+                dropout_p=self.attn_drop_p,
+                scale=self.scale,
+            )
         else:
-            attn = self.softmax(attn)
+            nLon = mask.shape[0]
+            B = B_ // nLon
 
-        attn = self.attn_drop(attn)
+            mask = mask.unsqueeze(1).unsqueeze(0)
+            earth_position_bias = torch.add(earth_position_bias, mask)
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                k.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                v.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                attn_mask=earth_position_bias,
+                dropout_p=self.attn_drop_p,
+                scale=self.scale,
+            )
+            x = x.view(B_, self.num_heads, C // self.num_heads, N, nW_)
 
-        x = (attn @ v).permute(0, 2, 3, 1, 4).reshape(B_, nW_, N, C)
+        x = x.permute(0, 2, 3, 1, 4).reshape(B_, nW_, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -183,7 +193,7 @@ class EarthAttention2D(nn.Module):
         self.register_buffer("earth_position_index", earth_position_index)
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
+        self.attn_drop_p = attn_drop
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -206,9 +216,6 @@ class EarthAttention2D(nn.Module):
         )
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        q = q * self.scale
-        attn = q @ k.transpose(-2, -1)
-
         earth_position_bias = self.earth_position_bias_table[
             self.earth_position_index.view(-1)
         ].view(
@@ -217,24 +224,34 @@ class EarthAttention2D(nn.Module):
             self.type_of_windows,
             -1,
         )  # Wlat*Wlon, Wlat*Wlon, num_lat, nH
-        earth_position_bias = earth_position_bias.permute(
-            3, 2, 0, 1
-        ).contiguous()  # nH, num_lat, Wlat*Wlon, Wlat*Wlon
-        attn = attn + earth_position_bias.unsqueeze(0)
+        earth_position_bias = (
+            earth_position_bias.permute(3, 2, 0, 1).contiguous().unsqueeze(0)
+        )  # nH, num_lat, Wlat*Wlon, Wlat*Wlon
 
-        if mask is not None:
-            nLon = mask.shape[0]
-            attn = attn.view(
-                B_ // nLon, nLon, self.num_heads, nW_, N, N
-            ) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, nW_, N, N)
-            attn = self.softmax(attn)
+        if mask is None:
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=earth_position_bias,
+                dropout_p=self.attn_drop_p,
+                scale=self.scale,
+            )
         else:
-            attn = self.softmax(attn)
+            nLon = mask.shape[0]
+            B = B_ // nLon
 
-        attn = self.attn_drop(attn)
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                k.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                v.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
+                attn_mask=earth_position_bias + mask.unsqueeze(1).unsqueeze(0),
+                dropout_p=self.attn_drop_p,
+                scale=self.scale,
+            )
+            x = x.view(B_, self.num_heads, C // self.num_heads, N, nW_)
 
-        x = (attn @ v).permute(0, 2, 3, 1, 4).reshape(B_, nW_, N, C)
+        x = x.permute(0, 2, 3, 1, 4).reshape(B_, nW_, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

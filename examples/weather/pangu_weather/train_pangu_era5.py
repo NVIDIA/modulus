@@ -19,16 +19,25 @@ import os
 import hydra
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from torch.nn.parallel import DistributedDataParallel
+from torch.cuda import amp
+from torch.cuda.amp import GradScaler
+
 from omegaconf import DictConfig, OmegaConf
+
+from tqdm import tqdm
 
 from modulus.models.pangu import Pangu
 from modulus.datapipes.climate import ERA5HDF5Datapipe
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 
-from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_mlflow
+from modulus.launch.logging import (
+    RankZeroLoggingWrapper,
+    PythonLogger,
+)
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 try:
@@ -39,77 +48,133 @@ except:
         + "See https://github.com/nvidia/apex for install details."
     )
 
+OmegaConf.register_new_resolver("lambda_lr", lambda x, y: (lambda epoch: x / y))
+torch._dynamo.config.optimize_ddp = False
 
-def loss_func(x, y):
-    return torch.nn.functional.l1_loss(x, y)
+
+@torch.jit.script
+def loss_func(x: torch.Tensor, y: torch.Tensor, weights: torch.Tensor):
+    return torch.mean(
+        weights * torch.nn.functional.smooth_l1_loss(x, y, reduction="none", beta=0.5)
+    ) / torch.mean(weights)
 
 
 @torch.no_grad()
 def validation_step(
-    eval_step, pangu_model, datapipe, surface_mask, channels=[0, 1], epoch=0
+    eval_step,
+    pangu_model,
+    datapipe,
+    surface_mask,
+    weights,
+    channels,
+    epoch,
 ):
-    loss_epoch = 0
+
+    num_channels = len(channels)
+    num_steps = datapipe.num_steps
+    loss_epoch = torch.zeros((num_channels, num_steps), device="cpu")
     num_examples = 0  # Number of validation examples
+
     # Dealing with DDP wrapper
     if hasattr(pangu_model, "module"):
         pangu_model = pangu_model.module
+
     pangu_model.eval()
-    for i, data in enumerate(datapipe):
-        invar_surface = data[0]["invar"].detach()[:, :4, :, :]
-        invar_upper_air = (
-            data[0]["invar"]
-            .detach()[:, 4:, :, :]
-            .reshape(
-                (
-                    data[0]["invar"].shape[0],
-                    5,
-                    -1,
-                    data[0]["invar"].shape[2],
-                    data[0]["invar"].shape[3],
+
+    # Loop over datapipe
+    for di, data in enumerate(datapipe):
+        # Get input data
+        invar = data[0]["invar"].detach()
+        cos_zenith = data[0]["cos_zenith"].detach().squeeze(dim=2)
+        cos_zenith = torch.clamp(cos_zenith, min=0.0) - 1.0 / torch.pi
+        outvar = data[0]["outvar"].detach()
+        sm = surface_mask.repeat(invar.shape[0], 1, 1, 1)
+
+        num_examples += outvar.shape[0]
+
+        # If first batch then create buffer for outputs
+        if di == 0:
+            outpred = torch.zeros_like(outvar, device="cpu").pin_memory()
+
+        for t in range(outvar.shape[1]):
+            out, loss = eval_step(
+                pangu_model, invar, cos_zenith[:, t : t + 1], sm, outvar[:, t], weights
+            )
+            invar = out.clone()
+            out = out.detach().cpu()
+            loss = loss.detach().cpu()
+
+            # Normalize
+            out = out * datapipe.sd + datapipe.mu
+            loss = loss * datapipe.sd[0, :, 0, 0]
+            loss_epoch[:, t] += loss[channels]
+
+            # If first batch then save out to buffer
+            if di == 0:
+                outpred[:, t].copy_(out, non_blocking=True)
+
+        # If first batch plot images
+        if (di == 0) and (epoch % 10 == 0):
+            os.makedirs("./images", exist_ok=True)
+            num_plots = max(4, num_steps)
+
+            outvar = outvar.cpu() * datapipe.sd + datapipe.mu
+            for i, ch in enumerate(channels):
+                fig, ax = plt.subplots(
+                    nrows=3, ncols=num_plots, figsize=(4 * num_plots, 2 * 3 + 1)
                 )
-            )
-        )
-        outvar_surface = data[0]["outvar"].cpu().detach()[:, :, :4, :, :]
-        outvar_upper_air = (
-            data[0]["outvar"]
-            .cpu()
-            .detach()[:, :, 4:, :, :]
-            .reshape(
-                (
-                    data[0]["outvar"].shape[0],
-                    data[0]["outvar"].shape[1],
-                    5,
-                    -1,
-                    data[0]["outvar"].shape[3],
-                    data[0]["outvar"].shape[4],
+
+                for j in range(num_plots):
+                    op = outpred[0, j, ch]
+                    ov = outvar[0, j, ch]
+                    vmin = ov.min().item()
+                    vmax = ov.max().item()
+                    pred = ax[0, j].imshow(op, vmin=vmin, vmax=vmax)
+                    ax[0, j].set_title(f"Channel {ch} Step {j} Prediction")
+                    plt.colorbar(
+                        pred, ax=ax[0, j], shrink=0.75, orientation="horizontal"
+                    )
+
+                    truth = ax[1, j].imshow(ov, vmin=vmin, vmax=vmax)
+                    ax[1, j].set_title(f"Channel {ch} Step {j} Truth")
+                    plt.colorbar(
+                        truth, ax=ax[1, j], shrink=0.75, orientation="horizontal"
+                    )
+
+                    diff = ax[2, j].imshow((op - ov) / ov.abs().mean())
+                    ax[2, j].set_title(f"Channel {ch} Step {j} Relative Error")
+                    plt.colorbar(
+                        diff, ax=ax[2, j], shrink=0.75, orientation="horizontal"
+                    )
+
+                plt.tight_layout()
+                plt.savefig(
+                    f"./images/diff_channel_{ch}_epoch_{epoch}.png",
+                    dpi=600,
+                    bbox_inches="tight",
                 )
-            )
-        )
-        predvar_surface = torch.zeros_like(outvar_surface)
-        predvar_upper_air = torch.zeros_like(outvar_upper_air)
+                plt.clf()
 
-        for t in range(outvar_surface.shape[1]):
-            output_surface, output_upper_air = eval_step(
-                pangu_model, invar_surface, surface_mask, invar_upper_air
-            )
-            invar_surface.copy_(output_surface)
-            invar_upper_air.copy_(output_upper_air)
-            predvar_surface[:, t] = output_surface.detach().cpu()
-            predvar_upper_air[:, t] = output_upper_air.detach().cpu()
+    loss_epoch = torch.sqrt(loss_epoch / num_examples).numpy()
 
-        num_elements_surface = torch.prod(torch.Tensor(list(predvar_surface.shape[1:])))
-        num_elements_upper_air = torch.prod(
-            torch.Tensor(list(predvar_upper_air.shape[1:]))
-        )
-        loss_epoch += (
-            torch.sum(torch.pow(predvar_surface - outvar_surface, 2))
-            + torch.sum(torch.pow(predvar_upper_air - outvar_upper_air, 2))
-        ) / (num_elements_surface + num_elements_upper_air)
+    # Save losses
+    csv_file_name = "validation_rmse_loss.csv"
+    try:
+        # See if there is an existing file.
+        df = pd.read_csv(csv_file_name, index_col=0)
+    except FileNotFoundError:
+        # Create a new dataframe otherwise.
+        df = pd.DataFrame(columns=["epoch", "channel_id", "step", "loss"])
 
-        num_examples += predvar_surface.shape[0]
+    dd = []
+    for i, ch in enumerate(channels):
+        for j in range(datapipe.num_steps):
+            dd.append([epoch, ch, j, loss_epoch[i, j]])
+
+    df = pd.concat([df, pd.DataFrame(dd, columns=df.columns)], ignore_index=True)
+    df.to_csv(csv_file_name)
 
     pangu_model.train()
-    return loss_epoch / num_examples
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")
@@ -118,31 +183,19 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # Initialize loggers
-    initialize_mlflow(
-        experiment_name=cfg.experiment_name,
-        experiment_desc=cfg.experiment_desc,
-        run_name="Pangu-trainng",
-        run_desc=cfg.experiment_desc,
-        user_name="Modulus User",
-        mode="offline",
-    )
-    LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
-    logger = PythonLogger("main")  # General python logger
 
-    number_channels_pangu = 4 + 5 * 13
-    datapipe = ERA5HDF5Datapipe(
-        data_dir=cfg.train.data_dir,
-        stats_dir=cfg.train.stats_dir,
-        channels=[i for i in range(number_channels_pangu)],
-        num_samples_per_year=cfg.train.num_samples_per_year,
-        batch_size=cfg.train.batch_size,
-        patch_size=OmegaConf.to_object(cfg.train.patch_size),
-        num_workers=cfg.train.num_workers,
-        device=dist.device,
-        process_rank=dist.rank,
-        world_size=dist.world_size,
+    logger = PythonLogger("main")  # General python logger
+    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)
+    rank_zero_logger.file_logging()
+
+    # print ranks and devices
+    logger.info(f"Rank: {dist.rank}, Device: {dist.device}")
+
+    number_channels_pangu = (
+        cfg.pangu.number_surface_variables
+        + cfg.pangu.number_atmosphere_variables * cfg.pangu.number_atmosphere_levels
     )
-    logger.success(f"Loaded datapipe of size {len(datapipe)}")
+    img_size = OmegaConf.to_object(cfg.pangu.img_size)
 
     mask_dir = cfg.mask_dir
     if cfg.get("mask_dtype", "float32") == "float32":
@@ -160,34 +213,38 @@ def main(cfg: DictConfig) -> None:
     topography = torch.from_numpy(
         np.load(os.path.join(mask_dir, "topography.npy")).astype(mask_dtype)
     )
-    surface_mask = torch.stack([land_mask, soil_type, topography], dim=0).to(
-        dist.device
+    topography = (topography - topography.mean()) / topography.std()
+    surface_mask = (
+        torch.stack([land_mask, soil_type, topography], dim=0)
+        .to(dist.device)
+        .unsqueeze(0)
     )
-    logger.success(f"Loaded suface constant mask from {mask_dir}")
-
-    if dist.rank == 0:
-        logger.file_logging()
-        validation_datapipe = ERA5HDF5Datapipe(
-            data_dir=cfg.val.data_dir,
-            stats_dir=cfg.val.stats_dir,
-            channels=[i for i in range(number_channels_pangu)],
-            num_steps=1,
-            num_samples_per_year=cfg.val.num_samples_per_year,
-            batch_size=cfg.val.batch_size,
-            patch_size=OmegaConf.to_object(cfg.val.patch_size),
-            device=dist.device,
-            num_workers=cfg.val.num_workers,
-            shuffle=False,
-        )
-        logger.success(f"Loaded validaton datapipe of size {len(validation_datapipe)}")
+    logger.success(f"Rank {dist.rank}: Loaded suface constant mask from {mask_dir}")
 
     pangu_model = Pangu(
-        img_size=OmegaConf.to_object(cfg.pangu.img_size),
+        img_size=img_size,
         patch_size=OmegaConf.to_object(cfg.pangu.patch_size),
         embed_dim=cfg.pangu.embed_dim,
         num_heads=OmegaConf.to_object(cfg.pangu.num_heads),
         window_size=OmegaConf.to_object(cfg.pangu.window_size),
+        number_constant_variables=cfg.pangu.number_constant_variables
+        + int(cfg.train.use_cosine_zenith),
+        number_surface_variables=cfg.pangu.number_surface_variables,
+        number_atmosphere_levels=cfg.pangu.number_atmosphere_levels,
+        number_atmosphere_variables=cfg.pangu.number_atmosphere_variables,
+        number_up_sampled_blocks=cfg.pangu.number_up_sampled_blocks,
+        number_down_sampled_blocks=cfg.pangu.number_down_sampled_blocks,
+        checkpoint_flag=cfg.pangu.checkpoint_flag,
     ).to(dist.device)
+
+    # pangu_model.compile()
+
+    weights = (
+        torch.abs(torch.cos(torch.linspace(90, -90, img_size[0]) * torch.pi / 180.0))
+        .unsqueeze(1)
+        .repeat(1, img_size[1])
+        .to(dist.device)
+    )
 
     # Distributed learning
     if dist.world_size > 1:
@@ -204,120 +261,196 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize optimizer and scheduler
     optimizer = optimizers.FusedAdam(
-        pangu_model.parameters(), betas=(0.9, 0.999), lr=0.0005, weight_decay=0.000003
+        pangu_model.parameters(),
+        betas=(0.9, 0.999),
+        lr=cfg.train.lr,
+        weight_decay=cfg.train.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
 
-    # Attempt to load latest checkpoint if one exists
-    loaded_epoch = load_checkpoint(
-        "./checkpoints",
-        models=pangu_model,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        device=dist.device,
-    )
+    # Load Validation Datapipe
+    if dist.rank == 0:
+        validation_datapipe = ERA5HDF5Datapipe(
+            data_dir=cfg.val.data_dir,
+            stats_dir=cfg.val.stats_dir,
+            channels=[i for i in range(number_channels_pangu)],
+            num_steps=cfg.val.num_rollout_steps,
+            num_samples_per_year=cfg.val.num_samples_per_year,
+            batch_size=cfg.val.batch_size,
+            device=dist.device,
+            num_workers=cfg.val.num_workers,
+            shuffle=False,
+            use_cos_zenith=cfg.train.use_cosine_zenith,
+            cos_zenith_args={
+                "dt": 6.0,
+                "start_year": 1980,
+                "latlon_bounds": ((90, -90), (0, 360)),
+            },
+            latlon_resolution=img_size,
+        )
+        logger.success(
+            f"Rank {dist.rank}: Loaded validaton datapipe of size {len(validation_datapipe)}"
+        )
 
     @StaticCaptureEvaluateNoGrad(model=pangu_model, logger=logger, use_graphs=False)
-    def eval_step_forward(my_model, invar_surface, surface_mask, invar_upper_air):
-        invar = my_model.prepare_input(invar_surface, surface_mask, invar_upper_air)
-        return my_model(invar)
+    def eval_step_forward(my_model, invar, cos_zenith, surface_mask, outvar, weights):
+        # Multi-step prediction
+        invar = torch.concat([surface_mask, cos_zenith, invar], dim=1)
+        outpred = my_model(invar)
+        loss = torch.sum(
+            weights * (outpred - outvar) ** 2, dim=(0, -2, -1)
+        ) / torch.sum(weights)
+        return outpred, loss
 
     @StaticCaptureTraining(
-        model=pangu_model, optim=optimizer, logger=logger, use_graphs=False
+        model=pangu_model,
+        optim=optimizer,
+        logger=logger,
+        use_graphs=cfg.enable_graphs,
+        use_amp=cfg.enable_amp,
+        gradient_clip_norm=cfg.gradient_clip_norm,
     )
-    def train_step_forward(
-        my_model,
-        invar_surface,
-        surface_mask,
-        invar_upper_air,
-        outvar_surface,
-        outvar_upper_air,
-    ):
+    def train_step_forward(my_model, invar, cos_zenith, surface_mask, outvar, weights):
         # Multi-step prediction
         loss = 0
-        # Multi-step not supported
-        for t in range(outvar_surface.shape[1]):
-            invar = my_model.prepare_input(invar_surface, surface_mask, invar_upper_air)
-            outpred_surface, outpred_upper_air = my_model(invar)
-            invar_surface = outpred_surface
-            invar_upper_air = outpred_upper_air
-            loss += loss_func(outpred_surface, outvar_surface[:, t]) * 0.25 + loss_func(
-                outpred_upper_air, outvar_upper_air[:, t]
-            )
+        batch_size = outvar.shape[0]
+        for b in range(batch_size):
+            invar_ = invar[b : b + 1]
+            cos_zenith_ = cos_zenith[b : b + 1]
+            for t in range(outvar.shape[1]):
+                invar_ = torch.concat(
+                    [surface_mask, cos_zenith_[:, t : t + 1], invar_], dim=1
+                )
+                outpred = my_model(invar_)
+                loss += loss_func(outpred, outvar[b : b + 1, t], weights) / batch_size
+                invar_ = outpred
+
         return loss
 
     # Main training loop
-    max_epoch = cfg.max_epoch
-    for epoch in range(max(1, loaded_epoch + 1), max_epoch + 1):
-        # Wrap epoch in launch logger for console / WandB logs
-        with LaunchLogger(
-            "train", epoch=epoch, num_mini_batch=len(datapipe), epoch_alert_freq=10
-        ) as log:
-            # === Training step ===
-            for j, data in enumerate(datapipe):
-                invar_surface = data[0]["invar"][:, :4, :, :]
-                invar_upper_air = data[0]["invar"][:, 4:, :, :].reshape(
-                    (
-                        data[0]["invar"].shape[0],
-                        5,
-                        -1,
-                        data[0]["invar"].shape[2],
-                        data[0]["invar"].shape[3],
-                    )
-                )
-                outvar_surface = data[0]["outvar"][:, :, :4, :, :]
-                outvar_upper_air = data[0]["outvar"][:, :, 4:, :, :].reshape(
-                    (
-                        data[0]["outvar"].shape[0],
-                        data[0]["outvar"].shape[1],
-                        5,
-                        -1,
-                        data[0]["outvar"].shape[3],
-                        data[0]["outvar"].shape[4],
-                    )
-                )
-                loss = train_step_forward(
-                    pangu_model,
-                    invar_surface,
-                    surface_mask,
-                    invar_upper_air,
-                    outvar_surface,
-                    outvar_upper_air,
+
+    # Attempt to load latest checkpoint if one exists
+    loaded_epoch = load_checkpoint(
+        cfg.checkpoint_dir,
+        models=pangu_model,
+        optimizer=optimizer,
+        scheduler=None,
+        scaler=None,
+        device=dist.device,
+    )
+
+    rank_zero_logger.info("Rank {dist.rank}: Training started.")
+    global_epoch = 0
+    for stage in cfg.train.stages:
+        if loaded_epoch > global_epoch:
+            if loaded_epoch >= global_epoch + stage.num_epochs:
+                # Skip stage
+                global_epoch += stage.num_epochs
+                continue
+            else:
+                num_epochs = stage.num_epochs - (loaded_epoch - global_epoch)
+
+            global_epoch = loaded_epoch
+        else:
+            num_epochs = stage.num_epochs
+
+        rank_zero_logger.info(
+            f"Rank {dist.rank}: Starting stage {stage.name} at epoch # {loaded_epoch}."
+        )
+
+        # Load datapipe for this stage
+        train_datapipe = ERA5HDF5Datapipe(
+            data_dir=cfg.train.data_dir,
+            stats_dir=cfg.train.stats_dir,
+            channels=[i for i in range(number_channels_pangu)],
+            num_samples_per_year=cfg.train.num_samples_per_year,
+            use_cos_zenith=cfg.train.use_cosine_zenith,
+            cos_zenith_args={
+                "dt": 6.0,
+                "start_year": 1980,
+                "latlon_bounds": ((90, -90), (0, 360)),
+            },
+            num_steps=stage.num_rollout_steps,
+            latlon_resolution=img_size,
+            batch_size=stage.batch_size,
+            num_workers=cfg.train.num_workers,
+            device=dist.device,
+            process_rank=dist.rank,
+            world_size=dist.world_size,
+        )
+        logger.success(
+            f"Rank {dist.rank}: Loaded datapipe of size {len(train_datapipe)}"
+        )
+
+        # Initialize scheduler
+        SchedulerClass = getattr(torch.optim.lr_scheduler, stage.lr_scheduler_name)
+        scheduler = SchedulerClass(optimizer, **stage.args)
+
+        # Set scheduler to current step
+        scheduler.step(stage.num_epochs - num_epochs)
+
+        # Get current step for checking if max iterations is reached
+        current_step = len(train_datapipe) * (stage.num_epochs - num_epochs)
+
+        for epoch in range(num_epochs):
+            logger.info(f"Rank {dist.rank}: Starting Epoch {global_epoch}.")
+            loss_agg = 0.0
+            for j, data in tqdm(enumerate(train_datapipe), disable=(dist.rank != 0)):
+                if current_step > stage.max_iterations:
+                    break
+
+                invar = data[0]["invar"]
+                outvar = data[0]["outvar"]
+                cos_zenith = data[0]["cos_zenith"].squeeze(dim=2)
+                cos_zenith = torch.clamp(cos_zenith, min=0.0) - 1.0 / torch.pi
+
+                loss_agg += train_step_forward(
+                    pangu_model, invar, cos_zenith, surface_mask, outvar, weights
                 )
 
-                log.log_minibatch({"loss": loss.detach()})
-            log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
+                current_step += 1
 
-        if dist.rank == 0:
-            # Wrap validation in launch logger for console / WandB logs
-            with LaunchLogger("valid", epoch=epoch) as log:
-                # === Validation step ===
-                error = validation_step(
+                if (
+                    current_step % int(len(train_datapipe) // 5) == 0
+                ) and dist.rank == 0:
+                    tqdm.write(
+                        f"Epoch: {global_epoch} \t iteration: {current_step} "
+                        + f"\t loss: {loss_agg / int(len(train_datapipe) // 5)}"
+                    )
+                    loss_agg = 0.0
+
+            # Step scheduler
+            scheduler.step()
+
+            # Perform validation
+            if dist.rank == 0:
+                del invar, cos_zenith, outvar
+                torch.cuda.empty_cache()
+
+                # Use Modulus Launch checkpoint
+                save_checkpoint(
+                    cfg.checkpoint_dir,
+                    models=pangu_model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=None,
+                    epoch=global_epoch + 1,
+                )
+
+                validation_step(
                     eval_step_forward,
                     pangu_model,
                     validation_datapipe,
                     surface_mask,
-                    epoch=epoch,
+                    weights,
+                    cfg.val.channels,
+                    global_epoch + 1,
                 )
-                log.log_epoch({"Validation error": error})
-
-        if dist.world_size > 1:
+            global_epoch += 1
+            torch.cuda.empty_cache()
             torch.distributed.barrier()
 
-        scheduler.step()
-
-        if (epoch % 5 == 0 or epoch == 1) and dist.rank == 0:
-            # Use Modulus Launch checkpoint
-            save_checkpoint(
-                "./checkpoints",
-                models=pangu_model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                epoch=epoch,
-            )
-
     if dist.rank == 0:
-        logger.info("Finished training!")
+        logger.info("Rank {dist.rank}: Finished training!")
 
 
 if __name__ == "__main__":

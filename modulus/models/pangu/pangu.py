@@ -20,10 +20,10 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from ..layers import DownSample3D, FuserLayer, UpSample3D
-from ..meta import ModelMetaData
-from ..module import Module
-from ..utils import (
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
+from modulus.models.pangu.pangu_processor import PanguProcessor
+from modulus.models.utils import (
     PatchEmbed2D,
     PatchEmbed3D,
     PatchRecovery2D,
@@ -59,6 +59,9 @@ class Pangu(Module):
         embed_dim (int): Patch embedding dimension. Default: 192
         num_heads (tuple[int]): Number of attention heads in different layers.
         window_size (tuple[int]): Window size.
+        number_surface_channels (int): Number of channels that correspond to surface variables.
+        number_air_variables (int): Number of upper-atmosphere variables.
+        number_air_levels (int): Number of pressure level of upper-atmosphere variables.
     """
 
     def __init__(
@@ -68,20 +71,34 @@ class Pangu(Module):
         embed_dim=192,
         num_heads=(6, 12, 12, 6),
         window_size=(2, 6, 12),
+        number_constant_variables=4,
+        number_surface_variables=4,
+        number_atmosphere_variables=5,
+        number_atmosphere_levels=13,
+        number_up_sampled_blocks=2,
+        number_down_sampled_blocks=6,
+        checkpoint_flag: bool = False,
     ):
         super().__init__(meta=MetaData())
-        drop_path = np.linspace(0, 0.2, 8).tolist()
+        drop_path = np.linspace(
+            0, 0.2, number_up_sampled_blocks + number_down_sampled_blocks
+        ).tolist()
         # In addition, three constant masks(the topography mask, land-sea mask and soil type mask)
+        self.number_constant_variables = number_constant_variables
+        self.number_surface_variables = number_surface_variables
+        self.number_air_variables = number_atmosphere_variables
+        self.number_air_levels = number_atmosphere_levels
         self.patchembed2d = PatchEmbed2D(
             img_size=img_size,
             patch_size=patch_size[1:],
-            in_chans=4 + 3,  # add
+            in_chans=self.number_surface_variables
+            + self.number_constant_variables,  # add
             embed_dim=embed_dim,
         )
         self.patchembed3d = PatchEmbed3D(
-            img_size=(13, img_size[0], img_size[1]),
+            img_size=(number_atmosphere_levels, img_size[0], img_size[1]),
             patch_size=patch_size,
-            in_chans=5,
+            in_chans=number_atmosphere_variables,
             embed_dim=embed_dim,
         )
         patched_inp_shape = (
@@ -90,80 +107,44 @@ class Pangu(Module):
             math.ceil(img_size[1] / patch_size[2]),
         )
 
-        self.layer1 = FuserLayer(
-            dim=embed_dim,
-            input_resolution=patched_inp_shape,
-            depth=2,
-            num_heads=num_heads[0],
-            window_size=window_size,
-            drop_path=drop_path[:2],
+        self.processor = PanguProcessor(
+            embed_dim,
+            patched_inp_shape,
+            num_heads,
+            window_size,
+            drop_path,
+            number_up_sampled_blocks,
+            checkpoint_flag,
         )
 
-        patched_inp_shape_downsample = (
-            8,
-            math.ceil(patched_inp_shape[1] / 2),
-            math.ceil(patched_inp_shape[2] / 2),
-        )
-        self.downsample = DownSample3D(
-            in_dim=embed_dim,
-            input_resolution=patched_inp_shape,
-            output_resolution=patched_inp_shape_downsample,
-        )
-        self.layer2 = FuserLayer(
-            dim=embed_dim * 2,
-            input_resolution=patched_inp_shape_downsample,
-            depth=6,
-            num_heads=num_heads[1],
-            window_size=window_size,
-            drop_path=drop_path[2:],
-        )
-        self.layer3 = FuserLayer(
-            dim=embed_dim * 2,
-            input_resolution=patched_inp_shape_downsample,
-            depth=6,
-            num_heads=num_heads[2],
-            window_size=window_size,
-            drop_path=drop_path[2:],
-        )
-        self.upsample = UpSample3D(
-            embed_dim * 2, embed_dim, patched_inp_shape_downsample, patched_inp_shape
-        )
-        self.layer4 = FuserLayer(
-            dim=embed_dim,
-            input_resolution=patched_inp_shape,
-            depth=2,
-            num_heads=num_heads[3],
-            window_size=window_size,
-            drop_path=drop_path[:2],
-        )
         # The outputs of the 2nd encoder layer and the 7th decoder layer are concatenated along the channel dimension.
         self.patchrecovery2d = PatchRecovery2D(
-            img_size, patch_size[1:], 2 * embed_dim, 4
+            img_size, patch_size[1:], 2 * embed_dim, self.number_surface_variables
         )
         self.patchrecovery3d = PatchRecovery3D(
-            (13, img_size[0], img_size[1]), patch_size, 2 * embed_dim, 5
+            (number_atmosphere_levels, img_size[0], img_size[1]),
+            patch_size,
+            2 * embed_dim,
+            number_atmosphere_variables,
         )
-
-    def prepare_input(self, surface, surface_mask, upper_air):
-        """Prepares the input to the model in the required shape.
-        Args:
-            surface (torch.Tensor): 2D n_lat=721, n_lon=1440, chans=4.
-            surface_mask (torch.Tensor): 2D n_lat=721, n_lon=1440, chans=3.
-            upper_air (torch.Tensor): 3D n_pl=13, n_lat=721, n_lon=1440, chans=5.
-        """
-        upper_air = upper_air.reshape(
-            upper_air.shape[0], -1, upper_air.shape[3], upper_air.shape[4]
-        )
-        surface_mask = surface_mask.unsqueeze(0).repeat(surface.shape[0], 1, 1, 1)
-        return torch.concat([surface, surface_mask, upper_air], dim=1)
 
     def forward(self, x):
         """
         Args:
             x (torch.Tensor): [batch, 4+3+5*13, lat, lon]
         """
-        surface = x[:, :7, :, :]
-        upper_air = x[:, 7:, :, :].reshape(x.shape[0], 5, 13, x.shape[2], x.shape[3])
+        surface = x[
+            :, : self.number_constant_variables + self.number_surface_variables, :, :
+        ]
+        upper_air = x[
+            :, self.number_constant_variables + self.number_surface_variables :, :, :
+        ].reshape(
+            x.shape[0],
+            self.number_air_variables,
+            self.number_air_levels,
+            x.shape[2],
+            x.shape[3],
+        )
         surface = self.patchembed2d(surface)
         upper_air = self.patchembed3d(upper_air)
 
@@ -171,21 +152,14 @@ class Pangu(Module):
         B, C, Pl, Lat, Lon = x.shape
         x = x.reshape(B, C, -1).transpose(1, 2)
 
-        x = self.layer1(x)
+        output = self.processor(x)
 
-        skip = x
-
-        x = self.downsample(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.upsample(x)
-        x = self.layer4(x)
-
-        output = torch.concat([x, skip], dim=-1)
         output = output.transpose(1, 2).reshape(B, -1, Pl, Lat, Lon)
         output_surface = output[:, :, 0, :, :]
         output_upper_air = output[:, :, 1:, :, :]
 
         output_surface = self.patchrecovery2d(output_surface)
         output_upper_air = self.patchrecovery3d(output_upper_air)
-        return output_surface, output_upper_air
+        s = output_upper_air.shape
+        output_upper_air = output_upper_air.reshape(s[0], s[1] * s[2], *s[3:])
+        return torch.concat([output_surface, output_upper_air], dim=1)
