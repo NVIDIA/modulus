@@ -74,6 +74,7 @@ all = [
     "netcdf4>=1.6.3",
     "ruamel.yaml>=0.17.22",
     "scikit-learn>=1.0.2",
+    "scikit-image>=0.24.0",
     "warp-lang>=0.6.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
