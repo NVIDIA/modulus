@@ -12,10 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Graph Transformer processor for GraphCast/GenCast.
 - Utility to generate STL from Signed Distance Field.
+- Improved Pangu training code
 
 ### Changed
 
 - Refactored CorrDiff training recipe for improved usability
+- Refactored Pangu model for better extensibility and gradient checkpointing support.
+    Some of these changes are not backward compatible.
 
 ### Deprecated
 
