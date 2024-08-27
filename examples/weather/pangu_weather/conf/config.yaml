@@ -24,16 +24,36 @@ hydra:
   run:
     dir: ./outputs/
 
-max_epoch: 361
+max_epoch: 101
+
+pangu:
+  img_size: [721, 1440]
+  patch_size: [2, 4, 4]
+  embed_dim: 192
+  num_heads: [6, 12, 12, 6]
+  window_size: [2, 6, 12]
+  number_constant_variables: 3
+  number_surface_variables: 4
+  number_atmosphere_variables: 5
+  number_atmosphere_levels: 13
+  number_up_sampled_blocks: 2
+  number_down_sampled_blocks: 6
+  checkpoint_flag: True
 
 train:
-  data_dir: "/data/datasets/era5_75var/train/"
-  stats_dir: "/data/datasets/era5_75var/stats/"
-  num_samples_per_year: 800
+  data_dir: "/data/train/"
+  stats_dir: "/data/stats/"
+  checkpoint_dir: "/data/checkpoints/"
+  mask_dir: "/data/constant_mask/"
+
+  num_samples_per_year: 1456
+  num_workers: 8
   lr: 1e-3
   weight_decay: 0.05
-  num_workers: 8
   use_cosine_zenith: True
+  mask_dtype: "float32"
+  enable_amp: False
+  enable_graphs: False
 
   stages:
     - name: "Learning Rate Warmup"
@@ -49,12 +69,12 @@ train:
     
     - name: "Cosine Annealing LR"
       max_iterations: .inf 
-      num_epochs: 300 
+      num_epochs: 100 
       batch_size: 1
       num_rollout_steps: 1
       lr_scheduler_name: CosineAnnealingLR
       args:
-        T_max: 300
+        T_max: 100
         eta_min: 0.0
       
     - name: "LambdaLR Rollout: 2 Steps"
@@ -84,34 +104,11 @@ train:
       args:
         lr_lambda: ${lambda_lr:3e-7,${train.lr}}
 
-
 val:
-  data_dir: "/data/datasets/era5_75var/test/"
-  stats_dir: "/data/datasets/era5_75var/stats/"
+  data_dir: "/data/test/"
+  stats_dir: "/data/stats/"
   num_samples_per_year: 32
   batch_size: 1
   num_workers: 8
   num_rollout_steps: 6
   channels: [0, 1, 2, 3, 4, 7, 43]
-
-pangu:
-  img_size: [721, 1440]
-  patch_size: [2, 4, 4]
-  embed_dim: 384
-  num_heads: [6, 12, 12, 6]
-  window_size: [2, 6, 12]
-  number_constant_variables: 3
-  number_surface_variables: 8
-  number_atmosphere_variables: 5
-  number_atmosphere_levels: 13
-  number_up_sampled_blocks: 6
-  number_down_sampled_blocks: 18
-  checkpoint_flag: True
-
-
-checkpoint_dir: "/data/dallasf/pangu/checkpoints/"
-mask_dir: "/data/dallasf/pangu/constant_mask"
-mask_dtype: "float32"
-enable_amp: False
-enable_graphs: False
-gradient_clip_norm: 64

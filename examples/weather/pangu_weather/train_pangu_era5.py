@@ -197,13 +197,14 @@ def main(cfg: DictConfig) -> None:
     )
     img_size = OmegaConf.to_object(cfg.pangu.img_size)
 
-    mask_dir = cfg.mask_dir
-    if cfg.get("mask_dtype", "float32") == "float32":
+    mask_dir = cfg.train.mask_dir
+    if cfg.train.get("mask_dtype", "float32") == "float32":
         mask_dtype = np.float32
-    elif cfg.get("mask_dtype", "float32") == "float16":
+    elif cfg.train.get("mask_dtype", "float32") == "float16":
         mask_dtype = np.float16
     else:
         mask_dtype = np.float32
+
     land_mask = torch.from_numpy(
         np.load(os.path.join(mask_dir, "land_mask.npy")).astype(mask_dtype)
     )
@@ -305,9 +306,8 @@ def main(cfg: DictConfig) -> None:
         model=pangu_model,
         optim=optimizer,
         logger=logger,
-        use_graphs=cfg.enable_graphs,
-        use_amp=cfg.enable_amp,
-        gradient_clip_norm=cfg.gradient_clip_norm,
+        use_graphs=cfg.train.enable_graphs,
+        use_amp=cfg.train.enable_amp,
     )
     def train_step_forward(my_model, invar, cos_zenith, surface_mask, outvar, weights):
         # Multi-step prediction
@@ -330,7 +330,7 @@ def main(cfg: DictConfig) -> None:
 
     # Attempt to load latest checkpoint if one exists
     loaded_epoch = load_checkpoint(
-        cfg.checkpoint_dir,
+        cfg.train.checkpoint_dir,
         models=pangu_model,
         optimizer=optimizer,
         scheduler=None,
@@ -428,7 +428,7 @@ def main(cfg: DictConfig) -> None:
 
                 # Use Modulus Launch checkpoint
                 save_checkpoint(
-                    cfg.checkpoint_dir,
+                    cfg.train.checkpoint_dir,
                     models=pangu_model,
                     optimizer=optimizer,
                     scheduler=scheduler,
