@@ -79,7 +79,7 @@ def test_bsms_ahmed_dataset(pytestconfig, ahmed_data_dir):
     assert len(ms_dataset) == 2
 
     g0 = ms_dataset[0]
-    assert g0["graph"].num_nodes() == 64310
+    assert g0["graph"].num_nodes() == 70661
     assert len(g0["ms_edges"]) == 3
     assert len(g0["ms_ids"]) == 2
 

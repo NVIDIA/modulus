@@ -37,7 +37,7 @@ def test_bsms_mgn_forward(pytestconfig, device):
     torch.manual_seed(1)
 
     # Create a simple graph.
-    num_nodes = 4
+    num_nodes = 8
     edges = (
         torch.arange(num_nodes - 1),
         torch.arange(num_nodes - 1) + 1,
