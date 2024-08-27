@@ -15,3 +15,4 @@
 # limitations under the License.
 
 from .pangu import Pangu
+from .pangu_processor import PanguProcessor
