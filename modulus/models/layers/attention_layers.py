@@ -116,7 +116,7 @@ class EarthAttention3D(nn.Module):
                 q,
                 k,
                 v,
-                attn_mask=earth_position_bias,
+                attn_mask=earth_position_bias.to(q.dtype),
                 dropout_p=self.attn_drop_p,
                 scale=self.scale,
             )
@@ -130,7 +130,7 @@ class EarthAttention3D(nn.Module):
                 q.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
                 k.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
                 v.view(B, nLon, self.num_heads, nW_, N, C // self.num_heads),
-                attn_mask=earth_position_bias,
+                attn_mask=earth_position_bias.to(q.dtype),
                 dropout_p=self.attn_drop_p,
                 scale=self.scale,
             )
