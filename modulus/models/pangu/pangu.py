@@ -53,15 +53,34 @@ class Pangu(Module):
     Pangu A PyTorch impl of: `Pangu-Weather: A 3D High-Resolution Model for Fast and Accurate Global Weather Forecast`
     - https://arxiv.org/abs/2211.02556
 
-    Args:
-        img_size (tuple[int]): Image size [Lat, Lon].
-        patch_size (tuple[int]): Patch token size [Lat, Lon].
-        embed_dim (int): Patch embedding dimension. Default: 192
-        num_heads (tuple[int]): Number of attention heads in different layers.
-        window_size (tuple[int]): Window size.
-        number_surface_channels (int): Number of channels that correspond to surface variables.
-        number_air_variables (int): Number of upper-atmosphere variables.
-        number_air_levels (int): Number of pressure level of upper-atmosphere variables.
+    Parameters
+    img_size: tuple[int]
+        Image size [lat, lon]
+    patch_size: tuple[int]
+        Patch-embedding shape
+    embed_dim: int
+        Embedding dimension size, be default 192.
+    num_heads: tuple[int]
+        Number of attention heads to use for each Fuser Layer.
+    window_size: tuple[int]
+        Window size in 3D attention window mechanism.
+    number_constant_variables: int
+        The number of constant variables (do not change in time).
+    number_surface_variables: int
+        The number of surface variables (not including constant variables).
+        By default 4
+    number_atmosphere_variables: int
+        The number of atmosphere variables per atmosphere level.
+        By default 5
+    number_atmosphere_levels: int
+        The number of pressure levels in the atmosphere.
+        By default 13.
+    number_up_sampled_blocks: int
+        The number of upsampled blocks in the Earth-specific Transformer blocks.
+    number_down_sampled_blocks: int
+        The number of downsampled blocks in the Earth-specific Transformer blocks.
+    checkpoint_flag: int
+        Whether to use gradient checkpointing in training.
     """
 
     def __init__(
