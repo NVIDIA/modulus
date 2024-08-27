@@ -693,8 +693,6 @@ class EDMPrecondSR(Module):
         Number of input color channels.
     img_out_channels : int
         Number of output color channels.
-    label_dim : int
-        Number of class labels, 0 = unconditional, by default 0.
     use_fp16 : bool
         Execute the underlying model at FP16 precision?, by default False.
     sigma_min : float
@@ -704,7 +702,7 @@ class EDMPrecondSR(Module):
     sigma_data : float
         Expected standard deviation of the training data, by default 0.5.
     model_type :str
-        Class name of the underlying model, by default "DhariwalUNet".
+        Class name of the underlying model, by default "SongUNetPosEmbd".
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 
@@ -726,12 +724,11 @@ class EDMPrecondSR(Module):
         img_channels,
         img_in_channels,
         img_out_channels,
-        label_dim=0,
         use_fp16=False,
         sigma_min=0.0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ):
         warnings.warn(
@@ -746,7 +743,6 @@ class EDMPrecondSR(Module):
         self.img_channels = img_channels
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
-        self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
@@ -757,7 +753,7 @@ class EDMPrecondSR(Module):
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
-            label_dim=label_dim,
+            label_dim=0,
             **model_kwargs,
         )  # TODO needs better handling
 
@@ -767,7 +763,6 @@ class EDMPrecondSR(Module):
         x,
         img_lr,
         sigma,
-        class_labels=None,
         force_fp32=False,
         **model_kwargs,
     ):
@@ -776,13 +771,6 @@ class EDMPrecondSR(Module):
 
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = (
-            None
-            if self.label_dim == 0
-            else torch.zeros([1, self.label_dim], device=x.device)
-            if class_labels is None
-            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
-        )
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -797,7 +785,7 @@ class EDMPrecondSR(Module):
         F_x = self.model(
             (c_in * x).to(dtype),
             c_noise.flatten(),
-            class_labels=class_labels,
+            class_labels=None,
             **model_kwargs,
         )
 
@@ -833,7 +821,6 @@ class _ConditionalPrecond(torch.nn.Module):
         model: torch.nn.Module,
         img_resolution: int,
         img_channels: int,
-        label_dim=0,
         use_fp16=False,
         sigma_min=0,
         sigma_max=float("inf"),
@@ -843,7 +830,6 @@ class _ConditionalPrecond(torch.nn.Module):
 
         # metadata. Not clear which is of these is used externally. I believe
         # img_resolution and img_channels are.
-        self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
@@ -856,23 +842,22 @@ class _ConditionalPrecond(torch.nn.Module):
     def forward(
         self,
         x,
-        sigma,
-        class_labels=None,
         condition=None,
+        sigma=None,
         force_fp32=False,
         **model_kwargs,
     ):
+        # workaround to to handle backward compatibility with EDMPrecond,
+        # argument ordering for EDMPrecond is x, condition, sigma
+        # EDMPrecond required condition to be passed, _ConditionalPrecond and
+        # thus EDMPrecondV2 allows it to be None. To be backward compatible with
+        # EDMPrecond based code argument ordering has to be maintained which means
+        # sigma has to change from a positional only to a positional-or-keyword arg
+        if sigma is None:
+            raise ValueError("sigma must be provided, it cannot be None")
+
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = (
-            None
-            if self.label_dim == 0
-            else (
-                torch.zeros([1, self.label_dim], device=x.device)
-                if class_labels is None
-                else class_labels.to(torch.float32).reshape(-1, self.label_dim)
-            )
-        )
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -893,7 +878,7 @@ class _ConditionalPrecond(torch.nn.Module):
         F_x = self.model(
             arg.to(dtype),
             c_noise.flatten(),
-            class_labels=class_labels,
+            class_labels=None,
             **model_kwargs,
         )
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
@@ -915,12 +900,13 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
     ----------
     img_resolution : int
         Image resolution.
+    img_channels : int
+        Number of image channels, not used. Exists to maintain compatibility
+        with models trained using older EDMPrecondSR
     img_in_channels : int
         Number of input color channels.
     img_out_channels : int
         Number of output color channels.
-    label_dim : int
-        Number of class labels, 0 = unconditional, by default 0.
     use_fp16 : bool
         Execute the underlying model at FP16 precision?, by default False.
     sigma_min : float
@@ -951,12 +937,12 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
         img_resolution,
         img_in_channels,
         img_out_channels,
-        label_dim=0,
+        img_channels=0,  # not used see above
         use_fp16=False,
         sigma_min=0.0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ) -> None:
         # The use of multiple inheritance here is a workaround to make the
@@ -970,7 +956,6 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
-            label_dim=label_dim,
             **model_kwargs,
         )
         _ConditionalPrecond.__init__(
@@ -978,7 +963,6 @@ class EDMPrecondSRV2(_ConditionalPrecond, Module):
             model=model,
             img_resolution=img_resolution,
             img_channels=img_out_channels,
-            label_dim=label_dim,
             use_fp16=use_fp16,
             sigma_min=sigma_min,
             sigma_max=sigma_max,

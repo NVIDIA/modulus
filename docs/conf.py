@@ -123,6 +123,9 @@ exclude_patterns = [
     "LICENSE.txt",
 ]
 
+# Fake imports
+autodoc_mock_imports = ["torch_scatter", "torch_cluster"]   # install of these packages takes very long
+
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 pdf_documents = [
     ("index", "rst2pdf", "Sample rst2pdf doc", "Your Name"),

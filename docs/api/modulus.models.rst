@@ -23,52 +23,7 @@ These include some very general models like Fourier Neural Operators (FNOs),
 ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
 Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
-Currently available models include:
-
-.. list-table::
-   :widths: 20 40 40
-   :header-rows: 1
-
-   * - Model Name
-     - Inputs
-     - Outputs
-   * - FullyConnected
-     - torch.Tensor [N, in_features]
-     - torch.Tensor [N, out_features]
-   * - FourierNeuralOperator
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - AFNO
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - ModAFNO
-     - torch.Tensor [N, in_channels, H, W], torch.Tensor [N, 1]
-     - torch.Tensor [N, out_channels, H, W]
-   * - MeshGraphNet
-     - torch.Tensor [num_nodes, input_dim_nodes], torch.Tensor [num_edges, input_dim_edges], dgl.DGLGraph [num_nodes, num_edges]
-     - torch.Tensor [num_nodes, output_dim]
-   * - GraphCastNet
-     - torch.Tensor [N, C_in, H, W]
-     - torch.Tensor [N, C_out, H, W]
-   * - Pix2PixNet 
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - One2ManyRNN
-     - torch.Tensor [N, C, 1, H, W]
-     - torch.Tensor [N, C, T, H, W]
-   * - Seq2SeqRNN
-     - torch.Tensor [N, C, T, H, W]
-     - torch.Tensor [N, C, T, H, W]
-   * - SRResNet
-     - torch.Tensor [N, C_in, D, H, W]
-     - torch.Tensor [N, C_out, D_out, H_out, W_out]
-   * - DLWP
-     - torch.Tensor [N, C_in, 6, Res, Res]
-     - torch.Tensor [N, C_out, 6, Res, Res]
-   * - SphericalFourierNeuralOperatorNet
-     - torch.Tensor [N, C_in, H, W]
-     - torch.Tensor [N, C_out, H, W]
-
+For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/modulus/tree/main/modulus/models>`_. 
 
 Below are some simple examples of how to use these models.
 
@@ -477,14 +432,19 @@ Graph Neural Networks
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.graphcast.graph_cast_net
+.. automodule:: modulus.models.mesh_reduced.mesh_reduced
     :members:
     :show-inheritance:
 
-Pix2Pix Net
------------
+
+Convolutional Networks
+-----------------------
 
 .. automodule:: modulus.models.pix2pix.pix2pix
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.srrn.super_res_net
     :members:
     :show-inheritance:
 
@@ -499,17 +459,47 @@ Recurrent Neural Networks
     :members:
     :show-inheritance:
 
-Super Resolution Network
-------------------------
 
-.. automodule:: modulus.models.srrn.super_res_net
+Weather / Climate Models
+-------------------------
+
+.. automodule:: modulus.models.dlwp.dlwp
     :members:
     :show-inheritance:
 
-DLWP Model
-----------
+.. automodule:: modulus.models.dlwp_healpix.HEALPixRecUNet
+    :members:
+    :show-inheritance:
 
-.. automodule:: modulus.models.dlwp.dlwp
+.. automodule:: modulus.models.graphcast.graph_cast_net
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.fengwu.fengwu
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.pangu.pangu
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.swinvrnn.swinvrnn
+    :members:
+    :show-inheritance:
+
+
+Diffusion Model
+---------------
+
+.. automodule:: modulus.models.diffusion.dhariwal_unet
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.diffusion.song_unet
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.diffusion.unet
     :members:
     :show-inheritance:
 
