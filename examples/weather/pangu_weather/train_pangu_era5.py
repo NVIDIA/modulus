@@ -84,8 +84,8 @@ def validation_step(
     # Loop over datapipe
     for di, data in enumerate(datapipe):
         # Get input data
-        invar = data[0]["invar"].detach()
-        cos_zenith = data[0]["cos_zenith"].detach().squeeze(dim=2)
+        invar = data[0]["invar"].detach().to("cuda:0")
+        cos_zenith = data[0]["cos_zenith"].detach().to("cuda:0").squeeze(dim=2)
         cos_zenith = torch.clamp(cos_zenith, min=0.0) - 1.0 / torch.pi
         outvar = data[0]["outvar"].detach()
         sm = surface_mask.repeat(invar.shape[0], 1, 1, 1)
@@ -95,10 +95,14 @@ def validation_step(
         # If first batch then create buffer for outputs
         if di == 0:
             outpred = torch.zeros_like(outvar, device="cpu").pin_memory()
-
         for t in range(outvar.shape[1]):
             out, loss = eval_step(
-                pangu_model, invar, cos_zenith[:, t : t + 1], sm, outvar[:, t], weights
+                pangu_model,
+                invar,
+                cos_zenith[:, t : t + 1],
+                sm,
+                outvar[:, t].to("cuda:0"),
+                weights,
             )
             invar = out.clone()
             out = out.detach().cpu()
@@ -177,13 +181,12 @@ def validation_step(
     pangu_model.train()
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="config")
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_internal")
 def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
     # Initialize loggers
-
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)
     rank_zero_logger.file_logging()
@@ -246,7 +249,6 @@ def main(cfg: DictConfig) -> None:
         .repeat(1, img_size[1])
         .to(dist.device)
     )
-
     # Distributed learning
     if dist.world_size > 1:
         ddps = torch.cuda.Stream()
@@ -260,6 +262,7 @@ def main(cfg: DictConfig) -> None:
             )
         torch.cuda.current_stream().wait_stream(ddps)
 
+    # pangu_model = torch.compile(pangu_model, mode = "max-autotune")
     # Initialize optimizer and scheduler
     optimizer = optimizers.FusedAdam(
         pangu_model.parameters(),
@@ -277,7 +280,7 @@ def main(cfg: DictConfig) -> None:
             num_steps=cfg.val.num_rollout_steps,
             num_samples_per_year=cfg.val.num_samples_per_year,
             batch_size=cfg.val.batch_size,
-            device=dist.device,
+            device="cpu",
             num_workers=cfg.val.num_workers,
             shuffle=False,
             use_cos_zenith=cfg.train.use_cosine_zenith,
@@ -308,6 +311,7 @@ def main(cfg: DictConfig) -> None:
         logger=logger,
         use_graphs=cfg.train.enable_graphs,
         use_amp=cfg.train.enable_amp,
+        gradient_clip_norm=cfg.train.get("gradient_clip_norm", None),
     )
     def train_step_forward(my_model, invar, cos_zenith, surface_mask, outvar, weights):
         # Multi-step prediction
@@ -348,7 +352,6 @@ def main(cfg: DictConfig) -> None:
                 continue
             else:
                 num_epochs = stage.num_epochs - (loaded_epoch - global_epoch)
-
             global_epoch = loaded_epoch
         else:
             num_epochs = stage.num_epochs
@@ -402,7 +405,6 @@ def main(cfg: DictConfig) -> None:
                 outvar = data[0]["outvar"]
                 cos_zenith = data[0]["cos_zenith"].squeeze(dim=2)
                 cos_zenith = torch.clamp(cos_zenith, min=0.0) - 1.0 / torch.pi
-
                 loss_agg += train_step_forward(
                     pangu_model, invar, cos_zenith, surface_mask, outvar, weights
                 )
