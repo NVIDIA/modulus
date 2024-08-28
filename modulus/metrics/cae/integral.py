@@ -117,7 +117,7 @@ def surface_integral(
     mesh: pv.PolyData,
     data_type: str = "point_data",
     array_name: Optional[Union[str, List[str]]] = None,
-) -> Dict[np.ndarray]:
+) -> Dict[str, np.ndarray]:
     """
     Computes the surface integral of a given mesh
 
