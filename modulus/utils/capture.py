@@ -63,6 +63,7 @@ class _StaticCapture(object):
         use_gradscaler: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        gradient_clip_norm: float | None = None,
         label: Optional[str] = None,
     ):
         self.logger = logger if logger else self.logger
@@ -81,6 +82,7 @@ class _StaticCapture(object):
         self.optim = optim
         self.eval = False
         self.no_grad = False
+        self.gradient_clip_norm = gradient_clip_norm
 
         # Set up toggles for optimizations
         if not (amp_type == torch.float16 or amp_type == torch.bfloat16):
@@ -250,6 +252,13 @@ class _StaticCapture(object):
 
         if not self.eval:
             # In training mode output should be the loss
+            if self.gradient_clip_norm is not None:
+                if self.use_autocast:
+                    self.scaler.unscale_(self.optim)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.gradient_clip_norm
+                )
+
             self.scaler.scale(output).backward()
         return output
 
@@ -348,6 +357,8 @@ class StaticCaptureTraining(_StaticCapture):
         Number of warmup steps for cuda graphs, by default 11
     amp_type : Union[float16, bfloat16], optional
         Auto casting type for AMP, by default torch.float16
+    gradient_clip_norm : Union[float, None], optional
+        Threshold for gradient clipping
     label : Optional[str, None], optional
         Static capture checkpoint label, by default None
 
@@ -399,6 +410,7 @@ class StaticCaptureTraining(_StaticCapture):
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        gradient_clip_norm: float | None = None,
         label: Optional[str] = None,
     ):
         super().__init__(
@@ -410,6 +422,7 @@ class StaticCaptureTraining(_StaticCapture):
             use_amp,
             cuda_graph_warmup,
             amp_type,
+            gradient_clip_norm,
             label,
         )
 
@@ -485,6 +498,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
             False,
             cuda_graph_warmup,
             amp_type,
+            None,
             label,
         )
         self.eval = True  # No optimizer/scaler calls

@@ -64,6 +64,7 @@ def logger():
     "use_amp, amp_type",
     [(True, torch.float16), (True, torch.bfloat16), (False, torch.float16)],
 )
+@pytest.mark.parametrize("gradient_clip_norm", [None, 4.0])
 def test_capture_training(
     model,
     logger,
@@ -72,6 +73,7 @@ def test_capture_training(
     use_graphs,
     use_amp,
     amp_type,
+    gradient_clip_norm,
 ):
     # Initialize the DistributedManager first since StaticCaptureTraining uses it
     DistributedManager.initialize()
@@ -98,6 +100,7 @@ def test_capture_training(
         use_amp=use_amp,
         cuda_graph_warmup=1,
         amp_type=amp_type,
+        gradient_clip_norm=gradient_clip_norm,
     )
     def training_step(invar, outvar):
         predvar = model(invar)
@@ -121,6 +124,7 @@ def test_capture_training(
         optim=optim,
         logger=logger,
         cuda_graph_warmup=1,
+        gradient_clip_norm=gradient_clip_norm,
     )
     def training_step(invar, outvar):
         predvar = model(invar)
