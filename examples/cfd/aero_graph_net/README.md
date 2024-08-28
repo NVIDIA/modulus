@@ -114,10 +114,10 @@ The example uses [Hydra](https://hydra.cc/docs/intro/) for experiment configurat
 Hydra provides a convenient way to change almost any experiment parameter,
 such as dataset configuration, model and optimizer settings and so on.
 
-This example also requires the `pyvista` and `vtk` libraries. Install with
+This example also requires the `pyvista`, `shapely` and `vtk` libraries. Install with
 
 ```bash
-pip install pyvista vtk
+pip install pyvista shapely vtk
 ```
 
 ### Ahmed Body training
