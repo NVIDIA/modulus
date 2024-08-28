@@ -20,9 +20,10 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pytest_utils import nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -93,23 +94,105 @@ def scaling_double_dict():
 @nfsdata_or_fail
 def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     variables = ["z500", "z1000"]
+    input_times = ["0H"]
+    input_time_dim = 1
+    output_time_dim = 1
+    presteps = 0
+    batch_size = 2
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
-    coupler = ConstantCoupler(dataset=zarr_ds, batch_size=1, variables=variables)
+    coupler = ConstantCoupler(
+        dataset=zarr_ds,
+        batch_size=batch_size,
+        variables=variables,
+        presteps=presteps,
+        input_times=input_times,
+        input_time_dim=input_time_dim,
+        output_time_dim=output_time_dim,
+    )
     assert isinstance(coupler, ConstantCoupler)
+
+    interval = 2
+    data_time_step = "3H"
+    coupler.compute_coupled_indices(interval, data_time_step)
+    coupled_integration_dim = presteps + max(output_time_dim // input_time_dim, 1)
+    expected = np.empty([batch_size, coupled_integration_dim, len(input_times)])
+    for b in range(batch_size):
+        for i in range(coupled_integration_dim):
+            expected[b, i, :] = b + np.array(
+                [pd.Timedelta(ts) / pd.Timedelta(data_time_step) for ts in input_times]
+            )
+    expected = expected.astype(int)
+    assert np.array_equal(expected, coupler._coupled_offsets)
+
+    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
+    scaling_da = scaling_df.to_xarray().astype("float32")
+    coupler.set_scaling(scaling_da)
+    coupled_scaling = scaling_da.sel(index=variables).rename({"index": "channel_in"})
+    expected = np.expand_dims(coupled_scaling["mean"].to_numpy(), (0, 2, 3, 4))
+    assert np.array_equal(expected, coupler.coupled_scaling["mean"])
+    expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
+    assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
 
 @nfsdata_or_fail
 def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     variables = ["z500", "z1000"]
+    input_times = ["6H", "12H"]
+    input_time_dim = 2
+    output_time_dim = 2
+    presteps = 0
+    batch_size = 2
+    averaging_window = "6H"
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
-    coupler = TrailingAverageCoupler(dataset=zarr_ds, batch_size=1, variables=variables)
+    coupler = TrailingAverageCoupler(
+        dataset=zarr_ds,
+        batch_size=batch_size,
+        variables=variables,
+        presteps=presteps,
+        averaging_window=averaging_window,
+        input_times=input_times,
+        input_time_dim=input_time_dim,
+        output_time_dim=output_time_dim,
+    )
     assert isinstance(coupler, TrailingAverageCoupler)
+
+    interval = 2
+    data_time_step = "3H"
+    coupler.compute_coupled_indices(interval, data_time_step)
+    coupled_integration_dim = presteps + max(output_time_dim // input_time_dim, 1)
+    expected = np.empty([batch_size, coupled_integration_dim, len(input_times)])
+    for b in range(batch_size):
+        for i in range(coupled_integration_dim):
+            expected[b, i, :] = (
+                b
+                + (input_time_dim * i + 1) * interval
+                + np.array(
+                    [
+                        pd.Timedelta(ts) / pd.Timedelta(data_time_step)
+                        for ts in input_times
+                    ]
+                )
+            )
+    expected = expected.astype(int)
+    assert np.array_equal(expected, coupler._coupled_offsets)
+
+    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
+    scaling_da = scaling_df.to_xarray().astype("float32")
+    coupler.set_scaling(scaling_da)
+    coupled_scaling = scaling_da.sel(index=variables).rename({"index": "channel_in"})
+    expected = np.expand_dims(coupled_scaling["mean"].to_numpy(), (0, 2, 3, 4))
+    assert np.array_equal(expected, coupler.coupled_scaling["mean"])
+    expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
+    assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
 
 @nfsdata_or_fail
@@ -127,7 +210,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     ):
         timeseries_ds = CoupledTimeSeriesDataset(
             dataset=zarr_ds,
-            input_variable=variables,
+            input_variables=variables,
             data_time_step="2h",
             time_step="5h",
             scaling=scaling_dict,
@@ -139,7 +222,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     ):
         timeseries_ds = CoupledTimeSeriesDataset(
             dataset=zarr_ds,
-            input_variable=variables,
+            input_variables=variables,
             data_time_step="2h",
             time_step="6h",
             gap="3h",
@@ -155,7 +238,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     with pytest.raises(KeyError, match=("one or more of the input data variables")):
         timeseries_ds = CoupledTimeSeriesDataset(
             dataset=zarr_ds,
-            input_variable=variables,
+            input_variables=variables,
             data_time_step="3h",
             time_step="6h",
             scaling=invalid_scaling,
@@ -166,12 +249,12 @@ def test_CoupledTimeSeriesDataset_initialization(
     with pytest.raises(
         UserWarning,
         match=(
-            "providing 'forecast_init_times' to CoupledTimeSeriesDataset requires `batch_size=1`"
+            "providing 'forecast_init_times' to TimeSeriesDataset requires `batch_size=1`"
         ),
     ):
         timeseries_ds = CoupledTimeSeriesDataset(
             dataset=zarr_ds,
-            input_variable=variables,
+            input_variables=variables,
             scaling=scaling_dict,
             batch_size=2,
             forecast_init_times=zarr_ds.time[:2],
@@ -179,14 +262,14 @@ def test_CoupledTimeSeriesDataset_initialization(
 
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
     )
     assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
 
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:2],
@@ -195,7 +278,7 @@ def test_CoupledTimeSeriesDataset_initialization(
 
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:2],
@@ -220,7 +303,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     ]
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:2],
@@ -247,7 +330,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     ]
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:2],
@@ -326,7 +409,7 @@ def test_CoupledTimeSeriesDataset_len(
     init_times = random.randint(1, len(zarr_ds.time.values))
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:init_times],
@@ -334,10 +417,25 @@ def test_CoupledTimeSeriesDataset_len(
     )
     assert len(timeseries_ds) == init_times
 
+    constant_coupler = [
+        {
+            "coupler": "ConstantCoupler",
+            "params": {
+                "batch_size": 2,
+                "variables": ["z250"],
+                "input_times": ["0H"],
+                "input_time_dim": 1,
+                "output_time_dim": 1,
+                "presteps": 0,
+                "prepared_coupled_data": True,
+            },
+        }
+    ]
+
     # check train mode
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         data_time_step="3h",
         time_step="9h",
         scaling=scaling_dict,
@@ -350,7 +448,7 @@ def test_CoupledTimeSeriesDataset_len(
     # check train mode
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         data_time_step="3h",
         time_step="9h",
         scaling=scaling_dict,
@@ -369,14 +467,14 @@ def test_CoupledTimeSeriesDataset_get(
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
-    variables = ["z500", "z1000"]
+    variables = list(zarr_ds.channel_out.to_numpy())
 
     batch_size = 2
     constant_coupler = [
         {
             "coupler": "ConstantCoupler",
             "params": {
-                "batch_size": 1,
+                "batch_size": batch_size,
                 "variables": ["z250"],
                 "input_times": ["0H"],
                 "input_time_dim": 1,
@@ -388,7 +486,7 @@ def test_CoupledTimeSeriesDataset_get(
     ]
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=batch_size,
         couplings=constant_coupler,
@@ -427,7 +525,7 @@ def test_CoupledTimeSeriesDataset_get(
     # this time dropping incomplete so that we get a full sample sample
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=batch_size,
         drop_last=True,
@@ -444,7 +542,7 @@ def test_CoupledTimeSeriesDataset_get(
     # With insolation we get 1 extra channel
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=batch_size,
         drop_last=True,
@@ -457,7 +555,7 @@ def test_CoupledTimeSeriesDataset_get(
     init_times = random.randint(1, len(zarr_ds.time.values))
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:init_times],
@@ -471,7 +569,7 @@ def test_CoupledTimeSeriesDataset_get(
     init_times = random.randint(1, len(zarr_ds.time.values))
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=1,
         add_insolation=True,
@@ -485,7 +583,7 @@ def test_CoupledTimeSeriesDataset_get(
     zarr_ds_no_const = zarr_ds.drop_vars("constants")
     timeseries_ds = CoupledTimeSeriesDataset(
         dataset=zarr_ds_no_const,
-        input_variable=variables,
+        input_variables=variables,
         scaling=scaling_double_dict,
         batch_size=1,
         forecast_init_times=zarr_ds.time[:init_times],
@@ -784,7 +882,7 @@ def test_CoupledTimeSeriesDataModule_get_coupled_vars(
 
     outvar = timeseries_dm._get_coupled_vars()
     outvar.sort()
-    expected = ["z250", "z500", "z1000"]
+    expected = ["z250"]
     expected.sort()
 
     assert expected == outvar
