@@ -17,7 +17,6 @@
 import math
 
 import torch
-from torch.utils.checkpoint import checkpoint_sequential
 
 from ..layers import DownSample3D, FuserLayer, UpSample3D
 from ..module import Module
@@ -67,6 +66,7 @@ class PanguProcessor(Module):
             num_heads=num_heads[0],
             window_size=window_size,
             drop_path=drop_path[:number_upsampled_blocks],
+            checkpoint_flag=checkpoint_flag,
         )
 
         patched_inp_shape_downsample = (
@@ -88,6 +88,7 @@ class PanguProcessor(Module):
                 num_heads=num_heads[1],
                 window_size=window_size,
                 drop_path=drop_path[number_upsampled_blocks:],
+                checkpoint_flag=checkpoint_flag,
             ),
             FuserLayer(
                 dim=embed_dim * 2,
@@ -96,6 +97,7 @@ class PanguProcessor(Module):
                 num_heads=num_heads[2],
                 window_size=window_size,
                 drop_path=drop_path[number_upsampled_blocks:],
+                checkpoint_flag=checkpoint_flag,
             ),
             UpSample3D(
                 embed_dim * 2,
@@ -110,15 +112,11 @@ class PanguProcessor(Module):
                 num_heads=num_heads[3],
                 window_size=window_size,
                 drop_path=drop_path[:number_upsampled_blocks],
+                checkpoint_flag=checkpoint_flag,
             ),
         )
 
         self.checkpoint_flag = checkpoint_flag
-
-    def checkpointed_model(self, x: torch.Tensor):
-        """Utility function to support gradient checkpointing."""
-        modules = [module for k, module in self.layers._modules.items()]
-        return checkpoint_sequential(modules, 5, x, use_reentrant=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         "Forward model pass."
@@ -126,9 +124,7 @@ class PanguProcessor(Module):
 
         skip = x
 
-        if self.checkpoint_flag:
-            x = self.checkpointed_model(x)
-        else:
-            x = self.layers(x)
+        for layer in self.layers:
+            x = layer(x)
 
         return torch.concat([x, skip], dim=-1)
