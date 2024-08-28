@@ -16,7 +16,7 @@
 
 experiment_name: "Modulus-Launch-Dev"
 experiment_desc: "Modulus launch development"
-run_desc: "Pangu lite ERA5 Training"
+run_desc: "Pangu ERA5 Lite-Training"
 
 hydra:
   job:
@@ -24,30 +24,64 @@ hydra:
   run:
     dir: ./outputs/
 
-start_epoch: 0
-max_epoch: 100
+max_epoch: 11
+
+pangu:
+  img_size: [721, 1440]
+  patch_size: [2, 4, 4]
+  embed_dim: 96
+  num_heads: [6, 12, 12, 6]
+  window_size: [2, 6, 12]
+  number_constant_variables: 3
+  number_surface_variables: 4
+  number_atmosphere_variables: 5
+  number_atmosphere_levels: 13
+  number_up_sampled_blocks: 2
+  number_down_sampled_blocks: 6
+  checkpoint_flag: True
 
 train:
   data_dir: "/data/train/"
   stats_dir: "/data/stats/"
-  num_samples_per_year: 1456
-  batch_size: 1
-  patch_size: [1, 1]
+  checkpoint_dir: "/data/checkpoints/"
+  mask_dir: "/data/constant_mask/"
+
+  num_samples_per_year: 600
   num_workers: 8
+  lr: 1e-3
+  weight_decay: 0.05
+  use_cosine_zenith: True
+  mask_dtype: "float32"
+  enable_amp: False
+  enable_graphs: False
+
+  stages:
+    - name: "Learning Rate Warmup"
+      max_iterations: .inf 
+      num_epochs: 1 
+      batch_size: 1
+      num_rollout_steps: 1
+      lr_scheduler_name: LinearLR
+      args:
+        start_factor: 0.001
+        end_factor: 1.0
+        total_iters: 1
+    
+    - name: "Cosine Annealing LR"
+      max_iterations: .inf 
+      num_epochs: 10
+      batch_size: 1
+      num_rollout_steps: 1
+      lr_scheduler_name: CosineAnnealingLR
+      args:
+        T_max: 10
+        eta_min: 0.0
+
 val:
   data_dir: "/data/test/"
   stats_dir: "/data/stats/"
-  num_samples_per_year: 4
+  num_samples_per_year: 1
   batch_size: 1
-  patch_size: [1, 1]
   num_workers: 8
-
-pangu:
-  img_size: [721, 1440]
-  patch_size: [2, 8, 8]
-  embed_dim: 192
-  num_heads: [6, 12, 12, 6]
-  window_size: [2, 6, 12]
-
-mask_dir: "/data/constant_mask"
-mask_dtype: "float32"
+  num_rollout_steps: 1
+  channels: [0, 1, 2, 3, 4, 7, 43]

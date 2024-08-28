@@ -17,7 +17,7 @@
 import torch
 
 
-def window_partition(x: torch.Tensor, window_size, ndim=3):
+def window_partition(x: torch.Tensor, window_size: tuple[int], ndim: int = 3):
     """
     Args:
         x: (B, Pl, Lat, Lon, C) or (B, Lat, Lon, C)

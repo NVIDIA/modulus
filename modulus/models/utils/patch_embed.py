@@ -132,7 +132,7 @@ class PatchEmbed3D(nn.Module):
         B, C, L, H, W = x.shape
         x = self.pad(x)
         x = self.proj(x)
-        if self.norm:
+        if self.norm is not None:
             x = self.norm(x.permute(0, 2, 3, 4, 1)).permute(0, 4, 1, 2, 3)
         return x
 

@@ -20,8 +20,9 @@ import torch
 from timm.layers import to_2tuple
 from timm.models.swin_transformer import SwinTransformerStage
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 
-from ..utils import (
+from modulus.models.utils import (
     PatchEmbed2D,
     PatchRecovery2D,
     crop2d,
@@ -32,6 +33,7 @@ from ..utils import (
     window_partition,
     window_reverse,
 )
+
 from .attention_layers import EarthAttention2D, EarthAttention3D
 from .drop import DropPath
 from .mlp_layers import Mlp
@@ -369,6 +371,7 @@ class FuserLayer(nn.Module):
         attn_drop=0.0,
         drop_path=0.0,
         norm_layer=nn.LayerNorm,
+        checkpoint_flag: bool = False,
     ):
         super().__init__()
         self.dim = dim
@@ -397,9 +400,14 @@ class FuserLayer(nn.Module):
             ]
         )
 
+        self.checkpoint_flag = checkpoint_flag
+
     def forward(self, x):
         for blk in self.blocks:
-            x = blk(x)
+            if self.checkpoint_flag:
+                x = checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
         return x
 
 
@@ -445,6 +453,7 @@ class EncoderLayer(nn.Module):
         attn_drop=0.0,
         drop_path=0.0,
         norm_layer=nn.LayerNorm,
+        checkpoint_flag: bool = False,
     ):
         super().__init__()
         self.in_chans = in_chans
@@ -519,16 +528,24 @@ class EncoderLayer(nn.Module):
             ]
         )
 
+        self.checkpoint_flag = checkpoint_flag
+
     def forward(self, x):
         x = self.patchembed2d(x)
         B, C, Lat, Lon = x.shape
         x = x.reshape(B, C, -1).transpose(1, 2)
         for blk in self.blocks:
-            x = blk(x)
+            if self.checkpoint_flag:
+                x = checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
         skip = x.reshape(B, Lat, Lon, C)
         x = self.downsample(x)
         for blk in self.blocks_middle:
-            x = blk(x)
+            if self.checkpoint_flag:
+                x = checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
         return x, skip
 
 
@@ -574,6 +591,7 @@ class DecoderLayer(nn.Module):
         attn_drop=0.0,
         drop_path=0.0,
         norm_layer=nn.LayerNorm,
+        checkpoint_flag: bool = False,
     ):
         super().__init__()
         self.out_chans = out_chans
@@ -645,13 +663,21 @@ class DecoderLayer(nn.Module):
 
         self.patchrecovery2d = PatchRecovery2D(img_size, patch_size, 2 * dim, out_chans)
 
+        self.checkpoint_flag = checkpoint_flag
+
     def forward(self, x, skip):
         B, Lat, Lon, C = skip.shape
         for blk in self.blocks_middle:
-            x = blk(x)
+            if self.checkpoint_flag:
+                x = checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
         x = self.upsample(x)
         for blk in self.blocks:
-            x = blk(x)
+            if self.checkpoint_flag:
+                x = checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
         output = torch.concat([x, skip.reshape(B, -1, C)], dim=-1)
         output = output.transpose(1, 2).reshape(B, -1, Lat, Lon)
         output = self.patchrecovery2d(output)
