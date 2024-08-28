@@ -64,7 +64,7 @@ def logger():
     "use_amp, amp_type",
     [(True, torch.float16), (True, torch.bfloat16), (False, torch.float16)],
 )
-@pytest.mark.parametrize("gradient_clip_norm", [None, 4.0])
+@pytest.mark.parametrize("gradient_clip_norm", [None, 0.10])
 def test_capture_training(
     model,
     logger,
@@ -113,6 +113,10 @@ def test_capture_training(
         input.copy_(torch.rand(8, 2).to(device))
         assert loss > 0, "MSE loss should always be larger than zero"
 
+        for param in model.parameters():
+            if gradient_clip_norm is not None:
+                assert param.grad.data.norm(2) < gradient_clip_norm
+
     # Test control via meta data
     model.meta.cuda_graphs = use_graphs
     model.meta.amp_gpu = use_amp
@@ -136,6 +140,10 @@ def test_capture_training(
         loss = training_step(input, output)
         input.copy_(torch.rand(8, 2).to(device))
         assert loss > 0, "MSE loss should always be larger than zero"
+
+        for param in model.parameters():
+            if gradient_clip_norm is not None:
+                assert param.grad.data.norm(2) < gradient_clip_norm
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
