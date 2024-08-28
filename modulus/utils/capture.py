@@ -252,6 +252,7 @@ class _StaticCapture(object):
 
         if not self.eval:
             # In training mode output should be the loss
+            self.scaler.scale(output).backward()
             if self.gradient_clip_norm is not None:
                 if self.use_autocast:
                     self.scaler.unscale_(self.optim)
@@ -259,7 +260,6 @@ class _StaticCapture(object):
                     self.model.parameters(), self.gradient_clip_norm
                 )
 
-            self.scaler.scale(output).backward()
         return output
 
     def _init_amp_scaler(
