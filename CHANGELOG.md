@@ -27,6 +27,7 @@ Shallow-Water-Equation example.
 ### Changed
 
 - Raise `ModulusUndefinedGroupError` when querying undefined process groups
+- Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `modulus` loss function
 - Safeguarding against uninitialized usage of `DistributedManager`
 
 ### Deprecated

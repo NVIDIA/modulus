@@ -14,7 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
+defaults:
+  - /model/modules/blocks@conv_block: conv_next_block
+  - /model/modules/blocks@down_sampling_block: avg_pool
+  - /model/modules/blocks@recurrent_block: conv_gru_block
 
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+_target_: modulus.models.dlwp_healpix_layers.healpix_encoder.UNetEncoder
+_recursive_: false
+n_channels:
+ - 136
+ - 68
+ - 34
+dilations:
+  - 1
+  - 2
+  - 4

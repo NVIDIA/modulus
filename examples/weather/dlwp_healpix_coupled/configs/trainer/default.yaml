@@ -14,7 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
+defaults:
+  - criterion: mse
+  - optimizer: adam
+  - lr_scheduler: cosine
 
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+_target_: trainer.Trainer
+_recursive_: true
+max_epochs: 300
+early_stopping_patience: null
+amp_mode: "fp16"
+graph_mode: "train_eval"
+output_dir: ${output_dir}

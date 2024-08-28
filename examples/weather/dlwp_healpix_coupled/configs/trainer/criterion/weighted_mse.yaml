@@ -14,7 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
+_target_: modulus.metrics.climate.healpix_loss.WeightedMSE
 
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+weights:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0

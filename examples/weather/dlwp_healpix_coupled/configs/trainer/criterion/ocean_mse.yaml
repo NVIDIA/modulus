@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
+_target_: modulus.metrics.climate.healpix_loss.OceanMSE
 
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+lsm_file: /datasets/healpix/HPX32/hpx32_1950-2022_3h_sst_coupled.zarr
+

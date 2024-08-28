@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
-
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+stochastic_weight_avg:
+  _target_: pytorch_lightning.callbacks.StochasticWeightAveraging
+  swa_epoch_start: 5

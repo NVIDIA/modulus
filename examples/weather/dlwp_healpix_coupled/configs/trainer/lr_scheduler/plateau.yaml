@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
-
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+_target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+mode: 'min'
+factor: 0.3
+patience: 20
+min_lr: 1e-5

@@ -14,7 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
-
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.AvgPool
+pooling: 2

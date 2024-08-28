@@ -14,7 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
-
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: 'val_loss'
+  min_delta: 0.0
+  patience: 50
+  verbose: false
+  mode: 'min'
+  strict: true

@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .HEALPixRecUNet import HEALPixRecUNet
-from .HEALPixUNet import HEALPixUNet
 
-__all__ = ["HEALPixRecUNet", "HEALPixUNet"]
+_target_: torch.optim.lr_scheduler.ConstantLR
+factor: 1.0
+total_iters: 5
+last_epoch: -1
