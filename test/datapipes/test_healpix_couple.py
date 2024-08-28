@@ -747,3 +747,76 @@ def test_CoupledTimeSeriesDataModule_get_dataloaders(
     assert isinstance(test_sampler, DistributedSampler)
     assert isinstance(test_dataloader, DataLoader)
     DistributedManager.cleanup()
+
+
+@nfsdata_or_fail
+def test_CoupledTimeSeriesDataModule_get_coupled_vars(
+    data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
+):
+    variables = ["z500", "z1000"]
+    constant_coupler = [
+        {
+            "coupler": "ConstantCoupler",
+            "params": {
+                "batch_size": 1,
+                "variables": ["z250"],
+                "input_times": ["0H"],
+                "input_time_dim": 1,
+                "output_time_dim": 1,
+                "presteps": 0,
+                "prepared_coupled_data": True,
+            },
+        }
+    ]
+
+    # Constant coupler
+    # Internally initializes DistributedManager
+    timeseries_dm = CoupledTimeSeriesDataModule(
+        src_directory=create_path,
+        dst_directory=data_dir,
+        dataset_name=dataset_name,
+        input_variables=variables,
+        batch_size=1,
+        prebuilt_dataset=True,
+        scaling=scaling_double_dict,
+        couplings=constant_coupler,
+    )
+
+    outvar = timeseries_dm._get_coupled_vars()
+    outvar.sort()
+    expected = ["z250", "z500", "z1000"]
+    expected.sort()
+
+    assert expected == outvar
+
+    average_coupler = [
+        {
+            "coupler": "TrailingAverageCoupler",
+            "params": {
+                "batch_size": 1,
+                "variables": ["z250"],
+                "input_times": ["6H"],
+                "averaging_window": "6H",
+                "input_time_dim": 1,
+                "output_time_dim": 1,
+                "presteps": 0,
+                "prepared_coupled_data": True,
+            },
+        }
+    ]
+    # Average coupler
+    # Internally initializes DistributedManager
+    timeseries_dm = CoupledTimeSeriesDataModule(
+        src_directory=create_path,
+        dst_directory=data_dir,
+        dataset_name=dataset_name,
+        input_variables=variables,
+        batch_size=1,
+        prebuilt_dataset=True,
+        scaling=scaling_double_dict,
+        couplings=average_coupler,
+    )
+    outvar = timeseries_dm._get_coupled_vars()
+    outvar.sort()
+
+    assert expected == outvar
