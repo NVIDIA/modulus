@@ -359,9 +359,14 @@ is not available at this time."
                 else:
                     input_tensor = self._reshape_inputs(inputs, step)
             else:
-                input_tensor = self._reshape_inputs(
-                    [outputs[-1]] + list(inputs[1:3]) + [inputs[3][step]], step
-                )
+                if len(self.couplings) > 0:
+                    input_tensor = self._reshape_inputs(
+                        [outputs[-1]] + list(inputs[1:3]) + [inputs[3][step]], step
+                    )
+                else:
+                    input_tensor = self._reshape_inputs(
+                        [outputs[-1]] + list(inputs[1:]), step
+                    )
 
             encodings = self.encoder(input_tensor)
             decodings = self.decoder(encodings)
