@@ -14,338 +14,368 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Train diffusion-based generative model using the techniques described in the
-paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
-
-import json
-import os
-import shutil
-
-# ruff: noqa: E402
-os.environ["TORCHELASTIC_ENABLE_FILE_TIMER"] = "1"
-
-import hydra
+import os, time, psutil, hydra, torch
 from hydra.utils import to_absolute_path
-from hydra.core.hydra_config import HydraConfig
-import torch
-from omegaconf import OmegaConf, DictConfig, ListConfig
-
-import modulus
+from omegaconf import DictConfig, OmegaConf
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.tensorboard import SummaryWriter
+from modulus import Module
+from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.utils.generative import EasyDict, parse_int_list
-
-from training import training_loop
+from modulus.metrics.diffusion import RegressionLoss, ResLoss
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
+from helpers.train_helpers import (
+    set_patch_shape,
+    set_seed,
+    configure_cuda_for_consistent_precision,
+    compute_num_accumulation_rounds,
+    handle_and_clip_gradients,
+    is_time_for_periodic_task,
+)
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="config_train_base")
+# Train the CorrDiff model using the configurations in "conf/config_training.yaml"
+@hydra.main(version_base="1.2", config_path="conf", config_name="config_training")
 def main(cfg: DictConfig) -> None:
-    """Train diffusion-based generative model using the techniques described in the
-    paper "Elucidating the Design Space of Diffusion-Based Generative Models".
-    """
 
-    # Sanity check
-    if not hasattr(cfg, "task"):
-        raise ValueError(
-            """Need to specify the task. Make sure the right config file is used. Run training using python train.py --config-name=<your_yaml_file>.
-            For example, for regression training, run python train.py --config-name=config_train_regression.
-            And for diffusion training, run python train.py --config-name=config_train_diffusion."""
-        )
-
-    # Dump the configs
-    os.makedirs(cfg.outdir, exist_ok=True)
-    OmegaConf.save(cfg, os.path.join(cfg.outdir, "config.yaml"))
-
-    # Parse options
-    regression_checkpoint_path = getattr(cfg, "regression_checkpoint_path", None)
-    if regression_checkpoint_path:
-        regression_checkpoint_path = to_absolute_path(regression_checkpoint_path)
-    task = getattr(cfg, "task")
-    outdir = getattr(cfg, "outdir", "./output")
-    arch = getattr(cfg, "arch", "ddpmpp-cwb-v0-regression")
-    precond = getattr(cfg, "precond", "unetregression")
-
-    # parse hyperparameters
-    duration = getattr(cfg, "duration", 200)
-    batch_size_global = getattr(cfg, "batch_size_global", 256)
-    batch_size_gpu = getattr(cfg, "batch_size_gpu", 2)
-    cbase = getattr(cfg, "cbase", 1)
-    # cres = parse_int_list(getattr(cfg, "cres", None))
-    lr = getattr(cfg, "lr", 0.0002)
-    ema = getattr(cfg, "ema", 0.5)
-    dropout = getattr(cfg, "dropout", 0.13)
-    augment = getattr(cfg, "augment", 0.0)
-
-    # Parse performance options
-    if hasattr(cfg, "fp_optimizations"):
-        fp_optimizations = cfg.fp_optimizations
-        fp16 = fp_optimizations == "fp16"
-    else:
-        # look for legacy "fp16" parameter
-        fp16 = getattr(cfg, "fp16", False)
-        fp_optimizations = "fp16" if fp16 else "fp32"
-    ls = getattr(cfg, "ls", 1)
-    bench = getattr(cfg, "bench", True)
-    workers = getattr(cfg, "workers", 4)
-    songunet_checkpoint_level = getattr(cfg, "songunet_checkpoint_level", 0)
-
-    # Parse I/O-related options
-    wandb_mode = getattr(cfg, "wandb_mode", "disabled")
-    wandb_project = getattr(cfg, "wandb_project", "Modulus-Generative")
-    wandb_entity = getattr(cfg, "wandb_entity", "CorrDiff-DDP-Group")
-    tick = getattr(cfg, "tick", 1)
-    dump = getattr(cfg, "dump", 500)
-    validation_dump = getattr(cfg, "validation_dump", 500)
-    validation_steps = getattr(cfg, "validation_steps", 10)
-    seed = getattr(cfg, "seed", 0)
-    transfer = getattr(cfg, "transfer")
-    dry_run = getattr(cfg, "dry_run", False)
-
-    # Parse weather data options
-    c = EasyDict()
-    c.task = task
-    c.fp_optimizations = fp_optimizations
-    c.wandb_mode = wandb_mode
-    c.wandb_project = wandb_project
-    c.wandb_entity = wandb_entity
-    c.wandb_name = HydraConfig.get().job.name
-    c.patch_shape_x = getattr(cfg, "patch_shape_x", None)
-    c.patch_shape_y = getattr(cfg, "patch_shape_y", None)
-    c.patch_num = getattr(cfg, "patch_num", 1)
-    c.grad_clip_threshold = getattr(cfg, "grad_clip_threshold", None)
-    c.lr_decay = getattr(cfg, "lr_decay", 0.8)
-    c.N_grid_channels = getattr(cfg, "N_grid_channels")
-    c.gridtype = getattr(cfg, "gridtype")
-    dataset_cfg = OmegaConf.to_container(cfg.dataset)
-    validation_dataset_cfg = (
-        OmegaConf.to_container(cfg.validation_dataset)
-        if hasattr(cfg, "validation_dataset")
-        else None
-    )
-    data_loader_kwargs = EasyDict(
-        pin_memory=True, num_workers=workers, prefetch_factor=2
-    )
-    c.hr_mean_conditioning = getattr(cfg, "hr_mean_conditioning", False)
-    c.in_channel = len(dataset_cfg["in_channels"])
-    # Initialize distributed manager.
+    # Initialize distributed environment for training
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # Initialize logger.
-    os.makedirs("logs", exist_ok=True)
-    logger = PythonLogger(name="train")  # General python logger
-    logger0 = RankZeroLoggingWrapper(logger, dist)
-    logger.file_logging(file_name=f"logs/train_{dist.rank}.log")
-
-    # Save a copy of the Modulus source code
-    # if dist.rank == 0:
-    #    shutil.copytree(
-    #        os.path.dirname(modulus.__file__), "modulus", dirs_exist_ok=True
-    #    )
-
-    # inform about the output
-    logger.info(
-        f"Checkpoints, logs, configs, and stats will be written in this directory: {os.getcwd()}"
-    )
-
-    # Initialize config dict.
-    c.network_kwargs = EasyDict()
-    c.loss_kwargs = EasyDict()
-    c.optimizer_kwargs = EasyDict(
-        class_name="torch.optim.Adam", lr=lr, betas=[0.9, 0.999], eps=1e-8
-    )
-
-    # Network architecture.
-    valid_archs = {
-        "ddpmpp-cwb",
-        "ddpmpp-cwb-v0-regression",
-        "ncsnpp",
-        "adm",
-    }
-    if arch not in valid_archs:
-        raise ValueError(
-            f"Invalid network architecture {arch}; " f"valid choices are {valid_archs}"
-        )
-
-    if arch == "ddpmpp-cwb":
-        c.network_kwargs.update(
-            model_type="SongUNetPosEmbd",
-            embedding_type="positional",
-            encoder_type="standard",
-            decoder_type="standard",
-            checkpoint_level=songunet_checkpoint_level,
-        )  # , attn_resolutions=[28]
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
-    elif arch == "ddpmpp-cwb-v0-regression":
-        c.network_kwargs.update(
-            model_type="SongUNetPosEmbd",
-            embedding_type="zero",
-            encoder_type="standard",
-            decoder_type="standard",
-            checkpoint_level=songunet_checkpoint_level,
-        )  # , attn_resolutions=[28]
-        c.network_kwargs.update(
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[28],
-        )  # era5-cwb, 448x448
-
-    elif arch == "ncsnpp":
-        c.network_kwargs.update(
-            model_type="SongUNetPosEmbd",
-            embedding_type="fourier",
-            encoder_type="residual",
-            decoder_type="standard",
-            checkpoint_level=songunet_checkpoint_level,
-        )
-        c.network_kwargs.update(
-            channel_mult_noise=2,
-            resample_filter=[1, 3, 3, 1],
-            model_channels=128,
-            channel_mult=[2, 2, 2],
-        )
-
-    else:
-        c.network_kwargs.update(
-            model_type="DhariwalUNet", model_channels=192, channel_mult=[1, 2, 3, 4]
-        )
-
-    # Preconditioning & loss function.
-    if precond == "edmv2" or precond == "edm":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSRV2"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
-    elif precond == "edmv1":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.EDMLossSR"
-    elif precond == "unetregression":
-        c.network_kwargs.class_name = "modulus.models.diffusion.UNet"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.RegressionLoss"
-    elif precond == "resloss":
-        c.network_kwargs.class_name = "modulus.models.diffusion.EDMPrecondSR"
-        c.loss_kwargs.class_name = "modulus.metrics.diffusion.ResLoss"
-
-    # Network options.
-    if cbase is not None:
-        c.network_kwargs.model_channels = cbase
-    # if cres is not None:
-    #    c.network_kwargs.channel_mult = cres
-    if augment:
-        if augment < 0 or augment > 1:
-            raise ValueError("Augment probability should be within [0,1].")
-        # import augmentation pipe
-        try:
-            from edmss import AugmentPipe
-        except ImportError:
-            raise ImportError(
-                "Please get the augmentation pipe  by running: pip install git+https://github.com/mnabian/edmss.git"
-            )
-        c.augment_kwargs = EasyDict(class_name="edmss.AugmentPipe", p=augment)
-        c.augment_kwargs.update(
-            xflip=1e8, yflip=1, scale=1, rotate_frac=1, aniso=1, translate_frac=1
-        )
-        c.network_kwargs.augment_dim = 9
-    c.network_kwargs.update(dropout=dropout, use_fp16=fp16)
-
-    # Training options.
-    c.total_kimg = max(int(duration * 1000), 1)
-    c.ema_halflife_kimg = int(ema * 1000)
-    c.update(batch_size_gpu=batch_size_gpu, batch_size_global=batch_size_global)
-    c.update(loss_scaling=ls, cudnn_benchmark=bench)
-    c.update(
-        kimg_per_tick=tick,
-        state_dump_ticks=dump,
-        valid_dump_ticks=validation_dump,
-        num_validation_evals=validation_steps,
-    )
-    if regression_checkpoint_path:
-        c.regression_checkpoint_path = regression_checkpoint_path
-
-    # Random seed.
-    if seed is None:
-        seed = torch.randint(1 << 31, size=[], device=dist.device)
-        if dist.distributed:
-            torch.distributed.broadcast(seed, src=0)
-        seed = int(seed)
-
-    # Transfer learning and resume.
-    if transfer is not None:
-        c.resume_pkl = transfer
-        c.ema_rampup_ratio = None
-
-    c.run_dir = outdir
-
-    # Print options.
-    for key in list(c.keys()):
-        val = c[key]
-        if isinstance(val, (ListConfig, DictConfig)):
-            c[key] = OmegaConf.to_container(val, resolve=True)
-    logger0.info("Training options:")
-    logger0.info(json.dumps(c, indent=2))
-    logger0.info(f"Output directory:        {c.run_dir}")
-    if "data_path" in dataset_cfg:
-        logger0.info(f"Dataset path:            {dataset_cfg['data_path']}")
-    logger0.info(f"Network architecture:    {arch}")
-    logger0.info(f"Preconditioning & loss:  {precond}")
-    logger0.info(f"Number of GPUs:          {dist.world_size}")
-    logger0.info(f"Batch size:              {c.batch_size_global}")
-    logger0.info(f"Mixed-precision:         {c.fp_optimizations}")
-
-    # Dry run?
-    if dry_run:
-        logger0.info("Dry run; exiting.")
-        return
-
-    # Create output directory.
-    logger0.info("Creating output directory...")
+    # Initialize loggers
     if dist.rank == 0:
-        os.makedirs(c.run_dir, exist_ok=True)
-        with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
-            json.dump(c, f, indent=2)
+        writer = SummaryWriter(log_dir="tensorboard")
+    logger = PythonLogger("main")  # General python logger
+    logger0 = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
 
+    # Resolve and parse configs
+    OmegaConf.resolve(cfg)
+    dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
+    if hasattr(cfg, "validation_dataset"):
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    else:
+        validation_dataset_cfg = None
+    fp_optimizations = cfg.training.perf.fp_optimizations
+    fp16 = fp_optimizations == "fp16"
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
+    logger.info(f"Saving the outputs in {os.getcwd()}")
+
+    # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
+    set_seed(dist.rank)
+    configure_cuda_for_consistent_precision()
+
+    # Instantiate the dataset
+    data_loader_kwargs = {
+        "pin_memory": True,
+        "num_workers": cfg.training.perf.dataloader_workers,
+        "prefetch_factor": 2,
+    }
     (
         dataset,
-        dataset_iter,
-        valid_dataset,
-        valid_dataset_iter,
+        dataset_iterator,
+        validation_dataset,
+        validation_dataset_iterator,
     ) = init_train_valid_datasets_from_config(
         dataset_cfg,
         data_loader_kwargs,
-        batch_size=batch_size_gpu,
-        seed=seed,
+        batch_size=cfg.training.hp.batch_size_per_gpu,
+        seed=0,
         validation_dataset_cfg=validation_dataset_cfg,
     )
 
-    (img_shape_y, img_shape_x) = dataset.image_shape()
-    if (c.patch_shape_x is None) or (c.patch_shape_x > img_shape_x):
-        c.patch_shape_x = img_shape_x
-    if (c.patch_shape_y is None) or (c.patch_shape_y > img_shape_y):
-        c.patch_shape_y = img_shape_y
-    if c.patch_shape_x != img_shape_x or c.patch_shape_y != img_shape_y:
-        if c.patch_shape_x != c.patch_shape_y:
-            raise NotImplementedError("Rectangular patch not supported yet")
-        if c.patch_shape_x % 32 != 0 or c.patch_shape_y % 32 != 0:
-            raise ValueError("Patch shape needs to be a multiple of 32")
+    # Parse image configuration & update model args
+    dataset_channels = len(dataset.input_channels())
+    img_in_channels = dataset_channels
+    img_shape = dataset.image_shape()
+    img_out_channels = len(dataset.output_channels())
+    if cfg.model.hr_mean_conditioning:
+        img_in_channels += img_out_channels
+
+    # Parse the patch shape
+    if cfg.model.name == "patched_diffusion":
+        patch_shape_x = cfg.training.hp.patch_shape_x
+        patch_shape_y = cfg.training.hp.patch_shape_y
+    else:
+        patch_shape_x = None
+        patch_shape_y = None
+    patch_shape = (patch_shape_y, patch_shape_x)
+    img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
+    if patch_shape != img_shape:
         logger0.info("Patch-based training enabled")
     else:
         logger0.info("Patch-based training disabled")
+    # interpolate global channel if patch-based model is used
+    if img_shape[1] != patch_shape[1]:
+        img_in_channels += dataset_channels
 
-    # Train.
-    training_loop.training_loop(
-        dataset, dataset_iter, valid_dataset, valid_dataset_iter, **c
+    # Instantiate the model and move to device.
+    if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
+        raise ValueError("Invalid model")
+    model_args = {  # default parameters for all networks
+        "img_out_channels": img_out_channels,
+        "img_resolution": list(img_shape),
+        "use_fp16": fp16,
+    }
+    standard_model_cfgs = {  # default parameters for different network types
+        "regression": {
+            "img_channels": 4,
+            "N_grid_channels": 4,
+            "embedding_type": "zero",
+        },
+        "diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "sinusoidal",
+            "N_grid_channels": 4,
+        },
+        "patched_diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "learnable",
+            "N_grid_channels": 100,
+        },
+    }
+    model_args.update(standard_model_cfgs[cfg.model.name])
+    if hasattr(cfg.model, "model_args"):  # override defaults from config file
+        model_args.update(OmegaConf.to_container(cfg.model.model_args))
+    if cfg.model.name == "regression":
+        model = UNet(
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
+        )
+    else:  # diffusion or patched diffusion
+        model = EDMPrecondSR(
+            img_in_channels=img_in_channels + model_args["N_grid_channels"],
+            **model_args,
+        )
+    model.train().requires_grad_(True).to(dist.device)
+
+    # Enable distributed data parallel if applicable
+    if dist.world_size > 1:
+        model = DistributedDataParallel(
+            model,
+            device_ids=[dist.local_rank],
+            broadcast_buffers=True,
+            output_device=dist.device,
+            find_unused_parameters=dist.find_unused_parameters,
+        )
+
+    # Load the regression checkpoint if applicable
+    if hasattr(cfg.training.io, "regression_checkpoint_path"):
+        regression_checkpoint_path = to_absolute_path(
+            cfg.training.io.regression_checkpoint_path
+        )
+        if not os.path.exists(regression_checkpoint_path):
+            raise FileNotFoundError(
+                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+            )
+        regression_net = Module.from_checkpoint(regression_checkpoint_path)
+        regression_net.eval().requires_grad_(False).to(dist.device)
+        logger0.success("Loaded the pre-trained regression model")
+
+    # Instantiate the loss function
+    patch_num = getattr(cfg.training.hp, "patch_num", 1)
+    if cfg.model.name in ("diffusion", "patched_diffusion"):
+        loss_fn = ResLoss(
+            regression_net=regression_net,
+            img_shape_x=img_shape[1],
+            img_shape_y=img_shape[0],
+            patch_shape_x=patch_shape[1],
+            patch_shape_y=patch_shape[0],
+            patch_num=patch_num,
+            hr_mean_conditioning=cfg.model.hr_mean_conditioning,
+        )
+    elif cfg.model.name == "regression":
+        loss_fn = RegressionLoss()
+
+    # Instantiate the optimizer
+    optimizer = torch.optim.Adam(
+        params=model.parameters(), lr=cfg.training.hp.lr, betas=[0.9, 0.999], eps=1e-8
     )
 
+    # Record the current time to measure the duration of subsequent operations.
+    start_time = time.time()
 
-# ----------------------------------------------------------------------------
+    # Compute the number of required gradient accumulation rounds
+    # It is automatically used if batch_size_per_gpu * dist.world_size < total_batch_size
+    batch_gpu_total, num_accumulation_rounds = compute_num_accumulation_rounds(
+        cfg.training.hp.total_batch_size,
+        cfg.training.hp.batch_size_per_gpu,
+        dist.world_size,
+    )
+    logger0.info(f"Using {num_accumulation_rounds} gradient accumulation rounds")
+
+    ## Resume training from previous checkpoints if exists
+    if dist.world_size > 1:
+        torch.distributed.barrier()
+    try:
+        cur_nimg = load_checkpoint(
+            path=f"checkpoints_{cfg.model.name}",
+            models=model,
+            optimizer=optimizer,
+            device=dist.device,
+        )
+    except:
+        cur_nimg = 0
+
+    ############################################################################
+    #                            MAIN TRAINING LOOP                            #
+    ############################################################################
+
+    logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
+    done = False
+    while not done:
+        tick_start_nimg = cur_nimg
+        tick_start_time = time.time()
+        # Compute & accumulate gradients
+        optimizer.zero_grad(set_to_none=True)
+        loss_accum = 0
+        for _ in range(num_accumulation_rounds):
+            img_clean, img_lr, labels = next(dataset_iterator)
+            img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
+            img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
+            labels = labels.to(dist.device).contiguous()
+            with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
+                loss = loss_fn(
+                    net=model,
+                    img_clean=img_clean,
+                    img_lr=img_lr,
+                    labels=labels,
+                    augment_pipe=None,
+                )
+            loss = loss.sum() / batch_gpu_total
+            loss_accum += loss / num_accumulation_rounds
+            loss.backward()
+
+        loss_sum = torch.tensor([loss_accum], device=dist.device)
+        if dist.world_size > 1:
+            torch.distributed.barrier()
+            torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
+        average_loss = (loss_sum / dist.world_size).cpu().item()
+        if dist.rank == 0:
+            writer.add_scalar("training_loss", average_loss, cur_nimg)
+
+        # Update weights.
+        lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
+        for g in optimizer.param_groups:
+            if lr_rampup > 0:
+                g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
+            g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
+            current_lr = g["lr"]
+            if dist.rank == 0:
+                writer.add_scalar("learning_rate", current_lr, cur_nimg)
+        handle_and_clip_gradients(
+            model, grad_clip_threshold=cfg.training.hp.grad_clip_threshold
+        )
+        optimizer.step()
+
+        cur_nimg += cfg.training.hp.total_batch_size
+        done = cur_nimg >= cfg.training.hp.training_duration
+
+        # Validation
+        if validation_dataset_iterator is not None:
+            valid_loss_accum = 0
+            if is_time_for_periodic_task(
+                cur_nimg,
+                cfg.training.io.validation_freq,
+                done,
+                cfg.training.hp.total_batch_size,
+                dist.rank,
+            ):
+                with torch.no_grad():
+                    for _ in range(cfg.training.io.validation_steps):
+                        img_clean_valid, img_lr_valid, labels_valid = next(
+                            validation_dataset_iterator
+                        )
+
+                        img_clean_valid = (
+                            img_clean_valid.to(dist.device)
+                            .to(torch.float32)
+                            .contiguous()
+                        )
+                        img_lr_valid = (
+                            img_lr_valid.to(dist.device).to(torch.float32).contiguous()
+                        )
+                        labels_valid = labels_valid.to(dist.device).contiguous()
+                        loss_valid = loss_fn(
+                            net=model,
+                            img_clean=img_clean_valid,
+                            img_lr=img_lr_valid,
+                            labels=labels_valid,
+                            augment_pipe=None,
+                        )
+                        loss_valid = (loss_valid.sum() / batch_gpu_total).cpu().item()
+                        valid_loss_accum += (
+                            loss_valid / cfg.training.io.validation_steps
+                        )
+                    valid_loss_sum = torch.tensor(
+                        [valid_loss_accum], device=dist.device
+                    )
+                    if dist.world_size > 1:
+                        torch.distributed.barrier()
+                        torch.distributed.all_reduce(
+                            valid_loss_sum, op=torch.distributed.ReduceOp.SUM
+                        )
+                    average_valid_loss = valid_loss_sum / dist.world_size
+                    if dist.rank == 0:
+                        writer.add_scalar(
+                            "validation_loss", average_valid_loss, cur_nimg
+                        )
+
+        if is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        ):
+            # Print stats if we crossed the printing threshold with this batch
+            tick_end_time = time.time()
+            fields = []
+            fields += [f"samples {cur_nimg:<9.1f}"]
+            fields += [f"training_loss {average_loss:<7.2f}"]
+            fields += [f"learning_rate {current_lr:<7.8f}"]
+            fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
+            fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
+            fields += [
+                f"sec_per_sample {((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg)):<7.2f}"
+            ]
+            fields += [
+                f"cpu_mem_gb {(psutil.Process(os.getpid()).memory_info().rss / 2**30):<6.2f}"
+            ]
+            fields += [
+                f"peak_gpu_mem_gb {(torch.cuda.max_memory_allocated(dist.device) / 2**30):<6.2f}"
+            ]
+            fields += [
+                f"peak_gpu_mem_reserved_gb {(torch.cuda.max_memory_reserved(dist.device) / 2**30):<6.2f}"
+            ]
+            logger0.info(" ".join(fields))
+            torch.cuda.reset_peak_memory_stats()
+
+        # Save checkpoints
+        if dist.world_size > 1:
+            torch.distributed.barrier()
+        if is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.save_checkpoint_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        ):
+            save_checkpoint(
+                path=f"checkpoints_{cfg.model.name}",
+                models=model,
+                optimizer=optimizer,
+                epoch=cur_nimg,
+            )
+
+    # Done.
+    logger0.info("Training Completed.")
+
 
 if __name__ == "__main__":
     main()
