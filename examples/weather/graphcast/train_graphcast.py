@@ -25,11 +25,18 @@ import wandb
 import torch.cuda.profiler as profiler
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR, LambdaLR
 
+import torch._dynamo
+
+torch._dynamo.config.suppress_errors = True  # TODO check if this can be removed
+
 # import modules
 import os
 
 from modulus.models.graphcast.graph_cast_net import GraphCastNet
-from modulus.utils.graphcast.loss import CellAreaWeightedLossFunction
+from modulus.utils.graphcast.loss import (
+    CellAreaWeightedLossFunction,
+    GraphCastLossFunction,
+)
 from modulus.launch.logging import (
     PythonLogger,
     initialize_wandb,
@@ -38,9 +45,9 @@ from modulus.launch.logging import (
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 from train_utils import count_trainable_params, prepare_input
-from loss.utils import grid_cell_area
+from loss.utils import normalized_grid_cell_area
 from train_base import BaseTrainer
-from validation import Validation
+from validation_base import Validation
 from modulus.datapipes.climate import ERA5HDF5Datapipe, SyntheticWeatherDataLoader
 from modulus.distributed import DistributedManager
 from modulus.utils.graphcast.data_utils import StaticData
@@ -48,6 +55,7 @@ from modulus.utils.graphcast.data_utils import StaticData
 import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
+from hydra.core.hydra_config import HydraConfig
 
 
 class GraphCastTrainer(BaseTrainer):
@@ -95,14 +103,22 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the model
         self.model = GraphCastNet(
-            multimesh_level=cfg.multimesh_level,
+            mesh_level=cfg.mesh_level,
+            multimesh=cfg.multimesh,
             input_res=tuple(cfg.latlon_res),
-            input_dim_grid_nodes=(cfg.num_channels_climate + cfg.use_cos_zenith)
+            input_dim_grid_nodes=(
+                cfg.num_channels_climate
+                + cfg.use_cos_zenith
+                + 4 * cfg.use_time_of_year_index
+            )
             * (cfg.num_history + 1)
             + cfg.num_channels_static,
             input_dim_mesh_nodes=3,
             input_dim_edges=4,
             output_dim_grid_nodes=cfg.num_channels_climate,
+            processor_type=cfg.processor_type,
+            khop_neighbors=cfg.khop_neighbors,
+            num_attention_heads=cfg.num_attention_heads,
             processor_layers=cfg.processor_layers,
             hidden_dim=cfg.hidden_dim,
             norm_type=cfg.norm_type,
@@ -132,13 +148,19 @@ class GraphCastTrainer(BaseTrainer):
         if cfg.watch_model and not cfg.jit and dist.rank == 0:
             wandb.watch(self.model)
 
-        # Get latitudes and longitudes
+        # Get required model attributes
         if hasattr(self.model, "module"):
             self.latitudes = self.model.module.latitudes
             self.longitudes = self.model.module.longitudes
+            self.lat_lon_grid = self.model.module.lat_lon_grid
+            self.is_distributed = self.model.module.is_distributed
+            self.expect_partitioned_input = self.model.module.expect_partitioned_input
         else:
             self.latitudes = self.model.latitudes
             self.longitudes = self.model.longitudes
+            self.lat_lon_grid = self.model.lat_lon_grid
+            self.is_distributed = self.model.is_distributed
+            self.expect_partitioned_input = self.model.expect_partitioned_input
 
         # distributed data parallel for multi-node training
         if dist.world_size > 1:
@@ -163,20 +185,21 @@ class GraphCastTrainer(BaseTrainer):
             "INTERP_LINEAR" if cfg.latlon_res != (721, 1440) else None
         )  # interpolate if not in native resolution
         self.cos_zenith_args = {
-            "dt": 6.0,
-            "start_year": 1980,
-            "latlon_bounds": ((90, -90), (0, 360)),
+            "dt": cfg.dt,
+            "start_year": cfg.start_year,
         }
+        self.channels_list = [i for i in range(cfg.num_channels_climate)]
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
-            channels=[i for i in range(cfg.num_channels_climate)],
+            channels=self.channels_list,
             latlon_resolution=cfg.latlon_res,
             interpolation_type=self.interpolation_type,
             num_samples_per_year=cfg.num_samples_per_year_train,
             num_steps=1,
             num_history=cfg.num_history,
             use_cos_zenith=cfg.use_cos_zenith,
+            use_time_of_year_index=cfg.use_time_of_year_index,
             cos_zenith_args=self.cos_zenith_args,
             batch_size=1,
             num_workers=cfg.num_workers,
@@ -191,17 +214,20 @@ class GraphCastTrainer(BaseTrainer):
         # enable train mode
         self.model.train()
 
-        # get area
-        if hasattr(self.model, "module"):
-            self.area = grid_cell_area(
-                self.model.module.lat_lon_grid[:, :, 0], unit="deg"
-            )
-        else:
-            self.area = grid_cell_area(self.model.lat_lon_grid[:, :, 0], unit="deg")
+        # get normalized area
+        self.area = normalized_grid_cell_area(self.lat_lon_grid[:, :, 0], unit="deg")
         self.area = self.area.to(dtype=self.dtype).to(device=dist.device)
 
         # instantiate loss, optimizer, and scheduler
-        self.criterion = CellAreaWeightedLossFunction(self.area)
+        if cfg.synthetic_dataset:
+            self.criterion = CellAreaWeightedLossFunction(self.area)
+        else:
+            self.criterion = GraphCastLossFunction(
+                self.area,
+                self.channels_list,
+                cfg.dataset_metadata_path,
+                cfg.time_diff_std_path,
+            )
         try:
             self.optimizer = apex.optimizers.FusedAdam(
                 self.model.parameters(),
@@ -249,16 +275,14 @@ class GraphCastTrainer(BaseTrainer):
         # Get the static data
         if self.static_dataset_path:
             self.static_data = StaticData(
-                self.static_dataset_path, self.model.latitudes, self.model.longitudes
+                self.static_dataset_path, self.latitudes, self.longitudes
             ).get()
             self.static_data = self.static_data.to(device=dist.device)
             assert cfg.num_channels_static == self.static_data.size(1), (
                 f"Number of static channels in model ({cfg.num_channels_static}) "
                 + f"does not match the static data ({self.static_data.size(1)})"
             )
-            if (
-                self.model.is_distributed and self.model.expect_partitioned_input
-            ):  # TODO verify
+            if self.is_distributed and self.expect_partitioned_input:  # TODO verify
                 # if input itself is distributed, we also need to distribute static data
                 self.static_data(
                     self.static_data[0].view(cfg.num_channels_static, -1).permute(1, 0)
@@ -305,13 +329,14 @@ def main(cfg: DictConfig) -> None:
     dist = DistributedManager()
 
     # initialize loggers
-    initialize_wandb(
-        project="Modulus-Launch",
-        entity="Modulus",
-        name="GraphCast-Training",
-        group="GraphCast-DDP-Group",
-        mode=cfg.wb_mode,
-    )  # Wandb logger
+    if dist.rank == 0:
+        initialize_wandb(
+            project="GraphCast",
+            entity="Modulus",
+            name=f"GraphCast-{HydraConfig.get().job.name}",
+            group="group",
+            mode=cfg.wb_mode,
+        )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
     rank_zero_logger.file_logging()
@@ -323,7 +348,14 @@ def main(cfg: DictConfig) -> None:
     if cfg.synthetic_dataset:
         DataPipe = SyntheticWeatherDataLoader
         cfg.static_dataset_path = None
-        rank_zero_logger.warning("Using Dummy dataset. Ignoring static dataset.")
+        cfg.use_cos_zenith = False
+        cfg.use_time_of_year_index = False
+        cfg.num_history = 0
+        cfg.num_workers = 0
+        rank_zero_logger.warning(
+            "Using synthetic dataset. Ignoring static dataset, cosine zenith angle,"
+            + " time of the year, and history. Also setting num_workers to 0."
+        )
     else:
         DataPipe = ERA5HDF5Datapipe
 
@@ -331,7 +363,7 @@ def main(cfg: DictConfig) -> None:
     trainer = GraphCastTrainer(cfg, dist, rank_zero_logger)
     start = time.time()
     rank_zero_logger.info("Training started...")
-    loss_agg, iter, tagged_iter, num_rollout_steps = 0, trainer.iter_init, 1, 1
+    loss_agg, iter, tagged_iter, num_rollout_steps = 0, trainer.iter_init + 1, 1, 1
     terminate_training, finetune, update_dataloader = False, False, False
 
     with torch.autograd.profiler.emit_nvtx() if cfg.profile else nullcontext():
@@ -340,7 +372,7 @@ def main(cfg: DictConfig) -> None:
             assert (
                 iter < cfg.num_iters_step1 + cfg.num_iters_step2 + cfg.num_iters_step3
             ), "Training is already finished!"
-            for i, data in enumerate(trainer.datapipe):
+            for _, data in enumerate(trainer.datapipe):
 
                 # profiling
                 if cfg.profile and iter == cfg.profile_range[0]:
@@ -391,13 +423,14 @@ def main(cfg: DictConfig) -> None:
                     trainer.datapipe = DataPipe(
                         data_dir=os.path.join(cfg.dataset_path, "train"),
                         stats_dir=os.path.join(cfg.dataset_path, "stats"),
-                        channels=[i for i in range(cfg.num_channels_climate)],
+                        channels=trainer.channels_list,
                         latlon_resolution=cfg.latlon_res,
                         interpolation_type=trainer.interpolation_type,
                         num_samples_per_year=cfg.num_samples_per_year_train,
                         num_steps=num_rollout_steps,
                         num_history=cfg.num_history,
                         use_cos_zenith=cfg.use_cos_zenith,
+                        use_time_of_year_index=cfg.use_time_of_year_index,
                         cos_zenith_args=trainer.cos_zenith_args,
                         batch_size=1,
                         num_workers=cfg.num_workers,
@@ -418,6 +451,10 @@ def main(cfg: DictConfig) -> None:
                     cos_zenith = data[0]["cos_zenith"]
                 except KeyError:
                     cos_zenith = None
+                try:
+                    time_idx = data[0]["time_of_year_idx"].item()
+                except KeyError:
+                    time_idx = None
 
                 invar_cat = prepare_input(
                     invar,
@@ -425,6 +462,11 @@ def main(cfg: DictConfig) -> None:
                     num_history=cfg.num_history,
                     static_data=trainer.static_data,
                     step=1,
+                    time_idx=time_idx,
+                    stride=cfg.stride,
+                    dt=cfg.dt,
+                    num_samples_per_year=cfg.num_samples_per_year_train,
+                    device=dist.device,
                 )
                 invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
                     dtype=trainer.dtype
@@ -444,7 +486,12 @@ def main(cfg: DictConfig) -> None:
                         channels=list(np.arange(cfg.num_channels_val)), iter=iter
                     )
                     logger.log(f"iteration {iter}, Validation MSE: {error:.04f}")
-
+                    wandb.log(
+                        {
+                            "Validation MSE": error,
+                        },
+                        step=iter,
+                    )
                 # distributed barrier
                 if dist.world_size > 1:
                     torch.distributed.barrier()
@@ -464,13 +511,15 @@ def main(cfg: DictConfig) -> None:
                         f"iteration: {iter}, loss: {loss_agg/cfg.save_freq:10.3e}, \
                             time per iter: {(time.time()-start)/cfg.save_freq:10.3e}"
                     )
-                    wandb.log(
-                        {
-                            "loss": loss_agg / cfg.save_freq,
-                            "learning_rate": trainer.scheduler.get_last_lr()[0],
-                        },
-                        step=iter,
-                    )
+                    loss_all = loss_agg / cfg.save_freq
+                    if dist.rank == 0:
+                        wandb.log(
+                            {
+                                "loss": loss_all,
+                                "learning_rate": trainer.scheduler.get_last_lr()[0],
+                            },
+                            step=iter,
+                        )
                     loss_agg = 0
                     start = time.time()
                 iter += 1
@@ -489,6 +538,7 @@ def main(cfg: DictConfig) -> None:
                             channels=list(np.arange(cfg.num_channels_val)), iter=iter
                         )
                         logger.log(f"iteration {iter}, Validation MSE: {error:.04f}")
+
                         save_checkpoint(
                             to_absolute_path(cfg.ckpt_path),
                             trainer.model,

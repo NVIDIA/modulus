@@ -123,6 +123,19 @@ def convert_datetime_to_cftime(
     return cls(time.year, time.month, time.day, time.hour, time.minute, time.second)
 
 
+def time_range(
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+    step: datetime.timedelta,
+    inclusive: bool = False,
+):
+    """Like the Python `range` iterator, but with datetimes."""
+    t = start_time
+    while (t <= end_time) if inclusive else (t < end_time):
+        yield t
+        t += step
+
+
 def format_time(seconds: Union[int, float]) -> str:  # pragma: no cover
     """Convert the seconds to human readable string with days, hours, minutes and seconds."""
     s = int(np.rint(seconds))
@@ -557,7 +570,7 @@ class InfiniteSampler(torch.utils.data.Sampler):  # pragma: no cover
             raise ValueError("rank must be non-negative and less than num_replicas")
         if not 0 <= window_size <= 1:
             raise ValueError("window_size must be between 0 and 1")
-        super().__init__(dataset)
+        super().__init__()
         self.dataset = dataset
         self.rank = rank
         self.num_replicas = num_replicas
