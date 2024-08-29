@@ -20,6 +20,35 @@ from scipy.interpolate import griddata
 from typing import List, Dict, Tuple
 
 
+def midpoint_data_interp(
+    pt1: np.ndarray, pt2: np.ndarray, points: np.ndarray, field: np.ndarray
+) -> np.ndarray:
+    """
+    Interpolate data on the midpoint of two points
+
+    Parameters:
+    -----------
+    pt1 : np.ndarray
+        Numpy array defining first point. Expected shape [1, 3]
+    pt2 : np.ndarray
+        Numpy array defining second point. Expected shape [1, 3]
+    points : np.ndarray
+        Numpy array containing all the points in the mesh. Expected shape [N, 3]
+    field : np.ndarray
+        Numpy array containing field values at all the points in the mesh.
+        Expected shape [N, m]
+
+    Returns:
+    --------
+    np.ndarray
+        Value at the midpoint
+    """
+    idx1 = np.where(np.all(points == pt1, axis=1))[0]
+    idx2 = np.where(np.all(points == pt2, axis=1))[0]
+
+    return 0.5 * (field[idx1][0] + field[idx2][0])
+
+
 def generate_mesh(
     nodes: np.ndarray, faces: np.ndarray, fields: np.ndarray
 ) -> pv.PolyData:
