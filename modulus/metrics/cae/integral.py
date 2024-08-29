@@ -14,102 +14,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import pyvista as pv
 
 
-def _midpoint_data_interp(
-    pt1: np.ndarray, pt2: np.ndarray, points: np.ndarray, field: np.ndarray
-) -> np.ndarray:
-    """
-    Interpolate data on the midpoint of two points
-
-    Parameters:
-    -----------
-    pt1 : np.ndarray
-        Numpy array defining first point. Expected shape [1, 3]
-    pt2 : np.ndarray
-        Numpy array defining second point. Expected shape [1, 3]
-    points : np.ndarray
-        Numpy array containing all the points in the mesh. Expected shape [N, 3]
-    field : np.ndarray
-        Numpy array containing field values at all the points in the mesh.
-        Expected shape [N, m]
-
-    Returns:
-    --------
-    np.ndarray
-        Value at the midpoint
-    """
-    idx1 = np.where(np.all(points == pt1, axis=1))[0]
-    idx2 = np.where(np.all(points == pt2, axis=1))[0]
-
-    return 0.5 * (field[idx1][0] + field[idx2][0])
-
-
 def line_integral(
-    edges: Tuple[np.ndarray, np.ndarray],
+    edges: np.ndarray,
     points: np.ndarray,
     field: np.ndarray,
-    criteria: Dict[str, float] = None,
 ) -> float:
     """
     Compute integral along a line / edge. Currently assumes the curve in xy plane.
 
     Parameters:
     -----------
-    edges : Tuple[np.ndarray, np.ndarray]
-        Tuple of two points. Each point of [1, 3] shape
+    edges : np.ndarray
+        Edges of the curve in [M, 2] format
     points : np.ndarray
-        Points for the edge
+        Coordinates of points for the edge
     field : np.ndarray
-        Field values at each point
-    criteria : Dict[str, float], optional
-        Criteria to sub-sample the integration points. Defaults to None.
+        Field values at each edge center.
 
     Returns:
     --------
     float
         Integral along the given curve / line.
     """
-    midpts = []
-    midpt_vals = []
-    normals = []
+    tangents = []
     lengths = []
 
-    # TODO: generalize to different planes
-    for e in edges:
-        vec = e[0] - e[1]
-        normal = [vec[1], -vec[0], vec[2]]
-        normal = normal / np.linalg.norm(normal)
-        midpt = (e[0] + e[1]) / 2
-        midpt_val = _midpoint_data_interp(e[0], e[1], points, field)
+    for i in range(edges.shape[0]):
+        vec = points[edges[i, 1]] - points[edges[i, 0]]
+        tangent = vec / np.linalg.norm(vec)
+        tangents.append(tangent)
+        lengths.append(np.linalg.norm(vec))
 
-        midpts.append(midpt)
-        midpt_vals.append(midpt_val)
-        normals.append(normal)
-        lengths.append(np.linalg.norm(e[0] - e[1]))
+    tangents = np.array(tangents)
+    lengths = np.array(lengths)
 
-    midpts = np.array(midpts)
-    normals = np.array(normals)
-    midpt_vals = np.array(midpt_vals)
-    lengths = np.array(lengths).reshape(-1, 1)
+    # integrate the results
+    if len(field.shape) == 2:
+        # Vector quantity
+        integral = np.sum(np.sum(field * tangents, axis=1) * lengths)
+    else:
+        # Scalar quantity
+        integral = np.sum(field * lengths)
 
-    if criteria is not None:
-        idx = (
-            (midpts[:, 0] >= criteria["x_min"])
-            & (midpts[:, 0] <= criteria["x_max"])
-            & (midpts[:, 1] >= criteria["y_min"])
-            & (midpts[:, 1] <= criteria["y_max"])
-        )
-        midpts = midpts[idx]
-        normals = normals[idx]
-        midpt_vals = midpt_vals[idx]
-        lengths = lengths[idx]
-
-    integral = np.sum(normals * midpt_vals * lengths, axis=0) / np.sum(lengths, axis=0)
     return integral
 
 
