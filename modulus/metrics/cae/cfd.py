@@ -18,7 +18,14 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import pyvista as pv
-import shapely
+
+try:
+    import shapely  # noqa: F401 for docs
+except ImportError:
+    raise ImportError(
+        "These metrics require shapely, install it using `pip install shapely`."
+    )
+
 import torch
 from numpy.fft import fft, fftfreq
 

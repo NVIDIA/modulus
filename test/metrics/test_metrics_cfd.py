@@ -48,7 +48,7 @@ def generate_box(level=500):
 
 
 @import_or_fail(["pyvista", "shapely"])
-def test_frontal_area(generate_sphere):
+def test_frontal_area(generate_sphere, pytestconfig):
     sphere = generate_sphere
 
     # area of circle
@@ -57,7 +57,7 @@ def test_frontal_area(generate_sphere):
 
 
 @import_or_fail(["pyvista"])
-def test_force_coeffs(generate_box):
+def test_force_coeffs(generate_box, pytestconfig):
     box = generate_box
     box = box.compute_normals()
     box = box.point_data_to_cell_data()

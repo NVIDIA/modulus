@@ -74,7 +74,7 @@ def test_line_integral(generate_circle):
 
 
 @import_or_fail(["pyvista"])
-def test_surface_integral(generate_sphere):
+def test_surface_integral(generate_sphere, pytestconfig):
     sphere = generate_sphere
 
     # test scalar field
