@@ -124,7 +124,9 @@ def compute_force_coefficients(
     return c_total, c_p, c_f
 
 
-def dominant_freq_calc(signal: List[Union[int, float]]) -> float:
+def dominant_freq_calc(
+    signal: List[Union[int, float]], sample_spacing: float = 1
+) -> float:
     """
     Compute the dominant frequency in the signal
 
@@ -132,6 +134,8 @@ def dominant_freq_calc(signal: List[Union[int, float]]) -> float:
     -----------
     signal : List[Union[int, float]]
         Signal
+    sample_spacing : float
+        Sample spacing, (inverse of sampling rate of the signal), by default 1
 
     Returns:
     --------
@@ -144,7 +148,7 @@ def dominant_freq_calc(signal: List[Union[int, float]]) -> float:
     mag = np.abs(yf)
     mag[0] = 0
     dom_idx = np.argmax(mag)
-    dom_freq = fftfreq(N, 1)[dom_idx]
+    dom_freq = fftfreq(N, sample_spacing)[dom_idx]
 
     return np.abs(dom_freq)
 
@@ -154,13 +158,12 @@ def compute_p_q_r(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute the P, Q and R invariants of the velocity gradient tensor.
-    The Q and R are normalized. Uses Finite Difference to compute the gradients.
+    The P, Q and R are normalized. Uses Finite Difference to compute the gradients.
 
     Parameters:
     -----------
     velocity_grad : torch.Tensor
-        3D Velocity gradient tensor (N, 9, nx, ny, nz) spacing is computed asuming
-        bounds of 2*pi.
+        3D Velocity gradient tensor (N, 3, 3, nx, ny, nz).
 
     Returns:
     --------
