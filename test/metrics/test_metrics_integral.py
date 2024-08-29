@@ -17,6 +17,7 @@
 import numpy as np
 import pytest
 import pyvista as pv
+from pytest_utils import import_or_fail
 
 from modulus.metrics.cae.integral import line_integral, surface_integral
 
@@ -72,6 +73,7 @@ def test_line_integral(generate_circle):
     assert np.allclose(integral, 0)
 
 
+@import_or_fail(["pyvista"])
 def test_surface_integral(generate_sphere):
     sphere = generate_sphere
 

@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 import torch
+from pytest_utils import import_or_fail
 
 from modulus.metrics.cae.cfd import (
     compute_force_coefficients,
@@ -46,6 +47,7 @@ def generate_box(level=500):
     return box
 
 
+@import_or_fail(["pyvista", "shapely"])
 def test_frontal_area(generate_sphere):
     sphere = generate_sphere
 
@@ -54,6 +56,7 @@ def test_frontal_area(generate_sphere):
     assert np.allclose(area, np.pi, rtol=1e-3)
 
 
+@import_or_fail(["pyvista"])
 def test_force_coeffs(generate_box):
     box = generate_box
     box = box.compute_normals()
