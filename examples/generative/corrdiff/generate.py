@@ -193,8 +193,8 @@ def main(cfg: DictConfig) -> None:
                         latents_shape=(
                             cfg.generation.seed_batch_size,
                             img_out_channels,
-                            img_shape[1],
                             img_shape[0],
+                            img_shape[1],
                         ),
                     )
             if net_res:
