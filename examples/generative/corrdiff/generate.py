@@ -90,12 +90,12 @@ def main(cfg: DictConfig) -> None:
     img_out_channels = len(dataset.output_channels())
 
     # Parse the patch shape
-    if hasattr(cfg, "training.hp.patch_shape_x"):  # TODO better config handling
-        patch_shape_x = cfg.training.hp.patch_shape_x
+    if hasattr(cfg.generation, "patch_shape_x"):  # TODO better config handling
+        patch_shape_x = cfg.generation.patch_shape_x
     else:
         patch_shape_x = None
-    if hasattr(cfg, "training.hp.patch_shape_y"):
-        patch_shape_y = cfg.training.hp.patch_shape_y
+    if hasattr(cfg.generation, "patch_shape_y"):
+        patch_shape_y = cfg.generation.patch_shape_y
     else:
         patch_shape_y = None
     patch_shape = (patch_shape_y, patch_shape_x)
@@ -193,8 +193,8 @@ def main(cfg: DictConfig) -> None:
                         latents_shape=(
                             cfg.generation.seed_batch_size,
                             img_out_channels,
-                            img_shape[1],
                             img_shape[0],
+                            img_shape[1],
                         ),
                     )
             if net_res:
