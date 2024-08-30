@@ -17,7 +17,7 @@
 import glob
 import re
 from pathlib import Path
-from typing import Any, Dict, List, NewType, Tuple, Union, Optional
+from typing import Any, Dict, List, NewType, Optional, Tuple, Union
 
 import torch
 from torch.cuda.amp import GradScaler
