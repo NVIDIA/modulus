@@ -205,6 +205,7 @@ def main(cfg: DictConfig) -> None:
         cfg.training.hp.batch_size_per_gpu,
         dist.world_size,
     )
+    batch_size_per_gpu = cfg.training.hp.batch_size_per_gpu
     logger0.info(f"Using {num_accumulation_rounds} gradient accumulation rounds")
 
     ## Resume training from previous checkpoints if exists
@@ -245,7 +246,7 @@ def main(cfg: DictConfig) -> None:
                     labels=labels,
                     augment_pipe=None,
                 )
-            loss = loss.sum() / batch_gpu_total
+            loss = loss.sum() / batch_size_per_gpu
             loss_accum += loss / num_accumulation_rounds
             loss.backward()
 
@@ -306,7 +307,9 @@ def main(cfg: DictConfig) -> None:
                             labels=labels_valid,
                             augment_pipe=None,
                         )
-                        loss_valid = (loss_valid.sum() / batch_gpu_total).cpu().item()
+                        loss_valid = (
+                            (loss_valid.sum() / batch_size_per_gpu).cpu().item()
+                        )
                         valid_loss_accum += (
                             loss_valid / cfg.training.io.validation_steps
                         )
