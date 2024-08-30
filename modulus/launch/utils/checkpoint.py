@@ -17,7 +17,7 @@
 import glob
 import re
 from pathlib import Path
-from typing import Any, Dict, List, NewType, Optional, Tuple, Union
+from typing import Any, Dict, List, NewType, Optional, Union
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -284,7 +284,7 @@ def load_checkpoint(
     epoch: Union[int, None] = None,
     metadata: Optional[Dict[str, Any]] = None,
     device: Union[str, torch.device] = "cpu",
-) -> Union[int, Tuple[int, Dict[str, Any]]]:
+) -> int:
     """Checkpoint loading utility
 
     This loader is designed to be used with the save checkpoint utility in Modulus
@@ -313,10 +313,8 @@ def load_checkpoint(
 
     Returns
     -------
-    Union[int, Tuple[int, Dict[str, Any]]]
-        If `return_metadata` is False, returns the loaded epoch as an integer.
-        If `return_metadata` is True, returns a tuple containing the loaded epoch (int)
-        and metadata (dict) extracted from the checkpoint.
+    int
+        Loaded epoch
     """
     # Check if checkpoint directory exists
     if not Path(path).is_dir():
