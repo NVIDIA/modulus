@@ -56,13 +56,14 @@ class _StaticCapture(object):
     def __init__(
         self,
         model: "modulus.Module",
-        optim: Union[optim, None] = None,
-        logger: Union[Logger, None] = None,
+        optim: Optional[optim] = None,
+        logger: Optional[Logger] = None,
         use_graphs: bool = True,
         use_autocast: bool = True,
         use_gradscaler: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        gradient_clip_norm: Optional[float] = None,
         label: Optional[str] = None,
     ):
         self.logger = logger if logger else self.logger
@@ -81,6 +82,7 @@ class _StaticCapture(object):
         self.optim = optim
         self.eval = False
         self.no_grad = False
+        self.gradient_clip_norm = gradient_clip_norm
 
         # Set up toggles for optimizations
         if not (amp_type == torch.float16 or amp_type == torch.bfloat16):
@@ -251,6 +253,12 @@ class _StaticCapture(object):
         if not self.eval:
             # In training mode output should be the loss
             self.scaler.scale(output).backward()
+            if self.gradient_clip_norm is not None:
+                self.scaler.unscale_(self.optim)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.gradient_clip_norm
+                )
+
         return output
 
     def _init_amp_scaler(
@@ -338,7 +346,7 @@ class StaticCaptureTraining(_StaticCapture):
         Modulus Model
     optim : torch.optim
         Optimizer
-    logger : Union[Logger, None], optional
+    logger : Optional[Logger], optional
         Modulus Launch Logger, by default None
     use_graphs : bool, optional
         Toggle CUDA graphs if supported by model, by default True
@@ -348,7 +356,9 @@ class StaticCaptureTraining(_StaticCapture):
         Number of warmup steps for cuda graphs, by default 11
     amp_type : Union[float16, bfloat16], optional
         Auto casting type for AMP, by default torch.float16
-    label : Optional[str, None], optional
+    gradient_clip_norm : Optional[float], optional
+        Threshold for gradient clipping
+    label : Optional[str], optional
         Static capture checkpoint label, by default None
 
     Raises
@@ -394,11 +404,12 @@ class StaticCaptureTraining(_StaticCapture):
         self,
         model: "modulus.Module",
         optim: torch.optim,
-        logger: Union[Logger, None] = None,
+        logger: Optional[Logger] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
+        gradient_clip_norm: Optional[float] = None,
         label: Optional[str] = None,
     ):
         super().__init__(
@@ -410,6 +421,7 @@ class StaticCaptureTraining(_StaticCapture):
             use_amp,
             cuda_graph_warmup,
             amp_type,
+            gradient_clip_norm,
             label,
         )
 
@@ -426,7 +438,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
     ----------
     model : modulus.models.Module
         Modulus Model
-    logger : Union[Logger, None], optional
+    logger : Optional[Logger], optional
         Modulus Launch Logger, by default None
     use_graphs : bool, optional
         Toggle CUDA graphs if supported by model, by default True
@@ -436,7 +448,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         Number of warmup steps for cuda graphs, by default 11
     amp_type : Union[float16, bfloat16], optional
         Auto casting type for AMP, by default torch.float16
-    label : Optional[str, None], optional
+    label : Optional[str], optional
         Static capture checkpoint label, by default None
 
     Raises
@@ -469,7 +481,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
     def __init__(
         self,
         model: "modulus.Module",
-        logger: Union[Logger, None] = None,
+        logger: Optional[Logger] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
         cuda_graph_warmup: int = 11,
@@ -485,6 +497,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
             False,
             cuda_graph_warmup,
             amp_type,
+            None,
             label,
         )
         self.eval = True  # No optimizer/scaler calls
