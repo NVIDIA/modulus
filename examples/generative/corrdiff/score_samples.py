@@ -83,7 +83,7 @@ def open_samples(f):
 # compute metrics in parallel for performance reasons
 def process(i, path, n_ensemble):
     truth, pred, root = open_samples(path)
-    truth = truth.isel(time=slice(i,  i + 1)).load()
+    truth = truth.isel(time=slice(i, i + 1)).load()
     if n_ensemble > 0:
         pred = pred.isel(time=slice(i, i + 1), ensemble=slice(0, n_ensemble))
     pred = pred.load()
@@ -91,7 +91,6 @@ def process(i, path, n_ensemble):
 
     a = xskillscore.rmse(truth, pred.mean("ensemble"), dim=dim)
     b = xskillscore.crps_ensemble(truth, pred, member_dim="ensemble", dim=dim)
-
 
     c = pred.std("ensemble").mean(dim)
     crps_mean = xskillscore.crps_ensemble(
@@ -101,20 +100,27 @@ def process(i, path, n_ensemble):
         dim=dim,
     )
 
-    metrics = xr.concat([a, b, c, crps_mean], dim="metric").assign_coords(
-        metric=["rmse", "crps", "std_dev", "mae"]
-    ).load()
+    metrics = (
+        xr.concat([a, b, c, crps_mean], dim="metric")
+        .assign_coords(metric=["rmse", "crps", "std_dev", "mae"])
+        .load()
+    )
     return metrics
 
 
 def main(path: str, output: str, n_ensemble: int == -1):
 
     truth, pred, root = open_samples(path)
-    
 
     with multiprocessing.Pool(32) as pool:
         metrics = []
-        for metric in tqdm.tqdm(pool.imap(partial(process, path=path, n_ensemble=n_ensemble), range(truth.sizes["time"])), total=truth.sizes["time"]):
+        for metric in tqdm.tqdm(
+            pool.imap(
+                partial(process, path=path, n_ensemble=n_ensemble),
+                range(truth.sizes["time"]),
+            ),
+            total=truth.sizes["time"],
+        ):
             metrics.append(metric)
 
     metrics = xr.concat(metrics, dim="time")
@@ -133,5 +139,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.path, args.output, args.n_ensemble)
-
-
