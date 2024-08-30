@@ -25,14 +25,14 @@ patch_shape_x: 448
 patch_shape_y: 448
   # Patch size. Patch-based sampling will be utilized if these dimensions differ from 
   # img_shape_x and img_shape_y
-overlap_pixels: 0
+overlap_pixels: 4
   # Number of overlapping pixels between adjacent patches
-boundary_pixels: 0
+boundary_pixels: 2
   # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
   # artifact.
-hr_mean_conditioning: false
-gridtype: "sinusoidal"
-N_grid_channels: 4
+hr_mean_conditioning: true
+gridtype: learnable
+N_grid_channels: 100
 sample_res: full
   # Sampling resolution
 times_range: null

@@ -20,7 +20,7 @@ weather forecasts.
 
 The `conf` directory contains the configuration files for the model, data,
 training, etc. The configs are given in YAML format and use the `omegaconf`
-library to manage them. Several example configs are given for training 
+library to manage them. Several example configs are given for training
 different models that are regression, diffusion, and patched-based diffusion
 models.
 The default configs are set to train the regression model.
@@ -29,29 +29,87 @@ according to the comments. Alternatively, you can create a new config file
 and specify it using the `--config-name` option.
 
 
-## Dataset
+## Dataset & Datapipe
 
 In this example, CorrDiff training is demonstrated on the Taiwan dataset,
 conditioned on the [ERA5 dataset](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5).
 We have made this dataset available for non-commercial use under the
 [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
 and can be downloaded from https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset.
-The dataloader in this example is tailored specifically for the Taiwan dataset.
-For other datasets, you will need to create a new dataloader.
-You can use the Taiwan dataloaderas a starting point for developing your new one.
+The datapipe in this example is tailored specifically for the Taiwan dataset.
+A light-weight datapipe for the HRRR dataset is also available and can be used
+with the CorrDiff-mini model.
+For other datasets, you will need to create a custom datapipe.
+You can use the lightweight HRRR datapipe as a starting point for developing your new one.
 
 
 ## Training the models
 
 
+There are several models available for training in this example, including
+a regression, a diffusion, and a patched-based diffusion model.
+The Patch-based diffusion model uses small subsets of the target region during
+both training and generation to enhance the scalability of the model.
 Apart from the dataset configs the main configs for training are `model`,
-`training`, and `validation`. These can be adjusted accordingly depending on 
-whether you are training the regression, diffusion, or the patch-based 
+`training`, and `validation`. These can be adjusted accordingly depending on
+whether you are training the regression, diffusion, or the patch-based
 diffusion model. Note that training the varients of the diffusion model
 requres a trained regression checkpoint, and the path to that checkpoint should
-be included in the `training` config file. Therefore, you should start with training
-a regression model, followed by training a diffusion model. To choose which model 
+be included in the `conf/training/corrdiff_diffusion.yaml ` file.
+Therefore, you should start with training
+a regression model, followed by training a diffusion model. To choose which model
 to train, simply change the configs in `conf/config_training.yaml`.
+
+For training the regression model, your `config_training.yaml` should be:
+
+```
+hydra:
+  job:
+    chdir: true
+    name: regression
+  run:
+    dir: ./outputs/${hydra:job.name}
+
+defaults:
+
+  # Dataset
+  - dataset/cwb_train
+
+  # Model
+  - model/corrdiff_regression
+
+  # Training
+  - training/corrdiff_regression
+
+  # Validation
+  - validation/basic
+  ```
+
+Similarly, for taining of the diffusion model, you should have:
+
+```
+hydra:
+  job:
+    chdir: true
+    name: diffusion
+  run:
+    dir: ./outputs/${hydra:job.name}
+
+defaults:
+
+  # Dataset
+  - dataset/cwb_train
+
+  # Model
+  - model/corrdiff_diffusion
+
+  # Training
+  - training/corrdiff_diffusion
+
+  # Validation
+  - validation/basic
+```
+
 To train the model, run
 
 ```python train.py```
@@ -62,18 +120,16 @@ Open a new terminal, navigate to the example directory, and run:
 ```tensorboard --logdir=outputs/<job_name>```
 
 If using a shared cluster, you may need to forward the port to see the tensorboard logs.
-Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU
-training, run
+Data parallelism is supported. Use `torchrun`
+To launch a multi-GPU or multi-node training:
 
-```mpirun -np <num_GPUs> python train.py```
-
-If running inside a docker container, you may need to include the
-`--allow-run-as-root` in the multi-GPU run command.
+```torchrun --standalone --nnodes=<NUM_NODES> --nproc_per_node=<NUM_GPUS_PER_NODE> train.py```
 
 ### Sampling and Model Evaluation
 
-Model evaluation is split into two components. generate.py creates a netCDF file
-that can be further analyzed and `plot_samples.py` makes plots from it.
+Model evaluation is split into two components. `generate.py` creates a netCDF file
+for the generated outputs, and `score_samples.py` computes deterministic and probablistic
+scores.
 
 To generate samples and save output in a netCDF file, run:
 
@@ -82,29 +138,20 @@ python generate.py
 ```
 This will use the base configs specified in the `conf/config_generate.yaml` file.
 
-Next, to plot one-sample for all the times (row=variable, col=sample, file=time), run:
+Next, to score the generated samples, run:
 
 ```bash
-python plot_single_sample.py samples.nc samples_image_dir
+python score_samples.py path=<PATH_TO_NC_FILE> output=<OUTPUT_FILE>
 ```
 
-To plot multiple samples for all times (row=time, col=sample, file=variable), run:
-
-```bash
-python plot_multiple_samples.py samples.nc samples_image_dir
-```
-
-Finally, to compute scalar deterministic and probabilistic scores, run:
-
-```bash
-python score_samples.py samples.nc
-
-```
+Some legacy plotting scripts are also available in the `inference` directory.
+You can also bring your checkpoints to [earth2studio]<https://github.com/NVIDIA/earth2studio>
+for further anaylysis and visualizations.
 
 ## Logging
 
-We use TensorBoard for logging training and validation losses, as well as 
-the learning rate during training. To visualize TensorBoard running in a 
+We use TensorBoard for logging training and validation losses, as well as
+the learning rate during training. To visualize TensorBoard running in a
 Docker container on a remote server from your local desktop, follow these steps:
 
 1. **Expose the Port in Docker:**
@@ -122,7 +169,7 @@ Docker container on a remote server from your local desktop, follow these steps:
      ```bash
      ssh -L 6006:localhost:6006 <user>@<remote-server-ip>
      ```
-    Replace `<user>` with your SSH username and `<remote-server-ip>` with the IP address 
+    Replace `<user>` with your SSH username and `<remote-server-ip>` with the IP address
     of your remote server. You can use a different port if necessary.
 
 4. **Access TensorBoard:**
@@ -131,7 +178,7 @@ Docker container on a remote server from your local desktop, follow these steps:
 **Note:** Ensure the remote server’s firewall allows connections on port `6006`
 and that your local machine’s firewall allows outgoing connections.
 
-  
+
 ## References
 
 - [Residual Diffusion Modeling for Km-scale Atmospheric Downscaling](https://arxiv.org/pdf/2309.15214.pdf)
