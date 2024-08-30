@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Metrics for CAE and CFD domain such as integrals, drag, and turbulence invariances and
   spectrum.
 - Added gradient clipping to StaticCapture utilities.
+- Bistride Multiscale MeshGraphNet example.
 
 ### Changed
 

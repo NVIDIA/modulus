@@ -12,8 +12,11 @@ the drag coefficient.
     1. [Ahmed Body](#ahmed-body)
     2. [DrivAerNet](#drivaernet)
 3. [Model](#model-overview-and-architecture)
+    1. [MeshGraphNet](#meshgraphnet)
+    2. [Bistride Multiscale (BSMS) MGN](#bistride-multiscale-bsms-mgn)
 4. [Training](#model-training)
     1. [Ahmed Body](#ahmed-body-training)
+        1. [BSMS MGN](#bsms-mgn-training)
     2. [DrivAerNet](#drivaer-training)
 5. [Inference](#inference)
 
@@ -58,8 +61,21 @@ Please see the corresponding [paper](#references) for more details.
 
 ## Model overview and architecture
 
+### MeshGraphNet
+
 The AeroGraphNet model is based on the MeshGraphNet [[1](#references)] architecture
 which is instrumental for learning from mesh-based data using GNNs.
+
+### Bistride Multiscale (BSMS) MGN
+
+Modulus BSMS MGN implementation is based on the BSMS GNN paper [[6](#references)].
+The model has two major building blocks:
+
+1. Bi-Stride Pooling and Adjacency Enhancement which precomputes different levels of meshes
+    consecutively from the input mesh as the top level.
+2. Transition between levels which determines how to do message passing across levels,
+    computing the edge weight and node updating after pooling and returning.
+
 Depending on the dataset, the model takes different inputs:
 
 ### Ahmed Body dataset
@@ -114,10 +130,30 @@ The example uses [Hydra](https://hydra.cc/docs/intro/) for experiment configurat
 Hydra provides a convenient way to change almost any experiment parameter,
 such as dataset configuration, model and optimizer settings and so on.
 
+For the full set of training script options, run the following command:
+
+```bash
+python train.py --help
+```
+
+In case of issues with Hydra config, you may get a Hydra error message
+that is not particularly useful. In such case, use `HYDRA_FULL_ERROR=1`
+environment variable:
+
+```bash
+HYDRA_FULL_ERROR=1 python train.py ...
+```
+
 This example also requires the `pyvista`, `shapely` and `vtk` libraries. Install with
 
 ```bash
 pip install pyvista shapely vtk
+```
+
+BSMS MGN model requires additional dependency:
+
+```bash
+pip install sparse_dot_mkl
 ```
 
 ### Ahmed Body training
@@ -168,6 +204,31 @@ export WANDB_API_KEY=<your_api_key>
 
 The URL to the dashboard will be displayed in the terminal after the run is launched.
 
+#### BSMS MGN training
+
+To train BSMS MGN, provide additional parameters, such as number of multi-scale layers,
+and, optionally, location of the BSMS cache which would greatly speed up
+the training process.
+For example, for 6-layer BSMS model, use the following command line:
+
+```bash
+python train.py +experiment=ahmed/bsms_mgn \
+    data.data_dir=. \
+    data.train.num_layers=6 \
+    data.val.num_layers=6 \
+    data.train.cache_dir=./cache_dir \
+    data.val.cache_dir=./cache_dir \
+    model.num_mesh_levels=6 \
+```
+
+When trained using provided experiment, `ahmed/bsms_mgn`, results should look something like:
+
+| Model | RRMSE |
+| :--- | ---: |
+| Baseline MGN | 0.21 |
+| Level 4 BSMS MGN | 0.16 |
+| Level 6 BSMS MGN | 0.11 |
+
 ### DrivAer training
 
 To train the MeshGraphNet model, run
@@ -212,3 +273,4 @@ in the output directory. Use ParaView or VTK.js to open and explore the results.
 3. [Ahmed body wiki](https://www.cfd-online.com/Wiki/Ahmed_body)
 4. [Deep Learning for Real-Time Aerodynamic Evaluations of Arbitrary Vehicle Shapes](https://arxiv.org/abs/2108.05798)
 5. [DrivAerNet: A Parametric Car Dataset for Data-driven Aerodynamic Design and Graph-Based Drag Prediction](https://arxiv.org/abs/2403.08055)
+6. [Efficient Learning of Mesh-Based Physical Simulation with Bi-Stride Multi-Scale Graph Neural Network](https://arxiv.org/pdf/2210.02573)

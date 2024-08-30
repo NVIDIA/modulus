@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: visualizers.MeshVisualizer
-_convert_: all
+defaults:
+  - mgn  # use MGN model as a base and change only required parameters.
 
-scalar: ???
-tag: ???
-camera_positions: ???
+_target_: modulus.models.meshgraphnet.BiStrideMeshGraphNet
+
+num_mesh_levels: 2
+bistride_unet_levels: 1
