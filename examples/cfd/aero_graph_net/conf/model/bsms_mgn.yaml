@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .combine_vtp_files import combine_vtp_files
-from .convert_file_formats import convert_tesselated_files_in_directory
-from .generate_stl import sdf_to_stl
+defaults:
+  - mgn  # use MGN model as a base and change only required parameters.
+
+_target_: modulus.models.meshgraphnet.BiStrideMeshGraphNet
+
+num_mesh_levels: 2
+bistride_unet_levels: 1

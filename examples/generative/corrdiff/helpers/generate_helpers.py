@@ -24,6 +24,8 @@ def get_dataset_and_sampler(dataset_cfg, times):
     """
     Get a dataset and sampler for generation.
     """
+    all_time_dataset_cfg = {"train": False, "all_times": True}
+    dataset_cfg.update(all_time_dataset_cfg)
     (dataset, _) = init_dataset_from_config(dataset_cfg, batch_size=1)
     plot_times = [
         convert_datetime_to_cftime(

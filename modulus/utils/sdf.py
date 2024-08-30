@@ -99,7 +99,7 @@ def signed_distance_field(
     >>> mesh_indices = np.array((0, 1, 2))
     >>> input_points = [(0.5, 0.5, 0.5)]
     >>> signed_distance_field(mesh_vertices, mesh_indices, input_points).numpy()
-    Module modulus.utils.sdf load on device 'cuda:0' took ...
+    Module ...
     array([0.5], dtype=float32)
     """
 
