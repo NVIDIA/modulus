@@ -108,10 +108,11 @@ def test_model_checkpointing(
     assert torch.allclose(output_2, new_output_2, rtol, atol)
 
     # Also load the model with metadata
+    metadata = {}
     epoch, metadata = load_checkpoint(
         checkpoint_folder,
         models=[mlp_model_1, mlp_model_2],
-        return_metadata=True,
+        metadata=metadata,
         device=device,
     )
 
