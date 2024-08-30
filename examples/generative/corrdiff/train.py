@@ -307,7 +307,9 @@ def main(cfg: DictConfig) -> None:
                             labels=labels_valid,
                             augment_pipe=None,
                         )
-                        loss_valid = (loss_valid.sum() / batch_size_per_gpu).cpu().item()
+                        loss_valid = (
+                            (loss_valid.sum() / batch_size_per_gpu).cpu().item()
+                        )
                         valid_loss_accum += (
                             loss_valid / cfg.training.io.validation_steps
                         )
