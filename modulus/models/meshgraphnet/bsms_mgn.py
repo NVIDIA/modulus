@@ -82,7 +82,11 @@ class BiStrideMeshGraphNet(MeshGraphNet):
     do_conat_trick: : bool, default=False
         Whether to replace concat+MLP with MLP+idx+sum
     num_processor_checkpoint_segments: int, optional
-        Number of processor segments for gradient checkpointing, by default 0 (checkpointing disabled)
+        Number of processor segments for gradient checkpointing, by default 0 (checkpointing disabled).
+        The number of segments should be a factor of 2 * `processor_size`, for example, if
+        `processor_size` is 15, then `num_processor_checkpoint_segments` can be 10 since it's
+        a factor of 15 * 2 = 30. It is recommended to start with a smaller number of segments
+        until the model fits into memory since each segment will affect model training speed.
     """
 
     def __init__(
