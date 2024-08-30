@@ -85,7 +85,7 @@ defaults:
   - validation/basic
   ```
 
-Similarily, for taining of the diffusion model, you should have:
+Similarly, for taining of the diffusion model, you should have:
 
 ```
 hydra:
