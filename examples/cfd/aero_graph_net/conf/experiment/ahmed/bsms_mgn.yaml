@@ -1,3 +1,5 @@
+# @package _global_
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,9 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: visualizers.MeshVisualizer
-_convert_: all
-
-scalar: ???
-tag: ???
-camera_positions: ???
+defaults:
+  - ahmed/mgn  # use MGN experiment as a base and change only required parameters.
+  - override /data@data.train: bsms_ahmed
+  - override /data@data.val: bsms_ahmed
+  - override /model: bsms_mgn
