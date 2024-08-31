@@ -45,7 +45,7 @@ perf:
 io:
     print_progress_freq: 1000
     # How often to print progress
-    save_checkpoint_freq: 50000
+    save_checkpoint_freq: 5000
     # How often to save the checkpoints, measured in number of processed samples
     validation_freq: 5000
     # how often to record the validation loss, measured in number of processed samples
