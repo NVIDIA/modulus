@@ -28,8 +28,9 @@ defaults:
   - dataset/cwb_generate
 
   # Sampler
-  # sampler/stochastic
-  - sampler/deterministic
+  - sampler/stochastic
+  #- sampler/deterministic
 
   # Generation
   - generation/base
+    #- generation/patched_based
