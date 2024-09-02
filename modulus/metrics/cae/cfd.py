@@ -172,6 +172,10 @@ def compute_p_q_r(
     velocity_grad : torch.Tensor
         3D Velocity gradient tensor (N, 3, 3, nx, ny, nz).
 
+    Reference:
+    ----------
+    https://ntrs.nasa.gov/api/citations/19960028952/downloads/19960028952.pdf
+
     Returns:
     --------
     Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
@@ -229,6 +233,10 @@ def compute_tke_spectrum(
     length : float, optional
         Length of the domain. Defaults to None, in which case, the spacing is computed
         asuming bounds of 2*pi.
+
+    Reference:
+    ----------
+    Pope, Stephen B. "Turbulent flows." Measurement Science and Technology 12.11 (2001): 2020-2021.
 
     Returns:
     --------
