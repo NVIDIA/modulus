@@ -22,8 +22,8 @@ import torch
 # ruff: noqa: E731
 
 
-@nvtx.annotate(message="ablation_sampler", color="red")
-def ablation_sampler(
+@nvtx.annotate(message="deterministic_sampler", color="red")
+def deterministic_sampler(
     net,
     latents,
     img_lr,

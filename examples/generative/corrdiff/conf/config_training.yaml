@@ -17,7 +17,7 @@
 hydra:
   job:
     chdir: true
-    name: regression
+    name: regression  # choose from [regression, diffusion, patched_diffusion]
   run:
     dir: ./outputs/${hydra:job.name}
 
@@ -34,7 +34,7 @@ defaults:
 
   # Training
   - training/corrdiff_regression
-    #- training/corrdiff_diffusion
+  #- training/corrdiff_diffusion
   #- training/corrdiff_patched_diffusion
 
   # Validation

@@ -16,10 +16,36 @@
 
 import os
 import random
+import urllib
 
+import numpy as np
+import pytest
 from pytest_utils import import_or_fail
+from stl import mesh
 
-from modulus.utils.mesh import combine_vtp_files, convert_tesselated_files_in_directory
+from modulus.utils.mesh import (
+    combine_vtp_files,
+    convert_tesselated_files_in_directory,
+    sdf_to_stl,
+)
+from modulus.utils.sdf import signed_distance_field
+
+
+@pytest.fixture
+def download_stl(tmp_path):
+    url = "https://upload.wikimedia.org/wikipedia/commons/4/43/Stanford_Bunny.stl"
+
+    parsed_url = urllib.parse.urlparse(url)
+    if parsed_url.scheme not in ("http", "https"):
+        raise ValueError(f"URL scheme '{parsed_url.scheme}' is not permitted.")
+
+    file_path = tmp_path / "Stanford_Bunny.stl"
+
+    # Download the STL file
+    urllib.request.urlretrieve(url, file_path)  # noqa: S310
+
+    # Return the path to the downloaded file
+    return file_path
 
 
 @import_or_fail(["vtk"])
@@ -149,3 +175,48 @@ def test_mesh_utils(tmp_path, pytestconfig):
         "obj2vtp", tmp_dir, output_dir=tmp_path / "converted"
     )
     assert os.path.exists(tmp_path / "converted/random.vtp")
+
+
+@import_or_fail(["warp", "skimage", "stl"])
+@pytest.mark.parametrize("backend", ["warp", "skimage"])
+def test_stl_gen(pytestconfig, backend, download_stl, tmp_path):
+
+    bunny_mesh = mesh.Mesh.from_file(str(download_stl))
+
+    vertices = np.array(bunny_mesh.vectors, dtype=np.float64)
+    vertices_3d = vertices.reshape(-1, 3)
+    vert_indices = np.arange((vertices_3d.shape[0]))
+
+    bounds = {
+        "x": (np.min(vertices_3d[:, 0]), np.max(vertices_3d[:, 0])),
+        "y": (np.min(vertices_3d[:, 1]), np.max(vertices_3d[:, 1])),
+        "z": (np.min(vertices_3d[:, 2]), np.max(vertices_3d[:, 2])),
+    }
+
+    res = {k: v[1] - v[0] for k, v in bounds.items()}
+    min_res = min(res.values()) / 100
+    n = [int((bounds[k][1] - bounds[k][0] + 2) // min_res) for k in bounds.keys()]
+    x = np.linspace(bounds["x"][0] - 1, bounds["x"][1] + 1, n[0], dtype=np.float64)
+    y = np.linspace(bounds["y"][0] - 1, bounds["y"][1] + 1, n[1], dtype=np.float64)
+    z = np.linspace(bounds["z"][0] - 1, bounds["z"][1] + 1, n[2], dtype=np.float64)
+    xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
+
+    coords = np.concatenate(
+        [xx.reshape(-1, 1), yy.reshape(-1, 1), zz.reshape(-1, 1)], axis=1
+    )
+
+    sdf_test = signed_distance_field(
+        vertices_3d, vert_indices, coords.flatten()
+    ).numpy()
+    output_filename = tmp_path / "output_stl.stl"
+    sdf_to_stl(
+        sdf_test.reshape(n[0], n[1], n[2]),
+        threshold=0.0,
+        backend=backend,
+        filename=output_filename,
+    )
+
+    # read the saved stl
+    saved_stl = mesh.Mesh.from_file(str(output_filename))
+
+    assert saved_stl.vectors is not None

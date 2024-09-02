@@ -18,7 +18,7 @@
 import pytest
 import torch
 
-from modulus.utils.generative import ablation_sampler
+from modulus.utils.generative import deterministic_sampler
 
 
 # Mock a minimal net class for testing
@@ -41,20 +41,20 @@ def mock_net():
 
 
 # Basic functionality test
-def test_ablation_sampler_output_type_and_shape(mock_net):
+def test_deterministic_sampler_output_type_and_shape(mock_net):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
-    output = ablation_sampler(net=mock_net, latents=latents, img_lr=img_lr)
+    output = deterministic_sampler(net=mock_net, latents=latents, img_lr=img_lr)
     assert isinstance(output, torch.Tensor)
     assert output.shape == latents.shape
 
 
 # Test for parameter validation
 @pytest.mark.parametrize("solver", ["invalid_solver", "euler", "heun"])
-def test_ablation_sampler_solver_validation(mock_net, solver):
+def test_deterministic_sampler_solver_validation(mock_net, solver):
     if solver == "invalid_solver":
         with pytest.raises(ValueError):
-            ablation_sampler(
+            deterministic_sampler(
                 net=mock_net,
                 latents=torch.randn(1, 3, 64, 64),
                 img_lr=torch.randn(1, 3, 64, 64),
@@ -62,7 +62,7 @@ def test_ablation_sampler_solver_validation(mock_net, solver):
             )
     else:
         # No exception should be raised for valid solvers
-        ablation_sampler(
+        deterministic_sampler(
             net=mock_net,
             latents=torch.randn(1, 3, 64, 64),
             img_lr=torch.randn(1, 3, 64, 64),
@@ -71,11 +71,11 @@ def test_ablation_sampler_solver_validation(mock_net, solver):
 
 
 # Test for edge cases
-def test_ablation_sampler_edge_cases(mock_net):
+def test_deterministic_sampler_edge_cases(mock_net):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
     # Test with extreme rho values, zero noise levels, etc.
-    output = ablation_sampler(
+    output = deterministic_sampler(
         net=mock_net, latents=latents, img_lr=img_lr, rho=1000, sigma_min=0, sigma_max=0
     )
     assert isinstance(output, torch.Tensor)
@@ -83,10 +83,10 @@ def test_ablation_sampler_edge_cases(mock_net):
 
 # Test discretization
 @pytest.mark.parametrize("discretization", ["vp", "ve", "iddpm", "edm"])
-def test_ablation_sampler_discretization(mock_net, discretization):
+def test_deterministic_sampler_discretization(mock_net, discretization):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
-    output = ablation_sampler(
+    output = deterministic_sampler(
         net=mock_net, latents=latents, img_lr=img_lr, discretization=discretization
     )
     assert isinstance(output, torch.Tensor)
@@ -94,10 +94,10 @@ def test_ablation_sampler_discretization(mock_net, discretization):
 
 # Test schedule
 @pytest.mark.parametrize("schedule", ["vp", "ve", "linear"])
-def test_ablation_sampler_schedule(mock_net, schedule):
+def test_deterministic_sampler_schedule(mock_net, schedule):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
-    output = ablation_sampler(
+    output = deterministic_sampler(
         net=mock_net, latents=latents, img_lr=img_lr, schedule=schedule
     )
     assert isinstance(output, torch.Tensor)
@@ -105,10 +105,10 @@ def test_ablation_sampler_schedule(mock_net, schedule):
 
 # Test number of steps
 @pytest.mark.parametrize("num_steps", [1, 5, 18])
-def test_ablation_sampler_num_steps(mock_net, num_steps):
+def test_deterministic_sampler_num_steps(mock_net, num_steps):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
-    output = ablation_sampler(
+    output = deterministic_sampler(
         net=mock_net, latents=latents, img_lr=img_lr, num_steps=num_steps
     )
     assert isinstance(output, torch.Tensor)
@@ -116,10 +116,10 @@ def test_ablation_sampler_num_steps(mock_net, num_steps):
 
 # Test sigma
 @pytest.mark.parametrize("sigma_min, sigma_max", [(0.001, 0.01), (1.0, 1.5)])
-def test_ablation_sampler_sigma_boundaries(mock_net, sigma_min, sigma_max):
+def test_deterministic_sampler_sigma_boundaries(mock_net, sigma_min, sigma_max):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
-    output = ablation_sampler(
+    output = deterministic_sampler(
         net=mock_net,
         latents=latents,
         img_lr=img_lr,
@@ -131,16 +131,16 @@ def test_ablation_sampler_sigma_boundaries(mock_net, sigma_min, sigma_max):
 
 # Test error handling
 @pytest.mark.parametrize("scaling", ["invalid_scaling", "vp", "none"])
-def test_ablation_sampler_scaling_validation(mock_net, scaling):
+def test_deterministic_sampler_scaling_validation(mock_net, scaling):
     latents = torch.randn(1, 3, 64, 64)
     img_lr = torch.randn(1, 3, 64, 64)
     if scaling == "invalid_scaling":
         with pytest.raises(ValueError):
-            ablation_sampler(
+            deterministic_sampler(
                 net=mock_net, latents=latents, img_lr=img_lr, scaling=scaling
             )
     else:
-        output = ablation_sampler(
+        output = deterministic_sampler(
             net=mock_net, latents=latents, img_lr=img_lr, scaling=scaling
         )
         assert isinstance(output, torch.Tensor)
