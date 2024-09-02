@@ -20,7 +20,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
-from modulus.models.diffusion import UNet, EDMPrecondSR
+from modulus.models.diffusion import UNet, EDMPrecondSRV2
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -63,6 +63,12 @@ def main(cfg: DictConfig) -> None:
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
     logger.info(f"Saving the outputs in {os.getcwd()}")
+    checkpoint_dir = os.path.join(
+        cfg.training.io.get("checkpoint_dir", "."),
+        f"checkpoints_{cfg.model.name}"
+    )
+    if cfg.training.hp.batch_size_per_gpu == "auto":
+        cfg.training.hp.batch_size_per_gpu = cfg.training.hp.total_batch_size // dist.world_size
 
     # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
     set_seed(dist.rank)
@@ -146,7 +152,7 @@ def main(cfg: DictConfig) -> None:
             **model_args,
         )
     else:  # diffusion or patched diffusion
-        model = EDMPrecondSR(
+        model = EDMPrecondSRV2(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
@@ -169,7 +175,7 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
@@ -212,7 +218,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
     try:
         cur_nimg = load_checkpoint(
-            path=f"checkpoints_{cfg.model.name}",
+            path=checkpoint_dir,
             models=model,
             optimizer=optimizer,
             device=dist.device,
@@ -367,7 +373,7 @@ def main(cfg: DictConfig) -> None:
             rank_0_only=True,
         ):
             save_checkpoint(
-                path=f"checkpoints_{cfg.model.name}",
+                path=checkpoint_dir,
                 models=model,
                 optimizer=optimizer,
                 epoch=cur_nimg,
