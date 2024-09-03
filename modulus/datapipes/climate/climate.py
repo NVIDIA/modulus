@@ -23,6 +23,7 @@ from itertools import chain
 import h5py
 import netCDF4 as nc
 import numpy as np
+import pytz
 import torch
 
 try:
@@ -729,7 +730,9 @@ class ClimateDaliExternalSource(ABC):
 
         # Load sequence of timestamps
         year = self.start_year + year_idx
-        start_time = datetime(year, 1, 1) + timedelta(hours=int(in_idx) * self.dt)
+        start_time = datetime(year, 1, 1, tzinfo=pytz.utc) + timedelta(
+            hours=int(in_idx) * self.dt
+        )
         timestamps = np.array(
             [
                 (start_time + timedelta(hours=i * self.stride * self.dt)).timestamp()
