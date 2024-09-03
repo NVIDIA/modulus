@@ -214,8 +214,7 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
 
 @pytest.fixture
 def data_dir():
-    # path = "/data/nfs/modulus-data/datasets/healpix/"
-    path = "/code/modulus-data/datasets/healpix/"
+    path = "/data/nfs/modulus-data/datasets/healpix/"
     return path
 
 
