@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Refactored CorrDiff training recipe for improved usability
+- Fixed timezone calculation in datapipe cosine zenith utility.
 
 ### Deprecated
 
