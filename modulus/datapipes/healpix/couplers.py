@@ -38,7 +38,7 @@ class ConstantCoupler:
         presteps: int = 0,
         input_time_dim: int = 2,
         output_time_dim: int = 2,
-        input_times: Sequence = [pd.Timedelta("24h"), pd.Timedelta("48H")],
+        input_times: Sequence = [pd.Timedelta("24H"), pd.Timedelta("48H")],
         prepared_coupled_data=True,
     ):
         """
