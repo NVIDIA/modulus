@@ -97,7 +97,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
 
     # Handling of the high-res mean
     additional_args = {}
-    if hr_mean:
+    if hr_mean is not None:
         additional_args["mean_hr"] = hr_mean
 
     # Loop over batches

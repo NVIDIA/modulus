@@ -263,7 +263,8 @@ def main(cfg: DictConfig) -> None:
         for g in optimizer.param_groups:
             if lr_rampup > 0:
                 g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
-            g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
+            if cur_nimg >= lr_rampup:
+                g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
             current_lr = g["lr"]
             if dist.rank == 0:
                 writer.add_scalar("learning_rate", current_lr, cur_nimg)
