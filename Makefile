@@ -4,7 +4,7 @@ install:
 
 editable-install:
 	pip install --upgrade pip && \
-		pip install -e . --config-settings editable_mode=strict
+		pip install -e .[dev] --config-settings editable_mode=strict
 
 get-data:
 	mkdir -p /data && \
@@ -39,7 +39,7 @@ doctest:
 pytest: 
 	coverage run \
 		--rcfile='test/coverage.pytest.rc' \
-		-m pytest --ignore-glob=*docs* 
+		-m pytest --ignore-glob=*docs* --ignore-glob=*examples*
 
 pytest-internal:
 	cd test/internal && \

@@ -23,49 +23,7 @@ These include some very general models like Fourier Neural Operators (FNOs),
 ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
 Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
-Currently available models include:
-
-.. list-table::
-   :widths: 20 40 40
-   :header-rows: 1
-
-   * - Model Name
-     - Inputs
-     - Outputs
-   * - FullyConnected
-     - torch.Tensor [N, in_features]
-     - torch.Tensor [N, out_features]
-   * - FourierNeuralOperator
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - AdaptiveFourierNeuralOperator
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - MeshGraphNet
-     - torch.Tensor [num_nodes, input_dim_nodes], torch.Tensor [num_edges, input_dim_edges], dgl.DGLGraph [num_nodes, num_edges]
-     - torch.Tensor [num_nodes, output_dim]
-   * - GraphCastNet
-     - torch.Tensor [N, C_in, H, W]
-     - torch.Tensor [N, C_out, H, W]
-   * - Pix2PixNet 
-     - torch.Tensor [N, in_channels, H, W]
-     - torch.Tensor [N, out_channels, H, W]
-   * - One2ManyRNN
-     - torch.Tensor [N, C, 1, H, W]
-     - torch.Tensor [N, C, T, H, W]
-   * - Seq2SeqRNN
-     - torch.Tensor [N, C, T, H, W]
-     - torch.Tensor [N, C, T, H, W]
-   * - SRResNet
-     - torch.Tensor [N, C_in, D, H, W]
-     - torch.Tensor [N, C_out, D_out, H_out, W_out]
-   * - DLWP
-     - torch.Tensor [N, C_in, 6, Res, Res]
-     - torch.Tensor [N, C_out, 6, Res, Res]
-   * - SphericalFourierNeuralOperatorNet
-     - torch.Tensor [N, C_in, H, W]
-     - torch.Tensor [N, C_out, H, W]
-
+For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/modulus/tree/main/modulus/models>`_.
 
 Below are some simple examples of how to use these models.
 
@@ -141,7 +99,7 @@ supports CUDA Graphs and Automatic Mixed-Precision.
             x = self.dec1(x2)
             return self.final(x)
 
-Now we show this model rewritten in Modulus. First, let's subclass the model from 
+Now we show this model rewritten in Modulus. First, let's subclass the model from
 ``modulus.Module`` instead of ``torch.nn.Module``. The
 ``modulus.Module`` class acts like a direct replacement for the
 ``torch.nn.Module`` and provides additional functionality for saving and loading
@@ -163,7 +121,7 @@ that this model supports. In this case we will enable CUDA Graphs and Automatic 
         cuda_graphs: bool = True
         amp_cpu: bool = True
         amp_gpu: bool = True
-    
+
     class UNet(modulus.Module):
         def __init__(self, in_channels=1, out_channels=1):
             super(UNet, self).__init__(meta=UNetMetaData())
@@ -234,12 +192,12 @@ training step function and optimize it for the specified optimizations.
 
 For the simple model above, you can observe ~1.1x speed-up due to CUDA Graphs and AMP.
 The speed-up observed changes from model to model and is typically greater for more
-complex models. 
+complex models.
 
 .. note::
     The ``ModelMetaData`` and ``modulus.Module`` do not make the model
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
-    to write the model code that enables each of these optimizations. 
+    to write the model code that enables each of these optimizations.
     Models in the Modulus Model Zoo are written to support many of these optimizations
     and checked against Modulus's CI to ensure that they work correctly.
 
@@ -269,7 +227,7 @@ below.
             super(TorchModel, self).__init__()
             self.conv1 = nn.Conv2d(1, 20, 5)
             self.conv2 = nn.Conv2d(20, 20, 5)
-    
+
         def forward(self, x):
             x = self.conv1(x)
             return self.conv2(x)
@@ -369,7 +327,7 @@ class.
 
 .. code:: python
 
-    >>> from modulus.registry import ModelRegistry 
+    >>> from modulus.registry import ModelRegistry
     >>> model_registry = ModelRegistry()
     >>> model_registry.list_models()
     ['AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
@@ -383,7 +341,7 @@ to the Modulus registry by adding an entry point to your ``toml`` file. For
 example, suppose your package structure is as follows:
 
 .. code:: python
-    
+
     # setup.py
 
     from setuptools import setup, find_packages
@@ -391,38 +349,38 @@ example, suppose your package structure is as follows:
     setup()
 
 .. code:: python
-    
+
     # pyproject.toml
 
     [build-system]
     requires = ["setuptools", "wheel"]
     build-backend = "setuptools.build_meta"
-    
+
     [project]
     name = "MyPackage"
     description = "My Neural Network Zoo."
     version = "0.1.0"
-    
+
     [project.entry-points."modulus.models"]
     MyModulusModel = "mypackage.models.MyModulusModel:MyModulusModel"
 
 .. code:: python
-   
+
    # mypackage/models.py
 
    import torch.nn as nn
    from modulus.models import Model
-   
+
    class MyModel(nn.Module):
        def __init__(self):
            super(MyModel, self).__init__()
            self.conv1 = nn.Conv2d(1, 20, 5)
            self.conv2 = nn.Conv2d(20, 20, 5)
-   
+
        def forward(self, x):
            x = self.conv1(x)
            return self.conv2(x)
-   
+
    MyModulusModel = Model.from_pytorch(MyModel)
 
 
@@ -431,7 +389,7 @@ registry.
 
 
 .. code:: python
-   
+
    >>> from modulus.registry import ModelRegistry
    >>> model_registry = ModelRegistry()
    >>> model_registry.list_models()
@@ -463,6 +421,10 @@ Fourier Neural Operators
     :members:
     :show-inheritance:
 
+.. automodule:: modulus.models.afno.modafno
+    :members:
+    :show-inheritance:
+
 Graph Neural Networks
 ---------------------
 
@@ -470,14 +432,23 @@ Graph Neural Networks
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.graphcast.graph_cast_net
+.. automodule:: modulus.models.mesh_reduced.mesh_reduced
     :members:
     :show-inheritance:
 
-Pix2Pix Net
------------
+.. automodule:: modulus.models.meshgraphnet.bsms_mgn
+    :members:
+    :show-inheritance:
+
+
+Convolutional Networks
+-----------------------
 
 .. automodule:: modulus.models.pix2pix.pix2pix
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.srrn.super_res_net
     :members:
     :show-inheritance:
 
@@ -492,17 +463,46 @@ Recurrent Neural Networks
     :members:
     :show-inheritance:
 
-Super Resolution Network
-------------------------
 
-.. automodule:: modulus.models.srrn.super_res_net
-    :members:
-    :show-inheritance:
-
-DLWP Model
-----------
+Weather / Climate Models
+-------------------------
 
 .. automodule:: modulus.models.dlwp.dlwp
     :members:
     :show-inheritance:
 
+.. automodule:: modulus.models.dlwp_healpix.HEALPixRecUNet
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.graphcast.graph_cast_net
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.fengwu.fengwu
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.pangu.pangu
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.swinvrnn.swinvrnn
+    :members:
+    :show-inheritance:
+
+
+Diffusion Model
+---------------
+
+.. automodule:: modulus.models.diffusion.dhariwal_unet
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.diffusion.song_unet
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.models.diffusion.unet
+    :members:
+    :show-inheritance:

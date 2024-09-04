@@ -20,7 +20,7 @@ Diffusion-Based Generative Models".
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import nvtx
@@ -68,10 +68,10 @@ class SongUNet(Module):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[List[int], int]
+        The resolution of the input/output image, 1 value represents a square image.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -111,18 +111,18 @@ class SongUNet(Module):
         How many layers should use gradient checkpointing, 0 is None
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
@@ -135,7 +135,7 @@ class SongUNet(Module):
 
     def __init__(
         self,
-        img_resolution: int,
+        img_resolution: Union[List[int], int],
         in_channels: int,
         out_channels: int,
         label_dim: int = 0,
@@ -195,8 +195,16 @@ class SongUNet(Module):
             init_attn=init_attn,
         )
 
+        # for compatibility with older versions that took only 1 dimension
+        self.img_resolution = img_resolution
+        if isinstance(img_resolution, int):
+            self.img_shape_y = self.img_shape_x = img_resolution
+        else:
+            self.img_shape_y = img_resolution[0]
+            self.img_shape_x = img_resolution[1]
+
         # set the threshold for checkpointing based on image resolution
-        self.checkpoint_threshold = (img_resolution >> checkpoint_level) + 1
+        self.checkpoint_threshold = (self.img_shape_y >> checkpoint_level) + 1
 
         # Mapping.
         if self.embedding_type != "zero":
@@ -232,7 +240,7 @@ class SongUNet(Module):
         cout = in_channels
         caux = in_channels
         for level, mult in enumerate(channel_mult):
-            res = img_resolution >> level
+            res = self.img_shape_y >> level
             if level == 0:
                 cin = cout
                 cout = model_channels
@@ -279,7 +287,7 @@ class SongUNet(Module):
         # Decoder.
         self.dec = torch.nn.ModuleDict()
         for level, mult in reversed(list(enumerate(channel_mult))):
-            res = img_resolution >> level
+            res = self.img_shape_y >> level
             if level == len(channel_mult) - 1:
                 self.dec[f"{res}x{res}_in0"] = UNetBlock(
                     in_channels=cout, out_channels=cout, attention=True, **block_kwargs
@@ -398,10 +406,10 @@ class SongUNetPosEmbd(SongUNet):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[List[int], int]
+        The resolution of the input/output image, 1 value represents a square image.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -421,7 +429,7 @@ class SongUNetPosEmbd(SongUNet):
     attn_resolutions : List[int], optional
         Resolutions at which self-attention layers are applied. By default [16].
     dropout : float, optional
-        Dropout probability applied to intermediate activations. By default 0.10.
+        Dropout probability applied to intermediate activations. By default 0.13.
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
@@ -439,18 +447,18 @@ class SongUNetPosEmbd(SongUNet):
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
@@ -463,17 +471,17 @@ class SongUNetPosEmbd(SongUNet):
 
     def __init__(
         self,
-        img_resolution: int,
+        img_resolution: Union[List[int], int],
         in_channels: int,
         out_channels: int,
         label_dim: int = 0,
         augment_dim: int = 0,
         model_channels: int = 128,
-        channel_mult: List[int] = [1, 2, 2, 2],
+        channel_mult: List[int] = [1, 2, 2, 2, 2],
         channel_mult_emb: int = 4,
         num_blocks: int = 4,
-        attn_resolutions: List[int] = [16],
-        dropout: float = 0.10,
+        attn_resolutions: List[int] = [28],
+        dropout: float = 0.13,
         label_dropout: float = 0.0,
         embedding_type: str = "positional",
         channel_mult_noise: int = 1,
@@ -482,6 +490,7 @@ class SongUNetPosEmbd(SongUNet):
         resample_filter: List[int] = [1, 1],
         gridtype: str = "sinusoidal",
         N_grid_channels: int = 4,
+        checkpoint_level: int = 0,
     ):
         super().__init__(
             img_resolution,
@@ -501,9 +510,9 @@ class SongUNetPosEmbd(SongUNet):
             encoder_type,
             decoder_type,
             resample_filter,
+            checkpoint_level,
         )
 
-        self.img_resolution = img_resolution
         self.gridtype = gridtype
         self.N_grid_channels = N_grid_channels
         self.pos_embd = self._get_positional_embedding()
@@ -513,72 +522,17 @@ class SongUNetPosEmbd(SongUNet):
         self, x, noise_labels, class_labels, global_index=None, augment_labels=None
     ):
         # append positional embedding to input conditioning
-        selected_pos_embd = self.positional_embedding_indexing(x, global_index)
-        x = torch.cat((x, selected_pos_embd), dim=1)
+        if self.pos_embd is not None:
+            selected_pos_embd = self.positional_embedding_indexing(x, global_index)
+            x = torch.cat((x, selected_pos_embd), dim=1)
 
-        if self.embedding_type != "zero":
-            # Mapping.
-            emb = self.map_noise(noise_labels)
-            emb = (
-                emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
-            )  # swap sin/cos
-            if self.map_label is not None:
-                tmp = class_labels
-                if self.training and self.label_dropout:
-                    tmp = tmp * (
-                        torch.rand([x.shape[0], 1], device=x.device)
-                        >= self.label_dropout
-                    ).to(tmp.dtype)
-                emb = emb + self.map_label(tmp * np.sqrt(self.map_label.in_features))
-            if self.map_augment is not None and augment_labels is not None:
-                emb = emb + self.map_augment(augment_labels)
-            emb = silu(self.map_layer0(emb))
-            emb = silu(self.map_layer1(emb))
-        else:
-            emb = torch.zeros(
-                (noise_labels.shape[0], self.emb_channels), device=x.device
-            )
-
-        # Encoder.
-        skips = []
-        aux = x
-        for name, block in self.enc.items():
-            with nvtx.annotate(f"SongUNet encoder: {name}", color="blue"):
-                if "aux_down" in name:
-                    aux = block(aux)
-                elif "aux_skip" in name:
-                    x = skips[-1] = x + block(aux)
-                elif "aux_residual" in name:
-                    x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
-                else:
-                    x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
-                    skips.append(x)
-
-        # Decoder.
-        aux = None
-        tmp = None
-        for name, block in self.dec.items():
-            with nvtx.annotate(f"SongUNet decoder: {name}", color="blue"):
-                if "aux_up" in name:
-                    aux = block(aux)
-                elif "aux_norm" in name:
-                    tmp = block(x)
-                elif "aux_conv" in name:
-                    tmp = block(silu(tmp))
-                    aux = tmp if aux is None else tmp + aux
-                else:
-                    if x.shape[1] != block.in_channels:
-                        x = torch.cat([x, skips.pop()], dim=1)
-                    x = block(x, emb)
-        return aux
+        return super().forward(x, noise_labels, class_labels, augment_labels)
 
     def positional_embedding_indexing(self, x, global_index):
         if global_index is None:
             selected_pos_embd = (
                 self.pos_embd.to(x.dtype)
-                .to(x.device)[
-                    None,
-                ]
+                .to(x.device)[None]
                 .expand((x.shape[0], -1, -1, -1))
             )
         else:
@@ -606,24 +560,22 @@ class SongUNetPosEmbd(SongUNet):
             return None
         elif self.gridtype == "learnable":
             grid = torch.nn.Parameter(
-                torch.randn(
-                    self.N_grid_channels, self.img_resolution, self.img_resolution
-                )
+                torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
             )
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
                 raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
-            x = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
-            y = np.meshgrid(np.linspace(-1, 1, self.img_resolution))
+            x = np.meshgrid(np.linspace(-1, 1, self.img_shape_y))
+            y = np.meshgrid(np.linspace(-1, 1, self.img_shape_x))
             grid_x, grid_y = np.meshgrid(y, x)
             grid = torch.from_numpy(np.stack((grid_x, grid_y), axis=0))
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels == 4:
             # print('sinusuidal grid added ......')
-            x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_resolution)))
-            y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_resolution)))
+            x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_x)))
+            y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_x)))
             grid_x1, grid_y1 = np.meshgrid(y1, x1)
             grid_x2, grid_y2 = np.meshgrid(y2, x2)
             grid = torch.squeeze(
@@ -641,8 +593,8 @@ class SongUNetPosEmbd(SongUNet):
             freq_bands = 2.0 ** np.linspace(0.0, num_freq, num=num_freq)
             grid_list = []
             grid_x, grid_y = np.meshgrid(
-                np.linspace(0, 2 * np.pi, self.img_resolution),
-                np.linspace(0, 2 * np.pi, self.img_resolution),
+                np.linspace(0, 2 * np.pi, self.img_shape_x),
+                np.linspace(0, 2 * np.pi, self.img_shape_y),
             )
             for freq in freq_bands:
                 for p_fn in [np.sin, np.cos]:
@@ -651,8 +603,8 @@ class SongUNetPosEmbd(SongUNet):
             grid = torch.from_numpy(np.stack(grid_list, axis=0))
             grid.requires_grad = False
         elif self.gridtype == "test" and self.N_grid_channels == 2:
-            idx_x = torch.arange(self.img_resolution)
-            idx_y = torch.arange(self.img_resolution)
+            idx_x = torch.arange(self.img_shape_y)
+            idx_y = torch.arange(self.img_shape_x)
             mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
             grid = torch.stack((mesh_x, mesh_y), dim=0)
         else:

@@ -99,6 +99,24 @@ def test_song_unet_constructor(device):
     output_image = model(input_image, noise_labels, class_labels)
     assert output_image.shape == (1, out_channels, img_resolution, img_resolution)
 
+    # test rectangular shape
+    model = UNet(
+        img_resolution=[img_resolution, img_resolution * 2],
+        in_channels=in_channels,
+        out_channels=out_channels,
+        embedding_type="fourier",
+        channel_mult_noise=2,
+        encoder_type="residual",
+        resample_filter=[1, 3, 3, 1],
+    ).to(device)
+    noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+    input_image = torch.ones([1, out_channels, img_resolution, img_resolution * 2]).to(
+        device
+    )
+    output_image = model(input_image, noise_labels, class_labels)
+    assert output_image.shape == (1, out_channels, img_resolution, img_resolution * 2)
+
     # Also test failure cases
     try:
         model = UNet(

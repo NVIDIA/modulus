@@ -17,21 +17,19 @@
 import pytest
 import torch
 from pytest_utils import import_or_fail
-from utils import create_random_input, fix_random_seeds, get_icosphere_path
+from utils import create_random_input, fix_random_seeds
 
 
 @import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_grad_checkpointing(device, pytestconfig, num_channels=2, res_h=15, res_w=15):
     """Test gradient checkpointing"""
-    icosphere_path = get_icosphere_path()
 
     from modulus.models.graphcast.graph_cast_net import GraphCastNet
 
     # constants
     model_kwds = {
-        "meshgraph_path": icosphere_path,
-        "static_dataset_path": None,
+        "mesh_level": 2,
         "input_res": (res_h, res_w),
         "input_dim_grid_nodes": num_channels,
         "input_dim_mesh_nodes": 3,

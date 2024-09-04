@@ -29,8 +29,14 @@ except ImportError:
     )
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List, Tuple, Union
+from typing import Dict, Iterable, List, Tuple, Union
+
+import pytz
+
+from modulus.datapipes.climate.utils.invariant import latlon_grid
+from modulus.datapipes.climate.utils.zenith_angle import cos_zenith_angle
 
 from ..datapipe import Datapipe
 from ..meta import DatapipeMetaData
@@ -68,11 +74,37 @@ class ERA5HDF5Datapipe(Datapipe):
         stride 2 = 12 hours delta t, by default 1
     num_steps : int, optional
         Number of timesteps are included in the output variables, by default 1
+    num_history : int, optional
+        Number of previous timesteps included in the input variables, by default 0
+    latlon_resolution: Tuple[int, int], optional
+        The resolution for the latitude-longitude grid (H, W). Needs to be specified
+        for cos zenith angle computation, or interpolation. By default None
+    interpolation_type: str, optional
+        Interpolation type for resizing. Supports ["INTERP_NN", "INTERP_LINEAR", "INTERP_CUBIC",
+        "INTERP_LANCZOS3", "INTERP_TRIANGULAR", "INTERP_GAUSSIAN"]. By default None
+        (no interpolation is done)
     patch_size : Union[Tuple[int, int], int, None], optional
         If specified, crops input and output variables so image dimensions are
         divisible by patch_size, by default None
     num_samples_per_year : int, optional
         Number of samples randomly taken from each year. If None, all will be use, by default None
+    use_cos_zenith: bool, optional
+        If True, the cosine zenith angles corresponding to the coordinates will be produced,
+        by default False
+    cos_zenith_args: Dict, optional
+        Dictionary containing the following
+        dt: float, optional
+            Time in hours between each timestep in the dataset, by default 6 hr
+        start_year: int, optional
+            Start year of dataset, by default 1980
+        latlon_bounds : Tuple[Tuple[float, float], Tuple[float, float]], optional
+            Bounds of latitude and longitude in the data, in the format
+            ((lat_start, lat_end,), (lon_start, lon_end)).
+            By default ((90, -90), (0, 360)).
+        Defaults are only applicable if use_cos_zenith is True. Otherwise, defaults to {}.
+    use_time_of_year_index: bool
+        If true, also returns the index that can be sued to determine the time of the year
+        corresponding to each sample. By default False.
     shuffle : bool, optional
         Shuffle dataset, by default True
     num_workers : int, optional
@@ -92,9 +124,15 @@ class ERA5HDF5Datapipe(Datapipe):
         channels: Union[List[int], None] = None,
         batch_size: int = 1,
         num_steps: int = 1,
+        num_history: int = 0,
         stride: int = 1,
+        latlon_resolution: Union[Tuple[int, int], None] = None,
+        interpolation_type: Union[str, None] = None,
         patch_size: Union[Tuple[int, int], int, None] = None,
         num_samples_per_year: Union[int, None] = None,
+        use_cos_zenith: bool = False,
+        cos_zenith_args: Dict = {},
+        use_time_of_year_index: bool = False,
         shuffle: bool = True,
         num_workers: int = 1,
         device: Union[str, torch.device] = "cuda",
@@ -109,10 +147,29 @@ class ERA5HDF5Datapipe(Datapipe):
         self.stats_dir = Path(stats_dir) if stats_dir is not None else None
         self.channels = channels
         self.stride = stride
+        self.latlon_resolution = latlon_resolution
+        self.interpolation_type = interpolation_type
         self.num_steps = num_steps
+        self.num_history = num_history
         self.num_samples_per_year = num_samples_per_year
+        self.use_cos_zenith = use_cos_zenith
+        self.cos_zenith_args = cos_zenith_args
+        self.use_time_of_year_index = use_time_of_year_index
         self.process_rank = process_rank
         self.world_size = world_size
+
+        # cos zenith defaults
+        if use_cos_zenith:
+            cos_zenith_args["dt"] = cos_zenith_args.get("dt", 6.0)
+            cos_zenith_args["start_year"] = cos_zenith_args.get("start_year", 1980)
+            cos_zenith_args["latlon_bounds"] = cos_zenith_args.get(
+                "latlon_bounds",
+                (
+                    (90, -90),
+                    (0, 360),
+                ),
+            )
+        self.latlon_bounds = cos_zenith_args.get("latlon_bounds")
 
         if isinstance(patch_size, int):
             patch_size = (patch_size, patch_size)
@@ -131,6 +188,46 @@ class ERA5HDF5Datapipe(Datapipe):
             raise IOError(f"Error, data directory {self.data_dir} does not exist")
         if self.stats_dir is not None and not self.stats_dir.is_dir():
             raise IOError(f"Error, stats directory {self.stats_dir} does not exist")
+
+        # Check interpolation type
+        if self.interpolation_type is not None:
+            valid_interpolation = [
+                "INTERP_NN",
+                "INTERP_LINEAR",
+                "INTERP_CUBIC",
+                "INTERP_LANCZOS3",
+                "INTERP_TRIANGULAR",
+                "INTERP_GAUSSIAN",
+            ]
+            if self.interpolation_type not in valid_interpolation:
+                raise ValueError(
+                    f"Interpolation type {self.interpolation_type} not supported"
+                )
+            self.interpolation_type = getattr(dali.types, self.interpolation_type)
+
+        # Layout
+        # Avoiding API change for self.num_history == 0.
+        # Need to use FCHW layout in the future regardless of the num_history.
+        if self.num_history == 0:
+            self.layout = ["CHW", "FCHW"]
+        else:
+            self.layout = ["FCHW", "FCHW"]
+
+        self.output_keys = ["invar", "outvar"]
+
+        # Get latlon for zenith angle
+        if self.use_cos_zenith:
+            if not self.latlon_resolution:
+                raise ValueError("latlon_resolution must be set for cos zenith angle")
+            self.data_latlon = np.stack(
+                latlon_grid(bounds=self.latlon_bounds, shape=self.latlon_resolution),
+                axis=0,
+            )
+            self.latlon_dali = dali.types.Constant(self.data_latlon)
+            self.output_keys += ["cos_zenith"]
+
+        if self.use_time_of_year_index:
+            self.output_keys += ["time_of_year_idx"]
 
         self.parse_dataset_files()
         self.load_statistics()
@@ -159,8 +256,16 @@ class ERA5HDF5Datapipe(Datapipe):
             # truncate the dataset to avoid out-of-range sampling and ensure each
             # rank has same number of samples (to avoid deadlocks)
             data_samples_per_year = (
-                (f["fields"].shape[0] - self.num_steps * self.stride) // self.world_size
+                (
+                    f["fields"].shape[0]
+                    - (self.num_steps + self.num_history) * self.stride
+                )
+                // self.world_size
             ) * self.world_size
+            if data_samples_per_year < 1:
+                raise ValueError(
+                    f"Not enough number of samples per year ({data_samples_per_year})"
+                )
             self.img_shape = f["fields"].shape[2:]
 
             # If channels not provided, use all of them
@@ -173,6 +278,8 @@ class ERA5HDF5Datapipe(Datapipe):
 
             # Adjust image shape if patch_size defined
             if self.patch_size is not None:
+                if self.use_cos_zenith:
+                    raise ValueError("Patching is not supported with cos zenith angle")
                 self.img_shape = [
                     s - s % self.patch_size[i] for i, s in enumerate(self.img_shape)
                 ]
@@ -257,7 +364,11 @@ class ERA5HDF5Datapipe(Datapipe):
                 channels=self.channels,
                 stride=self.stride,
                 num_steps=self.num_steps,
+                num_history=self.num_history,
                 num_samples_per_year=self.num_samples_per_year,
+                use_cos_zenith=self.use_cos_zenith,
+                cos_zenith_args=self.cos_zenith_args,
+                use_time_of_year_index=self.use_time_of_year_index,
                 batch_size=self.batch_size,
                 shuffle=self.shuffle,
                 process_rank=self.process_rank,
@@ -266,11 +377,12 @@ class ERA5HDF5Datapipe(Datapipe):
             # Update length of dataset
             self.length = len(source) // self.batch_size
             # Read current batch.
-            invar, outvar = dali.fn.external_source(
+            invar, outvar, timestamps, time_of_year_idx = dali.fn.external_source(
                 source,
-                num_outputs=2,
+                num_outputs=4,
                 parallel=True,
                 batch=False,
+                layout=self.layout,
             )
             if self.device.type == "cuda":
                 # Move tensors to GPU as external_source won't do that.
@@ -279,15 +391,59 @@ class ERA5HDF5Datapipe(Datapipe):
 
             # Crop.
             h, w = self.img_shape
-            invar = invar[:, :h, :w]
+            if self.num_history == 0:
+                invar = invar[:, :h, :w]
+            else:
+                invar = invar[:, :, :h, :w]
             outvar = outvar[:, :, :h, :w]
+
             # Standardize.
             if self.stats_dir is not None:
-                invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
+                if self.num_history == 0:
+                    invar = dali.fn.normalize(invar, mean=self.mu[0], stddev=self.sd[0])
+                else:
+                    invar = dali.fn.normalize(invar, mean=self.mu, stddev=self.sd)
                 outvar = dali.fn.normalize(outvar, mean=self.mu, stddev=self.sd)
 
+            # Resize.
+            if self.interpolation_type is not None:
+                invar = dali.fn.resize(
+                    invar,
+                    resize_x=self.latlon_resolution[1],
+                    resize_y=self.latlon_resolution[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
+                outvar = dali.fn.resize(
+                    outvar,
+                    resize_x=self.latlon_resolution[1],
+                    resize_y=self.latlon_resolution[0],
+                    interp_type=self.interpolation_type,
+                    antialias=False,
+                )
+
+            # cos zenith angle
+            if self.use_cos_zenith:
+                cos_zenith = dali.fn.cast(
+                    cos_zenith_angle(timestamps, latlon=self.latlon_dali),
+                    dtype=dali.types.FLOAT,
+                )
+                if self.device.type == "cuda":
+                    cos_zenith = cos_zenith.gpu()
+
+            # # Time of the year
+            # time_of_year_idx = dali.fn.cast(
+            #         time_of_year_idx,
+            #         dtype=dali.types.UINT32,
+            #     )
+
             # Set outputs.
-            pipe.set_outputs(invar, outvar)
+            outputs = (invar, outvar)
+            if self.use_cos_zenith:
+                outputs += (cos_zenith,)
+            if self.use_time_of_year_index:
+                outputs += (time_of_year_idx,)
+            pipe.set_outputs(*outputs)
 
         return pipe
 
@@ -295,7 +451,7 @@ class ERA5HDF5Datapipe(Datapipe):
         # Reset the pipeline before creating an iterator to enable epochs.
         self.pipe.reset()
         # Create DALI PyTorch iterator.
-        return dali_pth.DALIGenericIterator([self.pipe], ["invar", "outvar"])
+        return dali_pth.DALIGenericIterator([self.pipe], self.output_keys)
 
     def __len__(self):
         return self.length
@@ -312,14 +468,26 @@ class ERA5DaliExternalSource:
         Total number of training samples
     channels : Iterable[int]
         List representing which ERA5 variables to load
+    start_year : int, optional
+        Start year of dataset
     stride : int
         Number of steps between input and output variables
     num_steps : int
         Number of timesteps are included in the output variables
+    num_history : int
+        Number of previous timesteps included in the input variables
     num_samples_per_year : int
         Number of samples randomly taken from each year
     batch_size : int, optional
         Batch size, by default 1
+    use_cos_zenith: bool
+        If True, the cosine zenith angles corresponding to the coordinates will be produced,
+    cos_zenith_args: Dict
+        Dictionary containing the following
+        dt: float
+            Time in hours between each timestep in the dataset
+        start_year
+            Start year of dataset
     shuffle : bool, optional
         Shuffle dataset, by default True
     process_rank : int, optional
@@ -339,8 +507,12 @@ class ERA5DaliExternalSource:
         num_samples: int,
         channels: Iterable[int],
         num_steps: int,
+        num_history: int,
         stride: int,
         num_samples_per_year: int,
+        use_cos_zenith: bool,
+        cos_zenith_args: Dict,
+        use_time_of_year_index: bool,
         batch_size: int = 1,
         shuffle: bool = True,
         process_rank: int = 0,
@@ -352,8 +524,11 @@ class ERA5DaliExternalSource:
         self.num_samples = num_samples
         self.chans = list(channels)
         self.num_steps = num_steps
+        self.num_history = num_history
         self.stride = stride
         self.num_samples_per_year = num_samples_per_year
+        self.use_cos_zenith = use_cos_zenith
+        self.use_time_of_year_index = use_time_of_year_index
         self.batch_size = batch_size
         self.shuffle = shuffle
 
@@ -367,7 +542,14 @@ class ERA5DaliExternalSource:
         # Also, DALI external source does not support incomplete batches in parallel mode.
         self.num_batches = len(self.indices) // self.batch_size
 
-    def __call__(self, sample_info: dali.types.SampleInfo) -> Tuple[Tensor, Tensor]:
+        # cos zenith args
+        if self.use_cos_zenith:
+            self.dt: float = cos_zenith_args.get("dt")
+            self.start_year: int = cos_zenith_args.get("start_year")
+
+    def __call__(
+        self, sample_info: dali.types.SampleInfo
+    ) -> Tuple[Tensor, Tensor, np.ndarray]:
         if sample_info.iteration >= self.num_batches:
             raise StopIteration()
 
@@ -389,18 +571,46 @@ class ERA5DaliExternalSource:
         year_idx = idx // self.num_samples_per_year
         in_idx = idx % self.num_samples_per_year
 
+        # Load sequence of timestamps
+        if self.use_cos_zenith:
+            year = self.start_year + year_idx
+            start_time = datetime(year, 1, 1, tzinfo=pytz.utc) + timedelta(
+                hours=int(in_idx) * self.dt
+            )
+            timestamps = np.array(
+                [
+                    (
+                        start_time + timedelta(hours=i * self.stride * self.dt)
+                    ).timestamp()
+                    for i in range(self.num_history + self.num_steps + 1)
+                ]
+            )
+        else:
+            timestamps = np.array([])
+        if self.use_time_of_year_index:
+            time_of_year_idx = in_idx
+        else:
+            time_of_year_idx = -1
+
         data = self.data_files[year_idx]["fields"]
-        # Has [C,H,W] shape.
-        invar = data[in_idx, self.chans]
+        if self.num_history == 0:
+            # Has [C,H,W] shape.
+            invar = data[in_idx, self.chans]
+        else:
+            # Has [T,C,H,W] shape.
+            invar = data[
+                in_idx : in_idx + (self.num_history + 1) * self.stride : self.stride,
+                self.chans,
+            ]
 
         # Has [T,C,H,W] shape.
-        outvar = np.empty((self.num_steps,) + invar.shape, dtype=invar.dtype)
+        outvar = np.empty((self.num_steps,) + invar.shape[-3:], dtype=invar.dtype)
 
         for i in range(self.num_steps):
-            out_idx = in_idx + (i + 1) * self.stride
+            out_idx = in_idx + (self.num_history + i + 1) * self.stride
             outvar[i] = data[out_idx, self.chans]
 
-        return invar, outvar
+        return invar, outvar, timestamps, np.array([time_of_year_idx])
 
     def __len__(self):
         return len(self.indices)

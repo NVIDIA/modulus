@@ -19,10 +19,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Tuple
 
-import mlflow
 import torch
-from mlflow.entities.run import Run
-from mlflow.tracking import MlflowClient
+
+try:
+    import mlflow  # noqa: F401 for docs
+    from mlflow.entities.run import Run
+    from mlflow.tracking import MlflowClient
+except ImportError:
+    raise ImportError(
+        "These utilities require the MLFlow library. Install MLFlow using `pip install mlflow`. "
+        + "For more info, refer: https://www.mlflow.org/docs/2.5.0/quickstart.html#install-mlflow"
+    )
 
 from modulus.distributed import DistributedManager
 

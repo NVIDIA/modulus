@@ -3,7 +3,8 @@ import torch
 
 import modulus
 from modulus.datapipes.benchmarks.darcy import Darcy2D
-from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_mlflow
+from modulus.launch.logging import LaunchLogger, PythonLogger
+from modulus.launch.logging.mlflow import initialize_mlflow
 from modulus.metrics.general.mse import mse
 from modulus.models.fno.fno import FNO
 
