@@ -18,14 +18,6 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import pyvista as pv
-
-try:
-    import shapely  # noqa: F401 for docs
-except ImportError:
-    raise ImportError(
-        "These metrics require shapely, install it using `pip install shapely`."
-    )
-
 import torch
 from numpy.fft import fft, fftfreq
 
@@ -51,6 +43,13 @@ def compute_frontal_area(mesh: pv.PolyData, direction: str = "x"):
     frontal area: float
         Frontal area of the mesh in the given direction
     """
+    try:
+        import shapely  # noqa: F401 for docs
+    except ImportError:
+        raise ImportError(
+            "These metrics require shapely, install it using `pip install shapely`."
+        )
+
     direction_map = {
         "x": ((1, 0, 0), [1, 2]),
         "y": ((0, 1, 0), [0, 2]),
