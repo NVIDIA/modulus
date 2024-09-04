@@ -55,8 +55,8 @@ class SeqZarrDatapipe(Datapipe):
 
     Parameters
     ----------
-    zarr_dataset : zarr.hierarchy.Group
-        Zarr dataset to load from
+    file_mapping : str
+        File mapping
     batch_size : int, optional
         Batch size, by default 1
     num_steps : int, optional
@@ -73,7 +73,7 @@ class SeqZarrDatapipe(Datapipe):
 
     def __init__(
         self,
-        zarr_dataset: zarr.hierarchy.Group,
+        file_mapping: str,
         variables: list,
         batch_size: int = 1,
         num_steps: int = 2,
@@ -81,15 +81,19 @@ class SeqZarrDatapipe(Datapipe):
         device: Union[str, torch.device] = "cuda",
         process_rank: int = 0,
         world_size: int = 1,
+        batch: bool = False,
+        parallel: bool = True,
     ):
         super().__init__(meta=MetaData())
 
         # Store parameters
-        self.zarr_dataset = zarr_dataset
+        self.file_mapping = file_mapping
         self.variables = variables
         self.batch_size = batch_size
         self.num_steps = num_steps
         self.shuffle = shuffle
+        self.batch = batch
+        self.parallel = parallel
 
         # Set up device, needed for pipeline
         if isinstance(device, str):
@@ -128,13 +132,14 @@ class SeqZarrDatapipe(Datapipe):
         with pipe:
             # Zarr source
             source = SeqZarrSource(
-                self.zarr_dataset,
+                self.file_mapping,
                 self.variables,
                 num_steps=self.num_steps,
                 batch_size=self.batch_size,
                 shuffle=self.shuffle,
                 process_rank=self.process_rank,
                 world_size=self.world_size,
+                batch=self.batch,
             )
 
             # Update length of dataset
@@ -144,8 +149,9 @@ class SeqZarrDatapipe(Datapipe):
             data = dali.fn.external_source(
                 source,
                 num_outputs=len(self.pipe_outputs),
-                parallel=True,
-                batch=False,
+                parallel=self.parallel,
+                batch=self.batch,
+                prefetch_queue_depth=2,
                 device="cpu",
             )
 
@@ -175,8 +181,8 @@ class SeqZarrSource:
 
     Parameters
     ----------
-    zarr_dataset : zarr.hierarchy.Group
-        Zarr dataset
+    file_mapping : str
+        File mapping
     num_steps : int
         Number of steps to predict
     batch_size : int, optional
@@ -191,7 +197,7 @@ class SeqZarrSource:
 
     def __init__(
         self,
-        zarr_dataset: zarr.hierarchy.Group,
+        file_mapping: str,
         variables: list,
         num_steps: int,
         batch_size: int = 1,
@@ -200,11 +206,12 @@ class SeqZarrSource:
         world_size: int = 1,
     ):
         # Set up parameters
-        self.zarr_dataset = zarr_dataset
+        self.file_mapping = file_mapping
         self.variables = variables
         self.num_steps = num_steps
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.batch = batch
 
         # Check if all zarr arrays have the same first dimension
         self.first_dim = self.zarr_dataset[variables[0]].shape[0]
@@ -213,7 +220,7 @@ class SeqZarrSource:
                 raise ValueError("All zarr arrays must have the same first dimension.")
 
         # Get number of samples
-        self.indices = np.arange(self.first_dim - self.num_steps)
+        self.indices = np.arange(batch_size * world_size *((self.first_dim - self.num_steps) // batch_size // world_size))
         self.indices = np.array_split(self.indices, world_size)[process_rank]
 
         # Get number of full batches, ignore possible last incomplete batch for now.
@@ -222,9 +229,56 @@ class SeqZarrSource:
         # Set up last epoch
         self.last_epoch = None
 
-    def __call__(
-        self, sample_info: dali.types.SampleInfo
+        # Set zarr dataset
+        self.zarr_dataset = None
+
+        # Set call
+        if self.batch:
+            self._call = self._batch_call
+            self.batch_mapping = np.stack(
+                np.array_split(self.indices[:len(self.indices) - len(self.indices) % self.batch_size], self.batch_size),
+                axis=1
+            )
+        else:
+            self._call = self._sample_call
+
+    def _batch_call(
+        self, sample_info: dali.types.BatchInfo,
     ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray, np.ndarray]:
+
+        # Open Zarr dataset
+        if self.zarr_dataset is None:
+            self.zarr_dataset = zarr.open(self.file_mapping, mode="r")
+
+        if sample_info >= self.batch_mapping.shape[0]:
+            raise StopIteration()
+
+        # Get batch indices
+        batch_idx = self.batch_mapping[sample_info]
+        time_idx = np.concatenate(
+            [idx + np.arange(self.num_steps) for idx in batch_idx]
+        )
+
+        # Get data
+        data = []
+
+        # Get slices
+        for i, variable in enumerate(self.variables):
+            batch_data = self.zarr_dataset[variable][time_idx]
+            data.append(
+                np.reshape(batch_data, (self.batch_size, self.num_steps, *batch_data.shape[1:]))
+            )
+
+        return tuple(data)
+
+    def _sample_call(
+        self, sample_info: dali.types.SampleInfo,
+    ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray, np.ndarray]:
+
+        # Open Zarr dataset
+        if self.zarr_dataset is None:
+            self.zarr_dataset = zarr.open(self.file_mapping, mode="r")
+
         if sample_info.iteration >= self.num_batches:
             raise StopIteration()
 
@@ -250,5 +304,13 @@ class SeqZarrSource:
 
         return tuple(data)
 
+    def __call__(
+        self, sample_info: Union[dali.types.SampleInfo, dali.types.BatchInfo]
+    ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray, np.ndarray]:
+        return self._call(sample_info)
+
     def __len__(self):
-        return len(self.indices)
+        if self.batch:
+            return self.batch_mapping.shape[0] * self.batch_size
+        else:
+            return len(self.indices)

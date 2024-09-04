@@ -29,6 +29,7 @@ from omegaconf import DictConfig, OmegaConf
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
 
+from utils import get_filesystem
 from transform.transform import transform_registry
 
 
@@ -193,8 +194,12 @@ def main(cfg: DictConfig) -> None:
         transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Get filesystem
-    # TODO: add filesystems beyond local when needed
-    fs = fsspec.filesystem("file")
+    fs = get_filesystem(
+        cfg.filesystem.type,
+        cfg.filesystem.key,
+        cfg.filesystem.endpoint_url,
+        cfg.filesystem.region_name,
+    )
 
     # Make train data
     curate_train_era5 = CurateERA5(

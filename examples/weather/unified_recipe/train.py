@@ -29,6 +29,8 @@ from torch.nn.parallel import DistributedDataParallel
 import torch.optim as torch_optimizers
 from tqdm import tqdm
 
+from utils import get_filesystem
+
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
 
@@ -153,7 +155,12 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Initialize filesytem (TODO: Add multiple filesystem support)
-    fs = fsspec.filesystem("file")
+    fs = get_filesystem(
+        cfg.filesystem.type,
+        cfg.filesystem.key,
+        cfg.filesystem.endpoint_url,
+        cfg.filesystem.region_name,
+    )
 
     # Get filesystem mapper for datasets
     train_dataset_mapper = fs.get_mapper(cfg.curated_dataset.train_dataset_filename)

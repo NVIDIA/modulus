@@ -21,6 +21,10 @@ run_desc: "unified training recipe for global weather models"
 # Get defaults
 defaults:
 
+  # Filesystem
+  #- filesystem/local
+  - filesystem/pbss
+
   # Dataset
   - dataset/tiny_6hr_subsample
   #- dataset/6hr_subsample # uncomment for full dataset
