@@ -1,76 +1,43 @@
-# MeshGraphNet for Lagrangian mesh
+# MeshGraphNet with Lagrangian mesh
 
-This example is a re-implementation of the Water example
+This example of Meshgraphnet for particle-based simulation on the water dataset based on
 <https://github.com/google-deepmind/deepmind-research/tree/master/learning_to_simulate> in PyTorch.
 It demonstrates how to train a Graph Neural Network (GNN) for evaluation of the
 Lagrangian fluid.
 
 ## Problem overview
 
-Mesh-based simulations play a central role in modeling complex physical systems across
-various scientific and engineering disciplines. They offer robust numerical integration
-methods and allow for adaptable resolution to strike a balance between accuracy and
-efficiency. Machine learning surrogate models have emerged as powerful tools to reduce
-the cost of tasks like design optimization, design space exploration, and what-if
-analysis, which involve repetitive high-dimensional scientific simulations.
+In this project, we provide an example of Lagrangian mesh simulation for fluids. The Lagrangian mesh is particle-based, where vertices represent fluid particles and edges represent their interactions. Compared to an Eulerian mesh, where the mesh grid is fixed, a Lagrangian mesh is more flexible since it does not require tessellating the domain or aligning with boundaries. 
 
-However, some existing machine learning surrogate models, such as CNN-type models,
-are constrained by structured grids,
-making them less suitable for complex geometries or shells. The homogeneous fidelity of
-CNNs is a significant limitation for many complex physical systems that require an
-adaptive mesh representation to resolve multi-scale physics.
+As a result, Lagrangian meshes are well-suited for representing complex geometries and free-boundary problems, such as water splashes and object collisions. However, a drawback of the Lagrangian mesh is that it typically requires smaller time steps to maintain physically valid simulations.
 
-Graph Neural Networks (GNNs) present a viable approach for surrogate modeling in science
-and engineering. They are data-driven and capable of handling complex physics. Being
-mesh-based, GNNs can handle geometry irregularities and multi-scale physics,
-making them well-suited for a wide range of applications.
 
 ## Dataset
 
-We rely on DeepMind's vortex shedding dataset for this example. The dataset includes
-1000 training, 100 validation, and 100 test samples that are simulated using COMSOL
-with irregular triangle 2D meshes, each for 600 time steps with a time step size of
-0.01s. These samples vary in the size and the position of the cylinder. Each sample
-has a unique mesh due to geometry variations across samples, and the meshes have 1885
-nodes on average. Note that the model can handle different meshes with different number
-of nodes and edges as the input.
+We rely on [DeepMind's particle physics datasets](https://sites.google.com/view/learning-to-simulate) for this example .
+They datasets are particle-based simulation of fluid splashing and bouncing in a box or cube.
+
+| Datasets     | Number of Particles | Number of Time Steps | Time Step Interval (dt) | Ground Truth Simulator |
+|--------------|---------------------|------------|-------------------------|------------------------|
+| Water-3D     | 14k                  | 800        | 5ms                     | SPH                    |
+| Water-2D     | 2k                   | 1000       | 2.5ms                   | MPM                    |
+| WaterRamp    | 2.5k                 | 600        | 2.5ms                   | MPM                    |
+
 
 ## Model overview and architecture
 
-The model is free-running and auto-regressive. It takes the initial condition as the
-input and predicts the solution at the first time step. It then takes the prediction at
-the first time step to predict the solution at the next time step. The model continues
-to use the prediction at time step $t$ to predict the solution at time step $t+1$, until
-the rollout is complete. Note that the model is also able to predict beyond the
-simulation time span and extrapolate in time. However, the accuracy of the prediction
-might degrade over time and if possible, extrapolation should be avoided unless
-the underlying data patterns remain stationary and consistent.
+In this model, we utilize a Meshgraphnet to capture the fluid system’s dynamics. We represent the system as a graph, with vertices corresponding to fluid particles and edges representing their interactions. The model is autoregressive, using historical data to predict future states. The input features for the vertices include the current position, current velocity, node type (e.g., fluid, sand, boundary), and historical velocity. The model's output is the acceleration, defined as the difference between the current and next velocity. Both velocity and acceleration are derived from the position sequence and normalized to a standard Gaussian distribution for consistency.
 
-The model uses the input mesh to construct a bi-directional DGL graph for each sample.
-The node features include (6 in total):
+For computational efficiency, we do not explicitly construct wall nodes for square or cubic domains. Instead, we assign a wall feature to each interior particle node, representing its distance from the domain boundaries. For a system dimensionality of \(d = 2\) or \(d = 3\), the features are structured as follows:
 
-- Velocity components at time step $t$, i.e., $u_t$, $v_t$
-- One-hot encoded node type (interior node, no-slip node, inlet node, outlet node)
+- **Node features**: position (\(d\)), historical velocity (\(t \times d\)), one-hot encoding of node type (6), wall feature (\(2 \times d\))
+- **Edge features**: displacement (\(d\)), distance (1)
+- **Node target**: acceleration (\(d\))
 
-The edge features for each sample are time-independent and include (3 in total):
+We construct edges based on a predefined radius, connecting pairs of particle nodes if their pairwise distance is within this radius. During training, we shuffle the time sequence and train in batches, with the graph constructed dynamically within the dataloader. For inference, predictions are rolled out iteratively, and a new graph is constructed based on previous predictions. Wall features are computed online during this process. To enhance robustness, a small amount of noise is added during training.
 
-- Relative $x$ and $y$ distance between the two end nodes of an edge
-- L2 norm of the relative distance vector
+The model uses a hidden dimensionality of 128 for the encoder, processor, and decoder. The encoder and decoder each contain two hidden layers, while the processor consists of eight message-passing layers. We use a batch size of 20 per GPU, and summation aggregation is applied for message passing in the processor. The learning rate is set to 0.0001 and decays exponentially with a rate of 0.9999991. These hyperparameters can be configured in the config file.
 
-The output of the model is the velocity components at time step t+1, i.e.,
-$u_{t+1}$, $v_{t+1}$, as well as the pressure $p_{t+1}$.
-
-![Comparison between the MeshGraphNet prediction and the
-ground truth for the horizontal velocity for different test samples.
-](../../../docs/img/vortex_shedding.gif)
-
-A hidden dimensionality of 128 is used in the encoder,
-processor, and decoder. The encoder and decoder consist of two hidden layers, and
-the processor includes 15 message passing layers. Batch size per GPU is set to 1.
-Summation aggregation is used in the
-processor for message aggregation. A learning rate of 0.0001 is used, decaying
-exponentially with a rate of 0.9999991. Training is performed on 8 NVIDIA A100
-GPUs, leveraging data parallelism for 25 epochs.
 
 ## Getting Started
 
@@ -85,8 +52,9 @@ To download the data from DeepMind's repo, run
 
 ```bash
 cd raw_dataset
-sh download_dataset.sh cylinder_flow
+bash download_dataset.sh Water /data/
 ```
+Change the data path in `conf/config_2d.yaml` correspondingly
 
 To train the model, run
 
@@ -94,23 +62,11 @@ To train the model, run
 python train.py
 ```
 
-Data parallelism is also supported with multi-GPU runs. To launch a multi-GPU training,
-run
-
-```bash
-mpirun -np <num_GPUs> python train.py
-```
-
-If running in a docker container, you may need to include the `--allow-run-as-root` in
-the multi-GPU run command.
-
 Progress and loss logs can be monitored using Weights & Biases. To activate that,
-set `wandb_mode` to `online` in the `constants.py`. This requires to have an active
-Weights & Biases account. You also need to provide your API key. There are multiple ways
-for providing the API key but you can simply export it as an environment variable
-
-```bash
-export WANDB_API_KEY=<your_api_key>
+set `wandb_mode` to `online` in the `conf/config_2d.yaml` This requires to have an active
+Weights & Biases account. You also need to provide your API key in the config file.
+```
+wandb_key: <your_api_key>
 ```
 
 The URL to the dashboard will be displayed in the terminal after the run is launched.
@@ -126,5 +82,7 @@ This will save the predictions for the test dataset in `.gif` format in the `ani
 directory.
 
 ## References
-
+- [Learning to simulate complex physics
+with graph networks](arxiv.org/abs/2002.09405)
+- [Dataset](https://sites.google.com/view/learning-to-simulate)
 - [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/abs/2010.03409)

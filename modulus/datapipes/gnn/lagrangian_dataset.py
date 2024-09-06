@@ -45,22 +45,31 @@ from .lagrangian_reading_utils import parse_serialized_simulation_example
 # Hide GPU from visible devices for TF
 tf.config.set_visible_devices([], "GPU")
 
+
 def compute_edge_index(mesh_pos, radius):
     # compute the graph connectivity using pairwise distance
     distances = torch.cdist(mesh_pos, mesh_pos, p=2)
-    mask = (distances < radius) #& (distances > 0) # include self-edge
+    mask = distances < radius  # & (distances > 0) # include self-edge
     edge_index = torch.nonzero(mask).t().contiguous()
     return edge_index
+
 
 def compute_edge_attr(graph, radius=0.015):
     # compute the displacement and distance per edge
     edge_index = graph.edges()
-    displacement = graph.ndata["mesh_pos"][edge_index[1]] - graph.ndata["mesh_pos"][edge_index[0]]
-    distance = torch.pairwise_distance(graph.ndata["mesh_pos"][edge_index[0]], graph.ndata["mesh_pos"][edge_index[1]], keepdim=True)
+    displacement = (
+        graph.ndata["mesh_pos"][edge_index[1]] - graph.ndata["mesh_pos"][edge_index[0]]
+    )
+    distance = torch.pairwise_distance(
+        graph.ndata["mesh_pos"][edge_index[0]],
+        graph.ndata["mesh_pos"][edge_index[1]],
+        keepdim=True,
+    )
     # direction = displacement / distance
-    distance = torch.exp(-distance**2/radius**2)
+    distance = torch.exp(-(distance**2) / radius**2)
     graph.edata["x"] = torch.cat((displacement, distance), dim=-1)
     return
+
 
 def graph_update(graph, radius):
     # remove all previous edges and re-construct the graph using pair-wise distance
@@ -130,16 +139,16 @@ class LagrangianDataset(DGLDataset):
         self.length = num_samples * (num_steps - 1)
 
         path_metadata = os.path.join(data_dir, "metadata.json")
-        with open(path_metadata, 'r') as file:
+        with open(path_metadata, "r") as file:
             metadata = json.load(file)
             self.dt = metadata["dt"]
             self.radius = metadata["default_connectivity_radius"]
             self.bound = metadata["bounds"][0]
             self.dim = metadata["dim"]
-            self.vel_mean = torch.tensor(metadata["vel_mean"]).reshape(1,2)
-            self.vel_std = torch.tensor(metadata["vel_std"]).reshape(1,2)
-            self.acc_mean = torch.tensor(metadata["acc_mean"]).reshape(1,2)
-            self.acc_std = torch.tensor(metadata["acc_std"]).reshape(1,2)
+            self.vel_mean = torch.tensor(metadata["vel_mean"]).reshape(1, 2)
+            self.vel_std = torch.tensor(metadata["vel_std"]).reshape(1, 2)
+            self.acc_mean = torch.tensor(metadata["acc_mean"]).reshape(1, 2)
+            self.acc_std = torch.tensor(metadata["acc_std"]).reshape(1, 2)
 
         # override from config
         self.radius = radius
@@ -154,8 +163,12 @@ class LagrangianDataset(DGLDataset):
         for i in range(self.num_samples):
             data_np = dataset_iterator.get_next()
 
-            position = torch.from_numpy(data_np[1]['position'][:self.num_steps + self.num_history + 1].numpy()) # (600, 1515, 2), dtype=torch.float
-            node_type = torch.from_numpy(data_np[0]['particle_type'].numpy()) # (1515,), dtype=torch.long
+            position = torch.from_numpy(
+                data_np[1]["position"][: self.num_steps + self.num_history + 1].numpy()
+            )  # (600, 1515, 2), dtype=torch.float
+            node_type = torch.from_numpy(
+                data_np[0]["particle_type"].numpy()
+            )  # (1515,), dtype=torch.long
 
             # noise_mask.append(torch.eq(node_type, torch.zeros_like(node_type)))
 
@@ -168,9 +181,9 @@ class LagrangianDataset(DGLDataset):
             velocity = self.normalize_velocity(velocity)
             acceleration = self.normalize_acceleration(acceleration)
 
-            features["position"] = position[:self.num_steps + self.num_history]
-            features["velocity"] = velocity[:self.num_steps + self.num_history]
-            features["acceleration"] = acceleration[:self.num_steps + self.num_history]
+            features["position"] = position[: self.num_steps + self.num_history]
+            features["velocity"] = velocity[: self.num_steps + self.num_history]
+            features["acceleration"] = acceleration[: self.num_steps + self.num_history]
 
             self.node_type.append(F.one_hot(node_type, num_classes=6))
             self.node_features.append(features)
@@ -181,25 +194,31 @@ class LagrangianDataset(DGLDataset):
         gidx = idx // (self.num_steps - 1)  # graph index
         tidx = idx % (self.num_steps - 1)  # time step index
 
-        mesh_pos = self.node_features[gidx]["position"][tidx+self.num_history-1]
-        history = self.node_features[gidx]["velocity"][tidx:tidx+self.num_history].flip(0)
-        history = torch.flatten(history.permute(1,0,2), start_dim=1) # (n_node, num_history * dimension)
+        mesh_pos = self.node_features[gidx]["position"][tidx + self.num_history - 1]
+        history = self.node_features[gidx]["velocity"][
+            tidx : tidx + self.num_history
+        ].flip(0)
+        history = torch.flatten(
+            history.permute(1, 0, 2), start_dim=1
+        )  # (n_node, num_history * dimension)
 
         if self.split == "train":
             # mesh_pos += torch.std(mesh_pos) * self.noise_std * torch.randn_like(mesh_pos)
             history += torch.std(history) * self.noise_std * torch.randn_like(history)
 
-        boundary_features = self.compute_boundary_feature(mesh_pos, self.radius, bound=self.bound)
+        boundary_features = self.compute_boundary_feature(
+            mesh_pos, self.radius, bound=self.bound
+        )
         node_features = torch.cat(
             (mesh_pos, history, boundary_features, self.node_type[gidx]), dim=-1
         )
         # node_features[..., :self.dim] = 0 # position-invariance
         target_pos = self.node_features[gidx]["position"][tidx + self.num_history]
         target_vel = self.node_features[gidx]["velocity"][tidx + self.num_history]
-        target_acc = self.node_features[gidx]["acceleration"][tidx+self.num_history-1]
-        node_targets = torch.cat(
-            (target_pos, target_vel, target_acc), dim=-1
-        )
+        target_acc = self.node_features[gidx]["acceleration"][
+            tidx + self.num_history - 1
+        ]
+        node_targets = torch.cat((target_pos, target_vel, target_acc), dim=-1)
 
         graph = dgl.graph(([], []), num_nodes=node_features.shape[0])
         # edge_index = self.edge_index[gidx][tidx]
@@ -207,7 +226,9 @@ class LagrangianDataset(DGLDataset):
         graph.ndata["x"] = node_features
         graph.ndata["y"] = node_targets
         graph.ndata["mesh_pos"] = mesh_pos
-        graph.ndata["t"] = torch.tensor([tidx]).repeat(node_features.shape[0]) # just to track the start
+        graph.ndata["t"] = torch.tensor([tidx]).repeat(
+            node_features.shape[0]
+        )  # just to track the start
         # compute_edge_attr(graph)
         graph_update(graph, radius=self.radius)
 
@@ -219,9 +240,9 @@ class LagrangianDataset(DGLDataset):
 
     def set_normalizer_device(self, device):
         self.vel_mean = self.vel_mean.to(device)
-        self.vel_std =  self.vel_std.to(device)
+        self.vel_std = self.vel_std.to(device)
         self.acc_mean = self.acc_mean.to(device)
-        self.acc_std =  self.acc_std.to(device)
+        self.acc_std = self.acc_std.to(device)
 
     def normalize_velocity(self, velocity):
         velocity = velocity - self.vel_mean
@@ -258,7 +279,7 @@ class LagrangianDataset(DGLDataset):
     def compute_velocity(x, dt):
         # compute the derivative using finite difference
         v = torch.zeros_like(x)
-        v[1:] = (x[1:] - x[:-1])  # / dt
+        v[1:] = x[1:] - x[:-1]  # / dt
         v[0] = v[1]
         return v
 
@@ -266,7 +287,7 @@ class LagrangianDataset(DGLDataset):
     def compute_acceleration(x, dt):
         # compute the derivative using finite difference
         a = torch.zeros_like(x)
-        a[1:-1] = (x[2:] - 2 * x[1:-1] + x[:-2])  # / dt**2
+        a[1:-1] = x[2:] - 2 * x[1:-1] + x[:-2]  # / dt**2
         a[0] = a[1]
         a[-1] = a[-2]
         return a
@@ -274,7 +295,7 @@ class LagrangianDataset(DGLDataset):
     @staticmethod
     def compute_boundary_feature(position, radius=0.015, bound=[0.1, 0.9]):
         distance = torch.cat([position - bound[0], bound[1] - position], dim=-1)
-        features = torch.exp(-distance**2/radius**2)
+        features = torch.exp(-(distance**2) / radius**2)
         features[distance > radius] = 0
         return features
 
@@ -300,7 +321,8 @@ class LagrangianDataset(DGLDataset):
             meta = json.loads(fp.read())
         dataset = tf.data.TFRecordDataset(os.path.join(path, split + ".tfrecord"))
         return dataset.map(
-            functools.partial(parse_serialized_simulation_example, metadata=meta), num_parallel_calls=8
+            functools.partial(parse_serialized_simulation_example, metadata=meta),
+            num_parallel_calls=8,
         ).prefetch(tf.data.AUTOTUNE)
 
     @staticmethod
@@ -322,7 +344,3 @@ class LagrangianDataset(DGLDataset):
         features += noise * features
         targets -= noise * targets
         return features, targets
-
-
-
-

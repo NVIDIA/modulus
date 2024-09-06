@@ -132,10 +132,17 @@ class MGNTrainer:
                 "FusedAdam optimizer will not be used."
             )
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr, weight_decay=1e-5)
+            self.optimizer = torch.optim.Adam(
+                self.model.parameters(), lr=cfg.lr, weight_decay=1e-5
+            )
         rank_zero_logger.info(f"Using {self.optimizer.__class__.__name__} optimizer")
 
-        num_iteration = cfg.epochs * cfg.num_training_samples * cfg.num_training_time_steps // cfg.batch_size
+        num_iteration = (
+            cfg.epochs
+            * cfg.num_training_samples
+            * cfg.num_training_time_steps
+            // cfg.batch_size
+        )
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=num_iteration, eta_min=cfg.lr_min
         )
@@ -167,16 +174,20 @@ class MGNTrainer:
         with autocast(enabled=self.amp):
             # predict the acceleration
             pred_acc = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            loss_acc = self.criterion(pred_acc, graph.ndata["y"][..., 2*self.dim:])
+            loss_acc = self.criterion(pred_acc, graph.ndata["y"][..., 2 * self.dim :])
 
             # use the integrator to get the position
-            pred_pos, pred_vel = self.time_integrator(position=graph.ndata["x"][..., :self.dim],
-                                                      velocity=graph.ndata["x"][..., 1*self.dim:2*self.dim],
-                                                      acceleration=pred_acc,
-                                                      dt=self.dt)
-            loss_pos = self.criterion(pred_pos, graph.ndata["y"][..., :self.dim])
+            pred_pos, pred_vel = self.time_integrator(
+                position=graph.ndata["x"][..., : self.dim],
+                velocity=graph.ndata["x"][..., 1 * self.dim : 2 * self.dim],
+                acceleration=pred_acc,
+                dt=self.dt,
+            )
+            loss_pos = self.criterion(pred_pos, graph.ndata["y"][..., : self.dim])
             pred_vel = self.dataset.normalize_velocity(pred_vel)
-            loss_vel = self.criterion(pred_vel, graph.ndata["y"][..., self.dim:2*self.dim])
+            loss_vel = self.criterion(
+                pred_vel, graph.ndata["y"][..., self.dim : 2 * self.dim]
+            )
 
             return loss_pos, loss_vel, loss_acc
 
@@ -193,7 +204,9 @@ class MGNTrainer:
     def l2loss(self, input, target, p=2, eps=1e-5):
         input = input.flatten(start_dim=1)
         target = target.flatten(start_dim=1)
-        l2loss = torch.norm(input - target, dim=1, p=p) / (torch.norm(target, dim=1, p=p) + eps)
+        l2loss = torch.norm(input - target, dim=1, p=p) / (
+            torch.norm(target, dim=1, p=p) + eps
+        )
         l2loss = torch.mean(l2loss)
         return l2loss
 
