@@ -112,12 +112,8 @@ def ldc_trainer(cfg: DictConfig) -> None:
             mask_top_wall = y_vals == height / 2
 
             for k in bc_data[0].keys():
-                no_slip[k] = (
-                    (bc_data[0][k][mask_no_slip]).reshape(-1, 1).to(torch.float)
-                )
-                top_wall[k] = (
-                    (bc_data[0][k][mask_top_wall]).reshape(-1, 1).to(torch.float)
-                )
+                no_slip[k] = (bc_data[0][k][mask_no_slip]).reshape(-1, 1)
+                top_wall[k] = (bc_data[0][k][mask_top_wall]).reshape(-1, 1)
 
             interior = {}
             for k, v in int_data[0].items():
@@ -126,9 +122,7 @@ def ldc_trainer(cfg: DictConfig) -> None:
                     requires_grad = True
                 else:
                     requires_grad = False
-                interior[k] = (
-                    v.reshape(-1, 1).requires_grad_(requires_grad).to(torch.float)
-                )
+                interior[k] = v.reshape(-1, 1).requires_grad_(requires_grad)
 
             # apply BC constraints
             coords = torch.cat([interior["x"], interior["y"]], dim=1)
