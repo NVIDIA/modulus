@@ -753,7 +753,6 @@ class EDMPrecondSR(Module):
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
-            label_dim=0,
             **model_kwargs,
         )  # TODO needs better handling
 
