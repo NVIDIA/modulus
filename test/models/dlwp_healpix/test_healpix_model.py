@@ -13,6 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# ruff: noqa: E402
+import os
+import sys
+
+script_path = os.path.abspath(__file__)
+sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import common
 import pytest
@@ -67,6 +73,7 @@ def encoder_dict(conv_next_block_dict, down_sampling_block_dict, recurrent_block
 
 @pytest.fixture
 def up_sampling_block_dict(in_channels=3, out_channels=1):
+    """Block dict fixture."""
     activation_block = {
         "_target_": "modulus.models.layers.activations.CappedGELU",
         "cap_value": 10,
@@ -243,6 +250,9 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
             n_constants=0,
         ).to(device)
 
+    del model
+    torch.cuda.empty_cache()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
@@ -265,6 +275,8 @@ def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
     ).to(device)
 
     assert model.integration_steps == output_time_dim // input_time_dim
+    del model
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -307,6 +319,9 @@ def test_HEALPixRecUNet_reset(
     model.reset()
 
     assert common.compare_output(out_var, model(inputs))
+
+    del model, inputs, out_var
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -405,3 +420,6 @@ def test_HEALPixRecUNet_forward(
         file_name="dlwp_healpix_decoder.pth",
         rtol=1e-2,
     )
+
+    del model, inputs
+    torch.cuda.empty_cache()

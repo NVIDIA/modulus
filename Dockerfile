@@ -168,6 +168,9 @@ RUN pip install --no-cache-dir "numpy-stl" "scikit-image>=0.24.0"
 # Install sparse-dot-mkl
 RUN pip install --no-cache-dir "sparse-dot-mkl"
 
+# Install shapely
+RUN pip install --no-cache-dir "shapely"
+
 # cleanup of stage
 RUN rm -rf /modulus/
 

@@ -12,12 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Graph Transformer processor for GraphCast/GenCast.
 - Utility to generate STL from Signed Distance Field.
+- Metrics for CAE and CFD domain such as integrals, drag, and turbulence invariances and
+  spectrum.
 - Added gradient clipping to StaticCapture utilities.
 - Bistride Multiscale MeshGraphNet example.
 
 ### Changed
 
 - Refactored CorrDiff training recipe for improved usability
+- Fixed timezone calculation in datapipe cosine zenith utility.
 
 ### Deprecated
 
