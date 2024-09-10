@@ -14,17 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from math import ceil
-
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from omegaconf import DictConfig
-from sympy import Abs, Eq, Symbol
-from torch.nn import MSELoss
-from torch.optim import Adam, lr_scheduler
-
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import LaunchLogger, PythonLogger
 from modulus.launch.utils import load_checkpoint, save_checkpoint
@@ -35,6 +28,10 @@ from modulus.sym.eq.phy_informer import PhysicsInformer
 from modulus.sym.geometry.geometry_dataloader import GeometryDatapipe
 from modulus.sym.geometry.primitives_2d import Rectangle
 from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
+from omegaconf import DictConfig
+from sympy import Abs, Eq, Symbol
+from torch.nn import MSELoss
+from torch.optim import Adam, lr_scheduler
 
 
 @hydra.main(version_base="1.3", config_path=".", config_name="config.yaml")
