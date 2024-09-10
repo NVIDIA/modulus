@@ -46,8 +46,8 @@ from modulus.launch.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_mlflow,
 )
+from modulus.launch.logging.mlflow import initialize_mlflow
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 

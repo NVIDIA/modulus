@@ -17,7 +17,7 @@
 hydra:
   job:
     chdir: true
-    name: regression
+    name: regression  # choose from [regression, diffusion, patched_diffusion]
   run:
     dir: ./outputs/${hydra:job.name}
 
@@ -25,7 +25,7 @@ hydra:
 defaults:
 
   # Dataset
-  - dataset/cwb
+  - dataset/cwb_train
 
   # Model
   - model/corrdiff_regression

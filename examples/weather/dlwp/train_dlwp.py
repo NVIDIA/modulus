@@ -32,7 +32,8 @@ from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.models.dlwp import DLWP
 
 from cube_sphere_plotter_no_subplots import cube_sphere_plotter
-from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_mlflow
+from modulus.launch.logging import LaunchLogger, PythonLogger
+from modulus.launch.logging.mlflow import initialize_mlflow
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 import modulus.utils.zenith_angle as zenith_angle
 from torch.optim.lr_scheduler import ReduceLROnPlateau

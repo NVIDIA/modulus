@@ -16,5 +16,4 @@
 
 from .console import PythonLogger, RankZeroLoggingWrapper
 from .launch import LaunchLogger
-from .mlflow import initialize_mlflow
 from .wandb import initialize_wandb
