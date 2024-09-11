@@ -130,11 +130,13 @@ def main(cfg: DictConfig) -> None:
             "img_channels": img_out_channels,
             "gridtype": "sinusoidal",
             "N_grid_channels": 4,
+            "scale_cond_input": cfg.model.scale_cond_input,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "learnable",
             "N_grid_channels": 100,
+            "scale_cond_input": cfg.model.scale_cond_input,
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
