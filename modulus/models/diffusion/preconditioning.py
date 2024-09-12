@@ -734,7 +734,7 @@ class EDMPrecondSR(Module):
     ):
         super().__init__(meta=EDMPrecondSRMetaData)
         self.img_resolution = img_resolution
-        self.img_channels = img_channels
+        self.img_channels = img_channels  # TODO: this is not used, remove it
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
         self.use_fp16 = use_fp16

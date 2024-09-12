@@ -54,6 +54,7 @@ def test_diffusion_step(device):
         img_resolution=[16, 16],
         img_in_channels=8,
         img_out_channels=2,
+        img_channels=0,
         scale_cond_input=False,
     ).to(device)
 
