@@ -292,12 +292,23 @@ class DistributedManager(object):
         """Setup method using MPICH initialization"""
         rank = int(os.environ.get("PMI_RANK"))
         world_size = int(os.environ.get("PMI_SIZE"))
-        try:
-            # cray-mpich
+
+        # cray-mpich
+        if "PMI_LOCAL_RANK" in os.environ:
             local_rank = int(os.environ.get("PMI_LOCAL_RANK"))
-        except:
-            # mpich-4.2.1 / hydra
+        # mpich-4.2.1 / hydra
+        else:
             local_rank = int(os.environ.get("MPI_LOCALRANKID"))
+
+        # for multi-node MPI jobs, determine "addr" as the
+        # address of global rank 0.
+        if "localhost" == addr:
+            try:
+                import socket
+                from mpi4py import MPI
+                comm = MPI.COMM_WORLD
+                addr = comm.bcast(socket.gethostbyname(socket.gethostname()), root=0)
+            except ImportError: pass
 
         DistributedManager.setup(
             rank=rank,
