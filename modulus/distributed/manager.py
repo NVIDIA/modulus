@@ -288,6 +288,28 @@ class DistributedManager(object):
         )
 
     @staticmethod
+    def initialize_mpich(addr, port):
+        """Setup method using MPICH initialization"""
+        rank = int(os.environ.get("PMI_RANK"))
+        world_size = int(os.environ.get("PMI_SIZE"))
+        try:
+            # cray-mpich
+            local_rank = int(os.environ.get("PMI_LOCAL_RANK"))
+        except:
+            # mpich-4.2.1 / hydra
+            local_rank = int(os.environ.get("MPI_LOCALRANKID"))
+
+        DistributedManager.setup(
+            rank=rank,
+            world_size=world_size,
+            local_rank=local_rank,
+            addr=addr,
+            port=port,
+            backend=DistributedManager.get_available_backend(),
+            method="mpich",
+        )
+
+    @staticmethod
     def initialize_slurm(port):
         """Setup method using SLURM initialization"""
         rank = int(os.environ.get("SLURM_PROCID"))
@@ -319,6 +341,9 @@ class DistributedManager(object):
             `OPENMPI`: Initialization for OpenMPI launchers.
                      Uses `OMPI_COMM_WORLD_RANK`, `OMPI_COMM_WORLD_SIZE` and
                      `OMPI_COMM_WORLD_LOCAL_RANK` environment variables.
+            `MPICH`: Initialization for MPICH-based MPI launchers.
+                     Uses `PMI_RANK`, `PMI_SIZE` and
+                     either `PMI_LOCAL_RANK` or `MPI_LOCALRANKID` environment variables.
 
         Initialization by default is done using the first valid method in the order
         listed above. Initialization method can also be explicitly controlled using the
@@ -342,9 +367,11 @@ class DistributedManager(object):
                     DistributedManager.initialize_slurm(port)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
                     DistributedManager.initialize_open_mpi(addr, port)
+                elif "PMI_RANK" in os.environ:
+                    DistributedManager.initialize_mpich(addr, port)
                 else:
                     warn(
-                        "Could not initialize using ENV, SLURM or OPENMPI methods. Assuming this is a single process job"
+                        "Could not initialize using ENV, SLURM, OPENMPI or MPICH methods. Assuming this is a single process job"
                     )
                     DistributedManager._shared_state["_is_initialized"] = True
         elif initialization_method == "ENV":
@@ -353,13 +380,15 @@ class DistributedManager(object):
             DistributedManager.initialize_slurm(port)
         elif initialization_method == "OPENMPI":
             DistributedManager.initialize_open_mpi(addr, port)
+        elif initialization_method == "MPICH":
+            DistributedManager.initialize_mpich(addr, port)
         else:
             raise RuntimeError(
                 "Unknown initialization method "
                 f"{initialization_method}. "
                 "Supported values for "
                 "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
-                "ENV, SLURM and OPENMPI"
+                "ENV, SLURM, OPENMPI, and MPICH"
             )
 
         # Set per rank numpy random seed for data sampling
