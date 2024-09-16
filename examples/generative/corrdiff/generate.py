@@ -76,7 +76,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
 
     # Parse the inference input times
-    if cfg.generation.times_range and times:
+    if cfg.generation.times_range and cfg.generation.times:
         raise ValueError("Either times_range or times must be provided, but not both")
     if cfg.generation.times_range:
         times = get_time_from_range(cfg.generation.times_range)
