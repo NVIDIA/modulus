@@ -20,7 +20,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
-from modulus.models.diffusion import UNet, EDMPrecondSRV2
+from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss
@@ -136,11 +136,13 @@ def main(cfg: DictConfig) -> None:
             "img_channels": img_out_channels,
             "gridtype": "sinusoidal",
             "N_grid_channels": 4,
+            "scale_cond_input": cfg.model.scale_cond_input,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "learnable",
             "N_grid_channels": 100,
+            "scale_cond_input": cfg.model.scale_cond_input,
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
@@ -152,7 +154,7 @@ def main(cfg: DictConfig) -> None:
             **model_args,
         )
     else:  # diffusion or patched diffusion
-        model = EDMPrecondSRV2(
+        model = EDMPrecondSR(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )

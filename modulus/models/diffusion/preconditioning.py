@@ -729,24 +729,19 @@ class EDMPrecondSR(Module):
         sigma_max=float("inf"),
         sigma_data=0.5,
         model_type="SongUNetPosEmbd",
+        scale_cond_input=True,
         **model_kwargs,
     ):
-        warnings.warn(
-            "EDMPrecondSR has a bug in how the conditional input is scaled "
-            "(see https://github.com/NVIDIA/modulus/issues/229). "
-            "This preconditioner is now deprecated. "
-            "Please use EDMPrecondSRV2 instead.",
-            DeprecationWarning,
-        )
         super().__init__(meta=EDMPrecondSRMetaData)
         self.img_resolution = img_resolution
-        self.img_channels = img_channels
+        self.img_channels = img_channels  # TODO: this is not used, remove it
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.sigma_data = sigma_data
+        self.scale_cond_input = scale_cond_input
 
         model_class = getattr(network_module, model_type)
         self.model = model_class(
@@ -755,6 +750,28 @@ class EDMPrecondSR(Module):
             out_channels=img_out_channels,
             **model_kwargs,
         )  # TODO needs better handling
+        self.scaling_fn = self._get_scaling_fn()
+
+    def _get_scaling_fn(self):
+        if self.scale_cond_input:
+            warnings.warn(
+                "scale_cond_input=True does not properly scale the conditional input. "
+                "(see https://github.com/NVIDIA/modulus/issues/229). "
+                "This setup will be deprecated. "
+                "Please set scale_cond_input=False.",
+                DeprecationWarning,
+            )
+            return self._legacy_scaling_fn
+        else:
+            return self._scaling_fn
+
+    @staticmethod
+    def _scaling_fn(x, img_lr, c_in):
+        return torch.cat([c_in * x, img_lr.to(x.dtype)], dim=1)
+
+    @staticmethod
+    def _legacy_scaling_fn(x, img_lr, c_in):
+        return c_in * torch.cat([x, img_lr.to(x.dtype)], dim=1)
 
     @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
@@ -766,8 +783,6 @@ class EDMPrecondSR(Module):
         **model_kwargs,
     ):
         # Concatenate input channels
-        x = torch.cat((x, img_lr), dim=1)
-
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         dtype = (
@@ -781,8 +796,14 @@ class EDMPrecondSR(Module):
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
 
+        if img_lr is None:
+            arg = c_in * x
+        else:
+            arg = self.scaling_fn(x, img_lr, c_in)
+        arg = arg.to(dtype)
+
         F_x = self.model(
-            (c_in * x).to(dtype),
+            arg,
             c_noise.flatten(),
             class_labels=None,
             **model_kwargs,
@@ -793,8 +814,6 @@ class EDMPrecondSR(Module):
                 f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
             )
 
-        # Skip connection - for SR there's size mismatch bwtween input and output
-        x = x[:, 0 : self.img_out_channels, :, :]
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
 
@@ -805,168 +824,6 @@ class EDMPrecondSR(Module):
         See EDMPrecond.round_sigma
         """
         return EDMPrecond.round_sigma(sigma)
-
-
-class _ConditionalPrecond(torch.nn.Module):
-    """EDM Preconditioner with appropriate handling of conditional inputs via concatenation
-
-    This class is more modular since ``model`` is not constructed here.
-
-    """
-
-    def __init__(
-        self,
-        *,
-        model: torch.nn.Module,
-        img_resolution: int,
-        img_channels: int,
-        use_fp16=False,
-        sigma_min=0,
-        sigma_max=float("inf"),
-        sigma_data=0.5,
-    ):
-        super().__init__()
-
-        # metadata. Not clear which is of these is used externally. I believe
-        # img_resolution and img_channels are.
-        self.use_fp16 = use_fp16
-        self.sigma_min = sigma_min
-        self.sigma_max = sigma_max
-        self.sigma_data = sigma_data
-        self.img_resolution = img_resolution
-        self.img_channels = img_channels
-        self.model = model
-
-    @nvtx.annotate(message="_ConditionalPrecond", color="orange")
-    def forward(
-        self,
-        x,
-        condition=None,
-        sigma=None,
-        force_fp32=False,
-        **model_kwargs,
-    ):
-        # workaround to to handle backward compatibility with EDMPrecond,
-        # argument ordering for EDMPrecond is x, condition, sigma
-        # EDMPrecond required condition to be passed, _ConditionalPrecond and
-        # thus EDMPrecondV2 allows it to be None. To be backward compatible with
-        # EDMPrecond based code argument ordering has to be maintained which means
-        # sigma has to change from a positional only to a positional-or-keyword arg
-        if sigma is None:
-            raise ValueError("sigma must be provided, it cannot be None")
-
-        x = x.to(torch.float32)
-        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        dtype = (
-            torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
-            else torch.float32
-        )
-
-        c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        c_noise = sigma.log() / 4
-
-        if condition is None:
-            arg = c_in * x
-        else:
-            condition = condition.to(torch.float32)
-            arg = torch.cat([c_in * x, condition], dim=1)
-
-        F_x = self.model(
-            arg.to(dtype),
-            c_noise.flatten(),
-            class_labels=None,
-            **model_kwargs,
-        )
-        D_x = c_skip * x + c_out * F_x.to(torch.float32)
-        return D_x
-
-    def round_sigma(self, sigma):
-        return torch.as_tensor(sigma)
-
-
-class EDMPrecondSRV2(_ConditionalPrecond, Module):
-    # note this order of inheritance is necessesary  since Module.__init__ calls
-    # super().__init__
-    """EDM Preconditioner with appropriate handling of conditional inputs via concatenation
-
-    This helper is provided to have a similar interface to EDMPrecondSR,
-    which includes the model construction.
-
-    Parameters
-    ----------
-    img_resolution : int
-        Image resolution.
-    img_channels : int
-        Number of image channels, not used. Exists to maintain compatibility
-        with models trained using older EDMPrecondSR
-    img_in_channels : int
-        Number of input color channels.
-    img_out_channels : int
-        Number of output color channels.
-    use_fp16 : bool
-        Execute the underlying model at FP16 precision?, by default False.
-    sigma_min : float
-        Minimum supported noise level, by default 0.0.
-    sigma_max : float
-        Maximum supported noise level, by default inf.
-    sigma_data : float
-        Expected standard deviation of the training data, by default 0.5.
-    model_type :str
-        Class name of the underlying model, by default "DhariwalUNet".
-    **model_kwargs : dict
-        Keyword arguments for the underlying model.
-
-    Note
-    ----
-    References:
-    - Karras, T., Aittala, M., Aila, T. and Laine, S., 2022. Elucidating the
-    design space of diffusion-based generative models. Advances in Neural Information
-    Processing Systems, 35, pp.26565-26577.
-    - Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
-    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
-    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
-    arXiv preprint arXiv:2309.15214.
-    """
-
-    def __init__(
-        self,
-        img_resolution,
-        img_in_channels,
-        img_out_channels,
-        img_channels=0,  # not used see above
-        use_fp16=False,
-        sigma_min=0.0,
-        sigma_max=float("inf"),
-        sigma_data=0.5,
-        model_type="SongUNetPosEmbd",
-        **model_kwargs,
-    ) -> None:
-        # The use of multiple inheritance here is a workaround to make the
-        # preconditioner serializeable. The arguments of a Modulus model must be
-        # serializeable, but _ConditionalPrecond uses a compositional design for
-        # easier testing and modularity. Would be easier if modulus didn't rely
-        # on object inheritance for saving/loading.
-        Module.__init__(self, meta=EDMPrecondSRMetaData)
-        model_class = getattr(network_module, model_type)
-        model = model_class(
-            img_resolution=img_resolution,
-            in_channels=img_in_channels + img_out_channels,
-            out_channels=img_out_channels,
-            **model_kwargs,
-        )
-        _ConditionalPrecond.__init__(
-            self,
-            model=model,
-            img_resolution=img_resolution,
-            img_channels=img_out_channels,
-            use_fp16=use_fp16,
-            sigma_min=sigma_min,
-            sigma_max=sigma_max,
-            sigma_data=sigma_data,
-        )
 
 
 class VEPrecond_dfsr(torch.nn.Module):
