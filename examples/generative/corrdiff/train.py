@@ -64,11 +64,12 @@ def main(cfg: DictConfig) -> None:
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
     logger.info(f"Saving the outputs in {os.getcwd()}")
     checkpoint_dir = os.path.join(
-        cfg.training.io.get("checkpoint_dir", "."),
-        f"checkpoints_{cfg.model.name}"
+        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
     )
     if cfg.training.hp.batch_size_per_gpu == "auto":
-        cfg.training.hp.batch_size_per_gpu = cfg.training.hp.total_batch_size // dist.world_size
+        cfg.training.hp.batch_size_per_gpu = (
+            cfg.training.hp.total_batch_size // dist.world_size
+        )
 
     # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
     set_seed(dist.rank)

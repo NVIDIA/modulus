@@ -261,7 +261,7 @@ def main(cfg: DictConfig) -> None:
     # generate images
     logger0.info("Generating images...")
     batch_size = 1
-    warmup_steps = min(len(times)-1, 2)
+    warmup_steps = min(len(times) - 1, 2)
     # Generates model predictions from the input data using the specified
     # `generate_fn`, and save the predictions to the provided NetCDF file. It iterates
     # through the dataset using a data loader, computes predictions, and saves them along
