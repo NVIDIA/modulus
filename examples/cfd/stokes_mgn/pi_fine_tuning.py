@@ -38,24 +38,21 @@ except:
     )
 
 from collections import OrderedDict
-from typing import Dict, Optional
-
-from sympy import Function, Number, Symbol
-from utils import get_dataset, relative_lp_error
+from typing import Dict
 
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
     initialize_wandb,
 )
-from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.mlp.fully_connected import FullyConnected
 from modulus.sym.eq.pde import PDE
 from modulus.sym.eq.phy_informer import PhysicsInformer
-from modulus.sym.graph import Graph
 from modulus.sym.key import Key
 from modulus.sym.models.arch import Arch
-from modulus.sym.node import Node
+from sympy import Function, Number, Symbol
+
+from utils import get_dataset, relative_lp_error
 
 
 class Stokes(PDE):

@@ -83,7 +83,6 @@ def main(cfg: DictConfig):
     # Use Diffusion equation for the Darcy PDE
     forcing_fn = 1.0 * 4.49996e00 * 3.88433e-03  # after scaling
     darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=forcing_fn)
-    # darcy_node = darcy.make_nodes()
 
     dataset = HDF5MapStyleDataset(
         to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device

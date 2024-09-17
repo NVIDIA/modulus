@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dgl
 import numpy as np
 import torch
-from torch import Tensor
 import vtk
-import dgl
+from torch import Tensor
 
 try:
     import pyvista as pv
@@ -84,7 +84,7 @@ def get_dataset(path, return_graph=False):
     gnn_u = np.array(pv_mesh.point_data["pred_u"]).reshape(-1, 1)
     gnn_v = np.array(pv_mesh.point_data["pred_v"]).reshape(-1, 1)
     gnn_p = np.array(pv_mesh.point_data["pred_p"]).reshape(-1, 1)
-    
+
     nu = 0.01
 
     if return_graph:
@@ -100,7 +100,7 @@ def get_dataset(path, return_graph=False):
                 edge_list.append(  # noqa: PERF401
                     (id_list.GetId(j), id_list.GetId((j + 1) % num_ids))
                 )
-    
+
         graph = dgl.graph(edge_list, idtype=torch.int32)
 
         # Assign node features using the vertex data
@@ -131,7 +131,6 @@ def get_dataset(path, return_graph=False):
                 # Assign node attributes to the DGL graph
                 graph.ndata[array_name] = torch.tensor(array_data, dtype=torch.float32)
 
-    
         # compute freq features
         B = 10 * torch.randn((2, 64))
         x_proj = torch.matmul(graph.ndata["pos"], B)
@@ -163,7 +162,7 @@ def get_dataset(path, return_graph=False):
             wall_coords,
             polygon_coords,
             nu,
-            graph
+            graph,
         )
     else:
         return (
@@ -180,4 +179,3 @@ def get_dataset(path, return_graph=False):
             polygon_coords,
             nu,
         )
-

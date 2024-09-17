@@ -31,8 +31,6 @@ try:
 except:
     pass
 
-from utils import relative_lp_error
-
 from modulus.datapipes.gnn.stokes_dataset import StokesDataset
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
@@ -42,6 +40,8 @@ from modulus.launch.logging import (
 )
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.meshgraphnet import MeshGraphNet
+
+from utils import relative_lp_error
 
 
 class MGNTrainer:

@@ -19,8 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import LaunchLogger, PythonLogger
-from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.launch.logging import PythonLogger
 from modulus.models.fno import FNO
 from modulus.models.mlp.fully_connected import FullyConnected
 from modulus.sym.eq.pdes.navier_stokes import NavierStokes
@@ -60,7 +59,6 @@ def ldc_trainer(cfg: DictConfig) -> None:
         device=dist.device,
     )
 
-    loss_fn = MSELoss(reduction="mean")
     optimizer = Adam(model.parameters(), lr=cfg.scheduler.initial_lr)
     scheduler = lr_scheduler.LambdaLR(
         optimizer, lr_lambda=lambda step: 0.9999871767586216**step

@@ -15,7 +15,7 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import Dict, Optional
+from typing import Dict
 
 import hydra
 import matplotlib.pyplot as plt
@@ -29,10 +29,8 @@ from modulus.models.fno import FNO
 from modulus.models.mlp import FullyConnected
 from modulus.sym.eq.pdes.diffusion import Diffusion
 from modulus.sym.eq.phy_informer import PhysicsInformer
-from modulus.sym.graph import Graph
 from modulus.sym.key import Key
 from modulus.sym.models.arch import Arch
-from modulus.sym.node import Node
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
@@ -164,8 +162,6 @@ def main(cfg: DictConfig):
     # Use Diffusion equation for the Darcy PDE
     forcing_fn = 1.0 * 4.49996e00 * 3.88433e-03  # after scaling
     darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=forcing_fn)
-
-    darcy_node = darcy.make_nodes()
 
     dataset = HDF5MapStyleDataset(
         to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device
