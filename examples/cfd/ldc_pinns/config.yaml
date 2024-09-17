@@ -28,26 +28,6 @@ arch:
     fno_modes: 12
     padding: 9
 
-normaliser:
-  permeability:
-    mean: 1.25
-    std_dev: .75
-  darcy:
-    mean: 4.52E-2
-    std_dev: 2.79E-2
-
 scheduler:
   initial_lr: 1.E-3
   decay_rate: .9995
-  decay_pseudo_epochs: 8
-
-training:
-  resolution: 256
-  batch_size: 64
-  rec_results_freq : 8
-  max_pseudo_epochs: 256
-  pseudo_epoch_sample_size: 2048
-
-validation:
-  sample_size: 256
-  validation_pseudo_epochs: 4

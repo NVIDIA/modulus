@@ -27,6 +27,8 @@ Install the required dependencies by running below:
 pip install -r requirements.txt
 ```
 
+### Training
+
 To train the model, run
 
 ```bash
@@ -45,3 +47,13 @@ Modulus-Sym. For more details, refer documentation
 [here](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.eq.html#modulus.sym.eq.phy_informer.PhysicsInformer)
 
 The results would get saved in the `./outputs/` directory.
+
+## Additional Reading
+
+This example demonstrates computing physics losses on point clouds. For more examples
+on physics informing different type of models and model outputs, refer:
+
+* Point clouds: [Darcy Flow (DeepONet)](../darcy_physics_informed/darcy_physics_informed_deeponet.py),
+[Stokes Flow (MLP)](../stokes_mgn/pi_fine_tuning.py)
+* Regular grid: [Darcy Flow (FNO)](../darcy_physics_informed/darcy_physics_informed_fno.py)
+* Unstructured meshes: [Stokes Flow (MeshGraphNet)](../stokes_mgn/pi_fine_tuning_gnn.py)
