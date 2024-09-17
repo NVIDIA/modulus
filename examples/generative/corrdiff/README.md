@@ -35,7 +35,8 @@ In this example, CorrDiff training is demonstrated on the Taiwan dataset,
 conditioned on the [ERA5 dataset](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5).
 We have made this dataset available for non-commercial use under the
 [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
-and can be downloaded from https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/cwa_dataset.
+and can be downloaded from [https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets_cwa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets_cwa)
+by `ngc registry resource download-version "nvidia/modulus/modulus_datasets_cwa:v1"`.
 The datapipe in this example is tailored specifically for the Taiwan dataset.
 A light-weight datapipe for the HRRR dataset is also available and can be used
 with the CorrDiff-mini model.
