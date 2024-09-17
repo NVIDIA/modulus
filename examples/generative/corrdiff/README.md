@@ -25,13 +25,13 @@ Start by installing Modulus and copying this folder (`examples/generative/corrdi
 
 ### Configuration basics
 
-CorrDiff training is handled by `train.py` and controlled by YAML configuration files handled by [Hydra](https://hydra.cc/docs/intro/). Prebuilt configuration files are found in the `conf` directory. You can choose the configuration file using the `--config-name` option. The main configuration file specifies the training dataset, the model configuration and the training options. The details of these are given in the corresponding configuration files. To change a configuration option, you can either edit the configuration files or use the Hydra command line overrides. For example, the training batch size is controlled by the option `total_batch_size` found in the `hp` group in a file in the `training` directory. We can override this from the command line with the `++` syntax: `python train.py ++training.hp.total_batch_size=64` would set run the training with the batch size set to 64.
+CorrDiff training is handled by `train.py` and controlled by YAML configuration files handled by [Hydra](https://hydra.cc/docs/intro/). Prebuilt configuration files are found in the `conf` directory. You can choose the configuration file using the `--config-name` option. The main configuration file specifies the training dataset, the model configuration and the training options. The details of these are given in the corresponding configuration files. To change a configuration option, you can either edit the configuration files or use the Hydra command line overrides. For example, the training batch size is controlled by the option `training.hp.total_batch_size`. We can override this from the command line with the `++` syntax: `python train.py ++training.hp.total_batch_size=64` would set run the training with the batch size set to 64.
 
 ### Training the regression model
 To train the CorrDiff-Mini regression model, we use the main configuration file [config_training_mini_regression.yaml](conf/config_training_mini_regression.yaml). This includes the following components:
-* The HRRR-Mini dataset: [conf/dataset/hrrrmini.yaml]
-* The CorrDiff-Mini regression model: [conf/model/corrdiff_regression_mini.yaml]
-* The CorrDiff-Mini regression training options: [conf/training/corrdiff_regression_mini.yaml]
+* The HRRR-Mini dataset: [conf/dataset/hrrrmini.yaml](conf/dataset/hrrrmini.yaml)
+* The CorrDiff-Mini regression model: [conf/model/corrdiff_regression_mini.yaml](conf/dataset/hrrrmini.yaml)
+* The CorrDiff-Mini regression training options: [conf/training/corrdiff_regression_mini.yaml](conf/dataset/hrrrmini.yaml)
 To start the training, run:
 ```bash
 python train.py --config-name=config_training_mini_regression.yaml ++dataset.data_path=</path/to/dataset>/hrrr_mini_train.nc ++dataset.stats_path=</path/to/dataset>/stats.json
