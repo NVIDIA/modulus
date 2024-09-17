@@ -21,7 +21,7 @@ weather forecasts.
 To build custom CorrDiff versions, you can get started by training the "Mini" version of CorrDiff, which uses smaller training samples and a smaller network to reduce training costs from thousands of GPU hours to around 10 hours on A100 GPUs while still producing reasonable results. It also includes a simple data loader that can be used as a baseline for training CorrDiff on custom datasets.
 
 ### Preliminaries
-Start by installing Modulus and copying this folder (`examples/generative/corrdiff`) to a system with a GPU available. Also download the CorrDiff-Mini dataset from (TODO: location).
+Start by installing Modulus (if not already installed) and copying this folder (`examples/generative/corrdiff`) to a system with a GPU available. Also download the CorrDiff-Mini dataset from (TODO: location).
 
 ### Configuration basics
 
@@ -30,8 +30,8 @@ CorrDiff training is handled by `train.py` and controlled by YAML configuration 
 ### Training the regression model
 To train the CorrDiff-Mini regression model, we use the main configuration file [config_training_mini_regression.yaml](conf/config_training_mini_regression.yaml). This includes the following components:
 * The HRRR-Mini dataset: [conf/dataset/hrrrmini.yaml](conf/dataset/hrrrmini.yaml)
-* The CorrDiff-Mini regression model: [conf/model/corrdiff_regression_mini.yaml](conf/dataset/hrrrmini.yaml)
-* The CorrDiff-Mini regression training options: [conf/training/corrdiff_regression_mini.yaml](conf/dataset/hrrrmini.yaml)
+* The CorrDiff-Mini regression model: [conf/model/corrdiff_regression_mini.yaml](conf/model/corrdiff_regression_mini.yaml)
+* The CorrDiff-Mini regression training options: [conf/training/corrdiff_regression_mini.yaml](conf/training/corrdiff_regression_mini.yaml)
 To start the training, run:
 ```bash
 python train.py --config-name=config_training_mini_regression.yaml ++dataset.data_path=</path/to/dataset>/hrrr_mini_train.nc ++dataset.stats_path=</path/to/dataset>/stats.json
