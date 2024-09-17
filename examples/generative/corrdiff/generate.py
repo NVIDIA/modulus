@@ -259,7 +259,7 @@ def main(cfg: DictConfig) -> None:
                 return image_out
 
     # generate images
-    output_path = getattr(cfg.generation, "output_path", "corrdiff_output.nc")
+    output_path = getattr(cfg.generation.io, "output_filename", "corrdiff_output.nc")
     logger0.info(f"Generating images, saving results to {output_path}...")
     batch_size = 1
     warmup_steps = min(len(times) - 1, 2)
@@ -338,17 +338,18 @@ def main(cfg: DictConfig) -> None:
             if dist.rank == 0:
                 average_time_per_batch_element = elapsed_time / timed_steps / batch_size
                 logger.info(
-                    f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
+                    f"Total time to run {timed_steps} steps and {batch_size} members = {elapsed_time} s"
                 )
                 logger.info(
                     f"Average time per batch element = {average_time_per_batch_element} s"
                 )
 
             # make sure all the workers are done writing
-            for thread in list(writer_threads):
-                thread.result()
-                writer_threads.remove(thread)
-            writer_executor.shutdown()
+            if dist.rank == 0:
+                for thread in list(writer_threads):
+                    thread.result()
+                    writer_threads.remove(thread)
+                writer_executor.shutdown()
 
     if dist.rank == 0:
         f.close()
