@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0a0] - 2024-09-XX
+## [0.9.0a0] - 2024-11-XX
 
 ### Added
 
@@ -33,6 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+## [0.8.0] - 2024-09-24
+
+### Added
+
+- Graph Transformer processor for GraphCast/GenCast.
+- Utility to generate STL from Signed Distance Field.
+- Metrics for CAE and CFD domain such as integrals, drag, and turbulence invariances and
+  spectrum.
+- Added gradient clipping to StaticCapture utilities.
+- Bistride Multiscale MeshGraphNet example.
+
+### Changed
+
+- Refactored CorrDiff training recipe for improved usability
+- Fixed timezone calculation in datapipe cosine zenith utility.
 
 ## [0.7.0] - 2024-07-23
 
