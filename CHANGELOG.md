@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-## [0.8.0] - 2024-09-XX
+## [0.8.0] - 2024-09-24
 
 ### Added
 
@@ -37,16 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Refactored CorrDiff training recipe for improved usability
 - Fixed timezone calculation in datapipe cosine zenith utility.
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-### Dependencies
 
 ## [0.7.0] - 2024-07-23
 
