@@ -19,7 +19,6 @@ from pytest_utils import import_or_fail
 from torch.testing import assert_close
 
 import modulus
-from modulus.models.figconvnet.figconvunet import FIGConvUNet
 
 from . import common
 
@@ -31,6 +30,8 @@ MLP_C = [8, 8]
 
 
 def _create_model() -> modulus.Module:
+    from modulus.models.figconvnet.figconvunet import FIGConvUNet
+
     return FIGConvUNet(
         IN_C,
         OUT_C,
