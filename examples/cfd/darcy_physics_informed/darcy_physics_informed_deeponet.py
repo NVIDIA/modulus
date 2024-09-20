@@ -265,7 +265,7 @@ def main(cfg: DictConfig):
                 )
 
                 # Compute total loss
-                loss = loss_data + cfg.physics_wt * loss_pde
+                loss = loss_data + cfg.physics_weight * loss_pde
 
                 # Backward pass and optimizer and learning rate update
                 loss.backward()

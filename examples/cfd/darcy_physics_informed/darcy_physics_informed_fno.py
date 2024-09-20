@@ -112,7 +112,7 @@ def main(cfg: DictConfig):
         equations=darcy,
         grad_method="finite_difference",
         device=device,
-        fd_dx=1 / 240,
+        fd_dx=1 / 240,  # Unit square with resoultion as 240
     )
 
     optimizer = torch.optim.Adam(
@@ -158,7 +158,7 @@ def main(cfg: DictConfig):
                 loss_data = F.mse_loss(outvar, out)
 
                 # Compute total loss
-                loss = loss_data + 1 / 240 * cfg.physics_wt * loss_pde
+                loss = loss_data + 1 / 240 * cfg.physics_weight * loss_pde
 
                 # Backward pass and optimizer and learning rate update
                 loss.backward()
