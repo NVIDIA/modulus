@@ -23,7 +23,7 @@ defaults:
 
   # Filesystem
   - filesystem/local
-    #- filesystem/pbss
+  #- filesystem/object_storage
 
   # Dataset
   - dataset/tiny_6hr_subsample

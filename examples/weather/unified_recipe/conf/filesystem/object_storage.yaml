@@ -15,6 +15,6 @@
 # limitations under the License.
 
 type: "s3"
-key: "team-earth2-datasets"
-endpoint_url: "https://pbss.s8k.io"
+key: "my_key"
+endpoint_url: "https://my_endpoint_url"
 region_name: "us-east-1"

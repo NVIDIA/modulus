@@ -201,6 +201,8 @@ class SeqZarrSource:
         Process rank, by default 0
     world_size : int, optional
         World size, by default 1
+    batch : bool, optional
+        Batch data, by default False
     """
 
     def __init__(

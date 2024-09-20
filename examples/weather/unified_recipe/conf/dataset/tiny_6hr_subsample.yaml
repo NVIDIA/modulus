@@ -18,8 +18,7 @@ dataset_filename: "unified_recipe_datasets/tiny_arco_era5.zarr"
 
 dt: 6
 
-#years: ["1979-01-01", "2024-01-01"]
-years: ["1979-01-01", "1981-01-01"]
+years: ["1979-01-01", "2024-01-01"]
 
 chunking: [1, 1, 721, 1440]
 
