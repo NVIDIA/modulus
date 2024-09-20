@@ -36,8 +36,7 @@ from modulus.models.figconvnet.point_feature_grid_conv import (
     GridFeatureTransform,
     LayerNorm2d,
 )
-
-from .point_feature_grid_ops import (
+from modulus.models.figconvnet.point_feature_grid_ops import (
     GridFeatureCat,
     GridFeatureToPoint,
 )

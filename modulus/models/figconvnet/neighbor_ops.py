@@ -21,7 +21,10 @@ import torch
 from jaxtyping import Float, Int
 from torch import Tensor
 
-from .warp_neighbor_search import batched_radius_search_warp, radius_search_warp
+from modulus.models.figconvnet.warp_neighbor_search import (
+    batched_radius_search_warp,
+    radius_search_warp,
+)
 
 
 class NeighborSearchReturn:

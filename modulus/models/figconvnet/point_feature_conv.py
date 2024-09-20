@@ -22,11 +22,17 @@ import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
 
-from .components.encodings import SinusoidalEncoding
-from .components.mlp import MLPBlock
-from .components.reductions import REDUCTION_TYPES, row_reduction
-from .geometries import PointFeatures
-from .neighbor_ops import batched_neighbor_knn_search, batched_neighbor_radius_search
+from modulus.models.figconvnet.components.encodings import SinusoidalEncoding
+from modulus.models.figconvnet.components.mlp import MLPBlock
+from modulus.models.figconvnet.components.reductions import (
+    REDUCTION_TYPES,
+    row_reduction,
+)
+from modulus.models.figconvnet.geometries import PointFeatures
+from modulus.models.figconvnet.neighbor_ops import (
+    batched_neighbor_knn_search,
+    batched_neighbor_radius_search,
+)
 
 
 class PointFeatureTransform(nn.Module):
