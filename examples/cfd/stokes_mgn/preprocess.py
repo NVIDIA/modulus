@@ -15,8 +15,8 @@
 # limitations under the License.
 
 import os
-import shutil
 import random
+import shutil
 
 # Define the directory that contains the original files
 data_dir = "results"
