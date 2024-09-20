@@ -168,7 +168,7 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
-        zarr_dataset=zarr.open(val_dataset_mapper, mode="r"),
+        file_mapping=val_dataset_mapper,
         variables=["time", "predicted", "unpredicted"],
         batch_size=cfg.validation.batch_size,
         num_steps=cfg.validation.num_steps + cfg.training.nr_input_steps,
@@ -176,6 +176,12 @@ def main(cfg: DictConfig) -> None:
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
+        batch=cfg.datapipe.batch,
+        parallel=cfg.datapipe.parallel,
+        num_threads=cfg.datapipe.num_threads,
+        prefetch_queue_depth=cfg.datapipe.prefetch_queue_depth,
+        py_num_workers=cfg.datapipe.py_num_workers,
+        py_start_method=cfg.datapipe.py_start_method,
     )
 
     # Unroll network
@@ -263,7 +269,7 @@ def main(cfg: DictConfig) -> None:
 
         # Create new datapipe
         train_datapipe = SeqZarrDatapipe(
-            zarr_dataset=zarr.open(train_dataset_mapper, mode="r"),
+            file_mapping=train_dataset_mapper,
             variables=["time", "predicted", "unpredicted"],
             batch_size=stage.batch_size,
             num_steps=stage.unroll_steps + cfg.training.nr_input_steps,
@@ -271,6 +277,12 @@ def main(cfg: DictConfig) -> None:
             device=dist.device,
             process_rank=dist.rank,
             world_size=dist.world_size,
+            batch=cfg.datapipe.batch,
+            parallel=cfg.datapipe.parallel,
+            num_threads=cfg.datapipe.num_threads,
+            prefetch_queue_depth=cfg.datapipe.prefetch_queue_depth,
+            py_num_workers=cfg.datapipe.py_num_workers,
+            py_start_method=cfg.datapipe.py_start_method,
         )
 
         # Initialize scheduler

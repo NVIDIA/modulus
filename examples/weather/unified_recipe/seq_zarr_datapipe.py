@@ -83,6 +83,10 @@ class SeqZarrDatapipe(Datapipe):
         world_size: int = 1,
         batch: bool = False,
         parallel: bool = True,
+        num_threads: int = 2,
+        prefetch_queue_depth: int = 2,
+        py_num_workers: int = 1,
+        py_start_method: str = "spawn",
     ):
         super().__init__(meta=MetaData())
 
@@ -94,6 +98,10 @@ class SeqZarrDatapipe(Datapipe):
         self.shuffle = shuffle
         self.batch = batch
         self.parallel = parallel
+        self.num_threads = num_threads
+        self.prefetch_queue_depth = prefetch_queue_depth
+        self.py_num_workers = py_num_workers
+        self.py_start_method = py_start_method
 
         # Set up device, needed for pipeline
         if isinstance(device, str):
@@ -122,11 +130,11 @@ class SeqZarrDatapipe(Datapipe):
         """
         pipe = dali.Pipeline(
             batch_size=self.batch_size,
-            num_threads=2,
-            prefetch_queue_depth=2,
-            py_num_workers=1,
+            num_threads=self.num_threads,
+            prefetch_queue_depth=self.prefetch_queue_depth,
+            py_num_workers=self.py_num_workers,
             device_id=self.device.index,
-            py_start_method="spawn",
+            py_start_method=self.py_start_method,
         )
 
         with pipe:
@@ -151,7 +159,7 @@ class SeqZarrDatapipe(Datapipe):
                 num_outputs=len(self.pipe_outputs),
                 parallel=self.parallel,
                 batch=self.batch,
-                prefetch_queue_depth=2,
+                prefetch_queue_depth=self.prefetch_queue_depth,
                 device="cpu",
             )
 
@@ -204,6 +212,7 @@ class SeqZarrSource:
         shuffle: bool = True,
         process_rank: int = 0,
         world_size: int = 1,
+        batch: bool = False,
     ):
         # Set up parameters
         self.file_mapping = file_mapping
@@ -214,9 +223,10 @@ class SeqZarrSource:
         self.batch = batch
 
         # Check if all zarr arrays have the same first dimension
-        self.first_dim = self.zarr_dataset[variables[0]].shape[0]
+        _zarr_dataset = zarr.open(self.file_mapping, mode="r")
+        self.first_dim = _zarr_dataset[variables[0]].shape[0]
         for variable in self.variables:
-            if zarr_dataset[variable].shape[0] != self.first_dim:
+            if _zarr_dataset[variable].shape[0] != self.first_dim:
                 raise ValueError("All zarr arrays must have the same first dimension.")
 
         # Get number of samples

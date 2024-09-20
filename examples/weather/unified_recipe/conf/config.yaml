@@ -22,8 +22,8 @@ run_desc: "unified training recipe for global weather models"
 defaults:
 
   # Filesystem
-  #- filesystem/local
-  - filesystem/pbss
+  - filesystem/local
+    #- filesystem/pbss
 
   # Dataset
   - dataset/tiny_6hr_subsample
@@ -38,6 +38,9 @@ defaults:
   - transform/trim_lat720
   #- transform/healpix
   #- transform/downsample
+
+  # Data Pipeline
+  - datapipe/default
 
   # Model
   - model/tiny_afno
