@@ -229,6 +229,11 @@ def main(cfg: DictConfig) -> None:
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
     done = False
+
+    # init variables to monitor running mean of average loss since last periodic
+    average_loss_running_mean = 0
+    n_average_loss_running_mean = 1
+
     while not done:
         tick_start_nimg = cur_nimg
         tick_start_time = time.time()
@@ -257,8 +262,31 @@ def main(cfg: DictConfig) -> None:
             torch.distributed.barrier()
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = (loss_sum / dist.world_size).cpu().item()
+
+        # update running mean of average loss since last periodic task
+        average_loss_running_mean += (
+            average_loss - average_loss_running_mean
+        ) / n_average_loss_running_mean
+        n_average_loss_running_mean += 1
+
         if dist.rank == 0:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
+            writer.add_scalar(
+                "training_loss_running_mean", average_loss_running_mean, cur_nimg
+            )
+
+        ptt = is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        )
+        if ptt:
+            # reset running mean of average loss
+            average_loss_running_mean = 0
+            n_average_loss_running_mean = 1
 
         # Update weights.
         lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
@@ -343,6 +371,7 @@ def main(cfg: DictConfig) -> None:
             fields = []
             fields += [f"samples {cur_nimg:<9.1f}"]
             fields += [f"training_loss {average_loss:<7.2f}"]
+            fields += [f"training_loss_running_mean {average_loss_running_mean:<7.2f}"]
             fields += [f"learning_rate {current_lr:<7.8f}"]
             fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
             fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
