@@ -232,7 +232,7 @@ def main(cfg: DictConfig) -> None:
 
     # init variables to monitor running mean of average loss since last periodic
     average_loss_running_mean = 0
-    n_average_loss_running_mean=1
+    n_average_loss_running_mean = 1
 
     while not done:
         tick_start_nimg = cur_nimg
@@ -264,20 +264,29 @@ def main(cfg: DictConfig) -> None:
         average_loss = (loss_sum / dist.world_size).cpu().item()
 
         # update running mean of average loss since last periodic task
-        average_loss_running_mean += (average_loss-average_loss_running_mean)/n_average_loss_running_mean
+        average_loss_running_mean += (
+            average_loss - average_loss_running_mean
+        ) / n_average_loss_running_mean
         n_average_loss_running_mean += 1
 
         if dist.rank == 0:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
-            writer.add_scalar("training_loss_running_mean", average_loss_running_mean, cur_nimg)
+            writer.add_scalar(
+                "training_loss_running_mean", average_loss_running_mean, cur_nimg
+            )
 
-        ptt = is_time_for_periodic_task(cur_nimg,cfg.training.io.print_progress_freq,
-                                        done,cfg.training.hp.total_batch_size,
-                                        dist.rank,rank_0_only=True)
+        ptt = is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        )
         if ptt:
             # reset running mean of average loss
             average_loss_running_mean = 0
-            n_average_loss_running_mean=1
+            n_average_loss_running_mean = 1
 
         # Update weights.
         lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
