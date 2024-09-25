@@ -22,7 +22,6 @@ from pytest_utils import import_or_fail
 
 from modulus.metrics.cae.cfd import (
     compute_force_coefficients,
-    compute_frontal_area,
     compute_p_q_r,
     compute_tke_spectrum,
     dominant_freq_calc,
@@ -49,6 +48,8 @@ def generate_box(level=500):
 
 @import_or_fail(["pyvista", "shapely"])
 def test_frontal_area(generate_sphere, pytestconfig):
+    from modulus.metrics.cae.cfd import compute_frontal_area
+
     sphere = generate_sphere
 
     # area of circle
