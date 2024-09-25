@@ -16,6 +16,7 @@
 
 import h5py
 import numpy as np
+
 from utils import download_FNO_dataset
 
 download_FNO_dataset("Darcy_241", outdir="datasets/")

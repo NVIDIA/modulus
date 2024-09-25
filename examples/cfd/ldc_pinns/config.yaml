@@ -14,9 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+arch:
+  decoder:
+    out_features: 3
+    layers: 1
+    layer_size: 32
 
-__version__ = "0.9.0a0"
+  fno:
+    in_channels: 2
+    dimension: 2
+    latent_channels: 32
+    fno_layers: 4
+    fno_modes: 12
+    padding: 9
+
+scheduler:
+  initial_lr: 1.E-3
+  decay_rate: .9995
