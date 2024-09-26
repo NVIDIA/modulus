@@ -64,6 +64,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
         drop_last: bool = False,
         add_insolation: bool = False,
         forecast_init_times: Optional[Sequence] = None,
+        meta: DatapipeMetaData = MetaData(),
     ):
         """
         Parameters
@@ -98,10 +99,12 @@ class TimeSeriesDataset(Dataset, Datapipe):
             Note that:
                 - providing this parameter configures the data loader to only produce this number of samples, and
                     NOT produce any target array.
+        meta: DatapipeMetaData, optional
+            Data class for storing essential meta data
         """
         Datapipe.__init__(
             self,
-            meta=MetaData(),
+            meta=meta,
         )
         self.ds = dataset
         self.scaling = OmegaConf.to_object(scaling) if scaling else None

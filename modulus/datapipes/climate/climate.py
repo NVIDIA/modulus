@@ -23,6 +23,7 @@ from itertools import chain
 import h5py
 import netCDF4 as nc
 import numpy as np
+import pytz
 import torch
 
 try:
@@ -66,10 +67,10 @@ class ClimateDataSourceSpec:
 
     HDF5 files should contain the following variable with the corresponding
     name:
-    - `fields`: Tensor of shape (num_timesteps, num_channels, height, width),
-      containing climate data. The order of the channels should match the order
-      of the channels in the statistics files. The statistics files should be
-      `.npy` files with the shape (1, num_channels, 1, 1).
+    `fields`: Tensor of shape (num_timesteps, num_channels, height, width),
+    containing climate data. The order of the channels should match the order
+    of the channels in the statistics files. The statistics files should be
+    `.npy` files with the shape (1, num_channels, 1, 1).
     The names of the variables are found in the metadata file found in
     `metadata_path`.
 
@@ -327,20 +328,20 @@ class ClimateDatapipe(Datapipe):
     source provided:
 
     - `state_seq-{name}`: Tensors of shape
-      (batch_size, num_steps, num_channels, height, width).
-      This sequence is drawn from the data file and normalized if a
-      statistics file is provided.
+        (batch_size, num_steps, num_channels, height, width).
+        This sequence is drawn from the data file and normalized if a
+        statistics file is provided.
     - `timestamps-{name}`: Tensors of shape (batch_size, num_steps), containing
-      timestamps for each timestep in the sequence.
+        timestamps for each timestep in the sequence.
     - `{aux_variable}-{name}`: Tensors of shape
-      (batch_size, num_steps, aux_channels, height, width),
-      containing the auxiliary variables returned by each data source
+        (batch_size, num_steps, aux_channels, height, width),
+        containing the auxiliary variables returned by each data source
     - `cos_zenith-{name}`: Tensors of shape (batch_size, num_steps, 1, height, width),
-      containing the cosine of the solar zenith angle if specified.
+        containing the cosine of the solar zenith angle if specified.
     - `{invariant_name}: Tensors of shape (batch_size, invariant_channels, height, width),
-      containing the time-invariant data (depending only on spatial coordinates)
-      returned by the datapipe. These can include e.g.
-      land-sea mask and geopotential/surface elevation.
+        containing the time-invariant data (depending only on spatial coordinates)
+        returned by the datapipe. These can include e.g.
+        land-sea mask and geopotential/surface elevation.
 
     To use this data pipeline, your data directory must be structured as
     follows:
@@ -729,7 +730,9 @@ class ClimateDaliExternalSource(ABC):
 
         # Load sequence of timestamps
         year = self.start_year + year_idx
-        start_time = datetime(year, 1, 1) + timedelta(hours=int(in_idx) * self.dt)
+        start_time = datetime(year, 1, 1, tzinfo=pytz.utc) + timedelta(
+            hours=int(in_idx) * self.dt
+        )
         timestamps = np.array(
             [
                 (start_time + timedelta(hours=i * self.stride * self.dt)).timestamp()

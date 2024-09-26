@@ -26,10 +26,6 @@ GraphCast utils
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.graphcast.icospheres
-    :members:
-    :show-inheritance:
-
 .. automodule:: modulus.utils.graphcast.loss
     :members:
     :show-inheritance:
@@ -41,3 +37,33 @@ Filesystem utils
     :members:
     :show-inheritance:
 
+Generative utils
+----------------
+
+.. automodule:: modulus.utils.generative.sampler
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.utils.generative.utils
+    :members:
+    :show-inheritance:
+
+Geometry utils
+--------------
+
+.. automodule:: modulus.utils.neighbor_list
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.utils.sdf
+    :show-inheritance:
+
+Weather / Climate utils
+------------------------
+
+.. automodule:: modulus.utils.insolation
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.utils.zenith_angle
+    :show-inheritance:

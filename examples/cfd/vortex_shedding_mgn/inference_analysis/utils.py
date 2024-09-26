@@ -17,8 +17,36 @@
 import numpy as np
 import pyvista as pv
 from scipy.interpolate import griddata
-from numpy.fft import fft, fftfreq
-from typing import List, Dict, Union, Tuple
+from typing import List, Dict, Tuple
+
+
+def midpoint_data_interp(
+    pt1: np.ndarray, pt2: np.ndarray, points: np.ndarray, field: np.ndarray
+) -> np.ndarray:
+    """
+    Interpolate data on the midpoint of two points
+
+    Parameters:
+    -----------
+    pt1 : np.ndarray
+        Numpy array defining first point. Expected shape [1, 3]
+    pt2 : np.ndarray
+        Numpy array defining second point. Expected shape [1, 3]
+    points : np.ndarray
+        Numpy array containing all the points in the mesh. Expected shape [N, 3]
+    field : np.ndarray
+        Numpy array containing field values at all the points in the mesh.
+        Expected shape [N, m]
+
+    Returns:
+    --------
+    np.ndarray
+        Value at the midpoint
+    """
+    idx1 = np.where(np.all(points == pt1, axis=1))[0]
+    idx2 = np.where(np.all(points == pt2, axis=1))[0]
+
+    return 0.5 * (field[idx1][0] + field[idx2][0])
 
 
 def generate_mesh(
@@ -127,106 +155,3 @@ def modulus_geometry_interior_interpolator(
             samples[k] = interp_vals.reshape(-1, 1)
 
     return samples
-
-
-def dominant_freq_calc(signal: List[Union[int, float]]) -> float:
-    """
-    Compute the dominant frequency in the signal
-
-    Args:
-        signal (List[Union[int, float]]): Signal
-
-    Returns:
-        float: Dominant frequency
-    """
-    N = len(signal)
-    yf = fft(signal)
-
-    mag = np.abs(yf)
-    mag[0] = 0
-    dom_idx = np.argmax(mag)
-    dom_freq = fftfreq(N, 1)[dom_idx]
-
-    return np.abs(dom_freq)
-
-
-def midpoint_data_interp(
-    pt1: np.ndarray, pt2: np.ndarray, points: np.ndarray, field: np.ndarray
-) -> np.ndarray:
-    """
-    Interpolate data on the midpoint of two points
-
-    Args:
-        pt1 (np.ndarray): Numpy array defining first point. Expected shape [1, 3]
-        pt2 (np.ndarray): Numpy array defining second point. Expected shape [1, 3]
-        points (np.ndarray): Numpy array containing all the points in the mesh.
-        Expected shape [N, 3]
-        field (np.ndarray): Numpy array containing field values at all the points in
-        the mesh. Expected shape [N, m]
-
-    Returns:
-        np.ndarray: Value at the midpoint
-    """
-    idx1 = np.where(np.all(points == pt1, axis=1))[0]
-    idx2 = np.where(np.all(points == pt2, axis=1))[0]
-
-    return 0.5 * (field[idx1][0] + field[idx2][0])
-
-
-def compute_line_integral(
-    edges: Tuple[np.ndarray, np.ndarray],
-    points: np.ndarray,
-    field: np.ndarray,
-    criteria: Dict[str, float] = None,
-) -> float:
-    """
-    Compute integral along a line / edge. Currently assumes the curve in xy plane.
-
-    Args:
-        edges (Tuple[np.ndarray, np.ndarray]): Tuple of two points.
-        Each point of [1, 3] shape
-        points (np.ndarray): Points for the edge
-        field (np.ndarray): Field values at each point
-        criteria (Dict[str, float], optional): Criteria to sub-sample the integration
-        points. Defaults to None.
-
-    Returns:
-        float: Integral along the given curve / line.
-    """
-    midpts = []
-    midpt_vals = []
-    normals = []
-    lengths = []
-
-    # TODO: generalize to different planes
-    for e in edges:
-        vec = e[0] - e[1]
-        normal = [vec[1], -vec[0], vec[2]]
-        normal = normal / np.linalg.norm(normal)
-        midpt = (e[0] + e[1]) / 2
-        midpt_val = midpoint_data_interp(e[0], e[1], points, field)
-
-        midpts.append(midpt)
-        midpt_vals.append(midpt_val)
-        normals.append(normal)
-        lengths.append(np.linalg.norm(e[0] - e[1]))
-
-    midpts = np.array(midpts)
-    normals = np.array(normals)
-    midpt_vals = np.array(midpt_vals)
-    lengths = np.array(lengths).reshape(-1, 1)
-
-    if criteria is not None:
-        idx = (
-            (midpts[:, 0] >= criteria["x_min"])
-            & (midpts[:, 0] <= criteria["x_max"])
-            & (midpts[:, 1] >= criteria["y_min"])
-            & (midpts[:, 1] <= criteria["y_max"])
-        )
-        midpts = midpts[idx]
-        normals = normals[idx]
-        midpt_vals = midpt_vals[idx]
-        lengths = lengths[idx]
-
-    integral = np.sum(normals * midpt_vals * lengths, axis=0) / np.sum(lengths, axis=0)
-    return integral

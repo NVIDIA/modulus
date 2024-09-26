@@ -90,11 +90,13 @@ using ``python train.py`` or on multiple GPUs using
 .. code-block:: bash
 
    torchrun --standalone --nnodes=1 --nproc_per_node=<num_gpus> train.py 
+
 or 
 
 .. code-block:: bash
 
    mpirun -np <num_gpus> python train.py 
+
 if using OpenMPI. The script can also 
 be run on a SLURM cluster using 
 

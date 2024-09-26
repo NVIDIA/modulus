@@ -45,9 +45,9 @@ class MetaData(ModelMetaData):
 
 class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
-    U-Net architecture.
+    U-Net Wrapper for CorrDiff.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : int
         The resolution of the input/output image.
@@ -57,8 +57,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Number of input color channels.
     img_out_channels : int
         Number of output color channels.
-    label_dim : int, optional
-        Number of class labels; 0 indicates an unconditional model. By default 0.
     use_fp16: bool, optional
         Execute the underlying model at FP16 precision?, by default False.
     sigma_min: float, optional
@@ -73,8 +71,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Keyword arguments for the underlying model.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
     Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
@@ -87,22 +85,27 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         img_channels,
         img_in_channels,
         img_out_channels,
-        label_dim=0,
         use_fp16=False,
         sigma_min=0,
         sigma_max=float("inf"),
         sigma_data=0.5,
-        model_type="DhariwalUNet",
+        model_type="SongUNetPosEmbd",
         **model_kwargs,
     ):
         super().__init__(meta=MetaData)
 
         self.img_channels = img_channels
 
+        # for compatibility with older versions that took only 1 dimension
+        if isinstance(img_resolution, int):
+            self.img_shape_x = self.img_shape_y = img_resolution
+        else:
+            self.img_shape_x = img_resolution[0]
+            self.img_shape_y = img_resolution[1]
+
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
 
-        self.label_dim = label_dim
         self.use_fp16 = use_fp16
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
@@ -112,49 +115,28 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             img_resolution=img_resolution,
             in_channels=img_in_channels + img_out_channels,
             out_channels=img_out_channels,
-            label_dim=label_dim,
             **model_kwargs,
         )
 
-    def forward(
-        self, x, img_lr, sigma, class_labels=None, force_fp32=False, **model_kwargs
-    ):
+    def forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
         # SR: concatenate input channels
-        if img_lr is None:
-            x = x
-        else:
+        if img_lr is not None:
             x = torch.cat((x, img_lr), dim=1)
 
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = (
-            None
-            if self.label_dim == 0
-            else torch.zeros([1, self.label_dim], device=x.device)
-            if class_labels is None
-            else class_labels.to(torch.float32).reshape(-1, self.label_dim)
-        )
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
             else torch.float32
         )
 
-        # c_skip = self.sigma_data**2 / (sigma**2 + self.sigma_data**2)
-        # c_skip = 0.0 * c_skip
-        # c_out = sigma * self.sigma_data / (sigma**2 + self.sigma_data**2).sqrt()
-        # c_out = torch.ones_like(c_out)
-        # c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
-        # c_in = torch.ones_like(c_in)
-        # c_noise = sigma.log() / 4
-        # c_noise = 0.0 * c_noise
-
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
             torch.zeros(
                 sigma.numel(), dtype=sigma.dtype, device=sigma.device
             ),  # c_noise.flatten()
-            class_labels=class_labels,
+            class_labels=None,
             **model_kwargs,
         )
 
@@ -164,8 +146,6 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             )
 
         # skip connection - for SR there's size mismatch bwtween input and output
-        # x = x[:, 0 : self.img_out_channels, :, :]
-        # D_x = c_skip * x + c_out * F_x.to(torch.float32)
         D_x = F_x.to(torch.float32)
         return D_x
 

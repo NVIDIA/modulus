@@ -19,6 +19,7 @@
 defaults:
   - /data@data.train: ahmed
   - /data@data.val: ahmed
+  - /data@data.test: ahmed
   - /model: mgn
   - /loss@loss.graph: rrmseloss
   - /optimizer: adam
@@ -28,11 +29,16 @@ data:
   train:
     name: ahmed_body_train
     split: train
-    num_samples: 683
+    num_samples: 408
   val:
     name: ahmed_body_val
     split: validation
-    num_samples: 100
+    num_samples: 50
+  test:
+    name: ahmed_body_test
+    split: test
+    num_samples: 50
+    compute_drag: true
 
 train:
   epochs: 500
