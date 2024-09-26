@@ -40,7 +40,8 @@ Tensor = torch.Tensor
 # TODO unsure if better to remove this. Keeping this in for now
 wp.init()
 
-class UnitTransformer():
+
+class UnitTransformer:
     def __init__(self, X):
         self.mean = X.mean(dim=(0, 1), keepdim=True)
         self.std = X.std(dim=(0, 1), keepdim=True) + 1e-8
@@ -65,8 +66,8 @@ class UnitTransformer():
     def decode(self, x):
         return x * self.std + self.mean
 
-    def transform(self, X, inverse=True, component='all'):
-        if component == 'all' or 'all-reduce':
+    def transform(self, X, inverse=True, component="all"):
+        if component == "all" or "all-reduce":
             if inverse:
                 orig_shape = X.shape
                 return (X * (self.std - 1e-8) + self.mean).view(orig_shape)
@@ -75,7 +76,9 @@ class UnitTransformer():
         else:
             if inverse:
                 orig_shape = X.shape
-                return (X * (self.std[:, component] - 1e-8) + self.mean[:, component]).view(orig_shape)
+                return (
+                    X * (self.std[:, component] - 1e-8) + self.mean[:, component]
+                ).view(orig_shape)
             else:
                 return (X - self.mean[:, component]) / self.std[:, component]
 
@@ -206,22 +209,22 @@ class Darcy2D_fix(Datapipe):
         # Output tenors
         self.output_k = None
         self.output_p = None
-        
+
         self.is_test = is_test
-        
+
         self.__get_data__()
         if not self.is_test:
             self.x_normalizer = UnitTransformer(self.x_train)
             self.y_normalizer = UnitTransformer(self.y_train)
-        
+
             self.x_train = self.x_normalizer.encode(self.x_train)
             self.y_train = self.y_normalizer.encode(self.y_train)
         else:
             self.x_train = x_normalizer.encode(self.x_train)
-        
+
     def __get_normalizer__(self):
         return self.x_normalizer, self.y_normalizer
-    
+
     def __get_data__(self):
         x = np.linspace(0, 1, self.s)
         y = np.linspace(0, 1, self.s)
@@ -233,14 +236,18 @@ class Darcy2D_fix(Datapipe):
         else:
             n_train = 200
         self.n_train = n_train
-        self.x_train = scio.loadmat(self.train_path)["coeff"][:n_train, ::self.r, ::self.r][:, :self.s, :self.s]
+        self.x_train = scio.loadmat(self.train_path)["coeff"][
+            :n_train, :: self.r, :: self.r
+        ][:, : self.s, : self.s]
         self.x_train = self.x_train.reshape(n_train, -1)
         self.x_train = torch.from_numpy(self.x_train).float().cuda()
-        self.y_train = scio.loadmat(self.train_path)["sol"][:n_train, ::self.r, ::self.r][:, :self.s, :self.s]
+        self.y_train = scio.loadmat(self.train_path)["sol"][
+            :n_train, :: self.r, :: self.r
+        ][:, : self.s, : self.s]
         self.y_train = self.y_train.reshape(n_train, -1)
         self.y_train = torch.from_numpy(self.y_train).float().cuda()
         self.pos_train = pos.repeat(n_train, 1, 1)
-        
+
     def __iter__(self):
         """
         Yields

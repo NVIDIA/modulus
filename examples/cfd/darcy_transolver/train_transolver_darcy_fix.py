@@ -45,7 +45,8 @@ from modulus.launch.logging import PythonLogger, LaunchLogger, initialize_mlflow
 
 from validator_fix import GridValidator
 
-class UnitTransformer():
+
+class UnitTransformer:
     def __init__(self, X):
         self.mean = X.mean(dim=(0, 1), keepdim=True)
         self.std = X.std(dim=(0, 1), keepdim=True) + 1e-8
@@ -70,8 +71,8 @@ class UnitTransformer():
     def decode(self, x):
         return x * self.std + self.mean
 
-    def transform(self, X, inverse=True, component='all'):
-        if component == 'all' or 'all-reduce':
+    def transform(self, X, inverse=True, component="all"):
+        if component == "all" or "all-reduce":
             if inverse:
                 orig_shape = X.shape
                 return (X * (self.std - 1e-8) + self.mean).view(orig_shape)
@@ -80,18 +81,23 @@ class UnitTransformer():
         else:
             if inverse:
                 orig_shape = X.shape
-                return (X * (self.std[:, component] - 1e-8) + self.mean[:, component]).view(orig_shape)
+                return (
+                    X * (self.std[:, component] - 1e-8) + self.mean[:, component]
+                ).view(orig_shape)
             else:
                 return (X - self.mean[:, component]) / self.std[:, component]
+
 
 def count_parameters(model):
     total_params = 0
     for name, parameter in model.named_parameters():
-        if not parameter.requires_grad: continue
+        if not parameter.requires_grad:
+            continue
         params = parameter.numel()
         total_params += params
     print(f"Total Trainable Params: {total_params}")
     return total_params
+
 
 @hydra.main(version_base="1.3", config_path=".", config_name="config_fix.yaml")
 def darcy_trainer(cfg: DictConfig) -> None:
@@ -132,11 +138,15 @@ def darcy_trainer(cfg: DictConfig) -> None:
     ).to(dist.device)
     count_parameters(model)
     loss_fun = TestLoss(size_average=False)
-    optimizer = AdamW(model.parameters(), lr=cfg.scheduler.initial_lr, weight_decay=cfg.scheduler.weight_decay)
+    optimizer = AdamW(
+        model.parameters(),
+        lr=cfg.scheduler.initial_lr,
+        weight_decay=cfg.scheduler.weight_decay,
+    )
     # scheduler = lr_scheduler.LambdaLR(
     #     optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate**step
     # )
-    
+
     norm_vars = cfg.normaliser
     normaliser = {
         "permeability": (norm_vars.permeability.mean, norm_vars.permeability.std_dev),
@@ -153,11 +163,16 @@ def darcy_trainer(cfg: DictConfig) -> None:
     steps_per_pseudo_epoch = ceil(
         cfg.training.pseudo_epoch_sample_size / cfg.training.batch_size
     )
-    
-    scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=cfg.scheduler.initial_lr, steps_per_epoch=steps_per_pseudo_epoch, epochs=cfg.training.max_pseudo_epochs)
-    
+
+    scheduler = lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=cfg.scheduler.initial_lr,
+        steps_per_epoch=steps_per_pseudo_epoch,
+        epochs=cfg.training.max_pseudo_epochs,
+    )
+
     x_normalizer, y_normalizer = train_dataloader.__get_normalizer__()
-    
+
     test_dataloader = Darcy2D_fix(
         resolution=cfg.training.resolution,
         batch_size=cfg.training.batch_size,
@@ -166,7 +181,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
         is_test=True,
         x_normalizer=x_normalizer,
     )
-    
+
     validator = GridValidator(loss_fun=TestLoss(size_average=False), norm=y_normalizer)
 
     ckpt_args = {
@@ -177,7 +192,6 @@ def darcy_trainer(cfg: DictConfig) -> None:
     }
     loaded_pseudo_epoch = load_checkpoint(device=dist.device, **ckpt_args)
 
-    
     validation_iters = ceil(cfg.validation.sample_size / cfg.training.batch_size)
     log_args = {
         "name_space": "train",
@@ -245,11 +259,15 @@ def darcy_trainer(cfg: DictConfig) -> None:
                         logger,
                     )
                     total_loss += val_loss
-                logger.log_epoch({"Validation error": total_loss / (validation_iters * cfg.training.batch_size)})
+                logger.log_epoch(
+                    {
+                        "Validation error": total_loss
+                        / (validation_iters * cfg.training.batch_size)
+                    }
+                )
 
         # update learning rate
         # if pseudo_epoch % cfg.scheduler.decay_pseudo_epochs == 0:
-        
 
     save_checkpoint(**ckpt_args, epoch=cfg.training.max_pseudo_epochs)
     log.success("Training completed *yay*")
