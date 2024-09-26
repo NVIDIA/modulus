@@ -1,30 +1,38 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
-# SPDX-FileCopyrightText: All rights reserved.
-# SPDX-License-Identifier: MIT License
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# ignore_header_test
+# ruff: noqa: E402
+""""""
+"""
+Transolver model. This code was modified from, https://github.com/thuml/Transolver
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+The following license is provided from their source,
 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+Copyright (c) 2024 THUML @ Tsinghua University
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 
 import hydra
 from omegaconf import DictConfig
 from math import ceil
 
 from torch.nn import MSELoss
+from utils.testloss import TestLoss
 from torch.optim import Adam, lr_scheduler
 
 from modulus.models.transolver import Transolver
@@ -39,16 +47,7 @@ from validator import GridValidator
 
 @hydra.main(version_base="1.3", config_path=".", config_name="config.yaml")
 def darcy_trainer(cfg: DictConfig) -> None:
-    """Training for the 2D Darcy flow benchmark problem.
-
-    This training script demonstrates how to set up a data-driven model for a 2D Darcy flow
-    using Fourier Neural Operators (FNO) and acts as a benchmark for this type of operator.
-    Training data is generated in-situ via the Darcy2D data loader from Modulus. Darcy2D
-    continuously generates data previously unseen by the model, i.e. the model is trained
-    over a single epoch of a training set consisting of
-    (cfg.training.max_pseudo_epochs*cfg.training.pseudo_epoch_sample_size) unique samples.
-    Pseudo_epochs were introduced to leverage the LaunchLogger and its MLFlow integration.
-    """
+    """Training for the 2D Darcy flow benchmark problem."""
     DistributedManager.initialize()  # Only call this once in the entire script!
     dist = DistributedManager()  # call if required elsewhere
 
@@ -60,7 +59,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
         experiment_desc=f"training a Transformer-based PDE solver for the Darcy problem",
         run_name=f"Darcy Transolver training",
         run_desc=f"training Transolver for Darcy",
-        user_name="Haixu Wu, Huakun Luo",
+        user_name="Haixu Wu, Huakun Luo, Haowen Wang",
         mode="offline",
     )
     LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
@@ -83,7 +82,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
         H=cfg.training.resolution,
         W=cfg.training.resolution,
     ).to(dist.device)
-    loss_fun = MSELoss(reduction="mean")
+    loss_fun = TestLoss(size_average=False)
     optimizer = Adam(model.parameters(), lr=cfg.scheduler.initial_lr)
     scheduler = lr_scheduler.LambdaLR(
         optimizer, lr_lambda=lambda step: cfg.scheduler.decay_rate**step
@@ -98,7 +97,7 @@ def darcy_trainer(cfg: DictConfig) -> None:
         batch_size=cfg.training.batch_size,
         normaliser=normaliser,
     )
-    validator = GridValidator(loss_fun=MSELoss(reduction="mean"))
+    validator = GridValidator(loss_fun=TestLoss(size_average=False), norm=normaliser)
 
     ckpt_args = {
         "path": f"./checkpoints",
