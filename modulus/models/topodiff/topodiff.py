@@ -252,7 +252,7 @@ class TopoDiff(Module):
         x = self.out_conv(silu(self.out_norm(x)))
         return x
 
-class UNetDecoder(Module): 
+class UNetEncoder(Module): 
 
     def __init__(
             self,

@@ -24,7 +24,7 @@ import numpy as np
 
 from .topodiff import TopoDiff
 from .diffusion import Diffusion
-from .utils import DatasetTopoDiff, load_data_topodiff 
+from .utils import load_data_topodiff 
 
 if __name__ == "__main__": 
     
@@ -55,10 +55,18 @@ if __name__ == "__main__":
     model = TopoDiff(64, 6, 1, model_channels=128, attn_resolutions=[16,8]).to(device)
     diffusion = Diffusion(n_steps=1000,device=device)
     
+    topologies = np.load(dataset_folder + "topologies.npy")
+    constraints = np.load(dataset_folder + "constraints.npy", allow_pickle=True)
+    stress = np.load(dataset_folder + "vonmises.npy", allow_pickle=True)
+    strain = np.load(dataset_folder + "strain_energy.npy", allow_pickle=True)
+    load_imgs = np.load(dataset_folder + "load_ims.npy")
+    img_size = topologies.shape[1]    
+    
     batch_size = args.batch_size
     data = load_data_topodiff(
         topologies, constraints, stress, strain, load_imgs, batch_size= batch_size,deterministic=False
     )
+    top, cons = next(data)
 
     lr = 1e-4 
     optimizer = AdamW(model.parameters(), lr=lr)
