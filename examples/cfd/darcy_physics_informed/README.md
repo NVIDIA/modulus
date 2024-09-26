@@ -76,6 +76,11 @@ python
 darcy_physics_informed_fno.py
 ```
 
+### Note
+
+If you are running this example outside of the Modulus container, install Modulus Sym using 
+the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
+
 ## References
 
 - [Fourier Neural Operator for Parametric Partial Differential Equations](https://arxiv.org/abs/2010.08895)
