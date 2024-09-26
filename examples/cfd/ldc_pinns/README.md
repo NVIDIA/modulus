@@ -21,7 +21,7 @@ where some of these steps are automated and abstracted, we recommend the
 
 ### Prerequisites
 
-If you are running this example outside of the Modulus container, install Modulus Sym using 
+If you are running this example outside of the Modulus container, install Modulus Sym using
 the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
 
 ### Training
