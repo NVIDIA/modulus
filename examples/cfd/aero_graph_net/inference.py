@@ -133,13 +133,16 @@ class EvalRollout:
         """
 
         for batch in self.dataloader:
-            batch = batch_as_dict(batch, self.device)
-            graph = batch["graph"]
-            # normals = normals.to(self.device, torch.float32).squeeze()
-            # areas = areas.to(self.device, torch.float32).squeeze()
-            # coeff = coeff.to(self.device, torch.float32).squeeze()
-            # sid = sid.item()
-            # self.logger.info(f"Processing sample ID {sid}")
+            graph, case_id, normals, areas, coeff = batch
+            assert len(case_id) == 1, "Only batch size 1 is currently supported."
+
+            case_id = case_id[0].item()
+            graph = graph.to(self.device)
+            normals = normals.to(self.device)[0]
+            areas = areas.to(self.device)[0]
+            coeff = coeff.to(self.device)[0]
+
+            logger.info(f"Processing case id {case_id}")
             pred = self.model(graph.ndata["x"], graph.edata["x"], graph)
             gt = graph.ndata["y"]
             pred, gt = self.dataset.denormalize(pred, gt, pred.device)
@@ -158,10 +161,7 @@ class EvalRollout:
             if save_results:
                 # Convert DGL graph to PyVista graph and save it
                 pv_graph = dgl_to_pyvista(graph.cpu())
-                assert (
-                    len(batch["name"]) == 1
-                ), "Only batch size 1 is currently supported."
-                pv_graph.save(self.output_dir / (batch["name"][0] + ".vtp"))
+                pv_graph.save(self.output_dir / f"{case_id}.vtp")
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
