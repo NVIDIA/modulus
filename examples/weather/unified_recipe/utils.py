@@ -5,8 +5,9 @@ import fsspec
 import zarr
 import numpy as np
 
+
 def get_filesystem(
-    type: str, # "file" or "s3"
+    type: str,  # "file" or "s3"
     key: str = None,
     endpoint_url: str = None,
     region_name: str = None,

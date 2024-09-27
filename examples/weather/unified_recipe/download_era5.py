@@ -89,13 +89,9 @@ def main(cfg: DictConfig) -> None:
         # TODO: Remove single_threaded when machine updated
         if cfg.dataset.single_threaded:
             with dask.config.set(scheduler="single-threaded"):
-                arco_era5.to_zarr(
-                    save_mapper, consolidated=True, encoding=encoding
-                )
+                arco_era5.to_zarr(save_mapper, consolidated=True, encoding=encoding)
         else:
-            arco_era5.to_zarr(
-                save_mapper, consolidated=True, encoding=encoding
-            )
+            arco_era5.to_zarr(save_mapper, consolidated=True, encoding=encoding)
 
 
 if __name__ == "__main__":

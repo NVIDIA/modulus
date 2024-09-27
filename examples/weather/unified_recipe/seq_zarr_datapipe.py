@@ -55,8 +55,8 @@ class SeqZarrDatapipe(Datapipe):
 
     Parameters
     ----------
-    file_mapping : str
-        File mapping
+    file_mapping : fsspec.mapping.FSMap
+        Fsspec file mapping (e.g. fsspec.get_mapper("s3://bucket/path"))
     batch_size : int, optional
         Batch size, by default 1
     num_steps : int, optional
@@ -232,7 +232,11 @@ class SeqZarrSource:
                 raise ValueError("All zarr arrays must have the same first dimension.")
 
         # Get number of samples
-        self.indices = np.arange(batch_size * world_size *((self.first_dim - self.num_steps) // batch_size // world_size))
+        self.indices = np.arange(
+            batch_size
+            * world_size
+            * ((self.first_dim - self.num_steps) // batch_size // world_size)
+        )
         self.indices = np.array_split(self.indices, world_size)[process_rank]
 
         # Get number of full batches, ignore possible last incomplete batch for now.
@@ -248,16 +252,21 @@ class SeqZarrSource:
         if self.batch:
             self._call = self._batch_call
             self.batch_mapping = np.stack(
-                np.array_split(self.indices[:len(self.indices) - len(self.indices) % self.batch_size], self.batch_size),
-                axis=1
+                np.array_split(
+                    self.indices[
+                        : len(self.indices) - len(self.indices) % self.batch_size
+                    ],
+                    self.batch_size,
+                ),
+                axis=1,
             )
         else:
             self._call = self._sample_call
 
     def _batch_call(
-        self, sample_info: dali.types.BatchInfo,
+        self,
+        sample_info: dali.types.BatchInfo,
     ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray, np.ndarray]:
-
         # Open Zarr dataset
         if self.zarr_dataset is None:
             self.zarr_dataset = zarr.open(self.file_mapping, mode="r")
@@ -278,15 +287,17 @@ class SeqZarrSource:
         for i, variable in enumerate(self.variables):
             batch_data = self.zarr_dataset[variable][time_idx]
             data.append(
-                np.reshape(batch_data, (self.batch_size, self.num_steps, *batch_data.shape[1:]))
+                np.reshape(
+                    batch_data, (self.batch_size, self.num_steps, *batch_data.shape[1:])
+                )
             )
 
         return tuple(data)
 
     def _sample_call(
-        self, sample_info: dali.types.SampleInfo,
+        self,
+        sample_info: dali.types.SampleInfo,
     ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray, np.ndarray]:
-
         # Open Zarr dataset
         if self.zarr_dataset is None:
             self.zarr_dataset = zarr.open(self.file_mapping, mode="r")
