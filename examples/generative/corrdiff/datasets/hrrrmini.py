@@ -38,6 +38,7 @@ class HRRRMiniDataset(DownscalingDataset):
         input_variables: Union[List[str], None] = None,
         output_variables: Union[List[str], None] = None,
         invariant_variables: Union[List[str], None] = ("elev_mean", "lsm_mean"),
+        **kwargs,
     ):
         # load data
         (self.input, self.input_variables) = _load_dataset(
