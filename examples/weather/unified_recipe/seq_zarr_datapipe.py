@@ -16,6 +16,7 @@
 
 from dataclasses import dataclass
 from typing import Tuple, Union
+import fsspec
 
 import numpy as np
 import torch
@@ -73,7 +74,7 @@ class SeqZarrDatapipe(Datapipe):
 
     def __init__(
         self,
-        file_mapping: str,
+        file_mapping: fsspec.mapping.FSMap,
         variables: list,
         batch_size: int = 1,
         num_steps: int = 2,
@@ -189,8 +190,8 @@ class SeqZarrSource:
 
     Parameters
     ----------
-    file_mapping : str
-        File mapping
+    file_mapping : fsspec.mapping.FSMap
+        Fsspec file mapping (e.g. fsspec.get_mapper("s3://bucket/path"))
     num_steps : int
         Number of steps to predict
     batch_size : int, optional
@@ -207,7 +208,7 @@ class SeqZarrSource:
 
     def __init__(
         self,
-        file_mapping: str,
+        file_mapping: fsspec.mapping.FSMap,
         variables: list,
         num_steps: int,
         batch_size: int = 1,
