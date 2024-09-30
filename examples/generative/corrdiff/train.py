@@ -54,9 +54,11 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
-    if hasattr(cfg, "validation_dataset"):
-        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    if hasattr(cfg, "validation"):
+        train_test_split = True
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation)
     else:
+        train_test_split = False
         validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
     fp16 = fp_optimizations == "fp16"
@@ -92,6 +94,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.training.hp.batch_size_per_gpu,
         seed=0,
         validation_dataset_cfg=validation_dataset_cfg,
+        train_test_split=train_test_split,
     )
 
     # Parse image configuration & update model args
