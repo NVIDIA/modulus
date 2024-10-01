@@ -24,7 +24,7 @@ hp:
     # Training duration based on the number of processed samples
     total_batch_size: 256
     # Total batch size
-    batch_size_per_gpu: 256
+    batch_size_per_gpu: "auto"
     # Batch size per GPU
     lr_rampup: 0
     # Rampup for learning rate, in number of samples

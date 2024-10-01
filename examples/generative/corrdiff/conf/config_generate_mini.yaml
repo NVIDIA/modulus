@@ -17,7 +17,7 @@
 hydra:
   job:
     chdir: true
-    name: regression  # choose from [regression, diffusion, patched_diffusion]
+    name: mini_generation
   run:
     dir: ./outputs/${hydra:job.name}
 
@@ -25,17 +25,12 @@ hydra:
 defaults:
 
   # Dataset
-  - dataset/cwb_train
+  - dataset/hrrrmini
 
-  # Model
-  - model/corrdiff_regression
-  #- model/corrdiff_diffusion
-  #- model/corrdiff_patched_diffusion
+  # Sampler
+  - sampler/stochastic
+  #- sampler/deterministic
 
-  # Training
-  - training/corrdiff_regression
-  #- training/corrdiff_diffusion
-  #- training/corrdiff_patched_diffusion
-
-  # Validation (comment out to disable validation)
-  - validation/cwb
+  # Generation
+  - generation/mini
+    #- generation/patched_based

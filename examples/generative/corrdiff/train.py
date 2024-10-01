@@ -54,15 +54,24 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
-    if hasattr(cfg, "validation_dataset"):
-        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    if hasattr(cfg, "validation"):
+        train_test_split = True
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation)
     else:
+        train_test_split = False
         validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
     logger.info(f"Saving the outputs in {os.getcwd()}")
+    checkpoint_dir = os.path.join(
+        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
+    )
+    if cfg.training.hp.batch_size_per_gpu == "auto":
+        cfg.training.hp.batch_size_per_gpu = (
+            cfg.training.hp.total_batch_size // dist.world_size
+        )
 
     # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
     set_seed(dist.rank)
@@ -85,6 +94,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.training.hp.batch_size_per_gpu,
         seed=0,
         validation_dataset_cfg=validation_dataset_cfg,
+        train_test_split=train_test_split,
     )
 
     # Parse image configuration & update model args
@@ -130,16 +140,16 @@ def main(cfg: DictConfig) -> None:
             "img_channels": img_out_channels,
             "gridtype": "sinusoidal",
             "N_grid_channels": 4,
-            "scale_cond_input": cfg.model.scale_cond_input,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "learnable",
             "N_grid_channels": 100,
-            "scale_cond_input": cfg.model.scale_cond_input,
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
+    if cfg.model.name in ("diffusion", "patched_diffusion"):
+        model_args["scale_cond_input"] = cfg.model.scale_cond_input
     if hasattr(cfg.model, "model_args"):  # override defaults from config file
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
     if cfg.model.name == "regression":
@@ -171,7 +181,7 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
@@ -215,7 +225,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
     try:
         cur_nimg = load_checkpoint(
-            path=f"checkpoints_{cfg.model.name}",
+            path=checkpoint_dir,
             models=model,
             optimizer=optimizer,
             device=dist.device,
@@ -402,7 +412,7 @@ def main(cfg: DictConfig) -> None:
             rank_0_only=True,
         ):
             save_checkpoint(
-                path=f"checkpoints_{cfg.model.name}",
+                path=checkpoint_dir,
                 models=model,
                 optimizer=optimizer,
                 epoch=cur_nimg,

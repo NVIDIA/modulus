@@ -14,28 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression  # choose from [regression, diffusion, patched_diffusion]
-  run:
-    dir: ./outputs/${hydra:job.name}
-
-# Get defaults
 defaults:
+  - base
 
-  # Dataset
-  - dataset/cwb_train
+num_ensembles: 2
+  # Number of ensembles to generate per input
+seed_batch_size: 1
+  # Size of the batched inference
+inference_mode: all
+  # Choose between "all" (regression + diffusion), "regression" or "diffusion"
+hr_mean_conditioning: True
+gridtype: "sinusoidal"
+N_grid_channels: 4
+sample_res: full
+  # Sampling resolution
+times_range: null
+times:
+  - 2020-02-02T00:00:00
 
-  # Model
-  - model/corrdiff_regression
-  #- model/corrdiff_diffusion
-  #- model/corrdiff_patched_diffusion
-
-  # Training
-  - training/corrdiff_regression
-  #- training/corrdiff_diffusion
-  #- training/corrdiff_patched_diffusion
-
-  # Validation (comment out to disable validation)
-  - validation/cwb
+io:
+  res_ckpt_filename: diffusion_checkpoint.mdlus
+    # Checkpoint filename for the diffusion model  
+  reg_ckpt_filename: regression_checkpoint.mdlus
+    # Checkpoint filename for the mean predictor model

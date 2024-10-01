@@ -259,23 +259,27 @@ def main(cfg: DictConfig) -> None:
                 return image_out
 
     # generate images
-    logger0.info("Generating images...")
+    output_path = getattr(cfg.generation.io, "output_filename", "corrdiff_output.nc")
+    logger0.info(f"Generating images, saving results to {output_path}...")
     batch_size = 1
-    warmup_steps = min(len(times), 2)
+    warmup_steps = min(len(times) - 1, 2)
     # Generates model predictions from the input data using the specified
     # `generate_fn`, and save the predictions to the provided NetCDF file. It iterates
     # through the dataset using a data loader, computes predictions, and saves them along
     # with associated metadata.
-    with nc.Dataset(f"output_{dist.rank}.nc", "w") as f:
+    if dist.rank == 0:
+        f = nc.Dataset(output_path, "w")
         # add attributes
         f.cfg = str(cfg)
-        with torch.cuda.profiler.profile():
-            with torch.autograd.profiler.emit_nvtx():
 
-                data_loader = torch.utils.data.DataLoader(
-                    dataset=dataset, sampler=sampler, batch_size=1, pin_memory=True
-                )
-                time_index = -1
+    with torch.cuda.profiler.profile():
+        with torch.autograd.profiler.emit_nvtx():
+
+            data_loader = torch.utils.data.DataLoader(
+                dataset=dataset, sampler=sampler, batch_size=1, pin_memory=True
+            )
+            time_index = -1
+            if dist.rank == 0:
                 writer = NetCDFWriter(
                     f,
                     lat=dataset.latitude(),
@@ -283,10 +287,6 @@ def main(cfg: DictConfig) -> None:
                     input_channels=dataset.input_channels(),
                     output_channels=dataset.output_channels(),
                 )
-                warmup_steps = 2
-
-                start = torch.cuda.Event(enable_timing=True)
-                end = torch.cuda.Event(enable_timing=True)
 
                 # Initialize threadpool for writers
                 writer_executor = ThreadPoolExecutor(
@@ -294,61 +294,65 @@ def main(cfg: DictConfig) -> None:
                 )
                 writer_threads = []
 
-                times = dataset.time()
-                for image_tar, image_lr, index in iter(data_loader):
-                    time_index += 1
-                    if dist.rank == 0:
-                        logger0.info(f"starting index: {time_index}")
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
 
-                    if time_index == warmup_steps:
-                        start.record()
-
-                    # continue
-                    image_lr = (
-                        image_lr.to(device=device)
-                        .to(torch.float32)
-                        .to(memory_format=torch.channels_last)
-                    )
-                    image_tar = image_tar.to(device=device).to(torch.float32)
-                    image_out = generate_fn()
-
-                    if dist.rank == 0:
-                        batch_size = image_out.shape[0]
-                        # write out data in a seperate thread so we don't hold up inferencing
-                        writer_threads.append(
-                            writer_executor.submit(
-                                save_images,
-                                writer,
-                                dataset,
-                                list(times),
-                                image_out.cpu(),
-                                image_tar.cpu(),
-                                image_lr.cpu(),
-                                time_index,
-                                index[0],
-                            )
-                        )
-                end.record()
-                end.synchronize()
-                elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
-                timed_steps = time_index + 1 - warmup_steps
+            times = dataset.time()
+            for image_tar, image_lr, index in iter(data_loader):
+                time_index += 1
                 if dist.rank == 0:
-                    average_time_per_batch_element = (
-                        elapsed_time / timed_steps / batch_size
-                    )
-                    logger.info(
-                        f"Total time to run {timed_steps} and {batch_size} ensembles = {elapsed_time} s"
-                    )
-                    logger.info(
-                        f"Average time per batch element = {average_time_per_batch_element} s"
-                    )
+                    logger0.info(f"starting index: {time_index}")
 
-                # make sure all the workers are done writing
+                if time_index == warmup_steps:
+                    start.record()
+
+                # continue
+                image_lr = (
+                    image_lr.to(device=device)
+                    .to(torch.float32)
+                    .to(memory_format=torch.channels_last)
+                )
+                image_tar = image_tar.to(device=device).to(torch.float32)
+                image_out = generate_fn()
+
+                if dist.rank == 0:
+                    batch_size = image_out.shape[0]
+                    # write out data in a seperate thread so we don't hold up inferencing
+                    writer_threads.append(
+                        writer_executor.submit(
+                            save_images,
+                            writer,
+                            dataset,
+                            list(times),
+                            image_out.cpu(),
+                            image_tar.cpu(),
+                            image_lr.cpu(),
+                            time_index,
+                            index[0],
+                        )
+                    )
+            end.record()
+            end.synchronize()
+            elapsed_time = start.elapsed_time(end) / 1000.0  # Convert ms to s
+            timed_steps = time_index + 1 - warmup_steps
+            if dist.rank == 0:
+                average_time_per_batch_element = elapsed_time / timed_steps / batch_size
+                logger.info(
+                    f"Total time to run {timed_steps} steps and {batch_size} members = {elapsed_time} s"
+                )
+                logger.info(
+                    f"Average time per batch element = {average_time_per_batch_element} s"
+                )
+
+            # make sure all the workers are done writing
+            if dist.rank == 0:
                 for thread in list(writer_threads):
                     thread.result()
                     writer_threads.remove(thread)
                 writer_executor.shutdown()
 
+    if dist.rank == 0:
+        f.close()
     logger0.info("Generation Completed.")
 
 
