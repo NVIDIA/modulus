@@ -15,11 +15,22 @@
 # limitations under the License.
 
 defaults:
-  - activation: null
+  - modules/encoder@encoder: unet_enc
+  - modules/decoder@decoder: unet_dec
 
-_target_: modulus.models.dlwp_healpix_layers.healpix_blocks.BasicConvBlock
-in_channels: 3
-out_channels: 2
-kernel_size: 1
-dilation: 1
-n_layers: 1
+_target_: modulus.models.dlwp_healpix.HEALPixUNet
+_recursive_: false
+presteps: 0
+input_time_dim: ${data.input_time_dim}
+output_time_dim: ${data.output_time_dim}
+couplings: ${..data.module.couplings}
+
+# Parameters automatically overridden in train code
+input_channels: 1
+output_channels: 1
+n_constants: 1
+decoder_input_channels: 1
+
+# some perf parameters
+enable_nhwc: false
+enable_healpixpad: false
