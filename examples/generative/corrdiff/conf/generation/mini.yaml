@@ -14,9 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+defaults:
+  - base
 
-__version__ = "0.9.0a0"
+num_ensembles: 2
+  # Number of ensembles to generate per input
+seed_batch_size: 1
+  # Size of the batched inference
+inference_mode: all
+  # Choose between "all" (regression + diffusion), "regression" or "diffusion"
+hr_mean_conditioning: True
+gridtype: "sinusoidal"
+N_grid_channels: 4
+sample_res: full
+  # Sampling resolution
+times_range: null
+times:
+  - 2020-02-02T00:00:00
+
+io:
+  res_ckpt_filename: diffusion_checkpoint.mdlus
+    # Checkpoint filename for the diffusion model  
+  reg_ckpt_filename: regression_checkpoint.mdlus
+    # Checkpoint filename for the mean predictor model

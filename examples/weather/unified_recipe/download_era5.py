@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import datetime
-
 import dask
 import fsspec
 import hydra
@@ -23,6 +22,8 @@ import numpy as np
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from omegaconf import DictConfig, OmegaConf
+
+from utils import get_filesystem
 
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
@@ -38,6 +39,17 @@ def main(cfg: DictConfig) -> None:
         cfg.dataset.single_level_variables = []
     if not cfg.dataset.pressure_level_variables:
         cfg.dataset.pressure_level_variables = []
+
+    # Get fsspec filesystem
+    save_fs = get_filesystem(
+        cfg.filesystem.type,
+        cfg.filesystem.key,
+        cfg.filesystem.endpoint_url,
+        cfg.filesystem.region_name,
+    )
+
+    # Get file system mapper
+    save_mapper = save_fs.get_mapper(cfg.dataset.dataset_filename)
 
     # Get ARCO ERA5 dataset
     arco_filename = (
@@ -77,13 +89,9 @@ def main(cfg: DictConfig) -> None:
         # TODO: Remove single_threaded when machine updated
         if cfg.dataset.single_threaded:
             with dask.config.set(scheduler="single-threaded"):
-                arco_era5.to_zarr(
-                    cfg.dataset.dataset_filename, consolidated=True, encoding=encoding
-                )
+                arco_era5.to_zarr(save_mapper, consolidated=True, encoding=encoding)
         else:
-            arco_era5.to_zarr(
-                cfg.dataset.dataset_filename, consolidated=True, encoding=encoding
-            )
+            arco_era5.to_zarr(save_mapper, consolidated=True, encoding=encoding)
 
 
 if __name__ == "__main__":

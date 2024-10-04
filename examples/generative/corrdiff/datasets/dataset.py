@@ -34,6 +34,7 @@ def init_train_valid_datasets_from_config(
     batch_size: int = 1,
     seed: int = 0,
     validation_dataset_cfg: Union[dict, None] = None,
+    train_test_split: bool = True,
 ) -> Tuple[
     base.DownscalingDataset,
     Iterable,
@@ -55,14 +56,13 @@ def init_train_valid_datasets_from_config(
     """
 
     config = copy.deepcopy(dataset_cfg)
-    train_test_split = config.pop("train_test_split", True)
     (dataset, dataset_iter) = init_dataset_from_config(
         config, dataloader_cfg, batch_size=batch_size, seed=seed
     )
     if train_test_split:
         valid_dataset_cfg = copy.deepcopy(config)
-        validation_dataset_cfg = {"train": False, "all_times": False}
-        valid_dataset_cfg.update(validation_dataset_cfg)
+        if validation_dataset_cfg:
+            valid_dataset_cfg.update(validation_dataset_cfg)
         (valid_dataset, valid_dataset_iter) = init_dataset_from_config(
             valid_dataset_cfg, dataloader_cfg, batch_size=batch_size, seed=seed
         )

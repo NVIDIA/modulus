@@ -14,9 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .datapipes.datapipe import Datapipe
-from .datapipes.meta import DatapipeMetaData
-from .models.meta import ModelMetaData
-from .models.module import Module
+hydra:
+  job:
+    chdir: true
+    name: mini_generation
+  run:
+    dir: ./outputs/${hydra:job.name}
 
-__version__ = "0.9.0a0"
+# Get defaults
+defaults:
+
+  # Dataset
+  - dataset/hrrrmini
+
+  # Sampler
+  - sampler/stochastic
+  #- sampler/deterministic
+
+  # Generation
+  - generation/mini
+    #- generation/patched_based

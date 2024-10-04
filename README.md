@@ -275,10 +275,11 @@ optional dependencies can be found in the
 ### NVCR Container
 
 The recommended Modulus docker image can be pulled from the
-[NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus):
+[NVIDIA Container Registry](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/containers/modulus)
+(refer to the NGC registry for the latest tag):
 
 ```Bash
-docker pull nvcr.io/nvidia/modulus/modulus:24.04
+docker pull nvcr.io/nvidia/modulus/modulus:24.09
 ```
 
 Inside the container, you can clone the Modulus git repositories and get started with the
@@ -287,7 +288,7 @@ examples from this repo.
 
 ```bash
 docker run --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --runtime nvidia \
---rm -it nvcr.io/nvidia/modulus/modulus:24.04 bash
+--rm -it nvcr.io/nvidia/modulus/modulus:24.09 bash
 git clone https://github.com/NVIDIA/modulus.git
 cd modulus/examples/cfd/darcy_fno/
 pip install warp-lang # install NVIDIA Warp to run the darcy example
