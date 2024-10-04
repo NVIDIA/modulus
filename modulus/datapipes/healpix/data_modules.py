@@ -987,7 +987,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     constants=self.constants is not None,
                     batch_size=self.batch_size,
                 )
-                
+
                 dataset = dataset.sel(
                     channel_in=self.input_variables,
                     channel_out=self.output_variables,
