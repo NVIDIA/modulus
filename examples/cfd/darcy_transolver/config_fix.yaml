@@ -61,4 +61,4 @@ training:
 
 validation:
   sample_size: 200
-  validation_pseudo_epochs: 10
+  validation_pseudo_epochs: 2

@@ -25,7 +25,9 @@ In this case, the trainset and testset are fixed after the construction of Datas
 
 ## Additional Information
 
-More components are added for convenience. Validators calculate the loss between ground-truth and prediction, and visualize them in `mlruns`. Below is a simple example of visualization.
+In the fixed case, extra data is needed for training and the data path should be added when Darcy_2D_fix dataset is constructed. You can download the data [here](https://drive.google.com/drive/folders/1UnbQh2WWc6knEHbLn-ZaXrKUZhp7pjt-).
+
+More components are added for convenience. `Validators` calculate the loss between ground-truth and prediction, and visualize them in `./mlruns`. Below is a simple example of visualization.
 
 [![visualization](https://s21.ax1x.com/2024/09/26/pAlis3T.png)](https://imgse.com/i/pAlis3T)
 

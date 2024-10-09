@@ -1,36 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
-# SPDX-License-Identifier: MIT License
+# SPDX-License-Identifier: Apache-2.0
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-from dataclasses import dataclass
-
-import numpy as np
 import torch
+import numpy as np
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
-
-import modulus  # noqa: F401 for docs
-
-from ..meta import ModelMetaData
-from ..module import Module
 from .Embedding import timestep_embedding
 from .Physics_Attention import Physics_Attention_Structured_Mesh_2D
 
@@ -224,13 +211,13 @@ class Model(nn.Module):
         gridx = gridx.reshape(1, size_x, 1, 1).repeat([batchsize, 1, size_y, 1])
         gridy = torch.tensor(np.linspace(0, 1, size_y), dtype=torch.float)
         gridy = gridy.reshape(1, 1, size_y, 1).repeat([batchsize, size_x, 1, 1])
-        grid = torch.cat((gridx, gridy), dim=-1).cuda()  # B H W 2
+        grid = torch.cat((gridx, gridy), dim=-1)  # B H W 2
 
         gridx = torch.tensor(np.linspace(0, 1, self.ref), dtype=torch.float)
         gridx = gridx.reshape(1, self.ref, 1, 1).repeat([batchsize, 1, self.ref, 1])
         gridy = torch.tensor(np.linspace(0, 1, self.ref), dtype=torch.float)
         gridy = gridy.reshape(1, 1, self.ref, 1).repeat([batchsize, self.ref, 1, 1])
-        grid_ref = torch.cat((gridx, gridy), dim=-1).cuda()  # B H W 8 8 2
+        grid_ref = torch.cat((gridx, gridy), dim=-1)  # B H W 8 8 2
 
         pos = (
             torch.sqrt(
@@ -247,8 +234,10 @@ class Model(nn.Module):
 
     def forward(self, x, fx, T=None):
         if self.unified_pos:
-            x = self.pos.repeat(x.shape[0], 1, 1, 1).reshape(
-                x.shape[0], self.H * self.W, self.ref * self.ref
+            x = (
+                self.pos.repeat(x.shape[0], 1, 1, 1)
+                .reshape(x.shape[0], self.H * self.W, self.ref * self.ref)
+                .to(x.device)
             )
         if fx is not None:
             fx = torch.cat((x, fx), -1)
@@ -266,6 +255,21 @@ class Model(nn.Module):
             fx = block(fx)
 
         return fx
+
+
+from dataclasses import dataclass
+from functools import partial
+from typing import List
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+import modulus  # noqa: F401 for docs
+import modulus.models.layers.fft as fft
+
+from ..meta import ModelMetaData
+from ..module import Module
 
 
 @dataclass
@@ -360,6 +364,8 @@ class Transolver(Module):
         W: int,
     ) -> None:
         super().__init__(meta=MetaData())
+        self.H = H
+        self.W = W
         self.model = Model(
             space_dim=space_dim,
             n_layers=n_layers,
@@ -399,5 +405,5 @@ class Transolver(Module):
 
         """
         y = self.model(x, fx, T)
-        y = y.reshape(x.shape[0], x.shape[1], x.shape[2], -1)
+        y = y.reshape(x.shape[0], self.H, self.W, -1)
         return y

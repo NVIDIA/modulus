@@ -152,6 +152,13 @@ def darcy_trainer(cfg: DictConfig) -> None:
         "permeability": (norm_vars.permeability.mean, norm_vars.permeability.std_dev),
         "darcy": (norm_vars.darcy.mean, norm_vars.darcy.std_dev),
     }
+    # train_dataloader = Darcy2D_fix(
+    #     resolution=cfg.training.resolution,
+    #     batch_size=cfg.training.batch_size,
+    #     normaliser=normaliser,
+    #     train_path="/data/fno/piececonst_r421_N1024_smooth1.mat",
+    #     is_test=False,
+    # )
     train_dataloader = Darcy2D_fix(
         resolution=cfg.training.resolution,
         batch_size=cfg.training.batch_size,
@@ -215,7 +222,6 @@ def darcy_trainer(cfg: DictConfig) -> None:
     )
     def forward_train(pos, x, y, y_normalizer):
         pred = model(pos, fx=x.unsqueeze(-1)).squeeze(-1)
-        # pred = y_normalizer.decode(pred)
         pred = y_normalizer.decode(pred)
         loss = loss_fun(pred, y)
         return loss
