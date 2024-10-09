@@ -6,6 +6,8 @@ Transolver model. This code was modified from, https://github.com/thuml/Transolv
 
 The following license is provided from their source,
 
+MIT License
+
 Copyright (c) 2024 THUML @ Tsinghua University
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
