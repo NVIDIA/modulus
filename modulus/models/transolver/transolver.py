@@ -29,10 +29,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import torch
+from dataclasses import dataclass
+
 import numpy as np
+import torch
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
+
+import modulus  # noqa: F401 for docs
+
+from ..meta import ModelMetaData
+from ..module import Module
 from .Embedding import timestep_embedding
 from .Physics_Attention import Physics_Attention_Structured_Mesh_2D
 
@@ -270,21 +277,6 @@ class Model(nn.Module):
             fx = block(fx)
 
         return fx
-
-
-from dataclasses import dataclass
-from functools import partial
-from typing import List
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-import modulus  # noqa: F401 for docs
-import modulus.models.layers.fft as fft
-
-from ..meta import ModelMetaData
-from ..module import Module
 
 
 @dataclass

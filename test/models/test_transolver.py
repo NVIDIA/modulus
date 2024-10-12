@@ -57,7 +57,7 @@ def test_transolver_forward(device):
             pos,
             invar,
         ),
-        file_name=f"transolver_output.pth",
+        file_name="transolver_output.pth",
         atol=1e-3,
     )
 

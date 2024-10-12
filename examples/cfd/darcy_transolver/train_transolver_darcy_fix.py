@@ -24,12 +24,12 @@ from utils.testloss import TestLoss
 from torch.optim import Adam, lr_scheduler, AdamW
 
 from modulus.models.transolver import Transolver
-from modulus.datapipes.benchmarks.darcy_fix import Darcy2D_fix
 from modulus.distributed import DistributedManager
 from modulus.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.launch.logging import PythonLogger, LaunchLogger, initialize_mlflow
 
+from darcy_datapipe_fix import Darcy2D_fix
 from validator_fix import GridValidator
 
 
