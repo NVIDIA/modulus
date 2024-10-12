@@ -39,7 +39,7 @@ jobs:
     # This job only runs for pull request comments
     # Comment must be `/blossom-ci`
     if: >
-         github.event.comment.body == '/blossom-ci' &&
+         (github.event.comment.body == '/blossom-ci' || github.event.comment.body == '/multi-gpu-ci') &&
          (
            github.actor == 'nickgeneva' ||
            github.actor == 'ktangsali' ||

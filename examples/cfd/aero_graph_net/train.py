@@ -139,9 +139,12 @@ class MGNTrainer:
 
     def forward(self, batch):
         # forward pass
-        graph = batch["graph"]
+        batch = dict(batch)
+        graph = batch.pop("graph")
         with self.autocast():
-            pred = batch_as_dict(self.model(graph.ndata["x"], graph.edata["x"], graph))
+            pred = batch_as_dict(
+                self.model(graph.ndata["x"], graph.edata["x"], graph, **batch)
+            )
             # Graph data (e.g. p and WSS) loss.
             graph_loss = self.loss.graph(pred["graph"], graph.ndata["y"])
             losses = {"graph": graph_loss}
@@ -168,8 +171,10 @@ class MGNTrainer:
         losses_agg = defaultdict(float)
         for batch in self.validation_dataloader:
             batch = batch_as_dict(batch, self.dist.device)
-            graph = batch["graph"]
-            pred = batch_as_dict(self.model(graph.ndata["x"], graph.edata["x"], graph))
+            graph = batch.pop("graph")
+            pred = batch_as_dict(
+                self.model(graph.ndata["x"], graph.edata["x"], graph, **batch)
+            )
             pred_g, gt_g = self.dataset.denormalize(
                 pred["graph"], graph.ndata["y"], self.dist.device
             )

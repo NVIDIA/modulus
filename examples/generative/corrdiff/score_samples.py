@@ -42,8 +42,13 @@ variables:
 """
 # %%
 import sys
-
+import os
 import dask.diagnostics
+import dask
+import multiprocessing
+import tqdm
+import argparse
+from functools import partial
 
 import xarray as xr
 
@@ -75,17 +80,18 @@ def open_samples(f):
     return truth, pred, root
 
 
-if __name__ == "__main__":
-    path = sys.argv[1]
-
+# compute metrics in parallel for performance reasons
+def process(i, path, n_ensemble):
     truth, pred, root = open_samples(path)
-    pred = pred.chunk(time=1)
-    truth = truth.chunk(time=1)
-
+    truth = truth.isel(time=slice(i, i + 1)).load()
+    if n_ensemble > 0:
+        pred = pred.isel(time=slice(i, i + 1), ensemble=slice(0, n_ensemble))
+    pred = pred.load()
     dim = ["x", "y"]
 
     a = xskillscore.rmse(truth, pred.mean("ensemble"), dim=dim)
     b = xskillscore.crps_ensemble(truth, pred, member_dim="ensemble", dim=dim)
+
     c = pred.std("ensemble").mean(dim)
     crps_mean = xskillscore.crps_ensemble(
         truth,
@@ -94,8 +100,42 @@ if __name__ == "__main__":
         dim=dim,
     )
 
-    metrics = xr.concat([a, b, c, crps_mean], dim="metric").assign_coords(
-        metric=["rmse", "crps", "std_dev", "mae"]
+    metrics = (
+        xr.concat([a, b, c, crps_mean], dim="metric")
+        .assign_coords(metric=["rmse", "crps", "std_dev", "mae"])
+        .load()
     )
-    with dask.diagnostics.ProgressBar():
-        metrics.to_netcdf(sys.argv[2], mode="w")
+    return metrics
+
+
+def main(path: str, output: str, n_ensemble: int == -1):
+
+    truth, pred, root = open_samples(path)
+
+    with multiprocessing.Pool(32) as pool:
+        metrics = []
+        for metric in tqdm.tqdm(
+            pool.imap(
+                partial(process, path=path, n_ensemble=n_ensemble),
+                range(truth.sizes["time"]),
+            ),
+            total=truth.sizes["time"],
+        ):
+            metrics.append(metric)
+
+    metrics = xr.concat(metrics, dim="time")
+    metrics.attrs["n_ensemble"] = n_ensemble
+
+    # to netcdf with single threaded scheduler to avoid deadlocks
+    with dask.config.set(scheduler="single-threaded"):
+        metrics.to_netcdf(output, mode="w")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", type=str)
+    parser.add_argument("output", type=str)
+    parser.add_argument("--n-ensemble", type=int, default=-1)
+    args = parser.parse_args()
+
+    main(args.path, args.output, args.n_ensemble)

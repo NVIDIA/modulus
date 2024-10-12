@@ -68,7 +68,7 @@ class SongUNet(Module):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : Union[List[int], int]
         The resolution of the input/output image, 1 value represents a square image.
@@ -111,18 +111,18 @@ class SongUNet(Module):
         How many layers should use gradient checkpointing, 0 is None
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
@@ -135,7 +135,7 @@ class SongUNet(Module):
 
     def __init__(
         self,
-        img_resolution: int,
+        img_resolution: Union[List[int], int],
         in_channels: int,
         out_channels: int,
         label_dim: int = 0,
@@ -406,7 +406,7 @@ class SongUNetPosEmbd(SongUNet):
     type, embedding type, etc., making it flexible and adaptable to different tasks
     and configurations.
 
-    Parameters:
+    Parameters
     -----------
     img_resolution : Union[List[int], int]
         The resolution of the input/output image, 1 value represents a square image.
@@ -429,7 +429,7 @@ class SongUNetPosEmbd(SongUNet):
     attn_resolutions : List[int], optional
         Resolutions at which self-attention layers are applied. By default [16].
     dropout : float, optional
-        Dropout probability applied to intermediate activations. By default 0.10.
+        Dropout probability applied to intermediate activations. By default 0.13.
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
@@ -447,18 +447,18 @@ class SongUNetPosEmbd(SongUNet):
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
 
 
-    Note:
-    -----
+    Reference
+    ----------
     Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
-    Note:
+    Note
     -----
     Equivalent to the original implementation by Song et al., available at
     https://github.com/yang-song/score_sde_pytorch
 
-    Example:
+    Example
     --------
     >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
     >>> noise_labels = torch.randn([1])
@@ -477,11 +477,11 @@ class SongUNetPosEmbd(SongUNet):
         label_dim: int = 0,
         augment_dim: int = 0,
         model_channels: int = 128,
-        channel_mult: List[int] = [1, 2, 2, 2],
+        channel_mult: List[int] = [1, 2, 2, 2, 2],
         channel_mult_emb: int = 4,
         num_blocks: int = 4,
-        attn_resolutions: List[int] = [16],
-        dropout: float = 0.10,
+        attn_resolutions: List[int] = [28],
+        dropout: float = 0.13,
         label_dropout: float = 0.0,
         embedding_type: str = "positional",
         channel_mult_noise: int = 1,
