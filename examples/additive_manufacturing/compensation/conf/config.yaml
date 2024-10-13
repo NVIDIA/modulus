@@ -1,0 +1,31 @@
+general:
+  seed: 1234
+  random_sample: True
+  cuda: True
+  use_distributed: True
+  sync_batch: True
+  use_multigpu: True # Default: False for D, True for G
+
+train_dis_options:
+  model_path: './pretrained/11parts_lr-3/pred_model_0000.pth'
+  log_dir: './pretrained/11parts_lr-3/'
+  save_path: './pretrained/11parts_lr-3/'
+  num_epoch: 15001
+  num_batch: 2
+  learning_rate: 0.0001
+  pretrain: False
+  num_points: 190000
+
+train_gen_options:
+  num_points: 190000
+  pred_model_path: "./pretrained/ocardo_iso_p500k/pred_model_3000.pth"   # For D
+  gen_model_path: "./pretrained/ocardo_iso_p500k/pred_model_3000.pth"    # For G
+  log_dir: './pretrained/ocardo_iso_p500k/'
+  save_path: './pretrained/ocardo_iso_p500k/'
+  num_epoch: 50001
+  num_batch: 1
+  learning_rate: 0.001
+
+data_options:
+  dataset_name: "Ocardo" # choices=['Ocardo', 'Bar']
+  data_path: './data'
