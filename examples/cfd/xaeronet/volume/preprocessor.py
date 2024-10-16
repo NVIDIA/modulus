@@ -44,7 +44,10 @@ from omegaconf import DictConfig
 
 from sdf import signed_distance_field
 
-def unstructured2voxel(unstructured_grid, grid_size, bounds, write=False, output_filename='image.vti'):
+
+def unstructured2voxel(
+    unstructured_grid, grid_size, bounds, write=False, output_filename="image.vti"
+):
     """Converts an unstructured grid to a voxel grid (structured grid) using resampling."""
     resampler = vtk.vtkResampleToImage()
     resampler.AddInputDataObject(unstructured_grid)
@@ -66,7 +69,10 @@ def unstructured2voxel(unstructured_grid, grid_size, bounds, write=False, output
 
     return voxel_grid
 
-def convert_to_triangular_mesh(polydata, write=False, output_filename='surface_mesh_triangular.vtu'):
+
+def convert_to_triangular_mesh(
+    polydata, write=False, output_filename="surface_mesh_triangular.vtu"
+):
     """Converts a vtkPolyData object to a triangular mesh."""
     tet_filter = vtkDataSetTriangleFilter()
     tet_filter.SetInputData(polydata)
@@ -78,6 +84,7 @@ def convert_to_triangular_mesh(polydata, write=False, output_filename='surface_m
         tet_mesh.save(output_filename)
 
     return tet_mesh
+
 
 def extract_surface_triangles(tet_mesh):
     """Extracts the surface triangles from a triangular mesh."""
@@ -96,12 +103,14 @@ def extract_surface_triangles(tet_mesh):
 
     return triangle_indices
 
+
 def fetch_mesh_vertices(mesh):
     """Fetches the vertices of a mesh."""
     points = mesh.GetPoints()
     num_points = points.GetNumberOfPoints()
     vertices = [points.GetPoint(i) for i in range(num_points)]
     return vertices
+
 
 def get_cell_centers(voxel_grid):
     """Extracts the cell centers from a voxel grid."""
@@ -114,15 +123,26 @@ def get_cell_centers(voxel_grid):
     centers = [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
     return np.array(centers)
 
+
 def process_file(task):
     """Process a single pair of VTU and VTP/STL files and save the output."""
-    vtu_path, surface_mesh_path, grid_size, bounds, output_dir, surface_mesh_file_format, save_vti = task
+    (
+        vtu_path,
+        surface_mesh_path,
+        grid_size,
+        bounds,
+        output_dir,
+        surface_mesh_file_format,
+        save_vti,
+    ) = task
 
     vtu_mesh = read_vtu(vtu_path)
 
-    grid_size_expanded = tuple(s + 1 for s in grid_size) # Add 1 to each dimension for the voxel grid
+    grid_size_expanded = tuple(
+        s + 1 for s in grid_size
+    )  # Add 1 to each dimension for the voxel grid
     voxel_grid = unstructured2voxel(vtu_mesh, grid_size_expanded, bounds)
-    if surface_mesh_file_format == 'vtp':
+    if surface_mesh_file_format == "vtp":
         surface_mesh = read_vtp(surface_mesh_path)
         surface_mesh = convert_to_triangular_mesh(surface_mesh)
     else:
@@ -131,91 +151,123 @@ def process_file(task):
     surface_vertices = fetch_mesh_vertices(surface_mesh)
     volume_vertices = get_cell_centers(voxel_grid)
 
-    sdf, dsdf = signed_distance_field(surface_vertices, triangle_indices, volume_vertices, include_hit_points=True)
+    sdf, dsdf = signed_distance_field(
+        surface_vertices, triangle_indices, volume_vertices, include_hit_points=True
+    )
 
     sdf = sdf.numpy()
     dsdf = dsdf.numpy()
     dsdf = -(dsdf - volume_vertices)
-    dsdf = dsdf / np.linalg.norm(
-            dsdf, axis=1, keepdims=True
-            )
+    dsdf = dsdf / np.linalg.norm(dsdf, axis=1, keepdims=True)
 
     voxel_grid = pv.wrap(voxel_grid).point_data_to_cell_data()
     data = voxel_grid.cell_data
-    U = _vtk.vtk_to_numpy(data['UMeanTrim'])
-    p = _vtk.vtk_to_numpy(data['pMeanTrim'])
+    U = _vtk.vtk_to_numpy(data["UMeanTrim"])
+    p = _vtk.vtk_to_numpy(data["pMeanTrim"])
 
     # Reshape the arrays according to the voxel grid dimensions
     volume_vertices = np.transpose(volume_vertices)
     sdf = np.expand_dims(sdf, axis=0)
     U = np.transpose(U)
     p = np.expand_dims(p, axis=0)
-    volume_vertices = volume_vertices.reshape(3, *grid_size, order='F')
-    sdf = sdf.reshape(1, *grid_size, order='F')
+    volume_vertices = volume_vertices.reshape(3, *grid_size, order="F")
+    sdf = sdf.reshape(1, *grid_size, order="F")
     dsdf = np.transpose(dsdf)
-    dsdf = dsdf.reshape(3, *grid_size, order='F')
-    U = U.reshape(3, *grid_size, order='F')
-    p = p.reshape(1, *grid_size, order='F')
+    dsdf = dsdf.reshape(3, *grid_size, order="F")
+    U = U.reshape(3, *grid_size, order="F")
+    p = p.reshape(1, *grid_size, order="F")
 
     # Create a merged array maintaining the voxel shape
     merged_array = np.concatenate([volume_vertices, sdf, dsdf, U, p], axis=0)
     os.makedirs(output_dir, exist_ok=True)
-    output_filename = os.path.join(output_dir, os.path.basename(vtu_path).replace('.vtu', '.h5'))
+    output_filename = os.path.join(
+        output_dir, os.path.basename(vtu_path).replace(".vtu", ".h5")
+    )
 
-    with h5py.File(output_filename, 'w') as hf:
-        hf.create_dataset('data', data=merged_array)
+    with h5py.File(output_filename, "w") as hf:
+        hf.create_dataset("data", data=merged_array)
 
-    # Optionally save voxel grid as .vti for debugging 
+    # Optionally save voxel grid as .vti for debugging
     if save_vti:
-        voxel_grid.cell_data['SDF'] = sdf.flatten(order='F')
-        voxel_grid.cell_data['DSDFx'] = dsdf[0].flatten(order='F')
-        voxel_grid.cell_data['DSDFy'] = dsdf[1,:].flatten(order='F')
-        voxel_grid.cell_data['DSDFz'] = dsdf[2,:].flatten(order='F')
-        vti_filename = os.path.join(output_dir, os.path.basename(vtu_path).replace('.vtu', '.vti'))
+        voxel_grid.cell_data["SDF"] = sdf.flatten(order="F")
+        voxel_grid.cell_data["DSDFx"] = dsdf[0].flatten(order="F")
+        voxel_grid.cell_data["DSDFy"] = dsdf[1, :].flatten(order="F")
+        voxel_grid.cell_data["DSDFz"] = dsdf[2, :].flatten(order="F")
+        vti_filename = os.path.join(
+            output_dir, os.path.basename(vtu_path).replace(".vtu", ".vti")
+        )
         voxel_grid.save(vti_filename)
 
-def process_directory(data_path, output_base_path, grid_size, bounds=None, surface_mesh_file_format='stl', num_workers=16, save_vti=False):
+
+def process_directory(
+    data_path,
+    output_base_path,
+    grid_size,
+    bounds=None,
+    surface_mesh_file_format="stl",
+    num_workers=16,
+    save_vti=False,
+):
     """Process all VTU and VTP files in the given directory using multiprocessing with progress tracking."""
     tasks = []
     for root, _, files in os.walk(data_path):
-        vtu_files = [f for f in files if f.endswith('.vtu')]
+        vtu_files = [f for f in files if f.endswith(".vtu")]
         for vtu_file in vtu_files:
             vtu_path = os.path.join(root, vtu_file)
-            if surface_mesh_file_format == 'vtp':
-                surface_mesh_path = vtu_path.replace('.vtu', '.vtp')
-            elif surface_mesh_file_format == 'stl':
-                vtu_id = vtu_file[len('volume_'):-len('.vtu')]  # Extract the ID part
+            if surface_mesh_file_format == "vtp":
+                surface_mesh_path = vtu_path.replace(".vtu", ".vtp")
+            elif surface_mesh_file_format == "stl":
+                vtu_id = vtu_file[len("volume_") : -len(".vtu")]  # Extract the ID part
                 surface_mesh_file = f"drivaer_{vtu_id}.stl"
                 surface_mesh_path = os.path.join(root, surface_mesh_file)
             else:
-                raise ValueError(f"Unsupported surface mesh file format: {surface_mesh_file_format}")
+                raise ValueError(
+                    f"Unsupported surface mesh file format: {surface_mesh_file_format}"
+                )
 
             if os.path.exists(surface_mesh_path):
                 relative_path = os.path.relpath(root, data_path)
                 output_dir = os.path.join(output_base_path, relative_path)
-                tasks.append((vtu_path, surface_mesh_path, grid_size, bounds, output_dir, surface_mesh_file_format, save_vti))
+                tasks.append(
+                    (
+                        vtu_path,
+                        surface_mesh_path,
+                        grid_size,
+                        bounds,
+                        output_dir,
+                        surface_mesh_file_format,
+                        save_vti,
+                    )
+                )
             else:
-                print(f"Warning: Corresponding surface mesh file not found for {vtu_path}")
+                print(
+                    f"Warning: Corresponding surface mesh file not found for {vtu_path}"
+                )
 
     # Use multiprocessing to process the tasks with progress tracking
     with Pool(num_workers) as pool:
         # Use imap_unordered to process tasks as they complete
-        for _ in tqdm(pool.imap_unordered(process_file, tasks), total=len(tasks), desc="Processing Files", unit="file"):
+        for _ in tqdm(
+            pool.imap_unordered(process_file, tasks),
+            total=len(tasks),
+            desc="Processing Files",
+            unit="file",
+        ):
             pass
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    process_directory(to_absolute_path(cfg.data_path),
-                      to_absolute_path(cfg.h5_path),
-                      (cfg.num_voxels_x, cfg.num_voxels_y, cfg.num_voxels_z),
-                      (cfg.grid_origin_x, cfg.grid_origin_y, cfg.grid_origin_z),
-                      surface_mesh_file_format='stl',
-                      num_workers=cfg.num_preprocess_workers,
-                      save_vti=cfg.save_vti
-                      )
+    process_directory(
+        to_absolute_path(cfg.data_path),
+        to_absolute_path(cfg.h5_path),
+        (cfg.num_voxels_x, cfg.num_voxels_y, cfg.num_voxels_z),
+        (cfg.grid_origin_x, cfg.grid_origin_y, cfg.grid_origin_z),
+        surface_mesh_file_format="stl",
+        num_workers=cfg.num_preprocess_workers,
+        save_vti=cfg.save_vti,
+    )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-
-    

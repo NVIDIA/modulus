@@ -37,19 +37,25 @@ from torch.utils.data import Dataset, DataLoader
 
 
 # Get the absolute path to the parent directory
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from utils import find_h5_files
 
+
 class H5Dataset(Dataset):  # TODO: Use a Dali datapipe for better performance
+
+    """
+    Custom dataset class for loading
+
+    Parameters:
+    ----------
+        file_list (list of str): List of paths to .h5 files.
+        mean (np.ndarray): Global mean for normalization.
+        std (np.ndarray): Global standard deviation for normalization.
+    """
+
     def __init__(self, file_list, mean, std, nan_to_0=True):
-        """
-        Args:
-            file_list (list of str): List of paths to .h5 files.
-            mean (np.ndarray): Global mean for normalization.
-            std (np.ndarray): Global standard deviation for normalization.
-        """
         self.file_list = file_list
         self.mean = mean
         self.std = std
@@ -60,8 +66,8 @@ class H5Dataset(Dataset):  # TODO: Use a Dali datapipe for better performance
 
     def __getitem__(self, idx):
         file_path = self.file_list[idx]
-        with h5py.File(file_path, 'r') as hf:
-            data = hf['data'][:]
+        with h5py.File(file_path, "r") as hf:
+            data = hf["data"][:]
 
         # Normalize data using z-score
         data = (data - self.mean[:, None, None, None]) / self.std[:, None, None, None]
@@ -75,10 +81,21 @@ class H5Dataset(Dataset):  # TODO: Use a Dali datapipe for better performance
 
         return data_tensor
 
-def create_dataloader(file_list, mean, std, sampler, nan_to_0=True, batch_size=1, num_workers=4, pin_memory=True, prefetch_factor=2):
+
+def create_dataloader(
+    file_list,
+    mean,
+    std,
+    sampler,
+    nan_to_0=True,
+    batch_size=1,
+    num_workers=4,
+    pin_memory=True,
+    prefetch_factor=2,
+):
     """
     Creates a DataLoader for the H5Dataset with prefetching.
-    
+
     Args:
         file_list (list of str): List of paths to .h5 files.
         mean (np.ndarray): Global mean for normalization.
@@ -87,7 +104,7 @@ def create_dataloader(file_list, mean, std, sampler, nan_to_0=True, batch_size=1
         num_workers (int): Number of worker processes for data loading.
         pin_memory (bool): If True, the data loader will copy tensors into CUDA pinned memory.
         prefetch_factor (int): Number of samples to prefetch.
-    
+
     Returns:
         DataLoader: Configured DataLoader for the dataset.
     """
@@ -98,25 +115,28 @@ def create_dataloader(file_list, mean, std, sampler, nan_to_0=True, batch_size=1
         num_workers=num_workers,
         pin_memory=pin_memory,
         prefetch_factor=prefetch_factor,
-        sampler=sampler
+        sampler=sampler,
     )
     return dataloader
 
-if __name__ == '__main__':
-    data_path = 'drivaer_aws_h5'
-    stats_file = 'global_stats.json'
+
+if __name__ == "__main__":
+    data_path = "drivaer_aws_h5"
+    stats_file = "global_stats.json"
 
     # Load global statistics
-    with open(stats_file, 'r') as f:
+    with open(stats_file, "r") as f:
         stats = json.load(f)
-    mean = np.array(stats['mean'])
-    std = np.array(stats['std_dev'])
+    mean = np.array(stats["mean"])
+    std = np.array(stats["std_dev"])
 
     # Find all .h5 files in the directory
     file_list = find_h5_files(data_path)
 
     # Create DataLoader
-    dataloader = create_dataloader(file_list, mean, std, nan_to_0=True, batch_size=2, num_workers=1)
+    dataloader = create_dataloader(
+        file_list, mean, std, nan_to_0=True, batch_size=2, num_workers=1
+    )
 
     # Example usage
     for batch in dataloader:

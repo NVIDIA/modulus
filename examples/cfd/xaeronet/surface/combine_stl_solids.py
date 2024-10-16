@@ -29,6 +29,7 @@ from tqdm import tqdm
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 
+
 def process_stl_file(task):
     stl_path = task
 
@@ -55,11 +56,12 @@ def process_stl_file(task):
 
     return f"Processed: {stl_path} -> {output_file_path}"
 
+
 def process_directory(data_path, num_workers=16):
     """Process all STL files in the given directory using multiprocessing with progress tracking."""
     tasks = []
     for root, _, files in os.walk(data_path):
-        stl_files = [f for f in files if f.endswith('.stl')]
+        stl_files = [f for f in files if f.endswith(".stl")]
         for stl_file in stl_files:
             stl_path = os.path.join(root, stl_file)
 
@@ -68,13 +70,22 @@ def process_directory(data_path, num_workers=16):
 
     # Use multiprocessing to process the tasks with progress tracking
     with Pool(num_workers) as pool:
-        for _ in tqdm(pool.imap_unordered(process_stl_file, tasks), total=len(tasks), desc="Processing STL Files", unit="file"):
+        for _ in tqdm(
+            pool.imap_unordered(process_stl_file, tasks),
+            total=len(tasks),
+            desc="Processing STL Files",
+            unit="file",
+        ):
             pass
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     # Process the directory with multiple STL files
-    process_directory(to_absolute_path(cfg.data_path), num_workers=cfg.num_preprocess_workers)
+    process_directory(
+        to_absolute_path(cfg.data_path), num_workers=cfg.num_preprocess_workers
+    )
+
 
 if __name__ == "__main__":
     main()

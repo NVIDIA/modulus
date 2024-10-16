@@ -46,7 +46,9 @@ from modulus.datapipes.cae.readers import read_vtp
 from modulus.sym.geometry.tessellation import Tessellation
 
 
-def convert_to_triangular_mesh(polydata, write=False, output_filename='surface_mesh_triangular.vtu'):
+def convert_to_triangular_mesh(
+    polydata, write=False, output_filename="surface_mesh_triangular.vtu"
+):
     """Converts a vtkPolyData object to a triangular mesh."""
     tet_filter = vtk.vtkDataSetTriangleFilter()
     tet_filter.SetInputData(polydata)
@@ -58,6 +60,7 @@ def convert_to_triangular_mesh(polydata, write=False, output_filename='surface_m
         tet_mesh.save(output_filename)
 
     return tet_mesh
+
 
 def extract_surface_triangles(tet_mesh):
     """Extracts the surface triangles from a triangular mesh."""
@@ -84,71 +87,83 @@ def fetch_mesh_vertices(mesh):
     vertices = [points.GetPoint(i) for i in range(num_points)]
     return vertices
 
+
 def add_edge_features(graph):
-        """
-        Add relative displacement and displacement norm as edge features to the graph.
-        The calculations are done using the 'pos' attribute in the
-        node data of each graph. The resulting edge features are stored in the 'x' attribute
-        in the edge data of each graph.
+    """
+    Add relative displacement and displacement norm as edge features to the graph.
+    The calculations are done using the 'pos' attribute in the
+    node data of each graph. The resulting edge features are stored in the 'x' attribute
+    in the edge data of each graph.
 
-        This method will modify the graph in-place.
+    This method will modify the graph in-place.
 
-        Returns
-        -------
-        dgl.DGLGraph
-            Graph with updated edge features.
-        """
+    Returns
+    -------
+    dgl.DGLGraph
+        Graph with updated edge features.
+    """
 
-        pos = graph.ndata.get("coordinates")
-        if pos is None:
-            raise ValueError(
-                "'coordinates' does not exist in the node data of one or more graphs."
-            )
+    pos = graph.ndata.get("coordinates")
+    if pos is None:
+        raise ValueError(
+            "'coordinates' does not exist in the node data of one or more graphs."
+        )
 
-        row, col = graph.edges()
-        row = row.long()
-        col = col.long()
+    row, col = graph.edges()
+    row = row.long()
+    col = col.long()
 
-        disp = pos[row] - pos[col]
-        disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
-        graph.edata["x"] = torch.cat((disp, disp_norm), dim=-1)
+    disp = pos[row] - pos[col]
+    disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
+    graph.edata["x"] = torch.cat((disp, disp_norm), dim=-1)
 
-        return graph
+    return graph
+
 
 # Define this function outside of any local scope so it can be pickled
 def run_task(params):
     """Wrapper function to unpack arguments for process_run."""
     return process_run(*params)
 
+
 def process_partition(graph, num_partitions, halo_hops):
     """
     Helper function to partition a single graph and include node and edge features.
     """
     # Perform the partitioning
-    partitioned = dgl.metis_partition(graph, k=num_partitions, extra_cached_hops=halo_hops, reshuffle=True)
+    partitioned = dgl.metis_partition(
+        graph, k=num_partitions, extra_cached_hops=halo_hops, reshuffle=True
+    )
 
     # For each partition, restore node and edge features
     partition_list = []
     for _, subgraph in partitioned.items():
-        subgraph.ndata['coordinates'] = graph.ndata['coordinates'][subgraph.ndata[dgl.NID]]
-        subgraph.ndata['normals'] = graph.ndata['normals'][subgraph.ndata[dgl.NID]]
-        subgraph.ndata['area'] = graph.ndata['area'][subgraph.ndata[dgl.NID]]
-        subgraph.ndata['pressure'] = graph.ndata['pressure'][subgraph.ndata[dgl.NID]]
-        subgraph.ndata['shear_stress'] = graph.ndata['shear_stress'][subgraph.ndata[dgl.NID]]
-        if 'x' in graph.edata:
-            subgraph.edata['x'] = graph.edata['x'][subgraph.edata[dgl.EID]]
+        subgraph.ndata["coordinates"] = graph.ndata["coordinates"][
+            subgraph.ndata[dgl.NID]
+        ]
+        subgraph.ndata["normals"] = graph.ndata["normals"][subgraph.ndata[dgl.NID]]
+        subgraph.ndata["area"] = graph.ndata["area"][subgraph.ndata[dgl.NID]]
+        subgraph.ndata["pressure"] = graph.ndata["pressure"][subgraph.ndata[dgl.NID]]
+        subgraph.ndata["shear_stress"] = graph.ndata["shear_stress"][
+            subgraph.ndata[dgl.NID]
+        ]
+        if "x" in graph.edata:
+            subgraph.edata["x"] = graph.edata["x"][subgraph.edata[dgl.EID]]
 
         partition_list.append(subgraph)
-    
+
     return partition_list
 
-def process_run(run_path, num_points, node_degree, num_partitions, halo_hops, save_point_cloud=False):
+
+def process_run(
+    run_path, num_points, node_degree, num_partitions, halo_hops, save_point_cloud=False
+):
     """Process a single run directory to generate the graph and apply partitioning."""
-    run_id = os.path.basename(run_path).split('_')[-1]
-    
+    run_id = os.path.basename(run_path).split("_")[-1]
+
     stl_file = os.path.join(run_path, f"drivaer_{run_id}_single_solid.stl")
     vtp_file = os.path.join(run_path, f"boundary_{run_id}.vtp")
-    
+
     # Path to save the list of partitions
     partition_file_path = to_absolute_path(f"partitions/graph_partitions_{run_id}.bin")
 
@@ -159,7 +174,7 @@ def process_run(run_path, num_points, node_degree, num_partitions, halo_hops, sa
     if not os.path.exists(stl_file) or not os.path.exists(vtp_file):
         print(f"Warning: Missing files for run {run_id}. Skipping...")
         return
-    
+
     try:
         # Load the STL and VTP files
         obj = Tessellation.from_stl(stl_file, airtight=False)
@@ -168,28 +183,34 @@ def process_run(run_path, num_points, node_degree, num_partitions, halo_hops, sa
         surface_vertices = fetch_mesh_vertices(surface_mesh)
         surface_mesh = surface_mesh.cell_data_to_point_data()
         node_attributes = surface_mesh.point_data
-        pressure_ref = node_attributes['pMeanTrim']
-        shear_stress_ref = node_attributes['wallShearStressMeanTrim']
+        pressure_ref = node_attributes["pMeanTrim"]
+        shear_stress_ref = node_attributes["wallShearStressMeanTrim"]
 
         # Sample the boundary points
         boundary = obj.sample_boundary(num_points)
-        points = np.concatenate([boundary['x'], boundary['y'], boundary['z']], axis=1)
-        normals = np.concatenate([boundary['normal_x'], boundary['normal_y'], boundary['normal_z']], axis=1)
-    
+        points = np.concatenate([boundary["x"], boundary["y"], boundary["z"]], axis=1)
+        normals = np.concatenate(
+            [boundary["normal_x"], boundary["normal_y"], boundary["normal_z"]], axis=1
+        )
+
     except Exception as e:
         print(f"Error processing run {run_id}: {e}. Skipping this run...")
         return
 
     try:
         # Interpolate the pressure and shear stress values
-        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(surface_vertices)
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(
+            surface_vertices
+        )
         _, indices = nbrs.kneighbors(points)
         indices = indices.flatten()
         pressure = pressure_ref[indices]
         shear_stress = shear_stress_ref[indices]
 
         # Construct the graph
-        nbrs = NearestNeighbors(n_neighbors=node_degree + 1, algorithm='ball_tree').fit(points)
+        nbrs = NearestNeighbors(n_neighbors=node_degree + 1, algorithm="ball_tree").fit(
+            points
+        )
         _, indices = nbrs.kneighbors(points)
         src = [i for i in range(num_points) for _ in range(node_degree)]
         dst = indices[:, 1:].flatten()
@@ -198,11 +219,13 @@ def process_run(run_path, num_points, node_degree, num_partitions, halo_hops, sa
         graph = dgl.to_simple(graph)
         graph = dgl.to_bidirected(graph, copy_ndata=True)
         graph = dgl.add_self_loop(graph)
-        graph.ndata['coordinates'] = torch.tensor(points, dtype=torch.float32)
-        graph.ndata['normals'] = torch.tensor(normals, dtype=torch.float32)
-        graph.ndata['area'] = torch.tensor(boundary['area'], dtype=torch.float32)
-        graph.ndata['pressure'] = torch.tensor(pressure, dtype=torch.float32).unsqueeze(-1)
-        graph.ndata['shear_stress'] = torch.tensor(shear_stress, dtype=torch.float32)
+        graph.ndata["coordinates"] = torch.tensor(points, dtype=torch.float32)
+        graph.ndata["normals"] = torch.tensor(normals, dtype=torch.float32)
+        graph.ndata["area"] = torch.tensor(boundary["area"], dtype=torch.float32)
+        graph.ndata["pressure"] = torch.tensor(pressure, dtype=torch.float32).unsqueeze(
+            -1
+        )
+        graph.ndata["shear_stress"] = torch.tensor(shear_stress, dtype=torch.float32)
         graph = add_edge_features(graph)
 
         # Partition the graph and gather the partitions into a list
@@ -212,40 +235,65 @@ def process_run(run_path, num_points, node_degree, num_partitions, halo_hops, sa
         save_graphs(partition_file_path, partitioned_graphs)
 
         if save_point_cloud:
-            point_cloud = pv.PolyData(graph.ndata['coordinates'].numpy())
-            point_cloud['coordinates'] = graph.ndata['coordinates'].numpy()
-            point_cloud['normals'] = graph.ndata['normals'].numpy()
-            point_cloud['area'] = graph.ndata['area'].numpy()
-            point_cloud['pressure'] = graph.ndata['pressure'].numpy()
-            point_cloud['shear_stress'] = graph.ndata['shear_stress'].numpy()
-            point_cloud.save(f'point_clouds/point_cloud_{run_id}.vtp')
+            point_cloud = pv.PolyData(graph.ndata["coordinates"].numpy())
+            point_cloud["coordinates"] = graph.ndata["coordinates"].numpy()
+            point_cloud["normals"] = graph.ndata["normals"].numpy()
+            point_cloud["area"] = graph.ndata["area"].numpy()
+            point_cloud["pressure"] = graph.ndata["pressure"].numpy()
+            point_cloud["shear_stress"] = graph.ndata["shear_stress"].numpy()
+            point_cloud.save(f"point_clouds/point_cloud_{run_id}.vtp")
 
     except Exception as e:
-        print(f"Error while constructing graph or saving data for run {run_id}: {e}. Skipping this run...")
+        print(
+            f"Error while constructing graph or saving data for run {run_id}: {e}. Skipping this run..."
+        )
         return
 
-def process_all_runs(base_path, num_points, node_degree, num_partitions, halo_hops, num_workers=16, save_point_cloud=False):
+
+def process_all_runs(
+    base_path,
+    num_points,
+    node_degree,
+    num_partitions,
+    halo_hops,
+    num_workers=16,
+    save_point_cloud=False,
+):
     """Process all runs in the base directory in parallel."""
 
-    run_dirs = [os.path.join(base_path, d) for d in os.listdir(base_path) if d.startswith('run_') and os.path.isdir(os.path.join(base_path, d))]
+    run_dirs = [
+        os.path.join(base_path, d)
+        for d in os.listdir(base_path)
+        if d.startswith("run_") and os.path.isdir(os.path.join(base_path, d))
+    ]
 
-    tasks = [(run_dir, num_points, node_degree, num_partitions, halo_hops, save_point_cloud) for run_dir in run_dirs]
-    
+    tasks = [
+        (run_dir, num_points, node_degree, num_partitions, halo_hops, save_point_cloud)
+        for run_dir in run_dirs
+    ]
+
     with ProcessPoolExecutor(max_workers=num_workers) as pool:
-        for _ in tqdm(pool.map(run_task, tasks), total=len(tasks), desc="Processing Runs", unit="run"):
+        for _ in tqdm(
+            pool.map(run_task, tasks),
+            total=len(tasks),
+            desc="Processing Runs",
+            unit="run",
+        ):
             pass
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    process_all_runs(base_path=to_absolute_path(cfg.data_path),
-                     num_points=cfg.num_nodes,
-                     node_degree=cfg.node_degree,
-                     num_partitions=cfg.num_partitions,
-                     halo_hops=cfg.num_message_passing_layers,
-                     num_workers=cfg.num_preprocess_workers,
-                     save_point_cloud=cfg.save_point_clouds
-                     )
+    process_all_runs(
+        base_path=to_absolute_path(cfg.data_path),
+        num_points=cfg.num_nodes,
+        node_degree=cfg.node_degree,
+        num_partitions=cfg.num_partitions,
+        halo_hops=cfg.num_message_passing_layers,
+        num_workers=cfg.num_preprocess_workers,
+        save_point_cloud=cfg.save_point_clouds,
+    )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-    

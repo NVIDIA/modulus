@@ -1,4 +1,3 @@
-
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -48,11 +47,17 @@ from modulus.launch.logging import initialize_wandb
 from modulus.models.meshgraphnet import MeshGraphNet
 
 # Get the absolute path to the parent directory
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from dataloader import create_dataloader
-from utils import find_bin_files, save_checkpoint, load_checkpoint, count_trainable_params
+from utils import (
+    find_bin_files,
+    save_checkpoint,
+    load_checkpoint,
+    count_trainable_params,
+)
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -87,41 +92,59 @@ def main(cfg: DictConfig) -> None:
     valid_dataset = find_bin_files(to_absolute_path(cfg.validation_partitions_path))
 
     # Prepare the stats
-    with open(to_absolute_path(cfg.stats_file), 'r') as f:
+    with open(to_absolute_path(cfg.stats_file), "r") as f:
         stats = json.load(f)
-    mean = stats['mean']
-    std = stats['std_dev']
+    mean = stats["mean"]
+    std = stats["std_dev"]
 
     # Create DataLoader
-    train_dataloader = create_dataloader(train_dataset, mean, std, batch_size=1, prefetch_factor=None, use_ddp=True, num_workers=4)
+    train_dataloader = create_dataloader(
+        train_dataset,
+        mean,
+        std,
+        batch_size=1,
+        prefetch_factor=None,
+        use_ddp=True,
+        num_workers=4,
+    )
     # graphs is a list of graphs, each graph is a list of partitions
     graphs = [graph_partitions for graph_partitions, _ in train_dataloader]
 
     if dist.rank == 0:
-        validation_dataloader = create_dataloader(valid_dataset, mean, std, batch_size=1, prefetch_factor=None, use_ddp=False, num_workers=4)
-        validation_graphs = [graph_partitions for graph_partitions, _ in validation_dataloader]
+        validation_dataloader = create_dataloader(
+            valid_dataset,
+            mean,
+            std,
+            batch_size=1,
+            prefetch_factor=None,
+            use_ddp=False,
+            num_workers=4,
+        )
+        validation_graphs = [
+            graph_partitions for graph_partitions, _ in validation_dataloader
+        ]
         validation_ids = [id[0] for _, id in validation_dataloader]
         print(f"Training dataset size: {len(graphs)*dist.world_size}")
         print(f"Validation dataset size: {len(validation_dataloader)}")
 
     ######################################
-                # Training #
+    # Training #
     ######################################
 
     # Initialize model
     model = MeshGraphNet(
-            input_dim_nodes=6,
-            input_dim_edges=4,
-            output_dim=4,
-            processor_size=cfg.num_message_passing_layers,
-            aggregation="sum",
-            hidden_dim_node_encoder=256,
-            hidden_dim_edge_encoder=256,
-            hidden_dim_node_decoder=256,
-            mlp_activation_fn="relu",
-            do_concat_trick=True,
-            num_processor_checkpoint_segments=3,
-        ).to(device)
+        input_dim_nodes=6,
+        input_dim_edges=4,
+        output_dim=4,
+        processor_size=cfg.num_message_passing_layers,
+        aggregation="sum",
+        hidden_dim_node_encoder=256,
+        hidden_dim_edge_encoder=256,
+        hidden_dim_node_decoder=256,
+        mlp_activation_fn="relu",
+        do_concat_trick=True,
+        num_processor_checkpoint_segments=3,
+    ).to(device)
     print(f"Number of trainable parameters: {count_trainable_params(model)}")
 
     # DistributedDataParallel wrapper
@@ -138,12 +161,16 @@ def main(cfg: DictConfig) -> None:
 
     # Optimizer and scheduler
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=2000, eta_min=1e-6)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=2000, eta_min=1e-6
+    )
     scaler = GradScaler()
     print("Instantiated the model and optimizer")
 
     # Check if there's a checkpoint to resume from
-    start_epoch, _ = load_checkpoint(model, optimizer, scaler, scheduler, cfg.checkpoint_filename)
+    start_epoch, _ = load_checkpoint(
+        model, optimizer, scaler, scheduler, cfg.checkpoint_filename
+    )
 
     # Training loop
     print("Training started")
@@ -156,12 +183,19 @@ def main(cfg: DictConfig) -> None:
             for j in range(cfg.num_partitions):
                 with torch.autocast(amp_device, enabled=True, dtype=amp_dtype):
                     part = subgraphs[j].to(device)
-                    ndata = torch.cat((part.ndata['coordinates'], part.ndata['normals']), dim=1)
+                    ndata = torch.cat(
+                        (part.ndata["coordinates"], part.ndata["normals"]), dim=1
+                    )
                     pred = model(ndata, part.edata["x"], part)
-                    pred_filtered = pred[part.ndata['inner_node'].bool(), :]
-                    target = torch.cat((part.ndata['pressure'], part.ndata['shear_stress']), dim=1)
-                    target_filtered = target[part.ndata['inner_node'].bool()]
-                    loss = torch.mean((pred_filtered - target_filtered) ** 2) / cfg.num_partitions
+                    pred_filtered = pred[part.ndata["inner_node"].bool(), :]
+                    target = torch.cat(
+                        (part.ndata["pressure"], part.ndata["shear_stress"]), dim=1
+                    )
+                    target_filtered = target[part.ndata["inner_node"].bool()]
+                    loss = (
+                        torch.mean((pred_filtered - target_filtered) ** 2)
+                        / cfg.num_partitions
+                    )
                     total_loss += loss.item()
                 scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -172,8 +206,10 @@ def main(cfg: DictConfig) -> None:
 
         # Log the training loss
         if dist.rank == 0:
-            current_lr = optimizer.param_groups[0]['lr']
-            print(f"Epoch {epoch+1}, Learning Rate: {current_lr}, Total Loss: {total_loss / len(graphs)}")
+            current_lr = optimizer.param_groups[0]["lr"]
+            print(
+                f"Epoch {epoch+1}, Learning Rate: {current_lr}, Total Loss: {total_loss / len(graphs)}"
+            )
             writer.add_scalar("training_loss", total_loss / len(graphs), epoch)
             writer.add_scalar("learning_rate", current_lr, epoch)
 
@@ -182,93 +218,166 @@ def main(cfg: DictConfig) -> None:
             if dist.world_size > 1:
                 torch.distributed.barrier()
             if dist.rank == 0:
-                save_checkpoint(model, optimizer, scaler, scheduler, epoch + 1, loss.item(), cfg.checkpoint_filename)
+                save_checkpoint(
+                    model,
+                    optimizer,
+                    scaler,
+                    scheduler,
+                    epoch + 1,
+                    loss.item(),
+                    cfg.checkpoint_filename,
+                )
 
         ######################################
-                    # Validation #
+        # Validation #
         ######################################
 
         if dist.rank == 0 and epoch % cfg.validation_freq == 0:
             valid_loss = 0
-        
+
             for i in range(len(validation_graphs)):
                 # Placeholder to accumulate predictions and node features for the full graph's nodes
-                num_nodes = sum([subgraph.num_nodes() for subgraph in validation_graphs[i]])
-                
+                num_nodes = sum(
+                    [subgraph.num_nodes() for subgraph in validation_graphs[i]]
+                )
+
                 # Initialize accumulators for predictions and node features
-                pressure_pred = torch.zeros((num_nodes, 1), dtype=torch.float32, device=device)
-                shear_stress_pred = torch.zeros((num_nodes, 3), dtype=torch.float32, device=device)
-                pressure_true = torch.zeros((num_nodes, 1), dtype=torch.float32, device=device)
-                shear_stress_true = torch.zeros((num_nodes, 3), dtype=torch.float32, device=device)
-                coordinates = torch.zeros((num_nodes, 3), dtype=torch.float32, device=device)
-                normals = torch.zeros((num_nodes, 3), dtype=torch.float32, device=device)
+                pressure_pred = torch.zeros(
+                    (num_nodes, 1), dtype=torch.float32, device=device
+                )
+                shear_stress_pred = torch.zeros(
+                    (num_nodes, 3), dtype=torch.float32, device=device
+                )
+                pressure_true = torch.zeros(
+                    (num_nodes, 1), dtype=torch.float32, device=device
+                )
+                shear_stress_true = torch.zeros(
+                    (num_nodes, 3), dtype=torch.float32, device=device
+                )
+                coordinates = torch.zeros(
+                    (num_nodes, 3), dtype=torch.float32, device=device
+                )
+                normals = torch.zeros(
+                    (num_nodes, 3), dtype=torch.float32, device=device
+                )
                 area = torch.zeros((num_nodes, 1), dtype=torch.float32, device=device)
 
                 # Accumulate predictions and node features from all partitions
                 for j in range(cfg.num_partitions):
                     part = validation_graphs[i][j].to(device)
-                    
+
                     # Get node features (coordinates and normals)
-                    ndata = torch.cat((part.ndata['coordinates'], part.ndata['normals']), dim=1)
-                    
+                    ndata = torch.cat(
+                        (part.ndata["coordinates"], part.ndata["normals"]), dim=1
+                    )
+
                     with torch.no_grad():
                         with torch.autocast(amp_device, enabled=True, dtype=amp_dtype):
                             pred = model(ndata, part.edata["x"], part)
-                            pred_filtered = pred[part.ndata['inner_node'].bool()]
-                            target = torch.cat((part.ndata['pressure'], part.ndata['shear_stress']), dim=1)
-                            target_filtered = target[part.ndata['inner_node'].bool()]
-                            loss = torch.mean((pred_filtered - target_filtered) ** 2) / cfg.num_partitions
+                            pred_filtered = pred[part.ndata["inner_node"].bool()]
+                            target = torch.cat(
+                                (part.ndata["pressure"], part.ndata["shear_stress"]),
+                                dim=1,
+                            )
+                            target_filtered = target[part.ndata["inner_node"].bool()]
+                            loss = (
+                                torch.mean((pred_filtered - target_filtered) ** 2)
+                                / cfg.num_partitions
+                            )
                             valid_loss += loss.item()
 
                             # Store the predictions based on the original node IDs (using `dgl.NID`)
                             original_nodes = part.ndata[dgl.NID]
-                            inner_original_nodes = original_nodes[part.ndata['inner_node'].bool()]
-                            
+                            inner_original_nodes = original_nodes[
+                                part.ndata["inner_node"].bool()
+                            ]
+
                             # Accumulate the predictions
-                            pressure_pred[inner_original_nodes] = pred_filtered[:, 0:1].clone().to(torch.float32)
-                            shear_stress_pred[inner_original_nodes] = pred_filtered[:, 1:].clone().to(torch.float32)
+                            pressure_pred[inner_original_nodes] = (
+                                pred_filtered[:, 0:1].clone().to(torch.float32)
+                            )
+                            shear_stress_pred[inner_original_nodes] = (
+                                pred_filtered[:, 1:].clone().to(torch.float32)
+                            )
 
                             # Accumulate the ground truth
-                            pressure_true[inner_original_nodes] = target_filtered[:, 0:1].clone().to(torch.float32)
-                            shear_stress_true[inner_original_nodes] = target_filtered[:, 1:].clone().to(torch.float32)
-                            
+                            pressure_true[inner_original_nodes] = (
+                                target_filtered[:, 0:1].clone().to(torch.float32)
+                            )
+                            shear_stress_true[inner_original_nodes] = (
+                                target_filtered[:, 1:].clone().to(torch.float32)
+                            )
+
                             # Accumulate the node features
-                            coordinates[original_nodes] = part.ndata['coordinates'].clone().to(torch.float32)
-                            normals[original_nodes] = part.ndata['normals'].clone().to(torch.float32)
-                            area[original_nodes] = part.ndata['area'].clone().to(torch.float32)
+                            coordinates[original_nodes] = (
+                                part.ndata["coordinates"].clone().to(torch.float32)
+                            )
+                            normals[original_nodes] = (
+                                part.ndata["normals"].clone().to(torch.float32)
+                            )
+                            area[original_nodes] = (
+                                part.ndata["area"].clone().to(torch.float32)
+                            )
 
                 # Denormalize predictions and node features using the global stats
-                pressure_pred_denorm = (pressure_pred.cpu() * torch.tensor(std['pressure'])) + torch.tensor(mean['pressure'])
-                shear_stress_pred_denorm = (shear_stress_pred.cpu() * torch.tensor(std['shear_stress'])) + torch.tensor(mean['shear_stress'])
-                pressure_true_denorm = (pressure_true.cpu() * torch.tensor(std['pressure'])) + torch.tensor(mean['pressure'])
-                shear_stress_true_denorm = (shear_stress_true.cpu() * torch.tensor(std['shear_stress'])) + torch.tensor(mean['shear_stress'])
-                coordinates_denorm = (coordinates.cpu() * torch.tensor(std['coordinates'])) + torch.tensor(mean['coordinates'])
-                normals_denorm = (normals.cpu() * torch.tensor(std['normals'])) + torch.tensor(mean['normals'])
-                area_denorm = (area.cpu() * torch.tensor(std['area'])) + torch.tensor(mean['area'])
+                pressure_pred_denorm = (
+                    pressure_pred.cpu() * torch.tensor(std["pressure"])
+                ) + torch.tensor(mean["pressure"])
+                shear_stress_pred_denorm = (
+                    shear_stress_pred.cpu() * torch.tensor(std["shear_stress"])
+                ) + torch.tensor(mean["shear_stress"])
+                pressure_true_denorm = (
+                    pressure_true.cpu() * torch.tensor(std["pressure"])
+                ) + torch.tensor(mean["pressure"])
+                shear_stress_true_denorm = (
+                    shear_stress_true.cpu() * torch.tensor(std["shear_stress"])
+                ) + torch.tensor(mean["shear_stress"])
+                coordinates_denorm = (
+                    coordinates.cpu() * torch.tensor(std["coordinates"])
+                ) + torch.tensor(mean["coordinates"])
+                normals_denorm = (
+                    normals.cpu() * torch.tensor(std["normals"])
+                ) + torch.tensor(mean["normals"])
+                area_denorm = (area.cpu() * torch.tensor(std["area"])) + torch.tensor(
+                    mean["area"]
+                )
 
                 # Save the full point cloud after accumulating all partition predictions
                 # Create a PyVista PolyData object for the point cloud
                 point_cloud = pv.PolyData(coordinates_denorm.numpy())
-                point_cloud['coordinates'] = coordinates_denorm.numpy()
-                point_cloud['normals'] = normals_denorm.numpy()
-                point_cloud['area'] = area_denorm.numpy()
-                point_cloud['pressure_pred'] = pressure_pred_denorm.numpy()
-                point_cloud['shear_stress_pred'] = shear_stress_pred_denorm.numpy()
-                point_cloud['pressure_true'] = pressure_true_denorm.numpy()
-                point_cloud['shear_stress_true'] = shear_stress_true_denorm.numpy()
+                point_cloud["coordinates"] = coordinates_denorm.numpy()
+                point_cloud["normals"] = normals_denorm.numpy()
+                point_cloud["area"] = area_denorm.numpy()
+                point_cloud["pressure_pred"] = pressure_pred_denorm.numpy()
+                point_cloud["shear_stress_pred"] = shear_stress_pred_denorm.numpy()
+                point_cloud["pressure_true"] = pressure_true_denorm.numpy()
+                point_cloud["shear_stress_true"] = shear_stress_true_denorm.numpy()
 
                 # Save the point cloud
-                point_cloud.save(f'point_cloud_{validation_ids[i]}.vtp')
+                point_cloud.save(f"point_cloud_{validation_ids[i]}.vtp")
 
-            print(f"Epoch {epoch+1}, Validation Error: {valid_loss / len(validation_graphs)}")
-            writer.add_scalar("validation_loss", valid_loss / len(validation_graphs), epoch)
+            print(
+                f"Epoch {epoch+1}, Validation Error: {valid_loss / len(validation_graphs)}"
+            )
+            writer.add_scalar(
+                "validation_loss", valid_loss / len(validation_graphs), epoch
+            )
 
     # Save final checkpoint
     if dist.world_size > 1:
         torch.distributed.barrier()
     if dist.rank == 0:
-        save_checkpoint(model, optimizer, scaler, scheduler, cfg.num_epochs, loss.item(), 'final_model_checkpoint.pth')
-        print('Training complete')
+        save_checkpoint(
+            model,
+            optimizer,
+            scaler,
+            scheduler,
+            cfg.num_epochs,
+            loss.item(),
+            "final_model_checkpoint.pth",
+        )
+        print("Training complete")
+
 
 if __name__ == "__main__":
     main()

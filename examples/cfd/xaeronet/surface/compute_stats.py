@@ -1,4 +1,3 @@
-
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -36,11 +35,15 @@ from concurrent.futures import ProcessPoolExecutor
 from hydra import to_absolute_path
 from omegaconf import DictConfig
 
+
 def find_bin_files(data_path):
     """
     Finds all .bin files in the specified directory.
     """
-    return [os.path.join(data_path, f) for f in os.listdir(data_path) if f.endswith('.bin')]
+    return [
+        os.path.join(data_path, f) for f in os.listdir(data_path) if f.endswith(".bin")
+    ]
+
 
 def process_file(bin_file):
     """
@@ -49,8 +52,8 @@ def process_file(bin_file):
     graphs, _ = dgl.load_graphs(bin_file)
 
     # Initialize dictionaries to accumulate stats
-    node_fields = ['coordinates', 'normals', 'area', 'pressure', 'shear_stress']
-    edge_fields = ['x']
+    node_fields = ["coordinates", "normals", "area", "pressure", "shear_stress"]
+    edge_fields = ["x"]
 
     field_means = {}
     field_square_means = {}
@@ -71,10 +74,10 @@ def process_file(bin_file):
 
                 if data.ndim == 1:
                     data = np.expand_dims(data, axis=-1)
-                
+
                 # Compute mean, mean of squares, and count for each partition
                 field_mean = np.mean(data, axis=0)
-                field_square_mean = np.mean(data ** 2, axis=0)
+                field_square_mean = np.mean(data**2, axis=0)
                 count = data.shape[0]
 
                 # Accumulate stats across partitions
@@ -90,7 +93,7 @@ def process_file(bin_file):
                 data = graph.edata[field].numpy()
 
                 field_mean = np.mean(data, axis=0)
-                field_square_mean = np.mean(data ** 2, axis=0)
+                field_square_mean = np.mean(data**2, axis=0)
                 count = data.shape[0]
 
                 field_means[field] += field_mean * count
@@ -100,6 +103,7 @@ def process_file(bin_file):
                 print(f"Warning: Edge field '{field}' not found in {bin_file}")
 
     return field_means, field_square_means, counts
+
 
 def aggregate_results(results):
     """
@@ -128,10 +132,15 @@ def aggregate_results(results):
 
     for field in total_mean:
         global_mean[field] = total_mean[field] / total_count[field]
-        variance = (total_square_mean[field] / total_count[field]) - (global_mean[field] ** 2)
-        global_std[field] = np.sqrt(np.maximum(variance, 0))  # Ensure no negative variance due to rounding errors
+        variance = (total_square_mean[field] / total_count[field]) - (
+            global_mean[field] ** 2
+        )
+        global_std[field] = np.sqrt(
+            np.maximum(variance, 0)
+        )  # Ensure no negative variance due to rounding errors
 
     return global_mean, global_std
+
 
 def compute_global_stats(bin_files, num_workers=4):
     """
@@ -139,40 +148,59 @@ def compute_global_stats(bin_files, num_workers=4):
     using parallel processing.
     """
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        results = list(tqdm(executor.map(process_file, bin_files), total=len(bin_files), desc="Processing BIN Files", unit="file"))
+        results = list(
+            tqdm(
+                executor.map(process_file, bin_files),
+                total=len(bin_files),
+                desc="Processing BIN Files",
+                unit="file",
+            )
+        )
 
     # Aggregate the results from all files
     global_mean, global_std = aggregate_results(results)
 
     return global_mean, global_std
 
+
 def save_stats_to_json(mean, std_dev, output_file):
     """
     Saves the global mean and standard deviation to a JSON file.
     """
     stats = {
-        "mean": {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in mean.items()},
-        "std_dev": {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in std_dev.items()}
+        "mean": {
+            k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in mean.items()
+        },
+        "std_dev": {
+            k: v.tolist() if isinstance(v, np.ndarray) else v
+            for k, v in std_dev.items()
+        },
     }
-    
-    with open(output_file, 'w') as f:
+
+    with open(output_file, "w") as f:
         json.dump(stats, f, indent=4)
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
 
-    data_path = to_absolute_path(cfg.partitions_path)  # Directory containing the .bin graph files with partitions
+    data_path = to_absolute_path(
+        cfg.partitions_path
+    )  # Directory containing the .bin graph files with partitions
     output_file = to_absolute_path(cfg.stats_file)  # File to save the global statistics
     # Find all .bin files in the directory
     bin_files = find_bin_files(data_path)
 
     # Compute global statistics with parallel processing
-    global_mean, global_std = compute_global_stats(bin_files, num_workers=cfg.num_preprocess_workers)
+    global_mean, global_std = compute_global_stats(
+        bin_files, num_workers=cfg.num_preprocess_workers
+    )
 
     # Print the results
     print("Global Mean:", global_mean)
     print("Global Standard Deviation:", global_std)
     print(f"Statistics saved to {output_file}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
