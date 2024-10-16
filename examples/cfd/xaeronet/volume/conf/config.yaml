@@ -17,7 +17,7 @@
 hydra:
   job:
     chdir: true
-    name: XAeroNetS
+    name: XAeroNetV
   run:
     dir: ./outputs/${hydra:job.name}
 
@@ -25,39 +25,47 @@ hydra:
 # │            Data Preprocessing             │
 # └───────────────────────────────────────────┘  
 
-num_nodes: 500000                                    # Number of nodes in the graphs
-node_degree: 6                                       # Degree of the nodes in the graphs
-num_partitions: 2                                    # Number of partitions for each graph
+num_voxels_x: 700                                    # Number of voxels in x direction
+num_voxels_y: 256                                    # Number of voxels in y direction
+num_voxels_z: 128                                    # Number of voxels in z direction
+spacing: 0.015                                       # Spacing between the voxels (unit is meters)
+grid_origin_x: -3.08                                 # Origin of the grid in x direction
+grid_origin_y: -1.92                                 # Origin of the grid in y direction
+grid_origin_z: -0.32                                 # Origin of the grid in z direction
+num_partitions: 7                                    # Number of partitions for each voxel grid
+partition_width: 100                                 # Width of each partition (in x-direction only)
+halo_width: 40                                       # Width of the halo region (in x-direction only)
 data_path: /data/drivaer_aws/drivaer_data_full       # Path to the raw data
 num_preprocess_workers: 32                           # Number of workers for data preprocessing
-save_point_clouds: false                             # Save point clouds for the preprocessed data
+save_vti: false                                      # Save a .vti file for the preprocessed voxel data
 
 # ┌───────────────────────────────────────────┐
 # │           Model Configuration             │
 # └───────────────────────────────────────────┘
 
-num_message_passing_layers: 15                       # Number of message passing layers
-hidden_dim: 256                                      # Hidden dimension of the model
-activation: relu                                     # Activation function
+initial_hidden_dim: 64                               # Hidden dimension in the first level
+activation: gelu                                     # Activation function
+use_attn_gate: true                                  # Use attention gate
+attn_intermediate_channels: 256                      # Intermediate channels in the attention gate
 
 # ┌───────────────────────────────────────────┐
 # │          Training Configuration           │
 # └───────────────────────────────────────────┘
 
-partitions_path: partitions                         # Path to the partitions (.bin files)
-validation_partitions_path: validation_partitions   # Path to the validation partitions (.bin files)
+h5_path: drivaer_aws_h5                             # Path to the h5 files containing the voxel grids for training
+validation_h5_path: drivaer_aws_h5_validation       # Path to the h5 files containing the voxel grids for validation
 stats_file: global_stats.json                       # Path to the global statistics (.json file)
 checkpoint_filename: model_checkpoint.pth           # Filename of the model checkpoint
 num_epochs: 2000                                    # Number of epochs
-start_lr: 0.001                                     # Initial learning rate (cos annealing schedule is used) 
-end_lr: 0.000001                                    # Final learning rate (cos annealing schedule is used)                              
+start_lr: 0.00015                                   # Initial learning rate (cos annealing schedule is used) 
+end_lr: 0.0000005                                   # Final learning rate (cos annealing schedule is used)                              
 save_checkpoint_freq: 5                             # Frequency of saving the model checkpoint
 validation_freq: 50                                 # Frequency of validation
+continuity_lambda: 0.05                             # Continuity loss weight
 
 # ┌───────────────────────────────────────────┐
 # │        Performance Optimization           │
 # └───────────────────────────────────────────┘
 
-use_concat_trick: true                              # Use the concatenation trick
-checkpoint_segments: 3                              # Number of segments for the activation checkpointing
+gradient_checkpointing: true                        # use activation checkpointing
 enable_cudnn_benchmark: true                        # Enable cudnn benchmark

@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
                 # Training #
     ######################################
 
-    # Initialize model, loss function, and optimizer
+    # Initialize model
     model = MeshGraphNet(
             input_dim_nodes=6,
             input_dim_edges=4,

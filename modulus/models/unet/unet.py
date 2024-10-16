@@ -21,9 +21,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..meta import ModelMetaData
-from ..module import Module
+from modulus.models.meta import ModelMetaData
+from modulus.models.module import Module
+from transformer_engine import pytorch as te
+import torch.utils.checkpoint as checkpoint
 
+class ReshapedLayerNorm(te.LayerNorm):
+    def __init__(self, normalized_shape, eps: float = 1e-5, elementwise_affine: bool = True):
+        super().__init__(normalized_shape, eps, elementwise_affine)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shape = x.shape
+        x = x.view(shape[0], shape[1], -1).transpose(1, 2).contiguous()
+        x = super().forward(x)
+        x = x.transpose(1, 2).contiguous().view(shape)
+        return x
 
 class ConvBlock(nn.Module):
     """
@@ -98,6 +110,8 @@ class ConvBlock(nn.Module):
                 self.norm = nn.GroupNorm(**norm_args)
             elif normalization == "batchnorm":
                 self.norm = nn.BatchNorm3d(out_channels)
+            elif normalization == "layernorm":
+                self.norm = ReshapedLayerNorm(out_channels)
             else:
                 raise ValueError(
                     f"Normalization type '{normalization}' is not supported."
@@ -188,6 +202,8 @@ class ConvTranspose(nn.Module):
                 self.norm = nn.GroupNorm(**norm_args)
             elif normalization == "batchnorm":
                 self.norm = nn.BatchNorm3d(out_channels)
+            elif normalization == "layernorm":
+                self.norm = ReshapedLayerNorm(out_channels)
             else:
                 raise ValueError(
                     f"Normalization type '{normalization}' is not supported."
@@ -242,7 +258,7 @@ class Pool3d(nn.Module):
         # Initialize the corresponding pooling layer
         if pooling_type == "AvgPool3d":
             self.pooling = nn.AvgPool3d(
-                kernel_size=kernel_size,
+                kernel_size= kernel_size,
                 stride=stride,
                 padding=padding,
                 ceil_mode=ceil_mode,
@@ -259,6 +275,50 @@ class Pool3d(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.pooling(x)
+    
+class AttentionBlock(nn.Module):
+    """
+    Attention block for the skip connections using LayerNorm instead of BatchNorm.
+    
+    Parameters:
+    ----------
+        F_g (int): Number of channels in the decoder's features (query).
+        F_l (int): Number of channels in the encoder's features (key/value).
+        F_int (int): Number of intermediate channels (reduction in feature maps before attention computation).
+    
+    Returns:
+    -------
+        torch.Tensor: The attended skip feature map.
+    """
+    def __init__(self, F_g, F_l, F_int):
+        super().__init__()
+        # The attention mechanism reduces the feature maps to F_int channels
+        self.W_g = nn.Sequential(
+            nn.Conv3d(F_g, F_int, kernel_size=1, stride=1, padding=0, bias=True),
+            ReshapedLayerNorm(F_int)
+        )
+        
+        self.W_x = nn.Sequential(
+            nn.Conv3d(F_l, F_int, kernel_size=1, stride=1, padding=0, bias=True),
+            ReshapedLayerNorm(F_int)
+        )
+        
+        self.psi = nn.Sequential(
+            nn.Conv3d(F_int, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            ReshapedLayerNorm(1),
+            nn.Sigmoid()
+        )
+        
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, g, x):
+        # g is the decoder's upsampled features (query)
+        # x is the encoder's skip connection features (key/value)
+        g1 = self.W_g(g)
+        x1 = self.W_x(x)
+        psi = self.relu(g1 + x1)
+        psi = self.psi(psi)
+        return x * psi  # element-wise multiplication with attention mask
 
 
 class EncoderBlock(nn.Module):
@@ -284,11 +344,17 @@ class EncoderBlock(nn.Module):
         self,
         in_channels: int,
         feature_map_channels: List[int],
+        kernel_size: Union[int, tuple] = 3,
+        stride: Union[int, tuple] = 1,
         model_depth: int = 4,
         num_conv_blocks: int = 2,
         activation: Optional[str] = "relu",
+        padding: int = 1,
+        padding_mode: str = "zeros",
         pooling_type: str = "AvgPool3d",
         pool_size: int = 2,
+        normalization: Optional[str] = "groupnorm",
+        normalization_args: Optional[dict] = None,
     ):
         super().__init__()
 
@@ -306,7 +372,13 @@ class EncoderBlock(nn.Module):
                     ConvBlock(
                         in_channels=current_channels,
                         out_channels=feature_map_channels[depth * num_conv_blocks + i],
+                        kernel_size=kernel_size,
+                        stride=stride,
+                        padding=padding,
+                        padding_mode=padding_mode,
                         activation=activation,
+                        normalization=normalization,
+                        normalization_args=normalization_args,
                     )
                 )
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
@@ -346,10 +418,16 @@ class DecoderBlock(nn.Module):
         self,
         out_channels: int,
         feature_map_channels: List[int],
+        kernel_size: Union[int, tuple] = 3,
+        stride: Union[int, tuple] = 1,
         model_depth: int = 3,
         num_conv_blocks: int = 2,
         conv_activation: Optional[str] = "relu",
         conv_transpose_activation: Optional[str] = None,
+        padding: int = 1,
+        padding_mode: str = "zeros",
+        normalization: Optional[str] = "groupnorm",
+        normalization_args: Optional[dict] = None,
     ):
         super().__init__()
 
@@ -370,6 +448,7 @@ class DecoderBlock(nn.Module):
                             in_channels=current_channels,
                             out_channels=current_channels,
                             activation=conv_transpose_activation,
+
                         )
                     )
                     current_channels += feature_map_channels[
@@ -380,7 +459,13 @@ class DecoderBlock(nn.Module):
                     ConvBlock(
                         in_channels=current_channels,
                         out_channels=feature_map_channels[depth * num_conv_blocks + i],
+                        kernel_size=kernel_size,
+                        stride=stride,
+                        padding=padding,
+                        padding_mode=padding_mode,
                         activation=conv_activation,
+                        normalization=normalization,
+                        normalization_args=normalization_args,
                     )
                 )
                 current_channels = feature_map_channels[depth * num_conv_blocks + i]
@@ -390,6 +475,10 @@ class DecoderBlock(nn.Module):
             ConvBlock(
                 in_channels=current_channels,
                 out_channels=out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                padding_mode=padding_mode,
                 activation=None,
                 normalization=None,
             )
@@ -444,6 +533,8 @@ class UNet(Module):
         self,
         in_channels: int,
         out_channels: int,
+        kernel_size: Union[int, tuple] = 3,
+        stride: Union[int, tuple] = 1,
         model_depth: int = 5,
         feature_map_channels: List[int] = [
             64,
@@ -460,20 +551,37 @@ class UNet(Module):
         num_conv_blocks: int = 2,
         conv_activation: Optional[str] = "relu",
         conv_transpose_activation: Optional[str] = None,
+        padding: int = 1,
+        padding_mode: str = "zeros",
         pooling_type: str = "MaxPool3d",
         pool_size: int = 2,
+        normalization: Optional[str] = "groupnorm",
+        normalization_args: Optional[dict] = None,
+        use_attn_gate: bool = False,
+        attn_decoder_feature_maps = None,
+        attn_feature_map_channels = None,
+        attn_intermediate_channels = None,
+        gradient_checkpointing: bool = True,
     ):
         super().__init__(meta=MetaData())
+        self.use_attn_gate = use_attn_gate
+        self.gradient_checkpointing = gradient_checkpointing 
 
         # Construct the encoder
         self.encoder = EncoderBlock(
             in_channels=in_channels,
             feature_map_channels=feature_map_channels,
+            kernel_size=kernel_size,
+            stride=stride,
             model_depth=model_depth,
             num_conv_blocks=num_conv_blocks,
             activation=conv_activation,
+            padding=padding,
+            padding_mode=padding_mode,
             pooling_type=pooling_type,
             pool_size=pool_size,
+            normalization=normalization,
+            normalization_args=normalization_args,
         )
 
         # Construct the decoder
@@ -483,11 +591,30 @@ class UNet(Module):
         self.decoder = DecoderBlock(
             out_channels=out_channels,
             feature_map_channels=decoder_feature_maps,
+            kernel_size=kernel_size,
+            stride=stride,
             model_depth=model_depth - 1,
             num_conv_blocks=num_conv_blocks,
             conv_activation=conv_activation,
             conv_transpose_activation=conv_transpose_activation,
+            padding=padding,
+            padding_mode=padding_mode,
+            normalization=normalization,
+            normalization_args=normalization_args,
         )
+
+        # Initialize attention blocks for each skip connection
+        if self.use_attn_gate:
+            self.attention_blocks = nn.ModuleList([
+                AttentionBlock(F_g=attn_decoder_feature_maps[i], F_l=attn_feature_map_channels[i], F_int=attn_intermediate_channels)
+                for i in range(model_depth - 1)
+            ])
+
+    def checkpointed_forward(self, layer, x):
+        """Wrapper to apply gradient checkpointing if enabled."""
+        if self.gradient_checkpointing:
+            return checkpoint.checkpoint(layer, x, use_reentrant=False)
+        return layer(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skip_features = []
@@ -495,18 +622,25 @@ class UNet(Module):
         for layer in self.encoder.layers:
             if isinstance(layer, Pool3d):
                 skip_features.append(x)
-            x = layer(x)
+            # Apply checkpointing if enabled
+            x = self.checkpointed_forward(layer, x)
 
         # Decoding path
-        skip_features = skip_features[::-1]  # Reverse
-        concats = 0  # keep track of the number of concats
+        skip_features = skip_features[::-1]  # Reverse the skip features
+        concats = 0  # Track number of concats
         for layer in self.decoder.layers:
             if isinstance(layer, ConvTranspose):
-                x = layer(x)
-                x = torch.cat([x, skip_features[concats]], dim=1)
+                x = self.checkpointed_forward(layer, x)
+                if self.use_attn_gate:
+                    # Apply attention to the skip connection
+                    skip_att = self.attention_blocks[concats](x, skip_features[concats])
+                    x = torch.cat([x, skip_att], dim=1)
+                else:
+                    x = torch.cat([x, skip_features[concats]], dim=1)
                 concats += 1
             else:
-                x = layer(x)
+                # Apply checkpointing for other layers
+                x = self.checkpointed_forward(layer, x)
 
         return x
 

@@ -29,9 +29,12 @@ import os
 import json
 import numpy as np
 import dgl
+import hydra
 
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
+from hydra import to_absolute_path
+from omegaconf import DictConfig
 
 def find_bin_files(data_path):
     """
@@ -155,20 +158,21 @@ def save_stats_to_json(mean, std_dev, output_file):
     with open(output_file, 'w') as f:
         json.dump(stats, f, indent=4)
 
-if __name__ == '__main__':
-    data_path = 'partitions'  # Directory containing the .bin graph files with partitions
-    output_file = 'global_stats.json'  # Adjust this to the desired output file name
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
 
+    data_path = to_absolute_path(cfg.partitions_path)  # Directory containing the .bin graph files with partitions
+    output_file = to_absolute_path(cfg.stats_file)  # File to save the global statistics
     # Find all .bin files in the directory
     bin_files = find_bin_files(data_path)
 
     # Compute global statistics with parallel processing
-    global_mean, global_std = compute_global_stats(bin_files, num_workers=16)  # Adjust num_workers as needed
-
-    # Save statistics to a JSON file
-    save_stats_to_json(global_mean, global_std, output_file)
+    global_mean, global_std = compute_global_stats(bin_files, num_workers=cfg.num_preprocess_workers)
 
     # Print the results
     print("Global Mean:", global_mean)
     print("Global Standard Deviation:", global_std)
     print(f"Statistics saved to {output_file}")
+
+if __name__ == '__main__':
+    main()
