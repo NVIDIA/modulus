@@ -35,7 +35,14 @@ To train the XAeroNet-S model, follow these steps:
 
     8. Run 'train.py' to start the training.
 
+    9. Download the validation results (saved in form of point clouds in `.vtp` format), and visualize in Paraview.
+
+![XAeroNet-S Validation results for the sample #500.](../../../docs/img/xaeronet_s_results.png)
+
 ## Training the XAeroNet-V model
+
+![XAeroNet-V Validation results.](../../../docs/img/xaeronet_v_results.png)
+
 
 ## Logging
 
