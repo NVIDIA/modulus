@@ -35,6 +35,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
+<<<<<<< HEAD
 
 import modulus  # noqa: F401 for docs
 
@@ -42,6 +43,10 @@ from ..meta import ModelMetaData
 from ..module import Module
 from .Embedding import timestep_embedding
 from .Physics_Attention import Physics_Attention_Structured_Mesh_2D
+=======
+from modulus.models.transolver.Embedding import timestep_embedding
+from modulus.models.transolver.Physics_Attention import Physics_Attention_Structured_Mesh_2D
+>>>>>>> a42ec66 (fix: transolver doctest)
 
 ACTIVATION = {
     "gelu": nn.GELU,
@@ -338,18 +343,12 @@ class Transolver(Module):
 
     Example
     -------
-    >>> model = Transolver(space_dim=1, n_layers=5, n_hidden=256, dropout=0.0, n_head=8, Time_Input=False, act='gelu', mlp_ratio=1, fun_dim=1, out_dim=1, slice_num=32, ref=8, unified_pos=False, H=85, W=85)
-    >>> x = torch.rand(1, 85, 85, 1)
-    >>> fx = torch.rand(1, 85, 85, 1)
+    >>> model = Transolverspace_dim=2,n_layers=8,n_hidden=64,dropout=0,n_head=4,Time_Input=False,act="gelu",mlp_ratio=1,fun_dim=1,out_dim=1,slice_num=32,ref=8,unified_pos=1,H=85,W=85)
+    >>> x = torch.rand(1, 85, 85)
+    >>> fx = torch.rand(1, 85*85, 1)
     >>> output = model(x, fx)
     >>> print(output.shape)
     torch.Size([1, 85, 85, 1])
-
-    Note
-    ----
-    This model is based on the following implementation:
-    # todo
-
     """
 
     def __init__(
