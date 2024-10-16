@@ -35,7 +35,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
-<<<<<<< HEAD
 
 import modulus  # noqa: F401 for docs
 
@@ -43,10 +42,6 @@ from ..meta import ModelMetaData
 from ..module import Module
 from .Embedding import timestep_embedding
 from .Physics_Attention import Physics_Attention_Structured_Mesh_2D
-=======
-from modulus.models.transolver.Embedding import timestep_embedding
-from modulus.models.transolver.Physics_Attention import Physics_Attention_Structured_Mesh_2D
->>>>>>> a42ec66 (fix: transolver doctest)
 
 ACTIVATION = {
     "gelu": nn.GELU,
