@@ -34,7 +34,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 import torch.nn as nn
-from timm.models.layers import trunc_normal_
+from timm.layers import trunc_normal_
 
 import modulus  # noqa: F401 for docs
 
