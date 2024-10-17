@@ -132,6 +132,43 @@ def read_cgns(file_path: str) -> Any:
     return _extract_unstructured_grid(multi_block)
 
 
+def read_stl(file_path: str) -> vtk.vtkPolyData:
+    """
+    Read an STL file and return the polydata.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the STL file.
+
+    Returns
+    -------
+    vtkPolyData
+        The polydata read from the STL file.
+    """
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"{file_path} does not exist.")
+
+    # Check if file has .stl extension
+    if not file_path.endswith(".stl"):
+        raise ValueError(f"Expected a .stl file, got {file_path}")
+
+    # Create an STL reader
+    reader = vtk.vtkSTLReader()
+    reader.SetFileName(file_path)
+    reader.Update()
+
+    # Get the polydata
+    polydata = reader.GetOutput()
+
+    # Check if polydata is valid
+    if polydata is None:
+        raise ValueError(f"Failed to read polydata from {file_path}")
+
+    return polydata
+
+
 def _extract_unstructured_grid(
     multi_block: vtk.vtkMultiBlockDataSet,
 ) -> vtk.vtkUnstructuredGrid:
