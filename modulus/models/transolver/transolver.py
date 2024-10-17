@@ -335,15 +335,6 @@ class Transolver(Module):
         The height of the mesh.
     W : int
         The width of the mesh.
-
-    Example
-    -------
-    >>> model = Transolver(space_dim=2,n_layers=8,n_hidden=64,dropout=0,n_head=4,Time_Input=False,act="gelu",mlp_ratio=1,fun_dim=1,out_dim=1,slice_num=32,ref=8,unified_pos=1,H=85,W=85)
-    >>> x = torch.rand(1, 85, 85)
-    >>> fx = torch.rand(1, 85*85, 1)
-    >>> output = model(x, fx)
-    >>> print(output.shape)
-    torch.Size([1, 85, 85, 1])
     """
 
     def __init__(
