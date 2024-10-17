@@ -50,13 +50,15 @@ the loss function and the use of one over the other can change from case-to-case
 With this example, we intend to demonstrate both such cases so that the users can compare
 and contrast the two approaches.
 
-In this example we will also use the `PDE` class from Modulus-Sym to symbolically define
-the PDEs. This is very convinient and most natural way to define these PDEs and allows
-us to print the equations to check for correctness. This also abstracts out the
+In this example we will use the `PDE` class from Modulus-Sym to symbolically define
+the PDEs and use the `PhysicsInformer` utility to introduce the PDE
+constraints. Defining the PDEs sympolically is very convinient and most natural way to
+define these PDEs and allows us to print the equations to check for correctness.
+This also abstracts out the
 complexity of converting the equation into a pytorch representation. Modulus Sym also
 provides several complex, well tested PDEs like 3D Navier-Stokes, Linear elasticity,
 Electromagnetics, etc. pre-defined which can be used directly in physics-informing
-applications.  
+applications.
 
 ## Getting Started
 
@@ -73,6 +75,11 @@ or
 python 
 darcy_physics_informed_fno.py
 ```
+
+### Note
+
+If you are running this example outside of the Modulus container, install Modulus Sym using
+the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
 
 ## References
 

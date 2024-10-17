@@ -14,13 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-train_dataset_filename: train_7var_${transform.name}.zarr
-val_dataset_filename: val_7var_${transform.name}.zarr
+train_dataset_filename: unified_recipe_datasets/train_7var_${transform.name}.zarr
+val_dataset_filename: unified_recipe_datasets/val_7var_${transform.name}.zarr
 
 dt: 6
 
 train_years: ["1979-01-01", "2015-12-31"]
 val_years: ["2016-01-01", "2017-12-31"]
+
+chunk_channels_together: True
 
 nr_predicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.predicted_variables}])'}
 nr_unpredicted_variables: ${eval:'sum([len(v[1]) if isinstance(v, list) else 1 for v in ${curated_dataset.unpredicted_variables}])'}

@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dgl
 import numpy as np
 import torch
+import vtk
 from torch import Tensor
 
 try:
@@ -56,7 +58,7 @@ def parabolic_inflow(y, U_max):
     return u, v
 
 
-def get_dataset(path):
+def get_dataset(path, return_graph=False):
     """get_dataset file."""
     pv_mesh = pv.read(path)
 
@@ -85,17 +87,95 @@ def get_dataset(path):
 
     nu = 0.01
 
-    return (
-        ref_u,
-        ref_v,
-        ref_p,
-        gnn_u,
-        gnn_v,
-        gnn_p,
-        coords,
-        inflow_coords,
-        outflow_coords,
-        wall_coords,
-        polygon_coords,
-        nu,
-    )
+    if return_graph:
+        # generate DGL graph
+        polys = pv_mesh.GetPolys()
+        polys.InitTraversal()
+        edge_list = []
+        id_list = vtk.vtkIdList()
+        for _ in range(polys.GetNumberOfCells()):
+            polys.GetNextCell(id_list)
+            num_ids = id_list.GetNumberOfIds()
+            for j in range(num_ids):
+                edge_list.append(  # noqa: PERF401
+                    (id_list.GetId(j), id_list.GetId((j + 1) % num_ids))
+                )
+
+        graph = dgl.graph(edge_list, idtype=torch.int32)
+
+        # Assign node features using the vertex data
+        points = pv_mesh.GetPoints()
+        vertices = np.array(
+            [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
+        )
+        graph.ndata["pos"] = torch.tensor(vertices[:, :2], dtype=torch.float32)
+
+        # Add one-hot embedding of markers
+        point_data = pv_mesh.GetPointData()
+        marker = np.array(point_data.GetArray("marker"))
+        num_classes = 5
+        one_hot_marker = np.eye(num_classes)[marker.astype(int)]
+        graph.ndata["marker"] = torch.tensor(one_hot_marker, dtype=torch.float32)
+
+        # Extract node attributes from the vtkPolyData
+        for i in range(point_data.GetNumberOfArrays()):
+            array = point_data.GetArray(i)
+            array_name = array.GetName()
+            if array_name in ["u", "v", "p"]:
+                array_data = np.zeros(
+                    (points.GetNumberOfPoints(), array.GetNumberOfComponents())
+                )
+                for j in range(points.GetNumberOfPoints()):
+                    array.GetTuple(j, array_data[j])
+
+                # Assign node attributes to the DGL graph
+                graph.ndata[array_name] = torch.tensor(array_data, dtype=torch.float32)
+
+        # compute freq features
+        B = 10 * torch.randn((2, 64))
+        x_proj = torch.matmul(graph.ndata["pos"], B)
+        x_proj = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        graph.ndata["freq"] = x_proj
+
+        graph.ndata["x"] = torch.cat(
+            [graph.ndata[key] for key in ["pos", "marker", "freq"]], dim=-1
+        )
+        graph.ndata["y"] = torch.cat(
+            [graph.ndata[key] for key in ["u", "v", "p"]], dim=-1
+        )
+
+        pos = graph.ndata["pos"]
+        row, col = graph.edges()
+        disp = torch.tensor(pos[row.long()] - pos[col.long()])
+        disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
+        graph.edata["x"] = torch.cat((disp, disp_norm), dim=-1)
+        return (
+            ref_u,
+            ref_v,
+            ref_p,
+            gnn_u,
+            gnn_v,
+            gnn_p,
+            coords,
+            inflow_coords,
+            outflow_coords,
+            wall_coords,
+            polygon_coords,
+            nu,
+            graph,
+        )
+    else:
+        return (
+            ref_u,
+            ref_v,
+            ref_p,
+            gnn_u,
+            gnn_v,
+            gnn_p,
+            coords,
+            inflow_coords,
+            outflow_coords,
+            wall_coords,
+            polygon_coords,
+            nu,
+        )

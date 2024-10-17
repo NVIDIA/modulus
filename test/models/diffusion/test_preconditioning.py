@@ -14,55 +14,58 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 import torch
 
+from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.diffusion.preconditioning import (
-    EDMPrecondSRV2,
+    EDMPrecondSR,
     VEPrecond_dfsr,
     VEPrecond_dfsr_cond,
-    _ConditionalPrecond,
 )
 from modulus.models.module import Module
 
 
-def test__ConditionalPrecond():
-
+@pytest.mark.parametrize("scale_cond_input", [True, False])
+def test_EDMPrecondSR_forward(scale_cond_input):
     b, c_target, x, y = 1, 3, 8, 8
     c_cond = 4
 
-    def forward(x, sigma, *, class_labels):
-        assert x.shape[1] == c_target + c_cond
-        # add mean of full array and sigma, so that changing the scaling will
-        # break the regression check
-        return x[:, :c_target] + torch.mean(x, dim=1, keepdim=True) + sigma
-
-    preconditioned_model = _ConditionalPrecond(
-        model=forward, img_channels=c_target, img_resolution=8
+    # Create an instance of the preconditioner
+    model = EDMPrecondSR(
+        img_resolution=x,
+        img_channels=c_target,
+        img_in_channels=c_cond,
+        img_out_channels=c_target,
+        use_fp16=False,
+        model_type="SongUNet",
+        scale_cond_input=scale_cond_input,
     )
 
     latents = torch.ones((b, c_target, x, y))
-    image_conditioning = torch.arange(b * c_cond * x * y).reshape((b, c_cond, x, y))
-    sigma = 10.0
-    output = preconditioned_model(
-        latents,
-        condition=image_conditioning,
-        sigma=preconditioned_model.round_sigma(sigma),
+    img_lr = torch.arange(b * c_cond * x * y).reshape((b, c_cond, x, y))
+    sigma = torch.tensor([10.0])
+
+    # Forward pass
+    output = model(
+        x=latents,
+        img_lr=img_lr,
+        sigma=sigma,
     )
-    assert output.shape == latents.shape
 
-    # this expected value is a regression check...if you have made an
-    # intentional change, feel free to change it
-    expected = 45.7331
-    assert torch.allclose(torch.tensor(expected), torch.max(output))
+    # Assert the output shape is correct
+    assert output.shape == (b, c_target, x, y)
 
 
-def test_EDMPrecondSRV2_serialization(tmp_path):
-    module = EDMPrecondSRV2(8, 1, 1)
-    assert isinstance(module, _ConditionalPrecond)
+def test_EDMPrecondSR_serialization(tmp_path):
+    module = EDMPrecondSR(8, 1, 1, 1, scale_cond_input=False)
     model_path = tmp_path / "output.mdlus"
     module.save(model_path.as_posix())
     loaded = Module.from_checkpoint(model_path.as_posix())
-    assert isinstance(loaded, EDMPrecondSRV2)
+    assert isinstance(loaded, EDMPrecondSR)
+    save_checkpoint(path=tmp_path, models=module, epoch=1)
+    epoch = load_checkpoint(path=tmp_path)
+    assert epoch == 1
 
 
 def test_VEPrecond_dfsr():

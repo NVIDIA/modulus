@@ -51,7 +51,7 @@ def _bvh_query_distance(
     """
     tid = wp.tid()
 
-    res = wp.mesh_query_point(mesh, points[tid], max_dist)
+    res = wp.mesh_query_point_sign_normal(mesh, points[tid], max_dist)
 
     mesh_ = wp.mesh_get(mesh)
 

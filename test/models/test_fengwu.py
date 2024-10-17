@@ -52,6 +52,9 @@ def test_fengwu_forward(device):
     with torch.no_grad():
         assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
 
+    del invar, model
+    torch.cuda.empty_cache()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fengwu_constructor(device):
@@ -154,6 +157,8 @@ def test_fengwu_constructor(device):
             kw_args["img_size"][0],
             kw_args["img_size"][1],
         )
+    del model, invar
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -196,6 +201,8 @@ def test_fengu_optims(device):
     # Check Combo
     # model, invar = setup_model()
     # assert common.validate_combo_optims(model, (invar,))
+    del model, invar
+    torch.cuda.empty_cache()
 
 
 @common.check_ort_version()
@@ -224,3 +231,5 @@ def test_fengwu_deploy(device):
     )
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
+    del model, invar
+    torch.cuda.empty_cache()
