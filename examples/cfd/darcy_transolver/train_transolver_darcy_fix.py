@@ -34,6 +34,8 @@ from validator_fix import GridValidator
 
 
 class UnitTransformer:
+    """Unit transformer class for normalizing and denormalizing data."""
+
     def __init__(self, X):
         self.mean = X.mean(dim=(0, 1), keepdim=True)
         self.std = X.std(dim=(0, 1), keepdim=True) + 1e-8

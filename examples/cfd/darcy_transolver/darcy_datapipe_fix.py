@@ -42,6 +42,8 @@ wp.init()
 
 
 class UnitTransformer:
+    """Unit transformer class for normalizing and denormalizing data."""
+
     def __init__(self, X):
         self.mean = X.mean(dim=(0, 1), keepdim=True)
         self.std = X.std(dim=(0, 1), keepdim=True) + 1e-8
@@ -261,7 +263,6 @@ class Darcy2D_fix(Datapipe):
         """
         # infinite generator
         while True:
-            # 按batch_size取数据
             idx = np.random.choice(200, self.batch_size)
             x = self.x_train[idx]
             y = self.y_train[idx]
