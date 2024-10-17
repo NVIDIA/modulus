@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Temporal attention model in Mesh-Reduced space for transient vortex shedding
 
 This example is an implementation of the paper "Predicting Physics in Mesh-reduced Space
@@ -64,7 +66,7 @@ unzip modulus_datasets_cylinder-flow_v1.zip
 unzip dataset.zip
 ```
 
-This example requires the `torch-scatter` and  `torch-cllsuster` library for the
+This example requires the `torch-scatter` and  `torch-clsuster` library for the
 graph nodes agrregation. Install with
 
 ```bash
