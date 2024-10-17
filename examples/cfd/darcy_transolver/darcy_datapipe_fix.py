@@ -213,16 +213,16 @@ class Darcy2D_fix(Datapipe):
         self.output_p = None
 
         self.is_test = is_test
-        
+
         if not self.is_test:
             n_train = 1000
         else:
             n_train = 200
         self.n_train = n_train
-        
+
         if self.train_path is not None:
             self.__get_data__()
-        
+
         if not self.is_test:
             self.x_normalizer = UnitTransformer(self.x_train)
             self.y_normalizer = UnitTransformer(self.y_train)
@@ -242,12 +242,12 @@ class Darcy2D_fix(Datapipe):
         pos = np.c_[x.ravel(), y.ravel()]
         pos = torch.tensor(pos, dtype=torch.float).unsqueeze(0).cuda()
         self.x_train = scio.loadmat(self.train_path)["coeff"][
-            :self.n_train, :: self.r, :: self.r
+            : self.n_train, :: self.r, :: self.r
         ][:, : self.s, : self.s]
         self.x_train = self.x_train.reshape(self.n_train, -1)
         self.x_train = torch.from_numpy(self.x_train).float().cuda()
         self.y_train = scio.loadmat(self.train_path)["sol"][
-            :self.n_train, :: self.r, :: self.r
+            : self.n_train, :: self.r, :: self.r
         ][:, : self.s, : self.s]
         self.y_train = self.y_train.reshape(self.n_train, -1)
         self.y_train = torch.from_numpy(self.y_train).float().cuda()
