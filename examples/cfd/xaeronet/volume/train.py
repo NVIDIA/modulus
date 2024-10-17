@@ -90,7 +90,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     # AMP Configs
-    amp_dtype = torch.bfloat16  # UNet does not work with bfloat16
+    amp_dtype = torch.float16  # UNet does not work with bfloat16
     amp_device = "cuda"
 
     # Find all .h5 files in the directory

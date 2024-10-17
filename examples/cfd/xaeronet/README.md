@@ -1,8 +1,8 @@
-# XAeroNet: Scalable Foundational Neural Models for External Aerodynamics
+# XAeroNet: Scalable Neural Models for External Aerodynamics
 
-XAeroNet is a collection of scalable foundational models for large-scale external
-aerodynamic evaluatons. It consists of two models, XAeroNet-S and XAeroNet-V for
-sruface and volume predictions, respectively.
+XAeroNet is a collection of scalable models for large-scale external
+aerodynamic evaluations. It consists of two models, XAeroNet-S and XAeroNet-V for
+surface and volume predictions, respectively.
 
 ## Problem overview
 
