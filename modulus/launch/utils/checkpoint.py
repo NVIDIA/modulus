@@ -282,7 +282,7 @@ def load_checkpoint(
     scheduler: Union[scheduler, None] = None,
     scaler: Union[scaler, None] = None,
     epoch: Union[int, None] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata_dict: Optional[Dict[str, Any]] = {},
     device: Union[str, torch.device] = "cpu",
 ) -> int:
     """Checkpoint loading utility
@@ -306,7 +306,7 @@ def load_checkpoint(
     epoch : Union[int, None], optional
         Epoch checkpoint to load. If none is provided this will attempt to load the
         checkpoint with the largest index, by default None
-    metadata : Optional[Dict[str, Any]], optional
+    metadata_dict: Optional[Dict[str, Any]], optional
         Dictionary to store metadata from the checkpoint, by default None
     device : Union[str, torch.device], optional
         Target device, by default "cpu"
@@ -390,6 +390,6 @@ def load_checkpoint(
     # Update metadata if exists and the dictionary object is provided
     metadata = checkpoint_dict.get("metadata", {})
     for key, value in metadata.items():
-        metadata[key] = value
+        metadata_dict[key] = value
 
     return epoch
