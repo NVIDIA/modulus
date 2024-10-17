@@ -15,13 +15,16 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
 import pytest
 import torch
+import xarray as xr
+from pytest_utils import nfsdata_or_fail
 
-from modulus.metrics.climate.healpix_loss import BaseMSE, WeightedMSE
+from modulus.metrics.climate.healpix_loss import BaseMSE, OceanMSE, WeightedMSE
 
 
 @pytest.fixture
@@ -204,6 +207,88 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     assert torch.allclose(
         error,
         mean_weighted_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+
+@pytest.fixture
+def data_dir():
+    path = "/data/nfs/modulus-data/datasets/healpix/"
+    return path
+
+
+@pytest.fixture
+def dataset_name():
+    name = "healpix"
+    return name
+
+
+@nfsdata_or_fail
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_OceanMSE(
+    data_dir,
+    dataset_name,
+    device,
+    test_data,
+    pytestconfig,
+    rtol: float = 1e-3,
+    atol: float = 1e-3,
+):
+    num_channels = 3
+    channels, pred_tensor_np, targ_tensor_np = test_data(
+        channels=num_channels, img_shape=(32, 32)
+    )
+    ds_path = Path(data_dir, dataset_name + ".zarr")
+
+    lsm_ds = xr.open_dataset(ds_path, engine="zarr").constants.sel({"channel_c": "lsm"})
+
+    channel_ocean_mse = torch.Tensor([0.2706, 0.2706, 0]).to(device)
+    mean_ocean_mse = channel_ocean_mse.mean()
+    ocean_mse_func = OceanMSE(ds_path)
+
+    trainer = trainer_helper(
+        output_variables=["a", "b", "ones"],
+        device=device,
+    )
+    lsm_tensor = 1 - torch.tensor(np.expand_dims(lsm_ds.values, (0, 2, 3))).to(
+        trainer.device
+    )
+    ocean_mse_func.setup(trainer)
+
+    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels, -1, -1)
+    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels, -1, -1)
+
+    tensor_size = pred_tensor.shape[-2:]
+    ones = torch.ones(tensor_size, device=device)
+
+    # make the last channel of prediction and target the same
+    pred_tensor = pred_tensor.contiguous()
+    targ_tensor = targ_tensor.contiguous()
+    pred_tensor[-1, ...] = ones[...]
+    targ_tensor[-1, ...] = ones[...]
+
+    # expand out to 6 dimensions
+    pred_tensor = pred_tensor[(None,) * 3]
+    targ_tensor = targ_tensor[(None,) * 3]
+
+    pred_tensor = pred_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
+    targ_tensor = targ_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
+
+    # test for 0 loss
+    error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=False)
+    assert torch.allclose(
+        error,
+        channel_ocean_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test for 0 loss
+    error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
+    assert torch.allclose(
+        error,
+        mean_ocean_mse,
         rtol=rtol,
         atol=atol,
     )

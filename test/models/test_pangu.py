@@ -46,6 +46,9 @@ def test_pangu_forward(device):
     with torch.no_grad():
         assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
 
+    del model, invar
+    torch.cuda.empty_cache()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_pangu_constructor(device):
@@ -97,6 +100,8 @@ def test_pangu_constructor(device):
             kw_args["img_size"][0],
             kw_args["img_size"][1],
         )
+    del model, invar
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -133,6 +138,8 @@ def test_pangu_optims(device):
     # Check Combo
     # model, invar = setup_model()
     # assert common.validate_combo_optims(model, (invar,))
+    del model, invar
+    torch.cuda.empty_cache()
 
 
 @common.check_ort_version()
@@ -155,3 +162,5 @@ def test_pangu_deploy(device):
     invar = model.prepare_input(invar_surface, invar_surface_mask, invar_upper_air)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
+    del model, invar
+    torch.cuda.empty_cache()

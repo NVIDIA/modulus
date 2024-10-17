@@ -114,8 +114,8 @@ def diffusion_step(  # TODO generalize the module and add defaults
                 [
                     seed_batch_size,
                     img_out_channels,
-                    img_shape[1],
                     img_shape[0],
+                    img_shape[1],
                 ],
                 device=device,
             ).to(memory_format=torch.channels_last)
