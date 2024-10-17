@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added gradient clipping to StaticCapture utilities.
 - Bistride Multiscale MeshGraphNet example.
 - FIGConvUNet model and example.
-- XAeroNet model
+- The Transolver model.
+- The XAeroNet model.
 
 ### Changed
 
