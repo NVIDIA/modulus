@@ -21,8 +21,8 @@ from utils import load_data_topodiff
 def main(cfg: DictConfig) -> None: 
     
     logger = PythonLogger("main") # General Python Logger 
-    logger.log("Start running")
-    logger.info("end running ")
+    logger.log("Job start!")
+    
     topologies = np.load(cfg.path_data + "topologies.npy").astype(np.float64)
     constraints = np.load(cfg.path_data + "constraints.npy", allow_pickle=True)
     stress = np.load(cfg.path_data + "vonmises.npy", allow_pickle=True)
@@ -41,7 +41,7 @@ def main(cfg: DictConfig) -> None:
 
     lr = cfg.lr
     optimizer = AdamW(model.parameters(), lr=lr)
-    
+    logger.log("Start training!")
     
     prog = trange(cfg.epochs)
 
@@ -60,9 +60,9 @@ def main(cfg: DictConfig) -> None:
         optimizer.step() 
     
         if step % 100 == 0: 
-            print("epoch: %d, loss: %.5f" % (step, losses.item()))
+            logger.info("epoch: %d, loss: %.5f" % (step, losses.item()))
     torch.save(model.state_dict(), cfg.model_path + "model.pt")
-    print("job done!")
+    logger.info("Training completed!")
 
 
 # ----------------------------------------------------------------------------
