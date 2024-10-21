@@ -160,7 +160,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg.sampler.type == "stochastic":
         sampler_fn = partial(
             stochastic_sampler,
-            img_shape=img_shape[1],
+            img_shape = (img_shape[1],img_shape[0]),
             patch_shape=patch_shape[1],
             boundary_pix=cfg.sampler.boundary_pix,
             overlap_pix=cfg.sampler.overlap_pix,
