@@ -156,9 +156,9 @@ def process_partition(graph, num_partitions, halo_hops):
 
 
 def process_run(
-    run_path, num_points, node_degree, num_partitions, halo_hops, save_point_cloud=False
+    run_path, point_list, node_degree, num_partitions, halo_hops, save_point_cloud=False
 ):
-    """Process a single run directory to generate the graph and apply partitioning."""
+    """Process a single run directory to generate a multi-level graph and apply partitioning."""
     run_id = os.path.basename(run_path).split("_")[-1]
 
     stl_file = os.path.join(run_path, f"drivaer_{run_id}_single_solid.stl")
@@ -186,52 +186,82 @@ def process_run(
         pressure_ref = node_attributes["pMeanTrim"]
         shear_stress_ref = node_attributes["wallShearStressMeanTrim"]
 
-        # Sample the boundary points
-        boundary = obj.sample_boundary(num_points)
-        points = np.concatenate([boundary["x"], boundary["y"], boundary["z"]], axis=1)
-        normals = np.concatenate(
-            [boundary["normal_x"], boundary["normal_y"], boundary["normal_z"]], axis=1
+        # Sort the list of points in ascending order
+        sorted_points = sorted(point_list)
+
+        # Initialize arrays to store all points, normals, and areas
+        all_points = np.empty((0, 3))
+        all_normals = np.empty((0, 3))
+        all_areas = np.empty((0, 1))
+        edge_sources = []
+        edge_destinations = []
+
+        # Precompute the nearest neighbors for surface vertices
+        nbrs_surface = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(
+            surface_vertices
         )
+
+        for num_points in sorted_points:
+            # Sample the boundary points for the current level
+            boundary = obj.sample_boundary(num_points)
+            points = np.concatenate(
+                [boundary["x"], boundary["y"], boundary["z"]], axis=1
+            )
+            normals = np.concatenate(
+                [boundary["normal_x"], boundary["normal_y"], boundary["normal_z"]],
+                axis=1,
+            )
+            area = boundary["area"]
+
+            # Concatenate new points with the previous ones
+            all_points = np.vstack([all_points, points])
+            all_normals = np.vstack([all_normals, normals])
+            all_areas = np.vstack([all_areas, area])
+
+            # Construct edges for the combined point cloud at this level
+            nbrs_points = NearestNeighbors(
+                n_neighbors=node_degree + 1, algorithm="ball_tree"
+            ).fit(all_points)
+            _, indices_within = nbrs_points.kneighbors(all_points)
+            src_within = [i for i in range(len(all_points)) for _ in range(node_degree)]
+            dst_within = indices_within[:, 1:].flatten()
+
+            # Add the within-level edges
+            edge_sources.extend(src_within)
+            edge_destinations.extend(dst_within)
+
+        # Now, compute pressure and shear stress for the final combined point cloud
+        _, indices = nbrs_surface.kneighbors(all_points)
+        indices = indices.flatten()
+
+        pressure = pressure_ref[indices]
+        shear_stress = shear_stress_ref[indices]
 
     except Exception as e:
         print(f"Error processing run {run_id}: {e}. Skipping this run...")
         return
 
     try:
-        # Interpolate the pressure and shear stress values
-        nbrs = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(
-            surface_vertices
-        )
-        _, indices = nbrs.kneighbors(points)
-        indices = indices.flatten()
-        pressure = pressure_ref[indices]
-        shear_stress = shear_stress_ref[indices]
-
-        # Construct the graph
-        nbrs = NearestNeighbors(n_neighbors=node_degree + 1, algorithm="ball_tree").fit(
-            points
-        )
-        _, indices = nbrs.kneighbors(points)
-        src = [i for i in range(num_points) for _ in range(node_degree)]
-        dst = indices[:, 1:].flatten()
-        graph = dgl.graph((src, dst))
+        # Create the final graph with multi-level edges
+        graph = dgl.graph((edge_sources, edge_destinations))
         graph = dgl.remove_self_loop(graph)
         graph = dgl.to_simple(graph)
         graph = dgl.to_bidirected(graph, copy_ndata=True)
         graph = dgl.add_self_loop(graph)
-        graph.ndata["coordinates"] = torch.tensor(points, dtype=torch.float32)
-        graph.ndata["normals"] = torch.tensor(normals, dtype=torch.float32)
-        graph.ndata["area"] = torch.tensor(boundary["area"], dtype=torch.float32)
+
+        graph.ndata["coordinates"] = torch.tensor(all_points, dtype=torch.float32)
+        graph.ndata["normals"] = torch.tensor(all_normals, dtype=torch.float32)
+        graph.ndata["area"] = torch.tensor(all_areas, dtype=torch.float32)
         graph.ndata["pressure"] = torch.tensor(pressure, dtype=torch.float32).unsqueeze(
             -1
         )
         graph.ndata["shear_stress"] = torch.tensor(shear_stress, dtype=torch.float32)
         graph = add_edge_features(graph)
 
-        # Partition the graph and gather the partitions into a list
+        # Partition the graph
         partitioned_graphs = process_partition(graph, num_partitions, halo_hops)
 
-        # Save the list of partitions for this run
+        # Save the partitions
         save_graphs(partition_file_path, partitioned_graphs)
 
         if save_point_cloud:

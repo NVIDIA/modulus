@@ -32,7 +32,7 @@ import hydra
 
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
-from hydra import to_absolute_path
+from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 
 
@@ -195,6 +195,9 @@ def main(cfg: DictConfig) -> None:
     global_mean, global_std = compute_global_stats(
         bin_files, num_workers=cfg.num_preprocess_workers
     )
+
+    # Save statistics to a JSON file
+    save_stats_to_json(global_mean, global_std, output_file)
 
     # Print the results
     print("Global Mean:", global_mean)

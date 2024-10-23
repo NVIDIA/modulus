@@ -35,6 +35,7 @@ import dgl
 import pyvista as pv
 import torch
 import hydra
+import numpy as np
 from hydra.utils import to_absolute_path
 from torch.nn.parallel import DistributedDataParallel
 import torch.optim as optim
@@ -133,17 +134,17 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize model
     model = MeshGraphNet(
-        input_dim_nodes=6,
+        input_dim_nodes=24,
         input_dim_edges=4,
         output_dim=4,
         processor_size=cfg.num_message_passing_layers,
         aggregation="sum",
-        hidden_dim_node_encoder=256,
-        hidden_dim_edge_encoder=256,
-        hidden_dim_node_decoder=256,
-        mlp_activation_fn="relu",
-        do_concat_trick=True,
-        num_processor_checkpoint_segments=3,
+        hidden_dim_node_encoder=cfg.hidden_dim,
+        hidden_dim_edge_encoder=cfg.hidden_dim,
+        hidden_dim_node_decoder=cfg.hidden_dim,
+        mlp_activation_fn=cfg.activation,
+        do_concat_trick=cfg.use_concat_trick,
+        num_processor_checkpoint_segments=cfg.checkpoint_segments,
     ).to(device)
     print(f"Number of trainable parameters: {count_trainable_params(model)}")
 
@@ -184,7 +185,17 @@ def main(cfg: DictConfig) -> None:
                 with torch.autocast(amp_device, enabled=True, dtype=amp_dtype):
                     part = subgraphs[j].to(device)
                     ndata = torch.cat(
-                        (part.ndata["coordinates"], part.ndata["normals"]), dim=1
+                        (
+                            part.ndata["coordinates"],
+                            part.ndata["normals"],
+                            torch.sin(2 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(2 * np.pi * part.ndata["coordinates"]),
+                            torch.sin(4 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(4 * np.pi * part.ndata["coordinates"]),
+                            torch.sin(8 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(8 * np.pi * part.ndata["coordinates"]),
+                        ),
+                        dim=1,
                     )
                     pred = model(ndata, part.edata["x"], part)
                     pred_filtered = pred[part.ndata["inner_node"].bool(), :]
@@ -268,7 +279,17 @@ def main(cfg: DictConfig) -> None:
 
                     # Get node features (coordinates and normals)
                     ndata = torch.cat(
-                        (part.ndata["coordinates"], part.ndata["normals"]), dim=1
+                        (
+                            part.ndata["coordinates"],
+                            part.ndata["normals"],
+                            torch.sin(2 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(2 * np.pi * part.ndata["coordinates"]),
+                            torch.sin(4 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(4 * np.pi * part.ndata["coordinates"]),
+                            torch.sin(8 * np.pi * part.ndata["coordinates"]),
+                            torch.cos(8 * np.pi * part.ndata["coordinates"]),
+                        ),
+                        dim=1,
                     )
 
                     with torch.no_grad():

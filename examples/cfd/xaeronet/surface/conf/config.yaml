@@ -25,9 +25,9 @@ hydra:
 # │            Data Preprocessing             │
 # └───────────────────────────────────────────┘  
 
-num_nodes: 500000                                    # Number of nodes in the graphs
+num_nodes: [100000, 200000, 400000]                  # Number of nodes in the graphs
 node_degree: 6                                       # Degree of the nodes in the graphs
-num_partitions: 2                                    # Number of partitions for each graph
+num_partitions: 3                                    # Number of partitions for each graph
 data_path: /data/drivaer_aws/drivaer_data_full       # Path to the raw data
 num_preprocess_workers: 32                           # Number of workers for data preprocessing
 save_point_clouds: false                             # Save point clouds for the preprocessed data
@@ -37,8 +37,8 @@ save_point_clouds: false                             # Save point clouds for the
 # └───────────────────────────────────────────┘
 
 num_message_passing_layers: 15                       # Number of message passing layers
-hidden_dim: 256                                      # Hidden dimension of the model
-activation: relu                                     # Activation function
+hidden_dim: 512                                      # Hidden dimension of the model
+activation: silu                                     # Activation function
 
 # ┌───────────────────────────────────────────┐
 # │          Training Configuration           │
