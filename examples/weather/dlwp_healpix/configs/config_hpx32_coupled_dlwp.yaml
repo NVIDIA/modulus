@@ -14,17 +14,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: modulus.metrics.climate.loss.MSE_SSIM
+defaults:
+  - _self_
+  - data: era5_hpx32_8var-coupled_6h_24h
+  - model: coupled_hpx_rec_unet
+  - trainer: dlwp
 
-mse_params:
-ssim_params:
-  window_size: 11
-  time_series_forecasting: True
-# variables over which to calculate SSIM-MSE weighted average loss
-ssim_variables:
-  - ttr1h
-  - tcwv0
-# used to calculated the weighted average between MSE and DSSIM
-weights:
-  - 0.
-  - 1.
+experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
+output_dir: outputs/${experiment_name}
+# checkpoints names are in the form training-state-<name>.mdlus
+checkpoint_name: last
+load_weights_only: false
+seed: 0
+
+# Training specifications
+batch_size: 32
+learning_rate: 1e-3
+num_workers: 8
+
+# Distributed setup (multi GPU)
+port: 29450
+master_address: localhost
+
+hydra:
+  verbose: true
+  run:
+    dir: ${output_dir}

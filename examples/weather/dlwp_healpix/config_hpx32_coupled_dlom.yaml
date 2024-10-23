@@ -15,34 +15,28 @@
 # limitations under the License.
 
 defaults:
-  - module: time_series
-  - scaling: classic
-  - splits: default
+  - _self_
+  - data: era5_hpx32_dlom_sst-z1000-ws_48H-dt
+  - model: coupled_hpx_unet_dlom
+  - trainer: dlom
 
-src_directory: /datasets/healpix/HPX32
-dst_directory: /datasets/healpix/HPX32
-dataset_name: era5_hpx32_7var_6h_24h
-prefix: era5_1deg_3h_HPX32_1979-2021_
-suffix: ''
-data_format: classic
-input_variables:
-  - z500
-  - tau300-700
-  - z1000
-  - t2m0
-  - tcwv0
-  - t850
-  - z250
-output_variables: null
-constants:
-  land_sea_mask: lsm
-  topography: z
-input_time_dim: 2
-output_time_dim: 4
-data_time_step: 3h
-time_step: 6h
-gap: 6h
-add_insolation: true
-nside: 32
-cube_dim: ${data.nside}
-prebuilt_dataset: true
+experiment_name: ${now:%Y-%m-%d}/${now:%H-%M-%S}
+output_dir: outputs/${experiment_name}
+# checkpoints names are in the form training-state-<name>.mdlus
+checkpoint_name: last
+load_weights_only: false
+seed: 0
+
+# Training specifications
+batch_size: 64
+learning_rate: 1e-4
+num_workers: 8
+
+# Distributed setup (multi GPU)
+port: 29450
+master_address: localhost
+
+hydra:
+  verbose: true
+  run:
+    dir: ${output_dir}
