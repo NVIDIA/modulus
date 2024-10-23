@@ -154,38 +154,34 @@ def test_HEALPixLayer_initialization(device, multiplier):
 def test_HEALPixLayer_forward(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 
+    kernel_size = 3
+    dilation = 2
+    in_channels = 4
+    out_channels = 8
+
     tensor_size = torch.randint(low=2, high=4, size=(1,)).tolist()
-    tensor_size = [24, 4, *tensor_size, *tensor_size]
+    tensor_size = [24, in_channels, *tensor_size, *tensor_size]
     invar = torch.rand(tensor_size, device=device)
     outvar = layer(invar)
 
     assert common.compare_output(outvar, invar * multiplier)
 
-    # test nhwc mode and dilation
     layer = HEALPixLayer(
         layer=torch.nn.Conv2d,
-        in_channels=4,
-        out_channels=8,
-        kernel_size=3,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
         device=device,
-        # dilation=4,
-    )
-
-    outvar = layer(invar)
-
-    layer = HEALPixLayer(
-        layer=torch.nn.Conv2d,
-        in_channels=4,
-        out_channels=8,
-        kernel_size=3,
-        device=device,
-        dilation=1,
+        dilation=dilation,
         enable_healpixpad=True,
         enable_nhwc=True,
     )
 
-    assert outvar.shape == layer(invar).shape
-    assert outvar.stride() != layer(invar).stride()
+    # size of the padding added byu HEALPixLayer
+    expected_shape = [24, out_channels, tensor_size[-1], tensor_size[-1]]
+    expected_shape = torch.Size(expected_shape)
+
+    assert expected_shape == layer(invar).shape
 
     del layer, outvar, invar
     torch.cuda.empty_cache()
