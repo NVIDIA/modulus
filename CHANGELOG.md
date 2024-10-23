@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bistride Multiscale MeshGraphNet example.
 - FIGConvUNet model and example.
 - The Transolver model.
+- The XAeroNet model.
 
 ### Changed
 
