@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed timezone calculation in datapipe cosine zenith utility.
 - Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
 - Extended the checkpointing utility to store metadata.
+- Corrected missing export of loggin function used by transolver model
 
 ### Deprecated
 
