@@ -26,6 +26,7 @@ python examples/generative/topodiff/train_classifier.py
 python examples/generative/topodiff/train_regressor.py
 ```
 ### Generation
+By default, the generated topologies are conditioned on the boundary and loading conditions that have not been seen in the training process.
 Run the following command to generate topologies: 
 ```Bash
 python examples/generative/topodiff/inference.py
