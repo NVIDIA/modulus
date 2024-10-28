@@ -61,7 +61,8 @@ def main(cfg: DictConfig) -> None:
     
         if step % 100 == 0: 
             logger.info("epoch: %d, loss: %.5f" % (step, losses.item()))
-    torch.save(model.state_dict(), cfg.model_path + "model.pt")
+        if step % 100000 == 0:
+            torch.save(model.state_dict(), cfg.model_path + "model_" + str(step) + ".pt")
     logger.info("Training completed!")
 
 

@@ -10,6 +10,26 @@ We propose Topodiff, a conditional diffusion-model-based architecture to perform
 ## Dataset
 Link to the dataset: [here](https://www.dropbox.com/home/decode_lab/Datasets/Public%20Documents/Topodiff_dataset)
 
+## Instructions 
+
+
+<p align="center">
+<img src="../../../docs/img/topodiff_doc/topology_generated.png" width="840" />
+</p>
+
+### Model training 
+Run the following command to train the diffusion model
+```Bash
+python examples/generative/topodiff/train.py
+```
+### Generation
+Run the following command to generate topologies: 
+```Bash
+python examples/generative/topodiff/inference.py
+```
+
+
+
 
 ## Citations
 To cite this work, please use the following reference:

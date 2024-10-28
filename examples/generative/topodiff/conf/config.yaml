@@ -24,10 +24,11 @@ hydra:
 path_data: "/home/turbo/ICMLCB/data/64/"
 
 epochs: 400000
-batch_size: 32
+batch_size: 64
 lr: 1e-4 
 
 iterations: 400000
 diffusion_steps: 1000
-model_path: ./outputs/
-generation_path: .
+model_path: ./
+generation_path: ./
+model_path_inference: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt

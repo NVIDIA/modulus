@@ -32,7 +32,9 @@ def main(cfg: DictConfig) -> None:
     
     
     device = torch.device('cuda:0')
-    model = TopoDiff(64, 6, 1, model_channels=128, attn_resolutions=[16,8]).to(device)
+    model = TopoDiff(64, 6, 1, model_channels=128, attn_resolutions=[16,8])
+    model.load_state_dict(torch.load(cfg.model_path_inference))
+    model.to(device)
     
     diffusion = Diffusion(n_steps=1000,device=device)
     batch_size = cfg.batch_size
@@ -45,7 +47,7 @@ def main(cfg: DictConfig) -> None:
     cons = cons.float().to(device)
     
     n_steps = 1000
-    batch_size = 32     
+    #batch_size = 32     
     
     xt = torch.randn(batch_size, 1, 64, 64).to(device)
 
@@ -61,7 +63,7 @@ def main(cfg: DictConfig) -> None:
 
             xt = 1 / diffusion.alphas[i].sqrt() * (xt - noisy * (1 -  diffusion.alphas[i])/(1 - diffusion.alpha_bars[i]).sqrt()) + + diffusion.betas[i].sqrt() * z 
             
-        result = xt.cpu().numpy()
+        result = xt.cpu().detach().numpy()
     
     np.save(cfg.generation_path + 'results.npy', result)    
     
