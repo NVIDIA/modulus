@@ -64,7 +64,7 @@ def main(cfg: DictConfig) -> None:
     
     vf_in = torch.zeros([batch_size,1,image_size,image_size],dtype=torch.float32,device=device)
     loss_fn = nn.MSELoss()
-    for i in range(cfg.iterations):
+    for i in range(cfg.regressor_iterations):
     
         # get random batch from training data
         idx = np.random.choice(len(topologies), batch_size, replace=False)

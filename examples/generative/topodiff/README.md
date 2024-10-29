@@ -19,6 +19,30 @@ Download the dataset and set the **path_data** in [the config yaml file](conf/co
 </p>
 
 ### Model training 
+Before training the model, config.yaml should be: 
+```
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ./outputs/
+
+
+path_data: path to the Topodiff dataset downloaded 
+
+epochs: 200000
+batch_size: 128
+lr: 1e-4 
+
+classifier_iterations: 30000
+regressor_iterations: 30000
+diffusion_steps: 1000
+
+generation_path: ./
+model_path_diffusion: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt
+model_path_classifier: /home/turbo/Qian/modulus/modulus/outputs/classifier.pt
+```
+
 Run the following command to train the diffusion model, classifier for floating material and regressor for compliance:
 ```Bash
 python examples/generative/topodiff/train.py
@@ -50,5 +74,9 @@ To cite this work, please use the following reference:
 }
 ```
 
-## Contacts 
+## References
+- [Diffusion Models Beat GANs on Topology Optimization](https://decode.mit.edu/assets/papers/2022_maze_topodiff.pdf)
+- [Topodiff Project Page](https://decode.mit.edu/projects/topodiff/)
+- [Topodiff Dataset](https://www.dropbox.com/home/decode_lab/Datasets/Public%20Documents/Topodiff_dataset)
+- [Github](https://github.com/francoismaze/topodiff)
 
