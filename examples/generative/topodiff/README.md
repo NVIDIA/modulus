@@ -39,8 +39,8 @@ regressor_iterations: 30000
 diffusion_steps: 1000
 
 generation_path: ./
-model_path_diffusion: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt
-model_path_classifier: /home/turbo/Qian/modulus/modulus/outputs/classifier.pt
+model_path_diffusion: path to the pt file of the diffusion model
+model_path_classifier: path to the pt file of the classifier for floating material
 ```
 
 Run the following command to train the diffusion model, classifier for floating material and regressor for compliance:
