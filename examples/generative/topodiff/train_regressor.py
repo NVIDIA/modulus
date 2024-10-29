@@ -50,9 +50,6 @@ def main(cfg: DictConfig) -> None:
     regressor = UNetEncoder(in_channels = in_channels, out_channels=1).to(device)
     
     diffusion = Diffusion(n_steps=cfg.diffusion_steps,device=device)
-    print(cfg.model_path + "hello")
-    
-    
     
     
     batch_size = cfg.batch_size
