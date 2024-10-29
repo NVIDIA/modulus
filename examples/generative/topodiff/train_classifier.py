@@ -40,7 +40,6 @@ def main(cfg: DictConfig) -> None:
     classifier = UNetEncoder(in_channels = 1, out_channels=2).to(device)
     
     diffusion = Diffusion(n_steps=cfg.diffusion_steps,device=device)
-    print(cfg.model_path + "hello")
     
     batch_size = cfg.batch_size
 
@@ -49,8 +48,9 @@ def main(cfg: DictConfig) -> None:
     optimizer = AdamW(classifier.parameters(), lr=lr)
     scheduler = LinearLR(optimizer, start_factor=1, end_factor=0.001, total_iters=cfg.iterations)
     
-    for i in range(cfg.iterations):
+    for i in range(cfg.classifier_iterations):
         # get random batch from training data
+        
         idx = np.random.choice(len(train_img), batch_size, replace=False)
         batch = torch.tensor(train_img[idx]).float().unsqueeze(1).to(device)*2-1
         batch_labels = torch.tensor(train_labels[idx]).long().to(device)
@@ -66,9 +66,27 @@ def main(cfg: DictConfig) -> None:
         scheduler.step()        
        
         if i % 100 == 0: 
-            print("epoch: %d, loss: %.5f" % (i, loss.item()))
-            
-    torch.save(classifier.state_dict(), cfg.model_path + "regressor.pt")
+            with torch.no_grad():
+                idx = np.random.choice(len(valid_img), batch_size, replace=False)
+                batch = torch.tensor(valid_img[idx]).float().unsqueeze(1).to(device) * 2 - 1
+                batch_labels = torch.tensor(valid_labels[idx]).long().to(device)
+
+                # Sample diffusion steps and get noised images
+                t = torch.randint(0, cfg.diffusion_steps, (batch.shape[0], )).to(device)
+                batch = diffusion.q_sample(batch, t)
+
+                # Forward pass
+                logits = classifier(batch, time_steps=t)
+
+                # Compute accuracy
+                predicted_labels = torch.argmax(logits, dim=1)
+                correct_predictions = (predicted_labels == batch_labels).sum().item()
+                accuracy = correct_predictions / batch_size
+
+                print("epoch: %d, loss: %.5f, validation accuracy: %.3f" % (i, loss.item(), accuracy))
+        if i % 10000 == 0:
+            torch.save(classifier.state_dict(), cfg.model_path + "classifier.pt")    
+    
     print("job done!")
 
 

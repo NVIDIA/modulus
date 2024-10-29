@@ -28,7 +28,10 @@ batch_size: 64
 lr: 1e-4 
 
 iterations: 400000
+classifier_iterations: 30000
+regressor_iterations: 100000
 diffusion_steps: 1000
 model_path: ./
 generation_path: ./
-model_path_inference: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt
+model_path_diffusion: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt
+model_path_classifier: /home/turbo/Qian/modulus/modulus/outputs/classifier.pt
