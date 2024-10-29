@@ -59,12 +59,9 @@ def main(cfg: DictConfig) -> None:
     
     for i in reversed(range(n_steps)): 
         with torch.no_grad():
-            if i > 1: 
-                z = torch.rand_like(xt).to(device)
-            else: 
-                z = torch.zeros_like(xt).to(device)
             t = torch.tensor([i] * batch_size, device = device) 
             noisy = diffusion.p_sample(model,xt, t, cons)
+            
         with torch.enable_grad():
             xt.requires_grad_(True)
             logits = classifier(xt,time_steps=t)

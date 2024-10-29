@@ -42,7 +42,7 @@ from ..module import Module
 class MetaData(ModelMetaData):
     name: str = "TopoDiff"
     # Optimization
-    jit: bool = True
+    jit: bool = False
     cuda_graphs: bool = False
     amp_cpu: bool = False
     amp_gpu: bool = True
@@ -50,8 +50,8 @@ class MetaData(ModelMetaData):
     onnx: bool = True
     # Physics informed
     var_dim: int = 1
-    func_torch: bool = True
-    auto_grad: bool = True
+    func_torch: bool = False
+    auto_grad: bool = False
 
 
 class TopoDiff(Module):
