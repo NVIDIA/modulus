@@ -348,7 +348,6 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
         gefs_sample = np.concatenate((gefs_surface_sample, gefs_isobaric_sample), axis=0)  
         gefs_sample = self.normalize_input(gefs_sample)
         torch.cuda.nvtx.range_pop()
-        print(np.mean(hrrr_sample, axis=(1,2)))
         return hrrr_sample, gefs_sample, global_idx, int(time_index[-2:])//3
 
     def _global_idx_to_datetime(self, global_idx):
