@@ -21,10 +21,8 @@ hydra:
     dir: ./outputs/
 
 
-path_data: "/home/turbo/ICMLCB/data/64/"
-
-epochs: 200000
-batch_size: 128
+epochs: 500000
+batch_size: 64
 lr: 1e-4 
 
 classifier_iterations: 30000
@@ -32,5 +30,20 @@ regressor_iterations: 30000
 diffusion_steps: 1000
 model_path: ./
 generation_path: ./
-model_path_diffusion: /home/turbo/Qian/modulus/modulus/outputs/model_300000.pt
+model_path_diffusion: /home/turbo/Qian/modulus/modulus/outputs/model_100000.pt
 model_path_classifier: /home/turbo/Qian/modulus/modulus/outputs/classifier.pt
+
+
+path_training_data_diffusion: /home/turbo/Qian/dataset_1_diff/training_data/
+
+path_data_regressor_training: /home/turbo/Qian/dataset_2_reg/training_data/
+path_data_regressor_validation:  /home/turbo/Qian/dataset_2_reg/validation_data/
+
+path_data_classifier_training: /home/turbo/Qian/dataset_3_class/training_data/
+path_data_classifier_validation:  /home/turbo/Qian/dataset_3_class/validation_data/
+
+
+
+prefix_topology_file: gt_topo_
+prefix_pf_file: cons_pf_array_
+prefix_load_file: cons_load_array_

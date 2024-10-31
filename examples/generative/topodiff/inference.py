@@ -16,7 +16,7 @@ from modulus.launch.logging import (
     PythonLogger, 
     initialize_wandb
 )
-from utils import load_data_topodiff 
+from utils import load_data_topodiff, load_data
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None: 
@@ -24,15 +24,12 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main") # General Python Logger 
     logger.log("Job start!")
     
-    topologies = np.load(cfg.path_data + "Test_InDistro/topologies.npy").astype(np.float64)
-    constraints = np.load(cfg.path_data + "Test_InDistro/constraints.npy", allow_pickle=True)
-    stress = np.load(cfg.path_data + "Test_InDistro/vonmises.npy", allow_pickle=True)
-    strain = np.load(cfg.path_data + "Test_InDistro/strain_energy.npy", allow_pickle=True)
-    load_imgs = np.load(cfg.path_data + "/Test_InDistro/load_ims.npy")
+
+    topologies = np.random.randn(1800, 64,64)
+    vfs_stress_strain = load_data('/home/turbo/Qian/dataset_1_diff/test_data_level_1/',cfg.prefix_pf_file, '.npy', 200,2000)
+    load_imgs = load_data('/home/turbo/Qian/dataset_1_diff/test_data_level_1/', cfg.prefix_load_file, '.npy', 200,2000)
     
-    
-    
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     model = TopoDiff(64, 6, 1, model_channels=128, attn_resolutions=[16,8])
     model.load_state_dict(torch.load(cfg.model_path_diffusion))
     model.to(device)
@@ -44,20 +41,19 @@ def main(cfg: DictConfig) -> None:
     diffusion = Diffusion(n_steps=1000,device=device)
     batch_size = cfg.batch_size
     data = load_data_topodiff(
-        topologies, constraints, stress, strain, load_imgs, batch_size= batch_size,deterministic=False
+        topologies, vfs_stress_strain, load_imgs, batch_size= batch_size,deterministic=False
     )
     
     _, cons = next(data)
     
     cons = cons.float().to(device)
     
-    n_steps = 1000
-    #batch_size = 32     
-    
+    n_steps = 1000 
+
     xt = torch.randn(batch_size, 1, 64, 64).to(device)
-    floating_labels = torch.tensor([0]*batch_size).long().to(device)
+    floating_labels = torch.tensor([1]*batch_size).long().to(device)
     
-    for i in reversed(range(n_steps)): 
+    for i in reversed(trange(n_steps)): 
         with torch.no_grad():
             t = torch.tensor([i] * batch_size, device = device) 
             noisy = diffusion.p_sample(model,xt, t, cons)
@@ -75,40 +71,19 @@ def main(cfg: DictConfig) -> None:
             z = torch.zeros_like(xt).to(device)
             xt = xt + diffusion.betas[i].sqrt() * (z * 0.8 + 0.2 * grad.float())
     
-    result = xt.cpu().detach().numpy()
+    result = (xt.cpu().detach().numpy() + 1) * 2
 
-
-    """
-    result = []
-    with torch.no_grad():
-        for i in reversed(range(n_steps)):
-            if i > 1: 
-                z = torch.randn_like(xt).to(device)
-            else:
-                z = torch.zeros_like(xt).to(device)
-            t = torch.tensor([i] * batch_size, device = device) 
-            noisy = diffusion.p_sample(model,xt, t, cons)
-            logits = classifier(batch_size,time_steps=t)
-        
-            loss = F.cross_entropy(logits,floating_labels)
-            
-            
-
-            xt = 1 / diffusion.alphas[i].sqrt() * (xt - noisy * (1 -  diffusion.alphas[i])/(1 - diffusion.alpha_bars[i]).sqrt()) + + diffusion.betas[i].sqrt() * z 
-            
-        result = xt.cpu().detach().numpy()
-    """
-    np.save(cfg.generation_path + 'results.npy', result)    
+    np.save(cfg.generation_path + 'results_topology.npy', result)    
     
     # plot images for the generated samples
-    fig, axes = plt.subplots(2,4, figsize=(12,6),dpi=300)
+    fig, axes = plt.subplots(8,8, figsize=(12,6),dpi=300)
 
-    for i in range(2): 
-        for j in range(4): 
-            img = np.zeros((64,64))
-            img[result[i*4 + j ][0] > 0] = 1
+    for i in range(8): 
+        for j in range(8): 
+            img = result[i*4 + j ][0]
             axes[i,j].imshow(img, cmap='gray')
-            axes[i,j].axis('off')
+            axes[i,j].set_xticks([])
+            axes[i,j].set_yticks([])
         
 
     plt.xticks([])  # Remove x-axis ticks
@@ -116,7 +91,7 @@ def main(cfg: DictConfig) -> None:
     plt.gca().xaxis.set_visible(False)  # Optionally hide x-axis
     plt.gca().yaxis.set_visible(False)  # Optionally hide y-axis
     
-    plt.savefig(cfg.generation_path + 'grid.png', bbox_inches='tight', pad_inches=0)
+    plt.savefig(cfg.generation_path + 'grid_topology.png', bbox_inches='tight', pad_inches=0)
 
     
     

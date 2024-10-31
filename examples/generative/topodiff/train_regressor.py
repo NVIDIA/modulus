@@ -18,16 +18,17 @@ from modulus.launch.logging import (
     PythonLogger, 
     initialize_wandb
 )
-from utils import load_data_topodiff 
+from utils import load_data_topodiff, load_data_regressor
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None: 
     
     logger = PythonLogger("main") # General Python Logger 
     logger.log("Start running")
-    logger.info("end running ")
-    
-    
+
+    topologies, load_imgs, vfs_stress_strain, labels = load_data_regressor(cfg.path_data_regressor_training)
+    topologies = topologies*2 - 1        # Normalize the range of image to be [-1, 1]
+    """
     topologies = np.load(cfg.path_data + "Compliance/Training/topologies.npy").astype(np.float64)
     constraints = np.load(cfg.path_data + "Compliance/Training/constraints.npy", allow_pickle=True)
     stress = np.load(cfg.path_data+ "Compliance/Training/vonmises.npy", allow_pickle=True)
@@ -35,51 +36,43 @@ def main(cfg: DictConfig) -> None:
     load_imgs = np.load(cfg.path_data + "Compliance/Training/load_imgs.npy")
     bc_imgs = np.load(cfg.path_data + "Compliance/Training/bc_imgs.npy").astype(np.float64)
     Compliance = np.load(cfg.path_data + "Compliance/Training/compliance.npy").astype(np.float64)
+    """
 
-
-    vfs = []
-    for i in range(len(topologies)):
-        vfs.append(constraints[i]['VOL_FRAC'])
-    vfs = np.array(vfs)    
-    
-    image_size = topologies.shape[-1]
-    
     device = torch.device('cuda:0')
     
-    in_channels = 1 + 3 + 2 + 2
+    in_channels = 6
     regressor = UNetEncoder(in_channels = in_channels, out_channels=1).to(device)
     
     diffusion = Diffusion(n_steps=cfg.diffusion_steps,device=device)
     
     
     batch_size = cfg.batch_size
-
-
+    """
+    data = load_data_topodiff(
+        topologies, vfs_stress_strain, load_imgs, batch_size= batch_size,deterministic=False
+    )
+    """
     lr = cfg.lr
     optimizer = AdamW(regressor.parameters(), lr=lr)
-    scheduler = LinearLR(optimizer, start_factor=1, end_factor=0.001, total_iters=cfg.iterations)
+    scheduler = LinearLR(optimizer, start_factor=1, end_factor=0.001, total_iters=cfg.regressor_iterations)
     
-    vf_in = torch.zeros([batch_size,1,image_size,image_size],dtype=torch.float32,device=device)
     loss_fn = nn.MSELoss()
     for i in range(cfg.regressor_iterations):
     
         # get random batch from training data
         idx = np.random.choice(len(topologies), batch_size, replace=False)
-        batch = torch.tensor(topologies[idx]).float().unsqueeze(1).to(device)*2-1
-        batch_stress = torch.tensor(stress[idx]).float().unsqueeze(1).to(device)
-        batch_strain = torch.tensor(strain[idx]).float().unsqueeze(1).to(device)
-        batch_load_imgs = torch.tensor(load_imgs[idx]).float().to(device).permute(0,3,1,2)
-        batch_bc_imgs = torch.tensor(bc_imgs[idx]).float().to(device).permute(0,3,1,2)
-        batch_vf = torch.tensor(vfs[idx]).float().to(device)
-        batch_labels = torch.tensor(Compliance[idx]).float().to(device).unsqueeze(1)
+        batch = torch.tensor(topologies[idx]).float().unsqueeze(1).to(device)*2-1 # 4 x 1 x 64 x 64
+        batch_pf = torch.tensor(vfs_stress_strain[idx]).float().permute(0,3,1,2).to(device)*2-1
+        batch_load = torch.tensor(load_imgs[idx]).float().permute(0,3,1,2).to(device)
+        
+        batch_labels = torch.tensor(labels[idx]).float().to(device).unsqueeze(1)
 
-        vf_in = vf_in*0
-        vf_in = vf_in + batch_vf.unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        
 
         t = torch.randint(0, cfg.diffusion_steps, (batch.shape[0], )).to(device)
         batch = diffusion.q_sample(batch, t)
        
-        batch = torch.cat((batch,batch_stress,batch_strain,batch_load_imgs,vf_in,batch_bc_imgs),dim=1)
+        batch = torch.cat((batch,batch_pf,batch_load),dim=1)
 
         logits = regressor(batch,time_steps=t)
 
@@ -91,8 +84,8 @@ def main(cfg: DictConfig) -> None:
     
         if i % 100 == 0: 
             print("epoch: %d, loss: %.5f" % (i, loss.item()))
-            
-    torch.save(regressor.state_dict(), cfg.model_path + "regressor.pt")
+    if i % 10000 == 0:         
+        torch.save(regressor.state_dict(), cfg.model_path + "regressor.pt")
     print("job done!")
 
 
