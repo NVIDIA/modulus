@@ -105,7 +105,9 @@ def main(cfg: DictConfig) -> None:
     img_out_channels = len(dataset.output_channels())
     if cfg.model.hr_mean_conditioning:
         img_in_channels += img_out_channels
-    prob_channels = [4,5,6,7,8]
+
+    if cfg.model.name  == "lt_aware_ce_regression":
+        prob_channels = dataset.get_prob_channel_index()
     # Parse the patch shape
     if cfg.model.name == "patched_diffusion" or cfg.model.name == "lt_aware_patched_diffusion":
         patch_shape_x = cfg.training.hp.patch_shape_x
