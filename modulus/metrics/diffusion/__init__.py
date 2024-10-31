@@ -23,4 +23,5 @@ from .loss import (
     VELoss,
     VELoss_dfsr,
     VPLoss,
+    RegressionLossCE,
 )

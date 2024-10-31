@@ -29,7 +29,7 @@ from modulus.utils.generative import StackedRandomGenerator, time_range
 
 
 def regression_step(
-    net: torch.nn.Module, img_lr: torch.Tensor, latents_shape: torch.Size
+    net: torch.nn.Module, img_lr: torch.Tensor, latents_shape: torch.Size, lead_time_label: torch.Tensor = None,
 ) -> torch.Tensor:
     """
     Given a low-res input, performs a regression step to produce ensemble mean.
@@ -52,7 +52,7 @@ def regression_step(
 
     # Perform regression on a single batch element
     with torch.inference_mode():
-        x = net(x_hat[0:1], img_lr, t_hat)
+        x = net(x_hat[0:1], img_lr, t_hat, lead_time_label=lead_time_label)
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
@@ -72,6 +72,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
     rank: int,
     device: torch.device,
     hr_mean: torch.Tensor = None,
+    lead_time_label: torch.Tensor = None,
 ) -> torch.Tensor:
 
     """
@@ -99,6 +100,8 @@ def diffusion_step(  # TODO generalize the module and add defaults
     additional_args = {}
     if hr_mean is not None:
         additional_args["mean_hr"] = hr_mean
+    additional_args["lead_time_label"] = lead_time_label
+    additional_args["img_shape"] = img_shape
 
     # Loop over batches
     all_images = []
@@ -136,9 +139,9 @@ def diffusion_step(  # TODO generalize the module and add defaults
 class NetCDFWriter:
     """NetCDF Writer"""
 
-    def __init__(self, f, lat, lon, input_channels, output_channels):
+    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time):
         self._f = f
-
+        self.has_lead_time = has_lead_time
         # create unlimited dimensions
         f.createDimension("time")
         f.createDimension("ensemble")
@@ -163,16 +166,19 @@ class NetCDFWriter:
         v.units = "degrees_east"
 
         # create time dimension
-        v = f.createVariable("time", "i8", ("time"))
-        v.calendar = "standard"
-        v.units = "hours since 1990-01-01 00:00:00"
+        if has_lead_time:
+            v = f.createVariable("time", "str", ("time"))
+        else:
+            v = f.createVariable("time", "i8", ("time"))
+            v.calendar = "standard"
+            v.units = "hours since 1990-01-01 00:00:00"
 
         self.truth_group = f.createGroup("truth")
         self.prediction_group = f.createGroup("prediction")
         self.input_group = f.createGroup("input")
 
         for variable in output_channels:
-            name = variable.name + variable.level
+            name = variable.name + variable.level           
             self.truth_group.createVariable(name, "f", dimensions=("time", "y", "x"))
             self.prediction_group.createVariable(
                 name, "f", dimensions=("ensemble", "time", "y", "x")
@@ -181,7 +187,7 @@ class NetCDFWriter:
         # setup input data in netCDF
 
         for variable in input_channels:
-            name = variable.name + variable.level
+            name = variable.name + variable.level  
             self.input_group.createVariable(name, "f", dimensions=("time", "y", "x"))
 
     def write_input(self, channel_name, time_index, val):
@@ -198,10 +204,13 @@ class NetCDFWriter:
 
     def write_time(self, time_index, time):
         """Write time information to NetCDF file."""
-        time_v = self._f["time"]
-        self._f["time"][time_index] = cftime.date2num(
-            time, time_v.units, time_v.calendar
-        )
+        if self.has_lead_time:
+            self._f["time"][time_index] = time
+        else:
+            time_v = self._f["time"]
+            self._f["time"][time_index] = cftime.date2num(
+                time, time_v.units, time_v.calendar
+            )
 
 
 ############################################################################
