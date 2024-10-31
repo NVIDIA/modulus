@@ -399,6 +399,9 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
     def time(self):
         return self.valid_samples
 
+    def get_prob_channel_index(self):
+        return self.prob_channel_index + [len(self.output_variables)]
+    
     def input_channels(self):
         return [ChannelMetadata(name=n) for n in self.input_variables]
 
