@@ -19,7 +19,7 @@ hydra:
     chdir: true
     name: gefs_hrrr_diffusion
   run:
-    dir: /lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/tge/${hydra:job.name}
+    dir: ./outputs/${hydra:job.name}
 
 # Get defaults
 defaults:
@@ -28,7 +28,7 @@ defaults:
   - dataset/gefs_hrrr
 
   # Model
-  - model/corrdiff_patched_diffusion_gefs
+  - model/corrdiff_patched_diffusion_gefs_hrrr
 
   # Training
-  - training/corrdiff_patched_diffusion_gefs
+  - training/corrdiff_patched_diffusion_gefs_hrrr

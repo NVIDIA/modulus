@@ -31,4 +31,4 @@ defaults:
   - model/corrdiff_regression_gefs_hrrr
 
   # Training
-  - training/corrdiff_regression_mini
+  - training/corrdiff_regression_gefs_hrrr

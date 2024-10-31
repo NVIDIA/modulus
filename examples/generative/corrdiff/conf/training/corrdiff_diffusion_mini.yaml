@@ -22,9 +22,9 @@ defaults:
 hp:
     training_duration: 8000000
     # Training duration based on the number of processed samples
-    total_batch_size: 1
+    total_batch_size: 256
     # Total batch size
-    batch_size_per_gpu: 3
+    batch_size_per_gpu: "auto"
     # Batch size per GPU
     lr_rampup: 0
     # Rampup for learning rate, in number of samples
