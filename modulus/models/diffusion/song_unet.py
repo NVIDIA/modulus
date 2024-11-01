@@ -614,14 +614,10 @@ class SongUNetPosEmbd(SongUNet):
 
 class SongUNetPosLtEmbd(SongUNet):
     """
-    Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
-    optional self-attention,embeddings, and encoder-decoder components.
-
-    This model supports conditional and unconditional setups, as well as several
-    options for various internal architectural choices such as encoder and decoder
-    type, embedding type, etc., making it flexible and adaptable to different tasks
-    and configurations.
-
+    This model is adapated from SongUNetPosEmbd, with the incoporatation of lead-time aware
+    embedding for the GEFS-HRRR model. The lead-time embedding is activated by setting the 
+    lead_time_channels and lead_time_steps parameters.
+    
     Parameters
     -----------
     img_resolution : Union[List[int], int]
@@ -661,6 +657,10 @@ class SongUNetPosLtEmbd(SongUNet):
         'standard'.
     resample_filter : List[int], optional (default=[1,1])
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
+    lead_time_channels: int, optional
+        Length of lead time embedding vector
+    lead_time_steps: int, optional
+        Total number of lead times
 
 
     Reference
