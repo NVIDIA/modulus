@@ -258,9 +258,9 @@ class UNetEncoder(Module):
             out_channels: int,
             model_channels: int = 128, 
             num_res_blocks: int = 4,
-            channel_mult: tuple = (1, 2, 4, 8),
+            channel_mult: tuple = (1, 1, 1, 1),
             channel_mult_emb: int = 4,
-            attention_resolutions: tuple = (2, 4, 8),
+            attention_resolutions: tuple = (16, 8),
             dropout=0,
             output_prob=False):
 

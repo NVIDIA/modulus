@@ -28,7 +28,6 @@ def main(cfg: DictConfig) -> None:
 
     topologies, load_imgs, vfs_stress_strain, labels = load_data_regressor(cfg.path_data_regressor_training)
     topologies = topologies*2 - 1        # Normalize the range of image to be [-1, 1]
-    print(topologies.min(), topologies.max())
     """
     topologies = np.load(cfg.path_data + "Compliance/Training/topologies.npy").astype(np.float64)
     constraints = np.load(cfg.path_data + "Compliance/Training/constraints.npy", allow_pickle=True)
@@ -63,7 +62,7 @@ def main(cfg: DictConfig) -> None:
         # get random batch from training data
         idx = np.random.choice(len(topologies), batch_size, replace=False)
         batch = torch.tensor(topologies[idx]).float().unsqueeze(1).to(device)*2-1 # 4 x 1 x 64 x 64
-        batch_pf = torch.tensor(vfs_stress_strain[idx]).float().permute(0,3,1,2).to(device)*2-1
+        batch_pf = torch.tensor(vfs_stress_strain[idx]).float().permute(0,3,1,2).to(device)
         batch_load = torch.tensor(load_imgs[idx]).float().permute(0,3,1,2).to(device)
         
         batch_labels = torch.tensor(labels[idx]).float().to(device).unsqueeze(1)

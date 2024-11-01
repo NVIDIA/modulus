@@ -27,23 +27,16 @@ def main(cfg: DictConfig) -> None:
     logger = PythonLogger("main") # General Python Logger 
     logger.log("Start running")
 
-    #train_img = np.load(cfg.path_data  + "Floating/training.npy").astype(np.float64)
-    #train_labels = np.load(cfg.path_data  + "Floating/training_labels.npy").astype(np.float64)
-
-    #valid_img = np.load(cfg.path_data + "Floating/validation.npy").astype(np.float64)
-    #valid_labels = np.load(cfg.path_data  + "Floating/validation_labels.npy").astype(np.float64)
-    
     train_img, train_labels = load_data_classifier(cfg.path_data_classifier_training)
     valid_img, valid_labels = load_data_classifier(cfg.path_data_classifier_validation)
     train_img = 2 * train_img - 1
     valid_img = 2 * valid_img - 1
-    print(train_img.min(), train_img.max())
-    print(valid_img.min(), valid_img.max())
+
     device = torch.device('cuda:1')
     
     
     classifier = UNetEncoder(in_channels = 1, out_channels=2).to(device)
-    classifier.load_state_dict(torch.load('/home/turbo/Qian/modulus/modulus/outputs/classifier.pt'))
+    
     diffusion = Diffusion(n_steps=cfg.diffusion_steps,device=device)
     
     batch_size = cfg.batch_size
@@ -89,7 +82,8 @@ def main(cfg: DictConfig) -> None:
                 accuracy = correct_predictions / batch_size
 
                 print("epoch: %d, loss: %.5f, validation accuracy: %.3f" % (i, loss.item(), accuracy))
-        
+        #if i % 10000 == 0: 
+        #    torch.save(classifier.state_dict(), cfg.model_path + "classifier_" +str(i) + ".pt")    
     torch.save(classifier.state_dict(), cfg.model_path + "classifier.pt")    
     
     print("job done!")
