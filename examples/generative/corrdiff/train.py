@@ -106,10 +106,13 @@ def main(cfg: DictConfig) -> None:
     if cfg.model.hr_mean_conditioning:
         img_in_channels += img_out_channels
 
-    if cfg.model.name  == "lt_aware_ce_regression":
+    if cfg.model.name == "lt_aware_ce_regression":
         prob_channels = dataset.get_prob_channel_index()
     # Parse the patch shape
-    if cfg.model.name == "patched_diffusion" or cfg.model.name == "lt_aware_patched_diffusion":
+    if (
+        cfg.model.name == "patched_diffusion"
+        or cfg.model.name == "lt_aware_patched_diffusion"
+    ):
         patch_shape_x = cfg.training.hp.patch_shape_x
         patch_shape_y = cfg.training.hp.patch_shape_y
     else:
@@ -126,7 +129,13 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
-    if cfg.model.name not in ("regression", "lt_aware_ce_regression", "diffusion", "patched_diffusion", "lt_aware_patched_diffusion"):
+    if cfg.model.name not in (
+        "regression",
+        "lt_aware_ce_regression",
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         raise ValueError("Invalid model")
     model_args = {  # default parameters for all networks
         "img_out_channels": img_out_channels,
@@ -148,7 +157,7 @@ def main(cfg: DictConfig) -> None:
             "lead_time_steps": 9,
             "prob_channels": prob_channels,
             "checkpoint_level": songunet_checkpoint_level,
-            "model_type":"SongUNetPosLtEmbd",
+            "model_type": "SongUNetPosLtEmbd",
         },
         "diffusion": {
             "img_channels": img_out_channels,
@@ -169,11 +178,15 @@ def main(cfg: DictConfig) -> None:
             "lead_time_channels": 20,
             "lead_time_steps": 9,
             "checkpoint_level": songunet_checkpoint_level,
-            "model_type":"SongUNetPosLtEmbd",
+            "model_type": "SongUNetPosLtEmbd",
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
-    if cfg.model.name in ("diffusion", "patched_diffusion", "lt_aware_patched_diffusion"):
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         model_args["scale_cond_input"] = cfg.model.scale_cond_input
     if hasattr(cfg.model, "model_args"):  # override defaults from config file
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
@@ -184,12 +197,16 @@ def main(cfg: DictConfig) -> None:
         )
     elif cfg.model.name == "lt_aware_ce_regression":
         model = UNet(
-            img_in_channels=img_in_channels + model_args["N_grid_channels"] + model_args["lead_time_channels"],
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
             **model_args,
         )
     elif cfg.model.name == "lt_aware_patched_diffusion":
         model = EDMPrecondSR(
-            img_in_channels=img_in_channels + model_args["N_grid_channels"] + model_args["lead_time_channels"],
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
             **model_args,
         )
     else:  # diffusion or patched diffusion
@@ -225,7 +242,11 @@ def main(cfg: DictConfig) -> None:
 
     # Instantiate the loss function
     patch_num = getattr(cfg.training.hp, "patch_num", 1)
-    if cfg.model.name in ("diffusion", "patched_diffusion", "lt_aware_patched_diffusion"):
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         loss_fn = ResLoss(
             regression_net=regression_net,
             img_shape_x=img_shape[1],

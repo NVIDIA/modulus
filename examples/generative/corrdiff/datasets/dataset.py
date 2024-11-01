@@ -25,7 +25,11 @@ from . import base, cwb, hrrrmini, gefs_hrrr
 
 
 # this maps all known dataset types to the corresponding init function
-known_datasets = {"cwb": cwb.get_zarr_dataset, "hrrr_mini": hrrrmini.HRRRMiniDataset, "gefs_hrrr": gefs_hrrr.HrrrForecastGEFSDataset}
+known_datasets = {
+    "cwb": cwb.get_zarr_dataset,
+    "hrrr_mini": hrrrmini.HRRRMiniDataset,
+    "gefs_hrrr": gefs_hrrr.HrrrForecastGEFSDataset,
+}
 
 
 def init_train_valid_datasets_from_config(

@@ -19,9 +19,9 @@ from .loss import (
     EDMLoss,
     EDMLossSR,
     RegressionLoss,
+    RegressionLossCE,
     ResLoss,
     VELoss,
     VELoss_dfsr,
     VPLoss,
-    RegressionLossCE,
 )

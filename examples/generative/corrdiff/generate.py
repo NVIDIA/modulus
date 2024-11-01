@@ -89,7 +89,9 @@ def main(cfg: DictConfig) -> None:
         has_lead_time = cfg.generation["has_lead_time"]
     else:
         has_lead_time = False
-    dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times, has_lead_time=has_lead_time)
+    dataset, sampler = get_dataset_and_sampler(
+        dataset_cfg=dataset_cfg, times=times, has_lead_time=has_lead_time
+    )
     img_shape = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
 

@@ -395,6 +395,7 @@ class SongUNet(Module):
                         x = block(x, emb)
         return aux
 
+
 class SongUNetPosEmbd(SongUNet):
     """
     Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
@@ -609,7 +610,8 @@ class SongUNetPosEmbd(SongUNet):
         else:
             raise ValueError("Gridtype not supported.")
         return grid
-    
+
+
 class SongUNetPosLtEmbd(SongUNet):
     """
     Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
@@ -738,31 +740,57 @@ class SongUNetPosLtEmbd(SongUNet):
         self.lt_embd = self._get_lead_time_embedding()
         self.prob_channels = prob_channels
         if self.prob_channels:
-            self.scalar = torch.nn.Parameter(torch.ones((1,len(self.prob_channels),1,1)))
+            self.scalar = torch.nn.Parameter(
+                torch.ones((1, len(self.prob_channels), 1, 1))
+            )
 
     @nvtx.annotate(message="SongUNet", color="blue")
     def forward(
-        self, x, noise_labels, class_labels, lead_time_label=None, global_index=None, augment_labels=None
+        self,
+        x,
+        noise_labels,
+        class_labels,
+        lead_time_label=None,
+        global_index=None,
+        augment_labels=None,
     ):
         # append positional embedding to input conditioning
         embeds = []
         if self.pos_embd is not None:
             embeds.append(self.pos_embd.to(x.device))
         if self.lt_embd is not None:
-            embeds.append(torch.reshape(self.lt_embd[lead_time_label.int()], (self.lead_time_channels, self.img_shape_y, self.img_shape_x)).to(x.device))
+            embeds.append(
+                torch.reshape(
+                    self.lt_embd[lead_time_label.int()],
+                    (self.lead_time_channels, self.img_shape_y, self.img_shape_x),
+                ).to(x.device)
+            )
         if len(embeds) > 0:
             embeds = torch.cat(embeds, dim=0)
-            selected_pos_embd = self.positional_embedding_indexing(x, embeds, global_index)
+            selected_pos_embd = self.positional_embedding_indexing(
+                x, embeds, global_index
+            )
             x = torch.cat((x, selected_pos_embd), dim=1)
         out = super().forward(x, noise_labels, class_labels, augment_labels)
-        # if training mode, let crossEntropyLoss do softmax. The model outputs logits. 
+        # if training mode, let crossEntropyLoss do softmax. The model outputs logits.
         # if eval mode, the model outputs probability
         all_channels = list(range(out.shape[1]))  # [0, 1, 2, ..., 10]
-        scalar_channels = [item for item in all_channels if item not in self.prob_channels]
+        scalar_channels = [
+            item for item in all_channels if item not in self.prob_channels
+        ]
         if self.prob_channels and (not self.training):
-            out_final = torch.cat((out[:,scalar_channels], (out[:,self.prob_channels]*self.scalar).softmax(dim=1)), dim=1)
+            out_final = torch.cat(
+                (
+                    out[:, scalar_channels],
+                    (out[:, self.prob_channels] * self.scalar).softmax(dim=1),
+                ),
+                dim=1,
+            )
         elif self.prob_channels and self.training:
-            out_final = torch.cat((out[:,scalar_channels], (out[:,self.prob_channels]*self.scalar)), dim=1)
+            out_final = torch.cat(
+                (out[:, scalar_channels], (out[:, self.prob_channels] * self.scalar)),
+                dim=1,
+            )
         else:
             out_final = out
         return out_final
@@ -770,9 +798,7 @@ class SongUNetPosLtEmbd(SongUNet):
     def positional_embedding_indexing(self, x, pos_embd, global_index):
         if global_index is None:
             selected_pos_embd = (
-                pos_embd.to(x.dtype)
-                .to(x.device)[None]
-                .expand((x.shape[0], -1, -1, -1))
+                pos_embd.to(x.dtype).to(x.device)[None].expand((x.shape[0], -1, -1, -1))
             )
         else:
             B = global_index.shape[0]
@@ -854,6 +880,11 @@ class SongUNetPosLtEmbd(SongUNet):
         if (self.lead_time_steps is None) or (self.lead_time_channels is None):
             return None
         grid = torch.nn.Parameter(
-            torch.randn(self.lead_time_steps, self.lead_time_channels, self.img_shape_y, self.img_shape_x)
+            torch.randn(
+                self.lead_time_steps,
+                self.lead_time_channels,
+                self.img_shape_y,
+                self.img_shape_x,
+            )
         )
         return grid

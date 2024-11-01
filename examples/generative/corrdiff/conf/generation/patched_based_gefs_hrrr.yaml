@@ -62,7 +62,7 @@ perf:
     # To support multiple workers a threadsafe version of the netCDF library must be used
 
 io:
-  res_ckpt_filename: /lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/tge/EDMPrecondSRV2_updated.0.5821440.mdlus
+  res_ckpt_filename: EDMPrecondSRV2_updated.0.5821440.mdlus
     # Checkpoint filename for the diffusion model  
-  reg_ckpt_filename:  /lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/tge/UNet_updated.0.1960960.mdlus
+  reg_ckpt_filename: UNet_updated.0.1960960.mdlus
     # Checkpoint filename for the mean predictor model

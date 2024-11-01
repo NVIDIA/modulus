@@ -19,7 +19,7 @@ hydra:
     chdir: true
     name: gefs_hrrr_generation
   run:
-    dir: /lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/tge/${hydra:job.name}
+    dir: output/${hydra:job.name}
 
 # Get defaults
 defaults:

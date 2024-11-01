@@ -459,7 +459,15 @@ class ResLoss:
         self.patch_num = patch_num
         self.hr_mean_conditioning = hr_mean_conditioning
 
-    def __call__(self, net, img_clean, img_lr, labels=None, lead_time_label=None, augment_pipe=None):
+    def __call__(
+        self,
+        net,
+        img_clean,
+        img_lr,
+        labels=None,
+        lead_time_label=None,
+        augment_pipe=None,
+    ):
         """
         Calculate and return the loss for denoising score matching.
 
@@ -775,15 +783,27 @@ class RegressionLossCE:
     """
 
     def __init__(
-        self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5, prob_channels: list = [4,5,6,7,8],
+        self,
+        P_mean: float = -1.2,
+        P_std: float = 1.2,
+        sigma_data: float = 0.5,
+        prob_channels: list = [4, 5, 6, 7, 8],
     ):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
-        self.entropy = torch.nn.CrossEntropyLoss(reduction='none')
+        self.entropy = torch.nn.CrossEntropyLoss(reduction="none")
         self.prob_channels = prob_channels
 
-    def __call__(self, net, img_clean, img_lr, lead_time_label=None, labels=None, augment_pipe=None):
+    def __call__(
+        self,
+        net,
+        img_clean,
+        img_lr,
+        lead_time_label=None,
+        labels=None,
+        augment_pipe=None,
+    ):
         """
         Calculate and return the loss for the U-Net for deterministic predictions.
 
@@ -812,7 +832,9 @@ class RegressionLossCE:
             predictions.
         """
         all_channels = list(range(img_clean.shape[1]))  # [0, 1, 2, ..., 10]
-        scalar_channels = [item for item in all_channels if item not in self.prob_channels]
+        scalar_channels = [
+            item for item in all_channels if item not in self.prob_channels
+        ]
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
@@ -827,8 +849,20 @@ class RegressionLossCE:
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         input = torch.zeros_like(y, device=img_clean.device)
-        D_yn = net(input, y_lr, sigma, labels, lead_time_label=lead_time_label, augment_labels=augment_labels)
-        loss1 = weight * ((D_yn[:,scalar_channels] - y[:,scalar_channels]) ** 2)
-        loss2 = weight * self.entropy(D_yn[:,self.prob_channels], y[:,self.prob_channels])[:, None]
-        loss = torch.cat((loss1,loss2), dim=1)
+        D_yn = net(
+            input,
+            y_lr,
+            sigma,
+            labels,
+            lead_time_label=lead_time_label,
+            augment_labels=augment_labels,
+        )
+        loss1 = weight * ((D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2)
+        loss2 = (
+            weight
+            * self.entropy(D_yn[:, self.prob_channels], y[:, self.prob_channels])[
+                :, None
+            ]
+        )
+        loss = torch.cat((loss1, loss2), dim=1)
         return loss

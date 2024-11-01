@@ -79,7 +79,7 @@ def test_song_unet_lt_indexing(device):
         out_channels=10,
         gridtype="test",
         lead_time_channels=lead_time_channels,
-        prob_channels=[0,1,2,3],
+        prob_channels=[0, 1, 2, 3],
         N_grid_channels=N_pos,
     ).to(device)
     input_image = torch.ones([1, 10, batch_shape_x, batch_shape_y]).to(device)
@@ -94,12 +94,25 @@ def test_song_unet_lt_indexing(device):
     # assert torch.equal(pos_embed, global_index)
 
     model.training = True
-    output_image = model(input_image, noise_labels, class_labels, lead_time_label=torch.tensor(8), global_index=global_index)
+    output_image = model(
+        input_image,
+        noise_labels,
+        class_labels,
+        lead_time_label=torch.tensor(8),
+        global_index=global_index,
+    )
     assert output_image.shape == (1, 10, batch_shape_x, batch_shape_y)
 
     model.training = False
-    output_image = model(input_image, noise_labels, class_labels, lead_time_label=torch.tensor(8), global_index=global_index)
+    output_image = model(
+        input_image,
+        noise_labels,
+        class_labels,
+        lead_time_label=torch.tensor(8),
+        global_index=global_index,
+    )
     assert output_image.shape == (1, 10, batch_shape_x, batch_shape_y)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_global_indexing(device):
@@ -123,10 +136,15 @@ def test_song_unet_global_indexing(device):
     mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
     global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
 
-    output_image = model(input_image, noise_labels, class_labels, global_index=global_index)
-    pos_embed = model.positional_embedding_indexing(input_image, model.pos_embd, global_index=global_index)
+    output_image = model(
+        input_image, noise_labels, class_labels, global_index=global_index
+    )
+    pos_embed = model.positional_embedding_indexing(
+        input_image, model.pos_embd, global_index=global_index
+    )
     assert output_image.shape == (1, 2, batch_shape_x, batch_shape_y)
     assert torch.equal(pos_embed, global_index)
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_constructor(device):

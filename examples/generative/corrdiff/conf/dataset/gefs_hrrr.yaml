@@ -15,7 +15,7 @@
 # limitations under the License.
 
 type: gefs_hrrr
-data_path: /lustre/fsw/portfolios/coreai/projects/coreai_climate_earth2/tge/
+data_path: /data
 stats_path: modulus/examples/generative/corrdiff/stats.json
 output_variables: ["u10m", "v10m", "t2m", "precip", "cat_snow", "cat_ice", "cat_freez", "cat_rain", "cat_none"]
 prob_variables: ["cat_snow", "cat_ice", "cat_freez", "cat_rain"]

@@ -29,7 +29,10 @@ from modulus.utils.generative import StackedRandomGenerator, time_range
 
 
 def regression_step(
-    net: torch.nn.Module, img_lr: torch.Tensor, latents_shape: torch.Size, lead_time_label: torch.Tensor = None,
+    net: torch.nn.Module,
+    img_lr: torch.Tensor,
+    latents_shape: torch.Size,
+    lead_time_label: torch.Tensor = None,
 ) -> torch.Tensor:
     """
     Given a low-res input, performs a regression step to produce ensemble mean.
@@ -178,7 +181,7 @@ class NetCDFWriter:
         self.input_group = f.createGroup("input")
 
         for variable in output_channels:
-            name = variable.name + variable.level           
+            name = variable.name + variable.level
             self.truth_group.createVariable(name, "f", dimensions=("time", "y", "x"))
             self.prediction_group.createVariable(
                 name, "f", dimensions=("ensemble", "time", "y", "x")
@@ -187,7 +190,7 @@ class NetCDFWriter:
         # setup input data in netCDF
 
         for variable in input_channels:
-            name = variable.name + variable.level  
+            name = variable.name + variable.level
             self.input_group.createVariable(name, "f", dimensions=("time", "y", "x"))
 
     def write_input(self, channel_name, time_index, val):
