@@ -53,7 +53,7 @@ def main(cfg: DictConfig) -> None:
     optimizer = AdamW(classifier.parameters(), lr=lr)
     scheduler = LinearLR(optimizer, start_factor=1, end_factor=0.001, total_iters=cfg.classifier_iterations)
     
-    for i in range(cfg.classifier_iterations):
+    for i in range(cfg.classifier_iterations+1):
         # get random batch from training data
         
         idx = np.random.choice(len(train_img), batch_size, replace=False)

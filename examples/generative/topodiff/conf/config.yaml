@@ -21,7 +21,7 @@ hydra:
     dir: ./outputs/
 
 
-epochs: 500000
+epochs: 100000
 batch_size: 64
 lr: 1e-4 
 

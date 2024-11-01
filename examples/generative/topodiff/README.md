@@ -8,7 +8,11 @@ We propose Topodiff, a conditional diffusion-model-based architecture to perform
 </p>
 
 ## Dataset
-Link to the dataset: [here](https://www.dropbox.com/home/decode_lab/Datasets/Public%20Documents/Topodiff_dataset)
+- Link to the complete dataset: [here](https://www.dropbox.com/home/decode_lab/Datasets/Public%20Documents/Topodiff_dataset)
+-Link to the dataset for diffusion model training: [here](https://www.dropbox.com/scl/fi/9jy96a0lyf39wdwc27se7/dataset_1_diff.zip?rlkey=zz0ijw8e5h0hf0fb7qpnbwrgu&st=t7nuh1w7&dl=0)
+Link to the dataset for regression model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
+Link to the dataset for classifier model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
+
 
 Download the dataset and set the **path_data** in [the config yaml file](conf/config.yaml)
 
@@ -30,17 +34,28 @@ hydra:
 
 path_data: path to the Topodiff dataset downloaded 
 
-epochs: 200000
+epochs: 100000
 batch_size: 128
 lr: 1e-4 
 
-classifier_iterations: 30000
-regressor_iterations: 30000
+classifier_iterations: 20000
+regressor_iterations: 20000
 diffusion_steps: 1000
 
 generation_path: ./
+
 model_path_diffusion: path to the pt file of the diffusion model
 model_path_classifier: path to the pt file of the classifier for floating material
+
+
+path_training_data_diffusion: path to the /dataset_1_diff/training_data/
+
+path_data_regressor_training: path to the /dataset_2_reg/training_data/
+path_data_regressor_validation:  path to the /dataset_2_reg/validation_data/
+
+path_data_classifier_training: path to the /dataset_3_class/training_data/
+path_data_classifier_validation:  path to the /dataset_3_class/validation_data/
+
 ```
 
 Run the following command to train the diffusion model, classifier for floating material and regressor for compliance:

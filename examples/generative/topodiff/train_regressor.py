@@ -28,6 +28,7 @@ def main(cfg: DictConfig) -> None:
 
     topologies, load_imgs, vfs_stress_strain, labels = load_data_regressor(cfg.path_data_regressor_training)
     topologies = topologies*2 - 1        # Normalize the range of image to be [-1, 1]
+    print(topologies.min(), topologies.max())
     """
     topologies = np.load(cfg.path_data + "Compliance/Training/topologies.npy").astype(np.float64)
     constraints = np.load(cfg.path_data + "Compliance/Training/constraints.npy", allow_pickle=True)
@@ -57,7 +58,7 @@ def main(cfg: DictConfig) -> None:
     scheduler = LinearLR(optimizer, start_factor=1, end_factor=0.001, total_iters=cfg.regressor_iterations)
     
     loss_fn = nn.MSELoss()
-    for i in range(cfg.regressor_iterations):
+    for i in range(cfg.regressor_iterations+1):
     
         # get random batch from training data
         idx = np.random.choice(len(topologies), batch_size, replace=False)
@@ -84,8 +85,8 @@ def main(cfg: DictConfig) -> None:
     
         if i % 100 == 0: 
             print("epoch: %d, loss: %.5f" % (i, loss.item()))
-    if i % 10000 == 0:         
-        torch.save(regressor.state_dict(), cfg.model_path + "regressor.pt")
+          
+    torch.save(regressor.state_dict(), cfg.model_path + "regressor.pt")
     print("job done!")
 
 
