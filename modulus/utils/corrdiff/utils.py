@@ -55,7 +55,11 @@ def regression_step(
 
     # Perform regression on a single batch element
     with torch.inference_mode():
-        x = net(x_hat[0:1], img_lr, t_hat, lead_time_label=lead_time_label)
+        if lead_time_label is not None:
+            x = net(x_hat[0:1], img_lr, t_hat, lead_time_label=lead_time_label)
+        else:
+            x = net(x_hat[0:1], img_lr, t_hat)
+
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
@@ -103,7 +107,8 @@ def diffusion_step(  # TODO generalize the module and add defaults
     additional_args = {}
     if hr_mean is not None:
         additional_args["mean_hr"] = hr_mean
-    additional_args["lead_time_label"] = lead_time_label
+    if lead_time_label is not None: 
+        additional_args["lead_time_label"] = lead_time_label
     additional_args["img_shape"] = img_shape
 
     # Loop over batches
@@ -142,7 +147,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
 class NetCDFWriter:
     """NetCDF Writer"""
 
-    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time = False):
+    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time=False):
         self._f = f
         self.has_lead_time = has_lead_time
         # create unlimited dimensions

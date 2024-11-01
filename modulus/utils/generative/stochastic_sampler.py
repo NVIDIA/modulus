@@ -364,6 +364,8 @@ def stochastic_sampler(
         img_shape_y, img_shape_x = img_shape
     else:
         img_shape_x = img_shape_y = img_shape
+    if patch_shape > img_shape_x or patch_shape > img_shape_y:
+        patch_shape = min(img_shape_x, img_shape_y)
 
     # Time step discretization.
     step_indices = torch.arange(num_steps, dtype=torch.float64, device=latents.device)
@@ -446,16 +448,26 @@ def stochastic_sampler(
             x_hat_batch = x_hat
         x_hat_batch = x_hat_batch.to(latents.device)
         x_lr = x_lr.to(latents.device)
-        global_index = global_index.to(latents.device)
+        if global_index is not None:
+            global_index = global_index.to(latents.device)
 
-        denoised = net(
-            x_hat_batch,
-            x_lr,
-            t_hat,
-            class_labels,
-            lead_time_label=lead_time_label,
-            global_index=global_index,
-        ).to(torch.float64)
+        if lead_time_label is not None:
+            denoised = net(
+                x_hat_batch,
+                x_lr,
+                t_hat,
+                class_labels,
+                lead_time_label=lead_time_label,
+                global_index=global_index,
+            ).to(torch.float64)
+        else:
+            denoised = net(
+                x_hat_batch,
+                x_lr,
+                t_hat,
+                class_labels,
+                global_index=global_index,
+            ).to(torch.float64)
         if patch_shape != img_shape_x or patch_shape != img_shape_y:
 
             denoised = image_fuse(
@@ -488,14 +500,23 @@ def stochastic_sampler(
                 x_next_batch = x_next
             # ask about this fix
             x_next_batch = x_next_batch.to(latents.device)
-            denoised = net(
-                x_next_batch,
-                x_lr,
-                t_next,
-                class_labels,
-                lead_time_label=lead_time_label,
-                global_index=global_index,
-            ).to(torch.float64)
+            if lead_time_label is not None:
+                denoised = net(
+                    x_next_batch,
+                    x_lr,
+                    t_next,
+                    class_labels,
+                    lead_time_label=lead_time_label,
+                    global_index=global_index,
+                ).to(torch.float64)
+            else:
+                denoised = net(
+                    x_next_batch,
+                    x_lr,
+                    t_next,
+                    class_labels,
+                    global_index=global_index,
+                ).to(torch.float64)
             if patch_shape != img_shape_x or patch_shape != img_shape_y:
                 denoised = image_fuse(
                     denoised,
