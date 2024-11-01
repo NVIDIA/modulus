@@ -615,9 +615,9 @@ class SongUNetPosEmbd(SongUNet):
 class SongUNetPosLtEmbd(SongUNet):
     """
     This model is adapated from SongUNetPosEmbd, with the incoporatation of lead-time aware
-    embedding for the GEFS-HRRR model. The lead-time embedding is activated by setting the 
+    embedding for the GEFS-HRRR model. The lead-time embedding is activated by setting the
     lead_time_channels and lead_time_steps parameters.
-    
+
     Parameters
     -----------
     img_resolution : Union[List[int], int]

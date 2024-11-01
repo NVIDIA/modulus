@@ -60,7 +60,6 @@ def regression_step(
         else:
             x = net(x_hat[0:1], img_lr, t_hat)
 
-
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
         x = x.repeat([d if i == 0 else 1 for i, d in enumerate(x_hat.shape)])
@@ -107,7 +106,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
     additional_args = {}
     if hr_mean is not None:
         additional_args["mean_hr"] = hr_mean
-    if lead_time_label is not None: 
+    if lead_time_label is not None:
         additional_args["lead_time_label"] = lead_time_label
     additional_args["img_shape"] = img_shape
 
@@ -147,7 +146,9 @@ def diffusion_step(  # TODO generalize the module and add defaults
 class NetCDFWriter:
     """NetCDF Writer"""
 
-    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time=False):
+    def __init__(
+        self, f, lat, lon, input_channels, output_channels, has_lead_time=False
+    ):
         self._f = f
         self.has_lead_time = has_lead_time
         # create unlimited dimensions

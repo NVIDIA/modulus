@@ -763,10 +763,10 @@ class VELoss_dfsr:
 
 class RegressionLossCE:
     """
-    A regression loss function for the GEFS-HRRR model with probability channels, adapted 
-    from RegressionLoss. In this version, probability channels are evaluated using 
+    A regression loss function for the GEFS-HRRR model with probability channels, adapted
+    from RegressionLoss. In this version, probability channels are evaluated using
     CrossEntropyLoss instead of MSELoss.
-    
+
     Parameters
     ----------
     P_mean: float, optional
@@ -776,7 +776,7 @@ class RegressionLossCE:
     sigma_data: float, optional
         Standard deviation for data, by default 0.5.
     prob_channels: list, optional
-        A index list of output probability channels. 
+        A index list of output probability channels.
 
     Note
     ----
@@ -821,10 +821,10 @@ class RegressionLossCE:
 
         img_lr: torch.Tensor
             Input images (low resolution) to the neural network.
-            
+
         lead_time_label: torch.Tensor
             Lead time labels for input batches.
-            
+
         labels: torch.Tensor
             Ground truth labels for the input images.
 
