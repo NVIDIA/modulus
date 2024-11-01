@@ -9,9 +9,9 @@ We propose Topodiff, a conditional diffusion-model-based architecture to perform
 
 ## Dataset
 - Link to the complete dataset: [here](https://www.dropbox.com/home/decode_lab/Datasets/Public%20Documents/Topodiff_dataset)
--Link to the dataset for diffusion model training: [here](https://www.dropbox.com/scl/fi/9jy96a0lyf39wdwc27se7/dataset_1_diff.zip?rlkey=zz0ijw8e5h0hf0fb7qpnbwrgu&st=t7nuh1w7&dl=0)
-Link to the dataset for regression model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
-Link to the dataset for classifier model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
+- Link to the dataset for diffusion model training: [here](https://www.dropbox.com/scl/fi/9jy96a0lyf39wdwc27se7/dataset_1_diff.zip?rlkey=zz0ijw8e5h0hf0fb7qpnbwrgu&st=t7nuh1w7&dl=0)
+- Link to the dataset for regression model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
+- Link to the dataset for classifier model training: [here](https://www.dropbox.com/scl/fi/486kmqbghzxuxqewjm9b4/dataset_2_reg.zip?rlkey=gw8yu1lv40tqk192py7wsl9o9&st=ao9yc1rw&dl=0)
 
 
 Download the dataset and set the **path_data** in [the config yaml file](conf/config.yaml)
