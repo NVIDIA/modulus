@@ -142,7 +142,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
 class NetCDFWriter:
     """NetCDF Writer"""
 
-    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time):
+    def __init__(self, f, lat, lon, input_channels, output_channels, has_lead_time = False):
         self._f = f
         self.has_lead_time = has_lead_time
         # create unlimited dimensions
