@@ -738,7 +738,7 @@ class SongUNetPosLtEmbd(SongUNet):
         self.lt_embd = self._get_lead_time_embedding()
         self.prob_channels = prob_channels
         if self.prob_channels:
-            self.scalar = torch.nn.Parameter(torch.ones((1,5,1,1)))
+            self.scalar = torch.nn.Parameter(torch.ones((1,len(self.prob_channels),1,1)))
 
     @nvtx.annotate(message="SongUNet", color="blue")
     def forward(
