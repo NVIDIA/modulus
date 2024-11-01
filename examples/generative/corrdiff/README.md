@@ -34,6 +34,7 @@ To train the CorrDiff-Mini regression model, we use the main configuration file 
 * The CorrDiff-Mini regression model: [conf/model/corrdiff_regression_mini.yaml](conf/model/corrdiff_regression_mini.yaml)
 * The CorrDiff-Mini regression training options: [conf/training/corrdiff_regression_mini.yaml](conf/training/corrdiff_regression_mini.yaml)
 * The CorrDiff-GEFS-HRRR regression training options: [conf/model/corrdiff_regression_mini.yaml](conf/training/config_training_gefs_regression.yaml)
+  
 To start the training, run:
 ```bash
 python train.py --config-name=config_training_mini_regression.yaml ++dataset.data_path=</path/to/dataset>/hrrr_mini_train.nc ++dataset.stats_path=</path/to/dataset>/stats.json
