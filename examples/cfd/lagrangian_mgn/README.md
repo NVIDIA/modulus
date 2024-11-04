@@ -1,6 +1,6 @@
 # MeshGraphNet with Lagrangian mesh
 
-This example of Meshgraphnet for particle-based simulation on the water dataset based on
+This is an example of Meshgraphnet for particle-based simulation on the water dataset based on
 <https://github.com/google-deepmind/deepmind-research/tree/master/learning_to_simulate> in PyTorch.
 It demonstrates how to train a Graph Neural Network (GNN) for evaluation of the
 Lagrangian fluid.
@@ -9,7 +9,7 @@ Lagrangian fluid.
 
 In this project, we provide an example of Lagrangian mesh simulation for fluids. The Lagrangian mesh is particle-based, where vertices represent fluid particles and edges represent their interactions. Compared to an Eulerian mesh, where the mesh grid is fixed, a Lagrangian mesh is more flexible since it does not require tessellating the domain or aligning with boundaries. 
 
-As a result, Lagrangian meshes are well-suited for representing complex geometries and free-boundary problems, such as water splashes and object collisions. However, a drawback of the Lagrangian mesh is that it typically requires smaller time steps to maintain physically valid simulations.
+As a result, Lagrangian meshes are well-suited for representing complex geometries and free-boundary problems, such as water splashes and object collisions. However, a drawback of Lagrangian simulation is that it typically requires smaller time steps to maintain physically valid prediction.
 
 
 ## Dataset
