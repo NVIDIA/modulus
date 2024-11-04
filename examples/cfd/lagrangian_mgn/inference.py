@@ -27,7 +27,7 @@ from matplotlib import tri as mtri
 from matplotlib.patches import Rectangle
 import matplotlib  #
 
-matplotlib.use("TkAgg")  #
+matplotlib.use("TkAgg")  # for plotting
 
 import numpy as np
 from networkx import radius
@@ -91,8 +91,7 @@ class MGNRollout:
             cfg.num_edge_features,
             cfg.num_output_features,
             cfg.processor_size,
-            mlp_activation_fn="silu",
-            # mlp_activation_fn="silu" if cfg.recompute_activation else "gelu",
+            mlp_activation_fn=cfg.activation,
             do_concat_trick=cfg.do_concat_trick,
             num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
             recompute_activation=cfg.recompute_activation,
