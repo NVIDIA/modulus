@@ -24,6 +24,9 @@ hydra:
 data_dir: /data/Water
 dim: 2
 
+# model config
+activation: "silu"
+
 # training configs
 batch_size: 20
 epochs: 20

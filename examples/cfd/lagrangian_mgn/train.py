@@ -51,12 +51,13 @@ class MGNTrainer:
         self.gravity[-1] = -9.8
 
         # MGN with recompute_activation currently supports only SiLU activation function.
-        mlp_act = "silu"
-        if cfg.recompute_activation:
-            rank_zero_logger.info(
-                "Setting MLP activation to SiLU required by recompute_activation."
+        mlp_act = cfg.activation
+        if cfg.recompute_activation and cfg.activation.lower() != "silu":
+            raise ValueError(
+                f"recompute_activation only supports SiLU activation function, "
+                f"but got {cfg.activation}. Please either set activation='silu' "
+                f"or disable recompute_activation."
             )
-            mlp_act = "silu"
 
         # instantiate dataset
         self.dataset = LagrangianDataset(
