@@ -43,6 +43,7 @@ def initialize_wandb(
     sync_tensorboard: bool = False,
     save_code: bool = False,
     resume: str = None,
+    wandb_id: str = None,
     config=None,
     mode: Literal["offline", "online", "disabled"] = "offline",
     results_dir: str = None,
@@ -66,6 +67,11 @@ def initialize_wandb(
     resume: str, optional
         Sets the resuming behavior. Options: "allow", "must", "never", "auto" or None,
         by default None.
+    wandb_id: str, optional
+        A unique ID for this run, used for resuming. Used in conjunction with `resume`
+        parameter to enable experiment resuming.
+        See W&B documentation for more details:
+        https://docs.wandb.ai/guides/runs/resuming/
     config : optional
         a dictionary-like object for saving inputs , like hyperparameters.
         If dict, argparse or absl.flags, it will load the key value pairs into the
@@ -107,6 +113,7 @@ def initialize_wandb(
         dir=wandb_dir,
         group=group,
         save_code=save_code,
+        id=wandb_id,
     )
 
 

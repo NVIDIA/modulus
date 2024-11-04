@@ -97,7 +97,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
 
     # Handling of the high-res mean
     additional_args = {}
-    if hr_mean:
+    if hr_mean is not None:
         additional_args["mean_hr"] = hr_mean
 
     # Loop over batches
@@ -114,8 +114,8 @@ def diffusion_step(  # TODO generalize the module and add defaults
                 [
                     seed_batch_size,
                     img_out_channels,
-                    img_shape[1],
                     img_shape[0],
+                    img_shape[1],
                 ],
                 device=device,
             ).to(memory_format=torch.channels_last)

@@ -16,9 +16,9 @@
 
 num_ensembles: 64
   # Number of ensembles to generate per input
-seed_batch_size: 1
+seed_batch_size: 4
   # Size of the batched inference
-inference_mode: regression #all
+inference_mode: all
   # Choose between "all" (regression + diffusion), "regression" or "diffusion"
 patch_size: 448
 patch_shape_x: 448

@@ -13,6 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# ruff: noqa: E402
+import os
+import sys
+
+script_path = os.path.abspath(__file__)
+sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 
 import common
 import pytest
@@ -62,6 +68,9 @@ def test_UNetEncoder_initialize(device):
     ).to(device)
     assert isinstance(encoder, UNetEncoder)
 
+    del encoder
+    torch.cuda.empty_cache()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_forward(device):
@@ -101,6 +110,9 @@ def test_UNetEncoder_forward(device):
         # default behaviour is to half the h/w size after first
         assert out_tensor.shape[2] == tensor_size[2] // (2**idx)
 
+    del encoder, invar, outvar
+    torch.cuda.empty_cache()
+
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_UNetEncoder_reset(device):
@@ -127,6 +139,9 @@ def test_UNetEncoder_reset(device):
     # doesn't do anything
     encoder.reset()
     assert isinstance(encoder, UNetEncoder)
+
+    del encoder
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -183,6 +198,9 @@ def test_UNetDecoder_initilization(device):
         dilations=(1, 1, 1),
     ).to(device)
     assert isinstance(decoder, UNetDecoder)
+
+    del decoder
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -258,6 +276,9 @@ def test_UNetDecoder_forward(device):
 
     outvar = decoder(invars)
     assert outvar.shape == expected_size
+
+    del decoder, outvar, invars
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -342,3 +363,6 @@ def test_UNetDecoder_reset(device):
     decoder.reset()
     outvar_reset = decoder(invars)
     assert common.compare_output(outvar, outvar_reset)
+
+    del decoder, outvar, invars
+    torch.cuda.empty_cache()

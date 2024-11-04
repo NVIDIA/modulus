@@ -54,15 +54,24 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
-    if hasattr(cfg, "validation_dataset"):
-        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    if hasattr(cfg, "validation"):
+        train_test_split = True
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation)
     else:
+        train_test_split = False
         validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
     logger.info(f"Saving the outputs in {os.getcwd()}")
+    checkpoint_dir = os.path.join(
+        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
+    )
+    if cfg.training.hp.batch_size_per_gpu == "auto":
+        cfg.training.hp.batch_size_per_gpu = (
+            cfg.training.hp.total_batch_size // dist.world_size
+        )
 
     # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
     set_seed(dist.rank)
@@ -85,6 +94,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.training.hp.batch_size_per_gpu,
         seed=0,
         validation_dataset_cfg=validation_dataset_cfg,
+        train_test_split=train_test_split,
     )
 
     # Parse image configuration & update model args
@@ -138,6 +148,8 @@ def main(cfg: DictConfig) -> None:
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
+    if cfg.model.name in ("diffusion", "patched_diffusion"):
+        model_args["scale_cond_input"] = cfg.model.scale_cond_input
     if hasattr(cfg.model, "model_args"):  # override defaults from config file
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
     if cfg.model.name == "regression":
@@ -169,7 +181,7 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
@@ -205,6 +217,7 @@ def main(cfg: DictConfig) -> None:
         cfg.training.hp.batch_size_per_gpu,
         dist.world_size,
     )
+    batch_size_per_gpu = cfg.training.hp.batch_size_per_gpu
     logger0.info(f"Using {num_accumulation_rounds} gradient accumulation rounds")
 
     ## Resume training from previous checkpoints if exists
@@ -212,7 +225,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
     try:
         cur_nimg = load_checkpoint(
-            path=f"checkpoints_{cfg.model.name}",
+            path=checkpoint_dir,
             models=model,
             optimizer=optimizer,
             device=dist.device,
@@ -226,6 +239,11 @@ def main(cfg: DictConfig) -> None:
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
     done = False
+
+    # init variables to monitor running mean of average loss since last periodic
+    average_loss_running_mean = 0
+    n_average_loss_running_mean = 1
+
     while not done:
         tick_start_nimg = cur_nimg
         tick_start_time = time.time()
@@ -245,7 +263,7 @@ def main(cfg: DictConfig) -> None:
                     labels=labels,
                     augment_pipe=None,
                 )
-            loss = loss.sum() / batch_gpu_total
+            loss = loss.sum() / batch_size_per_gpu
             loss_accum += loss / num_accumulation_rounds
             loss.backward()
 
@@ -254,15 +272,39 @@ def main(cfg: DictConfig) -> None:
             torch.distributed.barrier()
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = (loss_sum / dist.world_size).cpu().item()
+
+        # update running mean of average loss since last periodic task
+        average_loss_running_mean += (
+            average_loss - average_loss_running_mean
+        ) / n_average_loss_running_mean
+        n_average_loss_running_mean += 1
+
         if dist.rank == 0:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
+            writer.add_scalar(
+                "training_loss_running_mean", average_loss_running_mean, cur_nimg
+            )
+
+        ptt = is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        )
+        if ptt:
+            # reset running mean of average loss
+            average_loss_running_mean = 0
+            n_average_loss_running_mean = 1
 
         # Update weights.
         lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
         for g in optimizer.param_groups:
             if lr_rampup > 0:
                 g["lr"] = cfg.training.hp.lr * min(cur_nimg / lr_rampup, 1)
-            g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
+            if cur_nimg >= lr_rampup:
+                g["lr"] *= cfg.training.hp.lr_decay ** ((cur_nimg - lr_rampup) // 5e6)
             current_lr = g["lr"]
             if dist.rank == 0:
                 writer.add_scalar("learning_rate", current_lr, cur_nimg)
@@ -306,7 +348,9 @@ def main(cfg: DictConfig) -> None:
                             labels=labels_valid,
                             augment_pipe=None,
                         )
-                        loss_valid = (loss_valid.sum() / batch_gpu_total).cpu().item()
+                        loss_valid = (
+                            (loss_valid.sum() / batch_size_per_gpu).cpu().item()
+                        )
                         valid_loss_accum += (
                             loss_valid / cfg.training.io.validation_steps
                         )
@@ -337,6 +381,7 @@ def main(cfg: DictConfig) -> None:
             fields = []
             fields += [f"samples {cur_nimg:<9.1f}"]
             fields += [f"training_loss {average_loss:<7.2f}"]
+            fields += [f"training_loss_running_mean {average_loss_running_mean:<7.2f}"]
             fields += [f"learning_rate {current_lr:<7.8f}"]
             fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
             fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
@@ -367,7 +412,7 @@ def main(cfg: DictConfig) -> None:
             rank_0_only=True,
         ):
             save_checkpoint(
-                path=f"checkpoints_{cfg.model.name}",
+                path=checkpoint_dir,
                 models=model,
                 optimizer=optimizer,
                 epoch=cur_nimg,

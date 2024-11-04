@@ -51,7 +51,7 @@ def _bvh_query_distance(
     """
     tid = wp.tid()
 
-    res = wp.mesh_query_point(mesh, points[tid], max_dist)
+    res = wp.mesh_query_point_sign_normal(mesh, points[tid], max_dist)
 
     mesh_ = wp.mesh_get(mesh)
 
@@ -99,7 +99,7 @@ def signed_distance_field(
     >>> mesh_indices = np.array((0, 1, 2))
     >>> input_points = [(0.5, 0.5, 0.5)]
     >>> signed_distance_field(mesh_vertices, mesh_indices, input_points).numpy()
-    Module modulus.utils.sdf load on device 'cuda:0' took ...
+    Module ...
     array([0.5], dtype=float32)
     """
 

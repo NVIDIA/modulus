@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import numpy as np
-
-import time, os
-import wandb
+import os
+import time
 
 import hydra
+import numpy as np
+import torch
+import wandb
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 
@@ -37,30 +37,22 @@ except:
         + "pip install pyvista"
     )
 
-from modulus.models.mlp.fully_connected import FullyConnected
+from collections import OrderedDict
+from typing import Dict
 
 from modulus.launch.logging import (
     PythonLogger,
-    initialize_wandb,
     RankZeroLoggingWrapper,
+    initialize_wandb,
 )
-from modulus.launch.utils import load_checkpoint, save_checkpoint
-from utils import relative_lp_error, get_dataset
-
-from collections import OrderedDict
-
-from sympy import Symbol, Function, Number
+from modulus.models.mlp.fully_connected import FullyConnected
 from modulus.sym.eq.pde import PDE
-from modulus.sym.node import Node
+from modulus.sym.eq.phy_informer import PhysicsInformer
 from modulus.sym.key import Key
-from modulus.sym.graph import Graph
-from modulus.sym.models.fully_connected import FullyConnectedArch
-from modulus.sym.models.fourier_net import FourierNetArch
 from modulus.sym.models.arch import Arch
-from modulus.sym.key import Key
-from modulus.sym.manager import GraphManager
+from sympy import Function, Number, Symbol
 
-from typing import Optional, Dict
+from utils import get_dataset, relative_lp_error
 
 
 class Stokes(PDE):
@@ -118,7 +110,7 @@ class DNN(torch.nn.Module):
     """
 
     def __init__(self, layers, fourier_features=64):
-        super(DNN, self).__init__()
+        super().__init__()
 
         # parameters
         self.depth = len(layers) - 1
@@ -184,7 +176,7 @@ class MdlsSymDNN(Arch):
         layers=[2, 128, 128, 128, 128, 3],
         fourier_features=64,
     ):
-        super(MdlsSymDNN, self).__init__(
+        super().__init__(
             input_keys=input_keys,
             output_keys=output_keys,
         )
@@ -225,7 +217,7 @@ class PhysicsInformedFineTuner:
         ref_v,
         ref_p,
     ):
-        super(PhysicsInformedFineTuner, self).__init__()
+        super().__init__()
 
         self.device = device
         self.nu = nu
@@ -246,11 +238,6 @@ class PhysicsInformedFineTuner:
             torch.tensor(coords_noslip, requires_grad=True).float().to(self.device)
         )
 
-        self.model = DNN(
-            layers=[2, 128, 128, 128, 128, 3],
-            fourier_features=64,
-        ).to(self.device)
-
         self.model = MdlsSymDNN(
             input_keys=[Key("x"), Key("y")],
             output_keys=[Key("u"), Key("v"), Key("p")],
@@ -260,37 +247,18 @@ class PhysicsInformedFineTuner:
 
         self.node_pde = Stokes(nu=self.nu, dim=2)
 
-        self.nodes = self.node_pde.make_nodes() + [
-            self.model.make_node(name="flow_network", jit=False)
-        ]
+        # note: this example uses the PhysicsInformer class from Modulus Sym to
+        # construct the computational graph. This allows you to leverage Modulus Sym's
+        # optimized derivative backend to compute the derivatives, along with other
+        # benefits like symbolic definition of PDEs and leveraging the PDEs from Modulus
+        # Sym's PDE module.
 
-        # note: this example uses the Graph class from Modulus Sym to construct the
-        # computational graph. This allows you to leverage Modulus Sym's optimized
-        # derivative backend to compute the derivatives, along with other benefits like
-        # symbolic definition of PDEs and leveraging the PDEs from Modulus Sym's PDE
-        # module.
-        # For more details, refer: https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.graph
-        self.graph = Graph(
-            self.nodes,
-            [Key("x"), Key("y")],
-            [Key("u"), Key("v"), Key("p")],
-            func_arch=False,
-        ).to(
-            self.device
-        )  # For pure inference (no gradients)
-        self.graph_full = Graph(
-            self.nodes,
-            [Key("x"), Key("y")],
-            [
-                Key("u"),
-                Key("v"),
-                Key("p"),
-                Key("continuity"),
-                Key("momentum_x"),
-                Key("momentum_y"),
-            ],
-            func_arch=False,
-        ).to(self.device)
+        self.phy_informer = PhysicsInformer(
+            required_outputs=["continuity", "momentum_x", "momentum_y"],
+            equations=self.node_pde,
+            grad_method="autodiff",
+            device=self.device,
+        )
 
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
@@ -306,23 +274,31 @@ class PhysicsInformedFineTuner:
     def loss(self):
         # inflow points
         x_in, y_in = self.coords_inflow[:, 0:1], self.coords_inflow[:, 1:2]
-        results_inflow = self.graph_full.forward({"x": x_in, "y": y_in})
+        results_inflow = self.model({"x": x_in, "y": y_in})
         pred_u_in, pred_v_in = results_inflow["u"], results_inflow["v"]
 
         # no-slip points
         x_no_slip, y_no_slip = self.coords_noslip[:, 0:1], self.coords_noslip[:, 1:2]
-        results_noslip = self.graph_full.forward({"x": x_no_slip, "y": y_no_slip})
+        results_noslip = self.model({"x": x_no_slip, "y": y_no_slip})
         pred_u_noslip, pred_v_noslip = results_noslip["u"], results_noslip["v"]
 
         # interior points
         x_int, y_int = self.coords[:, 0:1], self.coords[:, 1:2]
-        results_int = self.graph_full.forward({"x": x_int, "y": y_int})
+        model_out = self.model({"x": x_int, "y": y_int})
+        results_int = self.phy_informer.forward(
+            {
+                "coordinates": self.coords,
+                "u": model_out["u"],
+                "v": model_out["v"],
+                "p": model_out["p"],
+            }
+        )
         pred_mom_u, pred_mom_v, pred_cont = (
             results_int["momentum_x"],
             results_int["momentum_y"],
             results_int["continuity"],
         )
-        pred_u, pred_v, pred_p = results_int["u"], results_int["v"], results_int["p"]
+        pred_u, pred_v, pred_p = model_out["u"], model_out["v"], model_out["p"]
 
         u_in, v_in = self.parabolic_inflow(self.coords_inflow[:, 1:2])
 
@@ -410,11 +386,11 @@ class PhysicsInformedFineTuner:
         self.model.eval()
         with torch.no_grad():
             x_int, y_int = self.coords[:, 0:1], self.coords[:, 1:2]
-            results_int = self.graph.forward({"x": x_int, "y": y_int})
+            model_out = self.model({"x": x_int, "y": y_int})
             pred_u, pred_v, pred_p = (
-                results_int["u"],
-                results_int["v"],
-                results_int["p"],
+                model_out["u"],
+                model_out["v"],
+                model_out["p"],
             )
             error_u = torch.linalg.norm(self.ref_u - pred_u) / torch.linalg.norm(
                 self.ref_u
@@ -546,7 +522,7 @@ def main(cfg: DictConfig) -> None:
             pi_fine_tuner.coords[:, 0:1],
             pi_fine_tuner.coords[:, 1:2],
         )
-        results_int_inf = pi_fine_tuner.graph.forward({"x": x_int_inf, "y": y_int_inf})
+        results_int_inf = pi_fine_tuner.model({"x": x_int_inf, "y": y_int_inf})
         pred_u_inf, pred_v_inf, pred_p_inf = (
             results_int_inf["u"],
             results_int_inf["v"],

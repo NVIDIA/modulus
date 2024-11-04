@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.03-py3
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.06-py3
 FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
@@ -125,10 +125,16 @@ FROM builder as ci
 
 ARG TARGETPLATFORM
 
+# TODO: Remove hacky downgrade of netCDF4 package. netCDF4 v1.7.1 has following 
+# issue: https://github.com/Unidata/netcdf4-python/issues/1343
+# This workaround is only added for the CI systems which run pytest only once. 
+# For more details, refer: https://github.com/NVIDIA/modulus/issues/608
+RUN pip install --no-cache-dir "netcdf4>=1.6.3,<1.7.1"
+
 RUN pip install --no-cache-dir "mlflow>=2.1.1"
 
 COPY . /modulus/
-RUN cd /modulus/ && pip install -e .[makani] && pip uninstall nvidia-modulus -y
+RUN cd /modulus/ && pip install -e .[makani,fignet] && pip uninstall nvidia-modulus -y
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
         pip install --no-cache-dir "tensorflow==2.9.0" "warp-lang>=0.6.0"; \
@@ -155,6 +161,15 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluste
         echo "No custom wheel present, skipping"; \
     fi
 RUN pip install --no-cache-dir "torch_geometric==2.5.3"
+
+# Install scikit-image and stl
+RUN pip install --no-cache-dir "numpy-stl" "scikit-image>=0.24.0"
+
+# Install sparse-dot-mkl
+RUN pip install --no-cache-dir "sparse-dot-mkl"
+
+# Install shapely
+RUN pip install --no-cache-dir "shapely"
 
 # cleanup of stage
 RUN rm -rf /modulus/

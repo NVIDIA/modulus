@@ -191,6 +191,7 @@ class MeshGraphNet(Module):
         node_features: Tensor,
         edge_features: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
+        **kwargs,
     ) -> Tensor:
         edge_features = self.edge_encoder(edge_features)
         node_features = self.node_encoder(node_features)

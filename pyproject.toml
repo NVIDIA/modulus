@@ -64,9 +64,17 @@ dev = [
 makani = [
     # TODO(akamenev): PyPI does not allow direct URL deps, update once Makani is in PyPI
     # "makani @ git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0",
-    "torch-harmonics>=0.6.5",
+    "torch-harmonics>=0.6.5,<0.7.1",
     "tensorly>=0.8.1",
     "tensorly-torch>=0.4.0",
+]
+
+fignet = [
+    "jaxtyping>=0.2",
+    "torch_scatter>=2.1",
+    "torchinfo>=1.8",
+    "warp-lang>=1.0",
+    "webdataset>=0.2",
 ]
 
 all = [
@@ -74,15 +82,18 @@ all = [
     "netcdf4>=1.6.3",
     "ruamel.yaml>=0.17.22",
     "scikit-learn>=1.0.2",
-    "warp-lang>=0.6.0",
+    "scikit-image>=0.24.0",
+    "warp-lang>=1.0",
     "vtk>=9.2.6",
     "pyvista>=0.40.1",
     "cftime>=1.6.2",
     "einops>=0.7.0",
     "pyspng>=0.1.0",
+    "shapely>=2.0.6",
     "nvidia-modulus[launch]",
     "nvidia-modulus[dev]",
     "nvidia-modulus[makani]",
+    "nvidia-modulus[fignet]",
 ]
 
 
