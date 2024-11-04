@@ -55,7 +55,9 @@ recompute_activation: False
 wandb_mode: offline
 watch_model: False
 wandb_key:
-
+wandb_project: "meshgraphnet"
+wandb_entity:
+wandb_name:
 ckpt_path: "./checkpoints_2d"
 
 # test & visualization configs

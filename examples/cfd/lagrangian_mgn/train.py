@@ -221,10 +221,9 @@ def main(cfg: DictConfig) -> None:
     # Initialize loggers.
     wandb.login(key=cfg.wandb_key)
     initialize_wandb(
-        # project="meshgraphnet water-3D",
-        project="meshgraphnet",
-        entity="zongyi-li",
-        name="Lagrangian-MGN-Training",
+        project=cfg.wandb_project,
+        entity=cfg.wandb_entity,
+        name=cfg.wandb_name,
         mode=cfg.wandb_mode,
     )  # Wandb logger
     logger = PythonLogger("main")  # General python logger
@@ -256,10 +255,13 @@ def main(cfg: DictConfig) -> None:
             f"acceleration loss: {mean_loss_acc:10.3e}, "
             f"time per epoch: {(time.time()-start):10.3e}"
         )
-        wandb.log({"loss": mean_loss})
-        wandb.log({"loss_pos": mean_loss_pos})
-        wandb.log({"loss_vel": mean_loss_vel})
-        wandb.log({"loss_acc": mean_loss_acc})
+        losses = {
+            "loss": mean_loss,
+            "loss_pos": mean_loss_pos,
+            "loss_vel": mean_loss_vel,
+            "loss_acc": mean_loss_acc
+        }
+        wandb.log(losses)
 
         # save checkpoint
         if dist.world_size > 1:
