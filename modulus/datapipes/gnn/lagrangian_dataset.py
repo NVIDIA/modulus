@@ -145,10 +145,10 @@ class LagrangianDataset(DGLDataset):
             self.radius = metadata["default_connectivity_radius"]
             self.bound = metadata["bounds"][0]
             self.dim = metadata["dim"]
-            self.vel_mean = torch.tensor(metadata["vel_mean"]).reshape(1, 2)
-            self.vel_std = torch.tensor(metadata["vel_std"]).reshape(1, 2)
-            self.acc_mean = torch.tensor(metadata["acc_mean"]).reshape(1, 2)
-            self.acc_std = torch.tensor(metadata["acc_std"]).reshape(1, 2)
+            self.vel_mean = torch.tensor(metadata["vel_mean"]).reshape(1, self.dim)
+            self.vel_std = torch.tensor(metadata["vel_std"]).reshape(1, self.dim)
+            self.acc_mean = torch.tensor(metadata["acc_mean"]).reshape(1, self.dim)
+            self.acc_std = torch.tensor(metadata["acc_std"]).reshape(1, self.dim)
 
         # override from config
         self.radius = radius
@@ -339,7 +339,7 @@ class LagrangianDataset(DGLDataset):
     @staticmethod
     def _add_noise(features, targets, noise_std, noise_mask):
         noise = torch.normal(mean=0, std=noise_std, size=features.size())
-        noise_mask = noise_mask.expand(features.size()[0], -1, 2)
+        noise_mask = noise_mask.expand(features.size()[0], -1, features.size()[2])
         noise = torch.where(noise_mask, noise, torch.zeros_like(noise))
         features += noise * features
         targets -= noise * targets
