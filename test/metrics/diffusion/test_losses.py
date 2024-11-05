@@ -18,6 +18,7 @@ import torch
 
 from modulus.metrics.diffusion import (
     EDMLoss,
+    RegressionLossCE,
     VELoss,
     VELoss_dfsr,
     VPLoss,
@@ -180,6 +181,57 @@ def test_call_method_edm():
 #         fake_net, img_clean, img_lr, labels, mock_augment_pipe
 #     )
 #     assert isinstance(loss_value_with_augmentation, torch.Tensor)
+
+# RegressionLossCE tests
+
+
+def test_regressionlossce_initialization():
+    loss_func = RegressionLossCE()
+    assert loss_func.P_mean == -1.2
+    assert loss_func.P_std == 1.2
+    assert loss_func.sigma_data == 0.5
+    assert loss_func.prob_channels == [4, 5, 6, 7, 8]
+
+    loss_func = RegressionLossCE(
+        P_mean=-2.0, P_std=2.0, sigma_data=0.3, prob_channels=[1, 2, 3, 4]
+    )
+    assert loss_func.P_mean == -2.0
+    assert loss_func.P_std == 2.0
+    assert loss_func.sigma_data == 0.3
+    assert loss_func.prob_channels == [1, 2, 3, 4]
+
+
+def leadtime_fake_net(
+    input, y_lr, sigma, labels, lead_time_label=None, augment_labels=None
+):
+    return torch.zeros(1, 4, 29, 29)
+
+
+def test_call_method():
+    prob_channels = [0, 2]
+    loss_func = RegressionLossCE(prob_channels=prob_channels)
+
+    img_clean = torch.zeros(1, 4, 29, 29)
+    img_lr = torch.zeros(1, 4, 29, 29)
+    labels = None
+    lead_time_label = None
+
+    # Without augmentation
+    loss_value = loss_func(
+        leadtime_fake_net, img_clean, img_lr, lead_time_label, labels
+    )
+    assert isinstance(loss_value, torch.Tensor)
+    assert loss_value.shape == (1, 3, 29, 29)
+
+    # With augmentation
+    def mock_augment_pipe(imgs):
+        return imgs, None
+
+    loss_value_with_augmentation = loss_func(
+        leadtime_fake_net, img_clean, img_lr, lead_time_label, labels, mock_augment_pipe
+    )
+    assert isinstance(loss_value_with_augmentation, torch.Tensor)
+    assert loss_value.shape == (1, 3, 29, 29)
 
 
 # MixtureLoss tests

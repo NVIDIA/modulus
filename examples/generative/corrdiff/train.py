@@ -23,7 +23,7 @@ from modulus import Module
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.metrics.diffusion import RegressionLoss, ResLoss
+from modulus.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
@@ -61,6 +61,7 @@ def main(cfg: DictConfig) -> None:
         train_test_split = False
         validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
+    songunet_checkpoint_level = cfg.training.perf.songunet_checkpoint_level
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
@@ -105,8 +106,13 @@ def main(cfg: DictConfig) -> None:
     if cfg.model.hr_mean_conditioning:
         img_in_channels += img_out_channels
 
+    if cfg.model.name == "lt_aware_ce_regression":
+        prob_channels = dataset.get_prob_channel_index()
     # Parse the patch shape
-    if cfg.model.name == "patched_diffusion":
+    if (
+        cfg.model.name == "patched_diffusion"
+        or cfg.model.name == "lt_aware_patched_diffusion"
+    ):
         patch_shape_x = cfg.training.hp.patch_shape_x
         patch_shape_y = cfg.training.hp.patch_shape_y
     else:
@@ -123,7 +129,13 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
-    if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
+    if cfg.model.name not in (
+        "regression",
+        "lt_aware_ce_regression",
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         raise ValueError("Invalid model")
     model_args = {  # default parameters for all networks
         "img_out_channels": img_out_channels,
@@ -135,20 +147,46 @@ def main(cfg: DictConfig) -> None:
             "img_channels": 4,
             "N_grid_channels": 4,
             "embedding_type": "zero",
+            "checkpoint_level": songunet_checkpoint_level,
+        },
+        "lt_aware_ce_regression": {
+            "img_channels": 4,
+            "N_grid_channels": 4,
+            "embedding_type": "zero",
+            "lead_time_channels": 4,
+            "lead_time_steps": 9,
+            "prob_channels": prob_channels,
+            "checkpoint_level": songunet_checkpoint_level,
+            "model_type": "SongUNetPosLtEmbd",
         },
         "diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "sinusoidal",
             "N_grid_channels": 4,
+            "checkpoint_level": songunet_checkpoint_level,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "learnable",
             "N_grid_channels": 100,
+            "checkpoint_level": songunet_checkpoint_level,
+        },
+        "lt_aware_patched_diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "learnable",
+            "N_grid_channels": 100,
+            "lead_time_channels": 20,
+            "lead_time_steps": 9,
+            "checkpoint_level": songunet_checkpoint_level,
+            "model_type": "SongUNetPosLtEmbd",
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
-    if cfg.model.name in ("diffusion", "patched_diffusion"):
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         model_args["scale_cond_input"] = cfg.model.scale_cond_input
     if hasattr(cfg.model, "model_args"):  # override defaults from config file
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
@@ -157,11 +195,26 @@ def main(cfg: DictConfig) -> None:
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
+    elif cfg.model.name == "lt_aware_ce_regression":
+        model = UNet(
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
+            **model_args,
+        )
+    elif cfg.model.name == "lt_aware_patched_diffusion":
+        model = EDMPrecondSR(
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
+            **model_args,
+        )
     else:  # diffusion or patched diffusion
         model = EDMPrecondSR(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
+
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -189,7 +242,11 @@ def main(cfg: DictConfig) -> None:
 
     # Instantiate the loss function
     patch_num = getattr(cfg.training.hp, "patch_num", 1)
-    if cfg.model.name in ("diffusion", "patched_diffusion"):
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         loss_fn = ResLoss(
             regression_net=regression_net,
             img_shape_x=img_shape[1],
@@ -201,6 +258,8 @@ def main(cfg: DictConfig) -> None:
         )
     elif cfg.model.name == "regression":
         loss_fn = RegressionLoss()
+    elif cfg.model.name == "lt_aware_ce_regression":
+        loss_fn = RegressionLossCE(prob_channels=prob_channels)
 
     # Instantiate the optimizer
     optimizer = torch.optim.Adam(
@@ -251,16 +310,21 @@ def main(cfg: DictConfig) -> None:
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
         for _ in range(num_accumulation_rounds):
-            img_clean, img_lr, labels = next(dataset_iterator)
+            img_clean, img_lr, labels, *lead_time_label = next(dataset_iterator)
             img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
             img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
             labels = labels.to(dist.device).contiguous()
+            if lead_time_label:
+                lead_time_label = lead_time_label[0].to(dist.device).contiguous()
+            else:
+                lead_time_label = None
             with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
                 loss = loss_fn(
                     net=model,
                     img_clean=img_clean,
                     img_lr=img_lr,
                     labels=labels,
+                    lead_time_label=lead_time_label,
                     augment_pipe=None,
                 )
             loss = loss.sum() / batch_size_per_gpu
