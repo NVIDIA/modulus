@@ -14,7 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-type: hrrr_mini
-data_path: /data/corrdiff-mini/hrrr_mini_train.nc
-stats_path: /data/corrdiff-mini/stats.json
-output_variables: ['10u', '10v']
+name: lt_aware_patched_diffusion
+  # Name of the preconditioner
+hr_mean_conditioning: True
+  # High-res mean (regression's output) as additional condition
+scale_cond_input: True
+  # If true, also scales the input conditioning
+  # For backward compatibility, this is true by default
+  # We recommend setting this to false for new training runs
