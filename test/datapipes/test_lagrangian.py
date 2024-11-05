@@ -26,7 +26,7 @@ Tensor = torch.Tensor
 
 @pytest.fixture
 def data_dir():
-    return "/data/nfs/modulus-data/datasets/Water"
+    return "/data/nfs/modulus-data/datasets/water"
 
 
 @nfsdata_or_fail
@@ -38,7 +38,7 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
     # Test successful construction
     dataset = LagrangianDataset(
         data_dir=data_dir,
-        split="train",
+        split="valid",
         num_samples=2,  # Use a small number for testing
         num_steps=10,  # Use a small number for testing
     )
