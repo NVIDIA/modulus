@@ -48,7 +48,8 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
 
     # Test getting an item
     graph = dataset[0]
-    assert isinstance(graph, dgl.DGLGraph)
+    # new DGL (2.4+) uses dgl.heterograph.DGLGraph, previous DGL is dgl.DGLGraph
+    assert isinstance(graph, dgl.DGLGraph) or isinstance(graph, dgl.heterograph.DGLGraph)
 
     # Test graph properties
     assert "x" in graph.ndata
