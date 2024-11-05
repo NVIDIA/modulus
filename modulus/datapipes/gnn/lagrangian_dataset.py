@@ -18,8 +18,8 @@
 import functools
 import json
 import os
-import torch
 
+import torch
 
 try:
     import tensorflow.compat.v1 as tf
@@ -39,7 +39,6 @@ except ImportError:
     )
 from torch.nn import functional as F
 
-from .utils import load_json, save_json
 from .lagrangian_reading_utils import parse_serialized_simulation_example
 
 # Hide GPU from visible devices for TF
@@ -158,7 +157,7 @@ class LagrangianDataset(DGLDataset):
         print(f"Preparing the {split} dataset...")
         dataset_iterator = self._load_tf_data(self.data_dir, self.split)
         self.node_type = []
-        noise_mask, self.rollout_mask = [], []
+        self.rollout_mask = []
         self.node_features = []
         for i in range(self.num_samples):
             data_np = dataset_iterator.get_next()
@@ -175,7 +174,7 @@ class LagrangianDataset(DGLDataset):
             if self.split != "train":
                 self.rollout_mask.append(self._get_rollout_mask(node_type))
 
-            features, targets = {}, {}
+            features = {}
             velocity = self.compute_velocity(position, dt=self.dt)
             acceleration = self.compute_acceleration(position, dt=self.dt)
             velocity = self.normalize_velocity(velocity)

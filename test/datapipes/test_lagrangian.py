@@ -14,18 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dgl
 import pytest
 import torch
-import dgl
 from pytest_utils import import_or_fail, nfsdata_or_fail
 
 from . import common
 
 Tensor = torch.Tensor
 
+
 @pytest.fixture
 def data_dir():
     return "/data/nfs/modulus-data/datasets/Water"
+
 
 @nfsdata_or_fail
 @import_or_fail(["tensorflow", "dgl"])
@@ -38,7 +40,7 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
         data_dir=data_dir,
         split="train",
         num_samples=2,  # Use a small number for testing
-        num_steps=10  # Use a small number for testing
+        num_steps=10,  # Use a small number for testing
     )
 
     # iterate datapipe is iterable
@@ -68,4 +70,3 @@ def test_graph_construction(device):
     assert any((edge_index[0] == 0) & (edge_index[1] == 1))
     assert any((edge_index[0] == 1) & (edge_index[1] == 0))
     assert not any((edge_index[0] == 0) & (edge_index[1] == 2))
-

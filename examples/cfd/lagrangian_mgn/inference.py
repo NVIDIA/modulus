@@ -170,7 +170,10 @@ class MGNRollout:
         n = int(n ** (1 / dim))
         x = torch.linspace(-1, 1, n)
         xs = torch.meshgrid(
-            [x, ] * dim
+            [
+                x,
+            ]
+            * dim
         )
         points = torch.stack(xs, dim=-1)
         points = points.reshape(-1, dim)

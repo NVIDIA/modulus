@@ -259,7 +259,7 @@ def main(cfg: DictConfig) -> None:
             "loss": mean_loss,
             "loss_pos": mean_loss_pos,
             "loss_vel": mean_loss_vel,
-            "loss_acc": mean_loss_acc
+            "loss_acc": mean_loss_acc,
         }
         wandb.log(losses)
 
