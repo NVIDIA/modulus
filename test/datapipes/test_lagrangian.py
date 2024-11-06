@@ -29,7 +29,7 @@ def data_dir():
     return "/data/nfs/modulus-data/datasets/water"
 
 
-# @nfsdata_or_fail
+@nfsdata_or_fail
 @import_or_fail(["tensorflow", "dgl"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
