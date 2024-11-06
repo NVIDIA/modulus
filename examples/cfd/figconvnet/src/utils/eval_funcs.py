@@ -17,6 +17,7 @@
 from typing import Dict, Optional
 from jaxtyping import Float
 
+import torch
 from torch import Tensor
 
 
@@ -51,6 +52,11 @@ def max_absolute_error(
     return (y_true - y_pred).abs().max()
 
 
+def rrmse(y_true: Float[Tensor, "B"], y_pred: Float[Tensor, "B"]) -> Float[Tensor, "1"]:
+    """Compute the relative RMSE."""
+    return torch.linalg.vector_norm(y_pred - y_true) / torch.linalg.vector_norm(y_true)
+
+
 def eval_all_metrics(
     y_true: Float[Tensor, "B"], y_pred: Float[Tensor, "B"], prefix: Optional[str] = None
 ) -> Dict[str, float]:
@@ -67,6 +73,7 @@ def eval_all_metrics(
         "mse": mean_squared_error(y_true, y_pred).cpu().item(),
         "mae": mean_absolute_error(y_true, y_pred).cpu().item(),
         "maxae": max_absolute_error(y_true, y_pred).cpu().item(),
+        "rrmse": rrmse(y_true, y_pred).cpu().item(),
     }
     if prefix is not None:
         out_dict = {f"{prefix}_{k}": v for k, v in out_dict.items()}
