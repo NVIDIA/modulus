@@ -7,15 +7,22 @@ This repository provides sample applications demonstrating use of specific Physi
 model architectures that are easy to train and deploy. These examples aim to show how
 such models can help solve real world problems.
 
+## Modulus Concepts
+
+|Use case|Model|Transient|
+| --- | --- |  --- |
+|[Darcy Flow](./cfd/darcy_fno/)|FNO|NO|
+
 ## CFD
 
 |Use case|Model|Transient|
 | --- | --- |  --- |
 |[Vortex Shedding](./cfd/vortex_shedding_mgn/)|MeshGraphNet|YES|
-|[Ahmed Body Drag prediction](./cfd/ahmed_body_mgn/)|MeshGraphNet|NO|
+|[Drag prediction - Ahmed body](./cfd/aero_graph_net/)|MeshGraphNet|NO|
+|[Flow prediction - DriveML](./cfd/xaeronet/)|MeshGRaphNet, Unet|NO|
 |[Navier-Stokes Flow](./cfd/navier_stokes_rnn/)|RNN|YES|
 |[Gray-Scott System](./cfd/gray_scott_rnn/)|RNN|YES|
-|[Darcy Flow](./cfd/darcy_fno/)|FNO|NO|
+|[Lagrangian Fluid Flow](./cfd/lagrangian_mgn/)|MeshGRaphNet|YES|
 |[Darcy Flow using Nested-FNOs](./cfd/darcy_nested_fnos/)|Nested-FNO|NO|
 |[Darcy Flow (Data + Physics Driven) using DeepONet approach](./cfd/darcy_physics_informed/)|FNO (branch) and MLP (trunk)|NO|
 |[Darcy Flow (Data + Physics Driven) using PINO approach (Numerical gradients)](./cfd/darcy_physics_informed/)|FNO|NO|
@@ -29,13 +36,28 @@ such models can help solve real world problems.
 |[Medium-range global weather forecast using GraphCast](./weather/graphcast/)|GraphCast|YES|NO|YES|YES|
 |[Medium-range global weather forecast using FCN-AFNO](./weather/fcn_afno/)|FCN-AFNO|YES|YES|YES|YES|
 |[Medium-range and S2S global weather forecast using DLWP](./weather/dlwp/)|DLWP|YES|YES|YES|YES|
+|[Medium-range and S2S global weather forecast using DLWP](./weather/dlwp_healpix/)|DLWP-HEALPix|YES|YES|YES|YES|
+|[Medium-range and S2S global weather forecast using DLWP](./weather/dlwp_healpix_coupled/)|DLWP-HEALPix|YES|YES|YES|YES|
+|[Medium-range and S2S global weather forecast using DLWP](./weather/pangu_weather/)|Pangu|YES|YES|YES|YES|
+
+## Generative
+
+|Use case|Model|Multi-GPU| Multi-Node|
+| --- | --- | --- | --- |
+|[Generative Correction Diffusion Model for Km-scale Atmospheric Downscaling](./generative/corrdiff/)|CorrDiff|YES|YES|
 
 ## Healthcare
 
-|Use case|Model|Transient|
-| --- | --- |  --- |
-|[Cardiovascular Simulations](./healthcare/bloodflow_1d_mgn/)|MeshGraphNet|YES|
-|[Brain Anomaly Detection](./healthcare/brain_anomaly_detection/)|FNO|YES|
+|Use case|Model|Transient|Source|
+| --- | --- |  --- | ---|
+|[Cardiovascular Simulations](./healthcare/bloodflow_1d_mgn/)|MeshGraphNet|YES|Externally contributed|
+|[Brain Anomaly Detection](./healthcare/brain_anomaly_detection/)|FNO|YES| |
+
+## Additive Manufacturing
+
+|Use case|Model|Transient|Source|
+| --- | --- |  --- | --- |
+|[Metal Sintering Simulation](./additive_manufacturing/sintering_physics/)|MeshGraphNet|YES|Externally contributed|
 
 ## Molecular Dymanics
 
@@ -43,11 +65,6 @@ such models can help solve real world problems.
 | --- | --- |  --- |
 |[Force Prediciton for Lennard Jones system](./molecular_dynamics/lennard_jones/)|MeshGraphNet|NO|
 
-## Generative
-
-|Use case|Model|Multi-GPU| Multi-Node|
-| --- | --- | --- | --- |
-|[Generative Correction Diffusion Model for Km-scale Atmospheric Downscaling](./generative/corrdiff/)|CorrDiff|YES|YES|
 
 ## Additional examples
 
