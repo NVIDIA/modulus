@@ -27,6 +27,7 @@ def deterministic_sampler(
     net,
     latents,
     img_lr,
+    img_shape=None,
     class_labels=None,
     randn_like=torch.randn_like,
     num_steps=18,
