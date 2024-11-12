@@ -1,0 +1,296 @@
+base: &base_config
+  # data config
+  num_data_workers: 4 # number of dataloader worker threads per proc
+  location: '/pscratch/sd/p/pharring/hrrr_example'
+  dt: 1
+  exp_dir: '/pscratch/sd/j/jpathak/hrrr_experiments/'
+  log_to_screen: !!bool True
+  log_to_wandb: !!bool True
+  hrrr_img_size: [512, 896]
+  n_hrrr_channels: 5
+  n_era5_channels: 26
+  conus_dataset_name: 'hrrr' #versioning for conus dataset, e.g., hrrr, hrrr_v2, hrrr_v3, etc.
+  crop_hrrr: !!bool True #required if base dataset (hrrr) does not have nice dims. If set to true the hrrr_img_size will be used to crop the hrrr data
+  hrrr_stats: 'stats' #directory name for the hrrr stats files
+  exclude_channels: ["vil"] #list of channels to exclude from the hrrr dataset
+  invariants: []
+
+  # hyperparameters
+  batch_size: 64
+  max_epochs: 70
+  lr: 1E-3
+
+  enable_nhwc: !!bool False
+  optimizer_type: 'FusedAdam'
+
+  two_step_training: !!bool False
+  plot_animations: !!bool False
+
+  add_noise: !!bool False
+  noise_std: 0
+
+  nettype: 'swin_hrrr'
+  embed_dim: 768
+  depth: 12
+  patch_size: 4
+  window_ratio: 32
+  num_heads: 8
+  drop_path_rate: 0.1
+  mlp_ratio: 4
+
+  weight_decay: 0
+  residual: !!bool False
+  rmse_loss: !!bool False
+  relative_loss: !!bool True
+  scheduler: 'CosineAnnealingLR'
+  target: 'default'
+  task: 'forecast'
+
+  add_zenith: !!bool False
+  orography: !!bool False
+  activation_ckpt: False
+  full_pos_embed: True
+  rel_pos: False
+  mask_ratio: 0
+  nonzero_mask: False
+
+  save_checkpoint: !!bool True
+  print_every: 100
+
+  boundary_padding_pixels: 0 # set this to 0 for no padding, 32 for 32 pixels of padding in each direction etc.
+  localtest: !!bool False
+
+  train_years: [2017, 2018, 2019, 2020]
+  valid_years: [2021]
+
+  previous_step_conditioning: !!bool False
+  spatial_pos_embed: None
+  P_mean: -1.2 #default edm value
+
+test_config:
+  <<: *base_config 
+  batch_size: 1 # single-node DDP
+  log_to_wandb: True
+
+boundary_test:
+  <<: *base_config
+  batch_size: 4
+  log_to_wandb: True
+  boundary_padding_pixels: 128 # 32, 64, 128, 256 tested to work currently and play nice with swin patching and windowing
+
+baseline_boundary_32:
+  <<: *base_config
+  batch_size: 64
+  boundary_padding_pixels: 32
+  max_epochs: 50
+  embed_dim: 768
+
+baseline_boundary_64:
+  <<: *base_config
+  batch_size: 64
+  boundary_padding_pixels: 64
+  max_epochs: 50
+  embed_dim: 512
+
+
+baseline_boundary_32_v2: &v2
+  <<: *base_config
+  hrrr_img_size: [512, 640]
+  crop_hrrr: !!bool False #required if base dataset (hrrr) does not have nice dims. If set to true the hrrr_img_size will be used to crop the hrrr data
+  n_hrrr_channels: 60
+  num_data_workers: 8 
+  batch_size: 64
+  boundary_padding_pixels: 32
+  max_epochs: 50
+  embed_dim: 768
+  nettype: 'swin_hrrr'
+  conus_dataset_name: 'hrrr_v2'
+  exclude_channels: ["vil"]
+
+baseline_boundary_32_v2_80ep:
+  <<: *v2
+  max_epochs: 80
+
+baseline_boundary_32_v2_test:
+  <<: *v2
+  batch_size: 1
+
+baseline_boundary_32_v2_tendency_scale:
+  <<: *v2
+  batch_size: 64
+  target: 'residual_field'
+  hrrr_stats: 'tendency_stats'
+
+baseline_v3: &v3
+  <<: *v2
+  lr: 1E-3
+  batch_size: 64
+  conus_dataset_name: 'hrrr_v3'
+  hrrr_stats: 'stats'
+  target: 'default'
+  n_hrrr_channels: 132
+  boundary_padding_pixels: 0
+  print_every: 100
+
+hrrr_v3: &v3_repartition #re-running baseline v3 with re-organized dataset (august 2018 to 2021 train, 2022 valid)
+  <<: *v3
+  hrrr_stats: 'stats_v3_2019_2021' #stats files changed to reflect dropped samples from 2017 and half of 2018
+  train_years: [2018, 2019, 2020, 2021]
+  valid_years: [2022]
+
+hrrr_v3_fused_lamb:
+  <<: *v3_repartition
+  optimizer_type: 'FusedLAMB'
+  weight_decay: 1E-2
+  lr: 5E-4
+
+hrrr_v3_1: &v3_1
+  <<: *v3_repartition
+  batch_size: 64
+  exclude_channels: ['p25', 'p30', 'p35', 'p40', 'z40', 'vil']
+  n_hrrr_channels: 127
+  lr: 5E-4
+
+hrrr_v3_1_fused_lamb:
+  <<: *v3_1
+  optimizer_type: 'FusedLAMB'
+  weight_decay: 1E-2
+  lr: 5E-4
+
+hrrr_v3_1_embed1024:
+  <<: *v3_1
+  embed_dim: 1024
+
+hrrr_v3_1_embed2048:
+  <<: *v3_1
+  embed_dim: 2048
+
+hrrr_v3_1_embed1536:
+  <<: *v3_1
+  embed_dim: 1536
+
+hrrr_v3_test:
+  <<: *v3_repartition
+  batch_size: 4
+
+baseline_v3_ed1024:
+  <<: *v2
+  lr: 1E-3
+  batch_size: 64
+  embed_dim: 1024
+  conus_dataset_name: 'hrrr_v3'
+  hrrr_stats: 'stats'
+  target: 'default'
+  n_hrrr_channels: 132
+  boundary_padding_pixels: 0
+  print_every: 100
+
+baseline_v3_chmask25:
+  <<: *v3
+  mask_ratio: 0.25
+  nonzero_mask: True
+
+baseline_v3_chmaskzero25:
+  <<: *v3
+  mask_ratio: 0.25
+
+local_test:
+  <<: *v3
+  batch_size: 1
+  location: '/data/hrrr_v3_subset/'
+  num_data_workers: 0
+  localtest: !!bool True
+  log_to_wandb: !!bool False
+  exp_dir: data/runs
+
+diffusion_test:
+  <<: *v3
+  batch_size: 4
+  local_batch_size: 1
+  num_data_workers: 4
+  localtest: !!bool False
+  log_to_wandb: !!bool False
+  crop_size: 64
+  total_kimg: 1000
+  img_per_tick: 1000
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc']
+
+diffusion_test_with_regression:
+  <<: *v3
+  batch_size: 16 
+  local_batch_size: 1
+  num_data_workers: 4
+  localtest: !!bool False
+  log_to_wandb: !!bool False
+  crop_size: 64
+  total_kimg: 100000
+  img_per_tick: 1000
+  regression_model_basepath: '/pscratch/sd/j/jpathak/hrrr_experiments/baseline_v3/new-stats/'
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc']
+
+diffusion_regression_some_to_some: &diffusion
+  <<: *v3
+  batch_size: 16 
+  local_batch_size: 1
+  num_data_workers: 4
+  localtest: !!bool False
+  log_to_wandb: !!bool False
+  crop_size: 64
+  total_kimg: 100000
+  img_per_tick: 1000
+  regression_model_basepath: '/pscratch/sd/j/jpathak/hrrr_experiments/baseline_v3/new-stats/'
+  input_channels: ['u10m', 'v10m', 't2m', 'refc'] #'all' or list of channels to condition on
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc'] #'all' or list of channels to predict
+
+diffusion_regression_all_to_some:
+  <<: *diffusion
+  input_channels: 'all' #'all' or list of channels to condition on
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc'] #'all' or list of channels to predict
+
+diffusion_regression_a2s_v3_1_q: &diffusion_v3_1
+  <<: *v3_1
+  batch_size: 16 
+  local_batch_size: 1
+  num_data_workers: 4
+  localtest: !!bool False
+  log_to_wandb: !!bool False
+  crop_size: 64
+  total_kimg: 100000
+  img_per_tick: 1000
+  input_channels: 'all' #'all' or list of channels to condition on
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10'] #'all' or list of channels to predict
+  regression_model_basepath: '/pscratch/sd/j/jpathak/hrrr_experiments/hrrr_v3_1/1/'
+
+diffusion_regression_a2s_v3_1_invariants:
+  <<: *diffusion_v3_1
+  batch_size: 4
+  invariants: ["lsm", "orog"]
+
+diffusion_regression_a2s_v3_1_pstep_conditioning:
+  <<: *diffusion_v3_1
+  batch_size: 4
+  previous_step_conditioning: True
+
+diffusion_regression_a2s_v3_1_pos_embed:
+  <<: *diffusion_v3_1
+  batch_size: 4
+  spatial_pos_embed: "add" #None, "add", "concat"
+
+diffusion_regression_a2s_v3_1:
+  <<: *diffusion_v3_1
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'refc'] #'all' or list of channels to predict
+
+diffusion_regression_a2a_v3_1:
+  <<: *diffusion_v3_1
+  diffusion_channels: 'all' #'all' or list of channels to predict
+
+diffusion_regression_all_to_some_w:
+  <<: *diffusion
+  input_channels: 'all' #'all' or list of channels to condition on
+  diffusion_channels: ['u10m', 'v10m', 't2m', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9', 'w10', 'refc'] #'all' or list of channels to predict
+
+diffusion_regression_all_to_all:
+  <<: *diffusion
+  input_channels: 'all' #'all' or list of channels to condition on
+  diffusion_channels: 'all' #'all' or list of channels to predict
+

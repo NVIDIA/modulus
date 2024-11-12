@@ -1,0 +1,16 @@
+{
+    "task": "forecast",
+    "model_shortname": "diffusion_regression_a2a_v3_1_exclude_w_noema",
+    "output_directory": "/pscratch/sd/j/jpathak/hrrr_analysis/report/",
+    "device": "cuda:0",
+    "event_name":["Illinois_summer_convection",
+                 "Missouri_nocturnal_mcs",
+                  "Texas_drought",
+                  "Kansas_mcs",
+                  "Iowa_cumulus",
+                  "Iow_convection",
+                  "texas_ok_squall_line"],
+    "n_steps": 12,
+    "output_hrrr_channels": []
+}
+
