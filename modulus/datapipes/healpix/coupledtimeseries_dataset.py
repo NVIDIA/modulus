@@ -305,11 +305,10 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             np.transpose(x, axes=(0, 3, 1, 2, 4, 5)) for x in inputs_result
         ]
 
-        if "constants" in self.ds.data_vars:
+
+        if self.constants is not None:
             # Add the constants as [F, C, H, W]
-            inputs_result.append(np.swapaxes(self.ds.constants.values, 0, 1))
-            # inputs_result.append(self.ds.constants.values)
-        logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
+            inputs_result.append(self.constants)
 
         # append integrated couplings
         inputs_result.append(integrated_couplings)
