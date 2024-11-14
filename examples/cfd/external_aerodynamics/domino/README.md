@@ -2,8 +2,10 @@
 
 DoMINO is a local, multi-scale, point-cloud based model architecture to model large-scale 
 physics problems such as external aerodynamics. The DoMINO model architecture takes STL 
-geometries as input and evaluates flow field quantities on the surface of the car 
-as well as in the volume around it.
+geometries as input and evaluates flow quantities such as pressure and 
+wall shear stress on the surface of the car as well as velocity fields and pressure 
+in the volume around it. The DoMINO architecture is designed to provide fast, accurate 
+and scalable surrogate model for large-scale simulations.
 
 The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Blueprint 
 demo presented at Supercomputing' 24.
