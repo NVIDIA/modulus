@@ -13,7 +13,7 @@ code."""
 import re
 import numpy as np
 import torch
-import dnnlib
+import utils.dnnlib as dnnlib
 
 from . import misc
 
@@ -31,7 +31,7 @@ _cumulative     = dict()        # Cumulative counters on the CPU, updated by _sy
 #----------------------------------------------------------------------------
 
 def init_multiprocessing(rank, sync_device):
-    r"""Initializes `torch_utils.training_stats` for collecting statistics
+    r"""Initializes `utils.training_stats` for collecting statistics
     across multiple processes.
 
     This function must be called after

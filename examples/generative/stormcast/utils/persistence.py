@@ -19,7 +19,7 @@ import inspect
 import copy
 import uuid
 import types
-import dnnlib
+import utils.dnnlib as dnnlib
 
 #----------------------------------------------------------------------------
 
@@ -37,7 +37,7 @@ def persistent_class(orig_class):
 
     Example:
 
-        from torch_utils import persistence
+        from utils import persistence
 
         @persistence.persistent_class
         class MyNetwork(torch.nn.Module):
@@ -59,7 +59,7 @@ def persistent_class(orig_class):
     The decorator saves the source code of the entire Python module
     containing the decorated class. It does *not* save the source code of
     any imported modules. Thus, the imported modules must be available
-    during unpickling, also including `torch_utils.persistence` itself.
+    during unpickling, also including `utils.persistence` itself.
 
     It is ok to call functions defined in the same module from the
     decorated class. However, if the decorated class depends on other
@@ -163,7 +163,7 @@ def import_hook(hook):
     `meta` is an instance of `dnnlib.EasyDict` with the following fields:
 
         type:       Type of the persistent object, e.g. `'class'`.
-        version:    Internal version number of `torch_utils.persistence`.
+        version:    Internal version number of `utils.persistence`.
         module_src  Original source code of the Python module.
         class_name: Class name in the original Python module.
         state:      Internal state of the object.

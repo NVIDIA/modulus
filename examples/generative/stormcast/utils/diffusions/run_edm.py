@@ -1,91 +1,52 @@
 import os
-import time
-import copy
-import json
 from utils.YParams import YParams
 import pickle
-import psutil
 import numpy as np
 import torch
-import dnnlib
 import glob
-from torch_utils import distributed as dist
-from torch_utils import training_stats
-from torch_utils import misc
+
 from utils.diffusions.generate import edm_sampler
-import utils.diffusions.networks
-import utils.diffusions.losses
+from utils.diffusions.networks import get_preconditioned_architecture
 from utils.diffusions.power_ema import sigma_rel_to_gamma, solve_weights
-from utils.data_loader_hrrr_era5 import get_data_loader, get_dataset, worker_init
-import utils.img_utils
-from torchvision import transforms
-import matplotlib.pyplot as plt
-from networks.swinv2_hrrr import swinv2net
+from utils.data_loader_hrrr_era5 import get_dataset
 
 
 class EDMRunner():
 
-    def __init__(self, params, resume_pkl=None, posthoc_ema_sigma='None', ema=True):
+    def __init__(self, params, resume_pkl=None, posthoc_ema_sigma='None', ema=True, device=None, sampler_args={}):
 
-        device = torch.device('cuda:0')
+        if device is None:
+            device = torch.device('cuda:0')
 
+        self.sampler_args = sampler_args
         dataset_obj = get_dataset(params, train=True)
-        #hrrr_channels = dataset_obj.hrrr_channels.values.tolist()[:-1]
-        base_hrrr_channels, hrrr_channels = dataset_obj._get_hrrr_channel_names()
+
+        _, hrrr_channels = dataset_obj._get_hrrr_channel_names()
         self.input_channels = params.input_channels
-        if self.input_channels == 'all':
-            self.input_channels = hrrr_channels
-            self.input_channel_indices = list(range(len(hrrr_channels)))
-        else:
-            self.input_channel_indices = [hrrr_channels.index(channel) for channel in self.input_channels]
+        self.input_channels = hrrr_channels
+        self.input_channel_indices = list(range(len(hrrr_channels)))
         self.diffusion_channels = params.diffusion_channels
-        if self.diffusion_channels == 'all':
-            self.diffusion_channels = hrrr_channels
-            self.diffusion_channel_indices = list(range(len(hrrr_channels)))
-        else:
-            self.diffusion_channel_indices = [hrrr_channels.index(channel) for channel in self.diffusion_channels]
-        
+        self.diffusion_channels = hrrr_channels
+        self.diffusion_channel_indices = list(range(len(hrrr_channels)))
 
-        if len(params.invariants) > 0:
-            #conditional_channels += len(params.invariants)
-            invariant_array = dataset_obj._get_invariants()
-            self.invariant_tensor = torch.from_numpy(invariant_array).to(device)
-            self.invariant_tensor = self.invariant_tensor.unsqueeze(0)
-        
-        if params.linear_grid:
-            dims = params.hrrr_img_size
-            grid_x, grid_y = torch.meshgrid(torch.linspace(0, 1, dims[0]), torch.linspace(0, 1, dims[1]))
-            grid = torch.stack((grid_x, grid_y), dim=0).to(device)
-            grid = grid.unsqueeze(0)
-            if len(params.invariants) > 0:
-                self.invariant_tensor = torch.cat((self.invariant_tensor, grid), dim=1)
-            else:
-                self.invariant_tensor = grid        
+        invariant_array = dataset_obj._get_invariants()
+        self.invariant_tensor = torch.from_numpy(invariant_array).to(device)
+        self.invariant_tensor = self.invariant_tensor.unsqueeze(0)
 
- 
-        resolution = params.crop_size if not params.crop_size == None else 512
+        resolution = 512
         n_target_channels = len(self.diffusion_channel_indices)
-        if params.pure_diffusion:
-            n_input_channels = len(self.input_channel_indices) + 26
-        else:
-            n_input_channels = len(self.input_channel_indices) if not params.previous_step_conditioning else 2*len(self.input_channel_indices)
+        n_input_channels = 2*len(self.input_channel_indices) + len(params.invariants)
 
-        if len(params.invariants) > 0:
-            n_input_channels += len(params.invariants)
-        
-        if params.linear_grid:
-            print("Adding linear grid to input channels")
-            n_input_channels += 2
-        label_dim = 0
-
-        self.net = utils.diffusions.networks.get_preconditioned_architecture(
+        self.net = get_preconditioned_architecture(
             name="ddpmpp-cwb-v0",
             resolution=resolution,
             target_channels=n_target_channels,
             conditional_channels=n_input_channels,
             label_dim=0,
-            spatial_embedding=params.spatial_pos_embed
+            spatial_embedding=params.spatial_pos_embed,
+            attn_resolutions=params.attn_resolutions,
         ).requires_grad_(False)
+
         assert self.net.sigma_min < self.net.sigma_max
 
         if posthoc_ema_sigma != 'None':
@@ -108,6 +69,8 @@ class EDMRunner():
 
         self.net = self.net.to(device)
         self.params = params
+
+        print("n target channels: ", n_target_channels)
 
 
     def _load_reweighted_model(self, path, target_sigma_rel):
@@ -158,29 +121,13 @@ class EDMRunner():
 
         with torch.no_grad():
 
-            #n = ensemble_size 
-            #ensemble_size = hrrr_0.shape[0]
             ensemble_size, c, h, w = hrrr_0[:, self.diffusion_channel_indices, :, :].shape
             latents = torch.randn(ensemble_size, c, h, w, device=hrrr_0.device, dtype=hrrr_0.dtype)
-            if len(self.params.invariants) > 0:
-                if ensemble_size > 1 and self.invariant_tensor.shape[0] != ensemble_size:
-                    self.invariant_tensor = self.invariant_tensor.expand(ensemble_size, -1, -1, -1)
-                condition = torch.cat((hrrr_0, self.invariant_tensor), dim=1)
-                output_images = edm_sampler(self.net, latents=latents, condition=condition)
-            else:
-                output_images = edm_sampler(self.net, latents=latents, condition=hrrr_0)
+
+            if ensemble_size > 1 and self.invariant_tensor.shape[0] != ensemble_size:
+                self.invariant_tensor = self.invariant_tensor.expand(ensemble_size, -1, -1, -1)
+            condition = torch.cat((hrrr_0, self.invariant_tensor), dim=1)
+            output_images = edm_sampler(self.net, latents=latents, condition=condition, **self.sampler_args)
             
         
         return output_images, self.diffusion_channels
-
-
-def main():
-
-    config_directory = "./config"
-    config_file = "hrrr_swin.yaml"
-    config = "baseline_v3"
-
-    params = YParams(os.path.join(config_directory, config_file), config)
-
-    edm_runner = EDMRunner(params, resume_pkl=resume_pkl)
-

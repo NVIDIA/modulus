@@ -8,16 +8,9 @@
 """Generate random images using the techniques described in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import os
-import re
-import click
-import tqdm
-import pickle
 import numpy as np
 import torch
-import PIL.Image
-import dnnlib
-from torch_utils import distributed as dist
+from utils import distributed as dist
 
 # ----------------------------------------------------------------------------
 # Proposed EDM sampler (Algorithm 2).
@@ -31,12 +24,13 @@ def edm_sampler(
     randn_like=torch.randn_like,
     num_steps=18,
     sigma_min=0.002,
-    sigma_max=80,
+    sigma_max=800,
     rho=7,
     S_churn=0,
     S_min=0,
     S_max=float("inf"),
     S_noise=1,
+    **kwargs,
 ):
     # Adjust noise levels based on what's supported by the network.
     sigma_min = max(sigma_min, net.sigma_min)

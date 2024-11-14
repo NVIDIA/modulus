@@ -6,12 +6,8 @@
 # work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
 
 import re
-import contextlib
 import numpy as np
 import torch
-import warnings
-import dnnlib
-
 
 try:
     nan_to_num = torch.nan_to_num # 1.8.0a0
