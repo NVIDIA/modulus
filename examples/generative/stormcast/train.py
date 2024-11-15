@@ -13,8 +13,9 @@ import re
 import json
 import torch
 import wandb
-import utils.dnnlib as dnnlib
+from utils.misc import EasyDict
 from utils import distributed as dist
+#from modulus.distributed import DistributedManager
 from utils.diffusions import training_loop
 import glob
 import argparse
@@ -66,14 +67,15 @@ def main(**kwargs):
     opts = parser.parse_args()
     torch.multiprocessing.set_start_method('spawn')
     dist.init()
+    #DistributedManager.initialize()
+    #dist = DistributedManager()
+
 
     # Initialize config dict.
-    c = dnnlib.EasyDict()
-    c.optimizer_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=opts.lr, betas=[0.9,0.999], eps=1e-8)
-
+    c = EasyDict()
 
     # Training options.
-    # c.update(batch_size=opts.batch, batch_gpu=opts.batch_gpu)
+    c.optimizer_kwargs = EasyDict(lr=opts.lr, betas=[0.9,0.999], eps=1e-8)
     c.update(loss_scaling=opts.ls, cudnn_benchmark=opts.bench)
     c.update(kimg_per_tick=opts.tick, snapshot_ticks=opts.snap, state_dump_ticks=opts.dump)
 
@@ -140,7 +142,7 @@ def main(**kwargs):
         os.makedirs(c.run_dir, exist_ok=True)
         with open(os.path.join(c.run_dir, 'training_options.json'), 'wt') as f:
             json.dump(c, f, indent=2)
-        dnnlib.util.Logger(file_name=os.path.join(c.run_dir, 'log.txt'), file_mode='a', should_flush=True)
+        #dnnlib.util.Logger(file_name=os.path.join(c.run_dir, 'log.txt'), file_mode='a', should_flush=True)
 
         if opts.log_to_wandb:
             entity, project = 'nv-research-climate', 'hrrr'

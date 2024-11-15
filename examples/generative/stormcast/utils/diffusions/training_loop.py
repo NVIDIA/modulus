@@ -16,7 +16,6 @@ import pickle
 import psutil
 import numpy as np
 import torch
-import utils.dnnlib as dnnlib
 from utils import distributed as dist
 from utils import training_stats
 from utils import misc
@@ -241,9 +240,7 @@ def training_loop(
         loss_fn = RegressionLossV2()
     elif params.loss == "edm":
         loss_fn = EDMLoss(P_mean=params.P_mean)
-    optimizer = dnnlib.util.construct_class_by_name(
-        params=net.parameters(), **optimizer_kwargs
-    )  # subclass of torch.optim.Optimizer
+    optimizer = torch.optim.Adam(net.parameters(), **optimizer_kwargs)
     augment_pipe = None
     ddp = torch.nn.parallel.DistributedDataParallel(
         net, device_ids=[device], broadcast_buffers=False
@@ -259,7 +256,7 @@ def training_loop(
         dist.print0(f'Loading network weights from "{resume_pkl}"...')
         if dist.get_rank() != 0:
             torch.distributed.barrier()  # rank 0 goes first
-        with dnnlib.util.open_url(resume_pkl, verbose=(dist.get_rank() == 0)) as f:
+        with open(resume_pkl, 'rb') as f:
             data = pickle.load(f)
         if dist.get_rank() == 0:
             torch.distributed.barrier()  # other ranks follow
@@ -509,7 +506,7 @@ def training_loop(
             f"kimg {training_stats.report0('Progress/kimg', cur_nimg / 1e3):<9.1f}"
         ]
         fields += [
-            f"time {dnnlib.util.format_time(training_stats.report0('Timing/total_sec', tick_end_time - start_time)):<12s}"
+            f"time {misc.format_time(training_stats.report0('Timing/total_sec', tick_end_time - start_time)):<12s}"
         ]
         fields += [
             f"sec/tick {training_stats.report0('Timing/sec_per_tick', tick_end_time - tick_start_time):<7.1f}"
