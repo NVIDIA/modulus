@@ -11,85 +11,59 @@ paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 import os
 import re
 import json
-import click
 import torch
 import wandb
 import utils.dnnlib as dnnlib
 from utils import distributed as dist
 from utils.diffusions import training_loop
 import glob
-
-import warnings
-warnings.filterwarnings('ignore', 'Grad strides do not match bucket view strides') # False warning printed by PyTorch 1.12.
-
-#----------------------------------------------------------------------------
-# Parse a comma separated list of numbers or ranges and return a list of ints.
-# Example: '1,2,5-10' returns [1, 2, 5, 6, 7, 8, 9, 10]
-
-def parse_int_list(s):
-    if isinstance(s, list): return s
-    ranges = []
-    range_re = re.compile(r'^(\d+)-(\d+)$')
-    for p in s.split(','):
-        m = range_re.match(p)
-        if m:
-            ranges.extend(range(int(m.group(1)), int(m.group(2))+1))
-        else:
-            ranges.append(int(p))
-    return ranges
-
-#----------------------------------------------------------------------------
-
-@click.command()
-
-# Main options.
-@click.option('--outdir',        help='Where to save the results', metavar='DIR',                   type=str, required=True)
-@click.option('--precond',       help='Preconditioning & loss function', metavar='vp|ve|edm',       type=click.Choice(['vp', 've', 'edm']), default='edm', show_default=True)
-@click.option('--config_file',   help='Path to config file', metavar='FILE',                        type=str, required=True)
-@click.option('--config_name',   help='Name of config to use', metavar='NAME',                      type=str, required=True)
-@click.option('--log_to_wandb',  help='Log to wandb', metavar='BOOL',                               type=bool, default=False, show_default=True)
-@click.option('--run_id',        help='run id', metavar='INT',                                      type=int, default=None, show_default=True)
-
-# Hyperparameters.
-@click.option('--batch',         help='Total batch size', metavar='INT',                            type=click.IntRange(min=1), default=512, show_default=True)
-@click.option('--batch-gpu',     help='Limit batch size per GPU', metavar='INT',                    type=click.IntRange(min=1))
-@click.option('--cbase',         help='Channel multiplier  [default: varies]', metavar='INT',       type=int)
-@click.option('--cres',          help='Channels per resolution  [default: varies]', metavar='LIST', type=parse_int_list)
-@click.option('--lr',            help='Learning rate', metavar='FLOAT',                             type=click.FloatRange(min=0, min_open=True), default=4e-4, show_default=True)
-@click.option('--dropout',       help='Dropout probability', metavar='FLOAT',                       type=click.FloatRange(min=0, max=1), default=0.13, show_default=True)
-@click.option('--augment',       help='Augment probability', metavar='FLOAT',                       type=click.FloatRange(min=0, max=1), default=0.12, show_default=True)
-@click.option('--xflip',         help='Enable dataset x-flips', metavar='BOOL',                     type=bool, default=False, show_default=True)
-
-# Performance-related.
-@click.option('--fp16',          help='Enable mixed-precision training', metavar='BOOL',            type=bool, default=False, show_default=True)
-@click.option('--ls',            help='Loss scaling', metavar='FLOAT',                              type=click.FloatRange(min=0, min_open=True), default=1, show_default=True)
-@click.option('--bench',         help='Enable cuDNN benchmarking', metavar='BOOL',                  type=bool, default=True, show_default=True)
-@click.option('--cache',         help='Cache dataset in CPU memory', metavar='BOOL',                type=bool, default=True, show_default=True)
-@click.option('--workers',       help='DataLoader worker processes', metavar='INT',                 type=click.IntRange(min=1), default=1, show_default=True)
-
-# I/O-related.
-@click.option('--desc',          help='String to include in result dir name', metavar='STR',        type=str)
-@click.option('--nosubdir',      help='Do not create a subdirectory for results',                   is_flag=True)
-@click.option('--tick',          help='How often to print progress', metavar='KIMG',                type=click.IntRange(min=1), default=50, show_default=True)
-@click.option('--snap',          help='How often to save snapshots', metavar='TICKS',               type=click.IntRange(min=1), default=10, show_default=True)
-@click.option('--dump',          help='How often to dump state', metavar='TICKS',                   type=click.IntRange(min=1), default=10, show_default=True)
-@click.option('--seed',          help='Random seed  [default: random]', metavar='INT',              type=int)
-@click.option('--transfer',      help='Transfer learning from network pickle', metavar='PKL|URL',   type=str)
-@click.option('--resume',        help='Resume from previous training state', metavar='PT',          type=str)
-@click.option('-n', '--dry-run', help='Print training options and exit',                            is_flag=True)
+import argparse
 
 def main(**kwargs):
-    """Train diffusion-based generative model using the techniques described in the
-    paper "Elucidating the Design Space of Diffusion-Based Generative Models".
-
-    Examples:
-
-    \b
-    # Train DDPM++ model for class-conditional CIFAR-10 using 8 GPUs
-    torchrun --standalone --nproc_per_node=8 train.py --outdir=training-runs \\
-        --data=datasets/cifar10-32x32.zip --cond=1 --arch=ddpmpp
+    """Train regression or diffusion models for use in the StormCast (https://arxiv.org/abs/2408.10958) ML-based weather model
     """
-    opts = dnnlib.EasyDict(kwargs)
+
+    parser = argparse.ArgumentParser(
+        description="Train regression or diffusion models for use in StormCast"
+    )
+
+    # Main options.
+    parser.add_argument('--outdir',        help='Where to save the results', metavar='DIR',                   type=str, required=True)
+    parser.add_argument('--precond',       help='Preconditioning & loss function', metavar='vp|ve|edm',       type=str, default='edm')
+    parser.add_argument('--config_file',   help='Path to config file', metavar='FILE',                        type=str, required=True)
+    parser.add_argument('--config_name',   help='Name of config to use', metavar='NAME',                      type=str, required=True)
+    parser.add_argument('--log_to_wandb',  help='Log to wandb',                                               default=False, action='store_true')
+    parser.add_argument('--run_id',        help='run id', metavar='INT',                                      type=int, default=None)
+
+    # Hyperparameters.
+    parser.add_argument('--batch',         help='Total batch size', metavar='INT',                            type=int, default=512)
+    parser.add_argument('--batch-gpu',     help='Limit batch size per GPU', metavar='INT',                    type=int)
+    parser.add_argument('--cbase',         help='Channel multiplier  [default: varies]', metavar='INT',       type=int)
+    parser.add_argument('--lr',            help='Learning rate', metavar='FLOAT',                             type=float, default=4e-4)
+    parser.add_argument('--dropout',       help='Dropout probability', metavar='FLOAT',                       type=float, default=0.13)
+    parser.add_argument('--augment',       help='Augment probability', metavar='FLOAT',                       type=float, default=0.12)
+    parser.add_argument('--xflip',         help='Enable dataset x-flips', metavar='BOOL',                     type=bool, default=False)
+
+    # Performance-related.
+    parser.add_argument('--fp16',          help='Enable mixed-precision training', metavar='BOOL',            type=bool, default=False)
+    parser.add_argument('--ls',            help='Loss scaling', metavar='FLOAT',                              type=float, default=1)
+    parser.add_argument('--bench',         help='Enable cuDNN benchmarking', metavar='BOOL',                  type=bool, default=True)
+    parser.add_argument('--cache',         help='Cache dataset in CPU memory', metavar='BOOL',                type=bool, default=True)
+    parser.add_argument('--workers',       help='DataLoader worker processes', metavar='INT',                 type=int, default=1)
+
+    # I/O-related.
+    parser.add_argument('--desc',          help='String to include in result dir name', metavar='STR',        type=str)
+    parser.add_argument('--nosubdir',      help='Do not create a subdirectory for results',                   action='store_true')
+    parser.add_argument('--tick',          help='How often to print progress', metavar='KIMG',                type=int, default=50)
+    parser.add_argument('--snap',          help='How often to save snapshots', metavar='TICKS',               type=int, default=10)
+    parser.add_argument('--dump',          help='How often to dump state', metavar='TICKS',                   type=int, default=10)
+    parser.add_argument('--seed',          help='Random seed  [default: random]', metavar='INT',              type=int)
+    parser.add_argument('--transfer',      help='Transfer learning from network pickle', metavar='PKL|URL',   type=str)
+    parser.add_argument('--resume',        help='Resume from previous training state', metavar='PT',          type=str)
+    parser.add_argument('-n', '--dry-run', help='Print training options and exit',                            action='store_true')
+
+
+    opts = parser.parse_args()
     torch.multiprocessing.set_start_method('spawn')
     dist.init()
 
@@ -141,13 +115,13 @@ def main(**kwargs):
     # Transfer learning and resume. If a resume or transfer file is specified, it takes precedence over the existing run_dir.
     if opts.transfer is not None:
         if opts.resume is not None:
-            raise click.ClickException('--transfer and --resume cannot be specified at the same time')
+            raise ValueError('--transfer and --resume cannot be specified at the same time')
         c.resume_pkl = opts.transfer
         c.ema_rampup_ratio = None
     elif opts.resume is not None:
         match = re.fullmatch(r'training-state-(\d+).pt', os.path.basename(opts.resume))
         if not match or not os.path.isfile(opts.resume):
-            raise click.ClickException('--resume must point to training-state-*.pt from a previous training run')
+            raise ValueError('--resume must point to training-state-*.pt from a previous training run')
         c.resume_pkl = os.path.join(os.path.dirname(opts.resume), f'network-snapshot-{match.group(1)}.pkl')
         c.resume_kimg = int(match.group(1))
         c.resume_state_dump = opts.resume

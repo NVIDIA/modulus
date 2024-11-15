@@ -45,7 +45,7 @@ There is also a model registry `config/registry.json` which can be used to index
 To train the StormCast regression model, we use the default configuration file `config.yaml` and specify the `regression` config, along with the `--outdir` argument to choose where training logs and checkpoints should be saved. 
 We also can use command line options defined in `train.py` to specify other details, like a unique run ID to use for the experiment (`--run_id`), e.g.:
 ```bash
-python train.py --outdir rundir --config_file ./config/config.yaml --config_name regression --log_to_wandb False --run_id 0
+python train.py --outdir rundir --config_file ./config/config.yaml --config_name regression --run_id 0
 ```
 
 This will initialize the training experiment and launch the main training loop, which is defined in `utils/diffusions/training_loop.py`.
@@ -56,7 +56,7 @@ Data parallelism is supported via XXX.
 
 The method for launching a diffusion model training looks almost identical, and we just have to change the configuration name appropriately. However, since we need a pre-trained regression model for the diffusion model training, this config must define `regression_pickle` to point to a compatible pickle file with network weights for the regression model. Once that is taken care of, launching diffusion training looks nearly identical as previously:
 ```bash
-python train.py --outdir rundir --config_file ./config/config.yaml --config_name diffusion --log_to_wandb False --run_id 0
+python train.py --outdir rundir --config_file ./config/config.yaml --config_name diffusion --run_id 0
 ```
 
 Note that the full training pipeline for StormCast is fairly lengthy, requiring about 120 hours on 64 NVIDIA H100 GPUs. However, more lightweight trainings can still produce decent models if the diffusion model is not trained for as long.
@@ -93,7 +93,7 @@ A custom dataset object is defined in `utils/data_loader_hrrr_era5.py`, which lo
 
 ## Logging
 
-These scripts use Weights & Biases for experiment tracking, which can be enabled/disabled with the `log_to_wandb` flag. Academic accounts are free to create at [wandb.ai](https://wandb.ai/).
+These scripts use Weights & Biases for experiment tracking, which can be enabled by passing the `--log_to_wandb` argument to `train.py`. Academic accounts are free to create at [wandb.ai](https://wandb.ai/).
 Once you have an account set up, you can adjust `entity` and `project` in `train.py` to the appropriate names for your `wandb` workspace.
 
 
