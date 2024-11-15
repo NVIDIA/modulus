@@ -21,8 +21,8 @@ from utils import distributed as dist
 from utils import training_stats
 from utils import misc
 from utils.diffusions.generate import edm_sampler
-import utils.diffusions.networks
-import utils.diffusions.losses
+from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
+from utils.diffusions.losses import EDMLoss, RegressionLossV2
 from utils.diffusions.power_ema import sigma_rel_to_gamma
 from utils.data_loader_hrrr_era5 import get_dataset, worker_init
 import matplotlib.pyplot as plt
@@ -37,7 +37,6 @@ def get_pretrained_regression_net(
     regression_net_type, resume_pkl, device, invariant_tensor=None
 ):
     if regression_net_type == "unet2":
-        from utils.diffusions.networks import EasyRegressionV2
 
         hyperparams = YParams(
             os.path.join("config", "config.yaml"),
@@ -49,7 +48,7 @@ def get_pretrained_regression_net(
 
         conditional_channels = target_channels + len(hyperparams.invariants) + 26
 
-        net = utils.diffusions.networks.get_preconditioned_architecture(
+        net = get_preconditioned_architecture(
             name=net_name,
             resolution=resolution,
             target_channels=target_channels,
@@ -222,7 +221,7 @@ def training_loop(
     dist.print0("target_channels for diffusion", target_channels)
     dist.print0("conditional_channels for diffusion", conditional_channels)
 
-    net = utils.diffusions.networks.get_preconditioned_architecture(
+    net = get_preconditioned_architecture(
         name=net_name,
         resolution=resolution,
         target_channels=target_channels,
@@ -239,9 +238,9 @@ def training_loop(
     # Setup optimizer.
     dist.print0("Setting up optimizer...")
     if params.loss == "regression_v2":
-        loss_fn = utils.diffusions.losses.RegressionLossV2()
+        loss_fn = RegressionLossV2()
     elif params.loss == "edm":
-        loss_fn = utils.diffusions.losses.EDMLoss(P_mean=params.P_mean)
+        loss_fn = EDMLoss(P_mean=params.P_mean)
     optimizer = dnnlib.util.construct_class_by_name(
         params=net.parameters(), **optimizer_kwargs
     )  # subclass of torch.optim.Optimizer

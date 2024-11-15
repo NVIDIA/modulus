@@ -801,167 +801,6 @@ class SongUNet(torch.nn.Module):
         return aux
 
 
-# ----------------------------------------------------------------------------
-# Reimplementation of the ADM architecture from the paper
-# "Diffusion Models Beat GANS on Image Synthesis". Equivalent to the
-# original implementation by Dhariwal and Nichol, available at
-# https://github.com/openai/guided-diffusion
-
-
-class DhariwalUNet(torch.nn.Module):
-    def __init__(
-        self,
-        img_resolution,  # Image resolution at input/output.
-        in_channels,  # Number of color channels at input.
-        out_channels,  # Number of color channels at output.
-        label_dim=0,  # Number of class labels, 0 = unconditional.
-        augment_dim=0,  # Augmentation label dimensionality, 0 = no augmentation.
-        model_channels=192,  # Base multiplier for the number of channels.
-        channel_mult=[
-            1,
-            2,
-            3,
-            4,
-        ],  # Per-resolution multipliers for the number of channels.
-        channel_mult_emb=4,  # Multiplier for the dimensionality of the embedding vector.
-        num_blocks=3,  # Number of residual blocks per resolution.
-        attn_resolutions=[32, 16, 8],  # List of resolutions with self-attention.
-        dropout=0.10,  # List of resolutions with self-attention.
-        label_dropout=0,  # Dropout probability of class labels for classifier-free guidance.
-    ):
-        super().__init__()
-        self.label_dropout = label_dropout
-        emb_channels = model_channels * channel_mult_emb
-        init = dict(
-            init_mode="kaiming_uniform",
-            init_weight=np.sqrt(1 / 3),
-            init_bias=np.sqrt(1 / 3),
-        )
-        init_zero = dict(init_mode="kaiming_uniform", init_weight=0, init_bias=0)
-        block_kwargs = dict(
-            emb_channels=emb_channels,
-            channels_per_head=64,
-            dropout=dropout,
-            init=init,
-            init_zero=init_zero,
-        )
-
-        # Mapping.
-        self.map_noise = PositionalEmbedding(num_channels=model_channels)
-        self.map_augment = (
-            Linear(
-                in_features=augment_dim,
-                out_features=model_channels,
-                bias=False,
-                **init_zero,
-            )
-            if augment_dim
-            else None
-        )
-        self.map_layer0 = Linear(
-            in_features=model_channels, out_features=emb_channels, **init
-        )
-        self.map_layer1 = Linear(
-            in_features=emb_channels, out_features=emb_channels, **init
-        )
-        self.map_label = (
-            Linear(
-                in_features=label_dim,
-                out_features=emb_channels,
-                bias=False,
-                init_mode="kaiming_normal",
-                init_weight=np.sqrt(label_dim),
-            )
-            if label_dim
-            else None
-        )
-
-        # Encoder.
-        self.enc = torch.nn.ModuleDict()
-        cout = in_channels
-        for level, mult in enumerate(channel_mult):
-            res = img_resolution >> level
-            if level == 0:
-                cin = cout
-                cout = model_channels * mult
-                self.enc[f"{res}x{res}_conv"] = Conv2d(
-                    in_channels=cin, out_channels=cout, kernel=3, **init
-                )
-            else:
-                self.enc[f"{res}x{res}_down"] = UNetBlock(
-                    in_channels=cout, out_channels=cout, down=True, **block_kwargs
-                )
-            for idx in range(num_blocks):
-                cin = cout
-                cout = model_channels * mult
-                self.enc[f"{res}x{res}_block{idx}"] = UNetBlock(
-                    in_channels=cin,
-                    out_channels=cout,
-                    attention=(res in attn_resolutions),
-                    **block_kwargs,
-                )
-        skips = [block.out_channels for block in self.enc.values()]
-
-        # Decoder.
-        self.dec = torch.nn.ModuleDict()
-        for level, mult in reversed(list(enumerate(channel_mult))):
-            res = img_resolution >> level
-            if level == len(channel_mult) - 1:
-                self.dec[f"{res}x{res}_in0"] = UNetBlock(
-                    in_channels=cout, out_channels=cout, attention=True, **block_kwargs
-                )
-                self.dec[f"{res}x{res}_in1"] = UNetBlock(
-                    in_channels=cout, out_channels=cout, **block_kwargs
-                )
-            else:
-                self.dec[f"{res}x{res}_up"] = UNetBlock(
-                    in_channels=cout, out_channels=cout, up=True, **block_kwargs
-                )
-            for idx in range(num_blocks + 1):
-                cin = cout + skips.pop()
-                cout = model_channels * mult
-                self.dec[f"{res}x{res}_block{idx}"] = UNetBlock(
-                    in_channels=cin,
-                    out_channels=cout,
-                    attention=(res in attn_resolutions),
-                    **block_kwargs,
-                )
-        self.out_norm = GroupNorm(num_channels=cout)
-        self.out_conv = Conv2d(
-            in_channels=cout, out_channels=out_channels, kernel=3, **init_zero
-        )
-
-    def forward(self, x, noise_labels, class_labels, augment_labels=None):
-        # Mapping.
-        emb = self.map_noise(noise_labels)
-        if self.map_augment is not None and augment_labels is not None:
-            emb = emb + self.map_augment(augment_labels)
-        emb = silu(self.map_layer0(emb))
-        emb = self.map_layer1(emb)
-        if self.map_label is not None:
-            tmp = class_labels
-            if self.training and self.label_dropout:
-                tmp = tmp * (
-                    torch.rand([x.shape[0], 1], device=x.device) >= self.label_dropout
-                ).to(tmp.dtype)
-            emb = emb + self.map_label(tmp)
-        emb = silu(emb)
-
-        # Encoder.
-        skips = []
-        for block in self.enc.values():
-            x = block(x, emb) if isinstance(block, UNetBlock) else block(x)
-            skips.append(x)
-
-        # Decoder.
-        for block in self.dec.values():
-            if x.shape[1] != block.in_channels:
-                x = torch.cat([x, skips.pop()], dim=1)
-            x = block(x, emb)
-        x = self.out_conv(silu(self.out_norm(x)))
-        return x
-
-
 class EDMPrecond(torch.nn.Module):
     def __init__(
         self,
@@ -1042,35 +881,8 @@ class EDMPrecond(torch.nn.Module):
         return torch.as_tensor(sigma)
 
 
-class EasyRegression(torch.nn.Module):
-    """ allows the regression model to outwardly look like a straightforward regression model """
-    def __init__(
-        self,
-        model,
-        latent_shape
-
-    ):
-        super().__init__()
-
-        self.model = model
-        self.latent_shape = latent_shape
-    
-    def set_invariant(self, invariant_tensor):
-
-        self.invariant_tensor = invariant_tensor
-
-    def forward(self, hrrr, era5, mask=None): #mask is just for compatibility. Doesn't do anything
-
-
-        condition = torch.cat([hrrr, era5, self.invariant_tensor.repeat(hrrr.shape[0], 1, 1, 1)], dim=1)
-
-        sigma = torch.randn([condition.shape[0], 1, 1, 1], device=condition.device)
-        latent = torch.zeros([condition.shape[0], *self.latent_shape], device=condition.device)
-
-        return self.model(x=latent, sigma=sigma, condition=condition)
-
 class EasyRegressionV2(torch.nn.Module):
-    """ allows the regression model to outwardly look like a straightforward regression model """
+    """ Wrapper enabling the regression model to outwardly look like a straightforward regression model in inference"""
     def __init__(
         self,
         model,
@@ -1093,56 +905,10 @@ class EasyRegressionV2(torch.nn.Module):
         return self.model(sigma=sigma, condition=condition)
 
 
-class RegressionWrapper(torch.nn.Module):
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        img_resolution,  # Image resolution.
-        label_dim=0,  # Number of class labels, 0 = unconditional.
-        use_fp16=False,  # Execute the underlying model at FP16 precision?
-    ):
-        super().__init__()
-        self.img_resolution = img_resolution
-        self.label_dim = label_dim
-        self.use_fp16 = use_fp16
-        self.model = model
-
-    def forward(
-        self,
-        x,
-        sigma,
-        condition=None,
-        class_labels=None,
-        force_fp32=False,
-        **model_kwargs,
-    ):
-
-        x = x.to(torch.float32)
-        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = None 
-        dtype = (
-            torch.float16
-            if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
-            else torch.float32
-        )
-
-        c_noise = torch.zeros_like(sigma)
-        arg = x
-
-        if condition is not None:
-            arg = torch.cat([arg, condition], dim=1)
-
-        F_x = self.model(
-            arg.to(dtype),
-            c_noise.flatten(),
-            class_labels=class_labels,
-            **model_kwargs,
-        )
-        assert F_x.dtype == dtype
-        D_x = x + F_x.to(torch.float32)
-        return D_x
-
 class RegressionWrapperV2(torch.nn.Module):
+    '''Wrapper class for training regression models
+    (allows re-using training code between regression and diffusion training)
+    '''
     def __init__(
         self,
         model: torch.nn.Module,
@@ -1184,7 +950,7 @@ class RegressionWrapperV2(torch.nn.Module):
             **model_kwargs,
         )
         assert F_x.dtype == dtype
-        #D_x = x + F_x.to(torch.float32)
+
         D_x = F_x.to(torch.float32)
         return D_x
 
@@ -1234,29 +1000,6 @@ def get_preconditioned_architecture(
             hrrr_resolution=hrrr_resolution,
         )
         return EDMPrecond(
-            model=model,
-            img_resolution=resolution,
-            label_dim=label_dim,
-        )
-
-    elif name == "song-unet-regression":
-        model = SongUNetRegression(
-            img_resolution=resolution,
-            in_channels=target_channels + conditional_channels,
-            out_channels=target_channels,
-            label_dim=label_dim,
-            embedding_type="zero",
-            encoder_type="standard",
-            decoder_type="standard",
-            channel_mult_noise=1,
-            resample_filter=[1, 1],
-            model_channels=128,
-            channel_mult=[1, 2, 2, 2, 2],
-            attn_resolutions=[],
-            spatial_embedding=spatial_embedding,
-            hrrr_resolution=hrrr_resolution,
-        )
-        return RegressionWrapper(
             model=model,
             img_resolution=resolution,
             label_dim=label_dim,
