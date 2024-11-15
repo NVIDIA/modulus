@@ -43,14 +43,12 @@ There is also a model registry `config/registry.json` which can be used to index
 
 ### Training the regression model
 To train the StormCast regression model, we use the default configuration file `config.yaml` and specify the `regression` config, along with the `--outdir` argument to choose where training logs and checkpoints should be saved. 
-We also can use command line options defined in `train.py` to specify other details, like a unique run ID to use for the experiment (`--run_id`), e.g.:
+We also can use command line options defined in `train.py` to specify other details, like a unique run ID to use for the experiment (`--run_id`). On a single GPU machine, for example, run:
 ```bash
 python train.py --outdir rundir --config_file ./config/config.yaml --config_name regression --run_id 0
 ```
 
-This will initialize the training experiment and launch the main training loop, which is defined in `utils/diffusions/training_loop.py`.
-
-Data parallelism is supported via XXX.
+This will initialize training experiment and launch the main training loop, which is defined in `utils/diffusions/training_loop.py`.
 
 ### Training the diffusion model
 

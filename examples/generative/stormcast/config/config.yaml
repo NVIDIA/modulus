@@ -20,7 +20,7 @@ base: &base_config
 
   # hyperparameters
   batch_size: 64
-  lr: 5E-4
+  lr: 4E-4
   total_kimg: 100000
   img_per_tick: 1000
   clip_grad_norm: None

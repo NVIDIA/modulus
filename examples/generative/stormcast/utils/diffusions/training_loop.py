@@ -16,9 +16,10 @@ import pickle
 import psutil
 import numpy as np
 import torch
-from utils import distributed as dist
+from modulus.distributed import DistributedManager
 from utils import training_stats
 from utils import misc
+from utils.misc import print0
 from utils.diffusions.generate import edm_sampler
 from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
 from utils.diffusions.losses import EDMLoss, RegressionLossV2
@@ -76,8 +77,6 @@ def training_loop(
     ],  # Controls EMA profiles of model weight snapshots saved (sigma_rel from EDMv2)
     ema_freq_kimg=10,  # Frequency to save snapshots for EMA profiles (see EDMv2)
     lr_rampup_kimg=2000,  # Learning rate ramp-up duration.
-    loss_scaling=1,  # Loss scaling factor for reducing FP16 under/overflows.
-    kimg_per_tick=50,  # Interval of progress prints.
     snapshot_ticks=50,  # How often to save network snapshots, None = disable.
     state_dump_ticks=500,  # How often to dump training state, None = disable.
     resume_pkl=None,  # Start from the given network snapshot, None = random initialization.
@@ -89,9 +88,11 @@ def training_loop(
     config_name=None,
     log_to_wandb=False,
 ):
+    dist = DistributedManager()
     params = YParams(config_file, config_name)
     batch_size = params.batch_size
-    local_batch_size = batch_size // dist.get_world_size()
+    local_batch_size = batch_size // dist.world_size
+    optimizer_kwargs['lr'] = params.lr
     img_per_tick = params.img_per_tick
     use_regression_net = params.use_regression_net
     previous_step_conditioning = params.previous_step_conditioning
@@ -99,7 +100,7 @@ def training_loop(
     if loss_type == "regression_v2":
         train_regression_unet = True
         net_name = "song-unet-regression-v2"
-        print("Using regression_v2")
+        print0("Using regression_v2")
     elif loss_type == "edm":
         train_regression_unet = False
         net_name = "ddpmpp-cwb-v0"
@@ -108,7 +109,7 @@ def training_loop(
 
     # Initialize.
     start_time = time.time()
-    np.random.seed((seed * dist.get_world_size() + dist.get_rank()) % (1 << 31))
+    np.random.seed((seed * dist.world_size + dist.rank) % (1 << 31))
     torch.manual_seed(np.random.randint(1 << 31))
     torch.backends.cudnn.benchmark = cudnn_benchmark
     torch.backends.cudnn.allow_tf32 = False
@@ -116,12 +117,12 @@ def training_loop(
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
     if resume_state_dump is not None:
-        print("Resuming from state dump:", resume_state_dump)
-        print("Resuming from kimg:", resume_kimg)
-        print("Resuming from pkl:", resume_pkl)
+        print0("Resuming from state dump:", resume_state_dump)
+        print0("Resuming from kimg:", resume_kimg)
+        print0("Resuming from pkl:", resume_pkl)
 
     # Load dataset.
-    dist.print0("Loading dataset...")
+    print0("Loading dataset...")
     # hard code this name
 
     # load pretrained regression net
@@ -149,7 +150,7 @@ def training_loop(
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
-    dist.print0("diffusion_channel_indices", diffusion_channel_indices)
+    print0("diffusion_channel_indices", diffusion_channel_indices)
     if input_channels == "all":
         input_channel_indices = [
             hrrr_channels.index(channel) for channel in hrrr_channels
@@ -162,14 +163,14 @@ def training_loop(
 
     sampler = misc.InfiniteSampler(
         dataset=dataset_train,
-        rank=dist.get_rank(),
-        num_replicas=dist.get_world_size(),
+        rank=dist.rank,
+        num_replicas=dist.world_size,
         seed=seed,
     )
     valid_sampler = misc.InfiniteSampler(
         dataset=dataset_valid,
-        rank=dist.get_rank(),
-        num_replicas=dist.get_world_size(),
+        rank=dist.rank,
+        num_replicas=dist.world_size,
         seed=seed,
     )
     data_loader = torch.utils.data.DataLoader(
@@ -195,7 +196,7 @@ def training_loop(
     valid_dataset_iterator = iter(valid_data_loader)
 
     # Construct network.
-    dist.print0("Constructing network...")
+    print0("Constructing network...")
     resolution = 512
     target_channels = len(diffusion_channels)
     if train_regression_unet:
@@ -216,9 +217,9 @@ def training_loop(
     if not train_regression_unet:
         regression_net.set_invariant(invariant_tensor)
 
-    dist.print0("hrrr_channels", kept_hrrr_channels)
-    dist.print0("target_channels for diffusion", target_channels)
-    dist.print0("conditional_channels for diffusion", conditional_channels)
+    print0("hrrr_channels", kept_hrrr_channels)
+    print0("target_channels for diffusion", target_channels)
+    print0("conditional_channels for diffusion", conditional_channels)
 
     net = get_preconditioned_architecture(
         name=net_name,
@@ -235,7 +236,7 @@ def training_loop(
     net.train().requires_grad_(True).to(device)
 
     # Setup optimizer.
-    dist.print0("Setting up optimizer...")
+    print0("Setting up optimizer...")
     if params.loss == "regression_v2":
         loss_fn = RegressionLossV2()
     elif params.loss == "edm":
@@ -253,19 +254,19 @@ def training_loop(
 
     # Resume training from previous snapshot.
     if resume_pkl is not None:
-        dist.print0(f'Loading network weights from "{resume_pkl}"...')
-        if dist.get_rank() != 0:
+        print0(f'Loading network weights from "{resume_pkl}"...')
+        if dist.rank != 0:
             torch.distributed.barrier()  # rank 0 goes first
         with open(resume_pkl, 'rb') as f:
             data = pickle.load(f)
-        if dist.get_rank() == 0:
+        if dist.rank == 0:
             torch.distributed.barrier()  # other ranks follow
         misc.copy_params_and_buffers(
             src_module=data["net"], dst_module=net, require_all=False
         )
         del data  # conserve memory
     if resume_state_dump:
-        dist.print0(f'Loading training state from "{resume_state_dump}"...')
+        print0(f'Loading training state from "{resume_state_dump}"...')
         data = torch.load(resume_state_dump, map_location=torch.device("cpu"))
         misc.copy_params_and_buffers(
             src_module=data["net"], dst_module=net, require_all=True
@@ -282,14 +283,13 @@ def training_loop(
         del data  # conserve memory
 
     # Train.
-    dist.print0(f"Training for {total_kimg} kimg...")
-    dist.print0()
+    print0(f"Training for {total_kimg} kimg...")
+    print0()
     cur_nimg = resume_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
     maintenance_time = tick_start_time - start_time
-    dist.update_progress(cur_nimg // 1000, total_kimg)
     stats_jsonl = None
     wandb_logs = {}
 
@@ -378,7 +378,7 @@ def training_loop(
 
             # Save snapshots at fixed time intervals
             ema_freq = max(ema_freq_kimg * 1000 // effective_batch_size, 1)
-            # print('STEP', total_steps, ema_freq, effective_batch_size)
+            # print0('STEP', total_steps, ema_freq, effective_batch_size)
             if total_steps % ema_freq == 0:
                 data = dict(ema1=ema1, ema2=ema2, ema_sigma_rel=ema_sigma_rel)
                 for key, value in data.items():
@@ -387,7 +387,7 @@ def training_loop(
                         misc.check_ddp_consistency(value)
                         data[key] = value.cpu().to(torch.float16)
                     del value  # conserve memory
-                if dist.get_rank() == 0:
+                if dist.rank == 0:
                     with open(
                         os.path.join(run_dir, f"ema-snapshot-{total_steps:08d}.pkl"),
                         "wb",
@@ -527,13 +527,7 @@ def training_loop(
             f"reserved {training_stats.report0('Resources/peak_gpu_mem_reserved_gb', torch.cuda.max_memory_reserved(device) / 2**30):<6.2f}"
         ]
         torch.cuda.reset_peak_memory_stats()
-        dist.print0(" ".join(fields))
-
-        # Check for abort.
-        if (not done) and dist.should_stop():
-            done = True
-            dist.print0()
-            dist.print0("Aborting...")
+        print0(" ".join(fields))
 
         # Save network snapshot.
         if (snapshot_ticks is not None) and (done or cur_tick % snapshot_ticks == 0):
@@ -544,7 +538,7 @@ def training_loop(
                     misc.check_ddp_consistency(value)
                     data[key] = value.cpu()
                 del value  # conserve memory
-            if dist.get_rank() == 0:
+            if dist.rank == 0:
                 with open(
                     os.path.join(run_dir, f"network-snapshot-{cur_nimg//1000:06d}.pkl"),
                     "wb",
@@ -555,11 +549,11 @@ def training_loop(
 
         if cur_tick % params.validate_every == 0:
             if log_to_wandb:
-                if dist.get_rank() == 0:
-                    print("logging to wandb")
+                if dist.rank == 0:
+                    print0("logging to wandb")
                     wandb.log(wandb_logs, step=cur_nimg)
 
-            if dist.get_rank() == 0:
+            if dist.rank == 0:
                 # TODO: improve the image saving and run_dir setup for thread safe image saving from all ranks
 
                 for i in range(output_images.shape[0]):
@@ -610,7 +604,7 @@ def training_loop(
                 (state_dump_ticks is not None)
                 and (done or cur_tick % state_dump_ticks == 0)
                 and cur_tick != 0
-                and dist.get_rank() == 0
+                and dist.rank == 0
             ):
                 torch.save(
                     dict(
@@ -627,7 +621,7 @@ def training_loop(
                 (state_dump_ticks is not None)
                 and (done or cur_tick % state_dump_ticks == 0)
                 and cur_tick != 0
-                and dist.get_rank() == 0
+                and dist.rank == 0
             ):
                 torch.save(
                     dict(
@@ -640,7 +634,7 @@ def training_loop(
 
         # Update logs.
         training_stats.default_collector.update()
-        if dist.get_rank() == 0:
+        if dist.rank == 0:
             if stats_jsonl is None:
                 stats_jsonl = open(os.path.join(run_dir, "stats.jsonl"), "at")
 
@@ -650,11 +644,10 @@ def training_loop(
             if True:
                 wandb_logs["loss"] = stats_dict["Loss/loss"]["mean"]
                 wandb_logs["valid_loss"] = stats_dict["Loss/valid_loss"]["mean"]
-                print("loss: ", wandb_logs["loss"])
-                print("valid_loss: ", wandb_logs["valid_loss"])
+                print0("loss: ", wandb_logs["loss"])
+                print0("valid_loss: ", wandb_logs["valid_loss"])
             stats_jsonl.write(json.dumps(stats_dict) + "\n")
             stats_jsonl.flush()
-        dist.update_progress(cur_nimg // 1000, total_kimg)
 
         # Update state.
         cur_tick += 1
@@ -665,5 +658,6 @@ def training_loop(
             break
 
     # Done.
-    dist.print0()
-    dist.print0("Exiting...")
+    torch.distributed.barrier()
+    print0()
+    print0("Exiting...")

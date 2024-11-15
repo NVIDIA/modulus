@@ -10,7 +10,6 @@
 
 import numpy as np
 import torch
-from utils import distributed as dist
 
 # ----------------------------------------------------------------------------
 # Proposed EDM sampler (Algorithm 2).

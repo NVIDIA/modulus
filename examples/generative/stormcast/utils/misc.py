@@ -5,10 +5,14 @@
 # You should have received a copy of the license along with this
 # work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
 
+import sys
 import re
 import numpy as np
 import torch
-from typing import Any, Union
+from typing import Any, Union, Optional
+
+from modulus.distributed import DistributedManager
+
 
 try:
     nan_to_num = torch.nan_to_num # 1.8.0a0
@@ -52,6 +56,71 @@ def format_time(seconds: Union[int, float]) -> str:
         return "{0}h {1:02}m {2:02}s".format(s // (60 * 60), (s // 60) % 60, s % 60)
     else:
         return "{0}d {1:02}h {2:02}m".format(s // (24 * 60 * 60), (s // (60 * 60)) % 24, (s // 60) % 60)
+
+
+def print0(*args, **kwargs):
+    if DistributedManager().rank == 0:
+        print(*args, **kwargs)
+
+
+
+class Logger(object):
+    """Redirect stderr to stdout, optionally print stdout to a file, and optionally force flushing on both stdout and the file."""
+
+    def __init__(self, file_name: Optional[str] = None, file_mode: str = "w", should_flush: bool = True):
+        self.file = None
+
+        if file_name is not None:
+            self.file = open(file_name, file_mode)
+
+        self.should_flush = should_flush
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+
+        sys.stdout = self
+        sys.stderr = self
+
+    def __enter__(self) -> "Logger":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.close()
+
+    def write(self, text: Union[str, bytes]) -> None:
+        """Write text to stdout (and a file) and optionally flush."""
+        if isinstance(text, bytes):
+            text = text.decode()
+        if len(text) == 0: # workaround for a bug in VSCode debugger: sys.stdout.write(''); sys.stdout.flush() => crash
+            return
+
+        if self.file is not None:
+            self.file.write(text)
+
+        self.stdout.write(text)
+
+        if self.should_flush:
+            self.flush()
+
+    def flush(self) -> None:
+        """Flush written text to both stdout and a file, if open."""
+        if self.file is not None:
+            self.file.flush()
+
+        self.stdout.flush()
+
+    def close(self) -> None:
+        """Flush, close possible files, and remove stdout/stderr mirroring."""
+        self.flush()
+
+        # if using multiple loggers, prevent closing in wrong order
+        if sys.stdout is self:
+            sys.stdout = self.stdout
+        if sys.stderr is self:
+            sys.stderr = self.stderr
+
+        if self.file is not None:
+            self.file.close()
+            self.file = None
 
 
 #----------------------------------------------------------------------------

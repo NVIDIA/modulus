@@ -4,7 +4,7 @@ import glob
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from utils import distributed as dist
+from utils.misc import print0
 from datetime import datetime, timedelta
 import dask
 import xarray as xr
@@ -80,7 +80,7 @@ class HrrrEra5DatasetForecast(Dataset):
 
         self.era5_paths = sorted(self.era5_paths, key=lambda x: int(os.path.basename(x).replace('.zarr', '')))
 
-        dist.print0("list of all era5 paths: ", self.era5_paths)
+        print0("list of all era5 paths: ", self.era5_paths)
 
         if self.train:
             #keep only years specified in the params.train_years list
@@ -91,7 +91,7 @@ class HrrrEra5DatasetForecast(Dataset):
             self.era5_paths = [x for x in self.era5_paths if int(os.path.basename(x).replace('.zarr', '')) in self.params.valid_years]
             self.years = [int(os.path.basename(x).replace('.zarr', '')) for x in self.era5_paths]
 
-        dist.print0("list of all era5 paths after filtering: ", self.era5_paths)
+        print0("list of all era5 paths after filtering: ", self.era5_paths)
         self.n_years = len(self.era5_paths)
 
         with xr.open_zarr(self.era5_paths[0], consolidated=True) as ds:
@@ -104,7 +104,7 @@ class HrrrEra5DatasetForecast(Dataset):
 
         # HRRR parsing
         self.hrrr_paths = glob.glob(os.path.join(self.location, self.conus_dataset_name, "**", "????.zarr"), recursive=True)
-        dist.print0("list of all hrrr paths: ", self.hrrr_paths)
+        print0("list of all hrrr paths: ", self.hrrr_paths)
         self.hrrr_paths = sorted(self.hrrr_paths, key=lambda x: int(os.path.basename(x).replace('.zarr', '')))
         if self.train:
             #keep only years specified in the params.train_years list
@@ -115,11 +115,11 @@ class HrrrEra5DatasetForecast(Dataset):
             self.hrrr_paths = [x for x in self.hrrr_paths if int(os.path.basename(x).replace('.zarr', '')) in self.params.valid_years]
             self.years = [int(os.path.basename(x).replace('.zarr', '')) for x in self.hrrr_paths]
 
-        dist.print0("list of all hrrr paths after filtering: ", self.hrrr_paths)
+        print0("list of all hrrr paths after filtering: ", self.hrrr_paths)
 
         years = [int(os.path.basename(x).replace('.zarr', '')) for x in self.hrrr_paths]
-        dist.print0("years: ", years )
-        dist.print0("self.years: ", self.years)
+        print0("years: ", years )
+        print0("self.years: ", self.years)
         assert years == self.years, 'Number of years for ERA5 in %s and HRRR in %s must match'%(os.path.join(self.location, "era5/*.zarr"),
                                                                                                 os.path.join(self.location, "hrrr/*.zarr"))
         with xr.open_zarr(self.hrrr_paths[0], consolidated=True) as ds:
