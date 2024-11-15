@@ -87,6 +87,8 @@ def make_movie(path: str, dest: str, output_format: str = "gif", output_name: st
         )
         im = plot_latlon(a, prediction[i])
         plot_latlon(b, target[i])
+        a.set_title('StormCast')
+        b.set_title('HRRR Analysis State')
         time = initial_time + i * datetime.timedelta(hours=1)
         fig.suptitle(f"Valid Time: {time.isoformat()} \n Tag: {output_name}")
         cb = plt.colorbar(im, ax=[a, b], orientation="horizontal", shrink=0.8)

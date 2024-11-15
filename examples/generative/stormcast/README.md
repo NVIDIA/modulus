@@ -1,115 +1,105 @@
-# Localized convection capable modeling
+<!-- markdownlint-disable -->
+## StormCast: Kilometer-Scale Convection Allowing Model Emulation using Generative Diffusion Modeling
+
+## Problem overview
+
+Convection-allowing models (CAMs) are essential tools for forecasting severe thunderstorms and 
+mesoscale convective systems, which are responsible for some of the most extreme weather events. 
+By resolving kilometer-scale convective dynamics, these models provide the precision needed for 
+accurate hazard prediction. However, modeling the atmosphere at this scale is both challenging
+and expensive.
+
+This example demonstrates how to run training and simple inference for [StormCast](https://arxiv.org/abs/2408.10958),
+a generative diffusion model designed to emulate NOAA’s High-Resolution Rapid Refresh (HRRR) model, a 3km 
+operational CAM. StormCast autoregressively predicts multiple atmospheric state variables with remarkable
+accuracy, demonstrating ability to replicate storm dynamics, observed radar reflectivity, and realistic
+atmospheric structure via deep learning-based CAM emulation. StormCast enables high-resolution ML-driven
+regional weather forecasting and climate risk analysis.
 
 
-## Quickstart
+<p align="center">
+<img src="../../../docs/img/stormcast_rollout.gif"/>
+</p>
 
-We are using the shifter environment ```registry.nersc.gov/m4331/earth-pytorch:23.08```.
+## Getting started
 
-You can drop into a container by running:
+### Preliminaries
+Start by installing Modulus (if not already installed) and copying this folder (`examples/generative/stormcast`) to a system with a GPU available. Also, download the dataset from TODO.
 
-``` shifter --image=docker:registry.nersc.gov/m4331/earth-pytorch:23.08 /bin/bash ```
+### Configuration basics
 
-on an interactive node
-
-All paths in configs are interpreted relative to the $DATA_ROOT environment
-variable (by default "/").
-
-## Training
-
-To train a model, modify one of the existing batch scripts:
-``` submit_batch.sh ``` for example
-
-use one of the existing configurations in
-``` config/swin_hrrr.yaml ``` for example
-
-## Diffusion model training
-
-To train a diffusion model, modify one of the existing batch scripts:
-``` submit_batch_diffusion.sh ``` for example
-
-the diffusion model uses a config from config/hrrr_swin.yaml
-currently, we are using the hrrr_3_1 dataset and the hrrr_3_1 with config:
-``` diffusion_regression_a2s_v3_1_q: &diffusion_v3_1 ``` as the base config to inherit from.
-
-in training a diffusion model, we specify a few command line options. Eventually we want to bring those into the config yaml file
-
-```python train_diffusions.py --outdir rundir --tick 100 --config_file ./config/hrrr_swin.yaml --config_name diffusion_regression_a2s_v3_1_q_no_att --use_regression_net True --residual True --log_to_wandb True --run_id 0```
-
-the run_id is used for checkpoint restart in conjunction with the rundir (which you can specify as /pscratch/sd/j/jpathak/hrrr_experiments/ for example). When you start a run, the code checks for a pre-existing run dir with matching run id and valid training checkpoint. If such a directory exists, it will load the checkpoint and resume training from there. If not, a new one will be created.
-
-## Inference
-
-Run the inference, making zarr files
-
-    python3 run_inference.py --output-directory test_images/
-
-Score it and generate movies (requires cartopy):
-
-    python3 score_inference.py test_images/
-
-checkpoints are located under
-``` /pscratch/sd/j/jpathak/hrrr_experiments/ ```
-
-diffusion checkpoints are currently under
-
-```/pscratch/sd/j/jpathak/hrrr_experiments/diffusion_pickles ```
-
-The directory structure of diffusion checkpoints might change under future release and this readme will be updated at that point
-
-## Postprocessing
-To get a vertical cross section animation run
-```python vertical_section.py <path> ```
-with <path> to a `data.zarr` produced by `run_inference.py`
-
-## Dataset file structure
-
-We have a few different datasets that we are using for this project. The file structure is as follows:
-
-Training data directory:
-``` /pscratch/sd/p/pharring/hrrr_example/ ```
-
-
-## Dataset versions
-We have a few versions of the HRRR dataset
-```HRRR```
-and the HRRR-2 dataset
-```HRRR_v2```
-and the HRRR-3 dataset
-```HRRR_v3```
-
-## Development
-
-#### Container builds
-
-To update the container env you'll need to re-build the image. On Perlmutter, first do:
+StormCast training is handled by `train.py` and controlled by a YAML configuration file in `config/config.yaml` and command line arguments. You can choose the configuration file using the `--config_file` option, and a specific configuration within that file with the `--config-name` option. The main configuration file specifies the training dataset, the model configuration and the training options. To change a configuration option, you can either edit the existing configurations directly or make new ones by inheriting from the existing configs and overriding specific options. For example, one could create a new config for training the diffusion model in StormCast by creating a new config that inherits from the existing `diffusion` config in `config/config.yaml`:
 ```
-podman-hpc login registry.nersc.gov
-shifterimg login registry.nersc.gov
+diffusion_bs64:
+  <<: *diffusion
+  batch_size: 1
 ```
-Use your NERSC username and password. You may need to file a ticket to request access the first time.
 
-Then make your desired changes to the `Dockerfile` (e.g. new python package, increment nvcr version),
-and from the top-level dir in the repo run
+The basic configuration file currently contains configurations for just the `regression` and `diffusion` components of StormCast. Note any diffusion model you train will need a pretrained regression model to use, due to how StormCast is designed (you can refer to the paper for more details). The path to a checkpoint with model weights for the regression model is specified in the config by `regression_pickle` -- this file should be a pickle of a simple Python dictionary where the `net` key maps to the `state_dict` of the neural network (see `utils/diffusions/training_loop.py` for specific formatting code).
+
+All configuration items related to the dataset are also contained in `config/config.yaml`, most importantly the location on the filesystem of the prepared HRRR/ERA5 Dataset (see [Dataset section](#dataset) for details).
+
+There is also a model registry `config/registry.json` which can be used to index different model versions to be used in inference/evaluation. For simplicity, there is just a single model version specified there currently, which matches the StormCast model used to generate results in the paper.
+
+### Training the regression model
+To train the StormCast regression model, we use the default configuration file `config.yaml` and specify the `regression` config, along with the `--outdir` argument to choose where training logs and checkpoints should be saved. 
+We also can use command line options defined in `train.py` to specify other details, like a unique run ID to use for the experiment (`--run_id`), e.g.:
+```bash
+python train.py --outdir rundir --config_file ./config/config.yaml --config_name regression --log_to_wandb False --run_id 0
 ```
-bash docker/build.sh
+
+This will initialize the training experiment and launch the main training loop, which is defined in `utils/diffusions/training_loop.py`.
+
+Data parallelism is supported via XXX.
+
+### Training the diffusion model
+
+The method for launching a diffusion model training looks almost identical, and we just have to change the configuration name appropriately. However, since we need a pre-trained regression model for the diffusion model training, this config must define `regression_pickle` to point to a compatible pickle file with network weights for the regression model. Once that is taken care of, launching diffusion training looks nearly identical as previously:
+```bash
+python train.py --outdir rundir --config_file ./config/config.yaml --config_name diffusion --log_to_wandb False --run_id 0
 ```
-to update the image. This will build and push a new container version to the registry. Then finally run
+
+Note that the full training pipeline for StormCast is fairly lengthy, requiring about 120 hours on 64 NVIDIA H100 GPUs. However, more lightweight trainings can still produce decent models if the diffusion model is not trained for as long.
+
+Once the training is completed, you can enter a new model into `config/registry.json` that points to the checkpoints (`.pkl`) from your training(s), and you are ready to run inference.
+
+### Inference
+
+A simple demonstrative inference script is given in `inference.py`, which loads a pretrained model (TODO: will the model checkpoints be public/downloadable at time of release?)
+and runs a 12-hour forecast. The forecast outputs are saved as a `zarr` file, and some sample images (PNG and GIF) are created.
+
+To run inference, simply do:
+
+```bash
+python inference.py
 ```
-shifterimg pull <image_name>
-```
-to make the image available to shifter and update the sbatch/launch scripts. Make sure to also freeze
-the updated dependencies to `requirements.txt` by running ```make lock_deps``` from inside the container env.
+This inference script is configured entirely by the contents of the model registry `config/registry.json` file, which specifies config files and names to use for each of the diffusion and regression networks, along with other inference options which specify architecure types and exponential moving average (EMA) weight configurations.
 
-#### Makefile
+We also recommend bringing your checkpoints to [earth2studio](https://github.com/NVIDIA/earth2studio)
+for further anaylysis and visualizations.
 
-Generate requirements.txt:
 
-    make lock_deps
+## Dataset
 
-Lint please:
+In this example, StormCast is trained on the [HRRR dataset](https://rapidrefresh.noaa.gov/hrrr/),
+conditioned on the [ERA5 dataset](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5).
+The datapipe in this example is tailored specifically for the domain and problem setting posed in the 
+[original StormCast preprint](https://arxiv.org/abs/2408.10958), namely a subset of HRRR and ERA5 variables
+in a region over the Central US with spatial extent 1536km x 1920km.
 
-    make lint
 
-Download development data (you will be prompted for your password + OTP)
+A custom dataset object is defined in `utils/data_loader_hrrr_era5.py`, which loads temporally-aligned samples from HRRR and ERA5, interpolated to the same grid and normalized appropriately. This data pipeline requries the HRRR and ERA5 data to abide by a specific `zarr` format and for other datasets, you will need to create a custom datapipe.
 
-    make download_dev_data
+
+## Logging
+
+These scripts use Weights & Biases for experiment tracking, which can be enabled/disabled with the `log_to_wandb` flag. Academic accounts are free to create at [wandb.ai](https://wandb.ai/).
+Once you have an account set up, you can adjust `entity` and `project` in `train.py` to the appropriate names for your `wandb` workspace.
+
+
+## References
+
+- [Kilometer-Scale Convection Allowing Model Emulation using Generative Diffusion Modeling](https://arxiv.org/abs/2408.10958)
+- [Elucidating the design space of diffusion-based generative models](https://openreview.net/pdf?id=k7FuTOWMOc7)
+- [Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/pdf/2011.13456.pdf)
+

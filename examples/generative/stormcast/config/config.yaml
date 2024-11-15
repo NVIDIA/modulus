@@ -35,7 +35,7 @@ base: &base_config
 
 
 # ----------------------------------------------------------------------
-regression:
+regression: &regression
   <<: *base_config
   batch_size: 1
   use_regression_net: !!bool False
@@ -47,7 +47,7 @@ regression:
 
 
 # ----------------------------------------------------------------------
-diffusion:
+diffusion: &diffusion
   <<: *base_config
   batch_size: 1
   use_regression_net: !!bool True
