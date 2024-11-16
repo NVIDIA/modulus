@@ -71,14 +71,19 @@ Once the training is completed, you can enter a new model into `config/registry.
 ### Inference
 
 A simple demonstrative inference script is given in `inference.py`, which loads a pretrained model (TODO: will the model checkpoints be public/downloadable at time of release?)
-and runs a 12-hour forecast. The forecast outputs are saved as a `zarr` file, and some sample images (PNG and GIF) are created.
+and runs a 12-hour forecast. The forecast outputs are saved as a `zarr` file, and some sample plots are created.
 
 To run inference, simply do:
 
 ```bash
 python inference.py
 ```
-This inference script is configured entirely by the contents of the model registry `config/registry.json` file, which specifies config files and names to use for each of the diffusion and regression networks, along with other inference options which specify architecure types and exponential moving average (EMA) weight configurations.
+This inference script is configured by the contents of a model registry, which specifies config files and names to use for each of the diffusion and regression networks, along with other inference options which specify architecure types and a short description of the model. The `inference.py` script will automatically use the default file for the model registry (`config/registry.json`) and evaluate the `stormcast` example model, but you can configure it to run your desired inference case(s) with the following command-line options:
+```bash
+  --outdir DIR          Where to save the results
+  --registry_file FILE  Path to model registry file
+  --model_name MODEL    Name of model to evaluate from the registry
+```
 
 We also recommend bringing your checkpoints to [earth2studio](https://github.com/NVIDIA/earth2studio)
 for further anaylysis and visualizations.

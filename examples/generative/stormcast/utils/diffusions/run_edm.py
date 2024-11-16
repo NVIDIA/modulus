@@ -22,12 +22,20 @@ class EDMRunner():
         dataset_obj = get_dataset(params, train=True)
 
         _, hrrr_channels = dataset_obj._get_hrrr_channel_names()
-        self.input_channels = params.input_channels
-        self.input_channels = hrrr_channels
+        self.input_channels = hrrr_channels if params.input_channels == 'all' else params.input_channels
         self.input_channel_indices = list(range(len(hrrr_channels)))
-        self.diffusion_channels = params.diffusion_channels
-        self.diffusion_channels = hrrr_channels
+        self.diffusion_channels = hrrr_channels if params.diffusion_channels == 'all' else params.diffusion_channels
         self.diffusion_channel_indices = list(range(len(hrrr_channels)))
+
+
+        '''
+        _, kept_hrrr_channels = dataset_train._get_hrrr_channel_names()
+    hrrr_channels = kept_hrrr_channels
+
+    diffusion_channels = params.diffusion_channels
+    if diffusion_channels == "all":
+        diffusion_channels = hrrr_channels
+        '''
 
         invariant_array = dataset_obj._get_invariants()
         self.invariant_tensor = torch.from_numpy(invariant_array).to(device)

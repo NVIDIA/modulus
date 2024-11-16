@@ -7,8 +7,7 @@ import xarray as xr
 import zarr
 import pandas as pd
 import json
-import pickle
-import typer
+import argparse
 from modulus.distributed import DistributedManager
 
 #from utils.viz import make_movie
@@ -19,8 +18,6 @@ from utils.YParams import YParams
 
 
 def main(
-    model_shortname: str = "stormcast",
-    output_directory: str = "./rundir",
     device: str = "cuda:0",
     initial_time: datetime = datetime(2022, 11, 4, 21, 0),
     plot_var_hrrr: str = "refc",
@@ -28,13 +25,36 @@ def main(
     n_steps: int = 12,
     output_hrrr_channels: list[str] = [],
 ):
+    parser = argparse.ArgumentParser(
+        description="Run a StormCast inference"
+    )
+    parser.add_argument('--outdir',
+                        help='Where to save the results',
+                        metavar='DIR',
+                        type=str,
+                        default='./rundir'
+    )
+    parser.add_argument('--registry_file',
+                        help='Path to model registry file',
+                        metavar='FILE',
+                        type=str,
+                        default='config/registry.json'
+    )
+    parser.add_argument('--model_name',
+                        help='Name of model to evaluate from the registry',
+                        metavar='MODEL',
+                        type=str,
+                        default='stormcast'
+    )
+    opts = parser.parse_args()
+
 
     DistributedManager.initialize()
 
     #load model registry:
-    with open("./config/registry.json", "r") as f:
+    with open(opts.registry_file, "r") as f:
         registry = json.load(f)
-        model_info = registry["models"][model_shortname]
+        model_info = registry["models"][opts.model_name]
 
     params = YParams(model_info["regression_config_file"], model_info["regression_config_name"])
     params.local_batch_size = 1
@@ -50,7 +70,7 @@ def main(
     edm_runner = EDMRunner(edm_params, checkpoint_path=diffusion_path)
     residual = edm_params.residual
     
-    os.makedirs(output_directory, exist_ok=True)
+    os.makedirs(opts.outdir, exist_ok=True)
 
     if params.boundary_padding_pixels > 0:
         params.era5_img_size = (
@@ -63,14 +83,22 @@ def main(
     dataset = get_dataset(params, train=False)
 
     net_name = "song-unet-regression-v2"
-    resolution = 512
-    target_channels = len(['u10m', 'v10m', 't2m', 'msl', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'u11', 'u13', 'u15', 'u20', 'u25', 'u30', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v13', 'v15', 'v20', 'v25', 'v30', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11', 't13', 't15', 't20', 't25', 't30', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q13', 'q15', 'q20', 'q25', 'q30', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8', 'z9', 'z10', 'z11', 'z13', 'z15', 'z20', 'z25', 'z30', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11', 'p13', 'p15', 'p20', 'refc']) 
-    conditional_channels = target_channels + len(params.invariants) + 26
+    resolution = params.hrrr_img_size[0]
+    _, hrrr_channels = dataset._get_hrrr_channel_names()
+    diffusion_channels = hrrr_channels if diffusion_channels == "all" else params.diffusion_channels
+    input_channels = hrrr_channels if input_channels == "all" else params.input_channels
+    input_channel_indices = [
+        hrrr_channels.index(channel) for channel in input_channels
+    ]
+    diffusion_channel_indices = [
+        hrrr_channels.index(channel) for channel in diffusion_channels
+    ]
+    conditional_channels = len(diffusion_channels) + len(params.invariants) + params.n_era5_channels
 
     net = get_preconditioned_architecture(
         name=net_name,
         resolution=resolution,
-        target_channels=target_channels,
+        target_channels=len(diffusion_channels),
         conditional_channels=conditional_channels,
         label_dim=0,
         spatial_embedding=params.spatial_pos_embed,
@@ -82,7 +110,7 @@ def main(
     # Load pretrained regression model
     regression_path = model_info["regression_checkpoint_path"]
     chkpt = torch.load(regression_path, weights_only=True)
-    net.load_state_dict(chkpt["net"], strict=True)
+    model.load_state_dict(chkpt["net"], strict=True)
     
     hrrr_data = xr.open_zarr(os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr"))
 
@@ -134,7 +162,7 @@ def main(
 
     # initialize zarr
     zarr_output_path = os.path.join(
-        output_directory, initial_time.strftime("%Y-%m-%dT%H_%M_%S"), "data.zarr"
+        opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"), "data.zarr"
     )
     group = zarr.open_group(zarr_output_path, mode="w")
     group.array("latitude", data=hrrr_data["latitude"].values)
@@ -264,13 +292,13 @@ def main(
             fig.colorbar(im, ax=ax[3], fraction=0.046, pad=0.04)
             ax[3].set_title("Error, {}".format(plot_var_hrrr))
 
-            plt.savefig(f"{output_directory}/out_{i}.png")
+            plt.savefig(f"{opts.outdir}/out_{i}.png")
     
     #create output name with config, edm_config, initial_time
     edm_config = model_info["edm_config_name"]
     reg_config = model_info["regression_config_name"]
     output_gif_name = "{}_{}_{}".format(reg_config, edm_config, initial_time.isoformat()) 
-    #make_movie(zarr_output_path, os.path.join(output_directory, initial_time.isoformat()), output_name = output_gif_name) 
+    #make_movie(zarr_output_path, os.path.join(opts.outdir, initial_time.isoformat()), output_name = output_gif_name) 
     
     level_names = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 
                '11', '13', '15', '20', '25', '30', '35', '40']
@@ -375,7 +403,7 @@ def main(
     ds_targ['latitude'] = xr.DataArray(lats,dims=('y','x'))
     ds_targ = ds_targ.assign_coords(levels=model_levels)
     
-    ds_out_path = os.path.join(output_directory, initial_time.strftime("%Y-%m-%dT%H_%M_%S"))
+    ds_out_path = os.path.join(opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"))
     
     ds_pred_edm.to_netcdf(f"{ds_out_path}/ds_pred_edm.nc",format='NETCDF4')
     ds_pred_noedm.to_netcdf(f"{ds_out_path}/ds_pred_noedm.nc",format='NETCDF4')
@@ -385,4 +413,4 @@ def main(
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    main()

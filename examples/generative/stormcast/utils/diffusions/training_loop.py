@@ -32,41 +32,29 @@ from torch.nn.utils import clip_grad_norm_
 # ----------------------------------------------------------------------------
 
 
-def get_pretrained_regression_net(
-        regression_net_type,
-        resume_pkl,
-        device,
-        invariant_tensor=None
-):
-    if regression_net_type == "unet2":
+def get_pretrained_regression_net(checkpoint_path, config_file, regression_config, target_channels, device):
 
-        hyperparams = YParams(
-            os.path.join("config", "config.yaml"),
-            "regression",
-        )
-        net_name = "song-unet-regression-v2"
-        resolution = 512
-        target_channels = 99
+    hyperparams = YParams(config_file, regression_config)
+    net_name = "song-unet-regression-v2"
+    resolution = hyperparams.hrrr_img_size[0]
 
-        conditional_channels = target_channels + len(hyperparams.invariants) + 26
+    conditional_channels = target_channels + len(hyperparams.invariants) + hyperparams.n_era5_channels
 
-        net = get_preconditioned_architecture(
-            name=net_name,
-            resolution=resolution,
-            target_channels=target_channels,
-            conditional_channels=conditional_channels,
-            label_dim=0,
-            spatial_embedding=hyperparams.spatial_pos_embed,
-            attn_resolutions=hyperparams.attn_resolutions,
-        )
+    net = get_preconditioned_architecture(
+        name=net_name,
+        resolution=resolution,
+        target_channels=target_channels,
+        conditional_channels=conditional_channels,
+        label_dim=0,
+        spatial_embedding=hyperparams.spatial_pos_embed,
+        attn_resolutions=hyperparams.attn_resolutions,
+    )
+    
+    net = EasyRegressionV2(net)
+    chkpt = torch.load(checkpoint_path, weights_only=True)
+    net.load_state_dict(chkpt["net"], strict=True)
 
-        with open(resume_pkl, "rb") as f:
-            data = pickle.load(f)
-        net.load_state_dict(data["net"].state_dict(), strict=True)
-
-        net = EasyRegressionV2(net)
-
-        return net.to(device)
+    return net.to(device)
 
 
 def training_loop(
@@ -108,6 +96,7 @@ def training_loop(
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+    total_kimg = params.total_kimg
 
     if resume_state_dump is not None:
         print0("Resuming from state dump:", resume_state_dump)
@@ -115,41 +104,19 @@ def training_loop(
 
     # Load dataset.
     print0("Loading dataset...")
-    # hard code this name
-
-    # load pretrained regression net
-    if use_regression_net:
-        regression_net = get_pretrained_regression_net(
-            params.regression_net_type,
-            params.regression_pickle,
-            device,
-        )
-
-    total_kimg = params.total_kimg
 
     dataset_train = get_dataset(params, train=True)
     dataset_valid = get_dataset(params, train=False)
 
-    base_hrrr_channels, kept_hrrr_channels = dataset_train._get_hrrr_channel_names()
-    hrrr_channels = kept_hrrr_channels
-
-    diffusion_channels = params.diffusion_channels
-    if diffusion_channels == "all":
-        diffusion_channels = hrrr_channels
-    input_channels = params.input_channels
+    _, hrrr_channels = dataset_train._get_hrrr_channel_names()
+    diffusion_channels = hrrr_channels if diffusion_channels == "all" else params.diffusion_channels
+    input_channels = hrrr_channels if input_channels == "all" else params.input_channels
+    input_channel_indices = [
+        hrrr_channels.index(channel) for channel in input_channels
+    ]
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
-    print0("diffusion_channel_indices", diffusion_channel_indices)
-    if input_channels == "all":
-        input_channel_indices = [
-            hrrr_channels.index(channel) for channel in hrrr_channels
-        ]
-        input_channels = hrrr_channels
-    else:
-        input_channel_indices = [
-            hrrr_channels.index(channel) for channel in input_channels
-        ]
 
     sampler = misc.InfiniteSampler(
         dataset=dataset_train,
@@ -185,7 +152,17 @@ def training_loop(
     dataset_iterator = iter(data_loader)
     valid_dataset_iterator = iter(valid_data_loader)
 
-    # Construct network.
+    # load pretrained regression net if training diffusion
+    if use_regression_net:
+        regression_net = get_pretrained_regression_net(
+            checkpoint_path = params.regression_weights,
+            config_file=config_file,
+            regression_config=params.regression_config,
+            target_channels=len(diffusion_channels),
+            device = device,
+        )
+
+    # Construct network
     print0("Constructing network...")
     resolution = 512
     target_channels = len(diffusion_channels)
@@ -207,7 +184,7 @@ def training_loop(
     if not train_regression_unet:
         regression_net.set_invariant(invariant_tensor)
 
-    print0("hrrr_channels", kept_hrrr_channels)
+    print0("hrrr_channels", hrrr_channels)
     print0("target_channels for diffusion", target_channels)
     print0("conditional_channels for diffusion", conditional_channels)
 
