@@ -9,8 +9,9 @@ import pandas as pd
 import json
 import pickle
 import typer
+from modulus.distributed import DistributedManager
 
-from utils.viz import make_movie
+#from utils.viz import make_movie
 from utils.diffusions.run_edm import EDMRunner
 from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
 from utils.data_loader_hrrr_era5 import get_dataset
@@ -28,6 +29,8 @@ def main(
     output_hrrr_channels: list[str] = [],
 ):
 
+    DistributedManager.initialize()
+
     #load model registry:
     with open("./config/registry.json", "r") as f:
         registry = json.load(f)
@@ -43,9 +46,8 @@ def main(
     edm_params = YParams(model_info["edm_config_file"], edm_config)
     diffusion_channels = edm_params.diffusion_channels
     input_channels = edm_params.input_channels
-    resume_pkl = model_info["edm_checkpoint_path"] 
-    posthoc_ema_sigma = model_info["posthoc_ema_sigma"]
-    edm_runner = EDMRunner(edm_params, resume_pkl=resume_pkl, posthoc_ema_sigma=posthoc_ema_sigma, ema=False)
+    diffusion_path = model_info["edm_checkpoint_path"] 
+    edm_runner = EDMRunner(edm_params, checkpoint_path=diffusion_path)
     residual = edm_params.residual
     
     os.makedirs(output_directory, exist_ok=True)
@@ -75,13 +77,13 @@ def main(
         attn_resolutions=params.attn_resolutions,
         )
 
-    resume_pkl = model_info["regression_checkpoint_path"]
-
-    with open(resume_pkl, 'rb') as f:
-        data = pickle.load(f)
-    net.load_state_dict(data['net'].state_dict(), strict=True)
-
     model = EasyRegressionV2(net).to(device)
+    
+    # Load pretrained regression model
+    regression_path = model_info["regression_checkpoint_path"]
+    chkpt = torch.load(regression_path, weights_only=True)
+    net.load_state_dict(chkpt["net"], strict=True)
+    
     hrrr_data = xr.open_zarr(os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr"))
 
     dataset_obj = get_dataset(params, train=False)
@@ -268,7 +270,7 @@ def main(
     edm_config = model_info["edm_config_name"]
     reg_config = model_info["regression_config_name"]
     output_gif_name = "{}_{}_{}".format(reg_config, edm_config, initial_time.isoformat()) 
-    make_movie(zarr_output_path, os.path.join(output_directory, initial_time.isoformat()), output_name = output_gif_name) 
+    #make_movie(zarr_output_path, os.path.join(output_directory, initial_time.isoformat()), output_name = output_gif_name) 
     
     level_names = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 
                '11', '13', '15', '20', '25', '30', '35', '40']

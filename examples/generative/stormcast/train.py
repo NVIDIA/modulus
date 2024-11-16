@@ -42,7 +42,6 @@ def main(**kwargs):
 
     # I/O-related.
     parser.add_argument('--desc',          help='String to include in result dir name', metavar='STR',        type=str)
-    parser.add_argument('--snap',          help='How often to save snapshots', metavar='TICKS',               type=int, default=10)
     parser.add_argument('--dump',          help='How often to dump state', metavar='TICKS',                   type=int, default=10)
     parser.add_argument('--seed',          help='Random seed  [default: random]', metavar='INT',              type=int)
     parser.add_argument('--resume',        help='Resume from previous training state', metavar='PT',          type=str)
@@ -58,8 +57,7 @@ def main(**kwargs):
 
     # Training options.
     c.optimizer_kwargs = EasyDict(betas=[0.9,0.999], eps=1e-8)
-    c.update(cudnn_benchmark=opts.bench)
-    c.update(snapshot_ticks=opts.snap, state_dump_ticks=opts.dump)
+    c.update(cudnn_benchmark=opts.bench, state_dump_ticks=opts.dump)
 
     # Random seed.
     if opts.seed is not None:
@@ -83,16 +81,13 @@ def main(**kwargs):
 
     #if run_dir exists, then resume training
     if os.path.exists(c.run_dir):
-        training_states = sorted(glob.glob(os.path.join(c.run_dir, 'training-state-*.pt'))) 
+        training_states = sorted(glob.glob(os.path.join(c.run_dir, 'training-state-*.pt')))
         if training_states:
             print0('Resuming training from previous run_dir: ' + c.run_dir)
             last_training_state = sorted(glob.glob(os.path.join(c.run_dir, 'training-state-*.pt')))[-1]
-            last_network_snapshot = sorted(glob.glob(os.path.join(c.run_dir, 'network-snapshot-*.pkl')))[-1]
-            last_kimg = int(re.fullmatch(r'network-snapshot-(\d+).pkl', os.path.basename(last_network_snapshot)).group(1))
-            c.resume_pkl = last_network_snapshot
+            last_kimg = int(re.fullmatch(r'training-state-(\d+).pt', os.path.basename(last_training_state)).group(1))
             c.resume_kimg = last_kimg
             c.resume_state_dump = last_training_state
-            print0('Resuming training from previous network-snapshot-*.pkl file: ' + last_network_snapshot)
             print0('Resuming training from previous training-state-*.pt file: ' + last_training_state)
         
         
@@ -100,7 +95,6 @@ def main(**kwargs):
         match = re.fullmatch(r'training-state-(\d+).pt', os.path.basename(opts.resume))
         if not match or not os.path.isfile(opts.resume):
             raise ValueError('--resume must point to training-state-*.pt from a previous training run')
-        c.resume_pkl = os.path.join(os.path.dirname(opts.resume), f'network-snapshot-{match.group(1)}.pkl')
         c.resume_kimg = int(match.group(1))
         c.resume_state_dump = opts.resume
 

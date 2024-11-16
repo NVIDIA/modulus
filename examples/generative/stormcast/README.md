@@ -35,7 +35,9 @@ diffusion_bs64:
   batch_size: 1
 ```
 
-The basic configuration file currently contains configurations for just the `regression` and `diffusion` components of StormCast. Note any diffusion model you train will need a pretrained regression model to use, due to how StormCast is designed (you can refer to the paper for more details). The path to a checkpoint with model weights for the regression model is specified in the config by `regression_pickle` -- this file should be a pickle of a simple Python dictionary where the `net` key maps to the `state_dict` of the neural network (see `utils/diffusions/training_loop.py` for specific formatting code).
+The basic configuration file currently contains configurations for just the `regression` and `diffusion` components of StormCast. Note any diffusion model you train will need a pretrained regression model to use, due to how StormCast is designed (you can refer to the paper for more details), thus there are two config items that must be defined to train a diffusion model:
+  1. `regression_weights` -- The path to a checkpoint with model weights for the regression model. This file should be a pytorch checkpoint saved by your training script, with the `state_dict` for the regression network saved under the `net` key.
+  2. `regression_config` -- the config name used to train this regression model
 
 All configuration items related to the dataset are also contained in `config/config.yaml`, most importantly the location on the filesystem of the prepared HRRR/ERA5 Dataset (see [Dataset section](#dataset) for details).
 
@@ -64,7 +66,7 @@ Both regression and diffusion training can be distributed easily with data paral
 torchrun --standalone --nnodes=1 --nproc_per_node=8 train.py --outdir rundir --config_file ./config/config.yaml --config_name <your_distributed_training_config> --run_id 0
 ```
 
-Once the training is completed, you can enter a new model into `config/registry.json` that points to the checkpoints (`.pkl`) from your training(s), and you are ready to run inference.
+Once the training is completed, you can enter a new model into `config/registry.json` that points to the checkpoints (`.pt` file in your training output directory), and you are ready to run inference.
 
 ### Inference
 

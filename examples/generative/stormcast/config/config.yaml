@@ -52,9 +52,10 @@ diffusion: &diffusion
   batch_size: 1
   use_regression_net: !!bool True
   regression_net_type: 'unet2'
+  regression_weights: "/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/stormcast_checkpoints/regression_chkpt.pt"
+  regression_config: "regression"
   previous_step_conditioning: !!bool True
   spatial_pos_embed: !!bool True
   loss: 'edm'
   validate_every: 1
-  regression_pickle: "/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/stormcast_checkpoints/regression-chkpt.pkl"
 # ----------------------------------------------------------------------
