@@ -10,6 +10,6 @@ and scalable surrogate model for large-scale simulations.
 The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Blueprint 
 demo presented at Supercomputing' 24.
 
-<img width="2372" alt="image" src="https://github.com/user-attachments/assets/c653d477-c765-43a5-9ad7-09b21472c584">
+../../../../docs/img/domino_result_rtwt.jpg
 
 More details on the model architecture and reference pipeline will be released soon.
