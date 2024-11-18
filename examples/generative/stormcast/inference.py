@@ -1,3 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -24,51 +40,52 @@ def main(
     n_steps: int = 12,
     output_hrrr_channels: list[str] = [],
 ):
-    parser = argparse.ArgumentParser(
-        description="Run a StormCast inference"
+    parser = argparse.ArgumentParser(description="Run a StormCast inference")
+    parser.add_argument(
+        "--outdir",
+        help="Where to save the results",
+        metavar="DIR",
+        type=str,
+        default="./rundir",
     )
-    parser.add_argument('--outdir',
-                        help='Where to save the results',
-                        metavar='DIR',
-                        type=str,
-                        default='./rundir'
+    parser.add_argument(
+        "--registry_file",
+        help="Path to model registry file",
+        metavar="FILE",
+        type=str,
+        default="config/registry.json",
     )
-    parser.add_argument('--registry_file',
-                        help='Path to model registry file',
-                        metavar='FILE',
-                        type=str,
-                        default='config/registry.json'
-    )
-    parser.add_argument('--model_name',
-                        help='Name of model to evaluate from the registry',
-                        metavar='MODEL',
-                        type=str,
-                        default='stormcast'
+    parser.add_argument(
+        "--model_name",
+        help="Name of model to evaluate from the registry",
+        metavar="MODEL",
+        type=str,
+        default="stormcast",
     )
     opts = parser.parse_args()
 
-
     DistributedManager.initialize()
 
-    #load model registry:
+    # load model registry:
     with open(opts.registry_file, "r") as f:
         registry = json.load(f)
         model_info = registry["models"][opts.model_name]
 
-    params = YParams(model_info["regression_config_file"], model_info["regression_config_name"])
+    params = YParams(
+        model_info["regression_config_file"], model_info["regression_config_name"]
+    )
     params.local_batch_size = 1
     params.valid_years = [2022]
     residual = params.residual
-
 
     edm_config = model_info["edm_config_name"]
     edm_params = YParams(model_info["edm_config_file"], edm_config)
     diffusion_channels = edm_params.diffusion_channels
     input_channels = edm_params.input_channels
-    diffusion_path = model_info["edm_checkpoint_path"] 
+    diffusion_path = model_info["edm_checkpoint_path"]
     edm_runner = EDMRunner(edm_params, checkpoint_path=diffusion_path)
     residual = edm_params.residual
-    
+
     os.makedirs(opts.outdir, exist_ok=True)
 
     if params.boundary_padding_pixels > 0:
@@ -84,15 +101,21 @@ def main(
     net_name = "song-unet-regression-v2"
     resolution = params.hrrr_img_size[0]
     _, hrrr_channels = dataset._get_hrrr_channel_names()
-    diffusion_channels = hrrr_channels if params.diffusion_channels == "all" else params.diffusion_channels
-    input_channels = hrrr_channels if params.input_channels == "all" else params.input_channels
-    input_channel_indices = [
-        hrrr_channels.index(channel) for channel in input_channels
-    ]
+    diffusion_channels = (
+        hrrr_channels
+        if params.diffusion_channels == "all"
+        else params.diffusion_channels
+    )
+    input_channels = (
+        hrrr_channels if params.input_channels == "all" else params.input_channels
+    )
+    input_channel_indices = [hrrr_channels.index(channel) for channel in input_channels]
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
-    conditional_channels = len(diffusion_channels) + len(params.invariants) + params.n_era5_channels
+    conditional_channels = (
+        len(diffusion_channels) + len(params.invariants) + params.n_era5_channels
+    )
 
     net = get_preconditioned_architecture(
         name=net_name,
@@ -102,15 +125,17 @@ def main(
         label_dim=0,
         spatial_embedding=params.spatial_pos_embed,
         attn_resolutions=params.attn_resolutions,
-        )
+    )
 
     # Load pretrained regression model
     regression_path = model_info["regression_checkpoint_path"]
     chkpt = torch.load(regression_path, weights_only=True)
     net.load_state_dict(chkpt["net"], strict=True)
     model = EasyRegressionV2(net).to(device)
-    
-    hrrr_data = xr.open_zarr(os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr"))
+
+    hrrr_data = xr.open_zarr(
+        os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr")
+    )
 
     dataset_obj = get_dataset(params, train=False)
 
@@ -119,13 +144,19 @@ def main(
     model.set_invariant(invariant_tensor)
 
     base_hrrr_channels, hrrr_channels = dataset_obj._get_hrrr_channel_names()
-    hrrr_channel_indices = [ list(base_hrrr_channels).index(channel) for channel in hrrr_channels]
+    hrrr_channel_indices = [
+        list(base_hrrr_channels).index(channel) for channel in hrrr_channels
+    ]
     if len(output_hrrr_channels) == 0:
         output_hrrr_channels = hrrr_channels.copy()
 
     diffusion_channels, input_channels = hrrr_channels, hrrr_channels
-    diffusion_channel_indices = [ list(hrrr_channels).index(channel) for channel in diffusion_channels ]
-    input_channel_indices = [ list(hrrr_channels).index(channel) for channel in input_channels ]
+    diffusion_channel_indices = [
+        list(hrrr_channels).index(channel) for channel in diffusion_channels
+    ]
+    input_channel_indices = [
+        list(hrrr_channels).index(channel) for channel in input_channels
+    ]
 
     vardict: dict[str, int] = {
         hrrr_channel: i for i, hrrr_channel in enumerate(hrrr_channels)
@@ -171,7 +202,7 @@ def main(
     target_group = group.create_group("target")
     hrrr, _ = dataset[0]["hrrr"]
     assert hrrr.ndim == 3
-     
+
     grid_size = hrrr.shape[1:]
 
     for name in output_hrrr_channels:
@@ -203,12 +234,14 @@ def main(
             # write hrrr
             denorm_out_edm = out_edm.cpu().numpy() * stds_hrrr + means_hrrr
             denorm_out_noedm = out_noedm.cpu().numpy() * stds_hrrr + means_hrrr
-            
+
             for name in output_hrrr_channels:
                 k = vardict[name]
                 edm_prediction_group[name][i] = denorm_out_edm[0, k]
                 noedm_prediction_group[name][i] = denorm_out_noedm[0, k]
-                target_data = data["hrrr"][0][k].cpu().numpy() * stds_hrrr[k] + means_hrrr[k]
+                target_data = (
+                    data["hrrr"][0][k].cpu().numpy() * stds_hrrr[k] + means_hrrr[k]
+                )
                 target_group[name][i] = target_data
 
             if i > n_steps:
@@ -217,7 +250,13 @@ def main(
             hrrr_0 = out
             out = model(hrrr_0, boundary, mask=None)
             out_noedm = out.clone()
-            hrrr_0 = torch.cat((hrrr_0[:, input_channel_indices, :, :], out[:, input_channel_indices, :, :]), dim=1)
+            hrrr_0 = torch.cat(
+                (
+                    hrrr_0[:, input_channel_indices, :, :],
+                    out[:, input_channel_indices, :, :],
+                ),
+                dim=1,
+            )
             edm_corrected_outputs, _ = edm_runner.run(hrrr_0)
             if residual:
                 out[0, diffusion_channel_indices] += edm_corrected_outputs[0].float()
@@ -291,28 +330,46 @@ def main(
             ax[3].set_title("Error, {}".format(plot_var_hrrr))
 
             plt.savefig(f"{opts.outdir}/out_{i}.png")
-    
-    #create output name with config, edm_config, initial_time
+
+    # create output name with config, edm_config, initial_time
     edm_config = model_info["edm_config_name"]
-    
-    level_names = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 
-               '11', '13', '15', '20', '25', '30', '35', '40']
-    vertical_vars = ['u', 'v', 't', 'q', 'z', 'p', 'w']
-    horizontal_vars = ['msl','refc','u10m','v10m']
-    
+
+    level_names = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "13",
+        "15",
+        "20",
+        "25",
+        "30",
+        "35",
+        "40",
+    ]
+    vertical_vars = ["u", "v", "t", "q", "z", "p", "w"]
+    horizontal_vars = ["msl", "refc", "u10m", "v10m"]
+
     zarr_group = group
-    lons = zarr_group['longitude'][:,:]
-    lats = zarr_group['latitude'][:,:]
+    lons = zarr_group["longitude"][:, :]
+    lats = zarr_group["latitude"][:, :]
     initial_time_pd = pd.to_datetime(initial_time)
     val_times = []
     for i in range(n_steps):
-        val_times.append(initial_time_pd+pd.Timedelta(seconds=i*hours_since_jan_01))
-    
+        val_times.append(initial_time_pd + pd.Timedelta(seconds=i * hours_since_jan_01))
+
     def convert_strings_to_ints(string_list):
         return [int(i) for i in string_list]
-    
+
     model_levels = convert_strings_to_ints(level_names)
-    
+
     ds_pred_edm = xr.Dataset()
     ds_pred_noedm = xr.Dataset()
     ds_targ = xr.Dataset()
@@ -323,88 +380,136 @@ def main(
         dst = xr.Dataset()
 
         for i, level in enumerate(level_names):
-            key = f'{var}{level}' 
+            key = f"{var}{level}"
 
-            if key in zarr_group['edm_prediction']:
+            if key in zarr_group["edm_prediction"]:
                 # Extract the data from zarr_group
-                data_pred_edm = zarr_group['edm_prediction'][key][:, :]
+                data_pred_edm = zarr_group["edm_prediction"][key][:, :]
             else:
-                data_pred_edm = np.full((len(val_times), lats.shape[0], lats.shape[1]), np.nan)
+                data_pred_edm = np.full(
+                    (len(val_times), lats.shape[0], lats.shape[1]), np.nan
+                )
                 print(f"Key {key} not found in Zarr group. Filling with NaNs.")
-            if key in zarr_group['noedm_prediction']:
+            if key in zarr_group["noedm_prediction"]:
                 # Extract the data from zarr_group
-                data_pred_noedm = zarr_group['noedm_prediction'][key][:, :]
+                data_pred_noedm = zarr_group["noedm_prediction"][key][:, :]
             else:
-                data_pred_noedm = np.full((len(val_times), lats.shape[0], lats.shape[1]), np.nan)
-                print(f"Key {key} not found in Zarr group. Filling with NaNs.")
-                
-            if key in zarr_group['target']:
-                data_targ = zarr_group['target'][key][:, :]
-            else:
-                data_targ = np.full((len(val_times), lats.shape[0], lats.shape[1]), np.nan)
+                data_pred_noedm = np.full(
+                    (len(val_times), lats.shape[0], lats.shape[1]), np.nan
+                )
                 print(f"Key {key} not found in Zarr group. Filling with NaNs.")
 
+            if key in zarr_group["target"]:
+                data_targ = zarr_group["target"][key][:, :]
+            else:
+                data_targ = np.full(
+                    (len(val_times), lats.shape[0], lats.shape[1]), np.nan
+                )
+                print(f"Key {key} not found in Zarr group. Filling with NaNs.")
 
-            dap_edm = xr.DataArray(data_pred_edm, dims=('time', 'y', 'x'), coords={'time': val_times, 'y': np.arange(lats.shape[0]), 'x': np.arange(lats.shape[1]), 'levels': model_levels[i]})
-            dap_noedm = xr.DataArray(data_pred_noedm, dims=('time', 'y', 'x'), coords={'time': val_times, 'y':
-                                                np.arange(lats.shape[0]),
-                                                'x':
-                                                np.arange(lats.shape[1]),
-                                                'levels': model_levels[i]})
-            dat = xr.DataArray(data_targ, dims=('time', 'y', 'x'), coords={'time': val_times, 'y': np.arange(lats.shape[0]), 'x': np.arange(lats.shape[1]), 'levels': model_levels[i]})
+            dap_edm = xr.DataArray(
+                data_pred_edm,
+                dims=("time", "y", "x"),
+                coords={
+                    "time": val_times,
+                    "y": np.arange(lats.shape[0]),
+                    "x": np.arange(lats.shape[1]),
+                    "levels": model_levels[i],
+                },
+            )
+            dap_noedm = xr.DataArray(
+                data_pred_noedm,
+                dims=("time", "y", "x"),
+                coords={
+                    "time": val_times,
+                    "y": np.arange(lats.shape[0]),
+                    "x": np.arange(lats.shape[1]),
+                    "levels": model_levels[i],
+                },
+            )
+            dat = xr.DataArray(
+                data_targ,
+                dims=("time", "y", "x"),
+                coords={
+                    "time": val_times,
+                    "y": np.arange(lats.shape[0]),
+                    "x": np.arange(lats.shape[1]),
+                    "levels": model_levels[i],
+                },
+            )
 
-            dsp_edm[f'var_{i}'] = dap_edm
-            dsp_noedm[f'var_{i}'] = dap_noedm
-            dst[f'var_{i}'] = dat
+            dsp_edm[f"var_{i}"] = dap_edm
+            dsp_noedm[f"var_{i}"] = dap_noedm
+            dst[f"var_{i}"] = dat
 
-        combined_pred_edm = xr.concat([dsp_edm[var] for var in dsp_edm.data_vars], dim='levels')
-        combined_pred_noedm = xr.concat([dsp_noedm[var] for var in dsp_noedm.data_vars], dim='levels')
-        combined_targ = xr.concat([dst[var] for var in dst.data_vars], dim='levels')
+        combined_pred_edm = xr.concat(
+            [dsp_edm[var] for var in dsp_edm.data_vars], dim="levels"
+        )
+        combined_pred_noedm = xr.concat(
+            [dsp_noedm[var] for var in dsp_noedm.data_vars], dim="levels"
+        )
+        combined_targ = xr.concat([dst[var] for var in dst.data_vars], dim="levels")
 
-        reshaped_pred_edm = combined_pred_edm.transpose('time', 'levels', 'y', 'x')
-        reshaped_pred_noedm = combined_pred_noedm.transpose('time', 'levels', 'y', 'x')
-        reshaped_targ = combined_targ.transpose('time', 'levels', 'y', 'x')
+        reshaped_pred_edm = combined_pred_edm.transpose("time", "levels", "y", "x")
+        reshaped_pred_noedm = combined_pred_noedm.transpose("time", "levels", "y", "x")
+        reshaped_targ = combined_targ.transpose("time", "levels", "y", "x")
 
-        ds_pred_edm[f'{var}_comb'] = reshaped_pred_edm
-        ds_pred_noedm[f'{var}_comb'] = reshaped_pred_noedm
-        ds_targ[f'{var}_comb'] = reshaped_targ
-    
+        ds_pred_edm[f"{var}_comb"] = reshaped_pred_edm
+        ds_pred_noedm[f"{var}_comb"] = reshaped_pred_noedm
+        ds_targ[f"{var}_comb"] = reshaped_targ
+
     for var in horizontal_vars:
-        data_pred_edm = zarr_group['edm_prediction'][var][:, :]
-        data_pred_noedm = zarr_group['noedm_prediction'][var][:, :]
-        data_targ = zarr_group['target'][var][:, :]
-        dap_edm = xr.DataArray(data_pred_edm,dims=('time','y','x'),
-                         coords={'time':val_times,
-                                'y': np.arange(lats.shape[0]), 'x': np.arange(lats.shape[1])})
-        dap_noedm = xr.DataArray(data_pred_noedm,dims=('time','y','x'),
-                        coords={'time':val_times,
-                            'y': np.arange(lats.shape[0]), 'x': np.arange(lats.shape[1])})
-        dat = xr.DataArray(data_targ,dims=('time','y','x'),
-                         coords={'time':val_times,
-                                'y': np.arange(lats.shape[0]), 'x': np.arange(lats.shape[1])})
-        ds_pred_edm.update({var:dap_edm})
-        ds_pred_noedm.update({var:dap_noedm})
-        ds_targ.update({var:dat})
-    
-    ds_pred_edm['longitude'] = xr.DataArray(lons,dims=('y','x'))
-    ds_pred_edm['latitude'] = xr.DataArray(lats,dims=('y','x'))
+        data_pred_edm = zarr_group["edm_prediction"][var][:, :]
+        data_pred_noedm = zarr_group["noedm_prediction"][var][:, :]
+        data_targ = zarr_group["target"][var][:, :]
+        dap_edm = xr.DataArray(
+            data_pred_edm,
+            dims=("time", "y", "x"),
+            coords={
+                "time": val_times,
+                "y": np.arange(lats.shape[0]),
+                "x": np.arange(lats.shape[1]),
+            },
+        )
+        dap_noedm = xr.DataArray(
+            data_pred_noedm,
+            dims=("time", "y", "x"),
+            coords={
+                "time": val_times,
+                "y": np.arange(lats.shape[0]),
+                "x": np.arange(lats.shape[1]),
+            },
+        )
+        dat = xr.DataArray(
+            data_targ,
+            dims=("time", "y", "x"),
+            coords={
+                "time": val_times,
+                "y": np.arange(lats.shape[0]),
+                "x": np.arange(lats.shape[1]),
+            },
+        )
+        ds_pred_edm.update({var: dap_edm})
+        ds_pred_noedm.update({var: dap_noedm})
+        ds_targ.update({var: dat})
+
+    ds_pred_edm["longitude"] = xr.DataArray(lons, dims=("y", "x"))
+    ds_pred_edm["latitude"] = xr.DataArray(lats, dims=("y", "x"))
     ds_pred_edm = ds_pred_edm.assign_coords(levels=model_levels)
-    
-    ds_pred_noedm['longitude'] = xr.DataArray(lons,dims=('y','x'))
-    ds_pred_noedm['latitude'] = xr.DataArray(lats,dims=('y','x'))
+
+    ds_pred_noedm["longitude"] = xr.DataArray(lons, dims=("y", "x"))
+    ds_pred_noedm["latitude"] = xr.DataArray(lats, dims=("y", "x"))
     ds_pred_noedm = ds_pred_noedm.assign_coords(levels=model_levels)
 
-    ds_targ['longitude'] = xr.DataArray(lons,dims=('y','x'))
-    ds_targ['latitude'] = xr.DataArray(lats,dims=('y','x'))
+    ds_targ["longitude"] = xr.DataArray(lons, dims=("y", "x"))
+    ds_targ["latitude"] = xr.DataArray(lats, dims=("y", "x"))
     ds_targ = ds_targ.assign_coords(levels=model_levels)
-    
-    ds_out_path = os.path.join(opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"))
-    
-    ds_pred_edm.to_netcdf(f"{ds_out_path}/ds_pred_edm.nc",format='NETCDF4')
-    ds_pred_noedm.to_netcdf(f"{ds_out_path}/ds_pred_noedm.nc",format='NETCDF4')
-    ds_targ.to_netcdf(f"{ds_out_path}/ds_targ.nc",format='NETCDF4')
 
-    
+    ds_out_path = os.path.join(opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"))
+
+    ds_pred_edm.to_netcdf(f"{ds_out_path}/ds_pred_edm.nc", format="NETCDF4")
+    ds_pred_noedm.to_netcdf(f"{ds_out_path}/ds_pred_noedm.nc", format="NETCDF4")
+    ds_targ.to_netcdf(f"{ds_out_path}/ds_targ.nc", format="NETCDF4")
 
 
 if __name__ == "__main__":

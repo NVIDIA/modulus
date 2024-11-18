@@ -1,12 +1,21 @@
-# Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This work is licensed under a Creative Commons
-# Attribution-NonCommercial-ShareAlike 4.0 International License.
-# You should have received a copy of the license along with this
-# work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""Model architectures and preconditioning schemes used in the paper
-"Elucidating the Design Space of Diffusion-Based Generative Models"."""
+# Model architectures and preconditioning schemes used in the paper
+# "Elucidating the Design Space of Diffusion-Based Generative Models".
 
 import numpy as np
 import torch
@@ -29,11 +38,9 @@ def weight_init(shape, mode, fan_in, fan_out):
     raise ValueError(f'Invalid init mode "{mode}"')
 
 
-# ----------------------------------------------------------------------------
-# Fully-connected layer.
-
-
 class Linear(torch.nn.Module):
+    """Fully-connected layer"""
+
     def __init__(
         self,
         in_features,
@@ -63,11 +70,9 @@ class Linear(torch.nn.Module):
         return x
 
 
-# ----------------------------------------------------------------------------
-# Convolutional layer with optional up/downsampling.
-
-
 class Conv2d(torch.nn.Module):
+    """Convolutional layer with optional up/downsampling"""
+
     def __init__(
         self,
         in_channels,
@@ -163,11 +168,9 @@ class Conv2d(torch.nn.Module):
         return x
 
 
-# ----------------------------------------------------------------------------
-# Group normalization.
-
-
 class GroupNorm(torch.nn.Module):
+    "Group Normalization layer"
+
     def __init__(self, num_channels, num_groups=32, min_channels_per_group=4, eps=1e-5):
         super().__init__()
         self.num_groups = min(num_groups, num_channels // min_channels_per_group)
@@ -186,13 +189,11 @@ class GroupNorm(torch.nn.Module):
         return x
 
 
-# ----------------------------------------------------------------------------
-# Attention weight computation, i.e., softmax(Q^T * K).
-# Performs all computation using FP32, but uses the original datatype for
-# inputs/outputs/gradients to conserve memory.
-
-
 class AttentionOp(torch.autograd.Function):
+    """Attention weight computation, i.e., softmax(Q^T * K).
+    Performs all computation using FP32, but uses the original datatype for
+    inputs/outputs/gradients to conserve memory."""
+
     @staticmethod
     def forward(ctx, q, k):
         w = (
@@ -226,12 +227,14 @@ class AttentionOp(torch.autograd.Function):
 
 
 # ----------------------------------------------------------------------------
-# Unified U-Net block with optional up/downsampling and self-attention.
-# Represents the union of all features employed by the DDPM++, NCSN++, and
-# ADM architectures.
+#
 
 
 class UNetBlock(torch.nn.Module):
+    """Unified U-Net block with optional up/downsampling and self-attention.
+    Represents the union of all features employed by the DDPM++, NCSN++, and
+    ADM architectures."""
+
     def __init__(
         self,
         in_channels,
@@ -347,11 +350,9 @@ class UNetBlock(torch.nn.Module):
         return x
 
 
-# ----------------------------------------------------------------------------
-# Timestep embedding used in the DDPM++ and ADM architectures.
-
-
 class PositionalEmbedding(torch.nn.Module):
+    """Timestep embedding used in the DDPM++ and ADM architectures."""
+
     def __init__(self, num_channels, max_positions=10000, endpoint=False):
         super().__init__()
         self.num_channels = num_channels
@@ -369,11 +370,9 @@ class PositionalEmbedding(torch.nn.Module):
         return x
 
 
-# ----------------------------------------------------------------------------
-# Timestep embedding used in the NCSN++ architecture.
-
-
 class FourierEmbedding(torch.nn.Module):
+    """Timestep embedding used in the NCSN++ architecture."""
+
     def __init__(self, num_channels, scale=16):
         super().__init__()
         self.register_buffer("freqs", torch.randn(num_channels // 2) * scale)
@@ -385,6 +384,10 @@ class FourierEmbedding(torch.nn.Module):
 
 
 class SongUNetRegression(torch.nn.Module):
+    """U-Net implementation of the ADM architecture from the paper "Diffusion Models Beat GANS on Image Synthesis",
+    modified to be used as the regression model in StormCast (removes the diffusion time embedding ops in the network)
+    """
+
     def __init__(
         self,
         img_resolution,  # Image resolution at input/output.
@@ -412,7 +415,7 @@ class SongUNetRegression(torch.nn.Module):
             1,
             1,
         ],  # Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
-        spatial_embedding=None, # None or 'add' or 'concat'  
+        spatial_embedding=None,  # None or 'add' or 'concat'
         hrrr_resolution=(512, 640),
     ):
         assert embedding_type in ["zero"]
@@ -528,10 +531,8 @@ class SongUNetRegression(torch.nn.Module):
                 )
 
     def forward(self, x, noise_labels, class_labels, augment_labels=None):
-       
-        emb = torch.zeros(
-                (noise_labels.shape[0], self.emb_channels), device=x.device
-            )
+
+        emb = torch.zeros((noise_labels.shape[0], self.emb_channels), device=x.device)
 
         # Encoder.
         skips = []
@@ -562,16 +563,16 @@ class SongUNetRegression(torch.nn.Module):
                 if x.shape[1] != block.in_channels:
                     x = torch.cat([x, skips.pop()], dim=1)
                 x = block(x, emb)
-        
+
         return aux
 
-# ----------------------------------------------------------------------------
-# Reimplementation of the ADM architecture from the paper
-# "Diffusion Models Beat GANS on Image Synthesis". Equivalent to the
-# original implementation by Dhariwal and Nichol, available at
-# https://github.com/openai/guided-diffusion
 
 class SongUNet(torch.nn.Module):
+    """Reimplementation of the ADM architecture from the paper "Diffusion Models Beat GANS on Image Synthesis".
+    Equivalent to the original implementation by Dhariwal and Nichol, available at https://github.com/openai/guided-diffusion
+    Modified to include a learned additive position embedding at the input to the U-Net
+    """
+
     def __init__(
         self,
         img_resolution,  # Image resolution at input/output.
@@ -599,7 +600,7 @@ class SongUNet(torch.nn.Module):
             1,
             1,
         ],  # Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
-        spatial_embedding=False, # True or False  
+        spatial_embedding=False,  # True or False
         hrrr_resolution=(512, 640),
     ):
         assert embedding_type in ["fourier", "positional"]
@@ -611,7 +612,9 @@ class SongUNet(torch.nn.Module):
         self.spatial_embedding = spatial_embedding
 
         if spatial_embedding:
-            self.spatial_emb = torch.nn.Parameter( torch.randn(1, model_channels, *hrrr_resolution) )
+            self.spatial_emb = torch.nn.Parameter(
+                torch.randn(1, model_channels, *hrrr_resolution)
+            )
             torch.nn.init.trunc_normal_(self.spatial_emb, std=0.02)
 
         emb_channels = model_channels * channel_mult_emb
@@ -746,7 +749,7 @@ class SongUNet(torch.nn.Module):
                 )
 
     def forward(self, x, noise_labels, class_labels, augment_labels=None):
-       
+
         emb = self.map_noise(noise_labels)
         emb = (
             emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
@@ -797,11 +800,15 @@ class SongUNet(torch.nn.Module):
                 if x.shape[1] != block.in_channels:
                     x = torch.cat([x, skips.pop()], dim=1)
                 x = block(x, emb)
-        
+
         return aux
 
 
 class EDMPrecond(torch.nn.Module):
+    """Preconditioning wrapper to implement diffusion model training as proposed in "Elucidating the Design Space of
+    Diffusion-Based Generative Models" (EDM)
+    """
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -882,7 +889,8 @@ class EDMPrecond(torch.nn.Module):
 
 
 class EasyRegressionV2(torch.nn.Module):
-    """ Wrapper enabling the regression model to outwardly look like a straightforward regression model in inference"""
+    """Wrapper enabling the regression model to outwardly look like a straightforward regression model in inference"""
+
     def __init__(
         self,
         model,
@@ -890,15 +898,18 @@ class EasyRegressionV2(torch.nn.Module):
         super().__init__()
 
         self.model = model
-    
+
     def set_invariant(self, invariant_tensor):
 
         self.invariant_tensor = invariant_tensor
 
-    def forward(self, hrrr, era5, mask=None): #mask is just for compatibility. Doesn't do anything
+    def forward(
+        self, hrrr, era5, mask=None
+    ):  # mask is just for compatibility. Doesn't do anything
 
-
-        condition = torch.cat([hrrr, era5, self.invariant_tensor.repeat(hrrr.shape[0], 1, 1, 1)], dim=1)
+        condition = torch.cat(
+            [hrrr, era5, self.invariant_tensor.repeat(hrrr.shape[0], 1, 1, 1)], dim=1
+        )
 
         sigma = torch.randn([condition.shape[0], 1, 1, 1], device=condition.device)
 
@@ -906,9 +917,10 @@ class EasyRegressionV2(torch.nn.Module):
 
 
 class RegressionWrapperV2(torch.nn.Module):
-    '''Wrapper class for training regression models
+    """Wrapper class for training regression models
     (allows re-using training code between regression and diffusion training)
-    '''
+    """
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -933,7 +945,7 @@ class RegressionWrapperV2(torch.nn.Module):
 
         condition = condition.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
-        class_labels = None 
+        class_labels = None
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -966,7 +978,7 @@ def get_preconditioned_architecture(
     label_dim: int = 0,
     spatial_embedding: str = "add",
     hrrr_resolution: tuple = (512, 640),
-    attn_resolutions: list = []
+    attn_resolutions: list = [],
 ):
     """
 
@@ -1028,4 +1040,3 @@ def get_preconditioned_architecture(
         )
     else:
         raise ValueError(f'Invalid architecture name "{name}"')
-

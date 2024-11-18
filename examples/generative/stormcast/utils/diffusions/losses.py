@@ -1,13 +1,26 @@
-"""Code from https://github.com/NVlabs/edm/tree/main
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""
 import torch
 from utils.diffusions import networks
 
 
-# Improved loss function proposed in the paper "Elucidating the Design Space
-# of Diffusion-Based Generative Models" (EDM).
 class EDMLoss:
+    """Improved loss function proposed in the paper "Elucidating the Design Space of Diffusion-Based Generative Models" (EDM)."""
+
     def __init__(self, P_mean=-1.2, P_std=1.2, sigma_data=0.5):
         self.P_mean = P_mean
         self.P_std = P_std
@@ -50,6 +63,8 @@ class EDMLoss:
 
 
 class RegressionLossV2:
+    """Loss wrapper for training the StormCast regression model, so that it has a similar call signature as
+    the EDMLoss and the same training loop can be used to train both regression and diffusion models"""
 
     def __call__(
         self,
@@ -72,7 +87,7 @@ class RegressionLossV2:
         """
 
         sigma = torch.ones([x.shape[0], 1, 1, 1], device=x.device)
-        weight = 1.0 # (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
+        weight = 1.0  # (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
         y, augment_labels = augment_pipe(x) if augment_pipe is not None else (x, None)
 
         D_yn = net(

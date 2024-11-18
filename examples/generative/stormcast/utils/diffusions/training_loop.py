@@ -1,9 +1,18 @@
-# Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This work is licensed under a Creative Commons
-# Attribution-NonCommercial-ShareAlike 4.0 International License.
-# You should have received a copy of the license along with this
-# work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """Main training loop."""
 
@@ -31,13 +40,20 @@ from torch.nn.utils import clip_grad_norm_
 # ----------------------------------------------------------------------------
 
 
-def get_pretrained_regression_net(checkpoint_path, config_file, regression_config, target_channels, device):
+def get_pretrained_regression_net(
+    checkpoint_path, config_file, regression_config, target_channels, device
+):
+    """
+    Load a pretrained regression network as specified by a given config
+    """
 
     hyperparams = YParams(config_file, regression_config)
     net_name = "song-unet-regression-v2"
     resolution = hyperparams.hrrr_img_size[0]
 
-    conditional_channels = target_channels + len(hyperparams.invariants) + hyperparams.n_era5_channels
+    conditional_channels = (
+        target_channels + len(hyperparams.invariants) + hyperparams.n_era5_channels
+    )
 
     net = get_preconditioned_architecture(
         name=net_name,
@@ -48,7 +64,7 @@ def get_pretrained_regression_net(checkpoint_path, config_file, regression_confi
         spatial_embedding=hyperparams.spatial_pos_embed,
         attn_resolutions=hyperparams.attn_resolutions,
     )
-    
+
     chkpt = torch.load(checkpoint_path, weights_only=True)
     net.load_state_dict(chkpt["net"], strict=True)
     net = EasyRegressionV2(net)
@@ -74,7 +90,7 @@ def training_loop(
     params = YParams(config_file, config_name)
     batch_size = params.batch_size
     local_batch_size = batch_size // dist.world_size
-    optimizer_kwargs['lr'] = params.lr
+    optimizer_kwargs["lr"] = params.lr
     img_per_tick = params.img_per_tick
     use_regression_net = params.use_regression_net
     previous_step_conditioning = params.previous_step_conditioning
@@ -108,11 +124,15 @@ def training_loop(
     dataset_valid = get_dataset(params, train=False)
 
     _, hrrr_channels = dataset_train._get_hrrr_channel_names()
-    diffusion_channels = hrrr_channels if params.diffusion_channels == "all" else params.diffusion_channels
-    input_channels = hrrr_channels if params.input_channels == "all" else params.input_channels
-    input_channel_indices = [
-        hrrr_channels.index(channel) for channel in input_channels
-    ]
+    diffusion_channels = (
+        hrrr_channels
+        if params.diffusion_channels == "all"
+        else params.diffusion_channels
+    )
+    input_channels = (
+        hrrr_channels if params.input_channels == "all" else params.input_channels
+    )
+    input_channel_indices = [hrrr_channels.index(channel) for channel in input_channels]
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
@@ -154,11 +174,11 @@ def training_loop(
     # load pretrained regression net if training diffusion
     if use_regression_net:
         regression_net = get_pretrained_regression_net(
-            checkpoint_path = params.regression_weights,
+            checkpoint_path=params.regression_weights,
             config_file=config_file,
             regression_config=params.regression_config,
             target_channels=len(diffusion_channels),
-            device = device,
+            device=device,
         )
 
     # Construct network
@@ -218,7 +238,9 @@ def training_loop(
     # Resume training from previous snapshot.
     if resume_state_dump:
         print0(f'Loading training state from "{resume_state_dump}"...')
-        data = torch.load(resume_state_dump, map_location=torch.device("cpu"), weights_only=True)
+        data = torch.load(
+            resume_state_dump, map_location=torch.device("cpu"), weights_only=True
+        )
         net.load_state_dict(data["net"])
         total_steps = data["total_steps"]
         optimizer.load_state_dict(data["optimizer_state"])
@@ -303,9 +325,6 @@ def training_loop(
 
         optimizer.step()
 
-        
-
-
         # Perform maintenance tasks once per tick.
         effective_batch_size = (batch_size // local_batch_size) * hrrr_0.shape[0]
         total_steps += 1
@@ -325,7 +344,7 @@ def training_loop(
             batch = next(valid_dataset_iterator)
 
             with torch.no_grad():
-                #n = 1
+                # n = 1
                 hrrr_0, hrrr_1 = batch["hrrr"]
                 hrrr_0 = hrrr_0.to(torch.float32).to(device)
                 hrrr_1 = hrrr_1.to(torch.float32).to(device)
@@ -347,9 +366,7 @@ def training_loop(
                         latents = torch.randn_like(
                             hrrr_1[:, diffusion_channel_indices, :, :]
                         )
-                        loss_target = (
-                            hrrr_1 - reg_out
-                        )
+                        loss_target = hrrr_1 - reg_out
                         output_images = edm_sampler(
                             net,
                             latents=latents,
