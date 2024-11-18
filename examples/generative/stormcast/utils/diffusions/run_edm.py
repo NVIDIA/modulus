@@ -1,6 +1,5 @@
 import os
 from utils.YParams import YParams
-import pickle
 import numpy as np
 import torch
 import glob

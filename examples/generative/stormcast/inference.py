@@ -10,7 +10,6 @@ import json
 import argparse
 from modulus.distributed import DistributedManager
 
-#from utils.viz import make_movie
 from utils.diffusions.run_edm import EDMRunner
 from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
 from utils.data_loader_hrrr_era5 import get_dataset
@@ -295,9 +294,6 @@ def main(
     
     #create output name with config, edm_config, initial_time
     edm_config = model_info["edm_config_name"]
-    reg_config = model_info["regression_config_name"]
-    output_gif_name = "{}_{}_{}".format(reg_config, edm_config, initial_time.isoformat()) 
-    #make_movie(zarr_output_path, os.path.join(opts.outdir, initial_time.isoformat()), output_name = output_gif_name) 
     
     level_names = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 
                '11', '13', '15', '20', '25', '30', '35', '40']
