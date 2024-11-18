@@ -50,9 +50,9 @@ def get_pretrained_regression_net(checkpoint_path, config_file, regression_confi
         attn_resolutions=hyperparams.attn_resolutions,
     )
     
-    net = EasyRegressionV2(net)
     chkpt = torch.load(checkpoint_path, weights_only=True)
     net.load_state_dict(chkpt["net"], strict=True)
+    net = EasyRegressionV2(net)
 
     return net.to(device)
 
@@ -109,8 +109,8 @@ def training_loop(
     dataset_valid = get_dataset(params, train=False)
 
     _, hrrr_channels = dataset_train._get_hrrr_channel_names()
-    diffusion_channels = hrrr_channels if diffusion_channels == "all" else params.diffusion_channels
-    input_channels = hrrr_channels if input_channels == "all" else params.input_channels
+    diffusion_channels = hrrr_channels if params.diffusion_channels == "all" else params.diffusion_channels
+    input_channels = hrrr_channels if params.input_channels == "all" else params.input_channels
     input_channel_indices = [
         hrrr_channels.index(channel) for channel in input_channels
     ]
@@ -326,12 +326,13 @@ def training_loop(
             batch = next(valid_dataset_iterator)
 
             with torch.no_grad():
-                n = 1
+                #n = 1
                 hrrr_0, hrrr_1 = batch["hrrr"]
                 hrrr_0 = hrrr_0.to(torch.float32).to(device)
                 hrrr_1 = hrrr_1.to(torch.float32).to(device)
 
                 invariant_tensor_ = invariant_tensor.unsqueeze(0)
+                invariant_tensor_ = invariant_tensor.repeat(hrrr_0.shape[0], 1, 1, 1)
 
                 if use_regression_net:
                     with torch.no_grad():
@@ -345,11 +346,11 @@ def training_loop(
                             dim=1,
                         )
                         latents = torch.randn_like(
-                            hrrr_1[0:n, diffusion_channel_indices, :, :]
+                            hrrr_1[:, diffusion_channel_indices, :, :]
                         )
                         loss_target = (
                             hrrr_1 - reg_out
-                        )  # required for valid loss calculation
+                        )
                         output_images = edm_sampler(
                             net,
                             latents=latents,
@@ -357,11 +358,11 @@ def training_loop(
                         )
                         valid_loss = loss_fn(
                             net=ddp,
-                            x=loss_target[0:n, diffusion_channel_indices],
+                            x=loss_target[:, diffusion_channel_indices],
                             condition=torch.cat((hrrr_0, invariant_tensor_), dim=1),
                             augment_pipe=augment_pipe,
                         )
-                        output_images += reg_out[0:n, diffusion_channel_indices, :, :]
+                        output_images += reg_out[:, diffusion_channel_indices, :, :]
                         del reg_out
 
                 elif train_regression_unet:
@@ -373,14 +374,14 @@ def training_loop(
                     ), "input_channel_indices must be equal to diffusion_channel_indices when training regression unet"
                     condition = torch.cat(
                         (
-                            hrrr_0[0:n, input_channel_indices, :, :],
-                            era5[0:n],
+                            hrrr_0[:, input_channel_indices, :, :],
+                            era5[:],
                             invariant_tensor_,
                         ),
                         dim=1,
                     )
                     latents = torch.zeros_like(
-                        hrrr_1[0:n, diffusion_channel_indices, :, :],
+                        hrrr_1[:, diffusion_channel_indices, :, :],
                         device=hrrr_1.device,
                     )
                     rnd_normal = torch.randn(
@@ -392,7 +393,7 @@ def training_loop(
                     output_images = net(sigma=sigma, condition=condition)
                     valid_loss = loss_fn(
                         net=ddp,
-                        x=hrrr_1[0:n, diffusion_channel_indices, :, :],
+                        x=hrrr_1[:, diffusion_channel_indices, :, :],
                         condition=condition,
                         augment_pipe=augment_pipe,
                     )
@@ -408,7 +409,7 @@ def training_loop(
                             "channelwise_valid_loss"
                         ] = channelwise_valid_loss_dict
 
-                hrrr_1 = hrrr_1[0:n, diffusion_channel_indices, :, :]
+                hrrr_1 = hrrr_1[:, diffusion_channel_indices, :, :]
 
                 training_stats.report("Loss/valid_loss", valid_loss.mean())
 

@@ -85,8 +85,8 @@ def main(
     net_name = "song-unet-regression-v2"
     resolution = params.hrrr_img_size[0]
     _, hrrr_channels = dataset._get_hrrr_channel_names()
-    diffusion_channels = hrrr_channels if diffusion_channels == "all" else params.diffusion_channels
-    input_channels = hrrr_channels if input_channels == "all" else params.input_channels
+    diffusion_channels = hrrr_channels if params.diffusion_channels == "all" else params.diffusion_channels
+    input_channels = hrrr_channels if params.input_channels == "all" else params.input_channels
     input_channel_indices = [
         hrrr_channels.index(channel) for channel in input_channels
     ]
@@ -105,12 +105,11 @@ def main(
         attn_resolutions=params.attn_resolutions,
         )
 
-    model = EasyRegressionV2(net).to(device)
-    
     # Load pretrained regression model
     regression_path = model_info["regression_checkpoint_path"]
     chkpt = torch.load(regression_path, weights_only=True)
-    model.load_state_dict(chkpt["net"], strict=True)
+    net.load_state_dict(chkpt["net"], strict=True)
+    model = EasyRegressionV2(net).to(device)
     
     hrrr_data = xr.open_zarr(os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr"))
 
