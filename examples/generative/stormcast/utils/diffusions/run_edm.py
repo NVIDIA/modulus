@@ -48,12 +48,12 @@ class EDMRunner:
         self.invariant_tensor = torch.from_numpy(invariant_array).to(device)
         self.invariant_tensor = self.invariant_tensor.unsqueeze(0)
 
-        resolution = 512
+        resolution = params.hrrr_img_size[0]
         n_target_channels = len(self.diffusion_channel_indices)
         n_input_channels = 2 * len(self.input_channel_indices) + len(params.invariants)
 
         self.net = get_preconditioned_architecture(
-            name="ddpmpp-cwb-v0",
+            name="diffusion",
             resolution=resolution,
             target_channels=n_target_channels,
             conditional_channels=n_input_channels,

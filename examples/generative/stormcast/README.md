@@ -101,7 +101,34 @@ The datapipe in this example is tailored specifically for the domain and problem
 in a region over the Central US with spatial extent 1536km x 1920km.
 
 
-A custom dataset object is defined in `utils/data_loader_hrrr_era5.py`, which loads temporally-aligned samples from HRRR and ERA5, interpolated to the same grid and normalized appropriately. This data pipeline requries the HRRR and ERA5 data to abide by a specific `zarr` format and for other datasets, you will need to create a custom datapipe.
+A custom dataset object is defined in `utils/data_loader_hrrr_era5.py`, which loads temporally-aligned samples from HRRR and ERA5, interpolated to the same grid and normalized appropriately. This data pipeline requries the HRRR and ERA5 data to abide by a specific `zarr` format and for other datasets, you will need to create a custom datapipe. The table below lists the variables used to train StormCast -- in total there are 26 ERA5 variables used and 99 HRRR variables (along with 2 static HRRR invariants, the land/water mask and orography).
+
+#### ERA5 Variables
+| Parameter                             | Pressure Levels (hPa)     | Height Levels (m) |
+|---------------------------------------|---------------------------|--------------------|
+| Zonal Wind (u)                        | 1000, 850, 500, 250       | 10                 |
+| Meridional Wind (v)                   | 1000, 850, 500, 250       | 10                 |
+| Geopotential Height (z)               | 1000, 850, 500, 250       | None               |
+| Temperature (t)                       | 1000, 850, 500, 250       | 2                  |
+| Humidity (q)                          | 1000, 850, 500, 250       | None               |
+| Total Column of Water Vapour (tcwv)   | Integrated                | -                  |
+| Mean Sea Level Pressure (mslp)        | Surface                   | -                  |
+| Surface Pressure (sp)                 | Surface                   | -                  |
+
+
+#### HRRR Variables
+| Parameter                             | Hybrid Model Levels (Index)                               | Height Levels (m) |
+|---------------------------------------|-----------------------------------------------------------|--------------------|
+| Zonal Wind (u)                        | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20, 25, 30    | 10                 |
+| Meridional Wind (v)                   | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20, 25, 30    | 10                 |
+| Geopotential Height (z)               | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20, 25, 30    | None               |
+| Temperature (t)                       | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20, 25, 30    | 2                  |
+| Humidity (q)                          | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20, 25, 30    | None               |
+| Pressure (p)                          | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 20            | None               |
+| Max. Composite Radar Reflectivity     | -                                                         | Integrated         |
+| Mean Sea Level Pressure (mslp)        | -                                                         | Surface            |
+| Orography                             | -                                                         | Surface            |
+| Land/Water Mask                       | -                                                         | Surface            |
 
 
 ## Logging

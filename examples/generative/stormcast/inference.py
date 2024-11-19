@@ -98,7 +98,6 @@ def main(
 
     dataset = get_dataset(params, train=False)
 
-    net_name = "song-unet-regression-v2"
     resolution = params.hrrr_img_size[0]
     _, hrrr_channels = dataset._get_hrrr_channel_names()
     diffusion_channels = (
@@ -118,7 +117,7 @@ def main(
     )
 
     net = get_preconditioned_architecture(
-        name=net_name,
+        name="regression",
         resolution=resolution,
         target_channels=len(diffusion_channels),
         conditional_channels=conditional_channels,

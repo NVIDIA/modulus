@@ -983,6 +983,7 @@ def get_preconditioned_architecture(
     """
 
     Args:
+        name: 'regression' or 'diffusion' to select between either model type
         resolution (int): _description_
         target_channels: The number of channels in the target
         conditional_channels: The number of channels in the conditioning
@@ -994,7 +995,7 @@ def get_preconditioned_architecture(
     Returns:
         EDMPrecond: a wrapped torch module net(x+n, sigma, condition, class_labels) -> x
     """
-    if name == "ddpmpp-cwb-v0":
+    if name == "diffusion":
         model = SongUNet(
             img_resolution=resolution,
             in_channels=target_channels + conditional_channels,
@@ -1016,7 +1017,7 @@ def get_preconditioned_architecture(
             img_resolution=resolution,
             label_dim=label_dim,
         )
-    elif name == "song-unet-regression-v2":
+    elif name == "regression":
         model = SongUNetRegression(
             img_resolution=resolution,
             in_channels=conditional_channels,

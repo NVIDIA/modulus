@@ -48,7 +48,6 @@ def get_pretrained_regression_net(
     """
 
     hyperparams = YParams(config_file, regression_config)
-    net_name = "song-unet-regression-v2"
     resolution = hyperparams.hrrr_img_size[0]
 
     conditional_channels = (
@@ -56,7 +55,7 @@ def get_pretrained_regression_net(
     )
 
     net = get_preconditioned_architecture(
-        name=net_name,
+        name="regression",
         resolution=resolution,
         target_channels=target_channels,
         conditional_channels=conditional_channels,
@@ -97,11 +96,11 @@ def training_loop(
     loss_type = params.loss
     if loss_type == "regression_v2":
         train_regression_unet = True
-        net_name = "song-unet-regression-v2"
+        net_name = "regression"
         print0("Using regression_v2")
     elif loss_type == "edm":
         train_regression_unet = False
-        net_name = "ddpmpp-cwb-v0"
+        net_name = "diffusion"
 
     # Initialize.
     start_time = time.time()
