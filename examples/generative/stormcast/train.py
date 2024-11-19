@@ -24,10 +24,9 @@ import torch
 import wandb
 import glob
 import argparse
-import logging
 from modulus.distributed import DistributedManager
 
-from utils.misc import EasyDict, print0, Logger
+from utils.misc import EasyDict, print0
 from utils.diffusions import training_loop
 
 
