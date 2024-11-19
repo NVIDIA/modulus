@@ -17,9 +17,8 @@
 base: &base_config
   # data config
   num_data_workers: 4 # number of dataloader worker threads per proc
-  location: '/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/'
+  location: 'data' # Path to the dataset
   dt: 1
-  exp_dir: '/lustre/fsw/portfolios/nvr/users/jpathak/hrrr-experiments/'
   log_to_wandb: !!bool False
   hrrr_img_size: [512, 640]
   n_hrrr_channels: 127
@@ -67,7 +66,7 @@ diffusion: &diffusion
   <<: *base_config
   batch_size: 1
   use_regression_net: !!bool True
-  regression_weights: "/lustre/fsw/portfolios/nvr/projects/nvr_earth2_e2/stormcast_checkpoints/regression_chkpt.pt"
+  regression_weights: "stormcast_checkpoints/regression_chkpt.pt"
   regression_config: "regression"
   previous_step_conditioning: !!bool True
   spatial_pos_embed: !!bool True

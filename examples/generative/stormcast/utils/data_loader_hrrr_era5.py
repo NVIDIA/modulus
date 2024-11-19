@@ -42,9 +42,32 @@ def get_dataset(params, train):
 class HrrrEra5DatasetForecast(Dataset):
     """
     Paired dataset object serving time-synchronized pairs of ERA5 and HRRR samples
-    Expects data to be stored under directory specified by 'location'
-        ERA5 under <root_dir>/era5/
-        HRRR under <root_dir>/hrrr/
+    Expects data to be stored under directory specified by 'location' with the
+    following layout:
+
+    | <location>
+    | -- era5
+         | -- stats
+              | -- means.npy
+              | -- stds.npy
+              | -- time_means.npy
+         | -- valid
+         | -- test
+         | -- train
+    | -- <params.conus_dataset_name>
+         | invariants.zarr
+         | -- <params.hrrr_stats>
+              | -- means.npy
+              | -- stds.npy
+         | -- valid
+         | -- test
+         | -- train
+
+    ERA5 stored under <location>/era5/
+    HRRR stored under <location>/<params.conus_dataset_name>
+
+    Within each train/valid/test directory, there should be one zarr file per
+    year containing the data of interest.
     """
 
     def __init__(self, params, train, location: str):

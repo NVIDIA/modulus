@@ -1,6 +1,8 @@
 <!-- markdownlint-disable -->
 ## StormCast: Kilometer-Scale Convection Allowing Model Emulation using Generative Diffusion Modeling
 
+**Note: this example is an initial release of the StormCast code and will be heavily refactored in future releases**
+
 ## Problem overview
 
 Convection-allowing models (CAMs) are essential tools for forecasting severe thunderstorms and 
@@ -24,7 +26,7 @@ regional weather forecasting and climate risk analysis.
 ## Getting started
 
 ### Preliminaries
-Start by installing Modulus (if not already installed) and copying this folder (`examples/generative/stormcast`) to a system with a GPU available. Also, download the dataset from TODO.
+Start by installing Modulus (if not already installed) and copying this folder (`examples/generative/stormcast`) to a system with a GPU available. Also, prepare a combined HRRR/ERA5 dataset in the form specified in `utils/data_loader_hrrr_era5.py` (**Note: subsequent versions of this example will include more detailed dataset preparation instructions**).
 
 ### Configuration basics
 
@@ -70,8 +72,9 @@ Once the training is completed, you can enter a new model into `config/registry.
 
 ### Inference
 
-A simple demonstrative inference script is given in `inference.py`, which loads a pretrained model (TODO: will the model checkpoints be public/downloadable at time of release?)
-and runs a 12-hour forecast. The forecast outputs are saved as a `zarr` file, and some sample plots are created.
+A simple demonstrative inference script is given in `inference.py`, which loads a pretrained model from a local directory named `stormcast_checkpoints`.
+Yout should update this path to the checkpoints saved by your training runs that you want to run inference for.
+The `inference.py` script will run a 12-hour forecast and save outputs as a `zarr` file along with a few plots saved as `png` files.
 
 To run inference, simply do:
 
