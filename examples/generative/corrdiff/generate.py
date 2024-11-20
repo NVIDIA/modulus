@@ -85,7 +85,13 @@ def main(cfg: DictConfig) -> None:
 
     # Create dataset object
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
-    dataset, sampler = get_dataset_and_sampler(dataset_cfg=dataset_cfg, times=times)
+    if "has_lead_time" in cfg.generation:
+        has_lead_time = cfg.generation["has_lead_time"]
+    else:
+        has_lead_time = False
+    dataset, sampler = get_dataset_and_sampler(
+        dataset_cfg=dataset_cfg, times=times, has_lead_time=has_lead_time
+    )
     img_shape = dataset.image_shape()
     img_out_channels = len(dataset.output_channels())
 
@@ -196,6 +202,7 @@ def main(cfg: DictConfig) -> None:
                             img_shape[0],
                             img_shape[1],
                         ),
+                        lead_time_label=lead_time_label,
                     )
             if net_res:
                 if cfg.generation.hr_mean_conditioning:
@@ -216,6 +223,7 @@ def main(cfg: DictConfig) -> None:
                         rank=dist.rank,
                         device=device,
                         hr_mean=mean_hr,
+                        lead_time_label=lead_time_label,
                     )
             if cfg.generation.inference_mode == "regression":
                 image_out = image_reg
@@ -231,7 +239,6 @@ def main(cfg: DictConfig) -> None:
                     h1=img_shape_y // patch_shape[0],
                     w1=img_shape_x // patch_shape[1],
                 )
-
             # Gather tensors on rank 0
             if dist.world_size > 1:
                 if dist.rank == 0:
@@ -286,6 +293,7 @@ def main(cfg: DictConfig) -> None:
                     lon=dataset.longitude(),
                     input_channels=dataset.input_channels(),
                     output_channels=dataset.output_channels(),
+                    has_lead_time=has_lead_time,
                 )
 
                 # Initialize threadpool for writers
@@ -298,7 +306,7 @@ def main(cfg: DictConfig) -> None:
             end = torch.cuda.Event(enable_timing=True)
 
             times = dataset.time()
-            for image_tar, image_lr, index in iter(data_loader):
+            for image_tar, image_lr, index, *lead_time_label in iter(data_loader):
                 time_index += 1
                 if dist.rank == 0:
                     logger0.info(f"starting index: {time_index}")
@@ -307,6 +315,10 @@ def main(cfg: DictConfig) -> None:
                     start.record()
 
                 # continue
+                if lead_time_label:
+                    lead_time_label = lead_time_label[0].to(dist.device).contiguous()
+                else:
+                    lead_time_label = None
                 image_lr = (
                     image_lr.to(device=device)
                     .to(torch.float32)
@@ -314,7 +326,6 @@ def main(cfg: DictConfig) -> None:
                 )
                 image_tar = image_tar.to(device=device).to(torch.float32)
                 image_out = generate_fn()
-
                 if dist.rank == 0:
                     batch_size = image_out.shape[0]
                     # write out data in a seperate thread so we don't hold up inferencing
@@ -329,6 +340,7 @@ def main(cfg: DictConfig) -> None:
                             image_lr.cpu(),
                             time_index,
                             index[0],
+                            has_lead_time,
                         )
                     )
             end.record()

@@ -16,4 +16,5 @@
 
 type: stochastic
 boundary_pix: 2
-overlap_pix: 0
+overlap_pix: 4
+#overlap_pix has to be no less than 2*boundary_pix

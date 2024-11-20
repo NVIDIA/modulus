@@ -17,12 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added gradient clipping to StaticCapture utilities.
 - Bistride Multiscale MeshGraphNet example.
 - FIGConvUNet model and example.
+- The Transolver model.
+- The XAeroNet model.
+- Incoporated CorrDiff-GEFS-HRRR model into CorrDiff, with lead-time aware SongUNet and
+  cross entropy loss.
 
 ### Changed
 
 - Refactored CorrDiff training recipe for improved usability
 - Fixed timezone calculation in datapipe cosine zenith utility.
 - Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
+- Extended the checkpointing utility to store metadata.
+- Corrected missing export of loggin function used by transolver model
 
 ### Deprecated
 
