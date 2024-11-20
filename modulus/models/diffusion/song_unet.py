@@ -610,3 +610,281 @@ class SongUNetPosEmbd(SongUNet):
         else:
             raise ValueError("Gridtype not supported.")
         return grid
+
+
+class SongUNetPosLtEmbd(SongUNet):
+    """
+    This model is adapated from SongUNetPosEmbd, with the incoporatation of lead-time aware
+    embedding for the GEFS-HRRR model. The lead-time embedding is activated by setting the
+    lead_time_channels and lead_time_steps parameters.
+
+    Parameters
+    -----------
+    img_resolution : Union[List[int], int]
+        The resolution of the input/output image, 1 value represents a square image.
+    in_channels : int
+        Number of channels in the input image.
+    out_channels : int
+        Number of channels in the output image.
+    label_dim : int, optional
+        Number of class labels; 0 indicates an unconditional model. By default 0.
+    augment_dim : int, optional
+        Dimensionality of augmentation labels; 0 means no augmentation. By default 0.
+    model_channels : int, optional
+        Base multiplier for the number of channels across the network, by default 128.
+    channel_mult : List[int], optional
+        Per-resolution multipliers for the number of channels. By default [1,2,2,2].
+    channel_mult_emb : int, optional
+        Multiplier for the dimensionality of the embedding vector. By default 4.
+    num_blocks : int, optional
+        Number of residual blocks per resolution. By default 4.
+    attn_resolutions : List[int], optional
+        Resolutions at which self-attention layers are applied. By default [16].
+    dropout : float, optional
+        Dropout probability applied to intermediate activations. By default 0.13.
+    label_dropout : float, optional
+       Dropout probability of class labels for classifier-free guidance. By default 0.0.
+    embedding_type : str, optional
+        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++.
+        By default 'positional'.
+    channel_mult_noise : int, optional
+        Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
+    encoder_type : str, optional
+        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++. By default
+        'standard'.
+    decoder_type : str, optional
+        Decoder architecture: 'standard' for both DDPM++ and NCSN++. By default
+        'standard'.
+    resample_filter : List[int], optional (default=[1,1])
+        Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
+    lead_time_channels: int, optional
+        Length of lead time embedding vector
+    lead_time_steps: int, optional
+        Total number of lead times
+
+
+    Reference
+    ----------
+    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Poole, B., 2020. Score-based generative modeling through stochastic differential
+    equations. arXiv preprint arXiv:2011.13456.
+
+    Note
+    -----
+    Equivalent to the original implementation by Song et al., available at
+    https://github.com/yang-song/score_sde_pytorch
+
+    Example
+    --------
+    >>> model = SongUNet(img_resolution=16, in_channels=2, out_channels=2)
+    >>> noise_labels = torch.randn([1])
+    >>> class_labels = torch.randint(0, 1, (1, 1))
+    >>> input_image = torch.ones([1, 2, 16, 16])
+    >>> output_image = model(input_image, noise_labels, class_labels)
+    >>> output_image.shape
+    torch.Size([1, 2, 16, 16])
+    """
+
+    def __init__(
+        self,
+        img_resolution: Union[List[int], int],
+        in_channels: int,
+        out_channels: int,
+        label_dim: int = 0,
+        augment_dim: int = 0,
+        model_channels: int = 128,
+        channel_mult: List[int] = [1, 2, 2, 2, 2],
+        channel_mult_emb: int = 4,
+        num_blocks: int = 4,
+        attn_resolutions: List[int] = [28],
+        dropout: float = 0.13,
+        label_dropout: float = 0.0,
+        embedding_type: str = "positional",
+        channel_mult_noise: int = 1,
+        encoder_type: str = "standard",
+        decoder_type: str = "standard",
+        resample_filter: List[int] = [1, 1],
+        gridtype: str = "sinusoidal",
+        N_grid_channels: int = 4,
+        lead_time_channels: int = None,
+        lead_time_steps: int = 9,
+        prob_channels: List[int] = [],
+        checkpoint_level: int = 0,
+    ):
+        super().__init__(
+            img_resolution,
+            in_channels,
+            out_channels,
+            label_dim,
+            augment_dim,
+            model_channels,
+            channel_mult,
+            channel_mult_emb,
+            num_blocks,
+            attn_resolutions,
+            dropout,
+            label_dropout,
+            embedding_type,
+            channel_mult_noise,
+            encoder_type,
+            decoder_type,
+            resample_filter,
+            checkpoint_level,
+        )
+
+        self.gridtype = gridtype
+        self.N_grid_channels = N_grid_channels
+        self.pos_embd = self._get_positional_embedding()
+        self.lead_time_channels = lead_time_channels
+        self.lead_time_steps = lead_time_steps
+        self.lt_embd = self._get_lead_time_embedding()
+        self.prob_channels = prob_channels
+        if self.prob_channels:
+            self.scalar = torch.nn.Parameter(
+                torch.ones((1, len(self.prob_channels), 1, 1))
+            )
+
+    @nvtx.annotate(message="SongUNet", color="blue")
+    def forward(
+        self,
+        x,
+        noise_labels,
+        class_labels,
+        lead_time_label=None,
+        global_index=None,
+        augment_labels=None,
+    ):
+        # append positional embedding to input conditioning
+        embeds = []
+        if self.pos_embd is not None:
+            embeds.append(self.pos_embd.to(x.device))
+        if self.lt_embd is not None:
+            embeds.append(
+                torch.reshape(
+                    self.lt_embd[lead_time_label.int()],
+                    (self.lead_time_channels, self.img_shape_y, self.img_shape_x),
+                ).to(x.device)
+            )
+        if len(embeds) > 0:
+            embeds = torch.cat(embeds, dim=0)
+            selected_pos_embd = self.positional_embedding_indexing(
+                x, embeds, global_index
+            )
+            x = torch.cat((x, selected_pos_embd), dim=1)
+        out = super().forward(x, noise_labels, class_labels, augment_labels)
+        # if training mode, let crossEntropyLoss do softmax. The model outputs logits.
+        # if eval mode, the model outputs probability
+        all_channels = list(range(out.shape[1]))  # [0, 1, 2, ..., 10]
+        scalar_channels = [
+            item for item in all_channels if item not in self.prob_channels
+        ]
+        if self.prob_channels and (not self.training):
+            out_final = torch.cat(
+                (
+                    out[:, scalar_channels],
+                    (out[:, self.prob_channels] * self.scalar).softmax(dim=1),
+                ),
+                dim=1,
+            )
+        elif self.prob_channels and self.training:
+            out_final = torch.cat(
+                (out[:, scalar_channels], (out[:, self.prob_channels] * self.scalar)),
+                dim=1,
+            )
+        else:
+            out_final = out
+        return out_final
+
+    def positional_embedding_indexing(self, x, pos_embd, global_index):
+        if global_index is None:
+            selected_pos_embd = (
+                pos_embd.to(x.dtype).to(x.device)[None].expand((x.shape[0], -1, -1, -1))
+            )
+        else:
+            B = global_index.shape[0]
+            X = global_index.shape[2]
+            Y = global_index.shape[3]
+            global_index = torch.reshape(
+                torch.permute(global_index, (1, 0, 2, 3)), (2, -1)
+            )  # (B, 2, X, Y) to (2, B*X*Y)
+            selected_pos_embd = pos_embd.to(x.device)[
+                :, global_index[0], global_index[1]
+            ]  # (N_pe, B*X*Y)
+            selected_pos_embd = (
+                torch.permute(
+                    torch.reshape(selected_pos_embd, (pos_embd.shape[0], B, X, Y)),
+                    (1, 0, 2, 3),
+                )
+                .to(x.device)
+                .to(x.dtype)
+            )  # (B, N_pe, X, Y)
+        return selected_pos_embd
+
+    def _get_positional_embedding(self):
+        if self.N_grid_channels == 0:
+            return None
+        elif self.gridtype == "learnable":
+            grid = torch.nn.Parameter(
+                torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
+            )
+        elif self.gridtype == "linear":
+            if self.N_grid_channels != 2:
+                raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
+            x = np.meshgrid(np.linspace(-1, 1, self.img_shape_y))
+            y = np.meshgrid(np.linspace(-1, 1, self.img_shape_x))
+            grid_x, grid_y = np.meshgrid(y, x)
+            grid = torch.from_numpy(np.stack((grid_x, grid_y), axis=0))
+            grid.requires_grad = False
+        elif self.gridtype == "sinusoidal" and self.N_grid_channels == 4:
+            # print('sinusuidal grid added ......')
+            x1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            x2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_y)))
+            y1 = np.meshgrid(np.sin(np.linspace(0, 2 * np.pi, self.img_shape_x)))
+            y2 = np.meshgrid(np.cos(np.linspace(0, 2 * np.pi, self.img_shape_x)))
+            grid_x1, grid_y1 = np.meshgrid(y1, x1)
+            grid_x2, grid_y2 = np.meshgrid(y2, x2)
+            grid = torch.squeeze(
+                torch.from_numpy(
+                    np.expand_dims(
+                        np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
+                    )
+                )
+            )
+            grid.requires_grad = False
+        elif self.gridtype == "sinusoidal" and self.N_grid_channels != 4:
+            if self.N_grid_channels % 4 != 0:
+                raise ValueError("N_grid_channels must be a factor of 4")
+            num_freq = self.N_grid_channels // 4
+            freq_bands = 2.0 ** np.linspace(0.0, num_freq, num=num_freq)
+            grid_list = []
+            grid_x, grid_y = np.meshgrid(
+                np.linspace(0, 2 * np.pi, self.img_shape_x),
+                np.linspace(0, 2 * np.pi, self.img_shape_y),
+            )
+            for freq in freq_bands:
+                for p_fn in [np.sin, np.cos]:
+                    grid_list.append(p_fn(grid_x * freq))
+                    grid_list.append(p_fn(grid_y * freq))
+            grid = torch.from_numpy(np.stack(grid_list, axis=0))
+            grid.requires_grad = False
+        elif self.gridtype == "test" and self.N_grid_channels == 2:
+            idx_x = torch.arange(self.img_shape_y)
+            idx_y = torch.arange(self.img_shape_x)
+            mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
+            grid = torch.stack((mesh_x, mesh_y), dim=0)
+        else:
+            raise ValueError("Gridtype not supported.")
+        return grid
+
+    def _get_lead_time_embedding(self):
+        if (self.lead_time_steps is None) or (self.lead_time_channels is None):
+            return None
+        grid = torch.nn.Parameter(
+            torch.randn(
+                self.lead_time_steps,
+                self.lead_time_channels,
+                self.img_shape_y,
+                self.img_shape_x,
+            )
+        )
+        return grid
