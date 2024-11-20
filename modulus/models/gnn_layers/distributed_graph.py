@@ -67,6 +67,8 @@ class GraphPartition:
     partition_size: int
     partition_rank: int
     device: torch.device
+    # flag to indicate using adj matrix 1-D row-decomp
+    matrix_decomp: bool = False
 
     # data structures defining partition
     # set in after initialization or during execution
@@ -145,6 +147,7 @@ class GraphPartition:
         self.scatter_indices = [idx.to(*args, **kwargs) for idx in self.scatter_indices]
 
         return self
+
 
 def partition_graph_with_id_mapping(
     global_offsets: torch.Tensor,
@@ -419,7 +422,7 @@ def partition_graph_with_matrix_decomposition(
     (2) Each local graph (sub-matrix) can be defined/constructed by just node/edge offsets from
     global graph.
     (3) The partitioning is performed on a global graph stored in CPU memory, and then each device
-    (rank) constructs its local graph independently (in-parallel) from the global (shared) csc matrix.
+    (rank) constructs its local graph independently from the global csc matrix.
 
     Parameters
     ----------
@@ -429,10 +432,8 @@ def partition_graph_with_matrix_decomposition(
         CSC indices, can live on the CPU
     num_nodes : int
         number of nodes in the global graph
-    node_offset: int
-        offset of the local nodes in the global graph
-    num_local_nodes : int
-        number of nodes in the local graph
+    partition_book : torch.Tensor
+        the boundaries of 1-D row-decomp of adj. matrix for all ranks
     partition_size : int
         number of process groups across which graph is partitioned,
         i.e. the number of graph partitions
@@ -451,11 +452,10 @@ def partition_graph_with_matrix_decomposition(
     )
     dtype = global_indices.dtype
     # --------------------------------------------------------------
-    # Initialize temporary variables used in computing the partition
-    partition_book = partition_book.to(device=device)
+    # First partition the global row ptrs (dst nodes) to local row ptrs
+    num_edges = global_indices.size(0)
     node_offset = partition_book[partition_rank]
-    num_local_nodes = partition_book[partition_rank+1] - partition_book[partition_rank]
-
+    num_local_nodes = partition_book[partition_rank + 1] - partition_book[partition_rank]
     edge_partition_offset = global_offsets[node_offset]
     assert node_offset + num_local_nodes <= num_nodes, "Invalid node offset and number of local nodes"
     local_offsets = global_offsets[node_offset:node_offset + num_local_nodes + 1].to(device=device, non_blocking=True)
@@ -464,6 +464,7 @@ def partition_graph_with_matrix_decomposition(
 
     # Scan through all partitions and compress the source nodes (edges) for each partition
     # to fill the local send/recv buffers for all-to-all communications
+    partition_book = partition_book.to(device=device)
     for to_partition in range(partition_size):
         local_indices = global_indices[
             global_offsets[partition_book[to_partition]]:global_offsets[partition_book[to_partition+1]]
@@ -495,12 +496,14 @@ def partition_graph_with_matrix_decomposition(
     graph_partition.map_partitioned_edge_ids_to_global = torch.arange(edge_partition_offset,
                                                                       edge_partition_offset + graph_partition.num_local_indices,
                                                                       dtype=dtype, device=device)
+    # trivial mappings due to 1D row-wise decomposition, with mem. cost O(E, N) at each dev; need to optimize
     graph_partition.map_concatenated_local_src_ids_to_global = torch.arange(num_nodes, dtype=dtype, device=device)
+    graph_partition.map_concatenated_local_edge_ids_to_global = torch.arange(num_edges, dtype=dtype, device=device)
     graph_partition.map_concatenated_local_dst_ids_to_global = graph_partition.map_concatenated_local_src_ids_to_global
-    graph_partition.map_concatenated_local_edge_ids_to_global = graph_partition.map_concatenated_local_src_ids_to_global
     graph_partition.map_global_src_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
     graph_partition.map_global_dst_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
-    graph_partition.map_global_edge_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
+    graph_partition.map_global_edge_ids_to_concatenated_local = graph_partition.map_concatenated_local_edge_ids_to_global
+    graph_partition.matrix_decomp = True
 
     for r in range(graph_partition.partition_size):
         err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
@@ -906,8 +909,11 @@ class DistributedGraph:
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
 
-        # Not valid for the current partitioning scheme as we only have one node partition
-        assert scatter_features == False, "Scatter features for src nodes not supported for now, as we skipped map_concatenated_local_src_ids_to_global"
+        if self.graph_partition.matrix_decomp:
+            raise NotImplementedError(
+                "Use get_dst_node_features_in_partition instead of collecting source node features, "
+                "as there is only one node feature partition in matrix decomposition."
+            )
         if scatter_features:
             global_node_features = global_node_features[
                 self.graph_partition.map_concatenated_local_src_ids_to_global
@@ -946,7 +952,6 @@ class DistributedGraph:
     ) -> torch.Tensor:  # pragma: no cover
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
-        assert scatter_features == False, "Scatter features for dst nodes not supported for now, as we skipped map_concatenated_local_dst_ids_to_global"
         if scatter_features:
             global_node_features = global_node_features.to(device=self.device)[
                 self.graph_partition.map_concatenated_local_dst_ids_to_global
@@ -979,9 +984,6 @@ class DistributedGraph:
     ) -> torch.Tensor:  # pragma: no cover
         # if global features only on local rank 0 also scatter, split them
         # according to the partition and scatter them to other ranks
-
-        # Not valid for the current partitioning scheme as we only have one node partition scheme
-        assert scatter_features == False, "Scatter features for edges not supported for now, as we skipped map_concatenated_local_edge_ids_to_global"
         if scatter_features:
             global_edge_features = global_edge_features[
                 self.graph_partition.map_concatenated_local_edge_ids_to_global
@@ -1014,7 +1016,13 @@ class DistributedGraph:
         error_msg = f"Passed partitioned_node_features.device does not correspond to device of this rank, got {partitioned_node_features.device} and {self.device} respectively."
         if partitioned_node_features.device != self.device:
             raise AssertionError(error_msg)
-        raise NotImplementedError("Collect to get all node features has not been implemented yet")
+
+        if self.graph_partition.matrix_decomp:
+            raise NotImplementedError(
+                "Use get_global_dst_node_features instead of collecting source node features, "
+                "as there is only one node feature partition in matrix decomposition."
+            )
+
         if not get_on_all_ranks:
             global_node_feat = gather_v(
                 partitioned_node_features,
@@ -1051,7 +1059,7 @@ class DistributedGraph:
         error_msg = f"Passed partitioned_node_features.device does not correspond to device of this rank, got {partitioned_node_features.device} and {self.device} respectively."
         if partitioned_node_features.device != self.device:
             raise AssertionError(error_msg)
-        raise NotImplementedError("Collect to get all node features has not been implemented yet")
+
         if not get_on_all_ranks:
             global_node_feat = gather_v(
                 partitioned_node_features,
@@ -1088,7 +1096,7 @@ class DistributedGraph:
         error_msg = f"Passed partitioned_edge_features.device does not correspond to device of this rank, got {partitioned_edge_features.device} and {self.device} respectively."
         if partitioned_edge_features.device != self.device:
             raise AssertionError(error_msg)
-        raise NotImplementedError("Collect to get all edge features has not been implemented yet")
+
         if not get_on_all_ranks:
             global_edge_feat = gather_v(
                 partitioned_edge_features,
