@@ -147,29 +147,33 @@ class GraphPartition:
         return self
 
 
-def partition_graph_with_id_mapping(
+def partition_graph_with_matrix_decomposition(
     global_offsets: torch.Tensor,
     global_indices: torch.Tensor,
     num_nodes: int,
-    num_nodes_per_partition: int,
+    partition_book: List[int],
     partition_size: int,
     partition_rank: int,
     device: torch.device,
 ) -> GraphPartition:
     """
-    Utility function which partitions a global graph given as CSC structure.
-    It partitions both the global ID spaces for source nodes and destination nodes
-    based on the corresponding mappings as well as the graph structure and edge IDs.
-    For more details on partitioning in general see `GraphPartition`.
-    The function performs the partitioning based on a global graph in CPU
-    memory for each rank independently. It could be rewritten to e.g. only
-    do it one rank and exchange the partitions or to an algorithm that also
-    assumes an already distributed global graph, however, we expect global
-    graphs to fit in CPU memory. After the partitioning, we can get rid off
-    the larger one in CPU memory, only keep the local graphs on each GPU, and
-    avoid tedious gather/scatter routines for exchanging partitions in the process.
-    Note: It is up to the user to ensure that the provided mapping is valid. In particular,
-    we expect each rank to receive a non-empty partition of node IDs.
+    Utility function which partitions a global graph given as CSC structure based on its adjacency
+    matirx using 1-D row-wise decomposition. This approach ensures a 1D uniform distribution of nodes
+    and their associated 1-hop incoming edges. By treating source and destination nodes equivalently
+    during partitioning, this approach assumes the graph is not bipartite.
+    This decomposition also ensures that the graph convolution (spMM) remains local by maintaining a copy of
+    the local incoming edge features and the local node outputs from the graph convolution.
+    The memory complexity of this approach is O[(N/P + E/P)*hid_dim*L], where N/E are the number of nodes/edges.
+    The transformation from local node storage to local edge storage is achieved using nccl `alltoall`.
+
+    Key differences from the existing graph partition scheme (partition_graph_with_id_mapping):
+    (1) This function partitions the global node ID space uniformly, without distinguishing
+    between source and destination nodes (i.e., matrix row ordering or column ordering). Both
+    src/dst or row/col nodes are indexed consistently within the adjacency matrix.
+    (2) Each local graph (sub-matrix) can be defined/constructed by just node/edge offsets from
+    global graph.
+    (3) The partitioning is performed on a global graph stored in CPU memory, and then each device
+    (rank) constructs its local graph independently (in-parallel) from the global (shared) csc matrix.
 
     Parameters
     ----------
@@ -177,10 +181,12 @@ def partition_graph_with_id_mapping(
         CSC offsets, can live on the CPU
     global_indices : torch.Tensor
         CSC indices, can live on the CPU
-    mapping_src_ids_to_ranks: torch.Tensor
-        maps each global ID from every source node to its partition rank
-    mapping_dst_ids_to_ranks: torch.Tensor
-        maps each global ID from every destination node to its partition rank
+    num_nodes : int
+        number of nodes in the global graph
+    node_offset: int
+        offset of the local nodes in the global graph
+    num_local_nodes : int
+        number of nodes in the local graph
     partition_size : int
         number of process groups across which graph is partitioned,
         i.e. the number of graph partitions
@@ -198,56 +204,56 @@ def partition_graph_with_id_mapping(
         partition_size=partition_size, partition_rank=partition_rank, device=device
     )
     dtype = global_indices.dtype
-    input_device = global_indices.device
     # --------------------------------------------------------------
-    # initialize temporary variables used in computing the partition
+    # Initialize temporary variables used in computing the partition
+    node_offset = partition_book[partition_rank]
+    num_local_nodes = partition_book[partition_rank+1] - partition_book[partition_rank]
 
-    # global IDs of in each partition
-    # nodes_in_each_partition = [None] * partition_size
-    # num_nodes_in_each_partition = [None] * partition_size
-
-    node_decomp = torch.arange(0, num_nodes, num_nodes_per_partition, dtype=dtype)
-    assert len(node_decomp) == partition_size, "Unexpected partitioning node_decomp {}".format(node_decomp)
-    node_decomp = torch.cat([node_decomp, torch.tensor([num_nodes], dtype=dtype)])
-
-    # local node range in each partition
-    # fill: local_offsets, num_local_dst_nodes
-    global_sta = node_decomp[partition_rank]
-    global_end = node_decomp[partition_rank+1]
-    edge_partition_offset = global_offsets[global_sta]
-    local_offsets = global_offsets[global_sta:global_end + 1].to(device=device, non_blocking=True)
-    assert local_offsets.size(0) == global_end - global_sta + 1, "Unexpected local_offsets size {}".format(local_offsets.size(0))
+    edge_partition_offset = global_offsets[node_offset]
+    assert node_offset + num_local_nodes <= num_nodes, "Invalid node offset and number of local nodes"
+    local_offsets = global_offsets[node_offset:node_offset + num_local_nodes + 1].to(device=device, non_blocking=True)
     graph_partition.local_offsets = local_offsets - edge_partition_offset
-    graph_partition.num_local_dst_nodes = global_end - global_sta
+    graph_partition.num_local_dst_nodes = num_local_nodes
 
-    # compress the indices for each partition, to find scatter_indices
-    # Fill: local_indices, num_local_indices, num_local_src_nodes, sizes, scatter_indices
+    # Scan through all partitions and compress the source nodes (edges) for each partition
+    # to fill the local send/recv buffers for all-to-all communications
     for to_partition in range(partition_size):
         local_indices = global_indices[
-            global_offsets[node_decomp[to_partition]]:global_offsets[node_decomp[to_partition+1]]
+            global_offsets[partition_book[to_partition]]:global_offsets[partition_book[to_partition+1]]
         ].cuda(non_blocking=True)
-        src_node_at_partition, inverse_indices = local_indices.unique(sorted=True, return_inverse=True)
-        src_node_at_partition_rank = src_node_at_partition // num_nodes_per_partition
-        src_node_indices = torch.nonzero(src_node_at_partition_rank == partition_rank, as_tuple=False).squeeze(1)
-        graph_partition.scatter_indices[to_partition] = src_node_at_partition[src_node_indices] - node_decomp[partition_rank] # local node indices
-
+        # compress the columns (src nodes or local_indices) for each partition and record mapping (inverse_indices)
+        global_src_node_at_partition, inverse_indices = local_indices.unique(sorted=True, return_inverse=True)
+        global_src_node_at_partition_rank = torch.bucketize(global_src_node_at_partition, partition_book, right=True) - 1
+        src_node_indices = torch.nonzero(global_src_node_at_partition_rank == partition_rank, as_tuple=False).squeeze(1)
+        # fill local send buffer for alltoalls (scatter selected nodes to_partition rank)
+        graph_partition.scatter_indices[to_partition] = global_src_node_at_partition[src_node_indices] - node_offset
+        # fill the numbers of indices (edges), dst nodes and src nodes for each partition
         graph_partition.num_indices_in_each_partition[to_partition] = local_indices.size(0)
-        graph_partition.num_dst_nodes_in_each_partition[to_partition] = node_decomp[to_partition+1] - node_decomp[to_partition]
-        graph_partition.num_src_nodes_in_each_partition[to_partition] = src_node_at_partition.size(0)
+        graph_partition.num_dst_nodes_in_each_partition[to_partition] = partition_book[to_partition+1] - partition_book[to_partition]
+        graph_partition.num_src_nodes_in_each_partition[to_partition] = global_src_node_at_partition.size(0)
 
         if to_partition == partition_rank:
             graph_partition.local_indices = inverse_indices
             graph_partition.num_local_indices = graph_partition.local_indices.size(0)
-            graph_partition.num_local_src_nodes = src_node_at_partition.size(0)
-            graph_partition.map_partitioned_src_ids_to_global = src_node_at_partition
+            graph_partition.num_local_src_nodes = global_src_node_at_partition.size(0)
+            # map from local (compressed) column indices [0, ..., num_local_src_nodes] to their global node IDs
+            graph_partition.map_partitioned_src_ids_to_global = global_src_node_at_partition
 
         for from_partition in range(partition_size):
-            graph_partition.sizes[from_partition][to_partition] =  torch.count_nonzero(src_node_at_partition_rank == from_partition)
+            # fill all recv buffer sizes for alltoalls
+            graph_partition.sizes[from_partition][to_partition] =  torch.count_nonzero(global_src_node_at_partition_rank == from_partition)
 
-    # skip map_concatenated_local_src_ids_to_global
-    # skip map_concatenated_local_dst_ids_to_global
-    graph_partition.map_partitioned_dst_ids_to_global = torch.arange(global_sta, global_end, dtype=dtype, device=device)
-    graph_partition.map_partitioned_edge_ids_to_global = torch.arange(edge_partition_offset, edge_partition_offset + graph_partition.num_local_indices, dtype=dtype, device=device)
+    # trivial mappings due to 1D row-wise decomposition
+    graph_partition.map_partitioned_dst_ids_to_global = torch.arange(node_offset, node_offset + num_local_nodes, dtype=dtype, device=device)
+    graph_partition.map_partitioned_edge_ids_to_global = torch.arange(edge_partition_offset,
+                                                                      edge_partition_offset + graph_partition.num_local_indices,
+                                                                      dtype=dtype, device=device)
+    graph_partition.map_concatenated_local_src_ids_to_global = torch.arange(num_nodes, dtype=dtype, device=device)
+    graph_partition.map_concatenated_local_dst_ids_to_global = graph_partition.map_concatenated_local_src_ids_to_global
+    graph_partition.map_concatenated_local_edge_ids_to_global = graph_partition.map_concatenated_local_src_ids_to_global
+    graph_partition.map_global_src_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
+    graph_partition.map_global_dst_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
+    graph_partition.map_global_edge_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
 
     for r in range(graph_partition.partition_size):
         err_msg = "error in graph partition: list containing sizes of exchanged indices does not match the tensor of indices to be exchanged"
@@ -266,6 +272,7 @@ def partition_graph_nodewise(
     partition_size: int,
     partition_rank: int,
     device: torch.device,
+    oneD_matrixdecomp: bool = False,
 ) -> GraphPartition:
     """
     Utility function which partitions a global graph given as CSC structure naively
@@ -305,15 +312,14 @@ def partition_graph_nodewise(
         num_global_dst_nodes + partition_size - 1
     ) // partition_size
 
-    # mapping can be computed directly from the global node IDs (no need mapping)
-    # rank = global_node_id // num_nodes_per_partition
-    # local_dst_id = global_node_id - rank * num_nodes_per_partition
+    partition_book = torch.arange(0, num_global_dst_nodes, num_nodes_per_partition, dtype=global_indices.dtype)
+    partition_book = torch.cat([partition_book, torch.tensor([num_global_dst_nodes], dtype=global_indices.dtype)])
 
-    return partition_graph_with_id_mapping(
+    return partition_graph_with_matrix_decomposition(
         global_offsets,
         global_indices,
         num_global_dst_nodes,
-        num_nodes_per_partition,
+        partition_book,
         partition_size,
         partition_rank,
         device,
