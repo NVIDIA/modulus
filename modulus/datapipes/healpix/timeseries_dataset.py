@@ -19,7 +19,6 @@ import time
 import warnings
 from dataclasses import dataclass
 from typing import Optional, Sequence, Union
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -200,15 +199,14 @@ class TimeSeriesDataset(Dataset, Datapipe):
             # extract from ds:
             const = self.ds.constants.values
 
-            # rescale if needed
-            if self.constant_scaling:
-                const = (
-                    const - self.constant_scaling["mean"]
-                ) / self.constant_scaling["std"]
+            if self.scaling:
+                const = (const - self.constant_scaling["mean"]) / self.constant_scaling[
+                    "std"
+                ]
 
             # transpose to match new format:
             # [C, F, H, W] -> [F, C, H, W]
-            self.constants = np.transpose(const[0], axes=(1, 0, 2, 3))
+            self.constants = np.transpose(const, axes=(1, 0, 2, 3))
 
         self.get_constants()
 
@@ -257,7 +255,11 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 ),
             }
         except (ValueError, KeyError):
-            missing = [m for m in self.ds.channel_in.values if m not in list(self.scaling.keys())]
+            missing = [
+                m
+                for m in self.ds.channel_in.values
+                if m not in list(self.scaling.keys())
+            ]
             raise KeyError(
                 f"Input channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
             )
@@ -274,31 +276,38 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 ),
             }
         except (ValueError, KeyError):
-            missing = [m for m in self.ds.channel_out.values if m not in list(self.scaling.keys())]
+            missing = [
+                m
+                for m in self.ds.channel_out.values
+                if m not in list(self.scaling.keys())
+            ]
             raise KeyError(
                 f"Target channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
             )
 
         try:
-            self.constant_scaling = scaling_da.sel(
-                index=self.ds.channel_c.values
-            ).rename({"index": "channel_out"})
-            self.constant_scaling = {
-                "mean": np.expand_dims(
-                    self.constant_scaling["mean"].to_numpy(), (0, 2, 3, 4)
-                ),
-                "std": np.expand_dims(
-                    self.constant_scaling["std"].to_numpy(), (0, 2, 3, 4)
-                ),
-            }
+            # not all datasets will have constants
+            if "constants" in self.ds.data_vars:
+                self.constant_scaling = scaling_da.sel(
+                    index=self.ds.channel_c.values
+                ).rename({"index": "channel_out"})
+                self.constant_scaling = {
+                    "mean": np.expand_dims(
+                        self.constant_scaling["mean"].to_numpy(), (1, 2, 3)
+                    ),
+                    "std": np.expand_dims(
+                        self.constant_scaling["std"].to_numpy(), (1, 2, 3)
+                    ),
+                }
         except (ValueError, KeyError):
-            missing = [m for m in self.ds.channel_c.values if m not in list(self.scaling.keys())]
-            # only trigger if constant scale values are provided
-            if len(missing) != len(self.ds.channel_c.values):
-                raise KeyError(
-                    f"Constant channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
-                )
-
+            missing = [
+                m
+                for m in self.ds.channel_c.values
+                if m not in list(self.scaling.keys())
+            ]
+            raise KeyError(
+                f"Constant channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
+            )
 
     def __len__(self):
         """Get number of samples in the dataset
@@ -337,8 +346,8 @@ class TimeSeriesDataset(Dataset, Datapipe):
             if self.forecast_mode
             else (item + 1) * self.batch_size + self._window_length
         )
-        if not self.drop_last and max_index > self.ds.dims["time"]:
-            batch_size = self.batch_size - (max_index - self.ds.dims["time"])
+        if not self.drop_last and max_index > self.ds.sizes["time"]:
+            batch_size = self.batch_size - (max_index - self.ds.sizes["time"])
         else:
             batch_size = self.batch_size
         return (start_index, max_index), batch_size
