@@ -17,6 +17,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
+from contextlib import nullcontext
 
 try:
     import dgl  # noqa: F401 for docs
@@ -98,6 +99,8 @@ class MeshGraphNet(Module):
         Whether to replace concat+MLP with MLP+idx+sum
     num_processor_checkpoint_segments: int, optional
         Number of processor segments for gradient checkpointing, by default 0 (checkpointing disabled)
+    checkpoint_offloading: bool, optional
+        Whether to offload the checkpointing to the CPU, by default False
 
     Example
     -------
@@ -138,6 +141,7 @@ class MeshGraphNet(Module):
         aggregation: str = "sum",
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
+        checkpoint_offloading: bool = False,
         recompute_activation: bool = False,
     ):
         super().__init__(meta=MetaData())
@@ -184,6 +188,7 @@ class MeshGraphNet(Module):
             activation_fn=activation_fn,
             do_concat_trick=do_concat_trick,
             num_processor_checkpoint_segments=num_processor_checkpoint_segments,
+            checkpoint_offloading=checkpoint_offloading,
         )
 
     def forward(
@@ -215,10 +220,12 @@ class MeshGraphNetProcessor(nn.Module):
         activation_fn: nn.Module = nn.ReLU(),
         do_concat_trick: bool = False,
         num_processor_checkpoint_segments: int = 0,
+        checkpoint_offloading: bool = False,
     ):
         super().__init__()
         self.processor_size = processor_size
         self.num_processor_checkpoint_segments = num_processor_checkpoint_segments
+        self.checkpoint_offloading = checkpoint_offloading
 
         edge_block_invars = (
             input_dim_node,
@@ -254,6 +261,21 @@ class MeshGraphNetProcessor(nn.Module):
         self.processor_layers = nn.ModuleList(layers)
         self.num_processor_layers = len(self.processor_layers)
         self.set_checkpoint_segments(self.num_processor_checkpoint_segments)
+        self.set_checkpoint_offload_ctx(self.checkpoint_offloading)
+
+    def set_checkpoint_offload_ctx(self, enabled: bool):
+        """
+        Set the context for CPU offloading of checkpoints
+
+        Parameters
+        ----------
+        checkpoint_offloading : bool
+            whether to offload the checkpointing to the CPU
+        """
+        if enabled:
+            self.checkpoint_offload_ctx = torch.autograd.graph.save_on_cpu(pin_memory=True)
+        else:
+            self.checkpoint_offload_ctx = nullcontext()
 
     def set_checkpoint_segments(self, checkpoint_segments: int):
         """
@@ -326,14 +348,15 @@ class MeshGraphNetProcessor(nn.Module):
         edge_features: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
-        for segment_start, segment_end in self.checkpoint_segments:
-            edge_features, node_features = self.checkpoint_fn(
-                self.run_function(segment_start, segment_end),
-                node_features,
-                edge_features,
-                graph,
-                use_reentrant=False,
-                preserve_rng_state=False,
-            )
+        with self.checkpoint_offload_ctx:
+            for segment_start, segment_end in self.checkpoint_segments:
+                edge_features, node_features = self.checkpoint_fn(
+                    self.run_function(segment_start, segment_end),
+                    node_features,
+                    edge_features,
+                    graph,
+                    use_reentrant=False,
+                    preserve_rng_state=False,
+                )
 
         return node_features
