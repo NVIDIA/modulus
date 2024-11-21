@@ -478,7 +478,7 @@ def test_TimeSeriesDataModule_initialization(
         scaling=scaling_double_dict,
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
-    print(f"trying to create {create_path} {dataset_name}")
+
     # without the prebuilt dataset
     timeseries_dm = TimeSeriesDataModule(
         src_directory=create_path,
