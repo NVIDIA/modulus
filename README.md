@@ -10,6 +10,7 @@
 | [**Contributing Guidelines**](#contributing-to-modulus)
 | [**Resources**](#resources)
 | [**Communication**](#communication)
+| [**License**](#License)
 
 ## What is Modulus?
 
