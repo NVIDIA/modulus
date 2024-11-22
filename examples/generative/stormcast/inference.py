@@ -27,7 +27,7 @@ import argparse
 from modulus.distributed import DistributedManager
 
 from utils.diffusions.run_edm import EDMRunner
-from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
+from utils.nn import regression_model_forward, get_preconditioned_architecture
 from utils.data_loader_hrrr_era5 import get_dataset
 from utils.YParams import YParams
 
@@ -98,7 +98,6 @@ def main(
 
     dataset = get_dataset(params, train=False)
 
-    resolution = params.hrrr_img_size[0]
     _, hrrr_channels = dataset._get_hrrr_channel_names()
     diffusion_channels = (
         hrrr_channels
@@ -118,19 +117,24 @@ def main(
 
     net = get_preconditioned_architecture(
         name="regression",
-        resolution=resolution,
         target_channels=len(diffusion_channels),
         conditional_channels=conditional_channels,
-        label_dim=0,
         spatial_embedding=params.spatial_pos_embed,
         attn_resolutions=params.attn_resolutions,
+        hrrr_resolution=params.hrrr_img_size,
     )
 
     # Load pretrained regression model
     regression_path = model_info["regression_checkpoint_path"]
     chkpt = torch.load(regression_path, weights_only=True)
+
+    # TODO remove this hack when chkpts are updated
+    dev, modeldev = net.device_buffer, net.model.device_buffer
+    chkpt["net"]["device_buffer"] = dev
+    chkpt["net"]["model.device_buffer"] = modeldev
+
     net.load_state_dict(chkpt["net"], strict=True)
-    model = EasyRegressionV2(net).to(device)
+    model = net.to(device)
 
     hrrr_data = xr.open_zarr(
         os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr")
@@ -140,7 +144,6 @@ def main(
 
     invariant_array = dataset._get_invariants()
     invariant_tensor = torch.from_numpy(invariant_array).to(device).repeat(1, 1, 1, 1)
-    model.set_invariant(invariant_tensor)
 
     base_hrrr_channels, hrrr_channels = dataset_obj._get_hrrr_channel_names()
     hrrr_channel_indices = [
@@ -247,7 +250,7 @@ def main(
                 break
 
             hrrr_0 = out
-            out = model(hrrr_0, boundary, mask=None)
+            out = regression_model_forward(model, hrrr_0, boundary, invariant_tensor)
             out_noedm = out.clone()
             hrrr_0 = torch.cat(
                 (

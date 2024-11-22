@@ -13,13 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
 import re
 import numpy as np
 import torch
-from typing import Any, Union, Optional
+from typing import Any, Union
 
 from modulus.distributed import DistributedManager
+from modulus.models import Module
 
 
 try:
@@ -75,72 +75,6 @@ def format_time(seconds: Union[int, float]) -> str:
 def print0(*args, **kwargs):
     if DistributedManager().rank == 0:
         print(*args, **kwargs)
-
-
-class Logger(object):
-    """Redirect stderr to stdout, optionally print stdout to a file, and optionally force flushing on both stdout and the file."""
-
-    def __init__(
-        self,
-        file_name: Optional[str] = None,
-        file_mode: str = "w",
-        should_flush: bool = True,
-    ):
-        self.file = None
-
-        if file_name is not None:
-            self.file = open(file_name, file_mode)
-
-        self.should_flush = should_flush
-        self.stdout = sys.stdout
-        self.stderr = sys.stderr
-
-        sys.stdout = self
-        sys.stderr = self
-
-    def __enter__(self) -> "Logger":
-        return self
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        self.close()
-
-    def write(self, text: Union[str, bytes]) -> None:
-        """Write text to stdout (and a file) and optionally flush."""
-        if isinstance(text, bytes):
-            text = text.decode()
-        if (
-            len(text) == 0
-        ):  # workaround for a bug in VSCode debugger: sys.stdout.write(''); sys.stdout.flush() => crash
-            return
-
-        if self.file is not None:
-            self.file.write(text)
-
-        self.stdout.write(text)
-
-        if self.should_flush:
-            self.flush()
-
-    def flush(self) -> None:
-        """Flush written text to both stdout and a file, if open."""
-        if self.file is not None:
-            self.file.flush()
-
-        self.stdout.flush()
-
-    def close(self) -> None:
-        """Flush, close possible files, and remove stdout/stderr mirroring."""
-        self.flush()
-
-        # if using multiple loggers, prevent closing in wrong order
-        if sys.stdout is self:
-            sys.stdout = self.stdout
-        if sys.stderr is self:
-            sys.stderr = self.stderr
-
-        if self.file is not None:
-            self.file.close()
-            self.file = None
 
 
 # ----------------------------------------------------------------------------

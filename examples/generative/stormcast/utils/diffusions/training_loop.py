@@ -25,12 +25,17 @@ import psutil
 import numpy as np
 import torch
 from modulus.distributed import DistributedManager
+from modulus.metrics.diffusion import EDMLoss
+
 from utils import training_stats
 from utils import misc
 from utils.misc import print0
 from utils.diffusions.generate import edm_sampler
-from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
-from utils.diffusions.losses import EDMLoss, RegressionLossV2
+from utils.nn import (
+    regression_model_forward,
+    regression_loss_fn,
+    get_preconditioned_architecture,
+)
 from utils.data_loader_hrrr_era5 import get_dataset, worker_init
 import matplotlib.pyplot as plt
 import wandb
@@ -56,17 +61,22 @@ def get_pretrained_regression_net(
 
     net = get_preconditioned_architecture(
         name="regression",
-        resolution=resolution,
+        hrrr_resolution=hyperparams.hrrr_img_size,
         target_channels=target_channels,
         conditional_channels=conditional_channels,
-        label_dim=0,
         spatial_embedding=hyperparams.spatial_pos_embed,
         attn_resolutions=hyperparams.attn_resolutions,
     )
 
     chkpt = torch.load(checkpoint_path, weights_only=True)
+
+    # TODO remove this hack when chkpts are updated
+    dev, modeldev = net.device_buffer, net.model.device_buffer
+    chkpt["net"]["device_buffer"] = dev
+    chkpt["net"]["model.device_buffer"] = modeldev
+
     net.load_state_dict(chkpt["net"], strict=True)
-    net = EasyRegressionV2(net)
+    # net = EasyRegressionV2(net)
 
     return net.to(device)
 
@@ -199,19 +209,15 @@ def training_loop(
     invariant_array = dataset_train._get_invariants()
     invariant_tensor = torch.from_numpy(invariant_array).to(device)
 
-    if not train_regression_unet:
-        regression_net.set_invariant(invariant_tensor)
-
     print0("hrrr_channels", hrrr_channels)
     print0("target_channels for diffusion", target_channels)
     print0("conditional_channels for diffusion", conditional_channels)
 
     net = get_preconditioned_architecture(
         name=net_name,
-        resolution=resolution,
+        hrrr_resolution=params.hrrr_img_size,
         target_channels=target_channels,
         conditional_channels=conditional_channels,
-        label_dim=0,
         spatial_embedding=params.spatial_pos_embed,
         attn_resolutions=params.attn_resolutions,
     )
@@ -223,7 +229,7 @@ def training_loop(
     # Setup optimizer.
     print0("Setting up optimizer...")
     if params.loss == "regression_v2":
-        loss_fn = RegressionLossV2()
+        loss_fn = regression_loss_fn
     elif params.loss == "edm":
         loss_fn = EDMLoss(P_mean=params.P_mean)
     optimizer = torch.optim.Adam(net.parameters(), **optimizer_kwargs)
@@ -267,7 +273,9 @@ def training_loop(
             era5 = batch["era5"][0].to(device).to(torch.float32)
 
             with torch.no_grad():
-                reg_out = regression_net(hrrr_0, era5, mask=None)
+                reg_out = regression_model_forward(
+                    regression_net, hrrr_0, era5, invariant_tensor
+                )
                 hrrr_0 = torch.cat(
                     (
                         hrrr_0[:, input_channel_indices, :, :],
@@ -293,7 +301,9 @@ def training_loop(
         invariant_tensor_ = invariant_tensor.repeat(hrrr_0.shape[0], 1, 1, 1)
         hrrr_0 = torch.cat((hrrr_0, invariant_tensor_), dim=1)
 
-        loss = loss_fn(net=ddp, x=hrrr_1, condition=hrrr_0, augment_pipe=augment_pipe)
+        loss = loss_fn(
+            net=ddp, images=hrrr_1, condition=hrrr_0, augment_pipe=augment_pipe
+        )
         channelwise_loss = loss.mean(dim=(0, 2, 3))
         channelwise_loss_dict = {
             f"ChLoss/{diffusion_channels[i]}": channelwise_loss[i].item()
@@ -354,7 +364,9 @@ def training_loop(
                 if use_regression_net:
                     with torch.no_grad():
                         era5 = batch["era5"][0].to(device).to(torch.float32)
-                        reg_out = regression_net(hrrr_0, era5, mask=None)
+                        reg_out = regression_model_forward(
+                            regression_net, hrrr_0, era5, invariant_tensor
+                        )
                         hrrr_0 = torch.cat(
                             (
                                 hrrr_0[:, input_channel_indices, :, :],
@@ -373,7 +385,7 @@ def training_loop(
                         )
                         valid_loss = loss_fn(
                             net=ddp,
-                            x=loss_target[:, diffusion_channel_indices],
+                            images=loss_target[:, diffusion_channel_indices],
                             condition=torch.cat((hrrr_0, invariant_tensor_), dim=1),
                             augment_pipe=augment_pipe,
                         )
@@ -405,10 +417,10 @@ def training_loop(
                     sigma = (
                         rnd_normal * 1.2 - 1.2
                     ).exp()  # this isn't used by the code
-                    output_images = net(sigma=sigma, condition=condition)
+                    output_images = net(x=condition, img_lr=None, sigma=sigma)
                     valid_loss = loss_fn(
                         net=ddp,
-                        x=hrrr_1[:, diffusion_channel_indices, :, :],
+                        images=hrrr_1[:, diffusion_channel_indices, :, :],
                         condition=condition,
                         augment_pipe=augment_pipe,
                     )
