@@ -225,7 +225,8 @@ class MeshGraphNetProcessor(nn.Module):
         super().__init__()
         self.processor_size = processor_size
         self.num_processor_checkpoint_segments = num_processor_checkpoint_segments
-        self.checkpoint_offloading = checkpoint_offloading
+        self.checkpoint_offloading = checkpoint_offloading if (
+            num_processor_checkpoint_segments > 0) else False
 
         edge_block_invars = (
             input_dim_node,
