@@ -989,7 +989,7 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                 )
 
                 dataset = dataset.sel(
-                    channel_in=self.input_variables,
+                    channel_in=self.input_variables + coupled_variables,
                     channel_out=self.output_variables,
                 )
             else:
