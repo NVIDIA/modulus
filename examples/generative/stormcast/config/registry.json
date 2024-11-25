@@ -1,0 +1,13 @@
+{
+    "models": {
+        "stormcast":{
+            "edm_checkpoint_path": "stormcast_checkpoints/diffusion_chkpt.pt",
+            "edm_config_file": "./config/config.yaml",
+            "edm_config_name": "diffusion",
+            "regression_checkpoint_path": "stormcast_checkpoints/regression_chkpt.pt",
+            "regression_config_file": "./config/config.yaml",
+            "regression_config_name": "regression",
+            "description": "Example stormcast inference config"
+        }
+    }
+}

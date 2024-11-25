@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+base: &base_config
+  # data config
+  num_data_workers: 4 # number of dataloader worker threads per proc
+  location: 'data' # Path to the dataset
+  dt: 1
+  log_to_wandb: !!bool False
+  hrrr_img_size: [512, 640]
+  n_hrrr_channels: 127
+  n_era5_channels: 26
+  invariants: ["lsm", "orog"]
+  conus_dataset_name: 'hrrr_v3'
+  hrrr_stats: 'stats_v3_2019_2021' #stats files changed to reflect dropped samples from 2017 and half of 2018
+  input_channels: 'all' #'all' or list of channels to condition on
+  exclude_channels: ['u35', 'u40', 'v35', 'v40', 't35', 't40', 'q35', 'q40', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9', 'w10', 'w11', 'w13', 'w15', 'w20', 'w25', 'w30', 'w35', 'w40', 'p25', 'p30', 'p35', 'p40', 'z35', 'z40', 'tcwv', 'vil']
+  diffusion_channels: "all"
+  boundary_padding_pixels: 0 # set this to 0 for no padding, 32 for 32 pixels of padding in each direction etc.
+  train_years: [2018, 2019, 2020, 2021]
+  valid_years: [2022]
+
+  # hyperparameters
+  batch_size: 64
+  lr: 4E-4
+  total_kimg: 100000
+  img_per_tick: 1000
+  clip_grad_norm: None
+  residual: !!bool True
+  previous_step_conditioning: !!bool False
+  pure_diffusion: !!bool False
+  spatial_pos_embed: !!bool False
+  P_mean: -1.2 #default edm value
+  use_regression_net: !!bool True
+  attn_resolutions: []
+  ema_freq_kimg: 10
+
+
+# ----------------------------------------------------------------------
+regression: &regression
+  <<: *base_config
+  batch_size: 1
+  use_regression_net: !!bool False
+  loss: 'regression_v2'
+  validate_every: 1
+  total_kimg: 1
+  img_per_tick: 1
+# ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+diffusion: &diffusion
+  <<: *base_config
+  batch_size: 1
+  use_regression_net: !!bool True
+  regression_weights: "stormcast_checkpoints/regression_chkpt.pt"
+  regression_config: "regression"
+  previous_step_conditioning: !!bool True
+  spatial_pos_embed: !!bool True
+  loss: 'edm'
+  validate_every: 1
+# ----------------------------------------------------------------------
