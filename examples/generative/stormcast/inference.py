@@ -25,9 +25,10 @@ import pandas as pd
 import json
 import argparse
 from modulus.distributed import DistributedManager
+from modulus.models import Module
 
 from utils.diffusions.run_edm import EDMRunner
-from utils.nn import regression_model_forward, get_preconditioned_architecture
+from utils.nn import regression_model_forward
 from utils.data_loader_hrrr_era5 import get_dataset
 from utils.YParams import YParams
 
@@ -76,7 +77,6 @@ def main(
     )
     params.local_batch_size = 1
     params.valid_years = [2022]
-    residual = params.residual
 
     edm_config = model_info["edm_config_name"]
     edm_params = YParams(model_info["edm_config_file"], edm_config)
@@ -84,7 +84,6 @@ def main(
     input_channels = edm_params.input_channels
     diffusion_path = model_info["edm_checkpoint_path"]
     edm_runner = EDMRunner(edm_params, checkpoint_path=diffusion_path)
-    residual = edm_params.residual
 
     os.makedirs(opts.outdir, exist_ok=True)
 
@@ -107,33 +106,17 @@ def main(
     input_channels = (
         hrrr_channels if params.input_channels == "all" else params.input_channels
     )
-    input_channel_indices = [hrrr_channels.index(channel) for channel in input_channels]
+
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
-    conditional_channels = (
-        len(diffusion_channels) + len(params.invariants) + params.n_era5_channels
-    )
 
-    net = get_preconditioned_architecture(
-        name="regression",
-        target_channels=len(diffusion_channels),
-        conditional_channels=conditional_channels,
-        spatial_embedding=params.spatial_pos_embed,
-        attn_resolutions=params.attn_resolutions,
-        hrrr_resolution=params.hrrr_img_size,
-    )
+    input_channel_indices = [
+        list(hrrr_channels).index(channel) for channel in input_channels
+    ]
 
     # Load pretrained regression model
-    regression_path = model_info["regression_checkpoint_path"]
-    chkpt = torch.load(regression_path, weights_only=True)
-
-    # TODO remove this hack when chkpts are updated
-    dev, modeldev = net.device_buffer, net.model.device_buffer
-    chkpt["net"]["device_buffer"] = dev
-    chkpt["net"]["model.device_buffer"] = modeldev
-
-    net.load_state_dict(chkpt["net"], strict=True)
+    net = Module.from_checkpoint("stormcast_checkpoints/regression/UNet.0.0.mdlus")
     model = net.to(device)
 
     hrrr_data = xr.open_zarr(
@@ -151,14 +134,6 @@ def main(
     ]
     if len(output_hrrr_channels) == 0:
         output_hrrr_channels = hrrr_channels.copy()
-
-    diffusion_channels, input_channels = hrrr_channels, hrrr_channels
-    diffusion_channel_indices = [
-        list(hrrr_channels).index(channel) for channel in diffusion_channels
-    ]
-    input_channel_indices = [
-        list(hrrr_channels).index(channel) for channel in input_channels
-    ]
 
     vardict: dict[str, int] = {
         hrrr_channel: i for i, hrrr_channel in enumerate(hrrr_channels)
@@ -260,10 +235,7 @@ def main(
                 dim=1,
             )
             edm_corrected_outputs, _ = edm_runner.run(hrrr_0)
-            if residual:
-                out[0, diffusion_channel_indices] += edm_corrected_outputs[0].float()
-            else:
-                out[0, diffusion_channel_indices] = edm_corrected_outputs[0].float()
+            out[0, diffusion_channel_indices] += edm_corrected_outputs[0].float()
             out_edm = out.clone()
             boundary = data["era5"][0].cuda().float().unsqueeze(0)
 

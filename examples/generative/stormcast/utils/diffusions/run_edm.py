@@ -16,6 +16,7 @@
 
 
 import torch
+from modulus.models import Module
 from utils.diffusions.generate import edm_sampler
 from utils.nn import get_preconditioned_architecture
 from utils.data_loader_hrrr_era5 import get_dataset
@@ -63,14 +64,9 @@ class EDMRunner:
         assert self.net.sigma_min < self.net.sigma_max
 
         # Load pretrained weights
-        chkpt = torch.load(checkpoint_path, weights_only=True)
-
-        # TODO reformat pretrained checkpoints to include device buffer, then remove this hack
-        dev, modeldev = self.net.device_buffer, self.net.model.device_buffer
-        chkpt["net"]["device_buffer"] = dev
-        chkpt["net"]["model.device_buffer"] = modeldev
-
-        self.net.load_state_dict(chkpt["net"], strict=True)
+        self.net = Module.from_checkpoint(
+            "stormcast_checkpoints/diffusion/EDMPrecond.0.0.mdlus"
+        )
         self.net = self.net.to(device)
         self.params = params
 

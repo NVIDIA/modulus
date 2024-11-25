@@ -18,14 +18,15 @@
 
 import os
 import time
-import copy
 import json
 from utils.YParams import YParams
 import psutil
 import numpy as np
 import torch
+from modulus.models import Module
 from modulus.distributed import DistributedManager
 from modulus.metrics.diffusion import EDMLoss
+from modulus.launch.utils import save_checkpoint, load_checkpoint
 
 from utils import training_stats
 from utils import misc
@@ -42,53 +43,14 @@ import wandb
 from utils.spectrum import compute_ps1d
 from torch.nn.utils import clip_grad_norm_
 
-# ----------------------------------------------------------------------------
-
-
-def get_pretrained_regression_net(
-    checkpoint_path, config_file, regression_config, target_channels, device
-):
-    """
-    Load a pretrained regression network as specified by a given config
-    """
-
-    hyperparams = YParams(config_file, regression_config)
-    resolution = hyperparams.hrrr_img_size[0]
-
-    conditional_channels = (
-        target_channels + len(hyperparams.invariants) + hyperparams.n_era5_channels
-    )
-
-    net = get_preconditioned_architecture(
-        name="regression",
-        hrrr_resolution=hyperparams.hrrr_img_size,
-        target_channels=target_channels,
-        conditional_channels=conditional_channels,
-        spatial_embedding=hyperparams.spatial_pos_embed,
-        attn_resolutions=hyperparams.attn_resolutions,
-    )
-
-    chkpt = torch.load(checkpoint_path, weights_only=True)
-
-    # TODO remove this hack when chkpts are updated
-    dev, modeldev = net.device_buffer, net.model.device_buffer
-    chkpt["net"]["device_buffer"] = dev
-    chkpt["net"]["model.device_buffer"] = modeldev
-
-    net.load_state_dict(chkpt["net"], strict=True)
-    # net = EasyRegressionV2(net)
-
-    return net.to(device)
-
 
 def training_loop(
     run_dir=".",  # Output directory.
     optimizer_kwargs={},  # Options for optimizer.
     seed=0,  # Global random seed.
     lr_rampup_kimg=2000,  # Learning rate ramp-up duration.
-    state_dump_ticks=50,  # How often to dump training state, None = disable.
-    resume_state_dump=None,  # Start from the given training state, None = reset training state.
-    resume_kimg=0,  # Start from the given training progress.
+    checkpoint_ticks=50,  # How often to dump training state, None = disable.
+    resume_checkpoint=None,  # Start from the given training state, None = reset training state.
     cudnn_benchmark=True,  # Enable torch.backends.cudnn.benchmark?
     device=torch.device("cuda"),
     config_file=None,
@@ -122,9 +84,8 @@ def training_loop(
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
     total_kimg = params.total_kimg
 
-    if resume_state_dump is not None:
-        print0("Resuming from state dump:", resume_state_dump)
-        print0("Resuming from kimg:", resume_kimg)
+    if resume_checkpoint is not None:
+        print0("Resuming from checkpoint:", resume_checkpoint)
 
     # Load dataset.
     print0("Loading dataset...")
@@ -182,17 +143,13 @@ def training_loop(
 
     # load pretrained regression net if training diffusion
     if use_regression_net:
-        regression_net = get_pretrained_regression_net(
-            checkpoint_path=params.regression_weights,
-            config_file=config_file,
-            regression_config=params.regression_config,
-            target_channels=len(diffusion_channels),
-            device=device,
+        regression_net = Module.from_checkpoint(
+            "stormcast_checkpoints/regression/UNet.0.0.mdlus"
         )
+        regression_net = regression_net.to(device)
 
     # Construct network
     print0("Constructing network...")
-    resolution = 512
     target_channels = len(diffusion_channels)
     if train_regression_unet:
         conditional_channels = (
@@ -238,23 +195,20 @@ def training_loop(
         net, device_ids=[device], broadcast_buffers=False
     )
 
-    total_steps = 0
-
     # Resume training from previous snapshot.
-    if resume_state_dump:
-        print0(f'Loading training state from "{resume_state_dump}"...')
-        data = torch.load(
-            resume_state_dump, map_location=torch.device("cpu"), weights_only=True
+    cur_nimg = 0
+    if resume_checkpoint:
+        print0(f'Loading training state from "{resume_checkpoint}"...')
+
+        cur_nimg = load_checkpoint(
+            path=os.path.join(run_dir, "checkpoints"),
+            models=net,
+            optimizer=optimizer,
         )
-        net.load_state_dict(data["net"])
-        total_steps = data["total_steps"]
-        optimizer.load_state_dict(data["optimizer_state"])
-        del data  # conserve memory
 
     # Train.
     print0(f"Training for {total_kimg} kimg...")
     print0()
-    cur_nimg = resume_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
@@ -336,7 +290,6 @@ def training_loop(
 
         # Perform maintenance tasks once per tick.
         effective_batch_size = (batch_size // local_batch_size) * hrrr_0.shape[0]
-        total_steps += 1
         cur_nimg += effective_batch_size
         # done = (cur_nimg >= total_kimg * 1000)
         done = cur_nimg >= 10  # TODO remove this line (testing only)
@@ -524,18 +477,17 @@ def training_loop(
 
         # Save full dump of the training state.
         if (
-            (state_dump_ticks is not None)
-            and (done or cur_tick % state_dump_ticks == 0)
+            (checkpoint_ticks is not None)
+            and (done or cur_tick % checkpoint_ticks == 0)
             and cur_tick != 0
             and dist.rank == 0
         ):
-            torch.save(
-                dict(
-                    net=net.state_dict(),
-                    optimizer_state=optimizer.state_dict(),
-                    total_steps=total_steps,
-                ),
-                os.path.join(run_dir, f"training-state-{cur_nimg//1000:06d}.pt"),
+
+            save_checkpoint(
+                path=os.path.join(run_dir, "checkpoints"),
+                models=net,
+                optimizer=optimizer,
+                epoch=cur_nimg,
             )
 
         # Update logs.

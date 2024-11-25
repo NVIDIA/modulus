@@ -22,7 +22,7 @@ from modulus.distributed import DistributedManager
 from modulus.models import Module
 
 
-try:
+try:  # drop
     nan_to_num = torch.nan_to_num  # 1.8.0a0
 except AttributeError:
 
@@ -40,7 +40,7 @@ except AttributeError:
         )
 
 
-class EasyDict(dict):
+class EasyDict(dict):  # drop for hydra
     """Convenience class that behaves like a dict but allows access with the attribute syntax."""
 
     def __getattr__(self, name: str) -> Any:
@@ -56,7 +56,7 @@ class EasyDict(dict):
         del self[name]
 
 
-def format_time(seconds: Union[int, float]) -> str:
+def format_time(seconds: Union[int, float]) -> str:  # from modulus.utils.generative
     """Convert the seconds to human readable string with days, hours, minutes and seconds."""
     s = int(np.rint(seconds))
 
@@ -80,7 +80,7 @@ def print0(*args, **kwargs):
 # ----------------------------------------------------------------------------
 # Symbolic assert.
 
-try:
+try:  # drop
     symbolic_assert = torch._assert  # 1.8.0a0 # pylint: disable=protected-access
 except AttributeError:
     symbolic_assert = torch.Assert  # 1.7.0
@@ -89,7 +89,7 @@ except AttributeError:
 # Function decorator that calls torch.autograd.profiler.record_function().
 
 
-def profiled_function(fn):
+def profiled_function(fn):  # probably drop, depending on training_stats
     def decorator(*args, **kwargs):
         with torch.autograd.profiler.record_function(fn.__name__):
             return fn(*args, **kwargs)
@@ -98,7 +98,7 @@ def profiled_function(fn):
     return decorator
 
 
-class InfiniteSampler(torch.utils.data.Sampler):
+class InfiniteSampler(torch.utils.data.Sampler):  # Use modulus version
     """Sampler for torch.utils.data.DataLoader that loops over the dataset
     indefinitely, shuffling items as it goes."""
 
@@ -137,7 +137,7 @@ class InfiniteSampler(torch.utils.data.Sampler):
             idx += 1
 
 
-def named_params_and_buffers(module):
+def named_params_and_buffers(module):  # drop
     assert isinstance(module, torch.nn.Module)
     return list(module.named_parameters()) + list(module.named_buffers())
 
@@ -146,7 +146,7 @@ def named_params_and_buffers(module):
 # Check DistributedDataParallel consistency across processes.
 
 
-def check_ddp_consistency(module, ignore_regex=None):
+def check_ddp_consistency(module, ignore_regex=None):  # drop
     assert isinstance(module, torch.nn.Module)
     for name, tensor in named_params_and_buffers(module):
         fullname = type(module).__name__ + "." + name
@@ -161,7 +161,7 @@ def check_ddp_consistency(module, ignore_regex=None):
 
 
 @torch.no_grad()
-def copy_params_and_buffers(src_module, dst_module, require_all=False):
+def copy_params_and_buffers(src_module, dst_module, require_all=False):  # drop
     assert isinstance(src_module, torch.nn.Module)
     assert isinstance(dst_module, torch.nn.Module)
     src_tensors = dict(named_params_and_buffers(src_module))

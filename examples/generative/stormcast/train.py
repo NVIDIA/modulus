@@ -80,7 +80,11 @@ def main(**kwargs):
         "--desc", help="String to include in result dir name", metavar="STR", type=str
     )
     parser.add_argument(
-        "--dump", help="How often to dump state", metavar="TICKS", type=int, default=10
+        "--checkpoint_freq",
+        help="How often to checkpoint training state",
+        metavar="TICKS",
+        type=int,
+        default=10,
     )
     parser.add_argument(
         "--seed", help="Random seed  [default: random]", metavar="INT", type=int
@@ -102,7 +106,7 @@ def main(**kwargs):
 
     # Training options.
     c.optimizer_kwargs = EasyDict(betas=[0.9, 0.999], eps=1e-8)
-    c.update(cudnn_benchmark=opts.bench, state_dump_ticks=opts.dump)
+    c.update(cudnn_benchmark=opts.bench, checkpoint_ticks=opts.checkpoint_freq)
 
     # Random seed.
     if opts.seed is not None:
@@ -126,33 +130,23 @@ def main(**kwargs):
     # if run_dir exists, then resume training
     if os.path.exists(c.run_dir):
         training_states = sorted(
-            glob.glob(os.path.join(c.run_dir, "training-state-*.pt"))
+            glob.glob(os.path.join(c.run_dir, "checkpoints/checkpoint*.pt"))
         )
         if training_states:
             print0("Resuming training from previous run_dir: " + c.run_dir)
-            last_training_state = sorted(
-                glob.glob(os.path.join(c.run_dir, "training-state-*.pt"))
-            )[-1]
-            last_kimg = int(
-                re.fullmatch(
-                    r"training-state-(\d+).pt", os.path.basename(last_training_state)
-                ).group(1)
-            )
-            c.resume_kimg = last_kimg
-            c.resume_state_dump = last_training_state
+            last_training_state = training_states[-1]
+            c.resume_checkpoint = last_training_state
             print0(
-                "Resuming training from previous training-state-*.pt file: "
+                "Resuming training from previous checkpoint file: "
                 + last_training_state
             )
 
     if opts.resume is not None:
-        match = re.fullmatch(r"training-state-(\d+).pt", os.path.basename(opts.resume))
-        if not match or not os.path.isfile(opts.resume):
+        if not os.path.isfile(opts.resume) or not opts.resume.endswith(".pt"):
             raise ValueError(
-                "--resume must point to training-state-*.pt from a previous training run"
+                "--resume must point to a modulus .pt checkpoint from a previous training run"
             )
-        c.resume_kimg = int(match.group(1))
-        c.resume_state_dump = opts.resume
+        c.resume_checkpoint = opts.resume
 
     # Print options.
     if opts.dry_run:
