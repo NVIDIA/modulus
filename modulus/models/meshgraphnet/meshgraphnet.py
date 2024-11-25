@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn as nn
 from torch import Tensor
-from contextlib import nullcontext
 
 try:
     import dgl  # noqa: F401 for docs
@@ -225,8 +226,9 @@ class MeshGraphNetProcessor(nn.Module):
         super().__init__()
         self.processor_size = processor_size
         self.num_processor_checkpoint_segments = num_processor_checkpoint_segments
-        self.checkpoint_offloading = checkpoint_offloading if (
-            num_processor_checkpoint_segments > 0) else False
+        self.checkpoint_offloading = (
+            checkpoint_offloading if (num_processor_checkpoint_segments > 0) else False
+        )
 
         edge_block_invars = (
             input_dim_node,
@@ -274,7 +276,9 @@ class MeshGraphNetProcessor(nn.Module):
             whether to offload the checkpointing to the CPU
         """
         if enabled:
-            self.checkpoint_offload_ctx = torch.autograd.graph.save_on_cpu(pin_memory=True)
+            self.checkpoint_offload_ctx = torch.autograd.graph.save_on_cpu(
+                pin_memory=True
+            )
         else:
             self.checkpoint_offload_ctx = nullcontext()
 
