@@ -69,6 +69,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         forecast_init_times: Optional[Sequence] = None,
         couplings: Sequence = [],
         meta: DatapipeMetaData = MetaData(),
+        add_train_noise: bool = False,
+        train_noise_params: DictConfig = None,
     ):
         """
         Parameters
@@ -114,11 +116,18 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         couplings: Sequence, optional
             a Sequence of dictionaries that define the mechanics of couplings with other earth system
             components
+        add_train_noise: bool, optional
+            Add noise to the training data to inputs and integrated couplings to improve generalization, default False
+        train_noise_params: DictConfig, optional
+            Dictionary containing parameters for adding noise to the training data
         """
         self.input_variables = input_variables
         self.output_variables = (
             input_variables if output_variables is None else output_variables
         )
+        self.add_train_noise=add_train_noise
+        self.train_noise_params=train_noise_params
+
         if couplings is not None:
             self.couplings = [
                 getattr(couplers, c["coupler"])(
@@ -293,6 +302,23 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
                     if self.forecast_mode
                     else sol[self._input_indices[sample] + self._output_indices[sample]]
                 )
+
+        logger.log(5, "Adding gaussian noise to inputs and integrated_couplings")
+        if not self.forecast_mode and self.add_train_noise:
+            # Iterate over C: inputs.shape = [B, T, C, F, H, W]
+            for i in range(inputs.shape[2]):
+                inputs[:, :, i] += np.random.normal(
+                    loc=0,
+                    scale=self.train_noise_params["inputs"][self.input_variables[i]]["std"],
+                    size=inputs[:, :, i].shape
+                )
+            for c in self.couplings:
+                for i, v in enumerate(c.variables):
+                    integrated_couplings[i, :, :] += np.random.normal(
+                        loc=0,
+                        scale=self.train_noise_params["couplings"][v]["std"],
+                        size=integrated_couplings[i, :, :].shape
+                    )
 
         inputs_result = [inputs]
         if self.add_insolation:

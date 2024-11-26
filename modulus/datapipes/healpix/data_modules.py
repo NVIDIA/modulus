@@ -832,6 +832,8 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         prebuilt_dataset: bool = True,
         forecast_init_times: Optional[Sequence] = None,
         couplings: Sequence = None,
+        add_train_noise: Optional[bool] = False,
+        train_noise_params: Optional[DictConfig] = None,
     ):
         """
         Parameters
@@ -907,6 +909,9 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
             components. default None
         """
         self.couplings = couplings
+        self.add_train_noise = add_train_noise
+        self.train_noise_params = train_noise_params
+
         super().__init__(
             src_directory,
             dst_directory,
@@ -1052,6 +1057,8 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                 drop_last=self.drop_last,
                 add_insolation=self.add_insolation,
                 couplings=self.couplings,
+                add_train_noise=self.add_train_noise,
+                train_noise_params=self.train_noise_params,
             )
             self.val_dataset = CoupledTimeSeriesDataset(
                 dataset.sel(
