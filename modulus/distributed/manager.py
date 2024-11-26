@@ -332,7 +332,11 @@ class DistributedManager(object):
         addr = os.getenv("MASTER_ADDR", "localhost")
         port = os.getenv("MASTER_PORT", "12355")
         # https://pytorch.org/docs/master/notes/cuda.html#id5
-        os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+        # was changed in version 2.2
+        if torch.__version__ < (2, 2):
+            os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+        else:
+            os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "0"
         initialization_method = os.getenv("MODULUS_DISTRIBUTED_INITIALIZATION_METHOD")
         if initialization_method is None:
             try:
