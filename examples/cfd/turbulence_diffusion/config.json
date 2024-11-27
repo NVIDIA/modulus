@@ -1,5 +1,6 @@
 {
-  "dataset_dir": "/work/ross/datasets/Turbulence_AI_all_files/test/",
+  "dataset_dir": "data",
+  "download": true,
   "image_size": 512,
   "batch_size": 2,
   "num_epochs": 1,

@@ -2,36 +2,27 @@
 # coding=utf-8
 #
 # SPDX-FileCopyrightText: Copyright (c) 2024 - Edmund Ross
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 #
-# MIT License
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import matplotlib.pyplot as plt
 
 import shutil
 import os
+import dataset
 import torch
 import params
-
-from concurrent.futures import ProcessPoolExecutor
 
 from PIL import Image
 
@@ -65,52 +56,15 @@ def initialise_experiment(args):
     for f in folders:
         os.makedirs(to_path(experiment_path, f), exist_ok=True)
 
+    # Download and set up dataset if it hasn't been already
+    dataset.initialise_dataset(args)
+
     # Make a copy of this run's hyperparameters
     config_name = 'config_sample.json' if args.sample else 'config_train.json'
     config_json_path = to_path(experiment_path, config_name)
     shutil.copy(params.CONFIG_PATH, config_json_path)
 
     return experiment_path
-
-
-def crop_image(input_path, output_folder, crop_left_width=150):
-    """Crop an image to remove useless white space to the left of the cylinder """
-    # Get and open image
-    filename = os.path.basename(input_path)
-    img = Image.open(input_path)
-
-    # Set up the crop. Top left corner is 0,0 and the y-axis is inverted
-    width, height = img.size
-    left = crop_left_width
-    top = 0
-    right = width
-    bottom = height
-
-    # Execute and save
-    cropped_img = img.crop((left, top, right, bottom))
-
-    output_path = to_path(output_folder, f'cropped_{filename}')
-    cropped_img.save(output_path)
-    print(f'Cropped image: {filename}')
-
-
-def crop_images_parallel(input_folder, output_folder, crop_left_width=150, num_workers=8):
-    """Call crop_image for all images in the dataset, parallelised across multiple CPU cores"""
-    os.makedirs(output_folder, exist_ok=True)
-
-    input_paths = [to_path(input_folder, filename) for filename in os.listdir(input_folder)
-                   if filename.endswith((".jpg", ".jpeg", ".png"))]
-
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = []
-
-        for input_path in input_paths:
-            future = executor.submit(crop_image, input_path, output_folder, crop_left_width)
-            futures.append(future)
-
-        # Wait for all tasks to complete
-        for future in futures:
-            future.result()
 
 
 def resize_images(input_path, output_path, width=850, height=600):
