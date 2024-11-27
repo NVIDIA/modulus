@@ -10,7 +10,7 @@
 | [**Contributing Guidelines**](#contributing-to-modulus)
 | [**Resources**](#resources)
 | [**Communication**](#communication)
-| [**License**](#License)
+| [**License**](#license)
 
 ## What is Modulus?
 
@@ -363,4 +363,5 @@ Want to suggest some improvements to Modulus? Use our feedback form
 ## License
 
 Modulus is provided under the Apache License 2.0, please see [LICENSE.txt](./LICENSE.txt)
-for full license text. Enterprise SLA, support and preview access are available under NVAIE. 
+for full license text. Enterprise SLA, support and preview access are available
+under NVAIE.
