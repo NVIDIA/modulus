@@ -19,6 +19,8 @@ import numpy as np
 import nvtx
 import torch
 
+from modulus.models.diffusion import EDMPrecond
+
 # ruff: noqa: E731
 
 
@@ -185,9 +187,18 @@ def deterministic_sampler(
 
         # Euler step.
         h = t_next - t_hat
-        denoised = net(x_hat / s(t_hat), x_lr, sigma(t_hat), class_labels).to(
-            torch.float64
-        )
+        if isinstance(net, EDMPrecond):
+            # Conditioning info is passed as keyword arg
+            denoised = net(
+                x_hat / s(t_hat),
+                sigma(t_hat),
+                condition=x_lr,
+                class_labels=class_labels,
+            ).to(torch.float64)
+        else:
+            denoised = net(x_hat / s(t_hat), x_lr, sigma(t_hat), class_labels).to(
+                torch.float64
+            )
         d_cur = (
             sigma_deriv(t_hat) / sigma(t_hat) + s_deriv(t_hat) / s(t_hat)
         ) * x_hat - sigma_deriv(t_hat) * s(t_hat) / sigma(t_hat) * denoised
@@ -198,9 +209,18 @@ def deterministic_sampler(
         if solver == "euler" or i == num_steps - 1:
             x_next = x_hat + h * d_cur
         else:
-            denoised = net(x_prime / s(t_prime), x_lr, sigma(t_prime), class_labels).to(
-                torch.float64
-            )
+            if isinstance(net, EDMPrecond):
+                # Conditioning info is passed as keyword arg
+                denoised = net(
+                    x_prime / s(t_prime),
+                    sigma(t_prime),
+                    condition=x_lr,
+                    class_labels=class_labels,
+                ).to(torch.float64)
+            else:
+                denoised = net(
+                    x_prime / s(t_prime), x_lr, sigma(t_prime), class_labels
+                ).to(torch.float64)
             d_prime = (
                 sigma_deriv(t_prime) / sigma(t_prime) + s_deriv(t_prime) / s(t_prime)
             ) * x_prime - sigma_deriv(t_prime) * s(t_prime) / sigma(t_prime) * denoised

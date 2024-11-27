@@ -13,9 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import torch
 from modulus.models import Module
-from modulus.models.diffusion import EDMPrecond, UNet
+from modulus.models.diffusion import EDMPrecond, StormCastUNet
+from modulus.utils.generative import deterministic_sampler
 
 
 def get_preconditioned_architecture(
@@ -42,10 +44,9 @@ def get_preconditioned_architecture(
         EDMPrecond or RegressionWrapperV2: a wrapped torch module net(x+n, sigma, condition, class_labels) -> x
     """
     if name == "diffusion":
-        in_channels = target_channels + conditional_channels
         return EDMPrecond(
             img_resolution=hrrr_resolution,
-            img_channels=in_channels,
+            img_channels=target_channels + conditional_channels,
             out_channels=target_channels,
             model_type="SongUNet",
             channel_mult=[1, 2, 2, 2, 2],
@@ -54,12 +55,9 @@ def get_preconditioned_architecture(
         )
 
     elif name == "regression":
-        in_channels = conditional_channels
-        return UNet(
+        return StormCastUNet(
             img_resolution=hrrr_resolution,
-            img_channels=in_channels,
-            img_in_channels=in_channels
-            - target_channels,  # TODO hack since modulus UNet adds output channels to input channels
+            img_in_channels=conditional_channels,
             img_out_channels=target_channels,
             model_type="SongUNet",
             embedding_type="zero",
@@ -69,44 +67,64 @@ def get_preconditioned_architecture(
         )
 
 
+def diffusion_model_forward(
+    model, hrrr_0, diffusion_channel_indices, invariant_tensor, sampler_args={}
+):
+    """Helper function to run diffusion model sampling"""
+
+    b, c, h, w = hrrr_0[:, diffusion_channel_indices, :, :].shape
+
+    latents = torch.randn(b, c, h, w, device=hrrr_0.device, dtype=hrrr_0.dtype)
+
+    if b > 1 and invariant_tensor.shape[0] != b:
+        invariant_tensor = invariant_tensor.expand(b, -1, -1, -1)
+    condition = torch.cat((hrrr_0, invariant_tensor), dim=1)
+
+    output_images = deterministic_sampler(
+        model, latents=latents, img_lr=condition, **sampler_args
+    )
+
+    return output_images
+
+
 def regression_model_forward(model, hrrr, era5, invariant_tensor):
     """Helper function to run regression model forward pass in inference"""
 
-    condition = torch.cat(
-        [hrrr, era5, invariant_tensor.repeat(hrrr.shape[0], 1, 1, 1)], dim=1
-    )
+    x = torch.cat([hrrr, era5, invariant_tensor], dim=1)
 
-    sigma = torch.randn([condition.shape[0], 1, 1, 1], device=condition.device)
-
-    return model(x=condition, img_lr=None, sigma=sigma)
+    return model(x)
 
 
 def regression_loss_fn(
     net: Module,
     images,
-    condition=None,
+    condition,
     class_labels=None,
     augment_pipe=None,
+    return_model_outputs=False,
 ):
     """Helper function for training the StormCast regression model, so that it has a similar call signature as
     the EDMLoss and the same training loop can be used to train both regression and diffusion models
 
     Args:
-        net:
-        x: The latent data (to be denoised). shape [batch_size, target_channels, w, h]
-        class_labels: optional, shape [batch_size, label_dim]
-        condition: optional, the conditional inputs,
-            shape=[batch_size, condition_channel, w, h]
+        net: modulus.models.diffusion.StormCastUNet
+        images: Target data, shape [batch_size, target_channels, w, h]
+        condition: input to the model, shape=[batch_size, condition_channel, w, h]
+        class_labels: unused (applied to match EDMLoss signature)
+        augment_pipe: unused (applied to match EDMLoss signature)
+        return_model_outputs: If True, will return the generated outputs
     Returns:
         out: loss function with shape [batch_size, target_channels, w, h]
             This should be averaged to get the mean loss for gradient descent.
     """
 
-    sigma = torch.ones([images.shape[0], 1, 1, 1], device=images.device)
     y, augment_labels = (
         augment_pipe(images) if augment_pipe is not None else (images, None)
     )
 
-    D_yn = net(x=condition, img_lr=None, sigma=sigma)
+    D_yn = net(x=condition)
     loss = (D_yn - y) ** 2
-    return loss
+    if return_model_outputs:
+        return loss, D_yn
+    else:
+        return loss

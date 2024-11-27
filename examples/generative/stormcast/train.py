@@ -18,173 +18,77 @@
 paper "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
 import os
-import re
-import json
+import hydra
 import torch
 import wandb
 import glob
-import argparse
+from omegaconf import DictConfig
 from modulus.distributed import DistributedManager
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
-from utils.misc import EasyDict, print0
-from utils.diffusions import training_loop
+from utils.trainer import training_loop
 
 
-def main(**kwargs):
+@hydra.main(version_base=None, config_path="config", config_name="regression")
+def main(cfg: DictConfig) -> None:
     """Train regression or diffusion models for use in the StormCast (https://arxiv.org/abs/2408.10958) ML-based weather model"""
 
-    parser = argparse.ArgumentParser(
-        description="Train regression or diffusion models for use in StormCast"
-    )
-
-    # Main options.
-    parser.add_argument(
-        "--outdir",
-        help="Where to save the results",
-        metavar="DIR",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--config_file",
-        help="Path to config file",
-        metavar="FILE",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--config_name",
-        help="Name of config to use",
-        metavar="NAME",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--log_to_wandb", help="Log to wandb", default=False, action="store_true"
-    )
-    parser.add_argument(
-        "--run_id", help="run id", metavar="INT", type=int, default=None
-    )
-
-    # Performance-related.
-    parser.add_argument(
-        "--bench",
-        help="Enable cuDNN benchmarking",
-        metavar="BOOL",
-        type=bool,
-        default=True,
-    )
-
-    # I/O-related.
-    parser.add_argument(
-        "--desc", help="String to include in result dir name", metavar="STR", type=str
-    )
-    parser.add_argument(
-        "--checkpoint_freq",
-        help="How often to checkpoint training state",
-        metavar="TICKS",
-        type=int,
-        default=10,
-    )
-    parser.add_argument(
-        "--seed", help="Random seed  [default: random]", metavar="INT", type=int
-    )
-    parser.add_argument(
-        "--resume", help="Resume from previous training state", metavar="PT", type=str
-    )
-    parser.add_argument(
-        "-n", "--dry-run", help="Print training options and exit", action="store_true"
-    )
-
     # Initialize
-    opts = parser.parse_args()
     DistributedManager.initialize()
     dist = DistributedManager()
-
-    # Initialize config dict.
-    c = EasyDict()
-
-    # Training options.
-    c.optimizer_kwargs = EasyDict(betas=[0.9, 0.999], eps=1e-8)
-    c.update(cudnn_benchmark=opts.bench, checkpoint_ticks=opts.checkpoint_freq)
+    logger = PythonLogger("main")
+    logger0 = RankZeroLoggingWrapper(logger, dist)  # Log only from rank 0
 
     # Random seed.
-    if opts.seed is not None:
-        c.seed = opts.seed
-    else:
+    if cfg.training.seed < 0:
         seed = torch.randint(1 << 31, size=[], device=torch.device("cuda"))
         torch.distributed.broadcast(seed, src=0)
-        c.seed = int(seed)
+        cfg.training.seed = int(seed)
 
-    # Description string.
-    desc = f"hrrr-gpus{dist.world_size:d}"
-    if opts.desc is not None:
-        desc += f"-{opts.desc}"
+    # Resume from specified checkpoint, if provided
+    if cfg.training.resume_checkpoint is not None:
+        resume = cfg.training.resume_checkpoint
+        if not os.path.isfile(resume) or not resume.endswith(".pt"):
+            raise ValueError(
+                "training.resume_checkpoint must point to a modulus .pt checkpoint from a previous training run"
+            )
 
-    desc = opts.config_name + "-" + desc
-
-    # Pick output directory.
-    cur_run_id = opts.run_id if opts.run_id is not None else 0
-    c.run_dir = os.path.join(opts.outdir, f"{cur_run_id}-{desc}")
-
-    # if run_dir exists, then resume training
-    if os.path.exists(c.run_dir):
+    # If run directory already exists, then resume training from last checkpoint
+    wandb_resume = False
+    if os.path.exists(cfg.training.rundir):
         training_states = sorted(
-            glob.glob(os.path.join(c.run_dir, "checkpoints/checkpoint*.pt"))
+            glob.glob(os.path.join(cfg.training.rundir, "checkpoints/checkpoint*.pt"))
         )
         if training_states:
-            print0("Resuming training from previous run_dir: " + c.run_dir)
+            logger0.info(
+                "Resuming training from previous run_dir: " + cfg.training.rundir
+            )
             last_training_state = training_states[-1]
-            c.resume_checkpoint = last_training_state
-            print0(
+            cfg.training.resume_checkpoint = last_training_state
+            logger0.info(
                 "Resuming training from previous checkpoint file: "
                 + last_training_state
             )
+            wandb_resume = True
 
-    if opts.resume is not None:
-        if not os.path.isfile(opts.resume) or not opts.resume.endswith(".pt"):
-            raise ValueError(
-                "--resume must point to a modulus .pt checkpoint from a previous training run"
-            )
-        c.resume_checkpoint = opts.resume
-
-    # Print options.
-    if opts.dry_run:
-        print0("Dry run; exiting.")
-        return
-
-    # Create output directory.
-    print0("Creating output directory...")
-    if dist.rank == 0:
-        os.makedirs(c.run_dir, exist_ok=True)
-        with open(os.path.join(c.run_dir, "training_options.json"), "wt") as f:
-            json.dump(c, f, indent=2)
-
-        if opts.log_to_wandb:
-            entity, project = "nv-research-climate", "hrrr"
-            entity = entity
-            wandb_project = project
-            wandb_name = opts.config_name + "_" + desc
-            wandb_group = opts.config_name + "_" + str(cur_run_id)
-            os.makedirs(os.path.join(c.run_dir, "wandb"), exist_ok=True)
-            wandb.init(
-                dir=os.path.join(c.run_dir, "wandb"),
-                config=c,
-                name=wandb_name,
-                group=wandb_group,
-                project=wandb_project,
-                entity=entity,
-                resume=opts.resume,
-                mode="online",
-            )
-
-    # config options
-    c.config_file = opts.config_file
-    c.config_name = opts.config_name
-    c.log_to_wandb = opts.log_to_wandb
+    # Setup wandb, if enabled
+    if dist.rank == 0 and cfg.training.log_to_wandb:
+        entity, project = "wandb_entity", "wandb_project"
+        entity = entity
+        wandb_project = project
+        os.makedirs(os.path.join(cfg.training.rundir, "wandb"), exist_ok=True)
+        wandb.init(
+            dir=os.path.join(cfg.training.rundir, "wandb"),
+            config=cfg,
+            name=os.path.basename(cfg.training.rundir),
+            project=wandb_project,
+            entity=entity,
+            resume=wandb_resume,
+            mode="online",
+        )
 
     # Train.
-    training_loop.training_loop(**c)
+    training_loop(cfg)
 
 
 # ----------------------------------------------------------------------------
