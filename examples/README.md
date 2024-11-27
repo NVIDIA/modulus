@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD043 -->
+<!-- markdownlint-disable -->
 # NVIDIA Modulus Examples
 
 ## Introduction
@@ -23,7 +23,9 @@ such models can help solve real world problems.
 
 The several examples inside Modulus can be classified based on their domains as below:
 
-> **NOTE:**  The below classification is not exhaustive by any means! One can classify single example into multiple domains and we encourage the users to review the entire list.
+> **NOTE:**  The below classification is not exhaustive by any means!
+    One can classify single example into multiple domains and we encourage
+    the users to review the entire list.
 
 > **NOTE:**  * Indicates externally contributed examples.
 
