@@ -310,6 +310,7 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
 
         logger.log(5, "Adding gaussian noise to inputs and integrated_couplings")
         if not self.forecast_mode and self.add_train_noise:
+            print("Adding noise to inputs and integrated_couplings")
             # Iterate over C: inputs.shape = [B, T, C, F, H, W]
             for i in range(inputs.shape[2]):
                 inputs[:, :, i] += self.rng.normal(
