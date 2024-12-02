@@ -71,6 +71,7 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         meta: DatapipeMetaData = MetaData(),
         add_train_noise: bool = False,
         train_noise_params: DictConfig = None,
+        train_noise_seed: int = 42,
     ):
         """
         Parameters
@@ -120,6 +121,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             Add noise to the training data to inputs and integrated couplings to improve generalization, default False
         train_noise_params: DictConfig, optional
             Dictionary containing parameters for adding noise to the training data
+        train_noise_seed: int, optional
+            Seed for the random number generator for adding noise to the training data, default 42
         """
         self.input_variables = input_variables
         self.output_variables = (
@@ -127,6 +130,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         )
         self.add_train_noise=add_train_noise
         self.train_noise_params=train_noise_params
+        if self.add_train_noise:
+            self.rng = np.random.default_rng(train_noise_seed)
 
         if couplings is not None:
             self.couplings = [
@@ -307,14 +312,14 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         if not self.forecast_mode and self.add_train_noise:
             # Iterate over C: inputs.shape = [B, T, C, F, H, W]
             for i in range(inputs.shape[2]):
-                inputs[:, :, i] += np.random.normal(
+                inputs[:, :, i] += self.rng.normal(
                     loc=0,
                     scale=self.train_noise_params["inputs"][self.input_variables[i]]["std"],
                     size=inputs[:, :, i].shape
                 )
             for c in self.couplings:
                 for i, v in enumerate(c.variables):
-                    integrated_couplings[i, :, :] += np.random.normal(
+                    integrated_couplings[i, :, :] += self.rng.normal(
                         loc=0,
                         scale=self.train_noise_params["couplings"][v]["std"],
                         size=integrated_couplings[i, :, :].shape
