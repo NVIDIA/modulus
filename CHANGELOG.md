@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extended the checkpointing utility to store metadata.
 - Corrected missing export of loggin function used by transolver model
 
+### Dependencies
+
+- Set upper bound for `pyspng` version.
+
 ## [0.8.0] - 2024-09-24
 
 ### Added
