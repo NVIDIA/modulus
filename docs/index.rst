@@ -78,7 +78,4 @@ NVIDIA Modulus Core (Latest Release)
 
    examples/additive_manufacturing/sintering_physics/README.rst
 
-Indices and tables
-==================
 
-* :ref:`genindex`
