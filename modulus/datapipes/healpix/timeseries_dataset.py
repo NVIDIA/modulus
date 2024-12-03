@@ -199,7 +199,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
             # extract from ds:
             const = self.ds.constants.values
 
-            if self.scaling:
+            if self.constant_scaling:
                 const = (const - self.constant_scaling["mean"]) / self.constant_scaling[
                     "std"
                 ]
