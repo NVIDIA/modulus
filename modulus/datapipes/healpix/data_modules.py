@@ -285,7 +285,7 @@ def create_time_series_dataset_classic(
     for variable in all_variables:
         file_name = _get_file_name(src_directory, prefix, variable, suffix)
         logger.debug("open nc dataset %s", file_name)
-        if "sample" in list(xr.open_dataset(file_name).dims.keys()):
+        if "sample" in list(xr.open_dataset(file_name).sizes.keys()):
             ds = xr.open_dataset(file_name, chunks={"sample": batch_size}).rename(
                 {"sample": "time"}
             )
@@ -568,6 +568,10 @@ class TimeSeriesDataModule:
                     batch_size=self.batch_size,
                 )
 
+                dataset = dataset.sel(
+                    channel_in=self.input_variables,
+                    channel_out=self.output_variables,
+                )
             else:
                 dataset = open_fn(
                     input_variables=self.input_variables,
@@ -984,6 +988,10 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     batch_size=self.batch_size,
                 )
 
+                dataset = dataset.sel(
+                    channel_in=self.input_variables + coupled_variables,
+                    channel_out=self.output_variables,
+                )
             else:
                 dataset = open_fn(
                     input_variables=self.input_variables + coupled_variables,

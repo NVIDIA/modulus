@@ -17,7 +17,7 @@
 import glob
 import re
 from pathlib import Path
-from typing import Dict, List, NewType, Union
+from typing import Any, Dict, List, NewType, Optional, Union
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -185,6 +185,7 @@ def save_checkpoint(
     scheduler: Union[scheduler, None] = None,
     scaler: Union[scaler, None] = None,
     epoch: Union[int, None] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Training checkpoint saving utility
 
@@ -208,6 +209,8 @@ def save_checkpoint(
     epoch : Union[int, None], optional
         Epoch checkpoint to load. If none this will save the checkpoint in the next
         valid index, by default None
+    metadata : Optional[Dict[str, Any]], optional
+        Additional metadata to save, by default None
     """
     # Create checkpoint directory if it does not exist
     if not Path(path).is_dir():
@@ -260,6 +263,8 @@ def save_checkpoint(
     )
     if epoch:
         checkpoint_dict["epoch"] = epoch
+    if metadata:
+        checkpoint_dict["metadata"] = metadata
 
     # Save checkpoint to memory
     if bool(checkpoint_dict):
@@ -277,6 +282,7 @@ def load_checkpoint(
     scheduler: Union[scheduler, None] = None,
     scaler: Union[scaler, None] = None,
     epoch: Union[int, None] = None,
+    metadata_dict: Optional[Dict[str, Any]] = {},
     device: Union[str, torch.device] = "cpu",
 ) -> int:
     """Checkpoint loading utility
@@ -300,6 +306,8 @@ def load_checkpoint(
     epoch : Union[int, None], optional
         Epoch checkpoint to load. If none is provided this will attempt to load the
         checkpoint with the largest index, by default None
+    metadata_dict: Optional[Dict[str, Any]], optional
+        Dictionary to store metadata from the checkpoint, by default None
     device : Union[str, torch.device], optional
         Target device, by default "cpu"
 
@@ -378,4 +386,10 @@ def load_checkpoint(
     epoch = 0
     if "epoch" in checkpoint_dict:
         epoch = checkpoint_dict["epoch"]
+
+    # Update metadata if exists and the dictionary object is provided
+    metadata = checkpoint_dict.get("metadata", {})
+    for key, value in metadata.items():
+        metadata_dict[key] = value
+
     return epoch

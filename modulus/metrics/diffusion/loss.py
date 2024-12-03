@@ -459,7 +459,15 @@ class ResLoss:
         self.patch_num = patch_num
         self.hr_mean_conditioning = hr_mean_conditioning
 
-    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+    def __call__(
+        self,
+        net,
+        img_clean,
+        img_lr,
+        labels=None,
+        lead_time_label=None,
+        augment_pipe=None,
+    ):
         """
         Calculate and return the loss for denoising score matching.
 
@@ -515,6 +523,7 @@ class ResLoss:
             y_lr_res,
             sigma,
             labels,
+            lead_time_label=lead_time_label,
             augment_labels=augment_labels,
         )
 
@@ -605,6 +614,7 @@ class ResLoss:
             sigma,
             labels,
             global_index=global_index,
+            lead_time_label=lead_time_label,
             augment_labels=augment_labels,
         )
         loss = weight * ((D_yn - y) ** 2)
@@ -748,4 +758,118 @@ class VELoss_dfsr:
         output = net(x, t, labels)
         loss = (e - output).square()
 
+        return loss
+
+
+class RegressionLossCE:
+    """
+    A regression loss function for the GEFS-HRRR model with probability channels, adapted
+    from RegressionLoss. In this version, probability channels are evaluated using
+    CrossEntropyLoss instead of MSELoss.
+
+    Parameters
+    ----------
+    P_mean: float, optional
+        Mean value for `sigma` computation, by default -1.2.
+    P_std: float, optional:
+        Standard deviation for `sigma` computation, by default 1.2.
+    sigma_data: float, optional
+        Standard deviation for data, by default 0.5.
+    prob_channels: list, optional
+        A index list of output probability channels.
+
+    Note
+    ----
+    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
+    arXiv preprint arXiv:2309.15214.
+    """
+
+    def __init__(
+        self,
+        P_mean: float = -1.2,
+        P_std: float = 1.2,
+        sigma_data: float = 0.5,
+        prob_channels: list = [4, 5, 6, 7, 8],
+    ):
+        self.P_mean = P_mean
+        self.P_std = P_std
+        self.sigma_data = sigma_data
+        self.entropy = torch.nn.CrossEntropyLoss(reduction="none")
+        self.prob_channels = prob_channels
+
+    def __call__(
+        self,
+        net,
+        img_clean,
+        img_lr,
+        lead_time_label=None,
+        labels=None,
+        augment_pipe=None,
+    ):
+        """
+        Calculate and return the loss for the U-Net for deterministic predictions.
+
+        Parameters:
+        ----------
+        net: torch.nn.Module
+            The neural network model that will make predictions.
+
+        img_clean: torch.Tensor
+            Input images (high resolution) to the neural network.
+
+        img_lr: torch.Tensor
+            Input images (low resolution) to the neural network.
+
+        lead_time_label: torch.Tensor
+            Lead time labels for input batches.
+
+        labels: torch.Tensor
+            Ground truth labels for the input images.
+
+        augment_pipe: callable, optional
+            An optional data augmentation function that takes images as input and
+            returns augmented images. If not provided, no data augmentation is applied.
+
+        Returns:
+        -------
+        torch.Tensor
+            A tensor representing the loss calculated based on the network's
+            predictions.
+        """
+        all_channels = list(range(img_clean.shape[1]))  # [0, 1, 2, ..., 10]
+        scalar_channels = [
+            item for item in all_channels if item not in self.prob_channels
+        ]
+        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
+        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+        weight = (
+            1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
+        )
+
+        img_tot = torch.cat((img_clean, img_lr), dim=1)
+        y_tot, augment_labels = (
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+        )
+        y = y_tot[:, : img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+
+        input = torch.zeros_like(y, device=img_clean.device)
+        D_yn = net(
+            input,
+            y_lr,
+            sigma,
+            labels,
+            lead_time_label=lead_time_label,
+            augment_labels=augment_labels,
+        )
+        loss1 = weight * ((D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2)
+        loss2 = (
+            weight
+            * self.entropy(D_yn[:, self.prob_channels], y[:, self.prob_channels])[
+                :, None
+            ]
+        )
+        loss = torch.cat((loss1, loss2), dim=1)
         return loss

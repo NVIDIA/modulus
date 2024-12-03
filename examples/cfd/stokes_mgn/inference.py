@@ -16,23 +16,21 @@
 
 import os
 
-import torch
-import numpy as np
-
 import hydra
+import numpy as np
+import torch
 from hydra.utils import to_absolute_path
-from omegaconf import DictConfig
-
-from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.datapipes.gnn.stokes_dataset import StokesDataset
-from modulus.launch.utils import load_checkpoint
 from modulus.launch.logging import PythonLogger
+from modulus.launch.utils import load_checkpoint
+from modulus.models.meshgraphnet import MeshGraphNet
+from omegaconf import DictConfig
 
 from utils import relative_lp_error
 
 try:
-    from dgl.dataloading import GraphDataLoader
     from dgl import DGLGraph
+    from dgl.dataloading import GraphDataLoader
 except:
     raise ImportError(
         "Stokes  example requires the DGL library. Install the "
