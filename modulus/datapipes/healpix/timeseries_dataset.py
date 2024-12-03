@@ -303,8 +303,8 @@ class TimeSeriesDataset(Dataset, Datapipe):
             if self.forecast_mode
             else (item + 1) * self.batch_size + self._window_length
         )
-        if not self.drop_last and max_index > self.ds.dims["time"]:
-            batch_size = self.batch_size - (max_index - self.ds.dims["time"])
+        if not self.drop_last and max_index > self.ds.sizes["time"]:
+            batch_size = self.batch_size - (max_index - self.ds.sizes["time"])
         else:
             batch_size = self.batch_size
         return (start_index, max_index), batch_size

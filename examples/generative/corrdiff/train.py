@@ -23,7 +23,7 @@ from modulus import Module
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.metrics.diffusion import RegressionLoss, ResLoss
+from modulus.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
@@ -54,15 +54,25 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
-    if hasattr(cfg, "validation_dataset"):
-        validation_dataset_cfg = OmegaConf.to_container(cfg.validation_dataset)
+    if hasattr(cfg, "validation"):
+        train_test_split = True
+        validation_dataset_cfg = OmegaConf.to_container(cfg.validation)
     else:
+        train_test_split = False
         validation_dataset_cfg = None
     fp_optimizations = cfg.training.perf.fp_optimizations
+    songunet_checkpoint_level = cfg.training.perf.songunet_checkpoint_level
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
     logger.info(f"Saving the outputs in {os.getcwd()}")
+    checkpoint_dir = os.path.join(
+        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
+    )
+    if cfg.training.hp.batch_size_per_gpu == "auto":
+        cfg.training.hp.batch_size_per_gpu = (
+            cfg.training.hp.total_batch_size // dist.world_size
+        )
 
     # Set seeds and configure CUDA and cuDNN settings to ensure consistent precision
     set_seed(dist.rank)
@@ -85,6 +95,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.training.hp.batch_size_per_gpu,
         seed=0,
         validation_dataset_cfg=validation_dataset_cfg,
+        train_test_split=train_test_split,
     )
 
     # Parse image configuration & update model args
@@ -95,8 +106,13 @@ def main(cfg: DictConfig) -> None:
     if cfg.model.hr_mean_conditioning:
         img_in_channels += img_out_channels
 
+    if cfg.model.name == "lt_aware_ce_regression":
+        prob_channels = dataset.get_prob_channel_index()
     # Parse the patch shape
-    if cfg.model.name == "patched_diffusion":
+    if (
+        cfg.model.name == "patched_diffusion"
+        or cfg.model.name == "lt_aware_patched_diffusion"
+    ):
         patch_shape_x = cfg.training.hp.patch_shape_x
         patch_shape_y = cfg.training.hp.patch_shape_y
     else:
@@ -113,7 +129,13 @@ def main(cfg: DictConfig) -> None:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
-    if cfg.model.name not in ("regression", "diffusion", "patched_diffusion"):
+    if cfg.model.name not in (
+        "regression",
+        "lt_aware_ce_regression",
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         raise ValueError("Invalid model")
     model_args = {  # default parameters for all networks
         "img_out_channels": img_out_channels,
@@ -125,21 +147,47 @@ def main(cfg: DictConfig) -> None:
             "img_channels": 4,
             "N_grid_channels": 4,
             "embedding_type": "zero",
+            "checkpoint_level": songunet_checkpoint_level,
+        },
+        "lt_aware_ce_regression": {
+            "img_channels": 4,
+            "N_grid_channels": 4,
+            "embedding_type": "zero",
+            "lead_time_channels": 4,
+            "lead_time_steps": 9,
+            "prob_channels": prob_channels,
+            "checkpoint_level": songunet_checkpoint_level,
+            "model_type": "SongUNetPosLtEmbd",
         },
         "diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "sinusoidal",
             "N_grid_channels": 4,
-            "scale_cond_input": cfg.model.scale_cond_input,
+            "checkpoint_level": songunet_checkpoint_level,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
             "gridtype": "learnable",
             "N_grid_channels": 100,
-            "scale_cond_input": cfg.model.scale_cond_input,
+            "checkpoint_level": songunet_checkpoint_level,
+        },
+        "lt_aware_patched_diffusion": {
+            "img_channels": img_out_channels,
+            "gridtype": "learnable",
+            "N_grid_channels": 100,
+            "lead_time_channels": 20,
+            "lead_time_steps": 9,
+            "checkpoint_level": songunet_checkpoint_level,
+            "model_type": "SongUNetPosLtEmbd",
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
+        model_args["scale_cond_input"] = cfg.model.scale_cond_input
     if hasattr(cfg.model, "model_args"):  # override defaults from config file
         model_args.update(OmegaConf.to_container(cfg.model.model_args))
     if cfg.model.name == "regression":
@@ -147,11 +195,26 @@ def main(cfg: DictConfig) -> None:
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
+    elif cfg.model.name == "lt_aware_ce_regression":
+        model = UNet(
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
+            **model_args,
+        )
+    elif cfg.model.name == "lt_aware_patched_diffusion":
+        model = EDMPrecondSR(
+            img_in_channels=img_in_channels
+            + model_args["N_grid_channels"]
+            + model_args["lead_time_channels"],
+            **model_args,
+        )
     else:  # diffusion or patched diffusion
         model = EDMPrecondSR(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
+
     model.train().requires_grad_(True).to(dist.device)
 
     # Enable distributed data parallel if applicable
@@ -171,7 +234,7 @@ def main(cfg: DictConfig) -> None:
         )
         if not os.path.exists(regression_checkpoint_path):
             raise FileNotFoundError(
-                f"Expected a this regression checkpoint but not found: {regression_checkpoint_path}"
+                f"Expected this regression checkpoint but not found: {regression_checkpoint_path}"
             )
         regression_net = Module.from_checkpoint(regression_checkpoint_path)
         regression_net.eval().requires_grad_(False).to(dist.device)
@@ -179,7 +242,11 @@ def main(cfg: DictConfig) -> None:
 
     # Instantiate the loss function
     patch_num = getattr(cfg.training.hp, "patch_num", 1)
-    if cfg.model.name in ("diffusion", "patched_diffusion"):
+    if cfg.model.name in (
+        "diffusion",
+        "patched_diffusion",
+        "lt_aware_patched_diffusion",
+    ):
         loss_fn = ResLoss(
             regression_net=regression_net,
             img_shape_x=img_shape[1],
@@ -191,6 +258,8 @@ def main(cfg: DictConfig) -> None:
         )
     elif cfg.model.name == "regression":
         loss_fn = RegressionLoss()
+    elif cfg.model.name == "lt_aware_ce_regression":
+        loss_fn = RegressionLossCE(prob_channels=prob_channels)
 
     # Instantiate the optimizer
     optimizer = torch.optim.Adam(
@@ -215,7 +284,7 @@ def main(cfg: DictConfig) -> None:
         torch.distributed.barrier()
     try:
         cur_nimg = load_checkpoint(
-            path=f"checkpoints_{cfg.model.name}",
+            path=checkpoint_dir,
             models=model,
             optimizer=optimizer,
             device=dist.device,
@@ -229,6 +298,11 @@ def main(cfg: DictConfig) -> None:
 
     logger0.info(f"Training for {cfg.training.hp.training_duration} images...")
     done = False
+
+    # init variables to monitor running mean of average loss since last periodic
+    average_loss_running_mean = 0
+    n_average_loss_running_mean = 1
+
     while not done:
         tick_start_nimg = cur_nimg
         tick_start_time = time.time()
@@ -236,16 +310,21 @@ def main(cfg: DictConfig) -> None:
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0
         for _ in range(num_accumulation_rounds):
-            img_clean, img_lr, labels = next(dataset_iterator)
+            img_clean, img_lr, labels, *lead_time_label = next(dataset_iterator)
             img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
             img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
             labels = labels.to(dist.device).contiguous()
+            if lead_time_label:
+                lead_time_label = lead_time_label[0].to(dist.device).contiguous()
+            else:
+                lead_time_label = None
             with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
                 loss = loss_fn(
                     net=model,
                     img_clean=img_clean,
                     img_lr=img_lr,
                     labels=labels,
+                    lead_time_label=lead_time_label,
                     augment_pipe=None,
                 )
             loss = loss.sum() / batch_size_per_gpu
@@ -257,8 +336,31 @@ def main(cfg: DictConfig) -> None:
             torch.distributed.barrier()
             torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
         average_loss = (loss_sum / dist.world_size).cpu().item()
+
+        # update running mean of average loss since last periodic task
+        average_loss_running_mean += (
+            average_loss - average_loss_running_mean
+        ) / n_average_loss_running_mean
+        n_average_loss_running_mean += 1
+
         if dist.rank == 0:
             writer.add_scalar("training_loss", average_loss, cur_nimg)
+            writer.add_scalar(
+                "training_loss_running_mean", average_loss_running_mean, cur_nimg
+            )
+
+        ptt = is_time_for_periodic_task(
+            cur_nimg,
+            cfg.training.io.print_progress_freq,
+            done,
+            cfg.training.hp.total_batch_size,
+            dist.rank,
+            rank_0_only=True,
+        )
+        if ptt:
+            # reset running mean of average loss
+            average_loss_running_mean = 0
+            n_average_loss_running_mean = 1
 
         # Update weights.
         lr_rampup = cfg.training.hp.lr_rampup  # ramp up the learning rate
@@ -343,6 +445,7 @@ def main(cfg: DictConfig) -> None:
             fields = []
             fields += [f"samples {cur_nimg:<9.1f}"]
             fields += [f"training_loss {average_loss:<7.2f}"]
+            fields += [f"training_loss_running_mean {average_loss_running_mean:<7.2f}"]
             fields += [f"learning_rate {current_lr:<7.8f}"]
             fields += [f"total_sec {(tick_end_time - start_time):<7.1f}"]
             fields += [f"sec_per_tick {(tick_end_time - tick_start_time):<7.1f}"]
@@ -373,7 +476,7 @@ def main(cfg: DictConfig) -> None:
             rank_0_only=True,
         ):
             save_checkpoint(
-                path=f"checkpoints_{cfg.model.name}",
+                path=checkpoint_dir,
                 models=model,
                 optimizer=optimizer,
                 epoch=cur_nimg,

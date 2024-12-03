@@ -145,8 +145,13 @@ To further fine-tune the model using physics-informed learning, run
 python pi_fine_tuning.py
 ```
 
-Note: The fine-tuning step involves training of a PINN model to first refine the
+### Note
+
+The fine-tuning step involves training of a PINN model to first refine the
 predictions of the MeshGraphNet model followed by an inference of the PINN model.
+
+If you are running this fine-tuning outside of the Modulus container, install Modulus Sym
+using the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
 
 This will save the predictions for the test dataset in `.vtp` format in the `results`
 directory. Use Paraview to open and explore the results.

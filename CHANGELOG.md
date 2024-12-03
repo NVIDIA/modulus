@@ -6,7 +6,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0a0] - 2024-09-XX
+## [0.10.0a0] - 2025-01-XX
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [0.9.0] - 2024-12-04
+
+### Added
+
+- Graph Transformer processor for GraphCast/GenCast.
+- Utility to generate STL from Signed Distance Field.
+- Metrics for CAE and CFD domain such as integrals, drag, and turbulence invariances and
+  spectrum.
+- Added gradient clipping to StaticCapture utilities.
+- Bistride Multiscale MeshGraphNet example.
+- FIGConvUNet model and example.
+- The Transolver model.
+- The XAeroNet model.
+- Incoporated CorrDiff-GEFS-HRRR model into CorrDiff, with lead-time aware SongUNet and
+  cross entropy loss.
+- Option to offload checkpoints to further reduce memory usage
+- Added StormCast model training and simple inference to examples
+
+### Changed
+
+- Refactored CorrDiff training recipe for improved usability
+- Fixed timezone calculation in datapipe cosine zenith utility.
+- Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
+- Extended the checkpointing utility to store metadata.
+- Corrected missing export of loggin function used by transolver model
+
+## [0.8.0] - 2024-09-24
 
 ### Added
 
@@ -21,17 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Refactored CorrDiff training recipe for improved usability
 - Fixed timezone calculation in datapipe cosine zenith utility.
-- Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-### Dependencies
 
 ## [0.7.0] - 2024-07-23
 
