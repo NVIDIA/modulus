@@ -208,8 +208,6 @@ class TimeSeriesDataset(Dataset, Datapipe):
             # [C, F, H, W] -> [F, C, H, W]
             self.constants = np.transpose(const, axes=(1, 0, 2, 3))
 
-        self.get_constants()
-
     def get_constants(self):
         """Returns the constants used in this dataset
 
