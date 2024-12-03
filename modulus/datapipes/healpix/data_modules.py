@@ -613,6 +613,9 @@ class TimeSeriesDataModule:
                     batch_size=self.batch_size,
                 )
 
+        if self.constants is not None:
+            dataset = dataset.sel(channel_c=list(self.constants.values()))
+
         if self.splits is not None and self.forecast_init_times is None:
             self.train_dataset = TimeSeriesDataset(
                 dataset.sel(
@@ -1032,6 +1035,9 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     prefix=self.prefix,
                     batch_size=self.batch_size,
                 )
+
+        if self.constants is not None:
+            dataset = dataset.sel(channel_c=list(self.constants.values()))
 
         if self.splits is not None and self.forecast_init_times is None:
             self.train_dataset = CoupledTimeSeriesDataset(
