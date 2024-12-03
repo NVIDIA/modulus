@@ -22,7 +22,7 @@ import hydra
 import torch
 import wandb
 import glob
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 
@@ -74,14 +74,11 @@ def main(cfg: DictConfig) -> None:
     # Setup wandb, if enabled
     if dist.rank == 0 and cfg.training.log_to_wandb:
         entity, project = "wandb_entity", "wandb_project"
-        entity = entity
-        wandb_project = project
-        os.makedirs(os.path.join(cfg.training.rundir, "wandb"), exist_ok=True)
         wandb.init(
-            dir=os.path.join(cfg.training.rundir, "wandb"),
-            config=cfg,
+            dir=cfg.training.rundir,
+            config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
             name=os.path.basename(cfg.training.rundir),
-            project=wandb_project,
+            project=project,
             entity=entity,
             resume=wandb_resume,
             mode="online",

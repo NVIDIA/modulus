@@ -24,11 +24,10 @@ import psutil
 from modulus.models import Module
 from modulus.distributed import DistributedManager
 from modulus.metrics.diffusion import EDMLoss
-from modulus.utils.generative import deterministic_sampler
+from modulus.utils.generative import InfiniteSampler
+
 from modulus.launch.utils import save_checkpoint, load_checkpoint
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-
-from utils import misc
 from utils.nn import (
     regression_model_forward,
     diffusion_model_forward,
@@ -38,7 +37,7 @@ from utils.nn import (
 from utils.data_loader_hrrr_era5 import HrrrEra5Dataset, worker_init
 import matplotlib.pyplot as plt
 import wandb
-from utils.spectrum import compute_ps1d
+from utils.spectrum import ps1d_plots
 from torch.nn.utils import clip_grad_norm_
 
 
@@ -100,13 +99,13 @@ def training_loop(cfg):
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
 
-    sampler = misc.InfiniteSampler(
+    sampler = InfiniteSampler(
         dataset=dataset_train,
         rank=dist.rank,
         num_replicas=dist.world_size,
         seed=cfg.training.seed,
     )
-    valid_sampler = misc.InfiniteSampler(
+    valid_sampler = InfiniteSampler(
         dataset=dataset_valid,
         rank=dist.rank,
         num_replicas=dist.world_size,
@@ -387,7 +386,7 @@ def training_loop(cfg):
                     fields = ["u10m", "v10m", "t2m", "refc", "q1", "q5", "q10"]
 
                     # Compute spectral metrics
-                    figs, spec_ratios = compute_ps1d(
+                    figs, spec_ratios = ps1d_plots(
                         output_images[i], hrrr_1[i], fields, diffusion_channels
                     )
 
@@ -416,10 +415,12 @@ def training_loop(cfg):
                         )
                         plt.close(figs[specfig])
                         if log_to_wandb:
-                            wandb_logs.update({f"generated_{f_}": fig})
+                            # Save plots as wandb Images
+                            for figname, plot in figs.items():
+                                wandb_logs[figname] = wandb.Image(plot)
+                            wandb_logs.update({f"generated_{f_}": wandb.Image(fig)})
 
                 if log_to_wandb:
-                    wandb_logs.update(figs)
                     wandb_logs.update(spec_ratios)
                     wandb.log(wandb_logs, step=total_steps)
 
@@ -442,8 +443,8 @@ def training_loop(cfg):
             fields += [
                 f"gpumem {torch.cuda.max_memory_allocated(device) / 2**30:<6.2f}"
             ]
-            fields += [f"train_loss {avg_train_loss/train_steps}"]
-            fields += [f"val_loss {val_loss}"]
+            fields += [f"train_loss {avg_train_loss/train_steps:<6.3f}"]
+            fields += [f"val_loss {val_loss:<6.3f}"]
             logger0.info(" ".join(fields))
 
             # Reset counters
