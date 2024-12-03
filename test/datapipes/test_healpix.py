@@ -556,8 +556,15 @@ def test_TimeSeriesDataModule_get_constants(
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
+
     # dividing by 2 due to scaling
-    expected = np.transpose(zarr_ds.constants.values, axes=(1, 0, 2, 3)) / 2
+    expected = (
+        np.transpose(
+            zarr_ds.constants.sel(channel_c=list(constants.keys())).values,
+            axes=(1, 0, 2, 3),
+        )
+        / 2.0
+    )
 
     assert np.array_equal(
         timeseries_dm.get_constants(),
