@@ -17,8 +17,9 @@
 
 # General training config items
 outdir: 'rundir' # Root path under which to save training outputs
-run_id: '0' # Unique ID to use for this training run 
-rundir: ./${training.outdir}/${hydra:job.config_name}-${training.run_id} # Path where experiement outputs will be saved
+experiment_name: 'stormcast-training' # Name for the training experiment
+run_id: '0' # Unique ID to use for this training run
+rundir: ./${training.outdir}/${training.experiment_name}/${training.run_id} # Path where experiement outputs will be saved
 num_data_workers: 4 # Number of dataloader worker threads per proc
 log_to_wandb: False # Whether or not to log to Weights & Biases (requires wandb account)
 seed: -1 # Specify a random seed by setting this to an int > 0
@@ -31,7 +32,7 @@ checkpoint_freq: 5 # How often to save the checkpoints, measured in number of tr
 validation_freq: 5 # how often to record the validation loss, measured in number of training steps
 
 # Optimization hyperparameters
-batch_size: 1 # Total training batch size -- must be >= number of GPUs being used
+batch_size: 1 # Total training batch size -- must be >= (and divisble by) number of GPUs being used
 lr: 4E-4 # Initial learning rate
 lr_rampup_steps: 1000 # Number of training steps over which to perform linear LR warmup
 total_train_steps: 20 # Number of total training steps

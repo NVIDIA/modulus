@@ -61,7 +61,7 @@ class MetaData(ModelMetaData):
 class SongUNet(Module):
     """
     Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
-    optional self-attention,embeddings, and encoder-decoder components.
+    optional self-attention, embeddings, and encoder-decoder components.
 
     This model supports conditional and unconditional setups, as well as several
     options for various internal architectural choices such as encoder and decoder
@@ -95,7 +95,7 @@ class SongUNet(Module):
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
-        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++.
+        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++, 'zero' for none
         By default 'positional'.
     channel_mult_noise : int, optional
         Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
@@ -110,7 +110,7 @@ class SongUNet(Module):
     checkpoint_level : int, optional (default=0)
         How many layers should use gradient checkpointing, 0 is None
     additive_pos_embed: bool = False,
-        Set to true to add a learned position embedding after the first conv (used in StormCast)
+        Set to True to add a learned position embedding after the first conv (used in StormCast)
 
 
     Reference

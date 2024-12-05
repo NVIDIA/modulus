@@ -15,4 +15,4 @@
 # limitations under the License.
 
 run:
-  dir: ${training.outdir}/${hydra:job.config_name}-${training.run_id}
+  dir: ${training.outdir}/${training.experiment_name}/${training.run_id}

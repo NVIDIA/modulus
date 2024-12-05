@@ -198,7 +198,7 @@ def training_loop(cfg):
 
     # Train.
     logger0.info(
-        f"Training up to {total_train_steps} steps starting from {total_steps} steps..."
+        f"Training up to {total_train_steps} steps starting from step {total_steps}..."
     )
     stats_jsonl = None
     wandb_logs = {}

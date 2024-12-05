@@ -172,7 +172,7 @@ class StormCastUNet(Module):
 
     Parameters
     -----------
-    img_resolution : int
+    img_resolution : int or List[int]
         The resolution of the input/output image.
     img_channels : int
          Number of color channels.
@@ -209,8 +209,11 @@ class StormCastUNet(Module):
     ):
         super().__init__(meta=MetaData("StormCastUNet"))
 
-        self.img_shape_x = img_resolution[0]
-        self.img_shape_y = img_resolution[1]
+        if isinstance(img_resolution, int):
+            self.img_shape_x = self.img_shape_y = img_resolution
+        else:
+            self.img_shape_x = img_resolution[0]
+            self.img_shape_y = img_resolution[1]
 
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
@@ -262,19 +265,3 @@ class StormCastUNet(Module):
 
         D_x = F_x.to(torch.float32)
         return D_x
-
-    def round_sigma(self, sigma):
-        """
-        Convert a given sigma value(s) to a tensor representation.
-
-        Parameters
-        ----------
-        sigma : Union[float list, torch.Tensor]
-            The sigma value(s) to convert.
-
-        Returns
-        -------
-        torch.Tensor
-            The tensor representation of the provided sigma value(s).
-        """
-        return torch.as_tensor(sigma)

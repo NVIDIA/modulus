@@ -32,22 +32,19 @@ def get_preconditioned_architecture(
 
     Args:
         name: 'regression' or 'diffusion' to select between either model type
-        resolution (int): _description_
         target_channels: The number of channels in the target
         conditional_channels: The number of channels in the conditioning
-        label_dim: size of label data
-        sigma_min:  Defaults to 0.
-        sigma_max: Defaults to float("inf").
-        sigma_data:  Defaults to 0.5.
-
+        spatial_embedding: whether or not to use the additive spatial embedding in the U-Net
+        hrrr_resolution: resolution of HRRR data (U-Net inputs/outputs)
+        attn_resolutions: resolution of internal U-Net stages to use self-attention
     Returns:
-        EDMPrecond or RegressionWrapperV2: a wrapped torch module net(x+n, sigma, condition, class_labels) -> x
+        EDMPrecond or StormCastUNet: a wrapped torch module net(x+n, sigma, condition, class_labels) -> x
     """
     if name == "diffusion":
         return EDMPrecond(
             img_resolution=hrrr_resolution,
             img_channels=target_channels + conditional_channels,
-            out_channels=target_channels,
+            img_out_channels=target_channels,
             model_type="SongUNet",
             channel_mult=[1, 2, 2, 2, 2],
             attn_resolutions=attn_resolutions,
@@ -111,7 +108,7 @@ def regression_loss_fn(
         images: Target data, shape [batch_size, target_channels, w, h]
         condition: input to the model, shape=[batch_size, condition_channel, w, h]
         class_labels: unused (applied to match EDMLoss signature)
-        augment_pipe: unused (applied to match EDMLoss signature)
+        augment_pipe: optional data augmentation pipe
         return_model_outputs: If True, will return the generated outputs
     Returns:
         out: loss function with shape [batch_size, target_channels, w, h]

@@ -554,7 +554,7 @@ class EDMPrecond(Module):
         Number of color channels (for both input and output). If your model
         requires a different number of input or output chanels,
         override this by passing either of the optional
-        in_channels or out_channels args
+        img_in_channels or img_out_channels args
     label_dim : int
         Number of class labels, 0 = unconditional, by default 0.
     use_fp16 : bool
@@ -567,10 +567,11 @@ class EDMPrecond(Module):
         Expected standard deviation of the training data, by default 0.5.
     model_type :str
         Class name of the underlying model, by default "DhariwalUNet".
-    in_channels: int
+    img_in_channels: int
         Optional setting for when number of input channels =/= number of output
         channels. If set, will override img_channels for the input
-    out_channels: int
+        This is useful in the case of additional (conditional) channels
+    img_out_channels: int
         Optional setting for when number of input channels =/= number of output
         channels. If set, will override img_channels for the output
     **model_kwargs : dict
@@ -593,20 +594,20 @@ class EDMPrecond(Module):
         sigma_max=float("inf"),
         sigma_data=0.5,
         model_type="DhariwalUNet",
-        in_channels=None,
-        out_channels=None,
+        img_in_channels=None,
+        img_out_channels=None,
         **model_kwargs,
     ):
         super().__init__(meta=EDMPrecondMetaData)
         self.img_resolution = img_resolution
-        if in_channels is not None:
-            in_channels = in_channels
+        if img_in_channels is not None:
+            img_in_channels = img_in_channels
         else:
-            in_channels = img_channels
-        if out_channels is not None:
-            out_channels = out_channels
+            img_in_channels = img_channels
+        if img_out_channels is not None:
+            img_out_channels = img_out_channels
         else:
-            out_channels = img_channels
+            img_out_channels = img_channels
 
         self.label_dim = label_dim
         self.use_fp16 = use_fp16
@@ -617,8 +618,8 @@ class EDMPrecond(Module):
         model_class = getattr(network_module, model_type)
         self.model = model_class(
             img_resolution=img_resolution,
-            in_channels=in_channels,
-            out_channels=out_channels,
+            in_channels=img_in_channels,
+            out_channels=img_out_channels,
             label_dim=label_dim,
             **model_kwargs,
         )  # TODO needs better handling
