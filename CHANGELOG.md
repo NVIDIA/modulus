@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+- Remove the numpy dependency upper bound.
+
 ## [0.9.0] - 2024-12-04
 
 ### Added
