@@ -243,7 +243,7 @@ class DistributedManager(object):
             return "gloo"
 
     @staticmethod
-    def initialize_env():
+    def initialize_env(**kwargs):
         """Setup method using generic initialization"""
         rank = int(os.environ.get("RANK"))
         world_size = int(os.environ.get("WORLD_SIZE"))
@@ -268,10 +268,11 @@ class DistributedManager(object):
             addr=addr,
             port=port,
             backend=DistributedManager.get_available_backend(),
+            **kwargs,
         )
 
     @staticmethod
-    def initialize_open_mpi(addr, port):
+    def initialize_open_mpi(addr, port, **kwargs):
         """Setup method using OpenMPI initialization"""
         rank = int(os.environ.get("OMPI_COMM_WORLD_RANK"))
         world_size = int(os.environ.get("OMPI_COMM_WORLD_SIZE"))
@@ -285,10 +286,11 @@ class DistributedManager(object):
             port=port,
             backend=DistributedManager.get_available_backend(),
             method="openmpi",
+            **kwargs,
         )
 
     @staticmethod
-    def initialize_slurm(port):
+    def initialize_slurm(port, **kwargs):
         """Setup method using SLURM initialization"""
         rank = int(os.environ.get("SLURM_PROCID"))
         world_size = int(os.environ.get("SLURM_NPROCS"))
@@ -303,10 +305,11 @@ class DistributedManager(object):
             port=port,
             backend=DistributedManager.get_available_backend(),
             method="slurm",
+            **kwargs,
         )
 
     @staticmethod
-    def initialize():
+    def initialize(**kwargs):
         """
         Initialize distributed manager
 
@@ -324,6 +327,9 @@ class DistributedManager(object):
         listed above. Initialization method can also be explicitly controlled using the
         `MODULUS_DISTRIBUTED_INITIALIZATION_METHOD` environment variable and setting it
         to one of the options above.
+
+        kwargs are passed down to torch.distributed.init_process_group directly. This can be used
+        to set parameters like `timeout=timedelta(minutes=60)`
         """
         if DistributedManager.is_initialized():
             warn("Distributed manager is already intialized")
@@ -336,23 +342,23 @@ class DistributedManager(object):
         initialization_method = os.getenv("MODULUS_DISTRIBUTED_INITIALIZATION_METHOD")
         if initialization_method is None:
             try:
-                DistributedManager.initialize_env()
+                DistributedManager.initialize_env(**kwargs)
             except TypeError:
                 if "SLURM_PROCID" in os.environ:
-                    DistributedManager.initialize_slurm(port)
+                    DistributedManager.initialize_slurm(port, **kwargs)
                 elif "OMPI_COMM_WORLD_RANK" in os.environ:
-                    DistributedManager.initialize_open_mpi(addr, port)
+                    DistributedManager.initialize_open_mpi(addr, port, **kwargs)
                 else:
                     warn(
                         "Could not initialize using ENV, SLURM or OPENMPI methods. Assuming this is a single process job"
                     )
                     DistributedManager._shared_state["_is_initialized"] = True
         elif initialization_method == "ENV":
-            DistributedManager.initialize_env()
+            DistributedManager.initialize_env(**kwargs)
         elif initialization_method == "SLURM":
-            DistributedManager.initialize_slurm(port)
+            DistributedManager.initialize_slurm(port, **kwargs)
         elif initialization_method == "OPENMPI":
-            DistributedManager.initialize_open_mpi(addr, port)
+            DistributedManager.initialize_open_mpi(addr, port, **kwargs)
         else:
             raise RuntimeError(
                 "Unknown initialization method "
@@ -374,6 +380,7 @@ class DistributedManager(object):
         port="12355",
         backend="nccl",
         method="env",
+        **kwargs,
     ):
         """Set up PyTorch distributed process group and update manager attributes"""
         os.environ["MASTER_ADDR"] = addr
@@ -404,6 +411,7 @@ class DistributedManager(object):
                     rank=manager.rank,
                     world_size=manager.world_size,
                     device_id=manager.device,
+                    **kwargs,
                 )
             except TypeError:
                 # device_id only introduced in PyTorch 2.3
@@ -411,6 +419,7 @@ class DistributedManager(object):
                     backend,
                     rank=manager.rank,
                     world_size=manager.world_size,
+                    **kwargs,
                 )
 
         if torch.cuda.is_available():
