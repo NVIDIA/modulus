@@ -271,9 +271,9 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             np.transpose(x, axes=(0, 3, 1, 2, 4, 5)) for x in inputs_result
         ]
 
-        if self.constants is not None:
+        if "constants" in self.ds.data_vars:
             # Add the constants as [F, C, H, W]
-            inputs_result.append(self.constants)
+            inputs_result.append(self.get_constants())
 
         # append integrated couplings
         inputs_result.append(integrated_couplings)

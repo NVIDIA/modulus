@@ -215,7 +215,16 @@ class TimeSeriesDataset(Dataset, Datapipe):
         -------
         np.ndarray: The list of constants, None if there are no constants
         """
-        return self.constants
+        # extract from ds:
+        const = self.ds.constants.values
+        if self.constant_scaling:
+            const = (const - self.constant_scaling["mean"]) / self.constant_scaling[
+                "std"
+            ]
+        # transpose to match new format:
+        # [C, F, H, W] -> [F, C, H, W]
+        const = np.transpose(const, axes=(1, 0, 2, 3))
+        return const
 
     @staticmethod
     def _convert_time_step(dt):  # pylint: disable=invalid-name
@@ -469,9 +478,9 @@ class TimeSeriesDataset(Dataset, Datapipe):
             np.transpose(x, axes=(0, 3, 1, 2, 4, 5)) for x in inputs_result
         ]
 
-        if self.constants is not None:
+        if "constants" in self.ds.data_vars:
             # Add the constants as [F, C, H, W]
-            inputs_result.append(self.constants)
+            inputs_result.append(self.get_constants())
 
         logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
         torch.cuda.nvtx.range_pop()
