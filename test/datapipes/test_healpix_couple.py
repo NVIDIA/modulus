@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import torch as th
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf
 from pytest_utils import nfsdata_or_fail
@@ -142,6 +143,25 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
+    coupler.coupled_channel_indices = [0, 1]
+    coupled_fields_batch_size = 4
+    coupled_fields_timedim = 2
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupler.set_coupled_fields(coupled_fields)
+    assert list(coupler.preset_coupled_fields.shape) == expected_shape
+
     DistributedManager.cleanup()
 
 
@@ -199,6 +219,40 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     assert np.array_equal(expected, coupler.coupled_scaling["mean"])
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
+
+    averaging_window_max_indices = [
+        i // pd.Timedelta(data_time_step) for i in coupler.input_times
+    ]
+    di = averaging_window_max_indices[0]
+    averaging_slices = []
+    for j in range(coupler.coupled_integration_dim):
+        averaging_slices.append([])
+        for i, r in enumerate(averaging_window_max_indices):
+            averaging_slices[j].append(
+                slice(
+                    coupler.input_time_dim * j * di + i * di,
+                    coupler.input_time_dim * j * di + r,
+                )
+            )
+    coupler.averaging_slices = averaging_slices
+    coupler.coupled_channel_indices = [0, 1]
+    coupled_fields_batch_size = 4
+    coupled_fields_timedim = 4
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupler.set_coupled_fields(coupled_fields)
+    assert list(coupler.preset_coupled_fields.shape) == expected_shape
 
     DistributedManager.cleanup()
 
