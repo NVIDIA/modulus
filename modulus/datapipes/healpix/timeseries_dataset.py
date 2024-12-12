@@ -142,7 +142,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 )
             self._forecast_init_indices = np.array(
                 [
-                    int(np.where(self.ds["time"] == s)[0])
+                    int(np.where(self.ds["time"] == s)[0][0])
                     for s in self.forecast_init_times
                 ],
                 dtype="int",
