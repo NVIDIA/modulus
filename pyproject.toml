@@ -13,7 +13,7 @@ requires-python = ">=3.10"
 license = {text = "Apache 2.0"}
 dependencies = [
     "torch>=2.0.0",
-    "numpy>=1.22.4,<1.25",
+    "numpy>=1.22.4",
     "xarray>=2023.1.0",
     "zarr>=2.14.2",
     "fsspec>=2023.1.0",
