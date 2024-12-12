@@ -49,7 +49,6 @@ The several examples inside Modulus can be classified based on their domains as 
 |[Shallow Water Equations using Distributed GNNs](./cfd/swe_distributed_gnn/)|GraphCast|YES|
 |[Vortex Shedding with Temporal Attention](./cfd/vortex_shedding_mesh_reduced/)|MeshGraphNet|YES|
 
-
 ### Weather
 
 |Use case|Model|
@@ -63,13 +62,13 @@ The several examples inside Modulus can be classified based on their domains as 
 |[Medium-range and S2S global weather forecast using Pangu](./weather/pangu_weather/)|Pangu|
 |[Diagonistic (Precipitation) model using AFNO](./weather/diagnostic/)|AFNO|
 |[Unified Recipe for training several Global Weather Forecasting models](./weather/unified_recipe/)|AFNO, FCN-SFNO, GraphCast|
+|[Generative Correction Diffusion Model for Km-scale Atmospheric Downscaling](./generative/corrdiff/)|CorrDiff|
+|[StormCast: Generative Diffusion Model for Km-scale, Convection allowing Model Emulation](./generative/stormcast/)|CorrDiff|
 
 ### Generative
 
 |Use case|Model|
 | --- | --- |
-|[Generative Correction Diffusion Model for Km-scale Atmospheric Downscaling](./generative/corrdiff/)|CorrDiff|
-|[StormCast: Generative Diffusion Model for Km-scale, Convection allowing Model Emulation](./generative/stormcast/)|CorrDiff|
 |[Fluid Super-resolution*](./generative/diffusion/)|Diffusion|
 
 ### Healthcare
