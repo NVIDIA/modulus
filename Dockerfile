@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.06-py3
+ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.11-py3
 FROM ${BASE_CONTAINER} as builder
 
 ARG TARGETPLATFORM
@@ -88,10 +88,10 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown
         pip install --no-cache-dir --no-deps /modulus/deps/${DGL_ARM64_WHEEL}; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing DGL for: $TARGETPLATFORM" && \
-        pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; \
+        pip install --no-cache-dir --no-deps dgl -f https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html; \
     else \
         echo "No custom wheel or wheel on PyPi found. Installing DGL for: $TARGETPLATFORM from source" && \
-        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
+        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.4.0 && git submodule update --init --recursive && \
         DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
         cd python && \
         python setup.py install && \
