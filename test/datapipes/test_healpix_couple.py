@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import torch as th
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf
 from pytest_utils import nfsdata_or_fail
@@ -71,6 +72,8 @@ def scaling_dict():
         "z1000": {"mean": 952.1435546875, "std": 895.7516479492188},
         "z250": {"mean": 101186.28125, "std": 5551.77978515625},
         "z500": {"mean": 55625.9609375, "std": 2681.712890625},
+        "lsm": {"mean": 0, "std": 1},
+        "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
     }
     return DictConfig(scaling)
@@ -86,6 +89,8 @@ def scaling_double_dict():
         "z1000": {"mean": 0, "std": 2},
         "z250": {"mean": 0, "std": 2},
         "z500": {"mean": 0, "std": 2},
+        "lsm": {"mean": 0, "std": 2},
+        "z": {"mean": 0, "std": 2},
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
     }
     return DictConfig(scaling)
@@ -94,7 +99,7 @@ def scaling_double_dict():
 @nfsdata_or_fail
 def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     variables = ["z500", "z1000"]
-    input_times = ["0H"]
+    input_times = ["0h"]
     input_time_dim = 1
     output_time_dim = 1
     presteps = 0
@@ -116,7 +121,7 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     assert isinstance(coupler, ConstantCoupler)
 
     interval = 2
-    data_time_step = "3H"
+    data_time_step = "3h"
     coupler.compute_coupled_indices(interval, data_time_step)
     coupled_integration_dim = presteps + max(output_time_dim // input_time_dim, 1)
     expected = np.empty([batch_size, coupled_integration_dim, len(input_times)])
@@ -138,18 +143,37 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
+    coupler.coupled_channel_indices = [0, 1]
+    coupled_fields_batch_size = 4
+    coupled_fields_timedim = 2
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupler.set_coupled_fields(coupled_fields)
+    assert list(coupler.preset_coupled_fields.shape) == expected_shape
+
     DistributedManager.cleanup()
 
 
 @nfsdata_or_fail
 def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     variables = ["z500", "z1000"]
-    input_times = ["6H", "12H"]
+    input_times = ["6h", "12h"]
     input_time_dim = 2
     output_time_dim = 2
     presteps = 0
     batch_size = 2
-    averaging_window = "6H"
+    averaging_window = "6h"
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -167,7 +191,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     assert isinstance(coupler, TrailingAverageCoupler)
 
     interval = 2
-    data_time_step = "3H"
+    data_time_step = "3h"
     coupler.compute_coupled_indices(interval, data_time_step)
     coupled_integration_dim = presteps + max(output_time_dim // input_time_dim, 1)
     expected = np.empty([batch_size, coupled_integration_dim, len(input_times)])
@@ -195,6 +219,40 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     assert np.array_equal(expected, coupler.coupled_scaling["mean"])
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
+
+    averaging_window_max_indices = [
+        i // pd.Timedelta(data_time_step) for i in coupler.input_times
+    ]
+    di = averaging_window_max_indices[0]
+    averaging_slices = []
+    for j in range(coupler.coupled_integration_dim):
+        averaging_slices.append([])
+        for i, r in enumerate(averaging_window_max_indices):
+            averaging_slices[j].append(
+                slice(
+                    coupler.input_time_dim * j * di + i * di,
+                    coupler.input_time_dim * j * di + r,
+                )
+            )
+    coupler.averaging_slices = averaging_slices
+    coupler.coupled_channel_indices = [0, 1]
+    coupled_fields_batch_size = 4
+    coupled_fields_timedim = 4
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupler.set_coupled_fields(coupled_fields)
+    assert list(coupler.preset_coupled_fields.shape) == expected_shape
 
     DistributedManager.cleanup()
 
@@ -239,7 +297,7 @@ def test_CoupledTimeSeriesDataset_initialization(
             "bogosity": {"mean": 0, "std": 42},
         }
     )
-    with pytest.raises(KeyError, match=("one or more of the input data variables")):
+    with pytest.raises(KeyError, match=("Input channels ")):
         timeseries_ds = CoupledTimeSeriesDataset(
             dataset=zarr_ds,
             input_variables=variables,
@@ -363,7 +421,7 @@ def test_CoupledTimeSeriesDataset_get_constants(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -405,7 +463,7 @@ def test_CoupledTimeSeriesDataset_len(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -431,7 +489,7 @@ def test_CoupledTimeSeriesDataset_len(
             "params": {
                 "batch_size": 2,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -486,7 +544,7 @@ def test_CoupledTimeSeriesDataset_get(
             "params": {
                 "batch_size": batch_size,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -624,7 +682,7 @@ def test_CoupledTimeSeriesDataModule_initialization(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -718,7 +776,7 @@ def test_CoupledTimeSeriesDataModule_get_constants(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -759,7 +817,15 @@ def test_CoupledTimeSeriesDataModule_get_constants(
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
-    expected = np.transpose(zarr_ds.constants.values, axes=(1, 0, 2, 3))
+
+    # divide by 2 due to scaling
+    expected = (
+        np.transpose(
+            zarr_ds.constants.sel(channel_c=list(constants.keys())).values,
+            axes=(1, 0, 2, 3),
+        )
+        / 2.0
+    )
 
     assert np.array_equal(
         timeseries_dm.get_constants(),
@@ -807,7 +873,7 @@ def test_CoupledTimeSeriesDataModule_get_dataloaders(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -870,7 +936,7 @@ def test_CoupledTimeSeriesDataModule_get_coupled_vars(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["0H"],
+                "input_times": ["0h"],
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,
@@ -905,8 +971,8 @@ def test_CoupledTimeSeriesDataModule_get_coupled_vars(
             "params": {
                 "batch_size": 1,
                 "variables": ["z250"],
-                "input_times": ["6H"],
-                "averaging_window": "6H",
+                "input_times": ["6h"],
+                "averaging_window": "6h",
                 "input_time_dim": 1,
                 "output_time_dim": 1,
                 "presteps": 0,

@@ -142,7 +142,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 )
             self._forecast_init_indices = np.array(
                 [
-                    int(np.where(self.ds["time"] == s)[0])
+                    int(np.where(self.ds["time"] == s)[0][0])
                     for s in self.forecast_init_times
                 ],
                 dtype="int",
@@ -189,6 +189,8 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         self.input_scaling = None
         self.target_scaling = None
+        self.constant_scaling = None
+        self.constants = None
         if self.scaling:
             self._get_scaling_da()
 
@@ -201,11 +203,13 @@ class TimeSeriesDataset(Dataset, Datapipe):
         """
         # extract from ds:
         const = self.ds.constants.values
-
+        if self.constant_scaling:
+            const = (const - self.constant_scaling["mean"]) / self.constant_scaling[
+                "std"
+            ]
         # transpose to match new format:
         # [C, F, H, W] -> [F, C, H, W]
         const = np.transpose(const, axes=(1, 0, 2, 3))
-
         return const
 
     @staticmethod
@@ -232,9 +236,9 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         # REMARK: we remove the xarray overhead from these
         try:
-            self.input_scaling = scaling_da.sel(index=self.ds.channel_in.values).rename(
-                {"index": "channel_in"}
-            )
+            self.input_scaling = scaling_da.sel(
+                index=self.ds.channel_out.values
+            ).rename({"index": "channel_in"})
             self.input_scaling = {
                 "mean": np.expand_dims(
                     self.input_scaling["mean"].to_numpy(), (0, 2, 3, 4)
@@ -244,9 +248,13 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 ),
             }
         except (ValueError, KeyError):
+            missing = [
+                m
+                for m in self.ds.channel_in.values
+                if m not in list(self.scaling.keys())
+            ]
             raise KeyError(
-                f"one or more of the input data variables f{list(self.ds.channel_in)} not found in the "
-                f"scaling config dict data.scaling ({list(self.scaling.keys())})"
+                f"Input channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
             )
         try:
             self.target_scaling = scaling_da.sel(
@@ -261,9 +269,37 @@ class TimeSeriesDataset(Dataset, Datapipe):
                 ),
             }
         except (ValueError, KeyError):
+            missing = [
+                m
+                for m in self.ds.channel_out.values
+                if m not in list(self.scaling.keys())
+            ]
             raise KeyError(
-                f"one or more of the target data variables f{list(self.ds.channel_out)} not found in the "
-                f"scaling config dict data.scaling ({list(self.scaling.keys())})"
+                f"Target channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
+            )
+
+        try:
+            # not all datasets will have constants
+            if "constants" in self.ds.data_vars:
+                self.constant_scaling = scaling_da.sel(
+                    index=self.ds.channel_c.values
+                ).rename({"index": "channel_out"})
+                self.constant_scaling = {
+                    "mean": np.expand_dims(
+                        self.constant_scaling["mean"].to_numpy(), (1, 2, 3)
+                    ),
+                    "std": np.expand_dims(
+                        self.constant_scaling["std"].to_numpy(), (1, 2, 3)
+                    ),
+                }
+        except (ValueError, KeyError):
+            missing = [
+                m
+                for m in self.ds.channel_c.values
+                if m not in list(self.scaling.keys())
+            ]
+            raise KeyError(
+                f"Constant channels {missing} not found in the scaling config dict data.scaling ({list(self.scaling.keys())})"
             )
 
     def __len__(self):
@@ -303,8 +339,8 @@ class TimeSeriesDataset(Dataset, Datapipe):
             if self.forecast_mode
             else (item + 1) * self.batch_size + self._window_length
         )
-        if not self.drop_last and max_index > self.ds.dims["time"]:
-            batch_size = self.batch_size - (max_index - self.ds.dims["time"])
+        if not self.drop_last and max_index > self.ds.sizes["time"]:
+            batch_size = self.batch_size - (max_index - self.ds.sizes["time"])
         else:
             batch_size = self.batch_size
         return (start_index, max_index), batch_size
@@ -430,7 +466,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         if "constants" in self.ds.data_vars:
             # Add the constants as [F, C, H, W]
-            inputs_result.append(np.swapaxes(self.ds.constants.values, 0, 1))
+            inputs_result.append(self.get_constants())
 
         logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
         torch.cuda.nvtx.range_pop()
