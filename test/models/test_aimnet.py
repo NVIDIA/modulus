@@ -102,12 +102,13 @@ def create_model():
                 key_in="charges",
                 key_out="energy",
             ),
-            # TODO(akamenev): enable, once DFTD3 is supoprted.
+            # TODO(akamenev): need to verify the source and license of dftd3_data.pt checkpoint.
             # "dftd3": modules.DFTD3(
-            #         s8=0.3908,
-            #         a1=0.5660,
-            #         a2=3.1280,
-            # )
+            #     s8=0.3908,
+            #     a1=0.5660,
+            #     a2=3.1280,
+            #     chk_path=Path(__file__).parent / "data/dftd3_data.pt",
+            # ),
         },
     )
     return model
@@ -120,6 +121,5 @@ def test_aimnet2_forward():
     in_data = get_test_data()
     x0 = model(in_data)
 
-    # TODO(akamenev): update once DFTD3 is supoprted.
-    # assert_close(x0["energy"].item(), -18526.6806)
+    # TODO(akamenev): update once DFTD3 is enabled.
     assert_close(x0["energy"].item(), -5.09827, atol=1e-5, rtol=1e-4)

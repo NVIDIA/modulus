@@ -71,7 +71,33 @@ class AIMNet2(AIMNet2Base):
 
     https://chemrxiv.org/engage/chemrxiv/article-details/6525b39e8bab5d2055123f75
 
-    Note
+    Parameters
+    ----------
+    aev: Dict
+        Atomic Environment Vector (AEV) parameters.
+    nfeature: int
+        Number of features.
+    d2features: bool
+        Whether to use 2D features.
+    ncomb_v: int
+        Number of combinations in vector quantities.
+    hidden: Tuple[List[int]]
+        Hidden layers for the network.
+    aim_size: int
+        Size of the output.
+    outputs: Union[List[nn.Module], Dict[str, nn.Module]]
+        Output modules.
+    num_charge_channels: int, optional
+        Number of charge channels (1 for closed-shell, 2 for open-shell). Defaults to 1.
+
+    Raises
+    ------
+    ValueError
+        If num_charge_channels is not 1 or 2.
+    TypeError
+        If outputs is not a list or a dict.
+
+    Notes
     ----
     Equivalent to the original implementation from:
     https://github.com/isayevlab/aimnetcentral

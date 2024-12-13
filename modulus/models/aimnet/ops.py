@@ -37,7 +37,7 @@ from typing import Dict, Optional, Tuple
 import torch
 from torch import Tensor
 
-from . import nbops
+from modulus.models.aimnet import nbops
 
 
 def lazy_calc_dij_lr(data: Dict[str, Tensor]) -> Dict[str, Tensor]:

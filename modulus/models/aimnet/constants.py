@@ -31,7 +31,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import os
+from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -495,13 +496,13 @@ def get_r4r2(device="cpu"):
     return r4r2.to(device)
 
 
-def get_dftd3_param(device="cpu"):
+def get_dftd3_param(chk_path: Optional[str | Path] = None, device: str = "cpu"):
     """Collection of parameters for DFT-D3 model"""
-    dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "dftd3_data.pt")
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"dftd3_data.pt not found in {dirname}.")
-    param = torch.load(filename, map_location=device, weights_only=True)
+    if chk_path is None:
+        chk_path = Path(__file__).parent / "dftd3_data.pt"
+    if not chk_path.exists():
+        raise FileNotFoundError(f"File {chk_path} not found.")
+    param = torch.load(chk_path, map_location=device, weights_only=True)
     assert isinstance(param, dict)
     assert "c6ab" in param
     assert "r4r2" in param

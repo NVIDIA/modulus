@@ -37,8 +37,7 @@ import torch
 from torch import Tensor
 
 from modulus.models import Module
-
-from . import nbops
+from modulus.models.aimnet import nbops
 
 
 class AIMNet2Base(Module):

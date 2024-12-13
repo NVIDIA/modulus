@@ -31,6 +31,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from pathlib import Path
 from typing import Dict, Optional
 
 import torch
@@ -228,7 +229,13 @@ class DFTD3(nn.Module):
     """
 
     def __init__(
-        self, s8: float, a1: float, a2: float, s6: float = 1.0, key_out="energy"
+        self,
+        s8: float,
+        a1: float,
+        a2: float,
+        s6: float = 1.0,
+        key_out: str = "energy",
+        chk_path: Optional[str | Path] = None,
     ):
         super().__init__()
         self.key_out = key_out
@@ -247,7 +254,7 @@ class DFTD3(nn.Module):
         self.register_buffer("r4r2", torch.zeros(95))
         self.register_buffer("rcov", torch.zeros(95))
         self.register_buffer("cnmax", torch.zeros(95))
-        sd = constants.get_dftd3_param()
+        sd = constants.get_dftd3_param(chk_path)
         self.load_state_dict(sd)
 
     def _calc_c6ij(self, data: Dict[str, Tensor]) -> Tensor:
