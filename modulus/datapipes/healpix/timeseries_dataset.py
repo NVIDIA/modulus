@@ -194,20 +194,6 @@ class TimeSeriesDataset(Dataset, Datapipe):
         if self.scaling:
             self._get_scaling_da()
 
-        # setup constants
-        if "constants" in self.ds.data_vars:
-            # extract from ds:
-            const = self.ds.constants.values
-
-            if self.constant_scaling:
-                const = (const - self.constant_scaling["mean"]) / self.constant_scaling[
-                    "std"
-                ]
-
-            # transpose to match new format:
-            # [C, F, H, W] -> [F, C, H, W]
-            self.constants = np.transpose(const, axes=(1, 0, 2, 3))
-
     def get_constants(self):
         """Returns the constants used in this dataset
 
