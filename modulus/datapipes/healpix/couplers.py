@@ -180,7 +180,7 @@ class ConstantCoupler:
         )
         for i in range(len(self.preset_coupled_fields)):
             self.preset_coupled_fields[i, :, :, :, :, :] = coupled_fields[
-                0, 0, -1, :, :, :
+                0, -1, :, :, :, :
             ]
         # flag for construct integrated coupling method to use this array
         self.coupled_mode = True
