@@ -495,9 +495,7 @@ class DoubleConvNeXtBlock(th.nn.Module):
 
 class Multi_SymmetricConvNeXtBlock(th.nn.Module):
     """
-    Support "n_layers" in SymmetricConvNeXtBlock.
-    Create a multi-layer SymmetricConvNeXtBlock with 'n_layers' specified in the config files
-    Introduce a new class to prevent conflicts with existing trained models.
+    Class for creating multi-block SymmetricConvNeXtBlock. Defaults to all SymmetricConvNeXtBlocks having same parameters
     """
     def __init__(
             self,
@@ -508,17 +506,23 @@ class Multi_SymmetricConvNeXtBlock(th.nn.Module):
             kernel_size: int = 3,
             dilation: int = 1,
             upscale_factor: int = 4,
-            n_layers: int = 1,
+            n_conv_blocks: int = 1,
             activation: th.nn.Module = None,
             enable_nhwc: bool = False,
             enable_healpixpad: bool = False
             ):
+        """
+        Parameters
+        ----------
+        n_conv_blocks: int, optional
+            The number of SymmetricConvNeXt Blocks
+        """
         super().__init__()
     
         # Create a ModuleList to store complete blocks
         self.blocks = th.nn.ModuleList()
         
-        for i in range(n_layers):
+        for i in range(n_conv_blocks):
             curr_in = in_channels if i == 0 else out_channels
             
             # Create a single block as a separate Module
