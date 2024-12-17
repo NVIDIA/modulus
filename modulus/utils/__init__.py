@@ -18,3 +18,7 @@ from .capture import (
     StaticCaptureEvaluateNoGrad,
     StaticCaptureTraining,
 )
+
+from .profiler import (
+    ProfilingConfig
+)
