@@ -1,0 +1,28 @@
+{
+  "dataset_dir": "data",
+  "download": true,
+  "image_size": 512,
+  "batch_size": 2,
+  "num_epochs": 1,
+  "grad_accumulation": 1,
+  "seed": 42,
+
+  "ema_beta": 0.9999,
+  "ema_power": 0.666666,
+  "update_ema_every": 10,
+
+  "learning_rate": 1e-5,
+  "adam_betas": [0.9, 0.99],
+
+  "gamma": 0.1,
+  "step_size": 50,
+
+  "sample": true,
+  "sample_size": 4,
+  "sample_timesteps": 1000,
+  "model": "",
+
+  "save_every": 2,
+  "num_workers": 6,
+  "experiment_name": ""
+}
