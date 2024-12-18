@@ -105,17 +105,18 @@ class DistributedManager(object):
             obj._find_unused_parameters = False
         if not hasattr(obj, "_initialization_method"):
             obj._initialization_method = "None"
-        if not hasattr(obj, "_groups"):
-            obj._groups = {}
-        if not hasattr(obj, "_group_ranks"):
-            obj._group_ranks = {}
-        if not hasattr(obj, "_group_names"):
-            obj._group_names = {}
+        # if not hasattr(obj, "_groups"):
+        #     obj._groups = {}
+        # if not hasattr(obj, "_group_ranks"):
+        #     obj._group_ranks = {}
+        # if not hasattr(obj, "_group_names"):
+        #     obj._group_names = {}
         if not hasattr(obj, "_is_initialized"):
             obj._is_initialized = False
         if not hasattr(obj, "_global_mesh"):
             obj._global_mesh = None # Lazy initialized right when it's first needed
-
+        if not hasattr(obj, "_mesh_dims"):
+            obj._mesh_dims = {}
 
         return obj
 
@@ -173,7 +174,7 @@ class DistributedManager(object):
         return self._global_mesh
 
     @property
-    def group_rank(self,group_name):
+    def mesh_rank(self,mesh, dim=0):
         """
         Return the rank within a group 
 
@@ -182,6 +183,7 @@ class DistributedManager(object):
         group_name : _type_
             _description_
         """
+        
 
     def group(self, name=None):
         """
@@ -464,6 +466,11 @@ class DistributedManager(object):
             mesh_shape,
             mesh_dim_names=mesh_dim_names,
         )
+        
+        # Finally, upon success, cache the mesh dimensions:
+        self._mesh_dims = {
+            key : val for key, val in zip(mesh_dim_names, mesh_shape)
+        }
 
     @staticmethod
     def setup(
