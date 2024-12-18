@@ -103,6 +103,12 @@ class Ocardo(torch.utils.data.Dataset):
                 # i.e.
                 # /home/DL_engine/input_data/1/
                 # /home/DL_engine/input_data/2/
+                  Under each data folder:
+                    i.e.
+                    - /home/DL_engine/input_data/1/cad{tag_id}.csv
+                    - /home/DL_engine/input_data/1/scan_res{tag_id}.csv
+                # for complete description of sample data format, refer to README.md
+                # each part shape scan/ cad: i.e. torch.Size([12775, 3])
         :param num_points:
         :param partition:
         :param random_sample:
@@ -115,7 +121,7 @@ class Ocardo(torch.utils.data.Dataset):
         self.random_sample= random_sample
         # Read each row as the input part data ID
         lists = [line.rstrip() for line in open(os.path.join(self.data_path, 'input_data.txt'))]
-        print("read lists: ", lists)
+        print("read data folder name lists: ", lists)
         
         self.items = []
         # Initialize the tranform function to: Converts mesh faces [3, num_faces] to edge indices [2, num_edges] (functional name: face_to_edge).
@@ -125,58 +131,68 @@ class Ocardo(torch.utils.data.Dataset):
             # process for each data build in the input_data file
             # read the build id
             tag = lists[i].split('/')[-2]
-            print("tag: ", tag)
-            print("start loading with np: ", f"{self.data_path}/{lists[i]}cad{tag}.txt")
-
             # Read each row from the cad_<part_id>.txt, store as torch.FloatTensor the point coordinates
-            # cad = torch.FloatTensor(np.loadtxt(lists[i]+'cad%s.txt'%(tag), delimiter='\t'))[:,:3]
-            # cad = torch.FloatTensor(np.loadtxt(f"{self.data_path}/{lists[i]}cad{tag}.csv", delimiter='\t'))[:,:3]
-            cad = torch.FloatTensor(pd.read_csv(f"{self.data_path}/{lists[i]}cad{tag}.csv", sep=' ').values) #[:,:3]
-            print("loaded cad", cad.shape)
+            # cad = torch.FloatTensor(np.loadtxt(f"{self.data_path}/{lists[i]}cad{tag}.txt", delimiter='\t'))[:,:3] #input_data_bar_sample
+            print(f"{self.data_path}/{lists[i]}scan_res{tag}.csv")
+            cad = torch.FloatTensor(pd.read_csv(f"{self.data_path}/{lists[i]}cad{tag}.csv", sep=' ').values)    #molded_fiber
 
             # Read each row from the scan_res<part_id>.csv, store as torch.FloatTensor the point coordinates
-            # scan = torch.FloatTensor(np.loadtxt(lists[i]+'scan_res%s.csv'%(tag), delimiter=','))[:,:3]
-            scan = torch.FloatTensor(pd.read_csv(f"{self.data_path}/{lists[i]}scan_res{tag}.csv", sep=' ').values)
+            # scan = torch.FloatTensor(np.loadtxt(f"{self.data_path}/{lists[i]}scan_res{tag}.csv", delimiter=','))[:,:3]    #input_data_bar_sample
+            scan = torch.FloatTensor(pd.read_csv(f"{self.data_path}/{lists[i]}scan_res{tag}.csv", sep=' ').values)  #molded_fiber
+
             self.items.append((i+1, cad, scan))
             print("loaded scan", scan.shape)
 
             assert cad.shape == scan.shape, print("part CAD and Scan files not match ")
 
-        # print("finished preprocessing data: ", self.items)
-
     def __len__(self):
         return len(self.items)
 
     def __getitem__(self, idx):
+        """
+        For each item that contains the dataset
+            - part_id (i.e. 1)
+            - mesh(the original cad of size: pt_cnt, 3),
+            - scan(the scan of the printed part of size: pt_cnt, 3)
+            i.e. torch.Size([650, 3]) torch.Size([650, 3])
+
+
+        """
         # todo: remove the hard-coded part name
         part_name = 'ocardo'
         
         part_id, mesh, scan = self.items[idx]
-        print("__getitem__ part_id, mesh, scan: ", part_id, mesh.shape, scan.shape)
+
+        # todo: reason to compute mean/ what means for mean < 0?
+        # torch.mean(mesh):  tensor(-0.8895)
+        # torch.mean(mesh):  tensor(4.4421)
         m = torch.mean(mesh)
         
         # find correspondence between CAD - scan points 
         if self.random_sample:
-            sample = torch.randint(low=0, high=min(len(mesh),len(scan))-1,size=(self.num_points,))
-            # find correspondence between CAD - scan points 
+            # Get random sampling index from 0 to self.num_points
+            # i.e. sample id:  tensor([ 1653, 27927,  3942,  ..., 24202,  1684, 23686])
+            # resulting pts1, pts2 size: [self.num_points, 3], i.e. torch.Size([190000, 3])
+            # todo: if meaningful with the sample >> the pcloud original scanning/ sampling density -> los of duplicated samples ?
+            sample = torch.randint(low=0, high=min(len(mesh), len(scan)) - 1, size=(self.num_points,))
+
+            # find correspondence between CAD - scan points
             pts1 = mesh[sample]
             pts2 = scan[sample]
-            # print("check train data format, pst1/pst2: ", pts1.shape, pts2.shape)
-            # exit()
-        #     check train data format, pst1/pst2:  torch.Size([190000, 3]) torch.Size([190000, 3])
         else:
             pts1 = mesh
             pts2 = scan
         
         with torch.no_grad():
-            edge_index = torch_geometric.nn.knn_graph(torch.FloatTensor(pts1),10)
+            # taking 10 nodes for nearest neighbors, this lead to the edge numbers to be ~ 10 x sample number,
+            # i.e. sample#=190k, neighbor#=10, edge_index.shape=[2, ~1900k]
+            # i.e.torch.Size([2, 2082861]) / torch.Size([2, 1911460])
+            # knn compueted edge index:  tensor([[ 45007, 130923,  79760,  ..., 147219, 146399, 132629],
+            #                                 [     0,      0,      0,  ..., 189999, 189999, 189999]])
+            edge_index = torch_geometric.nn.knn_graph(torch.FloatTensor(pts1), 10)
+
         s = pts1.std(0)
 
-        print("get_item printed sample size, pst1/2: ", pts1.shape, pts2.shape)
-
-        # print("check points/ edge_index: ", pts1.shape, edge_index.shape)
-        # print("sample edge index: ", edge_index[:,:10])
-        # check points/ edge_index:  torch.Size([50000, 3]) torch.Size([2, 500000])
 
         out = torch_geometric.data.Data(x = pts1, y = pts2,
                                         edge_index=edge_index,
@@ -186,7 +202,7 @@ class Ocardo(torch.utils.data.Dataset):
         return out
 
 
-if __name__=='__main__':
-    dataset = Ocardo()
-    print(dataset[0])
-    
+# if __name__=='__main__':
+#     dataset = Ocardo()
+#     print(dataset[0])
+#
