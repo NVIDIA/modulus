@@ -26,7 +26,7 @@ import torch
 
 import modulus
 from modulus.distributed import DistributedManager
-from modulus.utils import ProfileConfig
+from modulus.utils.profiling import Profiler
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
@@ -69,7 +69,7 @@ class _StaticCapture(object):
         amp_type: Union[float16, bfloat16] = torch.float16,
         gradient_clip_norm: Optional[float] = None,
         label: Optional[str] = None,
-        prof_config: Optional[ProfilingConfig] = None
+        prof_config: Optional[Profiler] = None
     ):
         self.logger = logger if logger else self.logger
         # Checkpoint label (used for gradscaler)

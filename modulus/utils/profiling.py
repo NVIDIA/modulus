@@ -14,12 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import atexit
 
 from dataclasses import dataclass
+from typing import Tuple, Callable
 
-from contextlib import nullcontext, ContextDecorator
+try:
+    import line_profiler
+    import kernprof
+    lp_available = True
+except:
+    lp_available = False
 
-from torch.profiler import ProfilerActivity
+import warnings
+
+from contextlib import nullcontext, ContextDecorator, ExitStack
+
+from torch.profiler import   ProfilerActivity, record_function, profile
+
+from modulus.distributed import DistributedManager
 
 class Profiler(ContextDecorator):
     """
@@ -41,26 +55,55 @@ class Profiler(ContextDecorator):
     run for profiling and then disable the profiler entirely. (pass `enabled=False` in the constructor, which is default.)
     """
     def __init__(self,
-        enabled: bool = False,
+        enabled: bool = True,
         torch_profile: bool = False,
-        torch_output: str = "./profiler_output/",
-        torch_profiler_activies: Tuple[int] = [ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        output_dir: str = "./profiler_output/",
+        torch_profiler_activities: Tuple[int] = [ProfilerActivity.CPU],
+        record_shapes : bool = True,
+        profile_memory : bool = True,
         include_nvtx: bool = False,
+        line_profile: bool = True,
     ):
         
-        if not enabled:
+        self._enabled = enabled
+        if not self.enabled:
             # Do nothing ... 
             return
         
-        # Configure line_profiler here:
-        
-        # Configure pytorch profiler here:
-        
+        self.output_location = output_dir
         # If the model is distributed, control the location of the output:
         if DistributedManager().distributed:
-            self.output_location.append(f"/rank_{DistributedManager().rank}")
+            self.output_location += f"/rank_{DistributedManager().rank}"
+
+        # Configure line_profiler here:
+        if lp_available:
+            print("Hooray")
+        elif line_profile:
+            if DistributedManager().rank == 0:
+                warnings.warn("Line profiler failed to import - is it installed?  Disabling")
+            line_profile = False
+        
+        if line_profile:
+            import line_profiler
+            self.line_profiler = line_profiler.LineProfiler()
+        
+        # Configure pytorch profiler here:
+        if torch_profile:
+            self.do_torch_profiling = True
+            self.torch_prof = profile(activities = torch_profiler_activities, profile_memory=profile_memory, record_shapes=record_shapes)
+        else:
+            self.do_torch_profiling = False
+            self.torch_prof = nullcontext()
+            
 
         # Configure nvtx context tagging here:
+
+        self.exit_stack = ExitStack()
+
+        # Prevent double-finalization:
+        self.finalized = False
+
+
 
     @property
     def enabled(self):
@@ -69,21 +112,76 @@ class Profiler(ContextDecorator):
         """
         return self._enabled
 
-    def __enter__():
+    def __enter__(self):
         """
         Enter profiling contexts 
         """
-        
+        if not self.enabled: return
         # Activate pytorch profiling context
         # Set nvtx context based on name
         # Activate the line_profiler for use as a context
         
         # Capture each context in an exit stack that we'll back out of in the exit.
         
-        pass
+        self.exit_stack.enter_context(self.line_profiler.runctx())
+        self.exit_stack.enter_context(self.torch_prof)
+        
+        
+        return self
     
-    def __exit__():
-        pass
+    def __exit__(self, *exc):
+        """
+        Clear out the exit stack
+        """
+        if not self.enabled: return
+        
+        self.exit_stack.close()
+        
+    # register the finalize function to dump output incase of ctrl+C, etc., killing the profiler early:
+    def finalize(self, rank0_only = True):
+        """
+        Write profiling results to output
+        """
+        
+        if not self.enabled: return
+        
+        # Prevent double finalization:
+        if self.finalized: return
+        
+        # Make sure the output directory exists:
+        os.makedirs(self.output_location, exist_ok=True)
+        
+        if self.do_torch_profiling:
+            torch_outut_dir = self.output_location + "/torch/"
+            os.makedirs(torch_outut_dir, exist_ok=True)
+            
+            print(self.torch_prof.key_averages())
+            
+            # Write out torch profiling results:
+            print("Storing cpu times in output:")
+            with open(torch_outut_dir + "cpu_time.txt", 'w') as cpu_times:
+                times = self.torch_prof.key_averages().table()
+                cpu_times.write(times)
+            print("Done writing CPU Times")
+
+            # print("Storing gpu times in output:")
+            # with open(torch_outut_dir + "gpu_time.txt", 'w') as gpu_times:
+            #     times = self.torch_prof.key_averages().table(sort_by="gpu_times_total", row_limit=25)
+            #     print(times)
+            #     gpu_times.write(times)
+            # print("Done writing gpu Times")
+
+            # Store the trace
+            
+
+        self.finalized = True
+        
+    def __del__(self,):
+        """
+        Clean up and ensure results are output, just in case:
+        """
+        
+        if not self.finalized: self.finalize()
 
     def __call__(self, fn: Callable) -> Callable:
         """

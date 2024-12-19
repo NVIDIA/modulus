@@ -19,6 +19,6 @@ from .capture import (
     StaticCaptureTraining,
 )
 
-from .profiler import (
-    ProfilingConfig
+from .profiling import (
+    Profiler
 )
