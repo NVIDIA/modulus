@@ -29,6 +29,7 @@ def _bvh_query_distance(
     sdf: wp.array(dtype=wp.float32),
     sdf_hit_point: wp.array(dtype=wp.vec3f),
     sdf_hit_point_id: wp.array(dtype=wp.int32),
+    use_sign_winding_number: bool = False,
 ):
 
     """
@@ -45,13 +46,17 @@ def _bvh_query_distance(
         sdf (wp.array): An array to store the computed signed distances.
         sdf_hit_point (wp.array): An array to store the computed hit points.
         sdf_hit_point_id (wp.array): An array to store the computed hit point ids.
+        use_sign_winding_number (bool): Flag to use sign_winding_number method for SDF.
 
     Returns:
         None
     """
     tid = wp.tid()
 
-    res = wp.mesh_query_point_sign_normal(mesh, points[tid], max_dist)
+    if use_sign_winding_number:
+        res = wp.mesh_query_point_sign_winding_number(mesh, points[tid], max_dist)
+    else:
+        res = wp.mesh_query_point_sign_normal(mesh, points[tid], max_dist)
 
     mesh_ = wp.mesh_get(mesh)
 
@@ -73,6 +78,7 @@ def signed_distance_field(
     max_dist: float = 1e8,
     include_hit_points: bool = False,
     include_hit_points_id: bool = False,
+    use_sign_winding_number: bool = False,
 ) -> wp.array:
     """
     Computes the signed distance field (SDF) for a given mesh and input points.
@@ -116,7 +122,15 @@ def signed_distance_field(
     wp.launch(
         kernel=_bvh_query_distance,
         dim=len(sdf_points),
-        inputs=[mesh.id, sdf_points, max_dist, sdf, sdf_hit_point, sdf_hit_point_id],
+        inputs=[
+            mesh.id,
+            sdf_points,
+            max_dist,
+            sdf,
+            sdf_hit_point,
+            sdf_hit_point_id,
+            use_sign_winding_number,
+        ],
     )
 
     if include_hit_points and include_hit_points_id:
