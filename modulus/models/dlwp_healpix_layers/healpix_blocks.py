@@ -506,7 +506,7 @@ class Multi_SymmetricConvNeXtBlock(th.nn.Module):
             kernel_size: int = 3,
             dilation: int = 1,
             upscale_factor: int = 4,
-            n_conv_blocks: int = 1,
+            n_layers: int = 1,
             activation: th.nn.Module = None,
             enable_nhwc: bool = False,
             enable_healpixpad: bool = False
@@ -514,7 +514,7 @@ class Multi_SymmetricConvNeXtBlock(th.nn.Module):
         """
         Parameters
         ----------
-        n_conv_blocks: int, optional
+        n_layers: int, optional
             The number of SymmetricConvNeXt Blocks
         """
         super().__init__()
@@ -522,7 +522,7 @@ class Multi_SymmetricConvNeXtBlock(th.nn.Module):
         # Create a ModuleList to store complete blocks
         self.blocks = th.nn.ModuleList()
         
-        for i in range(n_conv_blocks):
+        for i in range(n_layers):
             curr_in = in_channels if i == 0 else out_channels
             
             # Create a single block as a separate Module
