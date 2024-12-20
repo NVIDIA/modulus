@@ -55,6 +55,7 @@ jobs:
            github.actor == 'tge25' ||
            github.actor == 'nbren12' ||
            github.actor == 'yairchn' ||
+           github.actor == 'pzharrington' ||
            github.actor == 'hasethinvd'
          )  
     steps:
