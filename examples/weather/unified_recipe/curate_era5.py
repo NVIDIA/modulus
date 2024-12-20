@@ -29,6 +29,7 @@ from omegaconf import DictConfig, OmegaConf
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
 
+from utils import get_filesystem
 from transform.transform import transform_registry
 
 
@@ -48,6 +49,7 @@ class CurateERA5:
         transform: None = None,
         date_range: Tuple[str, str] = ("2000-01-01", "2001-01-01"),
         dt: int = 1,  # 1 hour
+        chunk_channels_together: bool = True,
         single_threaded: bool = False,
     ):
         super().__init__()
@@ -63,6 +65,7 @@ class CurateERA5:
         self.date_range = date_range
         assert dt in [1, 3, 6, 12], "dt must be 1, 3, 6, or 12"
         self.dt = dt
+        self.chunk_channels_together = chunk_channels_together
         self.single_threaded = single_threaded
 
         # Open dataset to do curation from
@@ -137,11 +140,19 @@ class CurateERA5:
             xarray_unpredicted_variables, dim="unpredicted_channel"
         )
         self.era5_subset["time"] = self.era5["time"]
+
+        # Chunk channels
+        if self.chunk_channels_together:
+            predicted_channel_chunk_size = self.era5_subset.predicted_channel.size
+            unpredicted_channel_chunk_size = self.era5_subset.unpredicted_channel.size
+        else:
+            predicted_channel_chunk_size = 1
+            unpredicted_channel_chunk_size = 1
         self.era5_subset = self.era5_subset.chunk(
             {
                 "time": 1,
-                "predicted_channel": self.era5_subset.predicted_channel.size,
-                "unpredicted_channel": self.era5_subset.unpredicted_channel.size,
+                "predicted_channel": predicted_channel_chunk_size,
+                "unpredicted_channel": unpredicted_channel_chunk_size,
             }
         )
 
@@ -193,8 +204,12 @@ def main(cfg: DictConfig) -> None:
         transform = wrapper_transform(transform, **cfg.transform.kwargs)
 
     # Get filesystem
-    # TODO: add filesystems beyond local when needed
-    fs = fsspec.filesystem("file")
+    fs = get_filesystem(
+        cfg.filesystem.type,
+        cfg.filesystem.key,
+        cfg.filesystem.endpoint_url,
+        cfg.filesystem.region_name,
+    )
 
     # Make train data
     curate_train_era5 = CurateERA5(
@@ -207,6 +222,7 @@ def main(cfg: DictConfig) -> None:
         transform=transform,
         date_range=cfg.curated_dataset.train_years,
         dt=cfg.curated_dataset.dt,
+        chunk_channels_together=cfg.curated_dataset.chunk_channels_together,
     )
     curate_train_era5()
 
@@ -221,6 +237,7 @@ def main(cfg: DictConfig) -> None:
         transform=transform,
         date_range=cfg.curated_dataset.val_years,
         dt=cfg.curated_dataset.dt,
+        chunk_channels_together=cfg.curated_dataset.chunk_channels_together,
     )
     curate_val_era5()
 

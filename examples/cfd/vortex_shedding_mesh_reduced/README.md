@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Temporal attention model in Mesh-Reduced space for transient vortex shedding
 
 This example is an implementation of the paper "Predicting Physics in Mesh-reduced Space
@@ -59,11 +61,12 @@ per GPU is set to 10 for the sequence model training. Traing epochs is set as 20
 To download the data , run
 
 ```bash
-cd dataset
-sh TODO: need a shell to download the raw dataset from a cloud storage.
+wget --content-disposition https://api.ngc.nvidia.com/v2/resources/nvidia/modulus/modulus_datasets_cylinder-flow/versions/v1/zip -O modulus_datasets_cylinder-flow_v1.zip
+unzip modulus_datasets_cylinder-flow_v1.zip
+unzip dataset.zip
 ```
 
-This example requires the `torch-scatter` and  `torch-cluster` library for the
+This example requires the `torch-scatter` and  `torch-clsuster` library for the
 graph nodes agrregation. Install with
 
 ```bash

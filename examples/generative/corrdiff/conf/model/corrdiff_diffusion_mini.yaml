@@ -18,6 +18,10 @@ defaults:
   - corrdiff_diffusion
 
 hr_mean_conditioning: True
+scale_cond_input: false
+  # If true, also scales the input conditioning
+  # For backward compatibility, this is true by default
+  # We recommend setting this to false for new training runs
 
 model_args:
   model_channels: 64

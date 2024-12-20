@@ -15,3 +15,6 @@
 # limitations under the License.
 
 type: "file"
+key: null
+endpoint_url: null
+region_name: null

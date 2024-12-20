@@ -27,3 +27,5 @@ min_path: null
 max_path: null
 global_means_path: null
 global_stds_path: null
+train: False
+all_times: True

@@ -164,7 +164,7 @@ def _load_stats(stats, variables, group):
     return (mean, std)
 
 
-@jit(nopython=True, parallel=True)
+@jit(nopython=True)
 def _zoom_extrapolate(x, y, factor):
     """Bilinear zoom with extrapolation.
     Use a numba function here because numpy/scipy options are rather slow.
