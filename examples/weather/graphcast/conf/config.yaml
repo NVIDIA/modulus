@@ -118,6 +118,7 @@ val_freq: 5               # Frequency (iterations) for performing light-weight v
 # └───────────────────────────────────────────┘
 
 wb_mode: online            # Weights and Biases mode ["online", "offline", "disabled"]. If you don’t have a Weights and Biases API key, set this to "disabled".
+wb_entity: "Modulus"       # Weights and Biases entity. If you get permission related errors, you might need to put your wandb username here.
 watch_model: false         # If true, records the model parameter gradients through Weights and Biases.
 
 

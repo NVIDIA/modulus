@@ -332,7 +332,7 @@ def main(cfg: DictConfig) -> None:
     if dist.rank == 0:
         initialize_wandb(
             project="GraphCast",
-            entity="Modulus",
+            entity=cfg.wb_entity,
             name=f"GraphCast-{HydraConfig.get().job.name}",
             group="group",
             mode=cfg.wb_mode,
