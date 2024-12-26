@@ -26,7 +26,7 @@ jobs:
       - name: Merge Changes from modulus
         id: merge
         run: |
-          git merge upstream/main || echo "No changes to merge"
+          git merge -X theirs upstream/main || echo "No changes to merge"
 
       # Step 4: Push Changes to Fork
       - name: Push Changes to Fork
