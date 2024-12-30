@@ -19,6 +19,7 @@ import torch
 
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.diffusion.preconditioning import (
+    EDMPrecond,
     EDMPrecondSR,
     VEPrecond_dfsr,
     VEPrecond_dfsr_cond,
@@ -66,6 +67,43 @@ def test_EDMPrecondSR_serialization(tmp_path):
     save_checkpoint(path=tmp_path, models=module, epoch=1)
     epoch = load_checkpoint(path=tmp_path)
     assert epoch == 1
+
+
+@pytest.mark.parametrize("channels", [[0, 4], [3, 8], [3, 5]])
+def test_EDMPrecond_forward(channels):
+    res = [32, 64]
+    cond_ch, out_ch = channels
+    b = 1
+
+    # Create an instance of the preconditioner
+    model = EDMPrecond(
+        img_resolution=res,
+        img_channels=99,  # dummy value, should be overwritten by following args
+        img_in_channels=out_ch + cond_ch,
+        img_out_channels=out_ch,
+        model_type="SongUNet",
+    )
+
+    latents = torch.randn(b, out_ch, *res)
+    sigma = torch.tensor([10.0])
+
+    if cond_ch > 0:
+        # Forward pass with conditioning
+        condition = torch.randn(b, cond_ch, *res)
+        output = model(
+            x=latents,
+            condition=condition,
+            sigma=sigma,
+        )
+    else:
+        # Forward pass without conditioning
+        output = model(
+            x=latents,
+            sigma=sigma,
+        )
+
+    # Assert the output shape is correct
+    assert output.shape == (b, out_ch, *res)
 
 
 def test_VEPrecond_dfsr():

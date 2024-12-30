@@ -61,7 +61,7 @@ class MetaData(ModelMetaData):
 class SongUNet(Module):
     """
     Reimplementation of the DDPM++ and NCSN++ architectures, U-Net variants with
-    optional self-attention,embeddings, and encoder-decoder components.
+    optional self-attention, embeddings, and encoder-decoder components.
 
     This model supports conditional and unconditional setups, as well as several
     options for various internal architectural choices such as encoder and decoder
@@ -95,7 +95,7 @@ class SongUNet(Module):
     label_dropout : float, optional
        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
-        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++.
+        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++, 'zero' for none
         By default 'positional'.
     channel_mult_noise : int, optional
         Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
@@ -109,6 +109,8 @@ class SongUNet(Module):
         Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
     checkpoint_level : int, optional (default=0)
         How many layers should use gradient checkpointing, 0 is None
+    additive_pos_embed: bool = False,
+        Set to True to add a learned position embedding after the first conv (used in StormCast)
 
 
     Reference
@@ -153,6 +155,7 @@ class SongUNet(Module):
         decoder_type: str = "standard",
         resample_filter: List[int] = [1, 1],
         checkpoint_level: int = 0,
+        additive_pos_embed: bool = False,
     ):
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
@@ -205,6 +208,14 @@ class SongUNet(Module):
 
         # set the threshold for checkpointing based on image resolution
         self.checkpoint_threshold = (self.img_shape_y >> checkpoint_level) + 1
+
+        # Optional additive learned positition embed after the first conv
+        self.additive_pos_embed = additive_pos_embed
+        if self.additive_pos_embed:
+            self.spatial_emb = torch.nn.Parameter(
+                torch.randn(1, model_channels, self.img_shape_y, self.img_shape_x)
+            )
+            torch.nn.init.trunc_normal_(self.spatial_emb, std=0.02)
 
         # Mapping.
         if self.embedding_type != "zero":
@@ -358,6 +369,11 @@ class SongUNet(Module):
                     x = skips[-1] = x + block(aux)
                 elif "aux_residual" in name:
                     x = skips[-1] = aux = (x + block(aux)) / np.sqrt(2)
+                elif "_conv" in name:
+                    x = block(x)
+                    if self.additive_pos_embed:
+                        x = x + self.spatial_emb.to(dtype=x.dtype)
+                    skips.append(x)
                 else:
                     # For UNetBlocks check if we should use gradient checkpointing
                     if isinstance(block, UNetBlock):

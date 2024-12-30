@@ -72,7 +72,10 @@ def scaling_dict():
         "z1000": {"mean": 952.1435546875, "std": 895.7516479492188},
         "z250": {"mean": 101186.28125, "std": 5551.77978515625},
         "z500": {"mean": 55625.9609375, "std": 2681.712890625},
+        "lsm": {"mean": 0, "std": 1},
+        "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
+        "extra": {"mean": 1, "std": 0},
     }
     return DictConfig(scaling)
 
@@ -88,6 +91,9 @@ def scaling_double_dict():
         "z250": {"mean": 0, "std": 2},
         "z500": {"mean": 0, "std": 2},
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
+        "lsm": {"mean": 0, "std": 2},
+        "z": {"mean": 0, "std": 2},
+        "extra": {"mean": 0, "std": 2},
     }
     return DictConfig(scaling)
 
@@ -212,7 +218,7 @@ def test_TimeSeriesDataset_initialization(
             "bogosity": {"mean": 0, "std": 42},
         }
     )
-    with pytest.raises(KeyError, match=("one or more of the input data variables")):
+    with pytest.raises(KeyError, match=("Input channels ")):
         timeseries_ds = TimeSeriesDataset(
             dataset=zarr_ds,
             data_time_step="3h",
@@ -550,7 +556,15 @@ def test_TimeSeriesDataModule_get_constants(
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
-    expected = np.transpose(zarr_ds.constants.values, axes=(1, 0, 2, 3))
+
+    # dividing by 2 due to scaling
+    expected = (
+        np.transpose(
+            zarr_ds.constants.sel(channel_c=list(constants.keys())).values,
+            axes=(1, 0, 2, 3),
+        )
+        / 2.0
+    )
 
     assert np.array_equal(
         timeseries_dm.get_constants(),
@@ -617,7 +631,7 @@ def test_TimeSeriesDataModule_get_dataloaders(
     test_dataloader, test_sampler = timeseries_dm.test_dataloader(num_shards=1)
     assert test_sampler is None
     assert isinstance(test_dataloader, DataLoader)
-    print(f"dataset lenght {len}")
+
     # with >1 shard should be distributed sampler
     train_dataloader, train_sampler = timeseries_dm.train_dataloader(num_shards=2)
     assert isinstance(train_sampler, DistributedSampler)

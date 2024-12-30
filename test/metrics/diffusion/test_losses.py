@@ -57,6 +57,10 @@ def fake_net(y, sigma, labels, augment_labels=None):
     return torch.tensor([1.0])
 
 
+def fake_condition_net(y, sigma, condition, class_labels=None, augment_labels=None):
+    return torch.tensor([1.0])
+
+
 def test_call_method_vp():
     loss_func = VPLoss()
 
@@ -131,8 +135,13 @@ def test_call_method_edm():
     img = torch.tensor([[[[1.0]]]])
     labels = None
 
-    # Without augmentation
+    # Without augmentation or conditioning
     loss_value = loss_func(fake_net, img, labels)
+    assert isinstance(loss_value, torch.Tensor)
+
+    # With conditioning
+    condition = torch.tensor([[[[0.0]]]])
+    loss_value = loss_func(fake_condition_net, img, condition=condition, labels=labels)
     assert isinstance(loss_value, torch.Tensor)
 
     # With augmentation
