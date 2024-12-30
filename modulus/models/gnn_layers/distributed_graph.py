@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -29,6 +30,7 @@ from modulus.distributed import (
     scatter_v,
 )
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class GraphPartition:
@@ -910,9 +912,16 @@ class DistributedGraph:
         # according to the partition and scatter them to other ranks
 
         if self.graph_partition.matrix_decomp:
-            raise NotImplementedError(
-                "Use get_dst_node_features_in_partition instead of collecting source node features, "
-                "as there is only one node feature partition in matrix decomposition."
+            logger.warning(
+                "Matrix decomposition assumes one type of node feature partition, and the graph"
+                "adjacency matrix is square with identical src/dst node domains. "
+                "So, only `get_dst_node_features_in_partition` is used/needed to get src or dst"
+                "node features within a partition."
+            )
+            return self.get_dst_node_features_in_partition(
+                global_node_features,
+                scatter_features=scatter_features,
+                src_rank=src_rank,
             )
         if scatter_features:
             global_node_features = global_node_features[
@@ -1018,9 +1027,16 @@ class DistributedGraph:
             raise AssertionError(error_msg)
 
         if self.graph_partition.matrix_decomp:
-            raise NotImplementedError(
-                "Use get_global_dst_node_features instead of collecting source node features, "
-                "as there is only one node feature partition in matrix decomposition."
+            logger.warning(
+                "Matrix decomposition assumes one type of node feature partition, and the graph"
+                "adjacency matrix is square with identical src/dst node domains. "
+                "So, only `get_global_dst_node_features` is used/needed to get global src or dst"
+                "node features."
+            )
+            return self.get_global_dst_node_features(
+                partitioned_node_features,
+                get_on_all_ranks=get_on_all_ranks,
+                dst_rank=dst_rank,
             )
 
         if not get_on_all_ranks:
