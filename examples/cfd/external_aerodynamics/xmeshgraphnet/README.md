@@ -1,8 +1,18 @@
-# XAeroNet: Scalable Neural Models for External Aerodynamics
-
-XAeroNet is a collection of scalable models for large-scale external
-aerodynamic evaluations. It consists of two models, XAeroNet-S and XAeroNet-V for
-surface and volume predictions, respectively.
+# X-MeshGraphNet for Scalable Automotive Aerodynamics
+X-MeshGraphNet is a scalable, multi-scale extension of MeshGraphNet designed to
+address key challenges in GNN-based physical simulations including scalability,
+mesh requirements for the inference, and multi-scale modeling. Here we leverage 
+X-MeshGraphNet for accurate aerodynamic predictions in passenger car designs.
+We demonstrate how X-MeshGraphNet scales to large meshes while
+providing accurate predictions of surface pressure and wall
+shear stresses for various car designs, effectively addressing
+some of the key limitations of traditional GNN-based methods. 
+Additionally, we extend X-MeshGraphNet’s underlying halo-based
+partitioning with gradient aggregation scheme to other neural
+architectures, including UNets, to highlight the versatility of
+the proposed approach. To this end, we train a scalable 3D
+UNet model for volumetric predictions such as pressure and
+velocity within a bounding box around the car body.
 
 ## Problem overview
 
@@ -14,26 +24,26 @@ Traditional approaches, such as computational fluid dynamics (CFD) simulations,
 are computationally expensive and time-consuming, especially when evaluating multiple
 design iterations or large datasets.
 
-XAeroNet addresses these challenges by leveraging neural network-based surrogate
+Our models address these challenges by leveraging neural network-based surrogate
 models to provide fast, scalable, and accurate predictions for both surface-level
 and volume-level aerodynamic properties. By using the DrivAerML dataset, which
-contains high-fidelity CFD data for a variety of vehicle geometries, XAeroNet aims
+contains high-fidelity CFD data for a variety of vehicle geometries, X-MeshGraphNet aims
 to significantly reduce the computational cost while maintaining high prediction
-accuracy. The two models in XAeroNet—XAeroNet-S for surface predictions and XAeroNet-V
-for volume predictions—enable rapid aerodynamic evaluations across different design
+accuracy. The two surface and volume models enable rapid aerodynamic evaluations
+across different design
 configurations, making it easier to incorporate aerodynamic considerations early in
 the design process.
 
 ## Model Overview and Architecture
 
-### XAeroNet-S
+### The surface model
 
-XAeroNet-S is a scalable MeshGraphNet model that partitions large input graphs into
+X-MeshGraphNet is a scalable MeshGraphNet model that partitions large input graphs into
 smaller subgraphs to reduce training memory overhead. Halo regions are added to these
 subgraphs to prevent message-passing truncations at the boundaries. Gradient aggregation
 is employed to accumulate gradients from each partition before updating the model parameters.
 This approach ensures that training on partitions is equivalent to training on the entire
-graph in terms of model updates and accuracy. Additionally, XAeroNet-S does not rely on
+graph in terms of model updates and accuracy. Additionally, X-MeshGraphNet does not rely on
 simulation meshes for training and inference, overcoming a significant limitation of
 GNN models in simulation tasks.
 
@@ -43,22 +53,24 @@ This method also supports multi-mesh setups, where point clouds with different r
 are generated, their connectivity graphs are created, and all are superimposed. The Metis
 library is used to partition the graph for efficient training.
 
-For the XAeroNet-S model, STL files are used to generate point clouds and establish graph
+For the surface model, STL files are used to generate point clouds and establish graph
 connectivity. Additionally, the .vtp files are used to interpolate the solution fields onto
 the point clouds.
 
-### XAeroNet-V
+### The volume model
 
-XAeroNet-V is a scalable 3D UNet model with attention gates, designed to partition large
+The volume model is a scalable 3D UNet model with attention gates.
+It demonstrates the application of the partitioning with halo regions in X-MeshGraphNet
+to other architectures like 3D UNets. It is designed to partition large
 voxel grids into smaller sub-grids to reduce memory overhead during training. Halo regions
 are added to these partitions to avoid convolution truncations at the boundaries.
 Gradient aggregation is used to accumulate gradients from each partition before updating
 the model parameters, ensuring that training on partitions is equivalent to training on
-the entire voxel grid in terms of model updates and accuracy. Additionally, XAeroNet-V
+the entire voxel grid in terms of model updates and accuracy. Additionally, this model
 incorporates a continuity constraint as an additional loss term during training to
 enhance model interpretability.
 
-For the XAeroNet-V model, the .vtu files are used to interpolate the volumetric
+For the volume model, the .vtu files are used to interpolate the volumetric
 solution fields onto a voxel grid, while the .stl files are utilized to compute
 the signed distance field (SDF) and its derivatives on the voxel grid.
 
@@ -73,9 +85,9 @@ automatic workflows that represent the industrial state-of-the-art. Geometries a
 aerodynamic data are published in open-source formats. For more technical details about this
 dataset, please refer to their [paper](https://arxiv.org/pdf/2408.11969).
 
-## Training the XAeroNet-S model
+## Training the surface model
 
-To train the XAeroNet-S model, follow these steps:
+To train the surface model, follow these steps:
 
 1. Download the DrivAer ML dataset using the provided `download_aws_dataset.sh` script.
 
@@ -101,11 +113,11 @@ To train the XAeroNet-S model, follow these steps:
 9. Download the validation results (saved in form of point clouds in `.vtp` format),
    and visualize in Paraview.
 
-![XAeroNet-S Validation results for the sample #500.](../../../docs/img/xaeronet_s_results.png)
+![XAeroNet-S Validation results for the sample #500.](../../../../docs/img/xaeronet_s_results.png)
 
-## Training the XAeroNet-V model
+## Training the volume model
 
-To train the XAeroNet-V model, follow these steps:
+To train the volume model, follow these steps:
 
 1. Download the DrivAer ML dataset using the provided `download_aws_dataset.sh` script.
 
@@ -127,7 +139,7 @@ To train the XAeroNet-V model, follow these steps:
 8. Download the validation results (saved in form of voxel grids in `.vti` format),
    and visualize in Paraview.
 
-![XAeroNet-V Validation results.](../../../docs/img/xaeronet_v_results.png)
+![XAeroNet-V Validation results.](../../../../docs/img/xaeronet_v_results.png)
 
 ## Logging
 
