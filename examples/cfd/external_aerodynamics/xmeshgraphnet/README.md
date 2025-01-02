@@ -13,6 +13,11 @@ architectures, including UNets, to highlight the versatility of
 the proposed approach. To this end, we train a scalable 3D
 UNet model for volumetric predictions such as pressure and
 velocity within a bounding box around the car body.
+For more information about X-MeshGraphNet,
+please refer to the paper [paper](https://arxiv.org/pdf/2411.17164)
+
+![Illustration of the partitioning scheme with Halo.](../../../../docs/img/partitioning_with_halo.png)
+
 
 ## Problem overview
 
@@ -113,7 +118,7 @@ To train the surface model, follow these steps:
 9. Download the validation results (saved in form of point clouds in `.vtp` format),
    and visualize in Paraview.
 
-![XAeroNet-S Validation results for the sample #500.](../../../../docs/img/xaeronet_s_results.png)
+![Surface validation results for the sample #500.](../../../../docs/img/xmeshgraphnet_surface_results.png)
 
 ## Training the volume model
 
@@ -139,7 +144,7 @@ To train the volume model, follow these steps:
 8. Download the validation results (saved in form of voxel grids in `.vti` format),
    and visualize in Paraview.
 
-![XAeroNet-V Validation results.](../../../../docs/img/xaeronet_v_results.png)
+![Volume validation results.](../../../../docs/img/xmeshgraphnet_volume_results.png)
 
 ## Logging
 
@@ -174,3 +179,9 @@ Docker container on a remote server from your local desktop, follow these steps:
 
 **Note:** Ensure the remote server’s firewall allows connections on port `6006`
 and that your local machine’s firewall allows outgoing connections.
+
+## References
+
+- [X-MeshGraphNet: Scalable Multi-Scale Graph Neural Networks for Physics Simulation](https://arxiv.org/pdf/2411.17164)
+- [Learning Mesh-Based Simulation with Graph Networks](https://arxiv.org/pdf/2010.03409)
+- [DrivAerML: High-Fidelity Computational Fluid Dynamics Dataset for Road-Car External Aerodynamics](https://arxiv.org/pdf/2408.11969)
