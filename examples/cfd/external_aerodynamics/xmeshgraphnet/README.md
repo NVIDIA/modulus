@@ -14,9 +14,9 @@ the proposed approach. To this end, we train a scalable 3D
 UNet model for volumetric predictions such as pressure and
 velocity within a bounding box around the car body.
 For more information about X-MeshGraphNet,
-please refer to the [paper](https://arxiv.org/pdf/2411.17164)
+please refer to the [paper](https://arxiv.org/pdf/2411.17164).
 
-![Illustration of the partitioning scheme with Halo.](../../../../docs/img/partitioning_with_halo.png){width=50%}
+<img src="../../../../docs/img/partitioning_with_halo.png" alt="Illustration of the partitioning scheme with Halo." width="500">
 
 
 ## Problem overview
