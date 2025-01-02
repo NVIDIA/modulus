@@ -16,9 +16,7 @@ velocity within a bounding box around the car body.
 For more information about X-MeshGraphNet,
 please refer to the [paper](https://arxiv.org/pdf/2411.17164).
 
-<div style="text-align: center;">
-  <img src="../../../../docs/img/partitioning_with_halo.png" alt="Illustration of the partitioning scheme with Halo." width="500">
-</div>
+<img src="../../../../docs/img/partitioning_with_halo.png" alt="Illustration of the partitioning scheme with Halo." width="500">
 
 
 ## Problem overview
