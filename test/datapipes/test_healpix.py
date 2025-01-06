@@ -80,14 +80,14 @@ def scaling_dict():
 @pytest.fixture
 def scaling_double_dict():
     scaling = {
-        "t2m0": {"mean": 0, "std": 2},
-        "t850": {"mean": 0, "std": 2},
-        "tau300-700": {"mean": 0, "std": 2},
-        "tcwv0": {"mean": 0, "std": 2},
-        "z1000": {"mean": 0, "std": 2},
-        "z250": {"mean": 0, "std": 2},
-        "z500": {"mean": 0, "std": 2},
-        "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
+        "t2m0": {"mean": 0, "std": 1},
+        "t850": {"mean": 0, "std": 1},
+        "tau300-700": {"mean": 0, "std": 1},
+        "tcwv0": {"mean": 0, "std": 1},
+        "z1000": {"mean": 0, "std": 1},
+        "z250": {"mean": 0, "std": 1},
+        "z500": {"mean": 0, "std": 1},
+        "tp6": {"mean": 0, "std": 1, "log_epsilon": 1e-6},
     }
     return DictConfig(scaling)
 
