@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Refactored StormCast training example
+
 ### Deprecated
 
 ### Removed
@@ -21,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+- Remove the numpy dependency upper bound.
 
 ## [0.9.0] - 2024-12-04
 

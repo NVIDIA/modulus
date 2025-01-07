@@ -13,26 +13,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ruff: noqa
-from .utils import weight_init
-from .layers import (
-    AttentionOp,
-    Conv2d,
-    FourierEmbedding,
-    GroupNorm,
-    Linear,
-    PositionalEmbedding,
-    UNetBlock,
-)
-from .song_unet import SongUNet, SongUNetPosEmbd, SongUNetPosLtEmbd
-from .dhariwal_unet import DhariwalUNet
-from .unet import UNet, StormCastUNet
-from .preconditioning import (
-    EDMPrecond,
-    EDMPrecondSR,
-    VEPrecond,
-    VPPrecond,
-    iDDPMPrecond,
-    VEPrecond_dfsr_cond,
-    VEPrecond_dfsr,
-)
+
+# Defaults
+defaults:
+
+  # Dataset
+  - dataset/hrrr_era5
+
+  # Model
+  - model/stormcast
+
+  # Sampler
+  - sampler/edm_deterministic
+
+  # Inference
+  - inference/stormcast
+
+  - _self_
+
+hydra:
+  run:
+   dir: ${inference.rundir}

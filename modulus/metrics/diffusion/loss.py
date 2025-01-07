@@ -218,7 +218,7 @@ class EDMLoss:
         self.P_std = P_std
         self.sigma_data = sigma_data
 
-    def __call__(self, net, images, labels=None, augment_pipe=None):
+    def __call__(self, net, images, condition=None, labels=None, augment_pipe=None):
         """
         Calculate and return the loss corresponding to the EDM formulation.
 
@@ -256,7 +256,16 @@ class EDMLoss:
             augment_pipe(images) if augment_pipe is not None else (images, None)
         )
         n = torch.randn_like(y) * sigma
-        D_yn = net(y + n, sigma, labels, augment_labels=augment_labels)
+        if condition is not None:
+            D_yn = net(
+                y + n,
+                sigma,
+                condition=condition,
+                class_labels=labels,
+                augment_labels=augment_labels,
+            )
+        else:
+            D_yn = net(y + n, sigma, labels=labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
