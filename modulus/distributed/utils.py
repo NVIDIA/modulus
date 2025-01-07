@@ -246,6 +246,9 @@ def all_gather_v_wrapper(
 
     comm_size = dist.get_world_size(group=group)
 
+    print(sizes)
+    print(comm_size)
+
     if (sizes is not None) and (len(sizes) != comm_size):
         raise ValueError()
     if dim >= tensor.dim():
@@ -254,14 +257,34 @@ def all_gather_v_wrapper(
     if comm_size == 1:
         return tensor
 
-    tensor_shape = list(tensor.shape)
+    # This is valid if the the shape is a list of ints, but not if full tensor
+    # shapes are passed on each rank.  Check if each element of sizes itself is iterable:
+    
     tensor_format = get_memory_format(tensor)
+    
 
     if sizes is not None:
+        full_shapes = False
+        try:
+            iterator = iter(sizes[0])
+        except TypeError:
+            # Not iterable, use base tensor shape:
+            tensor_shape = list(tensor.shape)
+        else:
+            # it is iterable, use shapes directly
+            full_shapes = True
+            tensor_shape = None # Catch and replace below
+        
         tensor_list = [None] * comm_size
 
         for src in range(comm_size):
-            tensor_shape[dim] = sizes[src]
+            print(f"pre tensor_shape: {tensor_shape}")
+            if full_shapes:
+                tensor_shape = sizes[src]
+            else: 
+                tensor_shape[dim] = sizes[src]
+            print(f"sizes[{src}]: {sizes[src]}")
+            print(f"tensor_shape: {tensor_shape}")
             tensor_list[src] = torch.empty(
                 tensor_shape,
                 dtype=tensor.dtype,
@@ -272,6 +295,9 @@ def all_gather_v_wrapper(
         tensor_list = [torch.empty_like(tensor) for _ in range(comm_size)]
 
     dist.all_gather(tensor_list, tensor, group=group)
+
+    print([t.shape for t in tensor_list])
+    print(dim)
 
     output = torch.cat(tensor_list, dim=dim).contiguous(memory_format=tensor_format)
 

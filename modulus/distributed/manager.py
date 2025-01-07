@@ -116,6 +116,8 @@ class DistributedManager(object):
         if not hasattr(obj, "_global_mesh"):
             obj._global_mesh = None # Lazy initialized right when it's first needed
         if not hasattr(obj, "_mesh_dims"):
+            obj._mesh_dims = dict()  # Lazy initialized right when it's first needed
+        if not hasattr(obj, "_mesh_dims"):
             obj._mesh_dims = {}
 
         return obj
@@ -156,11 +158,16 @@ class DistributedManager(object):
         return self._cuda
 
     @property
-    def group_names(self):
-        """
-        Returns a list of all named process groups created
-        """
-        return self._groups.keys()
+    def mesh_dims(self):
+        """Mesh Dimensions as dictionary (axis name : size)"""
+        return self._mesh_dims
+
+    # @property
+    # def group_names(self):
+    #     """
+    #     Returns a list of all named process groups created
+    #     """
+    #     return self._groups.keys()
 
     @property
     def global_mesh(self):
@@ -183,20 +190,53 @@ class DistributedManager(object):
         group_name : _type_
             _description_
         """
+        #TODO
         
+    def mesh_names(self):
+        """
+        Return mesh axis names
+        """
+        return self._mesh_dims.keys()
+    
+    def mesh_sizes(self):
+        """
+        Return mesh axis sizes
+        """
+        return self._mesh_dims.values()
+    
+    # def group(self, name=None):
+    #     """
+    #     Returns a process group with the given name
+    #     If name is None, group is also None indicating the default process group
+    #     If named group does not exist, ModulusUndefinedGroupError exception is raised
+    #     """
+    #     if name in self._groups.keys():
+    #         return self._groups[name]
+    #     elif name is None:
+    #         return None
+    #     else:
+    #         raise ModulusUndefinedGroupError(name)
 
-    def group(self, name=None):
+    def mesh(self, name=None):
         """
-        Returns a process group with the given name
-        If name is None, group is also None indicating the default process group
-        If named group does not exist, ModulusUndefinedGroupError exception is raised
+        Return a device_mesh with the given name.
+        Does not initialize.  If the mesh is not created 
+        already, will raise and error
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of desired mesh, by default None
         """
-        if name in self._groups.keys():
-            return self._groups[name]
+
+        if name in self._global_mesh.axis_names:
+            return self._global_mesh[name]
         elif name is None:
-            return None
+            #TODO - is this the right choice?
+            
+            return self._global_mesh
         else:
-            raise ModulusUndefinedGroupError(name)
+            raise ModulusUndefinedGroupError(f"Mesh axis {name} not defined")
 
     def group_size(self, name=None):
         """
@@ -359,7 +399,7 @@ class DistributedManager(object):
         addr = os.getenv("MASTER_ADDR", "localhost")
         port = os.getenv("MASTER_PORT", "12355")
         # https://pytorch.org/docs/master/notes/cuda.html#id5
-        os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
+        os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "0"
         initialization_method = os.getenv("MODULUS_DISTRIBUTED_INITIALIZATION_METHOD")
         if initialization_method is None:
             try:
@@ -527,6 +567,20 @@ class DistributedManager(object):
             torch.cuda.empty_cache()
 
         manager._initialization_method = method
+
+
+    @staticmethod
+    def create_dtensor_from_chunks(local_chunk, target_mesh,):
+        
+        #TODO Doc string 
+        
+        # Goal: Create a dtensor from local tensor chunks.
+        # Performs extra communication to sync strides and shapes across the mesh.
+        
+        # First, get the mesh:
+        if isinstance(str, target_mesh):
+            # Fetch the mesh itself:
+            target_mesh = DistributedManager.global_mesh[target_mesh]
 
     # @staticmethod
     # def create_process_subgroup(

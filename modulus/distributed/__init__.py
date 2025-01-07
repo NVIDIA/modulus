@@ -27,3 +27,5 @@ from .utils import (
     reduce_loss,
     unmark_module_as_shared,
 )
+
+from .shard_tensor import ShardTensor
