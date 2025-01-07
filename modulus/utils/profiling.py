@@ -17,24 +17,33 @@
 import os
 import atexit
 
-from dataclasses import dataclass
-from typing import Tuple, Callable
+from dataclasses import dataclass, replace
+from typing import Tuple, Callable, Optional
 
-try:
-    import line_profiler
-    import kernprof
-    lp_available = True
-except:
-    lp_available = False
 
 import warnings
 
 from contextlib import nullcontext, ContextDecorator, ExitStack
 
+import torch
 from torch.profiler import   ProfilerActivity, record_function, profile
 
 from modulus.distributed import DistributedManager
 
+@dataclass
+class ModulusProfilerConfig:
+    torch_enabled:   bool = True
+    output_dir:      str  = "./profiler_output/"
+    torch_prof_activities: Optional[Tuple[int]] = None
+    record_shapes :  bool = True
+    profile_memory : bool = True
+    with_stack:      bool = True
+    with_trace:      bool = True
+    include_nvtx:    bool = False
+    
+    #TODO: add cls method to export some basic default configs
+    
+    
 class Profiler(ContextDecorator):
     """
     Profiler Class to enable easy, simple to configure profiling tools in modulus.
@@ -55,42 +64,38 @@ class Profiler(ContextDecorator):
     run for profiling and then disable the profiler entirely. (pass `enabled=False` in the constructor, which is default.)
     """
     def __init__(self,
-        enabled: bool = True,
-        torch_profile: bool = False,
-        output_dir: str = "./profiler_output/",
-        torch_profiler_activities: Tuple[int] = [ProfilerActivity.CPU],
-        record_shapes : bool = True,
-        profile_memory : bool = True,
-        include_nvtx: bool = False,
-        line_profile: bool = True,
+        config: Optional[ModulusProfilerConfig] = None,
+        **config_overrides,
     ):
         
-        self._enabled = enabled
-        if not self.enabled:
-            # Do nothing ... 
-            return
+        default_config = ModulusProfilerConfig()
+        self.config = replace(default_config, **config_overrides) if config is None else replace(config, config_overrides)
         
-        self.output_location = output_dir
+        if self.config.torch_enabled or self.config.include_nvtx: self._enabled = True
+        
+        print(self.config)
+        
+
         # If the model is distributed, control the location of the output:
         if DistributedManager().distributed:
-            self.output_location += f"/rank_{DistributedManager().rank}"
+            self.config.output_dir += f"/rank_{DistributedManager().rank}/"
 
-        # Configure line_profiler here:
-        if lp_available:
-            print("Hooray")
-        elif line_profile:
-            if DistributedManager().rank == 0:
-                warnings.warn("Line profiler failed to import - is it installed?  Disabling")
-            line_profile = False
-        
-        if line_profile:
-            import line_profiler
-            self.line_profiler = line_profiler.LineProfiler()
+        print(self.config)
         
         # Configure pytorch profiler here:
-        if torch_profile:
-            self.do_torch_profiling = True
-            self.torch_prof = profile(activities = torch_profiler_activities, profile_memory=profile_memory, record_shapes=record_shapes)
+        # Set the default profiling activities if not set:
+        if self.config.torch_enabled:
+            if self.config.torch_prof_activities is None:
+                torch_prof_activities = [ProfilerActivity.CPU]
+                if torch.cuda.is_available(): 
+                    torch_prof_activities.append(ProfilerActivity.CUDA)
+                self.config.torch_prof_activities = torch_prof_activities
+            self.torch_prof = profile(
+                activities     = self.config.torch_prof_activities, 
+                profile_memory = self.config.profile_memory, 
+                record_shapes  = self.config.record_shapes,
+                with_stack     = self.config.with_stack
+            )
         else:
             self.do_torch_profiling = False
             self.torch_prof = nullcontext()
@@ -123,7 +128,6 @@ class Profiler(ContextDecorator):
         
         # Capture each context in an exit stack that we'll back out of in the exit.
         
-        self.exit_stack.enter_context(self.line_profiler.runctx())
         self.exit_stack.enter_context(self.torch_prof)
         
         
@@ -149,29 +153,28 @@ class Profiler(ContextDecorator):
         if self.finalized: return
         
         # Make sure the output directory exists:
-        os.makedirs(self.output_location, exist_ok=True)
+        os.makedirs(self.config.output_dir, exist_ok=True)
         
-        if self.do_torch_profiling:
-            torch_outut_dir = self.output_location + "/torch/"
-            os.makedirs(torch_outut_dir, exist_ok=True)
+        if self.config.torch_enabled:
+            torch_output_dir = self.config.output_dir + "/torch/"
+            os.makedirs(torch_output_dir, exist_ok=True)
             
-            print(self.torch_prof.key_averages())
             
             # Write out torch profiling results:
             print("Storing cpu times in output:")
-            with open(torch_outut_dir + "cpu_time.txt", 'w') as cpu_times:
+            with open(torch_output_dir + "cpu_time.txt", 'w') as cpu_times:
                 times = self.torch_prof.key_averages().table()
                 cpu_times.write(times)
             print("Done writing CPU Times")
 
-            # print("Storing gpu times in output:")
-            # with open(torch_outut_dir + "gpu_time.txt", 'w') as gpu_times:
-            #     times = self.torch_prof.key_averages().table(sort_by="gpu_times_total", row_limit=25)
-            #     print(times)
-            #     gpu_times.write(times)
-            # print("Done writing gpu Times")
+            print("Storing gpu times in output:")
+            with open(torch_output_dir + "cuda_time.txt", 'w') as gpu_times:
+                times = self.torch_prof.key_averages().table(sort_by="cuda_time_total")
+                gpu_times.write(times)
+            print("Done writing gpu Times")
 
             # Store the trace
+            self.torch_prof.export_chrome_trace(torch_output_dir + "/trace.json")
             
 
         self.finalized = True
