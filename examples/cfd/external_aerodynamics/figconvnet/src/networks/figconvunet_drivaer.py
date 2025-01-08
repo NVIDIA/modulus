@@ -38,7 +38,8 @@ from src.utils.eval_funcs import eval_all_metrics
 class FIGConvUNetDrivAerNet(FIGConvUNet):
     """FIGConvUNetDrivAerNet
 
-    DrivAerNet is a variant of FIGConvUNet that is specialized for the DrivAer dataset.
+    FIGConvUNetDrivAerNet is a variant of FIGConvUNet
+    that is specialized for the DrivAerNet dataset.
     """
 
     def __init__(
@@ -247,7 +248,8 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
 class FIGConvUNetDrivAerML(FIGConvUNet):
     """FIGConvUNetDrivAerNet
 
-    DrivAerNet is a variant of FIGConvUNet that is specialized for the DrivAer dataset.
+    FIGConvUNetDrivAerML is a variant of FIGConvUNet
+    that is specialized for the DrivAerML dataset.
     """
 
     def __init__(
