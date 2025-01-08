@@ -14,5 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .domino_datapipe import DoMINODataPipe
-from .mesh_datapipe import MeshDatapipe
+from .model import DoMINO
