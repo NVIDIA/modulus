@@ -265,7 +265,7 @@ class EDMLoss:
                 augment_labels=augment_labels,
             )
         else:
-            D_yn = net(y + n, sigma, labels=labels, augment_labels=augment_labels)
+            D_yn = net(y + n, sigma, labels, augment_labels=augment_labels)
         loss = weight * ((D_yn - y) ** 2)
         return loss
 
