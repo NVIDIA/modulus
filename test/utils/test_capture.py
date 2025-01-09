@@ -64,6 +64,7 @@ def logger():
     "use_amp, amp_type",
     [(True, torch.float16), (True, torch.bfloat16), (False, torch.float16)],
 )
+@pytest.mark.parametrize("gradient_clip_norm", [None, 0.10])
 def test_capture_training(
     model,
     logger,
@@ -72,6 +73,7 @@ def test_capture_training(
     use_graphs,
     use_amp,
     amp_type,
+    gradient_clip_norm,
 ):
     # Initialize the DistributedManager first since StaticCaptureTraining uses it
     DistributedManager.initialize()
@@ -98,6 +100,7 @@ def test_capture_training(
         use_amp=use_amp,
         cuda_graph_warmup=1,
         amp_type=amp_type,
+        gradient_clip_norm=gradient_clip_norm,
     )
     def training_step(invar, outvar):
         predvar = model(invar)
@@ -109,6 +112,48 @@ def test_capture_training(
         loss = training_step(input, output)
         input.copy_(torch.rand(8, 2).to(device))
         assert loss > 0, "MSE loss should always be larger than zero"
+
+        for param in model.parameters():
+            is_nan = torch.any(torch.isnan(param.grad.data))
+            if gradient_clip_norm is not None and not is_nan:
+                assert param.grad.data.norm(2) < gradient_clip_norm
+
+
+@pytest.mark.parametrize(
+    "optim_type, device",
+    [("pytorch", "cuda:0"), ("apex", "cuda:0"), ("pytorch", "cpu")],
+)
+@pytest.mark.parametrize("use_graphs", [True, False])
+@pytest.mark.parametrize(
+    "use_amp, amp_type",
+    [(True, torch.float16), (True, torch.bfloat16), (False, torch.float16)],
+)
+@pytest.mark.parametrize("gradient_clip_norm", [None, 0.10])
+def test_capture_training_meta(
+    model,
+    logger,
+    device,
+    optim_type,
+    use_graphs,
+    use_amp,
+    amp_type,
+    gradient_clip_norm,
+):
+    # Initialize the DistributedManager first since StaticCaptureTraining uses it
+    DistributedManager.initialize()
+
+    model = model.to(device)
+    input = torch.rand(8, 2).to(device)
+    output = torch.rand(8, 2).to(device)
+    # Set up optimizer
+    if optim_type == "pytorch":
+        optim = torch.optim.Adam(model.parameters(), lr=0.001)
+    else:
+        if optimizers:
+            optim = optimizers.FusedAdam(model.parameters(), lr=0.001)
+        else:
+            logger.warn("Apex not installed, skipping fused Adam tests")
+            return
 
     # Test control via meta data
     model.meta.cuda_graphs = use_graphs
@@ -121,6 +166,7 @@ def test_capture_training(
         optim=optim,
         logger=logger,
         cuda_graph_warmup=1,
+        gradient_clip_norm=gradient_clip_norm,
     )
     def training_step(invar, outvar):
         predvar = model(invar)
@@ -132,6 +178,11 @@ def test_capture_training(
         loss = training_step(input, output)
         input.copy_(torch.rand(8, 2).to(device))
         assert loss > 0, "MSE loss should always be larger than zero"
+
+        for param in model.parameters():
+            is_nan = torch.any(torch.isnan(param.grad.data))
+            if gradient_clip_norm is not None and not is_nan:
+                assert param.grad.data.norm(2) < gradient_clip_norm
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])

@@ -30,6 +30,7 @@
 import datetime
 
 import numpy as np
+import pytz
 
 try:
     import nvidia.dali as dali
@@ -41,7 +42,7 @@ except ImportError:
     )
 
 RAD_PER_DEG = np.pi / 180.0
-DATETIME_2000 = datetime.datetime(2000, 1, 1, 12, 0, 0).timestamp()
+DATETIME_2000 = datetime.datetime(2000, 1, 1, 12, 0, 0, tzinfo=pytz.utc).timestamp()
 
 
 def _dali_mod(a, b):
@@ -75,7 +76,7 @@ def cos_zenith_angle(
 
 def _days_from_2000(model_time):  # pragma: no cover
     """Get the days since year 2000."""
-    return (3600 + model_time - DATETIME_2000) / (24.0 * 3600.0)
+    return (model_time - DATETIME_2000) / (24.0 * 3600.0)
 
 
 def _greenwich_mean_sidereal_time(model_time):

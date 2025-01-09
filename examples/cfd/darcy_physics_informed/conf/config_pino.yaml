@@ -24,7 +24,7 @@ start_lr: 0.001
 gamma: 0.99948708
 max_epochs: 50
 
-phy_wt: 0.1
+physics_weight: 0.1
 
 model:
   fno:

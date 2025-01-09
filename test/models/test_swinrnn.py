@@ -44,6 +44,8 @@ def test_swinrnn_forward(device):
     # Check output size
     with torch.no_grad():
         assert common.validate_forward_accuracy(model, (invar,), atol=5e-3)
+    del invar, model
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -91,6 +93,8 @@ def test_swinrnn_constructor(device):
             kw_args["img_size"][1],
             kw_args["img_size"][2],
         )
+    del model, invar, outvar
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -126,6 +130,8 @@ def test_swinrnn_optims(device):
     # Check Combo
     # model, invar_surface, invar_surface_mask, invar_upper_air = setup_model()
     # assert common.validate_combo_optims(model, (invar_surface, invar_surface_mask, invar_upper_air))
+    del model, invar
+    torch.cuda.empty_cache()
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -157,6 +163,8 @@ def test_swinrnn_checkpoint(device):
     bsize = random.randint(1, 5)
     invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     assert common.validate_checkpoint(model_1, model_2, (invar,))
+    del model_1, model_2, invar
+    torch.cuda.empty_cache()
 
 
 @common.check_ort_version()
@@ -179,3 +187,5 @@ def test_swinrnn_deploy(device):
     invar = torch.randn(bsize, 13, 6, 32, 64).to(device)
     assert common.validate_onnx_export(model, (invar,))
     assert common.validate_onnx_runtime(model, (invar,))
+    del model, invar
+    torch.cuda.empty_cache()
