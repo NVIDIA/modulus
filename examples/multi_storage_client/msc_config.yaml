@@ -1,0 +1,19 @@
+# This is an example MSC configuration file for accessing the cwb datasets stored 
+# in an S3-compatible bucket cwb-diffusions. 
+# The credentials are inferred from the environment variables S3_KEY and S3_SECRET.
+profiles:
+  cwb-diffusions:
+    storage_provider:
+      type: s3
+      options:
+        region_name: us-east-1
+        endpoint_url: https://pbss.s8k.io
+        base_path: cwb-diffusions
+    credentials_provider:
+      type: S3Credentials
+      options:
+        access_key: ${S3_KEY}
+        secret_key: ${S3_SECRET}
+  cache:
+    location: /tmp/.cache
+    size_mb: 5000

@@ -59,6 +59,7 @@ dev = [
     "interrogate==1.5.0",
     "coverage==6.5.0",
     "ruff==0.0.290",
+    "multi-storage-client>=0.12.2",
 ]
 
 makani = [
@@ -94,6 +95,7 @@ all = [
     "nvidia-modulus[dev]",
     "nvidia-modulus[makani]",
     "nvidia-modulus[fignet]",
+    "multi-storage-client[boto3]",
 ]
 
 
