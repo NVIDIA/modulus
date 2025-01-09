@@ -19,214 +19,395 @@
 # limitations under the License.
 
 
-import sys
 import os
-import argparse
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import numpy as np
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
 
 import torch_geometric
 
-from models.model import DGCNN
-from dataloader import Bar
+from model import DGCNN, DGCNN_ocardo
+from dataloader import Ocardo, Bar
 from pytorch3d.loss import chamfer_distance
-import time
 
-#os.environ['CUDA_VISIBLE_DEVICES']='1,2'
+import torch.distributed as distributed
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data.distributed import DistributedSampler
 
-# time measure
-def TicTocGenerator():
-    # Generator that returns time differences
-    ti = 0           # initial time
-    tf = time.time() # final time
-    while True:
-        ti = tf
-        tf = time.time()
-        yield tf-ti # returns the time difference
+from utils import tic, toc, log_string
+from losses import l2_dist
 
-TicToc = TicTocGenerator() # create an instance of the TicTocGen generator
-
-# This will be the main function through which Convolutional filters (Translation invariance+Self-similarity)
-
-def toc(tempBool=True):
-    # Prints the time difference yielded by generator instance TicToc
-    tempTimeInterval = next(TicToc)
-    if tempBool:
-        print( "Elapsed time: %f seconds.\n" %tempTimeInterval )
-
-def tic():
-    # Records a time in TicToc, marks the beginning of a time interval
-    toc(False)
-
-def l2_dist(pts1,pts2, reduction='mean'):
-    l2_per_batch = torch.mean(torch.sum(torch.pow(pts1-pts2,2),-1),-1)
-    if reduction == 'mean':
-        return torch.mean(l2_per_batch)
-    else:
-        return l2_per_batch
-
-def main():
-    parser = argparse.ArgumentParser(description='Point Cloud Deformation')
-    parser.add_argument('--seed', type=int, default=1234, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--num_points', type=int, default=20000, metavar='N',
-                        help='Num of points to use')
-    parser.add_argument('--data_path', type=str, default='/home/juheonlee/juheon_work/bar_retrain', choices=['modelnet40'], metavar='N',help='data path to use')
-    parser.add_argument('--model_path', type=str, default='/home/juheonlee/juheon_work/DL_engine/pretrained/MF_engine_v2/', metavar='N', help='Pretrained model path')
-    parser.add_argument('--log_dir', type=str, default='/home/juheonlee/juheon_work/DL_engine/pretrained/MF_engine_v2/', metavar='N', help='log train model path')
-    parser.add_argument('--num_epoch', type=int, default=2001, metavar='N',
-                        help='number of epoch')
-    parser.add_argument('--num_batch', type=int, default=3, metavar='N',
-                        help='number of batch')
-    parser.add_argument('--cuda', type=bool, default=True, metavar='N',
-                        help='use cuda')
-    parser.add_argument('--use_multigpu', type=bool, default=False, metavar='N', help='use multiple gpus')
-    args = parser.parse_args()
+import hydra
+from hydra import initialize, compose
+from omegaconf import DictConfig, OmegaConf
 
 
-    LOG_DIR = args.log_dir
-    if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
-    LOG_FOUT = open(os.path.join(LOG_DIR, 'log_train_gen.txt'), 'w')
-    
-    def log_string(out_str):
-        LOG_FOUT.write(out_str+'\n')
-        LOG_FOUT.flush()
-        print(out_str)
+def main(rank):
+    # def main(rank, world_size, dataset,args):
+    """
+
+    :param rank: number of visible cuda devices, from 0, 1, .. for distributed training
+    :return:
+    """
+
+    # Read the configs
+    with initialize(config_path="conf", job_name="test_app"):
+        cfg = compose(config_name="config", overrides=["+db=mysql", "+db.user=me"])
+    # define gpu id,  dtype:int
+    device = rank
+    world_size = torch.cuda.device_count()
+    print("rank: ", device)
+
+    # Initialize and open the log file
+    LOG_FOUT = open(
+        os.path.join(cfg.train_gen_options.log_dir, "log_train_gen.txt"), "a"
+    )
+    log_string(LOG_FOUT, OmegaConf.to_yaml(cfg))
+
+    # load data
+    log_string(LOG_FOUT, "load data: note it takes time")
+    if cfg.data_options.dataset_name == "Ocardo":
+        dataset = Ocardo(
+            data_path=cfg.data_options.data_path,
+            num_points=cfg.train_dis_options.num_points,
+            partition="train",
+        )
+    elif cfg.data_options.dataset_name == "Bar":
+        dataset = Bar(
+            data_path=cfg.data_options.data_path,
+            num_points=cfg.train_dis_options.num_points,
+            partition="train",
+        )
+    print("size of the data %d" % len(dataset))
+
+    # set up distributed training
+    if cfg.general.use_distributed:
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12355"
+        distributed.init_process_group("nccl", rank=device, world_size=world_size)
 
     torch.backends.cudnn.deterministic = True
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    np.random.seed(args.seed)
+    torch.manual_seed(cfg.general.seed)
+    torch.cuda.manual_seed_all(cfg.general.seed)
+    np.random.seed(cfg.general.seed)
 
-    #train_dataset = Bar_train(data_path = args.data_path, num_points = args.num_points, partition='train')
-    train_dataset = Fibre(data_path = args.data_path, num_points = args.num_points, partition='train')
-    
-    print('size of the data %d'%len(train_dataset))
-    # model setting
-    
     # generator
-    device = torch.device('cuda' if args.cuda else 'cpu') 
+    train_dataset = dataset
 
-
-    if args.use_multigpu:
-        # dataloader init
-        train_loader = torch_geometric.data.DataListLoader(train_dataset, batch_size=args.num_batch, shuffle=True, drop_last =True)
-        # generator
+    if cfg.data_options.dataset_name == "Ocardo":
+        generator = DGCNN_ocardo()
+        discriminator = DGCNN_ocardo()
+    else:
         generator = DGCNN()
-        generator.load_state_dict(torch.load('./pretrained/MF_engine_v1/model_2000.pth',map_location='cpu'))
-        generator = torch_geometric.nn.DataParallel(generator).cuda()
-        # discriminator
         discriminator = DGCNN()
-        discriminator.load_state_dict(torch.load('./pretrained/MF_engine_v1/model_2000.pth',map_location='cpu'))
+    log_string(LOG_FOUT, "Initialize model ....  \n\n")
+    # names are analogous to generative adversarial network
+    # note that IT IS NOT A GAN!!!!! it is just an analogy!
+
+    if cfg.general.use_distributed:
+        print("use distributed multi-gpu train")
+        # dataloader
+        train_sampler = DistributedSampler(
+            train_dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=True,
+            drop_last=True,
+        )
+        train_loader = torch_geometric.loader.DataLoader(
+            train_dataset, sampler=train_sampler
+        )
+
+        # generator
+        generator = generator.to(rank)
+        generator = DistributedDataParallel(generator, device_ids=[rank])
+        map_location = {"cuda:%d" % 0: "cuda:%d" % rank}
+        generator.load_state_dict(
+            torch.load(cfg.train_gen_options.gen_model_path, map_location=map_location)
+        )
+
+        # discriminator
+        discriminator = discriminator.to(rank)
+        discriminator = DistributedDataParallel(discriminator, device_ids=[rank])
+        map_location = {"cuda:%d" % 0: "cuda:%d" % rank}
+        # Load model
+        discriminator.load_state_dict(
+            torch.load(cfg.train_gen_options.pred_model_path, map_location=map_location)
+        )
+    elif cfg.general.use_multigpu:
+        print("use multi-gpus")
+        # todo: check elif , else conditions are same
+        # dataloader init
+        train_loader = torch_geometric.loader.DataListLoader(
+            train_dataset,
+            batch_size=cfg.train_gen_options.num_batch,
+            shuffle=True,
+            drop_last=True,
+        )
+
+        # generator
+        generator.load_state_dict(
+            torch.load(cfg.train_gen_options.gen_model_path, map_location="cpu")
+        )
+        generator = torch_geometric.nn.DataParallel(generator).cuda()
+
+        # discriminator
+        discriminator.load_state_dict(
+            torch.load(cfg.train_gen_options.pred_model_path, map_location="cpu")
+        )
         discriminator = torch_geometric.nn.DataParallel(discriminator).cuda()
     else:
-        # dataloader 
-        train_loader = torch_geometric.data.DataLoader(train_dataset, batch_size=args.num_batch, shuffle=True, drop_last =True)
+        # dataloader
+        train_loader = torch_geometric.data.DataLoader(
+            train_dataset,
+            batch_size=cfg.train_gen_options.num_batch,
+            shuffle=True,
+            drop_last=True,
+        )
+
         # generator
-        generator = DGCNN()
-        generator.load_state_dict(torch.load('./pretrained/MF_engine_v1/model_2000.pth',map_location='cpu'))
+        generator.load_state_dict(
+            torch.load(cfg.train_gen_options.gen_model_path, map_location="cpu")
+        )
         generator = generator.cuda()
+
         # discriminator
-        discriminator = DGCNN()
-        discriminator.load_state_dict(torch.load('./pretrained/MF_engine_v1/model_2000.pth',map_location='cpu'))
+        discriminator.load_state_dict(
+            torch.load(cfg.train_gen_options.pred_model_path, map_location="cpu")
+        )
         discriminator = discriminator.cuda()
-    
+
     # freeze weights for discriminator
     for p in discriminator.parameters():
-        p.requires_grad = False  # to avoid computation  
+        p.requires_grad = False  # to avoid computation
 
-    optimizer = torch.optim.Adam(generator.parameters(), lr=0.001)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[1000,3000],gamma=0.5)
-    steps = 500
-    for i in range(args.num_epoch):
+    optimizer = torch.optim.Adam(
+        generator.parameters(), lr=cfg.train_gen_options.learning_rate
+    )
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=[400, 800, 1200, 1600, 2500], gamma=0.5
+    )
+    steps = 250
+
+    log_string(LOG_FOUT, "Start training ....... ")
+
+    for ep in range(cfg.train_gen_options.num_epoch):
         total_train_loss = 0
         total_chamfer_loss = 0
         total_oloss = 0
         total_ocham = 0
-        tic()
+        if rank == 0 or cfg.general.use_distributed == False:
+            tic()
+
         # train
         for data in train_loader:
-            if args.cuda and args.use_multigpu==False:
+            if cfg.general.use_distributed:
                 data = data.to(device)
-                pts1 = data.x 
+                pts1 = data.x
                 pts2 = data.y.cpu()
                 edge_index = data.edge_index
-            elif args.use_multigpu:
-                pts1 = torch.cat([d.x for d in data]).reshape(args.num_batch,-1,3).reshape(args.num_batch,-1,3)
-                pts2 = torch.cat([d.y for d in data]).reshape(args.num_batch,-1,3).reshape(args.num_batch,-1,3)
-                pts1= pts1.cuda() 
-                pts2= pts1.cuda() 
-                
+            elif cfg.general.cuda and not cfg.general.use_multigpu:
+                data = data.to(device)
+                pts1 = data.x
+                # todo: why need to load to cpu
+                pts2 = data.y.cpu()
+                edge_index = data.edge_index
+            elif cfg.general.use_multigpu:
+                pts1 = (
+                    torch.cat([d.x for d in data])
+                    .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                    .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                )
+                pts2 = (
+                    torch.cat([d.y for d in data])
+                    .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                    .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                )
+                pts1 = pts1.to(device)
+                pts2 = pts1.to(device)
+
             optimizer.zero_grad()
-            
+
             # compensation
             com = generator(data)
-            if args.use_multigpu:
+            if cfg.general.use_distributed:
+                compensated_data = torch_geometric.data.Data(
+                    x=com, edge_index=edge_index
+                )
+            elif cfg.general.use_multigpu:
                 # it has be a list of graph data
                 compensated_data = []
-                tmp = com.reshape(args.num_batch,-1,3)
-                for ii in range(args.num_batch):
-                    d = torch_geometric.data.Data(x=tmp[ii], edge_index=data[ii].edge_index.cuda())
+                tmp = com.reshape(cfg.train_gen_options.num_batch, -1, 3)
+                for ii in range(cfg.train_gen_options.num_batch):
+                    d = torch_geometric.data.Data(
+                        x=tmp[ii], edge_index=data[ii].edge_index.cuda()
+                    )
                     compensated_data.append(d)
-            else: 
-                compensated_data = torch_geometric.data.Data(x=com,edge_index=edge_index)
+            else:
+                compensated_data = torch_geometric.data.Data(
+                    x=com, edge_index=edge_index
+                )
             # evaluate deformation
             out = discriminator(compensated_data)
-            
-            # reshape for metric computation 
-            if args.cuda and args.use_multigpu==False:
-                pts1 = pts1.reshape(args.num_batch,-1,3)
-                pts2 = pts2.reshape(args.num_batch,-1,3)
-            
-            # metric (loss fun)
-            chamfer,_   = chamfer_distance(out.reshape(args.num_batch,-1,3),pts1)
-            o_chamfer,_ = chamfer_distance(com.data.reshape(args.num_batch,-1,3),pts1)
-            l2_loss = l2_dist(out.reshape(args.num_batch,-1,3),pts1)
-            o_loss  = l2_dist(com.data.reshape(args.num_batch,-1,3),pts1).cpu().numpy()
 
-            loss    = l2_loss + chamfer*2
+            # reshape for metric computation
+            if cfg.general.cuda and cfg.general.use_multigpu == False:
+                pts1 = pts1.reshape(cfg.train_gen_options.num_batch, -1, 3)
+                pts2 = pts2.reshape(cfg.train_gen_options.num_batch, -1, 3)
+
+            # metric (loss fun)
+            # Compute chamfer_distance of the input CAD - D(G(compensated))
+            chamfer, _ = chamfer_distance(
+                out.reshape(cfg.train_gen_options.num_batch, -1, 3),
+                pts1.reshape(cfg.train_gen_options.num_batch, -1, 3),
+            )
+            # Compute chamfer_distance of the input CAD - G(compensated)
+            o_chamfer, _ = chamfer_distance(
+                com.data.reshape(cfg.train_gen_options.num_batch, -1, 3),
+                pts1.reshape(cfg.train_gen_options.num_batch, -1, 3),
+            )
+            # Compute l2_dist
+            l2_loss = l2_dist(
+                out.reshape(cfg.train_gen_options.num_batch, -1, 3),
+                pts1.reshape(cfg.train_gen_options.num_batch, -1, 3),
+            )
+            o_loss = (
+                l2_dist(
+                    com.data.reshape(cfg.train_gen_options.num_batch, -1, 3),
+                    pts1.reshape(cfg.train_gen_options.num_batch, -1, 3),
+                )
+                .cpu()
+                .numpy()
+            )
+
+            # Min the loss as input CAD - D(G(compensated))
+            loss = l2_loss + chamfer  # *2
             loss.backward()
 
-            total_train_loss += loss.item() - chamfer.item()*2
+            total_train_loss += loss.item() - chamfer.item()  # *2
             total_chamfer_loss += chamfer.item()
             total_oloss += o_loss
             total_ocham += o_chamfer
 
             optimizer.step()
-        total_avg_train_loss = total_train_loss/(args.num_batch*len(train_loader))
-        total_avg_chamfer_loss = total_chamfer_loss/(args.num_batch*len(train_loader))
-        total_avg_oloss = total_oloss/(args.num_batch*len(train_loader))
-        total_avg_ocham = total_ocham/(args.num_batch*len(train_loader))
-        log_string('[Epoch %03d] training loss: %.6f, chamfer loss: %.6f, reference1: %.6f, reference2: %.6f'%(i,total_avg_train_loss, total_avg_chamfer_loss, total_avg_oloss, total_avg_ocham))        
+
+        # syncronise after
+        if cfg.general.use_distributed:
+            distributed.barrier()
+        total_avg_train_loss = total_train_loss / (
+            cfg.train_gen_options.num_batch * len(train_loader)
+        )
+        total_avg_chamfer_loss = total_chamfer_loss / (
+            cfg.train_gen_options.num_batch * len(train_loader)
+        )
+        total_avg_oloss = total_oloss / (
+            cfg.train_gen_options.num_batch * len(train_loader)
+        )
+        total_avg_ocham = total_ocham / (
+            cfg.train_gen_options.num_batch * len(train_loader)
+        )
+        if rank == 0 or cfg.general.use_distributed == False:
+            log_string(
+                LOG_FOUT,
+                "[Epoch %03d] training loss: %.6f, chamfer loss: %.6f, reference1: %.6f, reference2: %.6f"
+                % (
+                    ep,
+                    total_avg_train_loss,
+                    total_avg_chamfer_loss,
+                    total_avg_oloss,
+                    total_avg_ocham,
+                ),
+            )
+            toc()
+            tic()
         # data save
-        if i%steps == 0:
-            log_string('save weights at epoch %03d'%i)
-            if os.path.exists(args.model_path):
-                if args.use_multigpu:
-                    torch.save(generator.module.state_dict(), args.model_path+'generator_%03d.pth'%i)
-                else:
-                    torch.save(generator.state_dict(), args.model_path+ 'generator_%03d.pth'%i)
+        if rank == 0 and ep % steps == 0:
+            log_string(LOG_FOUT, "save weights at epoch %03d" % ep)
+            os.makedirs(cfg.train_gen_options.save_path, exist_ok=True)
+
+            # save
+            if cfg.general.use_distributed:
+                torch.save(
+                    generator.state_dict(),
+                    cfg.train_gen_options.save_path + "gen_model_%04d.pth" % ep,
+                )
+            elif cfg.general.use_multigpu:
+                torch.save(
+                    generator.module.state_dict(),
+                    cfg.train_gen_options.save_path + "gen_model_%04d.pth" % ep,
+                )
             else:
-                os.mkdir(args.model_path)
-                if args.use_multigpu:
-                    torch.save(generator.module.state_dict(), args.model_path+'generator_%03d.pth'%i)
-                else:
-                        torch.save(generator.state_dict(), args.model_path+'generator_%03d.pth'%i)
-            if not os.path.exists(os.path.join(args.model_path,'results2')):
-                os.mkdir(os.path.join(args.model_path,'results2'))
- 
-            np.savetxt(os.path.join(args.model_path, 'results2/cad__%02d.csv'%i),pts1.cpu().numpy()[0],fmt='%.8f', delimiter=",")
-            np.savetxt(os.path.join(args.model_path, 'results2/scan_%02d.csv'%i),pts2.cpu().numpy()[0],fmt='%.8f', delimiter=",")
-            np.savetxt(os.path.join(args.model_path, 'results2/comp_%02d.csv'%i),com.detach().cpu().reshape(args.num_batch,-1,3).numpy()[0],fmt='%.8f', delimiter=",")
-            np.savetxt(os.path.join(args.model_path, 'results2/out__%02d.csv'%i),out.detach().cpu().reshape(args.num_batch,-1,3).numpy()[0],fmt='%.8f', delimiter=",")
+                torch.save(
+                    generator.state_dict(),
+                    cfg.train_gen_options.save_path + "gen_model_%04d.pth" % ep,
+                )
+
+            os.makedirs(
+                os.path.join(cfg.train_gen_options.save_path, "results2"), exist_ok=True
+            )
+
+            np.savetxt(
+                os.path.join(
+                    cfg.train_gen_options.save_path, "results2/cad__%02d.csv" % ep
+                ),
+                pts1.cpu().reshape(cfg.train_gen_options.num_batch, -1, 3).numpy()[0],
+                fmt="%.8f",
+                delimiter=",",
+            )
+            np.savetxt(
+                os.path.join(
+                    cfg.train_gen_options.save_path, "results2/scan_%02d.csv" % ep
+                ),
+                pts2.cpu().reshape(cfg.train_gen_options.num_batch, -1, 3).numpy()[0],
+                fmt="%.8f",
+                delimiter=",",
+            )
+            np.savetxt(
+                os.path.join(
+                    cfg.train_gen_options.save_path, "results2/comp_%02d.csv" % ep
+                ),
+                com.detach()
+                .cpu()
+                .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                .numpy()[0],
+                fmt="%.8f",
+                delimiter=",",
+            )
+            np.savetxt(
+                os.path.join(
+                    cfg.train_gen_options.save_path, "results2/out_%02d.csv" % ep
+                ),
+                out.detach()
+                .cpu()
+                .reshape(cfg.train_gen_options.num_batch, -1, 3)
+                .numpy()[0],
+                fmt="%.8f",
+                delimiter=",",
+            )
         scheduler.step()
-        if i > 4000: steps = 500
+
     # end training
     LOG_FOUT.close()
+    if cfg.general.use_distributed:
+        distributed.destroy_process_group()
+
 
 if __name__ == "__main__":
-    main()
+    with initialize(config_path="conf", job_name="test_app"):
+        cfg = compose(config_name="config", overrides=["+db=mysql", "+db.user=me"])
+
+        distributed_option = cfg.general.use_distributed
+        device = torch.device("cuda" if cfg.general.cuda else "cpu")
+
+    # run model based on single // data parallel // distributed data parallel
+    if distributed_option:
+        print("distributed data parallel ")
+        world_size = torch.cuda.device_count()
+        print("Cuda device cnt: ", world_size)
+        # mp.spawn(main, args=(world_size, dataset, param), nprocs=world_size, join=True)
+        mp.spawn(main, nprocs=world_size, join=True)
+    else:
+        # main(device,world_size,dataset,param)
+        main(device, cfg)

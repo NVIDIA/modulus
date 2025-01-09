@@ -47,6 +47,18 @@ train_gen_options:
   num_batch: 1
   learning_rate: 0.001
 
+inference_options:
+  seed: 1234
+  num_points: 20000   # 'Num of points to use'
+  data_path: './data/molded_fiber'   # 'data path to use', should be a folder where the design CAD exist
+  discriminator_path: './pretrained/11parts_lr-3/pred_model_2000.pth'   # 'discriminator model path'
+  generator_path: './pretrained/11parts_lr-3/gen_model_0500.pth'  # 'generator model path'
+  save_path: './output/test1217'  # 'save output path'
+  save_extra: True  # 'exports prediction and additional data csv'
+
+
 data_options:
   dataset_name: "Ocardo" # choices=['Ocardo', 'Bar']
-  data_path: './data'
+  data_path: './data/molded_fiber' # for other dataset: 'input_data_bar_sample','molded_fiber'
+  cad_format: 'txt'
+  scan_format: 'csv'

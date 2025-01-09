@@ -21,9 +21,10 @@
 
 import torch
 
-def l2_dist(pts1,pts2, reduction='mean'):
-    l2_per_batch = torch.mean(torch.sum(torch.pow(pts1-pts2,2),-1),-1)
-    if reduction == 'mean':
+
+def l2_dist(pts1, pts2, reduction="mean"):
+    l2_per_batch = torch.mean(torch.sum(torch.pow(pts1 - pts2, 2), -1), -1)
+    if reduction == "mean":
         return torch.mean(l2_per_batch)
     else:
         return l2_per_batch
