@@ -1,3 +1,7 @@
+# ignore_header_test
+# ruff: noqa: E402
+
+# © Copyright 2023 HP Development Company, L.P.
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
