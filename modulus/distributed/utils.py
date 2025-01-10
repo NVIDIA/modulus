@@ -232,7 +232,9 @@ def all_gather_v_wrapper(
         local tensor on each rank
     sizes : List[int], optional
         list of the sizes of each chunk on each rank along distributed dimension,
-        valid and set on each rank, by default None
+        valid and set on each rank, by default None.  Can be single integer
+        per rank (assuming all other dimensions except `dim` below are equal)
+        or can be full 
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -245,9 +247,6 @@ def all_gather_v_wrapper(
     """
 
     comm_size = dist.get_world_size(group=group)
-
-    print(sizes)
-    print(comm_size)
 
     if (sizes is not None) and (len(sizes) != comm_size):
         raise ValueError()
@@ -278,13 +277,10 @@ def all_gather_v_wrapper(
         tensor_list = [None] * comm_size
 
         for src in range(comm_size):
-            print(f"pre tensor_shape: {tensor_shape}")
             if full_shapes:
                 tensor_shape = sizes[src]
             else: 
                 tensor_shape[dim] = sizes[src]
-            print(f"sizes[{src}]: {sizes[src]}")
-            print(f"tensor_shape: {tensor_shape}")
             tensor_list[src] = torch.empty(
                 tensor_shape,
                 dtype=tensor.dtype,
@@ -296,8 +292,6 @@ def all_gather_v_wrapper(
 
     dist.all_gather(tensor_list, tensor, group=group)
 
-    print([t.shape for t in tensor_list])
-    print(dim)
 
     output = torch.cat(tensor_list, dim=dim).contiguous(memory_format=tensor_format)
 

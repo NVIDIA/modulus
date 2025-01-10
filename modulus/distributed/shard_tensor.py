@@ -35,6 +35,9 @@ from modulus.distributed._shard_tensor_spec import (
     _infer_shard_tensor_spec_from_local_chunks
 )
 
+from modulus.distributed._shard_redistribute import (
+    ShardRedistribute
+)
 from torch.distributed.device_mesh import _mesh_resources, DeviceMesh
 
 from modulus.distributed.autograd import all_gather_v
@@ -49,7 +52,7 @@ class _ToTorchTensor(torch.autograd.Function):
     def forward(
         ctx,
         input : "ShardTensor",
-        grad_placements: Optional[Sequence[Placement]]
+        grad_placements: Optional[Sequence[Placement]] = None
     ) -> torch.Tensor:
         
         ctx.shard_tensor_spec = input._spec
@@ -64,23 +67,27 @@ class _ToTorchTensor(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> "ShardTensor":
+        
         shard_tensor_spec = ctx.shard_tensor_spec
         mesh = shard_tensor_spec.mesh
         
-        shard_meta = shard_tensor_spec.meta
         
         grad_placements = ctx.grad_placements or shard_tensor_spec.placements
         
         # Generate a spec based on grad outputs and the expected placements:
-        grad_tensor_spec = _infer_shard_tensor_spec_from_local_chunks(grad_output, mesh, placements)
+        grad_tensor_spec = _infer_shard_tensor_spec_from_local_chunks(grad_output, mesh, grad_placements)
         
-        return ShardTensor(
-            grad_output,
-            grad_tensor_spec,
-            requires_grad=grad_output.requires_grad
+        return (
+            ShardTensor(
+                grad_output,
+                grad_tensor_spec,
+                requires_grad=grad_output.requires_grad
+            ),
+            None
         )
         
         
+    
     
 
 class _FromTorchTensor(torch.autograd.Function):
@@ -114,9 +121,9 @@ class _FromTorchTensor(torch.autograd.Function):
     ) -> torch.Tensor:
 
         previous_placement = ctx.previous_placement
-        previous_mesh = ctc.previous_mesh
+        previous_mesh = ctx.previous_mesh
         
-        assert grad_outputs.placements == previous_placement, \
+        assert grad_output.placements == previous_placement, \
             "Resharding gradients not yet implemented"
             
         
@@ -200,6 +207,24 @@ class ShardTensor(DTensor):
         
         return ret
     
+    def __repr__(self):
+        return f"ShardTensor(local_tensor={self._local_tensor}, device_mesh={self._spec.mesh}, placements={self._spec.placements})"
+    
+    @classmethod
+    def _from_dtensor(cls, dtensor : DTensor) -> "ShardTensor":
+        spec = ShardTensorSpec(
+            mesh            = dtensor._spec.mesh,
+            placements      = dtensor._spec.placements,
+            tensor_meta     = dtensor._spec.tensor_meta,
+            _sharding_sizes = None, # Leave this to none for a lazy init and assume it's not breaking to make this cast.
+            _local_shape    = dtensor._local_tensor.shape
+        )
+        return ShardTensor.__new__(
+            cls,
+            local_tensor = dtensor._local_tensor,
+            spec         = spec,
+            requires_grad = dtensor.requires_grad
+        )
     
     #TODO - methods from DTensor that might be necessary
     # def __tensor_flatten__(self) (https://github.com/pytorch/pytorch/blob/main/torch/distributed/tensor/_api.py#L293)
@@ -208,15 +233,29 @@ class ShardTensor(DTensor):
     # def __coerce_tangent_metadata__(self) (https://github.com/pytorch/pytorch/blob/main/torch/distributed/tensor/_api.py#L323)
     # def __coerce_same_metadata_as_tangent__(self) (https://github.com/pytorch/pytorch/blob/main/torch/distributed/tensor/_api.py#L331)
     
-    # @classmethod
-    # @torch._disable_dynamo
-    # def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
-
-    #     return ShardTensor._op_dispatcher.dispatch(
-    #         func,
-    #         args,
-    #         kwargs or {},
-    #     )
+    @classmethod
+    @torch._disable_dynamo
+    def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
+        # Leverage DTensor Dispatch as much as possible, but, enable
+        # the ability to operate on this output in the future:
+        dispatch_res =  DTensor.__torch_dispatch__(func, types, args, kwargs)
+        
+        #TODO - for ``Partial`` specs, in SOME cases, we need to include a "weight"
+        # For example, 
+        
+        
+        # Return a shard tensor instead of a dtensor.
+        # ShardTensor inherits from DTensor and can lazy-init from for efficiency 
+        if isinstance(dispatch_res, DTensor):
+            return ShardTensor._from_dtensor(dispatch_res)
+        
+        return dispatch_res
+        
+        # return ShardTensor._op_dispatcher.dispatch(
+        #     func,
+        #     args,
+        #     kwargs or {},
+        # )
         
     def from_local(
         local_tensor: torch.Tensor,
@@ -277,7 +316,58 @@ class ShardTensor(DTensor):
         )
 
         
+    def redistribute(
+        self,
+        device_mesh: Optional[DeviceMesh] = None,
+        placements: Optional[Sequence[Placement]] = None,
+        * ,
+        async_op: bool = False):
+        """
+        This is just like DTensor redistribute except that we use a custom layer for
+        shard redistribution.  Otherwise, the backwards pass will not evaluate correctly.
 
+        Parameters
+        ----------
+        device_mesh : Optional[DeviceMesh], optional
+            Mesh to use, by default None
+        placements : Optional[Sequence[Placement]], optional
+            Target Placements, by default None, will error if not supplied  
+        async_op : bool, optional
+            _description_, by default False
+
+        Returns
+        -------
+        _type_
+            _description_
+
+        Raises
+        ------
+        RuntimeError
+            _description_
+        RuntimeError
+            _description_
+        """
+        # if device_mesh is not specified, use the current device_mesh
+        device_mesh = device_mesh or self.device_mesh
+        # raise error if new placements not specified
+        if placements is None:
+            raise RuntimeError("placements is needed for redistribute!")
+
+        placements = list(placements)
+        for i, placement in enumerate(placements):
+            if placement.is_partial():
+                raise RuntimeError(
+                    "Can not redistribute to Partial, redistributing to Partial is for internal use only!"
+                )
+            elif isinstance(placement, Shard) and placement.dim < 0:
+                # normalize shard dim to be positive
+                placements[i] = Shard(placement.dim + self.ndim)
+        placements = tuple(placements)
+        
+        
+        # pyre-fixme[16]: `Redistribute` has no attribute `apply`.
+        return ShardRedistribute.apply(self, device_mesh, placements, async_op)
+    
     
     def to_local(
         self, *, grad_placements: Optional[Sequence[Placement]] = None
@@ -308,58 +398,6 @@ class ShardTensor(DTensor):
             self, grad_placements
         )
         
-    
-    # def redistribute(
-    #     self,
-    #     device_mesh: Optional[DeviceMesh] = None,
-    #     placements: Optional[Sequence[Placement]] = None,
-    #     *,
-    #     async_op: bool = False,
-    # ) -> "ShardTensor":
 
-    #     raise NotImplementedError("Redistributing a sharded tensor is not yet implemented")
     
-    def full_tensor(
-        self, *, grad_placements: Optional[Sequence[Placement]] = None
-    ) -> torch.Tensor:
-        # Custom implementation of Distribution.  This this take a ShardTensor 
-        # and coalesces all sharded dimensions.
-        
-        # Work from the innermost dimension outwards, assuming that if there is any replication
-        # It's at the highest levels of the mesh.
-        mesh = self._spec.mesh
-        placements = self._spec.placements
-        local_tensor = self.to_local()
-        
-        
-        sizes = self._spec.sharding_sizes
-        
-        # Each all gather changes the input shapes from what's in the spec.
-        # Option 1: Respec at each layer, may incur cost
-        # Option 2: Recompute shapes on the fly replacing reduced dims with global shape
     
-        global_shape = self.shape
-        
-        reduced_tensor_dims = []
-    
-        for i, placement in reversed(list(enumerate(placements))):
-
-        
-            tensor_dim = placement.dim
-            group = mesh.get_group(i)
-        
-
-            this_sizes = [s.shape for s in sizes[i]]
-
-            # This is replacing the original shard size with the global shard size
-            # on every dimension that has been already reduced:
-            this_sizes = [
-                [_s[i] if i not in reduced_tensor_dims else global_shape[i] for i, _ in enumerate(_s) ]
-                for _s in this_sizes
-            ]
-        
-            local_tensor = all_gather_v(local_tensor, sizes=this_sizes, dim=tensor_dim, group=group)
-            
-            reduced_tensor_dims.append(tensor_dim)
-            
-        return local_tensor
