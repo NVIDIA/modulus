@@ -66,7 +66,7 @@ def main(rank):
     LOG_FOUT = open(
         os.path.join(cfg.train_dis_options.log_dir, "log_train_dis.txt"), "a"
     )
-    log_string(LOG_FOUT, OmegaConf.to_yaml(cfg))
+    # log_string(LOG_FOUT, OmegaConf.to_yaml(cfg))
 
     # load data
     log_string(LOG_FOUT, "load data: note it takes time")
@@ -141,7 +141,7 @@ def main(rank):
             drop_last=True,
         )
         model = torch_geometric.nn.DataParallel(model).to(device)
-    else:
+    elif cfg.general.cuda:
         # Single Gpu training
         train_loader = torch_geometric.loader.DataLoader(
             train_dataset,
@@ -150,6 +150,17 @@ def main(rank):
             drop_last=True,
         )
         model = model.cuda()
+    else:
+        # todo: combine 2 if conditions to
+        #  model = model.to(device)
+        # CPU training
+        train_loader = torch_geometric.loader.DataLoader(
+            train_dataset,
+            batch_size=cfg.train_dis_options.num_batch,
+            shuffle=True,
+            drop_last=True,
+        )
+
 
     # In case of we have pre-trained setup
     if cfg.train_dis_options.pretrain:

@@ -22,10 +22,10 @@
 general:
   seed: 1234
   random_sample: True
-  cuda: True
-  use_distributed: True
+  cuda: False
+  use_distributed: False
   sync_batch: True
-  use_multigpu: True # Default: False for D, True for G
+  use_multigpu: False # Default: False for D, True for G
 
 train_dis_options:
   model_path: './pretrained/11parts_lr-3/pred_model_0000.pth'
@@ -59,6 +59,6 @@ inference_options:
 
 data_options:
   dataset_name: "Ocardo" # choices=['Ocardo', 'Bar']
-  data_path: './data/molded_fiber' # for other dataset: 'input_data_bar_sample','molded_fiber'
+  data_path: '/home/chenle/codes/DL_prediction_compensation-master/data/molded_fiber' # for other dataset: 'input_data_bar_sample','molded_fiber'
   cad_format: 'txt'
   scan_format: 'csv'

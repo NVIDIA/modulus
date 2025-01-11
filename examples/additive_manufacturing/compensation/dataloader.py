@@ -29,7 +29,7 @@ import torch
 from torch.utils.data import Dataset
 import torch_geometric
 
-import open3d as o3d
+# import open3d as o3d
 import trimesh
 
 
