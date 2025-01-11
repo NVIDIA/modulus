@@ -171,13 +171,16 @@ def main(rank):
         generator.load_state_dict(
             torch.load(cfg.train_gen_options.gen_model_path, map_location="cpu")
         )
-        generator = generator.cuda()
+        # todo: test single gpu working
+        # generator = generator.cuda()
+        generator = generator.to(device)
 
         # discriminator
         discriminator.load_state_dict(
             torch.load(cfg.train_gen_options.pred_model_path, map_location="cpu")
         )
-        discriminator = discriminator.cuda()
+        # discriminator = discriminator.cuda()
+        discriminator = discriminator.to(device)
 
     # freeze weights for discriminator
     for p in discriminator.parameters():

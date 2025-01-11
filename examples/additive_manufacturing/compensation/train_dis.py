@@ -141,25 +141,17 @@ def main(rank):
             drop_last=True,
         )
         model = torch_geometric.nn.DataParallel(model).to(device)
-    elif cfg.general.cuda:
-        # Single Gpu training
-        train_loader = torch_geometric.loader.DataLoader(
-            train_dataset,
-            batch_size=cfg.train_dis_options.num_batch,
-            shuffle=True,
-            drop_last=True,
-        )
-        model = model.cuda()
     else:
-        # todo: combine 2 if conditions to
-        #  model = model.to(device)
-        # CPU training
+        # Single Gpu training, or CPU training
         train_loader = torch_geometric.loader.DataLoader(
             train_dataset,
             batch_size=cfg.train_dis_options.num_batch,
             shuffle=True,
             drop_last=True,
         )
+        # todo: test single gpu working
+        # model = model.cuda()
+        model = model.to(device)
 
 
     # In case of we have pre-trained setup
