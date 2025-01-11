@@ -562,7 +562,7 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
         """
         Get prob_channel_index list one more dimension
         """
-        return self.prob_channel_index + [len(self.output_variables)]
+        return self.prob_channel_index + [len(self.output_variables) - 1]
 
     def input_channels(self):
         return [ChannelMetadata(name=n) for n in self.input_variables]

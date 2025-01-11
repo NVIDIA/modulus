@@ -527,7 +527,7 @@ class ResLoss:
         ].expand(b, -1, -1, -1)
 
         # form residual
-        if lead_time_label:
+        if lead_time_label is not None:
             y_mean = self.unet(
                 torch.zeros_like(y, device=img_clean.device),
                 y_lr_res,
@@ -627,7 +627,7 @@ class ResLoss:
             y_lr = y_lr_new
         latent = y + torch.randn_like(y) * sigma
 
-        if lead_time_label:
+        if lead_time_label is not None:
             D_yn = net(
                 latent,
                 y_lr,
@@ -886,7 +886,7 @@ class RegressionLossCE:
 
         input = torch.zeros_like(y, device=img_clean.device)
 
-        if lead_time_label:
+        if lead_time_label is not None:
             D_yn = net(
                 input,
                 y_lr,
