@@ -18,7 +18,7 @@
 type: cwb
 data_path: /code/2023-01-24-cwb-4years.zarr
 in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
-out_channels: [0, 17, 18, 19]
+out_channels: [0, 1, 2, 3]
 img_shape_x: 448
 img_shape_y: 448
 add_grid: true

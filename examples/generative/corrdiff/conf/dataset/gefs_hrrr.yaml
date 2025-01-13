@@ -16,7 +16,7 @@
 
 type: gefs_hrrr
 data_path: /data
-stats_path: modulus/examples/generative/corrdiff/stats.json
+stats_path: /data/stats.json
 output_variables: ["u10m", "v10m", "t2m", "precip", "cat_snow", "cat_ice", "cat_freez", "cat_rain", "cat_none"]
 prob_variables: ["cat_snow", "cat_ice", "cat_freez", "cat_rain"]
 input_surface_variables: ["u10m", "v10m", "t2m", "q2m", "sp", "msl", "precipitable_water"]
