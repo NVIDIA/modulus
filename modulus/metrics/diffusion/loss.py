@@ -527,14 +527,23 @@ class ResLoss:
         ].expand(b, -1, -1, -1)
 
         # form residual
-        y_mean = self.unet(
-            torch.zeros_like(y, device=img_clean.device),
-            y_lr_res,
-            sigma,
-            labels,
-            lead_time_label=lead_time_label,
-            augment_labels=augment_labels,
-        )
+        if lead_time_label is not None:
+            y_mean = self.unet(
+                torch.zeros_like(y, device=img_clean.device),
+                y_lr_res,
+                sigma,
+                labels,
+                lead_time_label=lead_time_label,
+                augment_labels=augment_labels,
+            )
+        else:
+            y_mean = self.unet(
+                torch.zeros_like(y, device=img_clean.device),
+                y_lr_res,
+                sigma,
+                labels,
+                augment_labels=augment_labels,
+            )
 
         y = y - y_mean
 
@@ -617,15 +626,26 @@ class ResLoss:
             y = y_new
             y_lr = y_lr_new
         latent = y + torch.randn_like(y) * sigma
-        D_yn = net(
-            latent,
-            y_lr,
-            sigma,
-            labels,
-            global_index=global_index,
-            lead_time_label=lead_time_label,
-            augment_labels=augment_labels,
-        )
+
+        if lead_time_label is not None:
+            D_yn = net(
+                latent,
+                y_lr,
+                sigma,
+                labels,
+                global_index=global_index,
+                lead_time_label=lead_time_label,
+                augment_labels=augment_labels,
+            )
+        else:
+            D_yn = net(
+                latent,
+                y_lr,
+                sigma,
+                labels,
+                global_index=global_index,
+                augment_labels=augment_labels,
+            )
         loss = weight * ((D_yn - y) ** 2)
 
         return loss
@@ -865,14 +885,24 @@ class RegressionLossCE:
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         input = torch.zeros_like(y, device=img_clean.device)
-        D_yn = net(
-            input,
-            y_lr,
-            sigma,
-            labels,
-            lead_time_label=lead_time_label,
-            augment_labels=augment_labels,
-        )
+
+        if lead_time_label is not None:
+            D_yn = net(
+                input,
+                y_lr,
+                sigma,
+                labels,
+                lead_time_label=lead_time_label,
+                augment_labels=augment_labels,
+            )
+        else:
+            D_yn = net(
+                input,
+                y_lr,
+                sigma,
+                labels,
+                augment_labels=augment_labels,
+            )
         loss1 = weight * ((D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2)
         loss2 = (
             weight
