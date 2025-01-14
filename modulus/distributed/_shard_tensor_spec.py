@@ -70,7 +70,9 @@ class ShardTensorSpec(DTensorSpec):
     @property
     def sharding_sizes(self, mesh_dim: Optional[int] =None) -> Tuple[torch.Size]:
         if self._sharding_sizes is None:
-            _all_gather_shard_shapes(self._local_shape, self.placements, self.mesh)
+            shard_shapes_by_dim, global_shape = _all_gather_shard_shapes(self._local_shape, self.placements, self.mesh)
+            self._sharding_sizes = shard_shapes_by_dim
+            self.tensor_meta._replace(shape = global_shape)
         if mesh_dim is not None:
             if mesh_dim < len(self._sharding_sizes): return self._sharding_sizes[mesh_dim]
         return self._sharding_sizes

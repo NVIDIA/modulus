@@ -82,7 +82,7 @@ class Attention(nn.Module):
 
         # post shape is [3, B, num_heads, N, head_dim]
         q, k, v = qkv.unbind(0)
-        return q
+
         # q shape is [B, num_heads, N, head_dim]
         q, k = self.q_norm(q), self.k_norm(k)
 
@@ -104,6 +104,7 @@ class Attention(nn.Module):
                 latent_hw is not None
             ), "NAT2D requires passing latent h, w dimensions to DiTBlock forward pass for attn reshape op"
             h, _ = latent_hw
+            print(f"H is {h}")
             q, k, v = map(
                 lambda x: rearrange(x, "b head (h w) c -> b h w head c", h=h), [q, k, v]
             )

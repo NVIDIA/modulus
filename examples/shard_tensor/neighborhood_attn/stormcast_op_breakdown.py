@@ -18,12 +18,21 @@ from torch.distributed.tensor.placement_types import Shard, Replicate
 from torch.distributed.tensor._ops.utils import register_prop_rule
 from torch.distributed.tensor._op_schema import OpSchema, OutputSharding, OpStrategy
 
+from torch.distributed.device_mesh import _mesh_resources, DeviceMesh
 
+# from stormcast_attn import unbind_rules
+from einops import rearrange
+
+
+from torch.distributed.tensor._ops.utils import register_prop_rule, register_op_strategy
+from torch.distributed.tensor._op_schema import OpSchema, OutputSharding, OpStrategy, RuntimeSchemaInfo
+
+from natten.functional import na2d
 
 aten = torch.ops.aten
 
 
-@register_prop_rule(aten.unbind.int)
+@register_prop_rule(aten.unbind.int, schema_info = RuntimeSchemaInfo(1))
 def unbind_rules(op_schema : OpSchema) -> OutputSharding:
     """
     Need to add rules for unbinding for stormcast and attention in general
@@ -64,16 +73,34 @@ def unbind_rules(op_schema : OpSchema) -> OutputSharding:
             dtype = input_spec.tensor_meta.dtype,
         )
 
-        new_spec = DTensorSpec(
-            mesh = input_spec.mesh,
-            placements = input_spec.placements,
-            tensor_meta = new_meta,
-        )
-        return OutputSharding(
-            [ new_spec for _ in range(unbind_dim_shape) ]
-        )
+        # The placements get adjusted too
+        new_placements = []
+        for p in input_spec.placements:
+            if isinstance(p, Replicate):
+                new_placements.append(p)
+            elif isinstance(p, Shard):
+                if p.dim > dim:
+                    new_placements.append(Shard(p.dim - 1))
+                else:
+                    new_placements.append(p)
+            elif isinstance(p, Partial):
+                raise Exception("Partial placement not supported yet for unbind")
+            
+        output_spec_list = [
+            DTensorSpec(
+                mesh        = input_spec.mesh,
+                placements  = tuple(new_placements),
+                tensor_meta = new_meta,
+            ) for _ in range(unbind_dim_shape)
+        ]
+        return OutputSharding(output_spec_list) 
+        
 
+from torch.distributed.tensor.experimental import register_sharding
 
+@register_sharding(na2d)
+def na2d_sharded_strategy(mesh : DeviceMesh, op_schema: OpSchema) -> OpStrategy:
+    raise Exception("na2d op strategy failing")
 
 
 
@@ -105,28 +132,119 @@ def main():
             print(f"{h_shape},{w_shape},{heads},{head_dim},{window_size},{stride},{n_params},{best:.4f},{mean:.4f},{std:.4f}")
                 
                 
+def test_inputs(unsharded_x, sharded_x):
+    
+    # First test, making sure inputs agree on rank 0:
+    
+    coalesced_x = sharded_x.full_tensor()
+    
+    dm = DistributedManager()
+    if dm.rank == 0:
+        assert torch.allclose(unsharded_x, coalesced_x)
+
+    return True
+
+def test_linear(unsharded_x, sharded_x):
+    
+    nc = unsharded_x.shape[-1]
+    
+    qkv_op = torch.nn.Linear(nc, 3*nc).to(unsharded_x.device)
+    
+    unsharded_out = qkv_op(unsharded_x)
+    
+    mesh = sharded_x._spec.mesh
+    
+    # Cast the linear to replicated:
+    qkv_op = distribute_module(
+        qkv_op, mesh
+    )
+    
+    sharded_out = qkv_op(sharded_x)
+    
+    full_out = sharded_out.full_tensor()
+    
+    dm = DistributedManager()
+    if dm.rank == 0:
+        assert torch.allclose(unsharded_out, full_out)
+    
+    return unsharded_out, sharded_out
+
+def test_unbind(unsharded_out, sharded_out, dim):
+    
+    num_heads = 8
+    head_dim  = dim // num_heads
+    
+    B = unsharded_out.shape[0]
+    N = unsharded_out.shape[1]
+    unsharded_out = unsharded_out.reshape(B, N, 3, num_heads, head_dim).permute(2, 0, 3, 1, 4)
+
+    # post shape is [3, B, num_heads, N, head_dim]
+    q, k, v = unsharded_out.unbind(0)
+    
+    
+    B = sharded_out.shape[0]
+    N = sharded_out.shape[1]
+    sharded_out = sharded_out.reshape(B, N, 3, num_heads, head_dim).permute(2, 0, 3, 1, 4)
+
+    
+    sq, sk, sv = sharded_out.unbind(0)
+    
+    dm = DistributedManager()
+    
+    sqf = sq.full_tensor()
+    skf = sk.full_tensor()
+    svf = sv.full_tensor()
+    
+    
+    if dm.rank == 0:
+        assert torch.allclose(q, sqf)
+        assert torch.allclose(k, skf)
+        assert torch.allclose(v, svf)
+
+    return (q, k, v,), (sq, sk, sv)
+
+def test_rearrange(q, shard_q, h):
+    
+    
+    q = rearrange(q, "b head (h w) c -> b h w head c", h=h)
+    
+    shard_q = rearrange(shard_q, "b head (h w) c -> b h w head c", h=h)
+    
+    sqf = shard_q.full_tensor()
+
+    dm = DistributedManager()
+    
+    
+    if dm.rank == 0:
+        assert torch.allclose(q, sqf)
+
+    return q, shard_q
+    
+    
+def test_na2d(single_device_inputs, sharded_inputs, kernel_size=7):
+    
+    (k, q, v) = single_device_inputs
+    (sk, sq, sv) = sharded_inputs
+    
+    x = na2d(q, k, v, kernel_size=kernel_size)
+    
+    sx = na2d(sq, sk, sv, kernel_size = kernel_size)
+    
+    sxf = sx.full_tensor()
+    
+    dm = DistributedManager()
+    
+    print(f"Rank {dm.rank} difference: {torch.sum(torch.abs(x - sxf))}")
+    
+    if dm.rank == 0:
+        assert(torch.allclose(x, sxf))
+    
+    return x, sx
+    
 def benchmark(args):
     
     # Pretend inputs: 
     x = create_data(args)
-    
-    # For the NAtten implementation, we have to shape this properly...
-    
-    attn = Attention(
-        dim = args.nheads * args.head_dim,
-        num_heads = args.nheads,
-        attn_kernel = args.window_size,
-    ).to(x.device)
-    
-    output = attn(x, latent_hw = [args.height, args.width])
-    
-    # Compute the number of parameter:
-    n_params = 0
-    for name, p in attn.named_parameters():
-        this_params_count = 1
-        for dim in p.shape:
-            this_params_count *= dim
-        n_params += this_params_count
     
       # Access the rank easily through the manager:
     dm = DistributedManager()
@@ -157,6 +275,27 @@ def benchmark(args):
         )
     )
     
+    
+    test_inputs(x, shard_x)
+    unsharded_out, sharded_out = test_linear(x, shard_x)
+    
+    unsharded_qkv, sharded_qkv = test_unbind(unsharded_out, sharded_out, dim=args.nheads * args.head_dim)
+    
+    q, k, v = unsharded_qkv
+    sq, sk, sv = sharded_qkv
+    
+    q, sq = test_rearrange(q, sq, args.height)
+    k, sk = test_rearrange(k, sk, args.height)
+    v, sv = test_rearrange(v, sv, args.height)
+    
+    print(f"Rank {dm.rank} passed rearrange")
+    
+    
+    x, sq = test_na2d((k, q, v), (sk, sq, sv), kernel_size=7)
+    
+    
+    dist.barrier()
+    
     # # Parallelize the module with replication:
     # placement = [Shard(0)]
     # for name, param in attn.named_parameters():
@@ -174,16 +313,16 @@ def benchmark(args):
     #     print(f"Distributed Parameter: {name}, Placement: {placement}, Shape: {param.data.shape}")
 
 
-        
-    attn = distribute_module(
-        attn, domain_mesh
-    )
-    
-    for name, param in attn.named_parameters():
-        print(f"{name}: {type(param.data)}")
-    print(f"args.height: {args.height}")
-    test_output = attn(shard_x, latent_hw = [args.height // 2, args.width ])
     return None
+    # attn = distribute_module(
+    #     attn, domain_mesh
+    # )
+    
+    # for name, param in attn.named_parameters():
+    #     print(f"{name}: {type(param.data)}")
+
+    # test_output = attn(shard_x, latent_hw = [args.height // 2, args.width ])
+    # return None
 
     
 
