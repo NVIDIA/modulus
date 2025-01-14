@@ -26,6 +26,7 @@ from scipy.spatial import KDTree
 
 try:
     import pyvista as pv
+
     PV_AVAILABLE = True
 except ImportError:
     PV_AVAILABLE = False
@@ -33,10 +34,10 @@ try:
     import vtk
     from vtk import vtkDataSetTriangleFilter
     from vtk.util import numpy_support
+
     VTK_AVAILABLE = True
 except ImportError:
     VTK_AVAILABLE = False
-
 
 
 def calculate_center_of_mass(stl_centers, stl_sizes):
@@ -79,7 +80,7 @@ def write_to_vtp(polydata, filename):
 def write_to_vtu(polydata, filename):
     """Function to write polydata to vtu"""
     if not VTK_AVAILABLE:
-        raise ImportError("VTK or is not installed. This function cannot be used
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     writer = vtk.vtkXMLUnstructuredGridWriter()
     writer.SetFileName(filename)
     writer.SetInputData(polydata)
@@ -111,7 +112,7 @@ def extract_surface_triangles(tet_mesh):
 def convert_to_tet_mesh(polydata):
     """Function to convert tet to stl"""
     if not VTK_AVAILABLE:
-        raise ImportError("VTK or is not installed. This function cannot be used
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     # Create a VTK DataSetTriangleFilter object
     tet_filter = vtkDataSetTriangleFilter()
     tet_filter.SetInputData(polydata)
@@ -154,7 +155,7 @@ def get_fields_from_cell(ptdata, var_list):
 def get_fields(data, variables):
     """Function to get fields from VTP/VTU"""
     if not VTK_AVAILABLE:
-        raise ImportError("VTK or is not installed. This function cannot
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     fields = []
     for array_name in variables:
         try:
