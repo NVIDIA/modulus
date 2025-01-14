@@ -343,3 +343,14 @@ def dict_to_device(state_dict, device):
     for k, v in state_dict.items():
         new_state_dict[k] = v.to(device)
     return new_state_dict
+
+
+def area_weighted_shuffle_array(arr, npoin, area):
+    factor = 1.0
+    total_area = np.sum(area**factor)
+    probs = area**factor / total_area
+    np.random.seed(seed=int(time.time()))
+    idx = np.arange(arr.shape[0])
+    np.random.shuffle(idx)
+    ids = np.random.choice(idx, npoin, p=probs[idx])
+    return arr[ids], ids

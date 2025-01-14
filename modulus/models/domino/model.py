@@ -660,7 +660,7 @@ class DoMINO(nn.Module):
 
         geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
         sdf_encoding_sampled = torch.gather(sdf_encoding, 2, mapping) * mask
-        geo_encoding_long_sampled = torch.gather(sdf_encoding, 2, mapping) * mask
+        geo_encoding_long_sampled = torch.gather(geo_encoding_long, 2, mapping) * mask
 
         encoding_g = torch.cat(
             (geo_encoding_sampled, sdf_encoding_sampled, geo_encoding_long_sampled),
