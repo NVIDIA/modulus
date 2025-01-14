@@ -199,14 +199,18 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             prediction_vol = unnormalize(prediction_vol, vol_factors[0], vol_factors[1])
 
-            prediction_vol[:, :, :3] = prediction_vol[:, :, :3] * stream_velocity[0, 0]
+            prediction_vol[:, :, :3] = (
+                prediction_vol[:, :, :3] * stream_velocity[0, 0].cpu().numpy()
+            )
             prediction_vol[:, :, 3] = (
                 prediction_vol[:, :, 3]
-                * stream_velocity[0, 0] ** 2.0
-                * air_density[0, 0]
+                * stream_velocity[0, 0].cpu().numpy() ** 2.0
+                * air_density[0, 0].cpu().numpy()
             )
             prediction_vol[:, :, 4] = (
-                prediction_vol[:, :, 4] * stream_velocity[0, 0] * length_scale[0]
+                prediction_vol[:, :, 4]
+                * stream_velocity[0, 0].cpu().numpy()
+                * length_scale[0].cpu().numpy()
             )
         else:
             prediction_vol = None
@@ -298,8 +302,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             prediction_surf = (
                 unnormalize(prediction_surf, surf_factors[0], surf_factors[1])
-                * stream_velocity[0, 0] ** 2.0
-                * air_density[0, 0]
+                * stream_velocity[0, 0].cpu().numpy() ** 2.0
+                * air_density[0, 0].cpu().numpy()
             )
 
         else:
