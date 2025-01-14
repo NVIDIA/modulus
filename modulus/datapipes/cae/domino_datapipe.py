@@ -491,8 +491,12 @@ class DoMINODataPipe(Dataset):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
         elif self.model_type == "surface":
             return {
@@ -509,8 +513,12 @@ class DoMINODataPipe(Dataset):
                 "surface_fields": surface_fields,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
         elif self.model_type == "volume":
             return {
@@ -527,8 +535,12 @@ class DoMINODataPipe(Dataset):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
 
 
