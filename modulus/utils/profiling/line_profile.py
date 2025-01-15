@@ -51,7 +51,7 @@ class LineProfileWrapper(ModulusProfilerWrapper):
     def _standup(self):
         # Nothing to do here ... 
         if lp_avail:
-            self._profiler = line_profiler.LineProfiler()
+            self._profiler = LineProfiler()
         else:
             self._profiler = None
             self.enabled = False
