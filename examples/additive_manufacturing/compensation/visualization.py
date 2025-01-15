@@ -20,10 +20,10 @@
 
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 import open3d as o3d
 import torch
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pytorch3d.loss import chamfer_distance
 
 

@@ -23,27 +23,22 @@ import os
 
 # test diff number of devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+import hydra
 import numpy as np
 import torch
-
-import torch_geometric
-
-from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
-
-from dataloader import Ocardo, Bar
-from pytorch3d.loss import chamfer_distance
-
 import torch.distributed as distributed
 import torch.multiprocessing as mp
+import torch_geometric
+from dataloader import Bar, Ocardo
+from hydra import compose, initialize
+from losses import l2_dist
+from omegaconf import DictConfig, OmegaConf
+from pytorch3d.loss import chamfer_distance
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
+from utils import log_string, tic, toc
 
-from utils import tic, toc, log_string
-from losses import l2_dist
-
-import hydra
-from hydra import initialize, compose
-from omegaconf import DictConfig, OmegaConf
+from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
 
 
 # @hydra.main(version_base=None, config_path="conf", config_name="conf")

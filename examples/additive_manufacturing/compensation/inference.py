@@ -1,19 +1,18 @@
-import os, glob
+import glob
+import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import argparse
+
 import numpy as np
-import trimesh
 import torch
-
-
 import torch_geometric
+import trimesh
+from hydra import compose, initialize
+from omegaconf import DictConfig, OmegaConf
+from utils import log_string, tic, toc
 
 from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
-from utils import tic, toc, log_string
-
-from hydra import initialize, compose
-from omegaconf import DictConfig, OmegaConf
 
 
 def main():

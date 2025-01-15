@@ -24,13 +24,12 @@ import sys
 
 import numpy as np
 import pandas as pd
-import trimesh
 import torch
-from torch.utils.data import Dataset
 import torch_geometric
 
 # import open3d as o3d
 import trimesh
+from torch.utils.data import Dataset
 from utils import log_string
 
 torch.manual_seed(0)
