@@ -19,29 +19,25 @@
 # limitations under the License.
 
 
-import sys
 import os
+import sys
+import time
 
+import matplotlib.pyplot as plt
 import numpy as np
-import trimesh
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Sequential as Seq, Dropout, Linear as Lin
-
 import torch_geometric
 import torch_geometric.transforms as T
-from torch_geometric.nn import EdgeConv, knn_graph
-from torch_geometric.nn import DynamicEdgeConv
-
-
-from torch_geometric.datasets import ModelNet
-from torch_geometric.data import DataLoader
-
-import matplotlib.pyplot as plt
+import trimesh
 from mpl_toolkits.mplot3d import Axes3D
-
-import time
+from torch.nn import Dropout
+from torch.nn import Linear as Lin
+from torch.nn import Sequential as Seq
+from torch_geometric.data import DataLoader
+from torch_geometric.datasets import ModelNet
+from torch_geometric.nn import DynamicEdgeConv, EdgeConv, knn_graph
 
 
 class DynamicEdgeConv2(EdgeConv):
