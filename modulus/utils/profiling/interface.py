@@ -14,22 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import sys, os
 from pathlib import Path
 
 from dataclasses import dataclass
 from typing import List, Optional, Callable
 
 
-from contextlib import ContextDecorator, ExitStack
+from contextlib import ExitStack
 
 from dataclasses import dataclass
 from modulus.distributed import DistributedManager
-from abc import ABC, abstractmethod
 
 from . core import _Profiler_Singleton, ProfileRegistry
 
-class Profiler(ContextDecorator):
+class Profiler:
     __metaclass__ = _Profiler_Singleton
     
 
@@ -58,9 +57,10 @@ class Profiler(ContextDecorator):
     _output_top : Path
     
     # A list of functions to capture for annotation _before_ all the profilers are initialized
-    _annotation_captures = []
+    _annotation_registry = []
+    _decoration_registry = []
     # we have to return a callable immediately from annotations, so send a placeholder
-    _annotation_outputs = []
+    # _annotation_outputs = []
     
     def __init__(self, output_dir_top = None):
         super().__init__()
@@ -68,6 +68,7 @@ class Profiler(ContextDecorator):
         # Configure nvtx context tagging here:
 
         self.exit_stack = ExitStack()
+        self.annotation_stack = ExitStack()
 
         # Prevent double-finalization and initializations:
         self.initialized = False
@@ -85,30 +86,38 @@ class Profiler(ContextDecorator):
         # Call _standup on all profilers, then set initialized to prevent
         # reinit
         
-        print("PROFILER BEING INITIALIZED")
         
         for p in self._profilers:
             p._standup()
             
-            
-        print(f"original outputs: {self._annotation_outputs}")
         # Annotate any missed functions:
-        for i, (captures, outputs) in  enumerate(zip(self._annotation_captures, self._annotation_outputs)):
-            fn, args, kwargs = captures
-            print(f"Original output: {outputs}")
-            real_annotation = self._do_actual_annotation(fn, *args, **kwargs)
-            self._annotation_outputs[i] = real_annotation
-            print(f"Updated output: {outputs}")
+        for func, args, kwargs in self._annotation_registry:
+            annotated = self._annotate_function(func, *args, **kwargs)            
+            self.replace_function(func, annotated)
             
-        print(f"updated outputs: {self._annotation_outputs}")
+
+        self._annotation_registry.clear()
+
+        for func in self._decoration_registry:
+            decorated = self._decorate_function(func)
+            self.replace_function(func, decorated)
+
         
         self.initialized = True
         
+    def initialize(self):
+        """
+        Manually initialize the profiler interface
+        """
 
-    def _teardown(self):
+    def finalize(self):
+        """
+        finalize the profiler interface.  Writes data to file
+        if necessary, automatically
+        """
         
         for p in self._profilers:
-            p._teardown(self.output_path)
+            p.finalize(self.output_path)
             
         
     def step(self):
@@ -147,13 +156,6 @@ class Profiler(ContextDecorator):
             self._profilers.append(profiler)
             return
     
-    def finalize(self):
-        """
-        Allow option to manually finalize
-        before destruction.  Preferred option!
-        """
-        self._teardown()
-
     def __enter__(self):
         """
         Enter profiling contexts 
@@ -182,7 +184,6 @@ class Profiler(ContextDecorator):
         """
         Clear out the exit stack
         """
-        print("Exiting!")
         if not self.enabled: return
         
         self.exit_stack.close()
@@ -191,11 +192,13 @@ class Profiler(ContextDecorator):
         """
         Clean up and ensure results are output, just in case:
         """
-        
-        if not self.finalized: self._teardown()
+        try:
+            self.finalize()
+        except Exception as e:
+            print("Profiler Interface failed to cleanup, please call finalize in your code!")
 
     
-    def __call__(fn: Callable) -> Callable:
+    def __call__(self, fn: Callable) -> Callable:
         """
         For using the Profiler as a decorator
         """
@@ -203,56 +206,121 @@ class Profiler(ContextDecorator):
         # For the function decorator, we pass the decoration 
         # on to active profilers for them to decorate.
         # Fires in the order they were activated!
-        
-        for p in self._profilers:
-            if p.enabled and p.is_decorator:
-                fn = p(fn)
-                
-        return fn
+
+        return self._deferred_or_immediate_decoration(fn)
 
     
-    def annotate(self, **kwargs):
-        """Two layers of functions here to allow kwargs to the decorator"""
+    
+            
+                
+    
 
-        print(f"got kwargs: {kwargs}")
+    def annotate(self, *args, **kwargs):
+        """
+        This is a "annotation factory" to produce the right decorator or context
+        depending on the presence of args and kwargs.
         
-        def decorator(fn):
+        It also has to *defer* decoration until the profiler is actually 
+        initialized and all tools are enabled.
         
-            print(f"got fn: {fn}")
+        Two layers of functions here to allow kwargs to the decorator
+        """
+
+
+        # Supporting only kwargs for function annotations
+        # if len(args) > 0 then this must be a context annotation
+        if len(args) > 0 and not callable(args[0]):
+            # Return the annotation _context_:
+            for p in self._profilers:
+                self.annotation_stack.enter_context(p.annotate(*args, **kwargs))
             
-            # A challenge here: we may have annotations called
-            # before the profiler is fully configured.
-            
-            # So, we capture function names and calls if 
-            # the profiler isn't yet initialized, 
-            # and run the annotation if it has already been initialized.
-            
-            if not self.initialized:
-                # send the actual function as the placeholder to prevent bugs:
-                self._annotation_outputs.append(lambda *a, **kw : fn(*a, **kw))
-                self._annotation_captures.append(
-                    (
-                        fn,
-                        kwargs
-                    )
-                )
-                return self._annotation_outputs[-1]
-            
+            return self.annotation_stack
+        else:
+            # This must be a function:
+            if len(args) == 1 and len(kwargs) == 0:
+                return self._deferred_or_immediate_annotation(args[0])
             else:
-                return self._do_actual_annotation(fn, *args, **kwargs)
+                # Called as function decorator `annotate(arguments, kwargs...)`
             
-        return decorator
+                # TODO - functools wraps here
             
-    def _do_actual_annotation(self, fn, *args, **kwargs):
+                def decorator(func):
+                    return self._deferred_or_immediate_annotation(func,*args, **kwargs)
+            
+                return decorator
+                
+
+
+    def _deferred_or_immediate_decoration(self, func):
+        
+        if self.initialized:
+            return self._decorate_function(func)
+        else:
+            self._decoration_registry.append(func)
+            return func
+            
+        
+    def _deferred_or_immediate_annotation(self, func, *args, **kwargs):
+        """
+        The role of this function is to decide whether to do the annotation immediately
+        or to defer it until after initialization.
+        """
+        
+        
+        if self.initialized:
+            return self._annotate_function(func, *args, **kwargs)
+        else:
+            # Capture the function but return it un-edited for now:
+            # Registering function for later:
+            self._annotation_registry.append((func, args, kwargs))
+            return func
+    
+            
+    def replace_function(self, func, wrapped_func):
+        
+        module_name = func.__module__
+        module = sys.modules[module_name]
+        
+        
+        if '.' in func.__qualname__:
+            
+            qualname_parts = func.__qualname__.split(".")
+            
+            obj = module
+            for part in qualname_parts[:-1]:
+                obj = getattr(obj, part)
+                
+            setattr(obj, qualname_parts[-1], wrapped_func)
+        
+        else:
+            setattr(module, func.__qualname__, wrapped_func)
+            # In case this function was imported into the main namespace
+            # (aka, in the executed script `from A import func as weird_name`), there
+            # is a reference to it there too.  Capture it:
+            __main__ = sys.modules["__main__"]
+            
+            for name, obj in vars(__main__).items():
+                if obj is func:
+                    setattr(__main__, name, wrapped_func)
+            
+            if hasattr(__main__, func.__qualname__):
+                setattr(__main__, func.__qualname__, wrapped_func)
+        
+    
+    def _annotate_function(self, func, *args, **kwargs):
         
         for p in self._profilers:
             if p.enabled and p.is_annotation:
-                print(f"In real annotated, got {fn}")
-                fn = p.annotate(fn, *args, **kwargs)
-                print(f"In real annotated, returned {fn}")
+                func = p.annotate(func, *args, **kwargs)
                 
-        return fn
+        return func
 
+    def _decorate_function(self, func):
+        for p in self._profilers:
+            if p.enabled and p.is_decorator:
+                func = p(func)
+                
+        return func
 
     @property
     def output_path(self):

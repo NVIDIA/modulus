@@ -44,7 +44,31 @@ class CoreProfilerConfig:
 
 
     
-
+class annotate:
+    """
+    Basic annotation class that can handle annotating with contexts 
+    as well as annotating as a decorator.
+    
+    Main role is to provide a single point of entry for `annotate`
+    and enable derived classes to sanitize arguments.
+    """
+    
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *exc):
+        return False
+    
+    def __call__(self, func):
+    
+        @functools.wraps(func)
+        def inner(*args,**kwargs):
+            return func(*args, **kwargs)
+    
+        return inner
 
 class ModulusProfilerWrapper(ContextDecorator):
     """
@@ -66,6 +90,10 @@ class ModulusProfilerWrapper(ContextDecorator):
     _is_context    : bool = False
     _is_decorator  : bool = False
     _is_annotation : bool = False
+    # _is_func_annon : bool = False # Is this a function annotation with a decorator?
+    # _is_cont_annon : bool = False # Is this a context-based annotation?
+    # Use the above to manage annotations
+    annotate = annotate
     
     # Name is both a singleton lookup and output directory top:
     _name : str = ""
@@ -83,17 +111,15 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         pass
     
+    # Getters / Setter for enabled, initialized, finalized
     @property
     def enabled(self):
         return self._enabled
     
-    @property
-    def is_decorator(self):
-        return self._is_decorator
-    
-    @property
-    def is_context(self):
-        return self._is_context
+    @enabled.setter
+    def enabled(self, value):
+        assert isinstance(value, bool)
+        self._enabled = value
     
     @property
     def finalized(self):
@@ -101,14 +127,37 @@ class ModulusProfilerWrapper(ContextDecorator):
     
     @finalized.setter
     def finalized(self, value : bool):
-        self._finalized = bool(value)
-    
+        assert isinstance(value, bool)
+        self._finalized = value
+        
     @property
     def initialized(self):
         return self._initialized
     
+    @initialized.setter
+    def initialized(self, value : bool):
+        assert isinstance(value, bool)
+        self._initialized = value
+    
+    @property
+    def is_decorator(self):
+        """
+        Flag to declare if this profiling instance supports function decoration
+        """
+        return self._is_decorator
+    
+    @property
+    def is_context(self):
+        """
+        Flag to declare if this profiling instance supports context-based profiling
+        """
+        return self._is_context
+    
     @property
     def is_annotation(self):
+        """
+        Flag to declare if this profiling instance supports function annotations
+        """
         return self._is_annotation
     
     def enable(self):
@@ -124,7 +173,7 @@ class ModulusProfilerWrapper(ContextDecorator):
     def __exit__(self, *exc):
         pass
     
-    def annotate(self, fn, **kwargs):
+    def step(self):
         pass
     
     def output_dir(self, top : Path):
@@ -141,6 +190,22 @@ class ModulusProfilerWrapper(ContextDecorator):
         
         return out_dir
 
+    def _teardown(self, path : Path ):
+        """
+        Don't overload _teardown; instead put your logic in finalize.
+        
+        The role of this function is to cleanly call the end logic 
+        with possible singleton instances floating around.
+        """
+        
+        if self.finalized:
+            return
+        try:
+            self._teardown()
+        except:
+            print("Error in finalization")
+        finally:
+            self.finalized = True
     
 class _Profiler_Singleton(type):
     """
@@ -181,10 +246,7 @@ class ProfileRegistry:
     
     @classmethod
     def get_profiler(cls, key):
-        
-        print(f"GETTER Current _instances: {cls._instances}")
-        print(f"GETTER Current _registry: {cls._registry}")
-        
+
         # Search by key:
         if key in cls._registry:
             return cls._registry[key]
@@ -198,9 +260,6 @@ class ProfileRegistry:
         
     @classmethod
     def register_profiler(cls, profiler_key, profiler_cls):
-        
-        print(f"SETTER Current _instances: {cls._instances}")
-        print(f"SETTER Current _registry: {cls._registry}")
         
         
         # assert isinstance(profiler_cls, _Profiler_Singleton), "Can only register instances of Profiler_Singleton"
@@ -217,3 +276,4 @@ class ProfileRegistry:
             # If it's a reregister of the same thing, no problem:
             if profiler_cls != cls._registry[profiler_key]:
                 raise Exception("Profiler key already in use for different profiler!")
+            

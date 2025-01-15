@@ -5,16 +5,40 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Callable
 
+import contextlib
 
 
 from dataclasses import dataclass, replace
 
-from . core import _Profiler_Singleton, CoreProfilerConfig, ModulusProfilerWrapper
+from . core import _Profiler_Singleton, ModulusProfilerWrapper, annotate
 
 import torch
 from torch.profiler import   ProfilerActivity, record_function, profile, schedule
 
 import functools
+
+class torch_annotate(annotate):
+    
+    def __call__(self, func):
+        """
+        Pytorch does not support function decoration annotation.
+        Do nothing (null decorator)
+        """
+        @functools.wraps(func)
+        def inner(*fn_args, **fn_kwargs):
+            return func(*fn_args, **fn_kwargs)
+        
+        return inner
+
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0:
+            self.name = args[0]
+        else:
+            self.name = None
+
+    def __enter__(self, *args):
+        if self.name: return record_function(self.name)
+        else: return self
 
 @dataclass
 class TorchProfilerConfig:
@@ -31,12 +55,18 @@ class TorchProfilerConfig:
     profile_memory:  bool = False
     with_flops:      bool = False
     schedule:    Callable = torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1)
-
     
 class TorchProfileWrapper(ModulusProfilerWrapper):
     __metaclass__ = _Profiler_Singleton
     
     _name : str = "torch"
+    
+    annotate = torch_annotate
+    
+    # Overload any of these:
+    _is_context    = True
+    _is_annotation = True
+    _is_decorator  = False
     
     def __init__(self, config: Optional[TorchProfilerConfig] = None, **config_overrides):
         
@@ -44,7 +74,7 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         
         # Pytorch is a context and annotation but not a wrapper:
         self._is_context    = True
-        self._is_annotation = True
+        self._is_annotation = False
         self._is_decorator  = False
         
         # Replace any overrides right into the config:
@@ -66,6 +96,7 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         return
         
     def _standup(self):
+
         self._profiler = profile(
             activities     = self._config.torch_prof_activities, 
             profile_memory = self._config.profile_memory, 
@@ -76,10 +107,8 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         
         self._initialized = True
 
-    def _teardown(self, output_top : Path):
-        
-        print("ENTER TEARDOWN")
-        
+    def finalize(self, output_top : Path):
+                
         if not self.enabled: return
         
         # Prevent double finalization:
@@ -88,39 +117,32 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         # Get the output directory:
         out_top = self.output_dir(output_top)
 
-        # Write out torch profiling results:
-        with open(out_top / Path("cpu_time.txt"), 'w') as cpu_times:
-            times = self._profiler.key_averages().table()
-            cpu_times.write(times)
+        if self._profiler is not None:
+            
+            try:
+                averages = self._profiler.key_averages()
+            except AssertionError as e:
+                # no averages recorded!
+                averages = None
+            
+            # Write out torch profiling results:
+            if averages:
+                with open(out_top / Path("cpu_time.txt"), 'w') as cpu_times:
+                    times = averages.table()
+                    cpu_times.write(times)
 
 
-        with open(out_top / Path("cuda_time.txt"), 'w') as gpu_times:
-            times = self._profiler.key_averages().table(sort_by="cuda_time_total")
-            gpu_times.write(times)
+                with open(out_top / Path("cuda_time.txt"), 'w') as gpu_times:
+                    times = averages.table(sort_by="cuda_time_total")
+                    gpu_times.write(times)
 
-        # Store the trace
-        trace_path = out_top / Path("trace.json")
-        self._profiler.export_chrome_trace(str(trace_path))
+                # Store the trace
+                trace_path = out_top / Path("trace.json")
+                self._profiler.export_chrome_trace(str(trace_path))
             
         # Make this profiler completed:
         self.finalized = True
-        
-    def annotate(self, fn, *args, **kwargs):
-        # Use the record_function context to wrap this function call:
-        print("Calling torch annotate")
-        # @functools.wraps(fn)
-        def wrappedWRAPPED(fn, *fn_args, **fn_kwargs):
-            print(f"Entering wrapped torch function with name {fn.__name__}")
-            with record_function(fn.__name__):
-                res = fn(*fn_args, **fn_kwargs)
-                print(f"wrapping got fn: {fn}")
-                print(f"wrapping got fn_args: {fn_args}")
-                print(f"wrapping got fn_kwargs: {fn_kwargs}")
-            return res
-        
-        
-        print(f"returning {wrappedWRAPPED}")
-        return wrappedWRAPPED
+            
     
     def __enter__(self):
         
@@ -133,23 +155,4 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
     def step(self):
         self._profiler.step()
 
-    def __call__(self, fn):
-        
-        @functools.wraps(fn)
-        def decorated(*args: Any, **kwds: Any) -> Any:
-            """Training step decorator function"""
-
-            with torch.no_grad() if self.no_grad else nullcontext():
-                if self.cuda_graphs_enabled:
-                    self._cuda_graph_forward(*args, **kwds)
-                else:
-                    self._zero_grads()
-                    self.output = self._amp_forward(*args, **kwds)
-
-                if not self.eval:
-                    # Update model parameters
-                    self.scaler.step(self.optim)
-                    self.scaler.update()
-
-            return self.output
 
