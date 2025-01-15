@@ -27,7 +27,7 @@ import torch
 
 import torch_geometric
 
-from model import DGCNN, DGCNN_ocardo
+from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
 from dataloader import Ocardo, Bar
 from pytorch3d.loss import chamfer_distance
 

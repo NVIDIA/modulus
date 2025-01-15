@@ -22,7 +22,6 @@
 
    - Check requirements from official install page: https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
    - when tested, Pytorch3D requires Python 3.8, 3.9 or 3.10
-   - gcc --version
    
    - ``pip install -U iopath``
     
@@ -30,6 +29,12 @@
 
 7. ``pip install torch-cluster``
 
+To test in customized CUDA environment, install compatible torch version compatible with cudatoolkit, i.e.
+
+``pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu121``
+
+ Refer to: 
+https://pytorch.org/get-started/previous-versions/
 
 Other dependencies for development: 
 
@@ -57,11 +62,17 @@ Other dependencies for development:
 
 
 ## Training
-- This is a two stage training analogous to GAN. DL deformation engine predicts part deformation. DL compensation engine propose a compensated shape, such that minimising the variation between the original part design and predicted printed part shape.   
+
+- To test running with cpu ``Connfig.yaml`` setting (not recommended): 
+  
+    - `` cuda: False ``
+    - ``use_distributed: False``
+    - ``use_multigpu: False``
+- Gpu training: set params listed above to True
 
 - There are two training codes that need to run in sequential manner.
 1. ``train_dis.py``: This code trains the discriminator (predict part deformations with its position and geometry) 
 2. ``train_gen.py``: This code trains the generator (compensate part geometry)
 
 ## inference
-- inference can be done with ``inference_engine.py`` 
+- ``inference.py`` 

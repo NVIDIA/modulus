@@ -45,6 +45,11 @@ import time
 
 
 class DynamicEdgeConv2(EdgeConv):
+    """
+    pytorch-geometric implementation of EdgeConv:
+    https://pytorch-geometric.readthedocs.io/en/2.6.0/generated/torch_geometric.nn.conv.EdgeConv.html
+    Original Paper: https://arxiv.org/abs/1801.07829
+    """
     def __init__(self, nn, k, aggr="max", **kwargs):
         """
 
@@ -68,9 +73,6 @@ class DynamicEdgeConv2(EdgeConv):
         return "{}(nn={}, k={})".format(self.__class__.__name__, self.nn, self.k)
 
 
-#'''
-
-
 def MLP(channels, batch_norm=True):
     """
     Set up the MLP layer with NN.linear
@@ -91,15 +93,16 @@ def MLP(channels, batch_norm=True):
 
 
 class DGCNN(torch.nn.Module):
+    """
+    Variation of EdgeConv blocks with the DGCNN backbone: https://arxiv.org/pdf/1801.07829
+    """
     def __init__(self, k=20, aggr="max"):
         super().__init__()
 
-        # self.conv1 = DynamicEdgeConv2(MLP([3*2, 64, 128, 1024, 3, 3]), k, aggr)
         self.conv1 = DynamicEdgeConv2(MLP([3 * 2, 64]), k, aggr)
         self.conv2 = DynamicEdgeConv2(MLP([64 * 2, 128]), k, aggr)
         self.conv3 = DynamicEdgeConv2(MLP([128 * 2, 512]), k, aggr)
-        # self.lin1  = Seq(MLP([1024, 256]) Dropout(0.2), 256, Dropout(0.5),3]
-        # self.lin1  = MLP([1024, 3])
+
         self.lin1 = Seq(
             MLP([512, 256]),  #  Dropout(0.2), #MLP([512,256]), Dropout(0.2),
             Lin(256, 3),
@@ -115,18 +118,19 @@ class DGCNN(torch.nn.Module):
 
 
 class DGCNN_ocardo(torch.nn.Module):
+    """
+    Variation of EdgeConv blocks with the DGCNN backbone: https://arxiv.org/pdf/1801.07829
+    Model architecture tuned for optimal performance on the Orcardo dataset
+    """
     def __init__(self, k=5, aggr="max"):
         super().__init__()
 
-        # self.conv1 = DynamicEdgeConv2(MLP([3*2, 64, 128, 1024, 3, 3]), k, aggr)
         self.conv1 = DynamicEdgeConv2(MLP([3 * 2, 64]), k, aggr)
         self.conv2 = DynamicEdgeConv2(MLP([64 * 2, 64]), k, aggr)
         self.conv3 = DynamicEdgeConv2(MLP([64 * 2, 64]), k, aggr)
         self.conv4 = DynamicEdgeConv2(MLP([64 * 2, 64]), k, aggr)
         self.conv5 = DynamicEdgeConv2(MLP([64 * 2, 64]), k, aggr)
-        # self.conv3 = DynamicEdgeConv2(MLP([128*2, 128]), k, aggr)
-        # self.lin1  = Seq(MLP([1024, 256]) Dropout(0.2), 256, Dropout(0.5),3]
-        # self.lin1  = MLP([1024, 3])
+
         self.lin1 = Seq(
             MLP([128, 128]),  #  Dropout(0.2), #MLP([512,256]), Dropout(0.2),
             # MLP([256, 256]),#  Dropout(0.2), #MLP([512,256]), Dropout(0.2),
@@ -152,13 +156,13 @@ class DGCNN_ocardo(torch.nn.Module):
         return x + x6
 
 
-if __name__ == "__main__":
-    from dataloader import Ocardo
-
-    device = torch.device("cuda")
-    m = DGCNN_ocardo().to(device)
-    dataset = Ocardo(num_points=50000)
-    train_loader = torch_geometric.data.DataListLoader(dataset, batch_size=2)
-    inputs = next(iter(train_loader))
-    inputs = inputs  # .to(device)
-    res = m(inputs)
+# if __name__ == "__main__":
+#     from dataloader import Ocardo
+#
+#     device = torch.device("cuda")
+#     m = DGCNN_ocardo().to(device)
+#     dataset = Ocardo(num_points=50000)
+#     train_loader = torch_geometric.data.DataListLoader(dataset, batch_size=2)
+#     inputs = next(iter(train_loader))
+#     inputs = inputs  # .to(device)
+#     res = m(inputs)

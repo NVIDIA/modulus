@@ -27,8 +27,10 @@ import torch
 from pytorch3d.loss import chamfer_distance
 
 
-# Function to load STL and convert to vertices and triangles
 def stl_to_vertices_and_faces(file_path):
+    """
+    Function to load STL and convert to vertices and triangles
+    """
     mesh = o3d.io.read_triangle_mesh(file_path)
     if mesh.is_empty():
         raise ValueError(f"Mesh at {file_path} is empty or invalid.")
@@ -37,8 +39,10 @@ def stl_to_vertices_and_faces(file_path):
     return verts, faces
 
 
-# Function to plot meshes
 def plot_mesh(mesh, ax, face_color, edge_color, label):
+    """
+    Function to plot meshes
+    """
     vertices = np.asarray(mesh.vertices)
     triangles = np.asarray(mesh.triangles)
     # Add faces with transparency
@@ -56,7 +60,7 @@ def calculate_rms(source, target):
     return torch.sqrt(torch.mean(diff ** 2))
 
 
-# Load STL files
+# Sample usage: Load STL files
 target_mesh_o3d = o3d.io.read_triangle_mesh("/content/cad_4.stl")
 uncompensated_mesh_o3d = o3d.io.read_triangle_mesh("/content/cad_4.stl")
 compensated_mesh_o3d = o3d.io.read_triangle_mesh("/content/cad_4.stl")

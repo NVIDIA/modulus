@@ -9,17 +9,29 @@ import torch
 
 import torch_geometric
 
-from model import DGCNN
-from utils import tic, toc
+from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
+from utils import tic, toc, log_string
 
 from hydra import initialize, compose
 from omegaconf import DictConfig, OmegaConf
 
 
 def main():
+    """
+    With the trained ckpt for both the prediction engine, and the compensation engine, config in cfg.inference_options
+        1. Load the parts to compensate from path:
+            cfg.inference_options.data_path
+            data path should contain stl / obj files to compensate for
+        2. From the trained compensation model, compensate the input CAD
+        3. From the trained deviation prediction model, predict the potential deviation of the compensated CAD, to compare with the original design
+    second:
+    """
     # Read the configs
     with initialize(config_path="conf", job_name="test_app"):
         cfg = compose(config_name="config", overrides=["+db=mysql", "+db.user=me"])
+    LOG_FOUT = open(
+        os.path.join(cfg.inference_options.save_path, "log_inf.txt"), "a"
+    )
 
     torch.backends.cudnn.deterministic = True
     torch.manual_seed(cfg.inference_options.seed)
@@ -36,6 +48,8 @@ def main():
     )
     for g in model.parameters():
         g.requires_grad = False  # to avoid computation
+    log_string(LOG_FOUT, "Trained Shape Compensation model loaded")
+
     discriminator = DGCNN().to(device)
     discriminator.load_state_dict(
         torch.load(cfg.inference_options.discriminator_path, map_location="cpu"),
@@ -43,7 +57,7 @@ def main():
     )
     for p in discriminator.parameters():
         p.requires_grad = False  # to avoid computation
-    print("model loaded")
+    log_string(LOG_FOUT, "Trained Shape Prediction model loaded")
 
     save_path = cfg.inference_options.save_path
     os.makedirs(save_path, exist_ok=True)
@@ -53,21 +67,24 @@ def main():
     models = glob.glob(data_path + "/*.stl") + glob.glob(
         data_path + "/*.obj"
     )  # main processing
-    print("start procesing data: ", models)
+    log_string(LOG_FOUT, f"Start processing data .. {models}")
+
     for m in models:
         tic()
-        print("processing Part %s" % m)
+        log_string(LOG_FOUT, f"processing Part {m}")
 
-        # load data
+        # load data as mesh
         cad = trimesh.load_mesh(m)
+        # convert mesh to points by taking vertices
         pts1 = torch.FloatTensor(np.asarray(cad.vertices))
 
+        # randomize point indices
         rand = np.arange(len(pts1))
         np.random.shuffle(rand)
-        print(rand)
+        # print(rand)
         pts1_full = pts1[rand]
-        print(pts1_full.shape)
-        print(len(pts1))
+        log_string(LOG_FOUT, f"Part full shape: {pts1_full.shape}")
+
         subsample = cfg.inference_options.num_points
         n = len(pts1_full) // subsample
         pred_res = []
@@ -86,8 +103,12 @@ def main():
                 pts1 = pts1.squeeze(0).to(device).squeeze(0)
                 edge_index = torch_geometric.nn.knn_graph(pts1, 20)
                 edge_index = edge_index.squeeze().to(device)
+
+            # Compensate the original CAD, then predict the deviation from the compensated CAD
             com = model(torch_geometric.data.Data(x=pts1, edge_index=edge_index))
             out = discriminator(torch_geometric.data.Data(x=com, edge_index=edge_index))
+
+            # Directly predict the deviation from the original CAD
             pre = discriminator(
                 torch_geometric.data.Data(x=pts1, edge_index=edge_index)
             )

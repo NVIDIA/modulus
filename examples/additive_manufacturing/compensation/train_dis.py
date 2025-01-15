@@ -28,7 +28,8 @@ import torch
 
 import torch_geometric
 
-from model import DGCNN, DGCNN_ocardo
+from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
+
 from dataloader import Ocardo, Bar
 from pytorch3d.loss import chamfer_distance
 
@@ -69,21 +70,23 @@ def main(rank):
     # log_string(LOG_FOUT, OmegaConf.to_yaml(cfg))
 
     # load data
-    log_string(LOG_FOUT, "load data: note it takes time")
+    log_string(LOG_FOUT, "Loading data: note it takes time")
     # todo: optimize the dataloader to potentially one
     if cfg.data_options.dataset_name == "Ocardo":
         dataset = Ocardo(
             data_path=cfg.data_options.data_path,
             num_points=cfg.train_dis_options.num_points,
             partition="train",
+            LOG_FOUT=LOG_FOUT,
         )
     elif cfg.data_options.dataset_name == "Bar":
         dataset = Bar(
             data_path=cfg.data_options.data_path,
             num_points=cfg.train_dis_options.num_points,
             partition="train",
+            LOG_FOUT=LOG_FOUT,
         )
-    print("size of the data %d" % len(dataset))
+    log_string(LOG_FOUT, f"Complete data loading, size of the parts read: {len(dataset)}")
     # todo: dataset not yet normailzed
 
     # set up distributed training

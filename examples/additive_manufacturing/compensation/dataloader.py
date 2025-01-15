@@ -31,23 +31,31 @@ import torch_geometric
 
 # import open3d as o3d
 import trimesh
-
+from utils import log_string
 
 torch.manual_seed(0)
 
 
 class Bar(torch.utils.data.Dataset):
+    """
+    To import the dataset, you can use files in either .txt or .csv format. Below is the folder structure for sample input data:
+        - input_data.txt: Contains logs, with each row corresponding to a build part geometry
+            - /part_folder_i (aligned with logs in input_data.txt):
+                - cad_<part_id>.txt: Contains 3 columns, each representing a point's coordinates.
+                - scan_red<part_id>.csv: Includes 3 columns representing point locations.
+    """
     def __init__(
         self,
-        data_path="/home/leejuhe/juheon_work/bucket_data/",
+        data_path="insert data path, default in cfg.data_options.data_path",
         num_points=50000,
         partition="train",
         random_sample=False,
         transform=None,
+        LOG_FOUT=None,
     ):
         self.num_points = num_points
-        self.data_path = data_path  # default
-        print("data_path: ", data_path)
+        self.data_path = data_path
+        log_string(LOG_FOUT, f"Process from data_path: {data_path}")
 
         self.random_sample = random_sample
         self.partition = partition
@@ -112,6 +120,25 @@ class Bar(torch.utils.data.Dataset):
 
 
 class Ocardo(torch.utils.data.Dataset):
+    """
+
+    :param data_path:
+          # contains the list of paths for dataset
+            # in the input_data.txt file, each row contains the input part data folder
+            # i.e.
+            # /home/DL_engine/input_data/1/
+            # /home/DL_engine/input_data/2/
+              Under each data folder:
+                i.e.
+                - /home/DL_engine/input_data/1/cad{tag_id}.csv
+                - /home/DL_engine/input_data/1/scan_res{tag_id}.csv
+            # for complete description of sample data format, refer to README.md
+            # each part shape scan/ cad: i.e. torch.Size([12775, 3])
+    :param num_points:
+    :param partition:
+    :param random_sample:
+    :param transform:
+    """
     def __init__(
         self,
         data_path="./input_data/",
@@ -119,29 +146,11 @@ class Ocardo(torch.utils.data.Dataset):
         partition="train",
         random_sample=True,
         transform=None,
+        LOG_FOUT=None,
     ):
-        """
-
-        :param data_path:
-              # contains the list of paths for dataset
-                # in the input_data.txt file, each row contains the input part data folder
-                # i.e.
-                # /home/DL_engine/input_data/1/
-                # /home/DL_engine/input_data/2/
-                  Under each data folder:
-                    i.e.
-                    - /home/DL_engine/input_data/1/cad{tag_id}.csv
-                    - /home/DL_engine/input_data/1/scan_res{tag_id}.csv
-                # for complete description of sample data format, refer to README.md
-                # each part shape scan/ cad: i.e. torch.Size([12775, 3])
-        :param num_points:
-        :param partition:
-        :param random_sample:
-        :param transform:
-        """
         self.num_points = num_points
         self.data_path = data_path
-        print("data_path: ", data_path)
+        log_string(LOG_FOUT, f"Process from data_path: {data_path}")
 
         self.random_sample = random_sample
         # Read each row as the input part data ID
@@ -149,7 +158,7 @@ class Ocardo(torch.utils.data.Dataset):
             line.rstrip()
             for line in open(os.path.join(self.data_path, "input_data.txt"))
         ]
-        print("read data folder name lists: ", lists)
+        log_string(LOG_FOUT, f"read data folder name lists: {lists}")
 
         self.items = []
         # Initialize the tranform function to: Converts mesh faces [3, num_faces] to edge indices [2, num_edges] (functional name: face_to_edge).
@@ -161,7 +170,9 @@ class Ocardo(torch.utils.data.Dataset):
             tag = lists[i].split("/")[-2]
             # Read each row from the cad_<part_id>.txt, store as torch.FloatTensor the point coordinates
             # cad = torch.FloatTensor(np.loadtxt(f"{self.data_path}/{lists[i]}cad{tag}.txt", delimiter='\t'))[:,:3] #input_data_bar_sample
-            print(f"{self.data_path}/{lists[i]}scan_res{tag}.csv")
+
+            log_string(LOG_FOUT, f"{self.data_path}/{lists[i]}scan_res{tag}.csv")
+
             cad = torch.FloatTensor(
                 pd.read_csv(f"{self.data_path}/{lists[i]}cad{tag}.csv", sep=" ").values
             )  # molded_fiber
@@ -175,7 +186,7 @@ class Ocardo(torch.utils.data.Dataset):
             )  # molded_fiber
 
             self.items.append((i + 1, cad, scan))
-            print("loaded scan", scan.shape)
+            log_string(LOG_FOUT, f"loaded scan {scan.shape}")
 
             assert cad.shape == scan.shape, print("part CAD and Scan files not match ")
 

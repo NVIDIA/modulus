@@ -22,7 +22,7 @@
 general:
   seed: 1234
   random_sample: True
-  cuda: False
+  cuda: True
   use_distributed: False
   sync_batch: True
   use_multigpu: False # Default: False for D, True for G
