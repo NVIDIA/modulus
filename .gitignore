@@ -171,3 +171,23 @@ multirun/
 
 # SLURM
 slurm-*.out
+
+# Ignore all data, model checkpoint, and mlruns files
+modulus/examples/cfd/darcy_fno/data/
+modulus/examples/cfd/darcy_fno/checkpoint/
+modulus/examples/cfd/darcy_fno/mlruns/
+modulus/examples/**/*.pt
+
+# But do not ignore any files that start with example_ (e.g., example_.pt)
+!modulus/examples/**/example_*.pt
+!data/example_small_batch.pt
+!modulus/examples/**/mlruns/example*
+!checkpoints/example_final.ckpt
+
+# But do not ignore any example or final files
+!modulus/examples/**/data/**/example*
+!modulus/examples/**/data/**/final*
+!modulus/examples/**/checkpoint/**/example*
+!modulus/examples/**/checkpoint/**/final*
+!modulus/examples/**/mlruns/**/example*
+!modulus/examples/**/mlruns/**/final*
