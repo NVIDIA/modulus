@@ -10,7 +10,7 @@ from modulus.distributed.shard_tensor import ShardTensor
 from modulus.distributed import DistributedManager
 
 
-def compute_halo_size(stride : int, kernel: int, dilation: int, ) -> int:
+def compute_convolution_halo_size(stride : int, kernel: int, dilation: int, ) -> int:
     """
     Compute the single-dimension halo size for a convolution kernel
 
