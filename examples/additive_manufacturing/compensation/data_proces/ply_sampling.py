@@ -19,12 +19,14 @@
 # limitations under the License.
 
 
-import os, glob
+import glob
+import os
+
 import numpy as np
-import trimesh
 import open3d as o3d
 import torch
 import torch_geometric
+import trimesh
 
 
 def generate_mesh_train():
@@ -54,18 +56,31 @@ def generate_mesh_train():
 
 
 def generate_mesh_eval(view=False):
+    """
+    Function to load a 3D object pair (Original design file v.s. Scanned printed part),
+        - CAD design in format of OBJ or STL
+        - Scanned printed part points in CSV or TXT
+    Export the Scanned in mesh, OBJ format
+    """
+    # Sample design CAD name
     object_name = "bar"
     part_id = 5
     cad_mesh = trimesh.load(
         "%s_%d/cad/%s_%d_uptess.obj" % (object_name, part_id, object_name, part_id)
     )
+
+    # Sample scanned printed file, or generated compensated file, in CSV or TXT
     scan_pts = np.loadtxt(
-        "C:/Users/leejuhe/Documents/comp/out__%02d.csv" % (part_id), delimiter=","
+        "C:/Users//Documents/comp/out__%02d.csv" % (part_id), delimiter=","
     )
-    x = torch.FloatTensor(np.asarray(cad_mesh.vertices))
-    y = torch.FloatTensor(scan_pts)
-    new_vert = y
+
+    # Define the new vertices as the scanned printed points coordinates
+    new_vert = torch.FloatTensor(scan_pts)
+
+    # Define the mesh from the Design CAD
     scan_mesh = cad_mesh
+
+    # Export new mesh
     scan_mesh.vertices = new_vert
     scan_mesh.export("%s_%d_out.obj" % (object_name, part_id))
     if view:

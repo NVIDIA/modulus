@@ -20,7 +20,6 @@
 
 
 import os
-import sys
 
 import numpy as np
 import pandas as pd
@@ -28,8 +27,6 @@ import torch
 import torch_geometric
 
 # import open3d as o3d
-import trimesh
-from torch.utils.data import Dataset
 from utils import log_string
 
 torch.manual_seed(0)
@@ -65,10 +62,10 @@ class Bar(torch.utils.data.Dataset):
         elif self.partition == "val":
             lists = [line.rstrip() for line in open(self.data_path + "/24hrs_val.txt")]
         self.items = []
-        l = len(lists)
+        len_ds = len(lists)
 
-        print("total data_size = %02d" % l)
-        for i in range(l):  # load all CAD & scan pairs
+        print("total data_size = %02d" % len_ds)
+        for i in range(len_ds):  # load all CAD & scan pairs
             tag = lists[i].split("/")[-2][2:]
             cad = torch.FloatTensor(
                 np.loadtxt(lists[i] + "cad%s.txt" % (tag), delimiter="\t")
@@ -187,7 +184,8 @@ class Ocardo(torch.utils.data.Dataset):
             self.items.append((i + 1, cad, scan))
             log_string(LOG_FOUT, f"loaded scan {scan.shape}")
 
-            assert cad.shape == scan.shape, print("part CAD and Scan files not match ")
+            if not cad.shape == scan.shape:
+                raise Exception("Part CAD and Scan files not match ")
 
     def __len__(self):
         return len(self.items)
@@ -237,8 +235,6 @@ class Ocardo(torch.utils.data.Dataset):
             #                                 [     0,      0,      0,  ..., 189999, 189999, 189999]])
             edge_index = torch_geometric.nn.knn_graph(torch.FloatTensor(pts1), 10)
 
-        s = pts1.std(0)
-
         out = torch_geometric.data.Data(
             x=pts1,
             y=pts2,
@@ -249,8 +245,3 @@ class Ocardo(torch.utils.data.Dataset):
         )
         return out
 
-
-# if __name__=='__main__':
-#     dataset = Ocardo()
-#     print(dataset[0])
-#

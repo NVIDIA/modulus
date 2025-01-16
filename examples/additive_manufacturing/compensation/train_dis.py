@@ -23,7 +23,6 @@ import os
 
 # test diff number of devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-import hydra
 import numpy as np
 import torch
 import torch.distributed as distributed
@@ -32,7 +31,7 @@ import torch_geometric
 from dataloader import Bar, Ocardo
 from hydra import compose, initialize
 from losses import l2_dist
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 from pytorch3d.loss import chamfer_distance
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
@@ -181,7 +180,7 @@ def main(rank):
         total_chamfer_loss = 0
         total_oloss = 0
         total_ocham = 0
-        if device == 0 or cfg.general.use_distributed == False:
+        if device == 0 or not cfg.general.use_distributed:
             tic()
 
         # train
@@ -264,7 +263,7 @@ def main(rank):
         total_avg_ocham = total_ocham / (
             cfg.train_dis_options.num_batch * len(train_loader)
         )
-        if device == 0 or cfg.general.use_distributed == False:
+        if device == 0 or not cfg.general.use_distributed:
             log_string(
                 LOG_FOUT,
                 "[Epoch %03d] training loss: %.6f, chamfer loss: %.6f, reference1: %.6f, reference2: %.6f"

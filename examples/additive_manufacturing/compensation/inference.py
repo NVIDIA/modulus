@@ -2,17 +2,19 @@ import glob
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import argparse
 
 import numpy as np
 import torch
 import torch_geometric
 import trimesh
 from hydra import compose, initialize
-from omegaconf import DictConfig, OmegaConf
+
+# from omegaconf import DictConfig, OmegaConf
 from utils import log_string, tic, toc
 
-from modulus.models.dgcnn.dgcnn_compensation import DGCNN, DGCNN_ocardo
+from modulus.models.dgcnn.dgcnn_compensation import DGCNN
+
+# from modulus.models.dgcnn.dgcnn_compensation import DGCNN_ocardo
 
 
 def main():
@@ -28,6 +30,7 @@ def main():
     # Read the configs
     with initialize(config_path="conf", job_name="test_app"):
         cfg = compose(config_name="config", overrides=["+db=mysql", "+db.user=me"])
+
     LOG_FOUT = open(
         os.path.join(cfg.inference_options.save_path, "log_inf.txt"), "a"
     )

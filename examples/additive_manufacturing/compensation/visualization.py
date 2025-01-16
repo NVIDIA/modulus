@@ -108,7 +108,7 @@ ax1 = fig.add_subplot(131, projection='3d')
 ax2 = fig.add_subplot(132, projection='3d')
 ax3 = fig.add_subplot(133, projection='3d')
 
-plot_mesh(target_mesh_o3d, ax1, face_color='lightcoral', edge_color='red', label=f"Target\n(Desired Shape)")
+plot_mesh(target_mesh_o3d, ax1, face_color='lightcoral', edge_color='red', label="Target\n(Desired Shape)")
 plot_mesh(uncompensated_mesh_o3d, ax2, face_color='lightgreen', edge_color='green',
           label=f"Uncompensated\nCD: {cd_uncomp.item():.4f}\nRMS: {uncomp_rms.item():.4f}")
 plot_mesh(compensated_mesh_o3d, ax3, face_color='lightblue', edge_color='blue',
