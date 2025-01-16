@@ -96,7 +96,7 @@ class _FromTorchTensor(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        input: torch.Tensor,
+        local_input: torch.Tensor,
         device_mesh: DeviceMesh,
         placements: Tuple[Placement, ...],
     ) -> "ShardTensor":
@@ -105,12 +105,12 @@ class _FromTorchTensor(torch.autograd.Function):
         # This function is simpler than the corresponding DTensor implementation on the surface
         # because under the hood, we always do checks here.
         
-        shard_tensor_spec = _infer_shard_tensor_spec_from_local_chunks(input, device_mesh, placements)
+        shard_tensor_spec = _infer_shard_tensor_spec_from_local_chunks(local_input, device_mesh, placements)
 
         shard_tensor = ShardTensor(
-            input.view_as(input),
+            local_input.view_as(local_input),
             shard_tensor_spec,
-            requires_grad=input.requires_grad,
+            requires_grad=local_input.requires_grad,
         )
         
         return shard_tensor
@@ -267,6 +267,7 @@ class ShardTensor(DTensor):
         local_tensor: torch.Tensor,
         device_mesh: Optional[DeviceMesh] = None,
         placements: Optional[Sequence[Placement]] = None,
+        infer_shape: Optional[bool] = False,
     ) -> "ShardTensor":
         """
         Generate a new ShardTensor from local torch tensors.  Uses 
@@ -285,41 +286,49 @@ class ShardTensor(DTensor):
             Target Device Mesh, if not specified will use the current mesh, by default None
         placements : Optional[Sequence[Placement]], optional
             Target placements, must have the same number of elements as ``device_mesh.ndim`` , by default None
-
+        infer_shape: Optional[bool]
+            If infer_shape is False, from_local assumes an _even_ distirbution of the local tensor
+            across each axis.  It will essentially create a DTensor and promote
         Returns
         -------
         ShardTensor
             A Shard Tensor Object
         """
         
-        # This implementation follows the pytorch DTensor Implementation Closely.
-        device_mesh = device_mesh or _mesh_resources.get_current_mesh()
-        device_type = device_mesh.device_type
-        
-        # convert the local tensor to desired device base on device mesh's device_type
-        if device_type != local_tensor.device.type and not local_tensor.is_meta:
-            local_tensor = local_tensor.to(device_type)
-        
-        # set default placements to replicated if not specified
-        if placements is None:
-            placements = [Replicate() for _ in range(device_mesh.ndim)]
-        else:
-            placements = list(placements)
-            for idx, placement in enumerate(placements):
-                # normalize shard dim to be positive
-                if placement.is_shard():
-                    placement = cast(Shard, placement)
-                    if placement.dim < 0:
-                        placements[idx] = Shard(placement.dim + local_tensor.ndim)
+        if infer_shape:
+                        
+            # This implementation follows the pytorch DTensor Implementation Closely.
+            device_mesh = device_mesh or _mesh_resources.get_current_mesh()
+            device_type = device_mesh.device_type
+            
+            # convert the local tensor to desired device base on device mesh's device_type
+            if device_type != local_tensor.device.type and not local_tensor.is_meta:
+                local_tensor = local_tensor.to(device_type)
+            
+            # set default placements to replicated if not specified
+            if placements is None:
+                placements = [Replicate() for _ in range(device_mesh.ndim)]
+            else:
+                placements = list(placements)
+                for idx, placement in enumerate(placements):
+                    # normalize shard dim to be positive
+                    if placement.is_shard():
+                        placement = cast(Shard, placement)
+                        if placement.dim < 0:
+                            placements[idx] = Shard(placement.dim + local_tensor.ndim)
 
-        # `from_local` is differentiable, and the gradient of the dist tensor this function
-        # created should flow back the gradients to the local_tensor, so we call an autograd
-        # function to construct the dist tensor instead.
-        return _FromTorchTensor.apply(  # pyre-ignore[16]: autograd func
-            local_tensor,
-            device_mesh,
-            tuple(placements),
-        )
+            # `from_local` is differentiable, and the gradient of the dist tensor this function
+            # created should flow back the gradients to the local_tensor, so we call an autograd
+            # function to construct the dist tensor instead.
+            return _FromTorchTensor.apply(  # pyre-ignore[16]: autograd func
+                local_tensor,
+                device_mesh,
+                tuple(placements),
+            )
+        else:
+            return ShardTensor._from_dtensor(
+                DTensor.from_local(local_tensor, device_mesh, placements)
+            )
 
         
     def redistribute(

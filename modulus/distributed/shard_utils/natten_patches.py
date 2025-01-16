@@ -107,7 +107,9 @@ def slice_output_by_halo_and_mesh(x, halo, mesh, placements):
     
     # Cast this back to a ShardTensor to return:
     
-    return ShardTensor.from_local(x,mesh, placements)
+    st = ShardTensor.from_local(x,mesh, placements)
+
+    return st
     
 
 def na2d_with_halo(q,k,v, kernel_size, dilation=1):

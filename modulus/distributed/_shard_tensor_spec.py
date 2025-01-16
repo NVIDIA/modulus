@@ -155,7 +155,7 @@ def _all_gather_shard_shapes(
 ):
     
     shard_shapes_by_dim = []
-    global_shape = [0 for s in local_shape]
+    global_shape = [s for s in local_shape]
     for mesh_axis, placement in enumerate(placements):
         
         tensor_dim = placement.dim
@@ -251,6 +251,7 @@ def _infer_shard_tensor_spec_from_local_chunks(
     
         
     shard_shapes_by_dim, global_shape = _all_gather_shard_shapes(local_shape, placements, target_mesh,)
+
 
     stride = _stride_from_contiguous_shape_C_style(global_shape)
 

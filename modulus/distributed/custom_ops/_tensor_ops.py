@@ -27,13 +27,15 @@ def unbind_rules(op_schema : OpSchema) -> OutputSharding:
     # if the chunking dimension is along a dimension that is sharded, we have to handle that.
     # If it's along an unsharded dimension, there is nearly nothing to do.  
    
-    # Outpu
    
     input_spec = args_schema[0]
     
     input_placements = input_spec.placements
 
-    if dim in [ i.dim for i in input_placements]:
+
+    shards = [ s for s in input_placements if isinstance(s, Shard) ]
+
+    if dim in [ i.dim for i in shards]:
         raise Exception("No implementation for unbinding along sharding axis yet.")
     
     else:
