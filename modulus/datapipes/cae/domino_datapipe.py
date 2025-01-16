@@ -39,6 +39,7 @@ from torch.utils.data import Dataset
 
 from modulus.utils.domino.utils import (
     KDTree,
+    area_weighted_shuffle_array,
     calculate_center_of_mass,
     calculate_normal_positional_encoding,
     create_grid,
@@ -383,8 +384,11 @@ class DoMINODataPipe(Dataset):
                     surf_grid = normalize(surf_grid, s_max, s_min)
 
                 if self.sampling:
-                    surface_coordinates_sampled, idx_surface = shuffle_array(
-                        surface_coordinates, self.surface_points
+                    (
+                        surface_coordinates_sampled,
+                        idx_surface,
+                    ) = area_weighted_shuffle_array(
+                        surface_coordinates, self.surface_points, surface_sizes
                     )
                     if surface_coordinates_sampled.shape[0] < self.surface_points:
                         surface_coordinates_sampled = pad(

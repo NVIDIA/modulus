@@ -130,6 +130,7 @@ class WandBLogger(Logger):
         entity: Optional[str] = None,
         resume: Optional[bool] = False,
         wandb_id: Optional[str] = None,
+        mode: Optional[str] = "online",
     ):
         super().__init__()
         if resume:
@@ -154,6 +155,7 @@ class WandBLogger(Logger):
             entity=entity,
             resume=resume,
             id=wandb_id,
+            mode=mode,
         )
         # log config to wandb
         if config is not None and resume != "must":
@@ -298,6 +300,7 @@ def init_logger(config: dict) -> Logger:
                     config=config,
                     resume=resume,
                     wandb_id=wandb_id,
+                    mode=logger_cfg.mode,
                 )
             )
         else:
