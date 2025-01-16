@@ -22,152 +22,68 @@ from datetime import datetime
 import xarray as xr
 import zarr
 import pandas as pd
-import json
-import argparse
+import hydra
 from modulus.distributed import DistributedManager
+from omegaconf import DictConfig
+from modulus.models import Module
 
-from utils.diffusions.run_edm import EDMRunner
-from utils.diffusions.networks import get_preconditioned_architecture, EasyRegressionV2
-from utils.data_loader_hrrr_era5 import get_dataset
-from utils.YParams import YParams
+from utils.nn import regression_model_forward, diffusion_model_forward
+from utils.data_loader_hrrr_era5 import HrrrEra5Dataset
 
 
-def main(
-    device: str = "cuda:0",
-    initial_time: datetime = datetime(2022, 11, 4, 21, 0),
-    plot_var_hrrr: str = "refc",
-    plot_var_era5: str = "t2m",
-    n_steps: int = 12,
-    output_hrrr_channels: list[str] = [],
-):
-    parser = argparse.ArgumentParser(description="Run a StormCast inference")
-    parser.add_argument(
-        "--outdir",
-        help="Where to save the results",
-        metavar="DIR",
-        type=str,
-        default="./rundir",
-    )
-    parser.add_argument(
-        "--registry_file",
-        help="Path to model registry file",
-        metavar="FILE",
-        type=str,
-        default="config/registry.json",
-    )
-    parser.add_argument(
-        "--model_name",
-        help="Name of model to evaluate from the registry",
-        metavar="MODEL",
-        type=str,
-        default="stormcast",
-    )
-    opts = parser.parse_args()
+@hydra.main(version_base=None, config_path="config", config_name="stormcast_inference")
+def main(cfg: DictConfig):
 
+    # Initialize
     DistributedManager.initialize()
+    dist = DistributedManager()
+    device = dist.device
 
-    # load model registry:
-    with open(opts.registry_file, "r") as f:
-        registry = json.load(f)
-        model_info = registry["models"][opts.model_name]
+    initial_time = datetime.fromisoformat(cfg.inference.initial_time)
+    n_steps = cfg.inference.n_steps
 
-    params = YParams(
-        model_info["regression_config_file"], model_info["regression_config_name"]
-    )
-    params.local_batch_size = 1
-    params.valid_years = [2022]
-    residual = params.residual
+    # Dataset prep
+    dataset = HrrrEra5Dataset(cfg.dataset, train=False)
 
-    edm_config = model_info["edm_config_name"]
-    edm_params = YParams(model_info["edm_config_file"], edm_config)
-    diffusion_channels = edm_params.diffusion_channels
-    input_channels = edm_params.input_channels
-    diffusion_path = model_info["edm_checkpoint_path"]
-    edm_runner = EDMRunner(edm_params, checkpoint_path=diffusion_path)
-    residual = edm_params.residual
-
-    os.makedirs(opts.outdir, exist_ok=True)
-
-    if params.boundary_padding_pixels > 0:
-        params.era5_img_size = (
-            params.hrrr_img_size[0] + 2 * params.boundary_padding_pixels,
-            params.hrrr_img_size[1] + 2 * params.boundary_padding_pixels,
-        )
-    else:
-        params.era5_img_size = params.hrrr_img_size
-
-    dataset = get_dataset(params, train=False)
-
-    resolution = params.hrrr_img_size[0]
-    _, hrrr_channels = dataset._get_hrrr_channel_names()
+    base_hrrr_channels, hrrr_channels = dataset._get_hrrr_channel_names()
     diffusion_channels = (
         hrrr_channels
-        if params.diffusion_channels == "all"
-        else params.diffusion_channels
+        if cfg.dataset.diffusion_channels == "all"
+        else cfg.dataset.diffusion_channels
     )
     input_channels = (
-        hrrr_channels if params.input_channels == "all" else params.input_channels
+        hrrr_channels
+        if cfg.dataset.input_channels == "all"
+        else cfg.dataset.input_channels
     )
-    input_channel_indices = [hrrr_channels.index(channel) for channel in input_channels]
+
     diffusion_channel_indices = [
         hrrr_channels.index(channel) for channel in diffusion_channels
     ]
-    conditional_channels = (
-        len(diffusion_channels) + len(params.invariants) + params.n_era5_channels
-    )
 
-    net = get_preconditioned_architecture(
-        name="regression",
-        resolution=resolution,
-        target_channels=len(diffusion_channels),
-        conditional_channels=conditional_channels,
-        label_dim=0,
-        spatial_embedding=params.spatial_pos_embed,
-        attn_resolutions=params.attn_resolutions,
-    )
-
-    # Load pretrained regression model
-    regression_path = model_info["regression_checkpoint_path"]
-    chkpt = torch.load(regression_path, weights_only=True)
-    net.load_state_dict(chkpt["net"], strict=True)
-    model = EasyRegressionV2(net).to(device)
-
-    hrrr_data = xr.open_zarr(
-        os.path.join(params.location, params.conus_dataset_name, "valid", "2021.zarr")
-    )
-
-    dataset_obj = get_dataset(params, train=False)
-
-    invariant_array = dataset._get_invariants()
-    invariant_tensor = torch.from_numpy(invariant_array).to(device).repeat(1, 1, 1, 1)
-    model.set_invariant(invariant_tensor)
-
-    base_hrrr_channels, hrrr_channels = dataset_obj._get_hrrr_channel_names()
-    hrrr_channel_indices = [
-        list(base_hrrr_channels).index(channel) for channel in hrrr_channels
-    ]
-    if len(output_hrrr_channels) == 0:
-        output_hrrr_channels = hrrr_channels.copy()
-
-    diffusion_channels, input_channels = hrrr_channels, hrrr_channels
-    diffusion_channel_indices = [
-        list(hrrr_channels).index(channel) for channel in diffusion_channels
-    ]
     input_channel_indices = [
         list(hrrr_channels).index(channel) for channel in input_channels
     ]
+
+    hrrr_data = xr.open_zarr(
+        os.path.join(
+            cfg.dataset.location, cfg.dataset.conus_dataset_name, "valid", "2021.zarr"
+        )
+    )
+
+    invariant_array = dataset._get_invariants()
+    invariant_tensor = torch.from_numpy(invariant_array).to(device).repeat(1, 1, 1, 1)
+
+    if len(cfg.inference.output_hrrr_channels) == 0:
+        output_hrrr_channels = diffusion_channels.copy()
 
     vardict: dict[str, int] = {
         hrrr_channel: i for i, hrrr_channel in enumerate(hrrr_channels)
     }
 
-    era5_data_path = os.path.join(params.location, "era5", "valid", "2021.zarr")
-
-    era5_data = xr.open_zarr(era5_data_path)
-
-    era5_channels = era5_data.channel.values
-
-    vardict_era5 = {era5_channel: i for i, era5_channel in enumerate(era5_channels)}
+    vardict_era5 = {
+        era5_channel: i for i, era5_channel in enumerate(dataset.era5_channels.values)
+    }
 
     color_limits = {
         "u10m": (-5, 5),
@@ -182,16 +98,22 @@ def main(
         (initial_time - datetime(initial_time.year, 1, 1, 0, 0)).total_seconds() / 3600
     )
 
+    hrrr_channel_indices = [
+        list(base_hrrr_channels).index(channel) for channel in hrrr_channels
+    ]
     means_hrrr = dataset.means_hrrr[hrrr_channel_indices]
     stds_hrrr = dataset.stds_hrrr[hrrr_channel_indices]
-
     means_era5 = dataset.means_era5
     stds_era5 = dataset.stds_era5
 
+    # Load pretrained models
+    net = Module.from_checkpoint(cfg.inference.regression_checkpoint)
+    regression_model = net.to(device)
+    net = Module.from_checkpoint(cfg.inference.diffusion_checkpoint)
+    diffusion_model = net.to(device)
+
     # initialize zarr
-    zarr_output_path = os.path.join(
-        opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"), "data.zarr"
-    )
+    zarr_output_path = os.path.join(cfg.inference.rundir, "data.zarr")
     group = zarr.open_group(zarr_output_path, mode="w")
     group.array("latitude", data=hrrr_data["latitude"].values)
     group.array("longitude", data=hrrr_data["longitude"].values)
@@ -247,7 +169,9 @@ def main(
                 break
 
             hrrr_0 = out
-            out = model(hrrr_0, boundary, mask=None)
+            out = regression_model_forward(
+                regression_model, hrrr_0, boundary, invariant_tensor
+            )
             out_noedm = out.clone()
             hrrr_0 = torch.cat(
                 (
@@ -256,15 +180,18 @@ def main(
                 ),
                 dim=1,
             )
-            edm_corrected_outputs, _ = edm_runner.run(hrrr_0)
-            if residual:
-                out[0, diffusion_channel_indices] += edm_corrected_outputs[0].float()
-            else:
-                out[0, diffusion_channel_indices] = edm_corrected_outputs[0].float()
+            edm_corrected_outputs = diffusion_model_forward(
+                diffusion_model,
+                hrrr_0,
+                diffusion_channel_indices,
+                invariant_tensor,
+                sampler_args=dict(cfg.sampler.args),
+            )
+            out[0, diffusion_channel_indices] += edm_corrected_outputs[0].float()
             out_edm = out.clone()
             boundary = data["era5"][0].cuda().float().unsqueeze(0)
 
-            varidx = vardict[plot_var_hrrr]
+            varidx = vardict[cfg.inference.plot_var_hrrr]
 
             fig, ax = plt.subplots(1, 4, figsize=(20, 5))
 
@@ -277,12 +204,12 @@ def main(
 
             error = pred - tar
 
-            if plot_var_hrrr in color_limits:
+            if cfg.inference.plot_var_hrrr in color_limits:
                 im = ax[0].imshow(
                     pred[0, varidx],
                     origin="lower",
                     cmap="magma",
-                    clim=color_limits[plot_var_hrrr],
+                    clim=color_limits[cfg.inference.plot_var_hrrr],
                 )
             else:
                 im = ax[0].imshow(pred[0, varidx], origin="lower", cmap="magma")
@@ -290,33 +217,35 @@ def main(
             fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
             ax[0].set_title(
                 "Predicted, {}, \n initial time {} \n lead_time {} hours".format(
-                    plot_var_hrrr, initial_time, i
+                    cfg.inference.plot_var_hrrr, initial_time, i
                 )
             )
-            if plot_var_hrrr in color_limits:
+            if cfg.inference.plot_var_hrrr in color_limits:
                 im = ax[1].imshow(
                     tar[0, varidx],
                     origin="lower",
                     cmap="magma",
-                    clim=color_limits[plot_var_hrrr],
+                    clim=color_limits[cfg.inference.plot_var_hrrr],
                 )
             else:
                 im = ax[1].imshow(tar[0, varidx], origin="lower", cmap="magma")
             fig.colorbar(im, ax=ax[1], fraction=0.046, pad=0.04)
-            ax[1].set_title("Actual, {}".format(plot_var_hrrr))
-            if plot_var_era5 in color_limits:
+            ax[1].set_title("Actual, {}".format(cfg.inference.plot_var_hrrr))
+            if cfg.inference.plot_var_era5 in color_limits:
                 im = ax[2].imshow(
-                    era5[0, vardict_era5[plot_var_era5]],
+                    era5[0, vardict_era5[cfg.inference.plot_var_era5]],
                     origin="lower",
                     cmap="magma",
-                    clim=color_limits[plot_var_era5],
+                    clim=color_limits[cfg.inference.plot_var_era5],
                 )
             else:
                 im = ax[2].imshow(
-                    era5[0, vardict_era5[plot_var_era5]], origin="lower", cmap="magma"
+                    era5[0, vardict_era5[cfg.inference.plot_var_era5]],
+                    origin="lower",
+                    cmap="magma",
                 )
             fig.colorbar(im, ax=ax[2], fraction=0.046, pad=0.04)
-            ax[2].set_title("ERA5, {}".format(plot_var_era5))
+            ax[2].set_title("ERA5, {}".format(cfg.inference.plot_var_era5))
             maxerror = np.max(np.abs(error[0, varidx]))
             im = ax[3].imshow(
                 error[0, varidx],
@@ -326,12 +255,9 @@ def main(
                 vmin=-maxerror,
             )
             fig.colorbar(im, ax=ax[3], fraction=0.046, pad=0.04)
-            ax[3].set_title("Error, {}".format(plot_var_hrrr))
+            ax[3].set_title("Error, {}".format(cfg.inference.plot_var_hrrr))
 
-            plt.savefig(f"{opts.outdir}/out_{i}.png")
-
-    # create output name with config, edm_config, initial_time
-    edm_config = model_info["edm_config_name"]
+            plt.savefig(f"{cfg.inference.rundir}/out_{i}.png")
 
     level_names = [
         "1",
@@ -504,7 +430,7 @@ def main(
     ds_targ["latitude"] = xr.DataArray(lats, dims=("y", "x"))
     ds_targ = ds_targ.assign_coords(levels=model_levels)
 
-    ds_out_path = os.path.join(opts.outdir, initial_time.strftime("%Y-%m-%dT%H_%M_%S"))
+    ds_out_path = cfg.inference.rundir
 
     ds_pred_edm.to_netcdf(f"{ds_out_path}/ds_pred_edm.nc", format="NETCDF4")
     ds_pred_noedm.to_netcdf(f"{ds_out_path}/ds_pred_noedm.nc", format="NETCDF4")

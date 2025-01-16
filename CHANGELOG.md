@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- DoMINO model architecture, datapipe and training recipe
+
 ### Changed
+
+- Refactored StormCast training example
 
 ### Deprecated
 
@@ -21,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ### Dependencies
+
+- Remove the numpy dependency upper bound.
 
 ## [0.9.0] - 2024-12-04
 

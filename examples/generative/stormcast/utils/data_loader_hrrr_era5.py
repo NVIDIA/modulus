@@ -15,31 +15,25 @@
 # limitations under the License.
 
 import os
-import logging
 import glob
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from utils.misc import print0
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.distributed import DistributedManager
 from datetime import datetime, timedelta
 import dask
 import xarray as xr
+
+
+logger = PythonLogger("dataset")
 
 
 def worker_init(wrk_id):
     np.random.seed(torch.utils.data.get_worker_info().seed % (2**32 - 1))
 
 
-def get_dataset(params, train):
-    """Return the train or validation dataset specified by params"""
-    return HrrrEra5DatasetForecast(
-        params,
-        train=train,
-        location=params.location,
-    )
-
-
-class HrrrEra5DatasetForecast(Dataset):
+class HrrrEra5Dataset(Dataset):
     """
     Paired dataset object serving time-synchronized pairs of ERA5 and HRRR samples
     Expects data to be stored under directory specified by 'location' with the
@@ -70,12 +64,16 @@ class HrrrEra5DatasetForecast(Dataset):
     year containing the data of interest.
     """
 
-    def __init__(self, params, train, location: str):
+    def __init__(self, params, train):
+
+        dist = DistributedManager()
+        self.logger0 = RankZeroLoggingWrapper(logger, dist)
+
         dask.config.set(
             scheduler="synchronous"
         )  # for threadsafe multiworker dataloaders
         self.params = params
-        self.location = location
+        self.location = self.params.location
         self.train = train
         self.path_suffix = "train" if train else "valid"
         self.dt = params.dt
@@ -147,7 +145,7 @@ class HrrrEra5DatasetForecast(Dataset):
             self.era5_paths, key=lambda x: int(os.path.basename(x).replace(".zarr", ""))
         )
 
-        print0("list of all era5 paths: ", self.era5_paths)
+        self.logger0.info(f"list of all era5 paths: {self.era5_paths}")
 
         if self.train:
             # keep only years specified in the params.train_years list
@@ -172,7 +170,7 @@ class HrrrEra5DatasetForecast(Dataset):
                 int(os.path.basename(x).replace(".zarr", "")) for x in self.era5_paths
             ]
 
-        print0("list of all era5 paths after filtering: ", self.era5_paths)
+        self.logger0.info(f"list of all era5 paths after filtering: {self.era5_paths}")
         self.n_years = len(self.era5_paths)
 
         with xr.open_zarr(self.era5_paths[0], consolidated=True) as ds:
@@ -191,7 +189,7 @@ class HrrrEra5DatasetForecast(Dataset):
             os.path.join(self.location, self.conus_dataset_name, "**", "????.zarr"),
             recursive=True,
         )
-        print0("list of all hrrr paths: ", self.hrrr_paths)
+        self.logger0.info(f"list of all hrrr paths: {self.hrrr_paths}")
         self.hrrr_paths = sorted(
             self.hrrr_paths, key=lambda x: int(os.path.basename(x).replace(".zarr", ""))
         )
@@ -218,11 +216,11 @@ class HrrrEra5DatasetForecast(Dataset):
                 int(os.path.basename(x).replace(".zarr", "")) for x in self.hrrr_paths
             ]
 
-        print0("list of all hrrr paths after filtering: ", self.hrrr_paths)
+        self.logger0.info(f"list of all hrrr paths after filtering: {self.hrrr_paths}")
 
         years = [int(os.path.basename(x).replace(".zarr", "")) for x in self.hrrr_paths]
-        print0("years: ", years)
-        print0("self.years: ", self.years)
+        self.logger0.info(f"years: {years}")
+        self.logger0.info(f"self.years: {self.years}")
         assert (
             years == self.years
         ), "Number of years for ERA5 in %s and HRRR in %s must match" % (
@@ -273,12 +271,12 @@ class HrrrEra5DatasetForecast(Dataset):
             first_sample = datetime(
                 year=first_year, month=8, day=1, hour=1, minute=0, second=0
             )  # marks transition of hrrr model version
-            logging.info("First sample is {}".format(first_sample))
+            self.logger0.info("First sample is {}".format(first_sample))
         else:
             first_sample = datetime(
                 year=first_year, month=1, day=1, hour=0, minute=0, second=0
             )
-            logging.info("First sample is {}".format(first_sample))
+            self.logger0.info("First sample is {}".format(first_sample))
 
         last_sample = datetime(
             year=last_year, month=12, day=31, hour=23, minute=0, second=0
@@ -287,7 +285,7 @@ class HrrrEra5DatasetForecast(Dataset):
             last_sample = datetime(
                 year=last_year, month=12, day=15, hour=0, minute=0, second=0
             )
-            logging.info("Last sample is {}".format(last_sample))
+            self.logger0.info("Last sample is {}".format(last_sample))
         all_datetimes = [
             first_sample + timedelta(hours=x)
             for x in range(int((last_sample - first_sample).total_seconds() / 3600) + 1)
@@ -310,7 +308,7 @@ class HrrrEra5DatasetForecast(Dataset):
             and (x + timedelta(hours=self.dt) not in missing_samples)
         ]
 
-        logging.info(
+        self.logger0.info(
             "Total datetimes in training set are {} of which {} are valid".format(
                 len(all_datetimes), len(self.valid_samples)
             )
@@ -414,7 +412,7 @@ class HrrrEra5DatasetForecast(Dataset):
         Build custom indexing window to subselect HRRR region from ERA5
         """
 
-        logging.info(
+        self.logger0.info(
             "Constructing ERA5 window, extending HRRR domain by {} pixels in each direction".format(
                 self.boundary_padding_pixels
             )
@@ -459,7 +457,7 @@ class HrrrEra5DatasetForecast(Dataset):
         added_pixels_x = new_x.shape[1] - self.hrrr_lon.shape[1]
         added_pixels_y = new_x.shape[0] - self.hrrr_lon.shape[0]
 
-        logging.info(
+        self.logger0.info(
             "Added {} pixels in x, {} pixels in y".format(
                 added_pixels_x, added_pixels_y
             )
