@@ -29,3 +29,6 @@ from .utils import (
 )
 
 from .shard_tensor import ShardTensor
+
+# Load and register custom ops:
+from .custom_ops import *

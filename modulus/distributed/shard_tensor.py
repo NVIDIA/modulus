@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from typing import cast, Optional, Tuple, Sequence
+from collections.abc import Iterable
 
 import torch
 
@@ -248,6 +249,11 @@ class ShardTensor(DTensor):
         # ShardTensor inherits from DTensor and can lazy-init from for efficiency 
         if isinstance(dispatch_res, DTensor):
             return ShardTensor._from_dtensor(dispatch_res)
+        
+        if isinstance(dispatch_res, Iterable):
+            return type(dispatch_res)(
+                ShardTensor._from_dtensor(d) for d in dispatch_res
+            )
         
         return dispatch_res
         

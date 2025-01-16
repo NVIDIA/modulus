@@ -1,0 +1,74 @@
+import torch
+
+from torch.distributed.tensor._ops.utils import register_prop_rule, register_op_strategy
+from torch.distributed.tensor._op_schema import OpSchema, OutputSharding, OpStrategy, RuntimeSchemaInfo
+from torch.distributed.tensor._dtensor_spec import DTensorSpec, TensorMeta
+from torch.distributed.tensor.placement_types import Shard, Replicate, Partial
+
+aten = torch.ops.aten
+
+from modulus.distributed._shard_tensor_spec import _stride_from_contiguous_shape_C_style
+
+@register_prop_rule(aten.unbind.int, schema_info = RuntimeSchemaInfo(1))
+def unbind_rules(op_schema : OpSchema) -> OutputSharding:
+    """
+    Need to add rules for unbinding for stormcast and attention in general
+    """
+    
+    # We need to get the dimension of the slice.  0 is default.
+    
+    args_schema = op_schema.args_schema
+
+    if len(args_schema) > 1:
+        dim = args_schema[-1]
+    else:
+        dim = 0
+        
+    # if the chunking dimension is along a dimension that is sharded, we have to handle that.
+    # If it's along an unsharded dimension, there is nearly nothing to do.  
+   
+    # Outpu
+   
+    input_spec = args_schema[0]
+    
+    input_placements = input_spec.placements
+
+    if dim in [ i.dim for i in input_placements]:
+        raise Exception("No implementation for unbinding along sharding axis yet.")
+    
+    else:
+        # We are reducing tensor rank and returning one sharding per tensor:
+        original_shape = list(input_spec.shape)
+        unbind_dim_shape = original_shape.pop(dim)
+
+        output_stride = _stride_from_contiguous_shape_C_style(original_shape)
+
+        # Need to create a new global meta:
+        new_meta = TensorMeta(
+            torch.Size(tuple(original_shape)),
+            stride = output_stride,
+            dtype = input_spec.tensor_meta.dtype,
+        )
+
+        # The placements get adjusted too
+        new_placements = []
+        for p in input_spec.placements:
+            if isinstance(p, Replicate):
+                new_placements.append(p)
+            elif isinstance(p, Shard):
+                if p.dim > dim:
+                    new_placements.append(Shard(p.dim - 1))
+                else:
+                    new_placements.append(p)
+            elif isinstance(p, Partial):
+                raise Exception("Partial placement not supported yet for unbind")
+            
+        output_spec_list = [
+            DTensorSpec(
+                mesh        = input_spec.mesh,
+                placements  = tuple(new_placements),
+                tensor_meta = new_meta,
+            ) for _ in range(unbind_dim_shape)
+        ]
+        return OutputSharding(output_spec_list) 
+        

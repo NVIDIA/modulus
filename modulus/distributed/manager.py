@@ -511,6 +511,8 @@ class DistributedManager(object):
         self._mesh_dims = {
             key : val for key, val in zip(mesh_dim_names, mesh_shape)
         }
+        
+        return self._global_mesh
 
     @staticmethod
     def setup(
