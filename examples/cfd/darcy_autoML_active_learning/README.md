@@ -1,7 +1,7 @@
 # Scalable PDE Surrogate Modeling: Darcy Flow with FNO/AFNO + AutoML & Active Learning
 
 ## Prerequisites
-For environment or Docker instructions, please consult **[getting_started_guide.md](./getting_started_guide.md)**.
+For environment or Docker instructions, please consult **[GETTING_STARTED.md](./GETTING_STARTED.md)**.
 
 ## Introduction
 This repository demonstrates a **multi-faceted Physics-AI pipeline** for **Darcy Flow** PDE surrogate modeling. It features:
