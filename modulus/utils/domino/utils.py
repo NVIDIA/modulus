@@ -22,11 +22,22 @@ import os
 import time
 
 import numpy as np
-import pyvista as pv
-import vtk
 from scipy.spatial import KDTree
-from vtk import vtkDataSetTriangleFilter
-from vtk.util import numpy_support
+
+try:
+    import pyvista as pv
+
+    PV_AVAILABLE = True
+except ImportError:
+    PV_AVAILABLE = False
+try:
+    import vtk
+    from vtk import vtkDataSetTriangleFilter
+    from vtk.util import numpy_support
+
+    VTK_AVAILABLE = True
+except ImportError:
+    VTK_AVAILABLE = False
 
 
 def calculate_center_of_mass(stl_centers, stl_sizes):
@@ -58,6 +69,8 @@ def unstandardize(field, mean, std):
 
 def write_to_vtp(polydata, filename):
     """Function to write polydata to vtp"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(filename)
     writer.SetInputData(polydata)
@@ -66,6 +79,8 @@ def write_to_vtp(polydata, filename):
 
 def write_to_vtu(polydata, filename):
     """Function to write polydata to vtu"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     writer = vtk.vtkXMLUnstructuredGridWriter()
     writer.SetFileName(filename)
     writer.SetInputData(polydata)
@@ -74,6 +89,10 @@ def write_to_vtu(polydata, filename):
 
 def extract_surface_triangles(tet_mesh):
     """Extracts the surface triangles from a triangular mesh."""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
+    if not PV_AVAILABLE:
+        raise ImportError("PyVista is not installed. This function cannot be used.")
     surface_filter = vtk.vtkDataSetSurfaceFilter()
     surface_filter.SetInputData(tet_mesh)
     surface_filter.Update()
@@ -92,6 +111,8 @@ def extract_surface_triangles(tet_mesh):
 
 def convert_to_tet_mesh(polydata):
     """Function to convert tet to stl"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     # Create a VTK DataSetTriangleFilter object
     tet_filter = vtkDataSetTriangleFilter()
     tet_filter.SetInputData(polydata)
@@ -105,6 +126,8 @@ def convert_to_tet_mesh(polydata):
 
 def get_node_to_elem(polydata):
     """Function to convert node to elem"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     c2p = vtk.vtkPointDataToCellData()
     c2p.SetInputData(polydata)
     c2p.Update()
@@ -131,6 +154,8 @@ def get_fields_from_cell(ptdata, var_list):
 
 def get_fields(data, variables):
     """Function to get fields from VTP/VTU"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     fields = []
     for array_name in variables:
         try:
@@ -148,6 +173,8 @@ def get_fields(data, variables):
 
 def get_vertices(polydata):
     """Function to get vertices"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     points = polydata.GetPoints()
     vertices = numpy_support.vtk_to_numpy(points.GetData())
     return vertices
@@ -165,6 +192,8 @@ def get_volume_data(polydata, variables):
 
 def get_surface_data(polydata, variables):
     """Function to get surface data"""
+    if not VTK_AVAILABLE:
+        raise ImportError("VTK or is not installed. This function cannot be used.")
     points = polydata.GetPoints()
     vertices = np.array([points.GetPoint(i) for i in range(points.GetNumberOfPoints())])
 
@@ -343,3 +372,14 @@ def dict_to_device(state_dict, device):
     for k, v in state_dict.items():
         new_state_dict[k] = v.to(device)
     return new_state_dict
+
+
+def area_weighted_shuffle_array(arr, npoin, area):
+    factor = 1.0
+    total_area = np.sum(area**factor)
+    probs = area**factor / total_area
+    np.random.seed(seed=int(time.time()))
+    idx = np.arange(arr.shape[0])
+    np.random.shuffle(idx)
+    ids = np.random.choice(idx, npoin, p=probs[idx])
+    return arr[ids], ids
