@@ -1,6 +1,59 @@
-# Getting Started
+# Getting Started (getting_started.md)
+
+## Table of Contents
+
+- [1. Introduction & Context](#1-introduction--context)  
+  *Describes the overall purpose of this guide, including prerequisites and disclaimers.*
+
+- [2. Set Up Git](#2-set-up-git)  
+  *Covers configuring user info, managing SSH keys, and setting up SSH for GitHub.*
+  - [2.1 Configure Git User Info](#21-configure-git-user-info)  
+    *Set your global Git username and email.*
+  - [2.2 Manage SSH Keys](#22-manage-ssh-keys)  
+    *Generate a new SSH key or add an existing one to this machine.*
+    - [Option A: Create a New SSH Key](#option-a-create-a-new-ssh-key)  
+      *Step-by-step commands for generating a new ed25519 key pair.*
+    - [Option B: Add an Existing SSH Key](#option-b-add-an-existing-ssh-key)  
+      *Copy and configure an existing SSH key pair on this machine.*
+  - [2.3 Configure SSH for GitHub](#23-configure-ssh-for-github)  
+    *Modify your `~/.ssh/config` so GitHub traffic uses your SSH key.*
+
+- [3. Set Up the Project](#3-set-up-the-project)  
+  *Create a project folder and clone the necessary repositories.*
+
+- [4. Set Up the Machine](#4-set-up-the-machine)  
+  *Install essential system components: NVIDIA drivers, Docker, and the NVIDIA Container Toolkit.*
+  - [4.1 Install NVIDIA Driver (Online)](#41-install-nvidia-driver-online)  
+    *Use APT to install and verify the NVIDIA 525 driver.*
+  - [4.2 Install Docker](#42-install-docker)  
+    *Remove old Docker packages, add Docker’s official repository, and enable non-root Docker usage.*
+  - [4.3 Install NVIDIA Container Toolkit](#43-install-nvidia-container-toolkit)  
+    *Install `nvidia-docker2` and other toolkit components for GPU support in Docker.*
+
+- [5. Install & Run NVIDIA Modulus (24.12)](#5-install--run-nvidia-modulus-2412)  
+  *Pull the Modulus container, launch it, and install Python dependencies.*
+  - [5.1 Pull Modulus Docker Image](#51-pull-modulus-docker-image)  
+    *Download the Modulus 24.12 container from NVIDIA’s registry.*
+  - [5.2 Launch the Modulus Container](#52-launch-the-modulus-container)  
+    *Run the container with GPU access, volume mounts, and environment variables.*
+  - [5.3 Install Python Requirements](#53-install-python-requirements)  
+    *Install any project-specific dependencies inside the container.*
+  - [5.4 Exit Container](#54-exit-container)  
+    *Properly leave the container.*
+
+- [6. Restarting the Container & Running Jupyter Notebook](#6-restarting-the-container--running-jupyter-notebook)  
+  *Bring containers back online and run Jupyter for interactive development.*
+  - [6.1 Restart & Attach to the Container](#61-restart--attach-to-the-container)  
+    *How to start and enter an existing container.*
+  - [6.2 (Optional) Launch Jupyter Notebook](#62-optional-launch-jupyter-notebook)  
+    *Start Jupyter within the container and access it via your browser.*
+
+- [Appendix: Offline Installation (Air-Gapped Workflow)](#appendix-offline-installation-air-gapped-workflow)  
+  *General outline for installing everything offline - e.g, in air-gapped environments.*
+
 
 ## 1. Introduction & Context
+
 This guide describes how to set up a machine for projects involving **NVIDIA Modulus (version 24.12)** on **Ubuntu 22.04 LTS**. It covers:
 - Setting up Git (including configuring user info and managing SSH keys).
 - Installing NVIDIA drivers, Docker, and the NVIDIA Container Toolkit.
@@ -209,16 +262,28 @@ docker pull nvcr.io/nvidia/modulus/modulus:24.12
               --ulimit memlock=-1 \
               --ulimit stack=67108864 \
               -v "${PWD}:/workspace" \
+              -e PROJECT_ROOT="/workspace" \
               --name my_modulus_container \
               -it \
               -p 8888:8888 \
               nvcr.io/nvidia/modulus/modulus:24.12 bash
    ```
 
+3. **Configure the container**:
+   Inside the container, set the `PROJECT_ROOT` environment variable:
+   ```bash
+   # export PROJECT_ROOT="$HOME/project/modulus-dls-api"
+   echo 'export PROJECT_ROOT="$HOME/project/modulus-dls-api"' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+   This will allow the notebooks to find the project root.
+
 ### 5.3 Install Python Requirements
-Inside the container, install any project-specific dependencies:
+Inside the container, install any project packages incl. project-specific dependencies:
 ```bash
-pip install -r examples/cfd/darcy_autoML_active_learning/requirements.txt
+# pip install -r examples/cfd/darcy_autoML_active_learning/requirements.txt
+cd examples/cfd/darcy_autoML_active_learning
+pip install -e .
 ```
 
 ### 5.4 Exit Container
@@ -241,6 +306,7 @@ docker exec -it my_modulus_container bash
 ### 6.2 (Optional) Launch Jupyter Notebook
 1. **Start Jupyter** inside the container:
    ```bash
+   cd project/modulus-dls-api/examples/cfd/darcy_autoML_active_learning # optional
    jupyter notebook --ip=0.0.0.0 --port=8888 --allow-root --no-browser
    ```
 
@@ -251,9 +317,157 @@ docker exec -it my_modulus_container bash
 
 ---
 
-# Appendix: Offline Installation (e.g., for Airgap)
+Below is an **improved appendix** that more consistently reflects the fact that your project **definitely requires** Python dependencies (rather than leaving it optional). It also incorporates more precise references to your existing instructions in the main guide. Feel free to adjust wording or headings as needed in your final `getting_started.md` file.
 
-> **Disclaimer**: This approach is not fully tested and depends on your ability to correctly download and transfer all required files. Adjust paths, filenames, and versions as needed.
+---
+
+# Appendix: Offline Installation (Air-Gapped Workflow)
+
+> **Disclaimer**: This approach is **not fully tested**. Adjust filenames/versions to your environment.
+
+## A. Overview
+
+The main steps in this Appendix mirror those in the online setup but involve **downloading** everything (drivers, Docker images, Python dependencies, etc.) on an **online machine** and **transferring** them to the **offline** system. We assume your offline system also runs **Ubuntu 22.04** and has a comparable environment.
+
+---
+
+## B. Prepare on an Online Machine
+
+1. **Gather Ubuntu .deb Packages**  
+   - NVIDIA Driver (e.g., **525**), Docker packages (`docker-ce`, `docker-ce-cli`, etc.), and the **NVIDIA Container Toolkit** (`nvidia-docker2`, `nvidia-container-toolkit`).
+   - On the online machine, run:
+     ```bash
+     sudo apt-get update
+     apt-get download <package_name>
+     ```
+   - This saves `.deb` files for each package locally, rather than installing them immediately.
+
+2. **Pull & Save the NVIDIA Modulus Docker Image**  
+   - Pull the image:
+     ```bash
+     docker pull nvcr.io/nvidia/modulus/modulus:24.12
+     ```
+   - Save it to a `.tar` file:
+     ```bash
+     docker save -o modulus_24.12.tar nvcr.io/nvidia/modulus/modulus:24.12
+     ```
+
+3. **Clone or Archive Your PDE/AI Code**  
+   - If you need your local PDE code from GitHub (e.g., the `modulus-dls-api` fork or additional repos):
+     ```bash
+     git clone git@github.com:NVIDIA/modulus.git
+     git clone git@github.com:YGMaerz/modulus-dls-api.git
+     ```
+   - Optionally **compress** them into `.tar.gz` archives.
+
+4. **Download Python Dependencies**  
+   - If your offline project (Darcy Flow, PDE surrogates, etc.) includes a `requirements.txt` (or `pyproject.toml`), **download** the wheels:
+     ```bash
+     pip download -r requirements.txt -d ./offline_wheels
+     ```
+   - This allows offline `pip install` without needing PyPI.
+
+5. **Transfer Files**  
+   - Copy all `.deb` packages, the `modulus_24.12.tar` Docker image, your code archives, and the `offline_wheels` folder onto a USB drive or external HDD.
+   - Move them to your **offline** machine.
+
+---
+
+## C. Install on the Offline Machine
+
+1. **Install Ubuntu Packages from `.deb`**  
+   - For the **NVIDIA driver**:
+     ```bash
+     sudo dpkg -i nvidia-driver-525_*.deb
+     sudo reboot
+     ```
+     Check with `nvidia-smi`.
+   - For **Docker** and dependencies:
+     ```bash
+     sudo dpkg -i docker-ce_*.deb docker-ce-cli_*.deb containerd.io_*.deb ...
+     sudo apt-get install -f  # resolves missing dependencies
+     sudo usermod -aG docker $USER  # if you want non-root Docker
+     sudo reboot
+     ```
+   - For the **NVIDIA Container Toolkit**:
+     ```bash
+     sudo dpkg -i nvidia-container-toolkit_*.deb nvidia-docker2_*.deb
+     sudo systemctl restart docker
+     ```
+
+2. **Load the Modulus Docker Image**  
+   ```bash
+   docker load -i modulus_24.12.tar
+   ```
+   You should see `nvcr.io/nvidia/modulus/modulus:24.12` upon running `docker images`.
+
+3. **Unpack (or Place) Your Code**  
+   - If you archived them (`modulus-dls-api.tar.gz` etc.), run:
+     ```bash
+     tar -xzf modulus-dls-api.tar.gz
+     ```
+   - Move them into e.g. `~/project/modulus-dls-api/`.
+
+4. **Install Project’s Python Dependencies**  
+   - If you have an offline wheels folder, run:
+     ```bash
+     pip install --no-index --find-links=./offline_wheels \
+         -r requirements.txt
+     ```
+   - Or, if you have a local `setup.py` or `pyproject.toml`, do:
+     ```bash
+     pip install -e .
+     ```
+   - This ensures your PDE/AI packages are installed offline.
+
+---
+
+## D. Usage & Verification
+
+1. **Start the Modulus Container**  
+   ```bash
+   cd ~/project/modulus-dls-api/
+   docker run --gpus all \
+              --shm-size=1g \
+              --ulimit memlock=-1 \
+              --ulimit stack=67108864 \
+              -v "${PWD}:/workspace" \
+              --name my_modulus_container \
+              -it \
+              nvcr.io/nvidia/modulus/modulus:24.12 bash
+   ```
+   > If you need Jupyter, add `-p 8888:8888` for port binding.
+
+2. **Install Additional Python Requirements** (If Not Done):
+   ```bash
+   pip install -r examples/cfd/darcy_autoML_active_learning/requirements.txt
+   ```
+   And/or:
+   ```bash
+   pip install -e examples/cfd/darcy_autoML_active_learning
+   ```
+   if you have a local Python package.
+
+3. **Run Jupyter (Optional)**  
+   ```bash
+   jupyter notebook --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+   ```
+   Then open `http://localhost:8888` in your browser (outside the container).
+
+4. **Stop / Restart**  
+   - To exit:
+     ```bash
+     exit
+     ```
+   - To restart:
+     ```bash
+     docker start my_modulus_container
+     docker exec -it my_modulus_container bash
+     ```
+
+---
+
+# Appendix: Offline Installation (Air-Gapped Workflow)
 
 ## 1. Prepare on an Online Machine
 

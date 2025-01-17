@@ -186,8 +186,14 @@ modulus/examples/**/*.pt
 
 # But do not ignore any example or final files
 !modulus/examples/**/data/**/example*
+!modulus/examples/**/data/**/example/*
 !modulus/examples/**/data/**/final*
+!modulus/examples/**/data/**/final/*
 !modulus/examples/**/checkpoint/**/example*
+!modulus/examples/**/checkpoint/**/example/*
 !modulus/examples/**/checkpoint/**/final*
+!modulus/examples/**/checkpoint/**/final/*
 !modulus/examples/**/mlruns/**/example*
+!modulus/examples/**/mlruns/**/example/*
 !modulus/examples/**/mlruns/**/final*
+!modulus/examples/**/mlruns/**/final/*

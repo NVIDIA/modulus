@@ -2,6 +2,18 @@
 
 ## Prerequisites
 For environment or Docker instructions, please consult **[GETTING_STARTED.md](./GETTING_STARTED.md)**.
+After completing those steps, you can launch the Modulus container and run the notebooks by:
+```bash
+# If container isn't running, start it
+docker start my_modulus_container
+# Attach to it
+docker exec -it my_modulus_container bash
+# Move into the example folder
+cd examples/cfd/darcy_autoML_active_learning
+# Launch Jupyter (published on port 8888)
+jupyter notebook --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+```
+Then open your browser at http://localhost:8888 (with the token link printed in the console), navigate to notebooks/darcy_autoML.ipynb or darcy_active_learning.ipynb.
 
 ## Introduction
 This repository demonstrates a **multi-faceted Physics-AI pipeline** for **Darcy Flow** PDE surrogate modeling. It features:
@@ -26,7 +38,7 @@ While Darcy Flow serves as our **example PDE**, the underlying **architecture** 
    - **Selecting Top-K**: Identifies which PDE fields are most “uncertain,” potentially requiring additional HPC solver runs or partial retraining.  
    - **Saving**: Optionally store the top-K uncertain samples in `.pt` format for further data augmentation.  
 
-> **Note**: If you’d like more details on environment setup, Docker usage, or how to run these notebooks in a local vs. HPC scenario, see **[getting_started_guide.md](./getting_started_guide.md)**.  
+> **Note**: If you’d like more details on environment setup, Docker usage, or how to run these notebooks in a local vs. HPC scenario, see **[GETTING_STARTED.md](./GETTING_STARTED.md)**.  
 
 ## Repository Structure
 
@@ -36,11 +48,13 @@ darcy_autoML_active_learning/
 │   ├─ darcy_autoML.ipynb           # Notebook 1: Surrogate + AutoML
 │   ├─ darcy_active_learning.ipynb  # Notebook 2: Offline AL with MC-Dropout
 ├─ src/
-│   ├─ data_loading.py
+│   ├─ darcy_automl_active_learning/
+│   │   └─ data_loading.py
 │   ├─ models/
 │   │   └─ fno_with_dropout.py
-│   ├─ model_factory.py
-│   ├─ ModelTrainingLoop.py
+│   │   ├─ model_factory.py
+│   │   ├─ ModelTrainingLoop.py
+│   ├─ automl
 │   ├─ automl.py
 │   ├─ AL/
 │   │   ├─ mc_dropout_estimator.py
@@ -49,8 +63,9 @@ darcy_autoML_active_learning/
 ├─ config/
 │   └─ config.yaml
 ├─ ...
-└─ getting_started_guide.md
+└─ GETTING_STARTED.md
 └─ requirements.txt
+└─ pyproject.toml
 ```
 
 ### Key Highlights
