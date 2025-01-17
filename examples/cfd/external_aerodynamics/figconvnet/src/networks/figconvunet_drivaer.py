@@ -38,7 +38,8 @@ from src.utils.eval_funcs import eval_all_metrics
 class FIGConvUNetDrivAerNet(FIGConvUNet):
     """FIGConvUNetDrivAerNet
 
-    DrivAerNet is a variant of FIGConvUNet that is specialized for the DrivAer dataset.
+    FIGConvUNetDrivAerNet is a variant of FIGConvUNet
+    that is specialized for the DrivAerNet dataset.
     """
 
     def __init__(
@@ -242,6 +243,143 @@ class FIGConvUNetDrivAerNet(FIGConvUNet):
         # diff_points = torch.cat((vertices, norm_diff_colors), dim=1)
 
         # return {"vis": im}, {"pred": pred_points, "gt": gt_points, "diff": diff_points}
+
+
+class FIGConvUNetDrivAerML(FIGConvUNet):
+    """FIGConvUNetDrivAerNet
+
+    FIGConvUNetDrivAerML is a variant of FIGConvUNet
+    that is specialized for the DrivAerML dataset.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        hidden_channels: List[int],
+        num_levels: int = 3,
+        num_down_blocks: Union[int, List[int]] = 1,
+        num_up_blocks: Union[int, List[int]] = 1,
+        mlp_channels: List[int] = [512, 512],
+        aabb_max: Tuple[float, float, float] = (2.5, 1.5, 1.0),
+        aabb_min: Tuple[float, float, float] = (-2.5, -1.5, -1.0),
+        voxel_size: Optional[float] = None,
+        resolution_memory_format_pairs: List[
+            Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
+        ] = [
+            (GridFeaturesMemoryFormat.b_xc_y_z, (2, 128, 128)),
+            (GridFeaturesMemoryFormat.b_yc_x_z, (128, 2, 128)),
+            (GridFeaturesMemoryFormat.b_zc_x_y, (128, 128, 2)),
+        ],
+        use_rel_pos: bool = True,
+        use_rel_pos_encode: bool = True,
+        pos_encode_dim: int = 32,
+        communication_types: List[Literal["mul", "sum"]] = ["sum"],
+        to_point_sample_method: Literal["graphconv", "interp"] = "graphconv",
+        neighbor_search_type: Literal["knn", "radius"] = "knn",
+        knn_k: int = 16,
+        reductions: List[REDUCTION_TYPES] = ["mean"],
+        drag_loss_weight: Optional[float] = None,
+        pooling_type: Literal["attention", "max", "mean"] = "max",
+        pooling_layers: List[int] = None,
+    ):
+        super().__init__(
+            in_channels=hidden_channels[0],
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            hidden_channels=hidden_channels,
+            num_levels=num_levels,
+            num_down_blocks=num_down_blocks,
+            num_up_blocks=num_up_blocks,
+            mlp_channels=mlp_channels,
+            aabb_max=aabb_max,
+            aabb_min=aabb_min,
+            voxel_size=voxel_size,
+            resolution_memory_format_pairs=resolution_memory_format_pairs,
+            use_rel_pos=use_rel_pos,
+            use_rel_pos_embed=use_rel_pos_encode,
+            pos_encode_dim=pos_encode_dim,
+            communication_types=communication_types,
+            to_point_sample_method=to_point_sample_method,
+            neighbor_search_type=neighbor_search_type,
+            knn_k=knn_k,
+            reductions=reductions,
+            drag_loss_weight=drag_loss_weight,
+            pooling_type=pooling_type,
+            pooling_layers=pooling_layers,
+        )
+
+    def data_dict_to_input(self, data_dict) -> torch.Tensor:
+        vertices = data_dict["coordinates"].float()
+        return vertices.to(self.device)
+
+    @torch.no_grad()
+    def eval_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices = self.data_dict_to_input(data_dict)
+        vertices = datamodule.encode(vertices, "coordinates")
+        normalized_pred, _ = self(vertices)
+        p_gt = datamodule.encode(data_dict["pressure"], "pressure").to(self.device)
+        wss_gt = datamodule.encode(data_dict["shear_stress"], "shear_stress").to(
+            self.device
+        )
+        normalized_gt = torch.cat((p_gt, wss_gt), -1)
+
+        if loss_fn is None:
+            loss_fn = self.loss
+
+        out_dict = {"l2": loss_fn(normalized_pred, normalized_gt)}
+
+        normalized_pred = normalized_pred.clone()
+        normalized_p_pred = normalized_pred[..., :1]
+        normalized_wss_pred = normalized_pred[..., 1:]
+
+        denorm_p_pred = datamodule.decode(normalized_p_pred, "pressure")
+        denorm_p_gt = data_dict["pressure"].to(self.device).view_as(denorm_p_pred)
+        out_dict["p_l2_denorm"] = loss_fn(denorm_p_pred, denorm_p_gt)
+
+        denorm_wss_pred = datamodule.decode(normalized_wss_pred, "shear_stress")
+        denorm_wss_gt = (
+            data_dict["shear_stress"].to(self.device).view_as(denorm_wss_pred)
+        )
+        out_dict["wss_l2_denorm"] = loss_fn(denorm_wss_pred, denorm_wss_gt)
+
+        # Pressure evaluation
+        out_dict.update(
+            eval_all_metrics(p_gt, normalized_p_pred, prefix="norm_pressure")
+        )
+        # WSS evaluation
+        out_dict.update(
+            eval_all_metrics(wss_gt, normalized_wss_pred, prefix="norm_wss")
+        )
+
+        return out_dict
+
+    def loss_dict(self, data_dict, loss_fn=None, datamodule=None, **kwargs) -> Dict:
+        vertices = self.data_dict_to_input(data_dict)
+        vertices = datamodule.encode(vertices, "coordinates")
+        normalized_pred, _ = self(vertices)
+        p_gt = datamodule.encode(data_dict["pressure"], "pressure").to(self.device)
+        wss_gt = datamodule.encode(data_dict["shear_stress"], "shear_stress").to(
+            self.device
+        )
+        normalized_gt = torch.cat((p_gt, wss_gt), -1)
+
+        return_dict = {}
+        if loss_fn is None:
+            loss_fn = self.loss
+
+        # return_dict["p_wss_loss"] = loss_fn(normalized_pred, normalized_gt)
+        # return return_dict
+        p_pred = normalized_pred[..., :1]
+        wss_pred = normalized_pred[..., 1:4]
+        return {
+            "p_loss": loss_fn(p_pred, p_gt),
+            "wss_loss": loss_fn(wss_pred, wss_gt),
+        }
+
+    def image_pointcloud_dict(self, data_dict, datamodule) -> Tuple[Dict, Dict]:
+        return {}, {}
 
 
 def drivaer_create_subplot(ax, vertices, data, title):
