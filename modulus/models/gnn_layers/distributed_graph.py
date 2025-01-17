@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import logging
-
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -31,6 +30,7 @@ from modulus.distributed import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class GraphPartition:
@@ -457,10 +457,16 @@ def partition_graph_with_matrix_decomposition(
     # First partition the global row ptrs (dst nodes) to local row ptrs
     num_edges = global_indices.size(0)
     node_offset = partition_book[partition_rank]
-    num_local_nodes = partition_book[partition_rank + 1] - partition_book[partition_rank]
+    num_local_nodes = (
+        partition_book[partition_rank + 1] - partition_book[partition_rank]
+    )
     edge_partition_offset = global_offsets[node_offset]
-    assert node_offset + num_local_nodes <= num_nodes, "Invalid node offset and number of local nodes"
-    local_offsets = global_offsets[node_offset:node_offset + num_local_nodes + 1].to(device=device, non_blocking=True)
+    if node_offset + num_local_nodes > num_nodes:
+        raise ValueError("Invalid node offset and number of local nodes")
+
+    local_offsets = global_offsets[node_offset : node_offset + num_local_nodes + 1].to(
+        device=device, non_blocking=True
+    )
     graph_partition.local_offsets = local_offsets - edge_partition_offset
     graph_partition.num_local_dst_nodes = num_local_nodes
 
@@ -469,42 +475,80 @@ def partition_graph_with_matrix_decomposition(
     partition_book = partition_book.to(device=device)
     for to_partition in range(partition_size):
         local_indices = global_indices[
-            global_offsets[partition_book[to_partition]]:global_offsets[partition_book[to_partition+1]]
+            global_offsets[partition_book[to_partition]] : global_offsets[
+                partition_book[to_partition + 1]
+            ]
         ].to(device=device, non_blocking=True)
         # compress the columns (src nodes or local_indices) for each partition and record mapping (inverse_indices)
-        global_src_node_at_partition, inverse_indices = local_indices.unique(sorted=True, return_inverse=True)
-        global_src_node_at_partition_rank = torch.bucketize(global_src_node_at_partition, partition_book, right=True) - 1
-        src_node_indices = torch.nonzero(global_src_node_at_partition_rank == partition_rank, as_tuple=False).squeeze(1)
+        global_src_node_at_partition, inverse_indices = local_indices.unique(
+            sorted=True, return_inverse=True
+        )
+        global_src_node_at_partition_rank = (
+            torch.bucketize(global_src_node_at_partition, partition_book, right=True)
+            - 1
+        )
+        src_node_indices = torch.nonzero(
+            global_src_node_at_partition_rank == partition_rank, as_tuple=False
+        ).squeeze(1)
         # fill local send buffer for alltoalls (scatter selected nodes to_partition rank)
-        graph_partition.scatter_indices[to_partition] = global_src_node_at_partition[src_node_indices] - node_offset
+        graph_partition.scatter_indices[to_partition] = (
+            global_src_node_at_partition[src_node_indices] - node_offset
+        )
         # fill the numbers of indices (edges), dst nodes and src nodes for each partition
-        graph_partition.num_indices_in_each_partition[to_partition] = local_indices.size(0)
-        graph_partition.num_dst_nodes_in_each_partition[to_partition] = partition_book[to_partition+1] - partition_book[to_partition]
-        graph_partition.num_src_nodes_in_each_partition[to_partition] = global_src_node_at_partition.size(0)
+        graph_partition.num_indices_in_each_partition[
+            to_partition
+        ] = local_indices.size(0)
+        graph_partition.num_dst_nodes_in_each_partition[to_partition] = (
+            partition_book[to_partition + 1] - partition_book[to_partition]
+        )
+        graph_partition.num_src_nodes_in_each_partition[
+            to_partition
+        ] = global_src_node_at_partition.size(0)
 
         if to_partition == partition_rank:
             graph_partition.local_indices = inverse_indices
             graph_partition.num_local_indices = graph_partition.local_indices.size(0)
             graph_partition.num_local_src_nodes = global_src_node_at_partition.size(0)
             # map from local (compressed) column indices [0, ..., num_local_src_nodes] to their global node IDs
-            graph_partition.map_partitioned_src_ids_to_global = global_src_node_at_partition
+            graph_partition.map_partitioned_src_ids_to_global = (
+                global_src_node_at_partition
+            )
 
         for from_partition in range(partition_size):
             # fill all recv buffer sizes for alltoalls
-            graph_partition.sizes[from_partition][to_partition] =  torch.count_nonzero(global_src_node_at_partition_rank == from_partition)
+            graph_partition.sizes[from_partition][to_partition] = torch.count_nonzero(
+                global_src_node_at_partition_rank == from_partition
+            )
 
     # trivial mappings due to 1D row-wise decomposition
-    graph_partition.map_partitioned_dst_ids_to_global = torch.arange(node_offset, node_offset + num_local_nodes, dtype=dtype, device=device)
-    graph_partition.map_partitioned_edge_ids_to_global = torch.arange(edge_partition_offset,
-                                                                      edge_partition_offset + graph_partition.num_local_indices,
-                                                                      dtype=dtype, device=device)
+    graph_partition.map_partitioned_dst_ids_to_global = torch.arange(
+        node_offset, node_offset + num_local_nodes, dtype=dtype, device=device
+    )
+    graph_partition.map_partitioned_edge_ids_to_global = torch.arange(
+        edge_partition_offset,
+        edge_partition_offset + graph_partition.num_local_indices,
+        dtype=dtype,
+        device=device,
+    )
     # trivial mappings due to 1D row-wise decomposition, with mem. cost O(E, N) at each dev; need to optimize
-    graph_partition.map_concatenated_local_src_ids_to_global = torch.arange(num_nodes, dtype=dtype, device=device)
-    graph_partition.map_concatenated_local_edge_ids_to_global = torch.arange(num_edges, dtype=dtype, device=device)
-    graph_partition.map_concatenated_local_dst_ids_to_global = graph_partition.map_concatenated_local_src_ids_to_global
-    graph_partition.map_global_src_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
-    graph_partition.map_global_dst_ids_to_concatenated_local = graph_partition.map_concatenated_local_src_ids_to_global
-    graph_partition.map_global_edge_ids_to_concatenated_local = graph_partition.map_concatenated_local_edge_ids_to_global
+    graph_partition.map_concatenated_local_src_ids_to_global = torch.arange(
+        num_nodes, dtype=dtype, device=device
+    )
+    graph_partition.map_concatenated_local_edge_ids_to_global = torch.arange(
+        num_edges, dtype=dtype, device=device
+    )
+    graph_partition.map_concatenated_local_dst_ids_to_global = (
+        graph_partition.map_concatenated_local_src_ids_to_global
+    )
+    graph_partition.map_global_src_ids_to_concatenated_local = (
+        graph_partition.map_concatenated_local_src_ids_to_global
+    )
+    graph_partition.map_global_dst_ids_to_concatenated_local = (
+        graph_partition.map_concatenated_local_src_ids_to_global
+    )
+    graph_partition.map_global_edge_ids_to_concatenated_local = (
+        graph_partition.map_concatenated_local_edge_ids_to_global
+    )
     graph_partition.matrix_decomp = True
 
     for r in range(graph_partition.partition_size):
@@ -564,9 +608,22 @@ def partition_graph_nodewise(
     ) // partition_size
 
     if matrix_decomp:
-        assert num_global_src_nodes == num_global_dst_nodes, "Assuming square adjacency matrix (num_src=num_dst) for matrix decomposition"
-        partition_book = torch.arange(0, num_global_dst_nodes, num_dst_nodes_per_partition, dtype=global_indices.dtype)
-        partition_book = torch.cat([partition_book, torch.tensor([num_global_dst_nodes], dtype=global_indices.dtype)])
+        if num_global_src_nodes != num_global_dst_nodes:
+            raise ValueError(
+                "Must be square adj. matrix (num_src=num_dst) for matrix decomposition"
+            )
+        partition_book = torch.arange(
+            0,
+            num_global_dst_nodes,
+            num_dst_nodes_per_partition,
+            dtype=global_indices.dtype,
+        )
+        partition_book = torch.cat(
+            [
+                partition_book,
+                torch.tensor([num_global_dst_nodes], dtype=global_indices.dtype),
+            ]
+        )
         return partition_graph_with_matrix_decomposition(
             global_offsets,
             global_indices,

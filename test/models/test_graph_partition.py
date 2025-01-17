@@ -35,12 +35,13 @@ def global_graph():
 
     return (offsets, indices, num_src_nodes, num_dst_nodes)
 
+
 @pytest.fixture
 def global_graph_square():
     """test fixture: simple non-bipartie graph with a degree of 2 per node"""
-    #num_src_nodes = 4
-    #num_dst_nodes = 4
-    #num_edges = 8
+    # num_src_nodes = 4
+    # num_dst_nodes = 4
+    # num_edges = 8
     offsets = torch.tensor([0, 2, 4, 6, 8], dtype=torch.int64)
     indices = torch.tensor([0, 3, 2, 1, 1, 0, 1, 2], dtype=torch.int64)
 
@@ -173,6 +174,7 @@ def test_gp_nodewise(global_graph, device):
 
     assert_partitions_are_equal(pg, pg_expected)
 
+
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_gp_matrixdecomp(global_graph_square, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph_square
@@ -180,12 +182,7 @@ def test_gp_matrixdecomp(global_graph_square, device):
     partition_rank = 0
 
     pg = partition_graph_nodewise(
-        offsets,
-        indices,
-        partition_size,
-        partition_rank,
-        device,
-        matrix_decomp = True
+        offsets, indices, partition_size, partition_rank, device, matrix_decomp=True
     )
 
     pg_expected = GraphPartition(
