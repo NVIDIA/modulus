@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - DoMINO model architecture, datapipe and training recipe
+- Added matrix decomposition scheme to improve graph partitioning
 - DrivAerML dataset support in FIGConvNet example.
 
 ### Changed
