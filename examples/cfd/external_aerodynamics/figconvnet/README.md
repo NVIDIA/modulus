@@ -19,6 +19,52 @@ We demonstrate a 140k× speed-up compared to GPU-accelerated
 computational fluid dynamics (CFD) simulators and over 2× improvement in pressure prediction
 over prior deep learning arts.
 
+## Supported datasets
+
+The current version of the code supports the following datasets:
+
+### DrivAerNet
+
+Both DrivAerNet and DrivAerNet++ datasets [[4](#references)] are supported.
+Please follow the instructions on the [dataset GitHub](https://github.com/Mohamedelrefaie/DrivAerNet)
+page to download the dataset.
+
+The corresponding experiment configuration file can be found at: `./configs/experiment/drivaernet/figconv_unet.yaml`.
+For more details, refer to the [Training section](#training).
+
+### DrivAerML
+
+DrivAerML dataset [[6](#references)] is supported but requires
+conversion of the dataset to a more efficient binary format.
+This format is supported by models like XAeroNet and FIGConvNet
+and represents efficient storage of the original meshes as
+partitioned graphs.
+For more details on how to convert the original DrivAerML dataset
+to partitioned dataset, refer to
+[XAeroNet example README](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/external_aerodynamics/xaeronet#training-the-xaeronet-s-model),
+steps 1 to 5.
+
+The binary dataset should have the following structure:
+
+```text
+├─ partitions
+│  ├─ graph_partitions_1.bin
+│  ├─ graph_partitions_1.bin
+│  ├─ ...
+├─ test_partitions
+│  ├─ graph_partitions_100.bin
+│  ├─ graph_partitions_101.bin
+│  ├─ ...
+├─ validation_partitions
+│  ├─ graph_partitions_200.bin
+│  ├─ graph_partitions_201.bin
+│  ├─ ...
+└─ global_stats.json
+```
+
+The corresponding experiment configuration file can be found at:
+`./configs/experiment/drivaerml/figconv_unet.yaml`.
+
 ## Installation
 
 FIGConvUNet dependencies can be installed with `pip install`, for example:
@@ -107,3 +153,4 @@ mpirun -np 2 python train.py \
 3. [Ahmed body wiki](https://www.cfd-online.com/Wiki/Ahmed_body)
 4. [DrivAerNet: A Parametric Car Dataset for Data-Driven Aerodynamic Design and Graph-Based Drag Prediction](https://arxiv.org/abs/2403.08055)
 5. [Deep Learning for Real-Time Aerodynamic Evaluations of Arbitrary Vehicle Shapes](https://arxiv.org/abs/2108.05798)
+6. [DrivAerML: High-Fidelity Computational Fluid Dynamics Dataset for Road-Car External Aerodynamics](https://arxiv.org/abs/2408.11969)

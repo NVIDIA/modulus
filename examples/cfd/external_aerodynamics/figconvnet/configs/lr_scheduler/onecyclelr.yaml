@@ -14,4 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .figconvunet_drivaer import FIGConvUNetDrivAerML, FIGConvUNetDrivAerNet
+_target_: torch.optim.lr_scheduler.OneCycleLR
+max_lr: 0.001
+epochs: ${..train.num_epochs}
+steps_per_epoch: 59
+pct_start: 0.2
