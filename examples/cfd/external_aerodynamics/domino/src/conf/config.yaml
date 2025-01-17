@@ -54,7 +54,7 @@ variables:
 
 model:
   model_type: surface # train which model? surface, volume, combined
-  loss_function: "rmse" # mse or rmse
+  loss_function: "mse" # mse or rmse
   interp_res: [128, 64, 48] # resolution of latent space
   use_sdf_in_basis_func: true # SDF in basis function network
   positional_encoding: false # calculate positional encoding?
@@ -65,7 +65,7 @@ model:
   num_surface_neighbors: 7 # How many neighbors?
   use_surface_normals: true # Use surface normals and surface areas for surface computation?
   use_only_normals: true # Use only surface normals and not surface area
-  integral_loss_scaling_factor: 10 # Scale integral loss by this factor
+  integral_loss_scaling_factor: 0 # Scale integral loss by this factor
   normalization: min_max_scaling # or mean_std_scaling
   geometry_rep: # Hyperparameters for geometry representation network
     base_filters: 16
@@ -76,7 +76,7 @@ model:
       radius_long: 0.5 # 1.0, 1.5
       hops: 1
     geo_processor:
-      base_filters: 32
+      base_filters: 8
     geo_processor_sdf:
       base_filters: 8
   nn_basis_functions: # Hyperparameters for basis function network
