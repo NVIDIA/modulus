@@ -121,7 +121,7 @@
     },
   
     "constraints": {
-      "max_resolution": 256,
+      "max_resolution": 512,
       "gpu_memory_requirements_gb": 12,
       "multi_gpu_supported": true,
       "distributed_training_supported": true,

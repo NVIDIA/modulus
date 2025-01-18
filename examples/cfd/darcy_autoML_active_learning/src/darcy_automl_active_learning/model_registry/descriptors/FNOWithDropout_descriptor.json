@@ -1,0 +1,116 @@
+{
+    "model_name": "FNOWithDropout",
+    "model_family": "FourierOperator",
+    "model_version": "1.0",
+    "description": "An extended Fourier Neural Operator with an nn.Dropout layer, enabling approximate Bayesian uncertainty for active learning.",
+    "implementation": {
+      "base_class": "darcy_automl_active_learning.models.fno_with_dropout.FNOWithDropout",
+      "source_repository": "https://github.com/YourOrg/YourRepo",
+      "framework_version": "NVIDIA Modulus 23.09, PyTorch 2.0+",
+      "requirements": [
+        "torch>=2.0",
+        "modulus>=23.09"
+      ],
+      "notes": "This class subclasses Modulus FNO to insert dropout after the forward pass."
+    },
+  
+    "accepted_formats": [
+      {
+        "dimension": [2, 3],
+        "geometry_type": ["grid"],
+        "representations": [
+          {
+            "representation_name": "uniform_grid",
+            "uniform": true,
+            "is_voxel_grid": false,
+            "is_transient_supported": false,
+            "channels_min": 1,
+            "channels_max": null,
+            "boundary_required": false,
+            "mesh_type": null,
+            "notes": "Same shape requirements as vanilla FNO (e.g. [N, C, H, W] for 2D)."
+          }
+        ]
+      }
+    ],
+  
+    "hyperparams_schema": [
+      {
+        "name": "dimension",
+        "type": "int",
+        "default": 2,
+        "description": "Spatial dimension (2 or 3)."
+      },
+      {
+        "name": "in_channels",
+        "type": "int",
+        "default": 1,
+        "description": "Number of input channels."
+      },
+      {
+        "name": "out_channels",
+        "type": "int",
+        "default": 1,
+        "description": "Number of output channels."
+      },
+      {
+        "name": "latent_channels",
+        "type": "int",
+        "default": 64,
+        "description": "Width (hidden dimensionality) of the FNO layers."
+      },
+      {
+        "name": "num_fno_layers",
+        "type": "int",
+        "default": 4,
+        "description": "Depth of FNO in terms of repeated spectral layers."
+      },
+      {
+        "name": "num_fno_modes",
+        "type": "int",
+        "default": 16,
+        "description": "Number of Fourier modes to keep along each spatial axis."
+      },
+      {
+        "name": "padding",
+        "type": "int",
+        "default": 9,
+        "description": "Zero-padding for spectral convolutions."
+      },
+      {
+        "name": "drop",
+        "type": "float",
+        "default": 0.1,
+        "min": 0.0,
+        "max": 0.7,
+        "description": "Dropout probability for approximate Bayesian inference."
+      }
+    ],
+  
+    "default_hyperparams": {
+      "optimizer": "Adam",
+      "learning_rate": 0.001,
+      "architecture": {
+        "in_channels": 1,
+        "out_channels": 1,
+        "dimension": 2,
+        "latent_channels": 64,
+        "num_fno_layers": 4,
+        "num_fno_modes": 16,
+        "padding": 9,
+        "drop": 0.1
+      }
+    },
+  
+    "constraints": {
+      "max_resolution": 256,
+      "gpu_memory_requirements_gb": 8,
+      "multi_gpu_supported": true,
+      "notes": "Dropout slightly increases memory usage and may slow training."
+    },
+  
+    "metadata": {
+      "authors": ["YGMaerz"]
+    }
+  }
+  
