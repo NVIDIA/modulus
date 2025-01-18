@@ -40,6 +40,7 @@ class Bar(torch.utils.data.Dataset):
                 - cad_<part_id>.txt: Contains 3 columns, each representing a point's coordinates.
                 - scan_red<part_id>.csv: Includes 3 columns representing point locations.
     """
+
     def __init__(
         self,
         data_path="insert data path, default in cfg.data_options.data_path",
@@ -79,8 +80,6 @@ class Bar(torch.utils.data.Dataset):
         return len(self.items)
 
     def __getitem__(self, idx):
-        part_name = "bar"
-
         part_id, mesh, scan = self.items[idx]
         m = torch.mean(mesh)
 
@@ -110,7 +109,6 @@ class Bar(torch.utils.data.Dataset):
             m=m,
             s=s,
             part_id=part_id,
-            part_name=part_name,
         )
         return out
 
@@ -135,6 +133,7 @@ class Ocardo(torch.utils.data.Dataset):
     :param random_sample:
     :param transform:
     """
+
     def __init__(
         self,
         data_path="./input_data/",
@@ -200,9 +199,6 @@ class Ocardo(torch.utils.data.Dataset):
 
 
         """
-        # todo: remove the hard-coded part name
-        part_name = "ocardo"
-
         part_id, mesh, scan = self.items[idx]
 
         # todo: reason to compute mean/ what means for mean < 0?
@@ -241,7 +237,5 @@ class Ocardo(torch.utils.data.Dataset):
             edge_index=edge_index,
             m=m,
             part_id=part_id,
-            part_name=part_name,
         )
         return out
-

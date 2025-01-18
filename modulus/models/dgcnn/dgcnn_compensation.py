@@ -21,17 +21,21 @@
 
 import torch
 import torch.nn as nn
+import torch_geometric
 from torch.nn import Linear as Lin
 from torch.nn import Sequential as Seq
 from torch_geometric.nn import DynamicEdgeConv, EdgeConv, knn_graph
 
+import modulus  # noqa: F401 for docs
+
 
 class DynamicEdgeConv2(EdgeConv):
     """
-    pytorch-geometric implementation of EdgeConv:
+    A modified pytorch-geometric implementation of EdgeConv:
     https://pytorch-geometric.readthedocs.io/en/2.6.0/generated/torch_geometric.nn.conv.EdgeConv.html
     Original Paper: https://arxiv.org/abs/1801.07829
     """
+
     def __init__(self, nn, k, aggr="max", **kwargs):
         """
 
@@ -62,7 +66,7 @@ def MLP(channels, batch_norm=True):
     :param channels:    channel[0]:in_features
                         channel[1]:out_features
     :param batch_norm:
-    :return:
+    :return: nn.Sequentially structured MLP model
     """
     return nn.Sequential(
         *[
@@ -76,8 +80,29 @@ def MLP(channels, batch_norm=True):
 
 class DGCNN(torch.nn.Module):
     """
-    Variation of EdgeConv blocks with the DGCNN backbone: https://arxiv.org/pdf/1801.07829
+    A modified of EdgeConv blocks with the DGCNN backbone.
+    Applies convolution to the edge features.
+
+    Parameters
+    ----------
+    1st EdgeConv MLP: input feature channels=3*2, output feature channels=64
+    2nd EdgeConv MLP: input feature channels=64*2, output feature channels=128
+    3rd EdgeConv MLP: input feature channels=128*2, output feature channels=512
+
+    Example
+    -------
+    >>> model = modulus.models.dgcnn.DGCNN()
+    >>> sample_pts = torch.randn(10000, 3)
+    >>> edge_index = torch_geometric.nn.knn_graph(torch.FloatTensor(sample_pts), 10)
+    >>> sample_pts_data = torch_geometric.data.Data(x=sample_pts, edge_index=edge_index)
+    >>> compensated_output = model(sample_pts_data)
+    >>> compensated_output.size()
+
+    Note
+    ----
+    Reference of DGCNN backbone: https://arxiv.org/pdf/1801.07829
     """
+
     def __init__(self, k=20, aggr="max"):
         super().__init__()
 
@@ -103,7 +128,22 @@ class DGCNN_ocardo(torch.nn.Module):
     """
     Variation of EdgeConv blocks with the DGCNN backbone: https://arxiv.org/pdf/1801.07829
     Model architecture tuned for optimal performance on the Orcardo dataset
+
+    Parameters
+    ----------
+    1st EdgeConv MLP: input feature channels=3*2, output feature channels=64
+    2nd EdgeConv MLP: input feature channels=64*2, output feature channels=64
+    3rd EdgeConv MLP: input feature channels=64*2, output feature channels=64
+    4th EdgeConv MLP: input feature channels=64*2, output feature channels=64
+    5th EdgeConv MLP: input feature channels=64*2, output feature channels=64
+
+    Aggregation func of the last layer: Max
+
+    Note
+    ----
+    Reference of DGCNN backbone: https://arxiv.org/pdf/1801.07829
     """
+
     def __init__(self, k=5, aggr="max"):
         super().__init__()
 

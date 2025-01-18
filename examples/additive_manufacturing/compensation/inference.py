@@ -31,9 +31,7 @@ def main():
     with initialize(config_path="conf", job_name="test_app"):
         cfg = compose(config_name="config", overrides=["+db=mysql", "+db.user=me"])
 
-    LOG_FOUT = open(
-        os.path.join(cfg.inference_options.save_path, "log_inf.txt"), "a"
-    )
+    LOG_FOUT = open(os.path.join(cfg.inference_options.save_path, "log_inf.txt"), "a")
 
     torch.backends.cudnn.deterministic = True
     torch.manual_seed(cfg.inference_options.seed)

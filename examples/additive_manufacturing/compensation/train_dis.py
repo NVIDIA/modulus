@@ -80,7 +80,9 @@ def main(rank):
             partition="train",
             LOG_FOUT=LOG_FOUT,
         )
-    log_string(LOG_FOUT, f"Complete data loading, size of the parts read: {len(dataset)}")
+    log_string(
+        LOG_FOUT, f"Complete data loading, size of the parts read: {len(dataset)}"
+    )
     # todo: dataset not yet normailzed
 
     # set up distributed training
@@ -149,7 +151,6 @@ def main(rank):
         # todo: test single gpu working
         # model = model.cuda()
         model = model.to(device)
-
 
     # In case of we have pre-trained setup
     if cfg.train_dis_options.pretrain:
