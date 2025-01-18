@@ -1,0 +1,123 @@
+{
+  "model_name": "GraphCast",
+  "model_family": "GraphOperator",
+  "model_version": "1.0",
+  "description": "Large-scale GNN approach designed for climate/weather PDE data on unstructured or geodesic meshes. Incorporates message passing and temporal updates to handle planet-scale forecasting or similar PDE-based phenomena.",
+
+  "implementation": {
+    "base_class": "my_project.models.graphcast.GraphCastModel",
+    "source_repository": "https://github.com/deepmind/graphcast  // or your forked/modified version",
+    "framework_version": "PyTorch Geometric 2.x, PyTorch 2.0",
+    "requirements": [
+      "torch>=2.0",
+      "torch_geometric>=2.3",
+      "numpy>=1.20"
+    ],
+    "notes": "Original GraphCast targets global weather data on a geodesic sphere. Requires adjacency and node-edge features."
+  },
+
+  "accepted_formats": [
+    {
+      "dimension": [2, 3],
+      "geometry_type": ["mesh"],
+      "representations": [
+        {
+          "representation_name": "spherical_geodesic",
+          "uniform": false,
+          "is_voxel_grid": false,
+          "channels_min": 1,
+          "channels_max": null,
+          "boundary_required": false,
+          "is_transient_supported": true,
+          "adjacency_required": true,
+          "notes": "Typically stores node coords on a sphere plus edge connectivity. Also works for other unstructured or mesh-based domains."
+        }
+      ]
+    }
+  ],
+
+  "hyperparams_schema": [
+    {
+      "name": "hidden_dim",
+      "type": "int",
+      "default": 256,
+      "min": 32,
+      "max": 1024,
+      "description": "Dimensionality of node (and possibly edge) embeddings in the GNN."
+    },
+    {
+      "name": "num_layers",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 16,
+      "description": "Number of graph message-passing layers or blocks."
+    },
+    {
+      "name": "drop",
+      "type": "float",
+      "default": 0.1,
+      "min": 0.0,
+      "max": 0.5,
+      "description": "Dropout rate applied in GNN layers to mitigate overfitting."
+    },
+    {
+      "name": "temporal_updates",
+      "type": "bool",
+      "default": true,
+      "description": "Whether GraphCast includes a recurrent or sequential update step for time-evolving PDE data."
+    },
+    {
+      "name": "aggregator_type",
+      "type": "string",
+      "default": "mean",
+      "choices": ["mean", "sum", "max", "attention"],
+      "description": "Aggregation function used in message passing."
+    }
+  ],
+
+  "default_hyperparams": {
+    "optimizer": "Adam",
+    "learning_rate": 0.0003,
+    "batch_size": 2,
+    "epochs": 300,
+    "architecture": {
+      "hidden_dim": 256,
+      "num_layers": 4,
+      "drop": 0.1,
+      "temporal_updates": true,
+      "aggregator_type": "mean"
+    },
+    "regularization": {
+      "weight_decay": 1e-5
+    }
+  },
+
+  "constraints": {
+    "max_resolution": null,
+    "gpu_memory_requirements_gb": 16,
+    "multi_gpu_supported": true,
+    "distributed_training_supported": true,
+    "notes": "Huge spherical meshes (e.g., 1M+ nodes) can require multi-GPU setups. GraphCast typically used for large-scale climate PDEs or high-res geodesic grids."
+  },
+
+  "metadata": {
+    "authors": ["DeepMind team", "Collaborators"],
+    "paper_references": [
+      "GraphCast: Learning skillful weather forecasting with global Earth observation data (DeepMind 2022)",
+      "https://arxiv.org/abs/2212.12794"
+    ],
+    "license": "Proprietary or Apache/MIT",
+    "citation": "If using GraphCast or derivative, cite the original paper and repository."
+  },
+
+  "usage_patterns": {
+    "best_for": "Global or regional PDE data on spherical geodesic meshes (like climate and weather). Also generalizable to other unstructured meshes.",
+    "limitations": "Must provide adjacency or edge index. Memory-heavy at scale. Data must be partitioned or batched effectively for large node counts.",
+    "recommended_practices": [
+      "Ensure node-level features (like lat/lon, elevation) are included as part of the input channels.",
+      "Use aggregator='attention' if your PDE problem benefits from attention-based local weighting.",
+      "Check GPU memory usage carefully if dealing with >1 million nodes."
+    ]
+  }
+}

@@ -1,0 +1,150 @@
+{
+    "model_name": "AFNO",
+    "model_family": "FourierOperator",
+    "model_version": "1.2",
+    "description": "Adaptive Fourier Neural Operator for PDE surrogates on uniform 2D/3D grids. Learns frequency weighting to handle multi-scale features more flexibly than standard FNO.",
+  
+    "implementation": {
+      "base_class": "modulus.models.afno.AFNO",
+      "source_repository": "https://github.com/NVIDIA/modulus",
+      "framework_version": "NVIDIA Modulus 23.09, PyTorch 2.0",
+      "requirements": [
+        "torch>=2.0",
+        "modulus>=23.09"
+      ],
+      "notes": "AFNO is an advanced variant of FNO that adaptively reweighs Fourier modes, which can be beneficial for localized or multi-scale phenomena."
+    },
+  
+    "accepted_formats": [
+      {
+        "dimension": [2, 3],
+        "geometry_type": ["grid"],
+        "representations": [
+          {
+            "representation_name": "uniform_grid",
+            "uniform": true,
+            "is_voxel_grid": false,
+            "channels_min": 1,
+            "channels_max": null,
+            "boundary_required": false,
+            "is_transient_supported": true,
+            "notes": "Similar data layout to FNO: [N, C, H, W] or [N, C, D, H, W]."
+          }
+        ]
+      }
+    ],
+  
+    "hyperparams_schema": [
+      {
+        "name": "drop",
+        "type": "float",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 0.5,
+        "description": "Dropout rate (if implemented) or drop_rate inside the AFNO blocks."
+      },
+      {
+        "name": "gating_strength",
+        "type": "float",
+        "default": 0.3,
+        "min": 0.0,
+        "max": 1.0,
+        "description": "Scaling factor to modulate adaptive frequency gating. Not always standard in baseline AFNO but used in some variants."
+      },
+      {
+        "name": "latent_channels",
+        "type": "int",
+        "default": 256,
+        "min": 32,
+        "max": 1024,
+        "description": "Dimensionality of the hidden representation (embed_dim)."
+      },
+      {
+        "name": "afno_layers",
+        "type": "int",
+        "default": 4,
+        "min": 1,
+        "max": 12,
+        "description": "Number of AFNO (Fourier) layers."
+      },
+      {
+        "name": "num_blocks",
+        "type": "int",
+        "default": 16,
+        "min": 4,
+        "max": 64,
+        "description": "Number of transform blocks within the AFNO stack."
+      },
+      {
+        "name": "sparsity_threshold",
+        "type": "float",
+        "default": 0.01,
+        "min": 0.0,
+        "max": 0.1,
+        "description": "Threshold below which frequency coefficients are considered negligible."
+      },
+      {
+        "name": "hard_thresholding_fraction",
+        "type": "float",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "description": "Fraction of top frequency modes to keep or remove if using a hard-threshold scheme."
+      },
+      {
+        "name": "dimension",
+        "type": "int",
+        "default": 2,
+        "choices": [2, 3],
+        "description": "Spatial dimension (2D or 3D)."
+      }
+    ],
+  
+    "default_hyperparams": {
+      "optimizer": "Adam",
+      "learning_rate": 0.0005,
+      "batch_size": 4,
+      "epochs": 400,
+      "architecture": {
+        "drop": 0.0,
+        "gating_strength": 0.3,
+        "latent_channels": 256,
+        "afno_layers": 4,
+        "num_blocks": 16,
+        "sparsity_threshold": 0.01,
+        "hard_thresholding_fraction": 1.0,
+        "dimension": 2
+      },
+      "regularization": {
+        "weight_decay": 1e-6
+      }
+    },
+  
+    "constraints": {
+      "max_resolution": 256,
+      "gpu_memory_requirements_gb": 12,
+      "multi_gpu_supported": true,
+      "distributed_training_supported": true,
+      "notes": "Adaptive frequency weighting can be slightly more expensive than plain FNO. 3D AFNO especially memory-hungry."
+    },
+  
+    "metadata": {
+      "authors": ["NVIDIA Modulus Team"],
+      "paper_references": [
+        "AFNO: Adaptive Fourier Neural Operator (arXiv/preprint)",
+        "NVIDIA Modulus Docs"
+      ],
+      "license": "Proprietary or Apache/MIT",
+      "citation": "If using AFNO, cite the original FNO paper + the AFNO extension."
+    },
+  
+    "usage_patterns": {
+      "best_for": "PDEs with varying frequency content or more localized structures. Adapts across scales via gating.",
+      "limitations": "Still requires uniform grid. Gains in 3D might be offset by heavy memory usage if resolution is large.",
+      "recommended_practices": [
+        "Increase gating_strength for strongly localized PDE features, lower it for smoother PDE fields.",
+        "Tune num_blocks and latent_channels carefully to balance accuracy vs. GPU usage.",
+        "Consider wavelet-based or graph-based operators if domain geometry is non-uniform or unstructured."
+      ]
+    }
+  }

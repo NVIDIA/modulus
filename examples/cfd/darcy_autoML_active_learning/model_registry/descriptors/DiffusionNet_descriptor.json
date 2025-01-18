@@ -1,0 +1,125 @@
+{
+  "model_name": "DiffusionNet",
+  "model_family": "GraphOperator",
+  "model_version": "1.0",
+  "description": "A graph-like or manifold-based operator that applies diffusion kernels on unstructured meshes. Ideal for PDE problems defined on arbitrary geometry (surfaces or volumes).",
+
+  "implementation": {
+    "base_class": "my_project.models.diffusionnet.DiffusionNet", 
+    "source_repository": "https://github.com/SomeOrg/diffusionnet", 
+    "framework_version": "PyTorch 2.0",
+    "requirements": [
+      "torch>=2.0",
+      "numpy>=1.21.0",
+      "scipy>=1.7.0"   
+    ],
+    "notes": "Leverages adjacency structures on unstructured meshes to propagate features via diffusion layers. Useful for surfaces or volumes in 2D/3D."
+  },
+
+  "accepted_formats": [
+    {
+      "dimension": [2, 3],
+      "geometry_type": ["mesh"],
+      "representations": [
+        {
+          "representation_name": "unstructured_mesh",
+          "uniform": false,
+          "is_voxel_grid": false,
+          "is_transient_supported": true,
+          "channels_min": 1,
+          "channels_max": null,
+          "boundary_required": false,
+          "mesh_type": "surface_or_volume",
+          "adjacency_required": true,
+          "notes": "Data typically includes vertices V, faces F, adjacency lists, plus PDE state channels. For PDE boundary conditions, boundary flags or pinned nodes are recommended."
+        }
+      ]
+    }
+  ],
+
+  "hyperparams_schema": [
+    {
+      "name": "hidden_dim",
+      "type": "int",
+      "default": 128,
+      "min": 16,
+      "max": 512,
+      "description": "Dimensionality of the feature embeddings (graph diffusion layers)."
+    },
+    {
+      "name": "num_layers",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 16,
+      "description": "Number of stacked diffusion layers or GNN blocks."
+    },
+    {
+      "name": "diffusion_steps",
+      "type": "int",
+      "default": 1,
+      "min": 1,
+      "max": 5,
+      "description": "Number of local diffusion iterations in each layer. Larger = broader receptive field but heavier compute."
+    },
+    {
+      "name": "drop",
+      "type": "float",
+      "default": 0.0,
+      "min": 0.0,
+      "max": 0.5,
+      "description": "Dropout probability on node features, can help regularize graph training."
+    },
+    {
+      "name": "activation",
+      "type": "string",
+      "default": "relu",
+      "possible_values": ["relu", "leaky_relu", "gelu"],
+      "description": "Non-linear activation used between diffusion layers."
+    }
+  ],
+
+  "default_hyperparams": {
+    "optimizer": "Adam",
+    "learning_rate": 0.0003,
+    "batch_size": 2,
+    "epochs": 250,
+    "architecture": {
+      "hidden_dim": 128,
+      "num_layers": 4,
+      "diffusion_steps": 1,
+      "drop": 0.0,
+      "activation": "relu"
+    },
+    "regularization": {
+      "weight_decay": 1e-6
+    }
+  },
+
+  "constraints": {
+    "max_vertices": 500000,
+    "gpu_memory_requirements_gb": 12,
+    "multi_gpu_supported": false,
+    "distributed_training_supported": false,
+    "notes": "Large meshes can be memory-intensive. For PDE boundary conditions, boundary nodes must be flagged or pinned. 3D volumetric meshes require more adjacency overhead vs. 2D surfaces."
+  },
+
+  "metadata": {
+    "authors": ["Your Lab/Team", "DiffusionNet Paper Authors"],
+    "paper_references": [
+      "DiffusionNet: A robust architecture for learning on manifolds and meshes",
+      "arXiv or Journal references"
+    ],
+    "license": "Apache 2.0 or similar"
+  },
+
+  "usage_patterns": {
+    "best_for": "Unstructured PDE domains, shape analysis, manifold PDE surrogacy (e.g., fluid flow over complex surfaces).",
+    "limitations": "Requires adjacency and consistent mesh connectivity. High memory usage if #faces or #vertices is large.",
+    "recommended_practices": [
+      "Provide adjacency or precomputed Laplacian for each mesh if possible—speeds up message passing.",
+      "Use boundary or pinned-node logic for PDE boundary conditions (can store them in node features or a separate boundary mask).",
+      "Check mesh quality and ensure no degenerate faces/vertices for stable training."
+    ]
+  }
+}

@@ -1,0 +1,132 @@
+{
+    "model_name": "FNO",
+    "model_family": "FourierOperator",
+    "model_version": "1.2",
+    "description": "Fourier Neural Operator for learning PDE surrogates on uniform 2D or 3D grids. Uses global FFT-based layers to capture long-range dependencies.",
+  
+    "implementation": {
+      "base_class": "modulus.models.fno.FNO",
+      "source_repository": "https://github.com/NVIDIA/modulus",
+      "framework_version": "NVIDIA Modulus 23.09, PyTorch 2.0",
+      "requirements": [
+        "torch>=2.0",
+        "modulus>=23.09"
+      ],
+      "notes": "Vanilla FNO from NVIDIA Modulus. Does global spectral transforms in each dimension. 3D usage may be memory-intensive."
+    },
+  
+    "accepted_formats": [
+      {
+        "dimension": [2, 3],
+        "geometry_type": ["grid"],
+        "representations": [
+          {
+            "representation_name": "uniform_grid",
+            "uniform": true,
+            "is_voxel_grid": false,
+            "channels_min": 1,
+            "channels_max": null,
+            "boundary_required": false,
+            "is_transient_supported": true,
+            "notes": "Typical shape: [N, C, H, W] or [N, C, D, H, W]. If PDE boundaries matter, user can add a boundary mask channel, but not mandatory."
+          }
+        ]
+      }
+    ],
+  
+    "hyperparams_schema": [
+      {
+        "name": "drop", 
+        "type": "float",
+        "default": 0.1,
+        "min": 0.0,
+        "max": 0.5,
+        "description": "Dropout rate applied after FNO layers."
+      },
+      {
+        "name": "fno_layers",
+        "type": "int",
+        "default": 4,
+        "min": 1,
+        "max": 12,
+        "description": "Number of FNO blocks/layers."
+      },
+      {
+        "name": "num_fno_modes",
+        "type": "int",
+        "default": 16,
+        "min": 8,
+        "max": 64,
+        "description": "Number of Fourier modes in each spatial dimension."
+      },
+      {
+        "name": "latent_channels",
+        "type": "int",
+        "default": 64,
+        "min": 16,
+        "max": 256,
+        "description": "Hidden channel dimension for the FNO layers."
+      },
+      {
+        "name": "dimension",
+        "type": "int",
+        "default": 2,
+        "choices": [2, 3],
+        "description": "Spatial dimension for the FNO (2D or 3D)."
+      },
+      {
+        "name": "padding",
+        "type": "int",
+        "default": 9,
+        "min": 0,
+        "max": 20,
+        "description": "Padding in real space before FFT."
+      }
+    ],
+  
+    "default_hyperparams": {
+      "optimizer": "Adam",
+      "learning_rate": 0.0005,
+      "batch_size": 4,
+      "epochs": 400,
+      "architecture": {
+        "drop": 0.1,
+        "fno_layers": 4,
+        "num_fno_modes": 16,
+        "latent_channels": 64,
+        "dimension": 2,
+        "padding": 9
+      },
+      "regularization": {
+        "weight_decay": 1e-6
+      }
+    },
+  
+    "constraints": {
+      "max_resolution": 256,
+      "gpu_memory_requirements_gb": 12,
+      "multi_gpu_supported": true,
+      "distributed_training_supported": true,
+      "notes": "3D FNO can require large memory. Ensure you have enough GPU for high resolution."
+    },
+  
+    "metadata": {
+      "authors": ["NVIDIA Modulus Team"],
+      "paper_references": [
+        "Z. Li et al., Fourier Neural Operator for Parametric PDEs (ICLR 2021)",
+        "NVIDIA Modulus Docs: https://docs.nvidia.com/deeplearning/modulus"
+      ],
+      "license": "Proprietary or Apache/MIT",
+      "citation": "If you use FNO, please cite the original FNO paper + NVIDIA Modulus."
+    },
+  
+    "usage_patterns": {
+      "best_for": "Parametric PDE families on uniform grids. Good for large-scale 2D or moderate 3D PDEs.",
+      "limitations": "Does not explicitly handle unstructured meshes or highly non-uniform grids. For that, see NuFNO or graph-based methods.",
+      "recommended_practices": [
+        "Use a moderate number of Fourier modes (16–32) for 2D problems.",
+        "Consider dropout if data is limited or prone to overfitting.",
+        "For 3D, watch out for GPU memory usage and scale up gradually."
+      ]
+    }
+  }

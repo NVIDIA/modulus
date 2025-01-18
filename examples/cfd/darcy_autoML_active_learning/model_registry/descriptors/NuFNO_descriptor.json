@@ -1,0 +1,136 @@
+{
+    "model_name": "NuFNO",
+    "model_family": "FourierOperator",
+    "model_version": "1.0",
+    "description": "Non-Uniform Fourier Neural Operator. Extends standard FNO to handle partially non-uniform meshes or coordinate-encoded grids, often by encoding spatial coordinates explicitly.",
+  
+    "implementation": {
+      "base_class": "my_project.models.nufno.NuFNO", 
+      "source_repository": "https://github.com/YourOrg/nufno  // or reference the relevant library/repo",
+      "framework_version": "PyTorch 2.0",
+      "requirements": [
+        "torch>=2.0",
+        "modulus>=23.09",         
+        "numpy>=1.21.0"
+      ],
+      "notes": "Coordinates are typically learned or embedded to handle partial non-uniformity. Still uses Fourier layers but on re-parameterized input domain."
+    },
+  
+    "accepted_formats": [
+      {
+        "dimension": [2, 3],
+        "geometry_type": ["grid"],
+        "representations": [
+          {
+            "representation_name": "non_uniform_grid",
+            "uniform": false,
+            "is_voxel_grid": false,
+            "is_transient_supported": true,
+            "channels_min": 1,
+            "channels_max": null,
+            "boundary_required": false,
+            "mesh_type": null,
+            "notes": "NuFNO applies FFT-like operations on a coordinate-encoded domain. Input shape might be [N, (H*W), channels] or [N, H, W, channels] with coordinate embeddings."
+          }
+        ]
+      }
+    ],
+  
+    "hyperparams_schema": [
+      {
+        "name": "coord_encoding_dim",
+        "type": "int",
+        "default": 2,
+        "min": 1,
+        "max": 3,
+        "description": "Dimension of the coordinate embedding for partial non-uniform domain. For 2D PDEs, typical is 2."
+      },
+      {
+        "name": "embed_layer_width",
+        "type": "int",
+        "default": 64,
+        "min": 16,
+        "max": 1024,
+        "description": "Width of the MLP or embedding layer that transforms raw (x,y) coordinates into a higher-dimensional latent vector."
+      },
+      {
+        "name": "latent_channels",
+        "type": "int",
+        "default": 64,
+        "min": 16,
+        "max": 512,
+        "description": "Number of channels in the Fourier transform layers after coordinate embedding."
+      },
+      {
+        "name": "num_layers",
+        "type": "int",
+        "default": 4,
+        "min": 1,
+        "max": 12,
+        "description": "Depth of the NuFNO stack—i.e., how many consecutive Fourier layers are used after coordinate encoding."
+      },
+      {
+        "name": "num_modes",
+        "type": "int",
+        "default": 16,
+        "min": 1,
+        "max": 32,
+        "description": "Number of Fourier modes or frequency components retained in each layer."
+      },
+      {
+        "name": "drop",
+        "type": "float",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 0.5,
+        "description": "Dropout probability for the main layers (similar to FNO)."
+      }
+    ],
+  
+    "default_hyperparams": {
+      "optimizer": "AdamW",
+      "learning_rate": 0.0005,
+      "batch_size": 4,
+      "epochs": 300,
+      "architecture": {
+        "coord_encoding_dim": 2,
+        "embed_layer_width": 64,
+        "latent_channels": 64,
+        "num_layers": 4,
+        "num_modes": 16,
+        "drop": 0.0
+      },
+      "regularization": {
+        "weight_decay": 1e-6
+      }
+    },
+  
+    "constraints": {
+      "max_resolution": 512,
+      "gpu_memory_requirements_gb": 10,
+      "multi_gpu_supported": false,
+      "distributed_training_supported": false,
+      "notes": "Non-uniform expansions can be memory-heavy for large or highly irregular domains. Typically suitable for moderate PDE sizes."
+    },
+  
+    "metadata": {
+      "authors": ["Research Lab X", "Your Team", "Collaborators"],
+      "paper_references": [
+        "NuFNO: Non-Uniform Fourier Neural Operator Paper/Preprint",
+        "NVIDIA Modulus or other partial references if integrated"
+      ],
+      "license": "MIT or Similar",
+      "citation": "Please cite the NuFNO paper if you use this model in research."
+    },
+  
+    "usage_patterns": {
+      "best_for": "PDE problems with partial non-uniform grids where coordinate encoding can approximate the domain geometry.",
+      "limitations": "Still not fully unstructured (like a mesh). Typically requires a 'grid-like' connectivity, albeit non-uniform spacing. 3D usage can be large memory.",
+      "recommended_practices": [
+        "Embed the (x, y) coordinates via a small MLP or sinusoidal encoding before applying the Fourier layers.",
+        "Tune num_modes carefully for partially irregular domains. Too many modes can lead to overfitting or high compute cost.",
+        "Inspect coordinate coverage—NuFNO still expects fairly regular domain coverage, not purely random point clouds."
+      ]
+    }
+  }
+  
