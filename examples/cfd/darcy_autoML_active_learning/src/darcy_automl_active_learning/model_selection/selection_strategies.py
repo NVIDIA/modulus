@@ -36,5 +36,5 @@ class SimpleSelectionStrategy(BaseSelectionStrategy):
 
         # Possibly do: if dimension=2 and geometry=grid => pick FNO, else pick DiffusionNet
         # For now, a simple example:
-        selected = [("FNO", "candidate0")]
+        selected = [("FNOWithDropout", "candidate0")]
         return selected
