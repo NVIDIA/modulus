@@ -178,13 +178,48 @@ modulus/examples/cfd/darcy_fno/checkpoint/
 modulus/examples/cfd/darcy_fno/mlruns/
 modulus/examples/**/*.pt
 
-# But do not ignore any files that start with example_ (e.g., example_.pt)
+##############################################################################
+# Ignore all data, checkpoint, and mlruns directories under both:
+# - modulus/examples/
+# - examples/
+##############################################################################
+modulus/examples/**/data/
+modulus/examples/**/checkpoint/
+modulus/examples/**/mlruns/
+examples/**/data/
+examples/**/checkpoint/
+examples/**/mlruns/
+
+##############################################################################
+# Ignore all .pt files under:
+# - modulus/examples/
+# - examples/
+##############################################################################
+modulus/examples/**/*.pt
+examples/**/*.pt
+
+##############################################################################
+# EXCEPTIONS: Do NOT ignore files that start with "example_*",
+# "final", or any specifically whitelisted items like "data/example_small_batch.pt"
+##############################################################################
+
+# 1) Don't ignore .pt files starting with "example_" in either path
 !modulus/examples/**/example_*.pt
+!examples/**/example_*.pt
+
+# 2) Specifically allow data/example_small_batch.pt in the repo root if needed
 !data/example_small_batch.pt
-!modulus/examples/**/mlruns/example*
+
+# 3) Don't ignore anything named "example*" or "final*" under mlruns in either path
+!modulus/examples/**/mlruns/**/example*
+!modulus/examples/**/mlruns/**/final*
+!examples/**/mlruns/**/example*
+!examples/**/mlruns/**/final*
+
+# 4) Allow "checkpoints/example_final.ckpt" if that's in the repo root or other path
 !checkpoints/example_final.ckpt
 
-# But do not ignore any example or final files
+# 5) More fine-grained "example*" or "final*" exceptions under data/ and checkpoint/
 !modulus/examples/**/data/**/example*
 !modulus/examples/**/data/**/example/*
 !modulus/examples/**/data/**/final*
@@ -192,8 +227,13 @@ modulus/examples/**/*.pt
 !modulus/examples/**/checkpoint/**/example*
 !modulus/examples/**/checkpoint/**/example/*
 !modulus/examples/**/checkpoint/**/final*
-!modulus/examples/**/checkpoint/**/final/*
-!modulus/examples/**/mlruns/**/example*
-!modulus/examples/**/mlruns/**/example/*
-!modulus/examples/**/mlruns/**/final*
-!modulus/examples/**/mlruns/**/final/*
+!modulus/examples/**/checkpoint/**/final*
+
+!examples/**/data/**/example*
+!examples/**/data/**/example/*
+!examples/**/data/**/final*
+!examples/**/data/**/final/*
+!examples/**/checkpoint/**/example*
+!examples/**/checkpoint/**/example/*
+!examples/**/checkpoint/**/final*
+!examples/**/checkpoint/**/final*
