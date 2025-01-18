@@ -50,10 +50,10 @@ train_gen_options:
 inference_options:
   seed: 1234
   num_points: 20000   # 'Num of points to use'
-  data_path: './data/molded_fiber'   # 'data path to use', should be a folder where the design CAD exist
-  discriminator_path: './pretrained/11parts_lr-3/pred_model_2000.pth'   # 'discriminator model path'
-  generator_path: './pretrained/11parts_lr-3/gen_model_0500.pth'  # 'generator model path'
-  save_path: './output/test1217'  # 'save output path'
+  data_path: '/home/chenle/codes/DL_prediction_compensation-master/data/molded_fiber/10/cad' # for other dataset: 'input_data_bar_sample','molded_fiber'
+  discriminator_path: './pretrained/pretrained_os/pred_model_3000.pth'   # 'discriminator model path'
+  generator_path: './pretrained/pretrained_os/gen_model_46500.pth'  # 'generator model path'
+  save_path: './output/test'  # 'save output path'
   save_extra: True  # 'exports prediction and additional data csv'
 
 
