@@ -1,0 +1,35 @@
+{
+  "descriptor_name": "Darcy2D_Uniform_2Ch",
+  "data_structure": {
+    "dimension": 2,
+    "geometry_type": "grid",
+    "uniform": true,
+    "representation": {
+      "array_layout": "[N, H, W, C]",
+      "coordinate_mapping": "implicit uniform",
+      "coordinate_bounds": {
+        "x_min": 0.0,
+        "x_max": 1.0,
+        "y_min": 0.0,
+        "y_max": 1.0
+      }
+    },
+    "is_transient": false,
+    "boundary": false,
+    "boundary_info": null,
+    "cell_type": null,
+    "decimation": false,
+    "decimation_level": null,
+    "channels": 2,
+    "time_steps": null,
+    "adjacency": false
+  },
+  "metadata": {
+    "pde_type": "Darcy",
+    "num_samples": 20,
+    "description": "2D Darcy dataset with 2 channels (e.g. 'permeability' and 'darcy'), generated via Modulus Darcy2D with uniform grid.",
+    "source_script": "00_Generate_Data.ipynb",
+    "file_pattern": "darcy_batch_*.pt",
+    "notes": "Each .pt file stores a dict with keys 'permeability' & 'darcy'."
+  }
+}

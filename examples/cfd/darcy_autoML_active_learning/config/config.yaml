@@ -1,2 +1,13 @@
-test:
-  test_value: 123
+normaliser:
+  permeability:
+    mean: 1.0
+    std_dev: 0.5
+  darcy:
+    mean: 0.1
+    std_dev: 0.05
+
+training:
+  resolution: 64
+  batch_size: 4
+  max_pseudo_epochs: 10
+  pseudo_epoch_sample_size: 512
