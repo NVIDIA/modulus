@@ -19,60 +19,121 @@
 # limitations under the License.
 
 
-import glob
 import os
 
 import numpy as np
 import open3d as o3d
+import pandas as pd
 import torch
 import torch_geometric
 import trimesh
 
 
-def generate_mesh_train():
-    cad_mesh = trimesh.load(
-        "/home/juheonlee/juheon_work/new_data/CustomerLarge-2_003-iso_offset.ply"
-    )
+def generate_mesh_train(
+    ply_path,
+    scan_pcd_path,
+    save_csv=True,
+    save_mesh_path=None,
+    part_name="bar",
+    part_id="3",
+    export_format="pth",
+    filter_dist=False,
+):
+    """
+    A PLY file is a computer file format for storing 3D data as a collection of polygons.
+    PLY stands for Polygon File Format, and it's also known as the Stanford Triangle Format.
+    PLY files are used to store 3D data from 3D scanners.
 
-    x = torch.FloatTensor(np.asarray(cad_mesh.vertices)) - torch.FloatTensor(
+    This function load a CAD file in PLY format, or STL format with trimesh:
+         i.e. <trimesh.Trimesh(vertices.shape=(point_cnt, 3), faces.shape=(cnt, 3), name=`ply_path`)>
+
+    Load the raw scan file sampled points in PCD format, then save the updated scan mesh in OBJ format.
+
+    Parameters:
+        - ply_path = os.path.join(root_data_path, "data_pipeline_bar/remesh98.ply")
+        - scan_pcd_path = os.path.join(root_data_path, "data_pipeline_bar/bar_98/scan/98_SAMPLED_POINTS_aligned.pcd")
+        - save_mesh_path = "test_data_pipeline"
+
+    Return:
+        Saved scan mesh path
+    """
+    os.makedirs(save_mesh_path, exist_ok=True)
+
+    # Load cad mesh from PLY file
+    cad_mesh = trimesh.load(ply_path)
+
+    # Centralize the coordinates
+    cad_pts = torch.FloatTensor(np.asarray(cad_mesh.vertices)) - torch.FloatTensor(
         cad_mesh.bounds.mean(0)
     )
 
-    # raw scan
-    scan_pts = o3d.io.read_point_cloud(
-        "/home/juheonlee/juheon_work/new_data/CustomerLarge-2_003-iso_offset_aligned.pcd"
-    )
-    y = torch.FloatTensor(np.asarray(scan_pts.points)) - torch.FloatTensor(
+    # Load raw scan file in PCD, o3d function to read PointCloud from file
+    scan_pts = o3d.io.read_point_cloud(scan_pcd_path)
+
+    # Centralize the coordinates
+    scan_pts = torch.FloatTensor(np.asarray(scan_pts.points)) - torch.FloatTensor(
         cad_mesh.bounds.mean(0)
     )
 
-    # fine one-to-one matching
-    idx1, idx2 = torch_geometric.nn.knn(y, x, 1)
-    new_vert = y[idx2]
+    # Fined one-to-one matching
+    idx1, idx2 = torch_geometric.nn.knn(scan_pts, cad_pts, 1)
+    new_vert = scan_pts[idx2]
 
+    if filter_dist:
+        dist = torch.sqrt(torch.sum(torch.pow(cad_pts - new_vert, 2), 1))
+        filt = dist > 1.2
+        new_vert[filt] = cad_pts[filt]
+
+    # Updates the scan coordinates to the original CAD mesh
     scan_mesh = cad_mesh
-    scan_mesh.vertices = new_vert + torch.FloatTensor(cad_mesh.bounds.mean(0))
-    scan_mesh.export("data_out.obj")
+    vertices = new_vert + torch.FloatTensor(cad_mesh.bounds.mean(0))
+    scan_mesh.vertices = vertices
+
+    if export_format == "obj":
+        scan_mesh.export(os.path.join(save_mesh_path, "data_out.obj"))
+    elif export_format == "pth":
+        torch.save(vertices, os.path.join(save_mesh_path, f"{part_id}/{part_name}.pth"))
+    else:
+        print("Export format should be OBJ or PTH")
+        exit()
+
+    if save_csv:
+        # save the original CAD points with centralize coordinates
+        np.savetxt(
+            os.path.join(save_mesh_path, f"{part_id}/{part_name}_cad.csv"), cad_pts
+        )
+        # save the mapped scan_pts points with centralize coordinates
+        np.savetxt(
+            os.path.join(save_mesh_path, f"{part_id}/{part_name}_scan.csv"), new_vert
+        )
+
+    return os.path.join(save_mesh_path, "data_out.obj")
 
 
-def generate_mesh_eval(view=False):
+def generate_mesh_eval(cad_path, comp_out_path, export_path, view=False):
     """
-    Function to load a 3D object pair (Original design file v.s. Scanned printed part),
+    Function to load a 3D object pair (Original design file v.s. Scanned printed / Compensated part),
         - CAD design in format of OBJ or STL
-        - Scanned printed part points in CSV or TXT
+        - Scanned printed, or compensated part points, in CSV or TXT
     Export the Scanned in mesh, OBJ format
+
+    Parameters:
+    - object_name = "bar"
+    - part_id = 5
+    - cad_path = "%s_%d/cad/%s_%d_uptess.obj" % (object_name, part_id, object_name, part_id)
+    - comp_out_path = comp/out__%02d.csv" % (part_id)
+
+    Return:
+        Saved scan mesh path
     """
+    os.makedirs(export_path, exist_ok=True)
+
     # Sample design CAD name
-    object_name = "bar"
-    part_id = 5
-    cad_mesh = trimesh.load(
-        "%s_%d/cad/%s_%d_uptess.obj" % (object_name, part_id, object_name, part_id)
-    )
+    cad_mesh = trimesh.load(cad_path)
 
     # Sample scanned printed file, or generated compensated file, in CSV or TXT
-    scan_pts = np.loadtxt(
-        "C:/Users//Documents/comp/out__%02d.csv" % (part_id), delimiter=","
-    )
+    # change the reading format, if data was saved with other separators, " ", ","
+    scan_pts = pd.read_csv(comp_out_path, sep=",").values
 
     # Define the new vertices as the scanned printed points coordinates
     new_vert = torch.FloatTensor(scan_pts)
@@ -82,100 +143,6 @@ def generate_mesh_eval(view=False):
 
     # Export new mesh
     scan_mesh.vertices = new_vert
-    scan_mesh.export("%s_%d_out.obj" % (object_name, part_id))
+    scan_mesh.export(os.path.join(export_path, "export_out.obj"))
     if view:
         scan_mesh.show()
-
-
-def generate_scan_file(
-    root_dir="/home/chenle/codes/DL_prediction_compensation-master/data",
-    save_csv=True,
-    part_id=0,
-    part_name=None,
-):
-    # cad_mesh = trimesh.load('/home/juheonlee/juheon_work/new_data/CustomerLar  ge-2_003-iso_offset.ply')
-    # scan_pts = o3d.io.read_point_cloud('/home/juheonlee/juheon_work/new_data/CustomerLarge-2_003-iso_offset_scan_aligned.pcd')
-    # cad_mesh = trimesh.load('/home/chenle/codes/Model_Aligner-master/output/0/scan/Part_1_S+U_CD.stl')
-    # scan_pts = o3d.io.read_point_cloud(
-    #     '/home/chenle/codes/Model_Aligner-master/output/0/scan/Part_1_S+U_CD.pcd')
-    #
-    print("cad file: ", glob.glob(f"{root_dir}/{part_id}/cad/*.{'stl'}"))
-    cad_mesh = trimesh.load(glob.glob(f"{root_dir}/{part_id}/cad/*.{'stl'}")[0])
-    print("loading... ", glob.glob(f"{root_dir}/{part_id}/scan/*.{'pcd'}"))
-    scan_pts = o3d.io.read_point_cloud(
-        glob.glob(f"{root_dir}/{part_id}/scan/*.{'pcd'}")[0]
-    )
-
-    x = torch.FloatTensor(np.asarray(cad_mesh.vertices)) - torch.FloatTensor(
-        cad_mesh.bounds.mean(0)
-    )
-    y = torch.FloatTensor(np.asarray(scan_pts.points)) - torch.FloatTensor(
-        cad_mesh.bounds.mean(0)
-    )
-
-    # find one-to-one match
-    idx1, idx2 = torch_geometric.nn.knn(y, x, 1)
-    new_vert = y[idx2]
-
-    vertices = new_vert + torch.FloatTensor(cad_mesh.bounds.mean(0))
-    torch.save(vertices, os.path.join(root_dir, f"{part_id}/{part_name}.pth"))
-    if save_csv:
-        np.savetxt(os.path.join(root_dir, f"{part_id}/{part_name}_cad.csv"), x)
-        print("saved to cad: ", x.shape)
-        np.savetxt(os.path.join(root_dir, f"{part_id}/{part_name}_scan.csv"), new_vert)
-        print("saved to _scan: ", new_vert.shape)
-        print("saved text, ", os.path.join(root_dir, part_name + "_cad.csv"))
-
-
-def generate_scan():
-    path1 = "C:/Users/leejuhe/Documents/flytte2"
-    path2 = "C:/Users/leejuhe/Documents/dataset/bar_outputs"
-
-    if not path2:
-        raise Exception("no data path defined")
-
-    subfolders = [f.path for f in os.scandir(path2) if f.is_dir()]
-    print(subfolders)
-    part_id = subfolders[0].split("\\")[1].split("_")
-    # print(part_id)
-    #'''
-    for i in range(len(subfolders)):
-        print("processing: %s" % subfolders[i])
-
-        object_name = "bar"
-        part_id = subfolders[i].split("\\")[1].split("_")[0]
-        if part_id == "23":
-            continue
-        cad_mesh = trimesh.load(
-            "%s/%s_%s/cad/%s_%s_uptess.obj"
-            % (path1, object_name, part_id, object_name, part_id)
-        )
-        print(cad_mesh)
-        x = torch.FloatTensor(np.asarray(cad_mesh.vertices)) - torch.FloatTensor(
-            cad_mesh.bounds.mean(0)
-        )
-
-        # raw scan
-        scan_pts = o3d.io.read_point_cloud(
-            "%s/scan/%s_scan_u_aligned.pcd" % (subfolders[i], part_id)
-        )
-        y = torch.FloatTensor(np.asarray(scan_pts.points)) - torch.FloatTensor(
-            cad_mesh.bounds.mean(0)
-        )
-
-        idx1, idx2 = torch_geometric.nn.knn(y, x, 1)
-        new_vert = y[idx2]
-        dist = torch.sqrt(torch.sum(torch.pow(x - new_vert, 2), 1))
-        filt = dist > 1.2
-
-        new_vert[filt] = x[filt]
-        vertices = new_vert + torch.FloatTensor(cad_mesh.bounds.mean(0))
-        print(vertices)
-        torch.save(
-            vertices, "%s/scan/%s_%s_test.pth" % (subfolders[i], object_name, part_id)
-        )
-    #'''
-
-
-if __name__ == "__main__":
-    generate_scan_file(part_id="11", part_name="4")

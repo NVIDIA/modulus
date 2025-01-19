@@ -44,7 +44,9 @@ Other dependencies for development:
 
 
 ## Dataset
-- Currently available: bar repository [link not working yet](https://duckduckgo.com)
+- Currently available: 
+  - Bar repository [link not working yet](https://duckduckgo.com)
+  - Molded-fiber repository [link not working yet](https://duckduckgo.com)
 
 - Sample input data folder format: 
   
@@ -74,5 +76,10 @@ Other dependencies for development:
 1. ``train_dis.py``: This code trains the discriminator (predict part deformations with its position and geometry) 
 2. ``train_gen.py``: This code trains the generator (compensate part geometry)
 
-## inference
-- ``inference.py`` 
+## Inference
+
+- Supported 3D formats: 
+    - Stereolitography (STL)
+    - Wavefront file (OBJ)
+- How to run: 
+  - ``python inference.py`` 
