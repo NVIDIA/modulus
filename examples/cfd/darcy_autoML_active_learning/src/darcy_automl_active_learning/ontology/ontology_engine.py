@@ -3,11 +3,11 @@ from typing import Dict, Any
 
 class OntologyEngine:
     """
-    A mock 'OntologyEngine' that returns hard-coded transformation plans
-    for two candidates: 'candidate0' (FNOWithDropout) and 'candidate1' (AFNO).
-
-    We explicitly embed `data_dir_path` inside each transform operation's params,
-    along with optional subfolder_source/dest keys to differentiate candidate0/candidate1.
+    A mock 'OntologyEngine' that returns a transformation plan for exactly one candidate,
+    based on model_name ("FNO", "FNOWithDropout", or "AFNO") and candidate_key (e.g. "candidate0").
+    
+    It embeds data_dir_path in each transform_op's params, along with optional subfolder_source
+    and subfolder_dest for stages 3, 4, and 5. If model_name is unrecognized, raises NotImplementedError.
     """
 
     def __init__(self):
@@ -17,33 +17,57 @@ class OntologyEngine:
         self,
         source_data_desc: Dict[str, Any],
         target_data_requirements: Dict[str, Any],
+        model_name: str,
+        candidate_key: str,
         data_dir_path: str = "data"
     ) -> Dict[str, Any]:
         """
-        Returns a dictionary of transformation plans for two candidates: candidate0 and candidate1.
+        Build and return a transformation plan *for one candidate* (one model_name + candidate_key).
 
         Args:
-            source_data_desc:         E.g., data_desc["data_structure"] from the PDE descriptor
-            target_data_requirements: E.g., from candidate_selector.get_required_data_structure(model_name)
-            data_dir_path:            Base path to your 'data' folder (PosixPath or string).
+            source_data_desc:          The PDE data descriptor (e.g., data_desc["data_structure"]).
+            target_data_requirements:  E.g., from candidate_selector.get_required_data_structure(model_name).
+            model_name:                "FNO", "FNOWithDropout", or "AFNO".
+            candidate_key:             A unique identifier, e.g. "candidate0".
+            data_dir_path:             Base directory path (string); embedded in each transform_op.
 
         Returns:
-            A Python dict representing transformation plans for both candidates. 
-            Each transform_ops entry includes `data_dir_path` in its params, and 
-            subfolder_source/dest for the relevant stages.
+            A dictionary with shape:
+            {
+              "model_name": "<chosen model name>",
+              "stages": [
+                {
+                  "stage_name": "01_01_01_LoadRawData",
+                  "transform_ops": [
+                    {
+                      "method": "copy_only",
+                      "params": {
+                        "source_folder": "...",
+                        "dest_folder": "...",
+                        "subfolder_source": "...",    (optional)
+                        "subfolder_dest": "...",      (optional)
+                        "data_dir_path": "..."        (string)
+                      }
+                    },
+                    ...
+                  ]
+                },
+                ...
+              ]
+            }
+
+        Raises:
+            NotImplementedError: If model_name is not one of ("FNO", "FNOWithDropout", "AFNO").
         """
 
-        # Convert data_dir_path to a string to avoid JSON serialization errors
+        # Convert to string (avoid JSON serialization problems if it's a Path)
         data_dir_path = str(data_dir_path)
 
-        # --------------------------------------------------
-        # Candidate0 => FNOWithDropout
-        # --------------------------------------------------
+        # Hard-coded plan for "FNO"
         plan_for_fno = {
-            "model_name": "FNOWithDropout",
+            "model_name": "FNO",
             "stages": [
                 {
-                    # Stage 1: no subfolders, shared raw data
                     "stage_name": "01_01_01_LoadRawData",
                     "transform_ops": [
                         {
@@ -51,13 +75,13 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "00_Generate_Data",
                                 "dest_folder": "01_01_LoadRawData",
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 3: subfolders for candidate0
                     "stage_name": "01_01_03_TransformRawData",
                     "transform_ops": [
                         {
@@ -65,15 +89,14 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_LoadRawData",
                                 "dest_folder": "01_01_03_TransformRawData",
-                                "subfolder_source": "candidate0",
-                                "subfolder_dest": "candidate0",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 4: subfolders for candidate0
                     "stage_name": "01_01_04_Preprocessing",
                     "transform_ops": [
                         {
@@ -81,15 +104,14 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_03_TransformRawData",
                                 "dest_folder": "01_01_04_Preprocessing",
-                                "subfolder_source": "candidate0",
-                                "subfolder_dest": "candidate0",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 5: subfolders for candidate0
                     "stage_name": "01_01_05_FeaturePreparation",
                     "transform_ops": [
                         {
@@ -97,8 +119,8 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_04_Preprocessing",
                                 "dest_folder": "01_01_05_FeaturePreparation",
-                                "subfolder_source": "candidate0",
-                                "subfolder_dest": "candidate0",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
@@ -107,14 +129,77 @@ class OntologyEngine:
             ]
         }
 
-        # --------------------------------------------------
-        # Candidate1 => AFNO
-        # --------------------------------------------------
+        # Hard-coded plan for "FNOWithDropout" (same stages, different top-level model_name)
+        plan_for_fno_with_dropout = {
+            "model_name": "FNOWithDropout",
+            "stages": [
+                {
+                    "stage_name": "01_01_01_LoadRawData",
+                    "transform_ops": [
+                        {
+                            "method": "copy_only",
+                            "params": {
+                                "source_folder": "00_Generate_Data",
+                                "dest_folder": "01_01_LoadRawData",
+                                "subfolder_dest": candidate_key,
+                                "data_dir_path": data_dir_path
+                            }
+                        }
+                    ]
+                },
+                {
+                    "stage_name": "01_01_03_TransformRawData",
+                    "transform_ops": [
+                        {
+                            "method": "copy_only",
+                            "params": {
+                                "source_folder": "01_01_LoadRawData",
+                                "dest_folder": "01_01_03_TransformRawData",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
+                                "data_dir_path": data_dir_path
+                            }
+                        }
+                    ]
+                },
+                {
+                    "stage_name": "01_01_04_Preprocessing",
+                    "transform_ops": [
+                        {
+                            "method": "copy_only",
+                            "params": {
+                                "source_folder": "01_01_03_TransformRawData",
+                                "dest_folder": "01_01_04_Preprocessing",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
+                                "data_dir_path": data_dir_path
+                            }
+                        }
+                    ]
+                },
+                {
+                    "stage_name": "01_01_05_FeaturePreparation",
+                    "transform_ops": [
+                        {
+                            "method": "copy_only",
+                            "params": {
+                                "source_folder": "01_01_04_Preprocessing",
+                                "dest_folder": "01_01_05_FeaturePreparation",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
+                                "data_dir_path": data_dir_path
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        # Hard-coded plan for "AFNO"
         plan_for_afno = {
             "model_name": "AFNO",
             "stages": [
                 {
-                    # Stage 1: no subfolders, shared raw data
                     "stage_name": "01_01_01_LoadRawData",
                     "transform_ops": [
                         {
@@ -122,13 +207,13 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "00_Generate_Data",
                                 "dest_folder": "01_01_LoadRawData",
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 3: subfolders for candidate1
                     "stage_name": "01_01_03_TransformRawData",
                     "transform_ops": [
                         {
@@ -136,15 +221,14 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_LoadRawData",
                                 "dest_folder": "01_01_03_TransformRawData",
-                                "subfolder_source": "candidate1",
-                                "subfolder_dest": "candidate1",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 4: subfolders for candidate1
                     "stage_name": "01_01_04_Preprocessing",
                     "transform_ops": [
                         {
@@ -152,15 +236,14 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_03_TransformRawData",
                                 "dest_folder": "01_01_04_Preprocessing",
-                                "subfolder_source": "candidate1",
-                                "subfolder_dest": "candidate1",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
                     ]
                 },
                 {
-                    # Stage 5: subfolders for candidate1
                     "stage_name": "01_01_05_FeaturePreparation",
                     "transform_ops": [
                         {
@@ -168,8 +251,8 @@ class OntologyEngine:
                             "params": {
                                 "source_folder": "01_01_04_Preprocessing",
                                 "dest_folder": "01_01_05_FeaturePreparation",
-                                "subfolder_source": "candidate1",
-                                "subfolder_dest": "candidate1",
+                                "subfolder_source": candidate_key,
+                                "subfolder_dest": candidate_key,
                                 "data_dir_path": data_dir_path
                             }
                         }
@@ -178,14 +261,15 @@ class OntologyEngine:
             ]
         }
 
-        # Return both candidate plans
-        return {
-            "candidate0": {
-                "model_name": "FNOWithDropout",
-                "plan": plan_for_fno
-            },
-            "candidate1": {
-                "model_name": "AFNO",
-                "plan": plan_for_afno
-            }
-        }
+        # Decide which plan to return based on model_name
+        if model_name == "FNO":
+            return plan_for_fno
+        elif model_name == "FNOWithDropout":
+            return plan_for_fno_with_dropout
+        elif model_name == "AFNO":
+            return plan_for_afno
+        else:
+            raise NotImplementedError(
+                f"[OntologyEngine] Model '{model_name}' is not implemented. "
+                "Available options: ['FNO', 'FNOWithDropout', 'AFNO']."
+            )
