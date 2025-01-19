@@ -2,14 +2,17 @@
 
 import os
 import json
+import logging
 from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
 
 class ModelRegistry:
     """
     The ModelRegistry manages a collection of model descriptors,
     each specifying important metadata (base_class, accepted_formats,
     default_hyperparams, HPC constraints, etc.).
-    
+
     If no 'descriptors_file' is specified, the registry automatically
     scans a default folder (DEFAULT_DESCRIPTOR_DIR) for .json files,
     each expected to contain exactly one model descriptor. The
@@ -23,8 +26,8 @@ class ModelRegistry:
 
     def __init__(self, descriptors_file: Optional[str] = None):
         """
-        If descriptors_file is provided, loads that single JSON file. 
-        Otherwise, scans DEFAULT_DESCRIPTOR_DIR for all *.json files 
+        If descriptors_file is provided, loads that single JSON file.
+        Otherwise, scans DEFAULT_DESCRIPTOR_DIR for all *.json files
         and loads each as a model descriptor.
 
         :param descriptors_file: Path to a single JSON file containing model descriptor(s), 
@@ -40,39 +43,45 @@ class ModelRegistry:
             if os.path.isdir(self.DEFAULT_DESCRIPTOR_DIR):
                 self.load_all_descriptors_in_folder(self.DEFAULT_DESCRIPTOR_DIR)
             else:
-                # Optionally raise or just warn
-                print(f"[ModelRegistry] WARNING: No descriptors_file provided and default folder "
-                      f"'{self.DEFAULT_DESCRIPTOR_DIR}' not found. No models loaded.")
+                # Optionally raise or just log a warning
+                logger.debug(
+                    "[ModelRegistry] WARNING: No descriptors_file provided and default folder "
+                    f"'{self.DEFAULT_DESCRIPTOR_DIR}' not found. No models loaded."
+                )
 
     def load_descriptors(self, file_path: str) -> None:
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"[ModelRegistry] No file found at {file_path}")
-        
-        # *** Add encoding="utf-8" here ***
+
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         if "model_name" in data:
             model_key = data["model_name"]
             self._descriptors[model_key] = data
-            print(f"[ModelRegistry] Loaded descriptor for '{model_key}' from {file_path}")
+            logger.debug(
+                "[ModelRegistry] Loaded descriptor for '%s' from %s",
+                model_key, file_path
+            )
         else:
             raise ValueError(f"[ModelRegistry] JSON at {file_path} missing 'model_name'.")
 
     def load_all_descriptors_in_folder(self, folder_path: str) -> None:
         """
         Scans a folder for .json files, calling load_descriptors(...) on each.
-        
+
         :param folder_path: path to a directory containing .json descriptor files
         """
         json_files = [
-            f for f in os.listdir(folder_path) 
+            f for f in os.listdir(folder_path)
             if f.endswith(".json") and os.path.isfile(os.path.join(folder_path, f))
         ]
 
         if not json_files:
-            print(f"[ModelRegistry] WARNING: No .json files found in {folder_path}. "
-                  "No models loaded.")
+            logger.debug(
+                "[ModelRegistry] WARNING: No .json files found in %s. No models loaded.",
+                folder_path
+            )
             return
 
         for json_fname in sorted(json_files):
@@ -80,13 +89,15 @@ class ModelRegistry:
             try:
                 self.load_descriptors(file_path)
             except Exception as e:
-                # Optionally continue loading others, or re-raise.
-                print(f"[ModelRegistry] ERROR: Could not load {json_fname}: {e}")
+                logger.debug(
+                    "[ModelRegistry] ERROR: Could not load %s: %s",
+                    json_fname, e
+                )
 
     def get_descriptor(self, model_name: str) -> Dict[str, Any]:
         """
         Retrieve the descriptor dictionary for a given model name.
-        
+
         :param model_name: The model name key (e.g., "FNO", "AFNO", "DiffusionNet").
         :return: The descriptor dictionary (e.g., with keys: "description", "base_class", etc.).
         :raises KeyError: If the model_name is not found in the registry.
@@ -114,7 +125,7 @@ class ModelRegistry:
             raise ValueError("[ModelRegistry] Descriptor must contain 'model_name' field.")
         model_key = descriptor["model_name"]
         self._descriptors[model_key] = descriptor
-        print(f"[ModelRegistry] Registered new descriptor for model '{model_key}'.")
+        logger.debug("[ModelRegistry] Registered new descriptor for model '%s'.", model_key)
 
     def model_exists(self, model_name: str) -> bool:
         """
@@ -130,18 +141,3 @@ class ModelRegistry:
         Return a list of all model names in the registry.
         """
         return list(self._descriptors.keys())
-
-    def load_descriptors(self, file_path: str) -> None:
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError(f"[ModelRegistry] No file found at {file_path}")
-        
-        # *** Add encoding="utf-8" here ***
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        if "model_name" in data:
-            model_key = data["model_name"]
-            self._descriptors[model_key] = data
-            print(f"[ModelRegistry] Loaded descriptor for '{model_key}' from {file_path}")
-        else:
-            raise ValueError(f"[ModelRegistry] JSON at {file_path} missing 'model_name'.")
