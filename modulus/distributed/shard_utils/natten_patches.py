@@ -5,7 +5,7 @@ import torch
 import torch.distributed as dist
 
 from modulus.distributed import ShardTensor
-from . halo import HaloPaddingND
+from . halo import HaloPaddingND, UnSliceHaloND
 
 class UndeterminedShardingError(Exception):
     pass
@@ -70,46 +70,7 @@ def shard_to_haloed_local(q, k, v, kernel_size, dilation=1):
     
     return (local_padded_q, local_padded_k, local_padded_v), halo
 
-def slice_output_by_halo_and_mesh(x, halo, mesh, placements):
-    """
-    Natten na2d halo computations leaves the shape unchanged
-    (kind of like a "same" convolution) but we have no edge padding
-    applied on the edges of the space.
-    
-    This function determines where in the mesh this slice lives and cuts 
-    the halo off if necessary
-    """
 
-    mesh_dims = range(mesh.ndim)
-    tensor_dims = [ p.dim for p in placements]
-    
-    for mesh_dim, tensor_dim in zip(mesh_dims, tensor_dims):
-        
-        # The local group can come right from the mesh.
-        local_group = mesh.get_group(mesh_dim)
-        local_rank  = mesh.get_local_rank(mesh_dim)
-        local_size  = dist.get_world_size(group=local_group)
-        
-        # Select off the appropriate tensor dim:
-        dim_shape = x.shape[tensor_dim]
-        
-        start = halo[mesh_dim]
-        end = dim_shape - halo[mesh_dim]
-        
-        if local_rank == 0:
-            start = 0
-        if local_rank == local_size -1:
-            end = dim_shape
-        
-        indices = torch.arange(start, end).to(x.device)
-        
-        x = x.index_select(tensor_dim, indices)
-    
-    # Cast this back to a ShardTensor to return:
-    
-    st = ShardTensor.from_local(x,mesh, placements)
-
-    return st
     
 
 def na2d_with_halo(q,k,v, kernel_size, dilation=1):
@@ -196,7 +157,9 @@ def na2d_wrapper(wrapped, instance, args, kwargs):
         # This applies the native, underlying na2d:
         x = wrapped(lq, lk, lv, kernel_size, dilation)
         # This slices off any extra bits and reforms the output into a shard tensor
-        return slice_output_by_halo_and_mesh(x, halo, q._spec.mesh, q._spec.placements)
+        # x = slice_output_by_halo_and_mesh(x, halo, q._spec.mesh, q._spec.placements)
+        x = UnSliceHaloND.apply(x, halo, q._spec.mesh, q._spec.placements)
+        return x
         # raise NotImplementedError("This is the section to do!")
     else:
         raise UndeterminedShardingError("q, k, and v must all be the same types (torch.Tensor or ShardTensor)")

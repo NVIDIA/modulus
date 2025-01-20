@@ -362,6 +362,9 @@ class ShardTensor(DTensor):
         RuntimeError
             _description_
         """
+        
+        print(f"Calling shard redistribute on shard of shape {self.shape} and local shape {self._local_tensor.shape}")
+        
         # if device_mesh is not specified, use the current device_mesh
         device_mesh = device_mesh or self.device_mesh
         # raise error if new placements not specified

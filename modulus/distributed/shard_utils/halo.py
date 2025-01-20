@@ -263,8 +263,9 @@ class HaloPaddingND(torch.autograd.Function):
 
 
         # padded_tensor = halo_padding_1d(stensor.to_local(), mesh, halo[0], edge_padding_t, edge_padding_s[0])
-        ctx.mesh = mesh
         ctx.halo = halo
+        ctx.spec = stensor._spec
+        ctx.requires_input_grad = stensor.requires_grad
 
         return local_tensor
 
@@ -272,17 +273,117 @@ class HaloPaddingND(torch.autograd.Function):
     def backward(ctx, grad_output: torch.Tensor):  # pragma: no cover
         """backward pass of the of the Distributed HaloPadding primitive"""
 
-        print(f"got grad output: {grad_output}")
+        print(f"got grad output of shape: {grad_output.shape}")
+        print(f"got grad output of type: {type(grad_output)}")
 
-        grad_tensor = all_gather_v_bwd_wrapper(
-            grad_output,
-            ctx.sizes,
-            dim=ctx.dim,
-            use_fp32=ctx.use_fp32,
-            group=ctx.group,
+        spec = ctx.spec
+        mesh = spec.mesh
+        placements = spec.placements
+        halo = ctx.halo
+        # The backwards pass is to cut off the gradients here in the halo region.
+        outputs = unslice_output_by_halo_and_mesh_fwd(grad_output, halo, mesh, placements)
+        
+        # And, wrap it into a shard tensor:
+        grad_tensor = ShardTensor(
+            outputs,
+            spec,
+            requires_grad=grad_output.requires_grad,
         )
 
-        if not ctx.needs_input_grad[0]:
-            grad_tensor = None
+        return grad_tensor, None, None, None
 
-        return grad_tensor, None, None, None, None
+
+def unslice_output_by_halo_and_mesh_fwd(x, halo, mesh, placements):
+    """
+    Natten na2d halo computations leaves the shape unchanged
+    (kind of like a "same" convolution) but we have no edge padding
+    applied on the edges of the space.
+    
+    This function determines where in the mesh this slice lives and cuts 
+    the halo off if necessary
+    """
+
+    mesh_dims = range(mesh.ndim)
+    tensor_dims = [ p.dim for p in placements]
+    
+    for mesh_dim, tensor_dim in zip(mesh_dims, tensor_dims):
+        
+        # The local group can come right from the mesh.
+        local_group = mesh.get_group(mesh_dim)
+        local_rank  = mesh.get_local_rank(mesh_dim)
+        local_size  = dist.get_world_size(group=local_group)
+        
+        # Select off the appropriate tensor dim:
+        dim_shape = x.shape[tensor_dim]
+        
+        start = halo[mesh_dim]
+        end = dim_shape - halo[mesh_dim]
+        
+        if local_rank == 0:
+            start = 0
+        if local_rank == local_size -1:
+            end = dim_shape
+        
+        indices = torch.arange(start, end).to(x.device)
+        
+        x = x.index_select(tensor_dim, indices)
+    
+    # Cast this back to a ShardTensor to return:
+    
+
+    return x
+
+class UnSliceHaloND(torch.autograd.Function):
+    
+    """
+    Class to trim off unnecessary sections of a tensor that has had a halo computation applied to it
+    Used in cases such as: neighborhood attention, when the central halos require trimming after the application
+    of the operation.
+    """
+    
+    @staticmethod
+    def forward(
+        ctx,
+        tensor : torch.Tensor,
+        halo,
+        mesh,
+        placements,
+    ) -> "ShardTensor":
+        ctx.halo = halo
+        ctx.mesh = mesh
+        ctx.placements = placements
+        
+        assert len(halo) == mesh.ndim, f"Halo size ({len(halo)} must match mesh rank ({mesh.ndim}))"
+        
+        
+        outputs = unslice_output_by_halo_and_mesh_fwd(tensor, halo, mesh, placements)
+        
+        
+        # Cast to shard tensor:
+        outputs = ShardTensor.from_local(outputs,mesh, placements)
+        
+        return outputs
+    
+    @staticmethod
+    def backward(
+        ctx,
+        grad_output
+    ) -> torch.Tensor:
+        
+        # padded_tensor = halo_padding_1d(stensor.to_local(), mesh, halo[0], edge_padding_t, edge_padding_s[0])
+        mesh = ctx.mesh
+        halo = ctx.halo
+        placements = ctx.placements
+        # the gradient of the slicing is the halo operation that inverts it
+        
+        edge_padding_s = [0,] * len(halo)
+        edge_padding_t = "none"
+        
+        local_tensor = grad_output.to_local()
+        for mesh_dim in range(mesh.ndim):
+            tensor_dim = placements[mesh_dim].dim
+            local_tensor = halo_padding_1d(local_tensor, mesh, mesh_dim, tensor_dim, halo[mesh_dim], edge_padding_t, edge_padding_s[0])
+        
+
+
+        return local_tensor, None, None, None

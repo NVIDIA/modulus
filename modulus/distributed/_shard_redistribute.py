@@ -135,6 +135,7 @@ def redistribute_local_shard_tensor(
                 new_local_tensor = partial_spec._reduce_value(
                     local_tensor, device_mesh, i
                 )
+                print("Called reduce value!")
             elif current.is_shard():
                 current_placement = cast(Shard, current)
                 new_local_tensor = _to_replicate_tensor(
@@ -264,6 +265,12 @@ class ShardRedistribute(torch.autograd.Function):
             output = input._local_tensor
             target_spec = current_spec
 
+        # print("FORWARD in SHARD REDISTRIBUTE")
+        # print(f"Input shape: {input.shape} with local shape {input._local_tensor.shape}")
+        # print(f"Input placements: {input._spec.placements}")
+        # print(f"OUTPUT shape: {output.shape}")
+        # print(f"OUTPUT spec: {target_spec}")
+
         return shard_tensor.ShardTensor(
             output,
             target_spec,
@@ -272,8 +279,10 @@ class ShardRedistribute(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: "ShardTensor"):  # type: ignore[override]
+
         previous_spec = ctx.current_spec
         current_spec = grad_output._spec
+
         async_op = ctx.async_op
 
         local_tensor = grad_output._local_tensor

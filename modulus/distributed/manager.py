@@ -24,7 +24,7 @@ import torch
 import torch.distributed as dist
 
 # from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
-
+import atexit
 
 class ModulusUndefinedGroupError(Exception):
     """Exception for querying an undefined process group using the Modulus DistributedManager"""
@@ -764,7 +764,7 @@ class DistributedManager(object):
     #             # Add child ids to the queue
     #             q.put(child.identifier)
 
-
+    @atexit.register
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
@@ -781,3 +781,5 @@ class DistributedManager(object):
                 dist.barrier()
             dist.destroy_process_group()
         DistributedManager._shared_state = {}
+
+
