@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Refactored StormCast training example
+- Enhancements and bug fixes to DoMINO model and training example
+- Enhancement to parameterize DoMINO model with inlet velocity
 
 ### Deprecated
 
