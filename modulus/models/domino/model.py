@@ -347,7 +347,7 @@ class NNBasisFunctions(nn.Module):
         self.bn2 = nn.BatchNorm1d(int(base_layer))
         self.bn3 = nn.BatchNorm1d(int(base_layer))
 
-        self.activation = F.gelu
+        self.activation = F.relu
 
     def forward(self, x, padded_value=-10):
         facets = x
@@ -373,7 +373,7 @@ class ParameterModel(nn.Module):
         self.bn2 = nn.BatchNorm1d(int(base_layer))
         self.bn3 = nn.BatchNorm1d(int(base_layer))
 
-        self.activation = F.gelu
+        self.activation = F.relu
 
     def forward(self, x, padded_value=-10):
         params = x
@@ -396,15 +396,15 @@ class AggregationModel(nn.Module):
         self.new_change = new_change
         base_layer = model_parameters.base_layer
         self.fc1 = nn.Linear(self.input_features, base_layer)
-        self.fc2 = nn.Linear(base_layer, int(base_layer / 2))
-        self.fc3 = nn.Linear(int(base_layer / 2), int(base_layer / 4))
-        self.fc4 = nn.Linear(int(base_layer / 4), int(base_layer / 8))
-        self.fc5 = nn.Linear(int(base_layer / 8), self.output_features)
+        self.fc2 = nn.Linear(base_layer, int(base_layer))
+        self.fc3 = nn.Linear(int(base_layer), int(base_layer))
+        self.fc4 = nn.Linear(int(base_layer), int(base_layer))
+        self.fc5 = nn.Linear(int(base_layer), self.output_features)
         self.bn1 = nn.BatchNorm1d(base_layer)
-        self.bn2 = nn.BatchNorm1d(int(base_layer / 2))
-        self.bn3 = nn.BatchNorm1d(int(base_layer / 4))
-        self.bn4 = nn.BatchNorm1d(int(base_layer / 8))
-        self.activation = F.gelu
+        self.bn2 = nn.BatchNorm1d(int(base_layer))
+        self.bn3 = nn.BatchNorm1d(int(base_layer))
+        self.bn4 = nn.BatchNorm1d(int(base_layer))
+        self.activation = F.relu
 
     def forward(self, x):
         out = self.activation(self.fc1(x))
@@ -487,6 +487,8 @@ class DoMINO(nn.Module):
     >>> volume_coordinates = torch.randn(bsize, 100, 3).to(device)
     >>> vol_grid_max_min = torch.randn(bsize, 2, 3).to(device)
     >>> surf_grid_max_min = torch.randn(bsize, 2, 3).to(device)
+    >>> stream_velocity = torch.randn(bsize, 1).to(device)
+    >>> air_density = torch.randn(bsize, 1).to(device)
     >>> input_dict = {
     ...            "pos_volume_closest": pos_normals_closest_vol,
     ...            "pos_volume_center_of_mass": pos_normals_com_vol,
@@ -506,6 +508,8 @@ class DoMINO(nn.Module):
     ...            "volume_mesh_centers": volume_coordinates,
     ...            "volume_min_max": vol_grid_max_min,
     ...            "surface_min_max": surf_grid_max_min,
+    ...             "stream_velocity": stream_velocity,
+    ...             "air_density": air_density,
     ...        }
     >>> output = model(input_dict)
     Module ...
@@ -620,7 +624,7 @@ class DoMINO(nn.Module):
         base_layer_geo = model_parameters.geometry_local.base_layer
         self.fc_1 = nn.Linear(self.neighbors_in_radius * 3, base_layer_geo)
         self.fc_2 = nn.Linear(base_layer_geo, base_layer_geo)
-        self.activation = F.gelu
+        self.activation = F.relu
 
         # Aggregation model
         if self.output_features_surf is not None:
@@ -1042,7 +1046,7 @@ class DoMINO(nn.Module):
             surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
             # Calculate local geometry encoding for surface
             encoding_g_surf = self.geo_encoding_local_surface(
-                encoding_g, surface_mesh_centers, s_grid
+                0.5 * encoding_g_surf, surface_mesh_centers, s_grid
             )
 
             # Approximate solution on surface cell center
