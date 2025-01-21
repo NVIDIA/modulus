@@ -43,7 +43,7 @@ class DrivAerMLPartitionedDataset(Dataset):
     ```
     ├─ partitions
     │  ├─ graph_partitions_1.bin
-    │  ├─ graph_partitions_1.bin
+    │  ├─ graph_partitions_2.bin
     │  ├─ ...
     ├─ test_partitions
     │  ├─ graph_partitions_100.bin
