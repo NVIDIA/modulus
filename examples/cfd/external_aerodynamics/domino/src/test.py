@@ -86,9 +86,9 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
         data_dict = dict_to_device(data_dict, device)
 
         # Non-dimensionalization factors
-        air_density = data_dict["air_density"].cpu().numpy()
-        stream_velocity = data_dict["stream_velocity"].cpu().numpy()
-        length_scale = data_dict["length_scale"].cpu().numpy()
+        air_density = data_dict["air_density"]
+        stream_velocity = data_dict["stream_velocity"]
+        length_scale = data_dict["length_scale"]
 
         # STL nodes
         geo_centers = data_dict["geometry_coordinates"]
@@ -187,6 +187,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         volume_mesh_centers_batch,
                         geo_encoding_local,
                         pos_encoding,
+                        stream_velocity,
+                        air_density,
                         num_sample_points=20,
                         eval_mode="volume",
                     )
@@ -195,17 +197,20 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         :, start_idx:end_idx
                     ] = tpredictions_batch.cpu().numpy()
 
-            # print(
-            #     f"Volume predictions calculated, Time taken={float(time.time()-start_time)}"
-            # )
             prediction_vol = unnormalize(prediction_vol, vol_factors[0], vol_factors[1])
 
-            prediction_vol[:, :, :3] = prediction_vol[:, :, :3] * stream_velocity[0]
+            prediction_vol[:, :, :3] = (
+                prediction_vol[:, :, :3] * stream_velocity[0, 0].cpu().numpy()
+            )
             prediction_vol[:, :, 3] = (
-                prediction_vol[:, :, 3] * stream_velocity[0] ** 2.0 * air_density[0]
+                prediction_vol[:, :, 3]
+                * stream_velocity[0, 0].cpu().numpy() ** 2.0
+                * air_density[0, 0].cpu().numpy()
             )
             prediction_vol[:, :, 4] = (
-                prediction_vol[:, :, 4] * stream_velocity[0] * length_scale[0]
+                prediction_vol[:, :, 4]
+                * stream_velocity[0, 0].cpu().numpy()
+                * length_scale[0].cpu().numpy()
             )
         else:
             prediction_vol = None
@@ -276,6 +281,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                                 surface_neighbors_normals_batch,
                                 surface_areas_batch,
                                 surface_neighbors_areas_batch,
+                                stream_velocity,
+                                air_density,
                             )
                         )
                     else:
@@ -283,6 +290,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                             surface_mesh_centers_batch,
                             geo_encoding_local,
                             pos_encoding,
+                            stream_velocity,
+                            air_density,
                             num_sample_points=1,
                             eval_mode="surface",
                         )
@@ -293,12 +302,10 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             prediction_surf = (
                 unnormalize(prediction_surf, surf_factors[0], surf_factors[1])
-                * stream_velocity[0] ** 2.0
-                * air_density[0]
+                * stream_velocity[0, 0].cpu().numpy() ** 2.0
+                * air_density[0, 0].cpu().numpy()
             )
-            # print(
-            #     f"Surface predictions calculated, Time taken={float(time.time()-start_time)}"
-            # )
+
         else:
             prediction_surf = None
 
@@ -638,8 +645,12 @@ def main(cfg: DictConfig):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": np.array(length_scale, dtype=np.float32),
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), axis=-1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), axis=-1
+                ),
             }
         elif model_type == "surface":
             data_dict = {
@@ -656,8 +667,12 @@ def main(cfg: DictConfig):
                 "surface_fields": np.float32(surface_fields),
                 "surface_min_max": np.float32(surf_grid_max_min),
                 "length_scale": np.array(length_scale, dtype=np.float32),
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), axis=-1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), axis=-1
+                ),
             }
         elif model_type == "volume":
             data_dict = {
@@ -674,8 +689,12 @@ def main(cfg: DictConfig):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": np.array(length_scale, dtype=np.float32),
-                "stream_velocity": np.array(STREAM_VELOCITY, dtype=np.float32),
-                "air_density": np.array(AIR_DENSITY, dtype=np.float32),
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), axis=-1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), axis=-1
+                ),
             }
 
         data_dict = {
