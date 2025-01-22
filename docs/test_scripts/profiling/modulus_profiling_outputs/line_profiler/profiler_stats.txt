@@ -1,0 +1,120 @@
+Timer unit: 1e-09 s
+
+Total time: 1.68113 s
+File: /root/modulus/docs/test_scripts/profiling/attn_instrumented.py
+Function: forward at line 31
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    31                                               @profile
+    32                                               def forward(self, x: torch.Tensor) -> torch.Tensor:
+    33                                           
+    34         7      47800.0   6828.6      0.0          B, N, C = x.shape
+    35         7  128992209.0    2e+07      7.7          qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+    36         7     330651.0  47235.9      0.0          q, k, v = qkv.unbind(0)
+    37                                           
+    38                                           
+    39                                                   # This is not optimal code right here ...
+    40         7   33299807.0    5e+06      2.0          q = q * self.scale
+    41         7  519998368.0    7e+07     30.9          attn = q @ k.transpose(-2, -1)
+    42         7  770982387.0    1e+08     45.9          attn = attn.softmax(dim=-1)
+    43         7     908354.0 129764.9      0.1          attn = self.attn_drop(attn)
+    44         7  126324266.0    2e+07      7.5          x = attn @ v
+    45                                           
+    46         7   54615920.0    8e+06      3.2          x = x.transpose(1, 2).reshape(B, N, C)
+    47         7   45193613.0    6e+06      2.7          x = self.proj(x)
+    48         7     427617.0  61088.1      0.0          x = self.proj_drop(x)
+    49         7      11976.0   1710.9      0.0          return x
+
+Total time: 0 s
+File: /root/modulus/docs/test_scripts/profiling/attn_instrumented.py
+Function: forward at line 65
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    65                                               @profile
+    66                                               def forward(self, x):
+    67                                                   x = self.fc1(x)
+    68                                                   x = self.gelu(x)
+    69                                                   x = self.drop1(x)
+    70                                                   x = self.fc2(x)
+    71                                                   x = self.gelu(x)
+    72                                                   x = self.drop2(x)
+    73                                                   return x
+
+Total time: 0 s
+File: /root/modulus/docs/test_scripts/profiling/attn_instrumented.py
+Function: forward at line 104
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   104                                               @profile
+   105                                               def forward(self, x: torch.Tensor) -> torch.Tensor:
+   106                                                   x = x + self.attn(self.norm1(x))
+   107                                                   x = x + self.mlp(self.norm2(x))
+   108                                                   return x
+
+Total time: 0.034937 s
+File: /root/modulus/docs/test_scripts/profiling/workload_annotated.py
+Function: loss_fn at line 21
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    21                                           @profile
+    22                                           @annotate
+    23                                           def loss_fn(output_data):
+    24                                               # All except the first dim:
+    25         7      62750.0   8964.3      0.2      dims = tuple(range(len(output_data.shape)))
+    26                                               # Just a silly loss function:
+    27         7   27348381.0    4e+06     78.3      output_data = output_data**2.
+    28         7    7012940.0    1e+06     20.1      loss = torch.sum(output_data, dims[1:])
+    29         7     512965.0  73280.7      1.5      return loss.mean()
+
+Total time: 8.03672 s
+File: /root/modulus/docs/test_scripts/profiling/workload_annotated.py
+Function: workload at line 31
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    31                                           @profile
+    32                                           def workload(cfg):
+    33                                           
+    34         1     276118.0 276118.0      0.0      ds = RandomNoiseDataset(cfg["shape"])
+    35                                               
+    36         2     184006.0  92003.0      0.0      loader = DataLoader(
+    37         1        169.0    169.0      0.0          ds, 
+    38         1      32122.0  32122.0      0.0          batch_size=cfg["batch_size"], 
+    39         1        171.0    171.0      0.0          shuffle = True,
+    40                                               )
+    41                                               
+    42                                               
+    43                                               # Initialize the model:
+    44         2   40149878.0    2e+07      0.5      model = Attention(
+    45         1      63345.0  63345.0      0.0          dim = cfg["shape"][-1],
+    46         1      47669.0  47669.0      0.0          num_heads = cfg.model["num_heads"],
+    47         1      37457.0  37457.0      0.0          qkv_bias  = cfg.model["qkv_bias"] ,
+    48         1      36388.0  36388.0      0.0          attn_drop = cfg.model["attn_drop"],
+    49         1      36591.0  36591.0      0.0          proj_drop = cfg.model["proj_drop"],
+    50                                               )
+    51                                               
+    52         1      51199.0  51199.0      0.0      if cfg["train"]:
+    53         1 1392984747.0    1e+09     17.3          opt = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    54                                               
+    55         2      67972.0  33986.0      0.0      with Profiler() as p:
+    56         1       1079.0   1079.0      0.0          start = time.perf_counter()
+    57         8 1352550257.0    2e+08     16.8          for i, batch in enumerate(loader):
+    58         7   27666344.0    4e+06      0.3              image = batch["image"]
+    59         7 1811979974.0    3e+08     22.5              output = model(image)
+    60         7     929678.0 132811.1      0.0              if cfg["train"]:
+    61         7    1704783.0 243540.4      0.0                  opt.zero_grad()
+    62                                                           # Compute the loss:
+    63         7   59092552.0    8e+06      0.7                  loss = loss_fn(output)
+    64                                                           # Do the gradient calculation:
+    65         7 3339735099.0    5e+08     41.6                  loss.backward()
+    66                                                           # Apply the gradients
+    67         7    8709902.0    1e+06      0.1                  opt.step()
+    68         7      12254.0   1750.6      0.0              p.step
+    69         7      27316.0   3902.3      0.0              end = time.perf_counter()
+    70         7     333109.0  47587.0      0.0              print(f"Finished step {i} in {end - start:.4f} seconds")
+    71         7       5423.0    774.7      0.0              start = time.perf_counter()
+

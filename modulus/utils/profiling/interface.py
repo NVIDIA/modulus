@@ -21,15 +21,76 @@ from dataclasses import dataclass
 from typing import List, Optional, Callable
 
 
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager, ContextDecorator
 
 from dataclasses import dataclass
 from modulus.distributed import DistributedManager
 
 from . core import _Profiler_Singleton, ProfileRegistry
 
-class Profiler:
-    __metaclass__ = _Profiler_Singleton
+import wrapt
+
+
+import inspect
+
+@wrapt.decorator
+def universal(wrapped, instance, args, kwargs):
+    print("ENTER UNIVERSAL")
+    print(f"wrapped: {wrapped}")
+    print(f"instance: {instance}")
+    print(f"args: {args}")
+    print(f"kwargs: {kwargs}")
+    if instance is None:
+        if inspect.isclass(wrapped):
+            # Decorator was applied to a class.
+            return wrapped(*args, **kwargs)
+        else:
+            # Decorator was applied to a function or staticmethod.
+            return wrapped(*args, **kwargs)
+    else:
+        if inspect.isclass(instance):
+            # Decorator was applied to a classmethod.
+            return wrapped(*args, **kwargs)
+        else:
+            # Decorator was applied to an instancemethod.
+            return wrapped(*args, **kwargs)
+    print("REACHED THE END!")
+
+class AnnotationManager:
+    """
+    Annotations must be context decorators.  To make this a little cleaner,
+    this class is a manager just for annotations.  It provides the 
+    interface for __enter__ / __exit__ / __call__ and also a stack of
+    sub-annotations
+    """
+    _annotations = []
+    
+    def append(self, annotation):
+        self._annotations.append(annotation)
+    
+    def annotate(self, func_or_context):
+        
+        for annotation in reversed(self.annotations):
+            func_or_context = annotation(func_or_context)
+            
+        return func_or_context
+    
+    def __call__(self, func):
+
+        return self.annotate(func)
+
+    def __enter__(self):
+                  
+        self.exit_stack = ExitStack()
+        for annotation in self._annotations:
+            self.exit_stack.enter_context(annotation)
+        return self
+        
+    def __exit__(self, *exc):
+        
+        return self.exit_stack.__exit__(*exc)
+        
+class Profiler(metaclass=_Profiler_Singleton):
     
 
     """
@@ -54,41 +115,64 @@ class Profiler:
     # Keep a list of configured, singleton profilers
     _profilers = []
     
-    _output_top : Path
+    _output_top : Path = Path("./modulus_profiling_outputs/")
     
     # A list of functions to capture for annotation _before_ all the profilers are initialized
     _annotation_registry = []
     _decoration_registry = []
-    # we have to return a callable immediately from annotations, so send a placeholder
-    # _annotation_outputs = []
     
-    def __init__(self, output_dir_top = None):
-        super().__init__()
-        
-        # Configure nvtx context tagging here:
+    # Control flow switches for whether the profiler
+    # has been initialized (and can do annotations/decorations)
+    # (And if not - they get deferred, see below)
+    _initialized : bool = False
+    
+    # Control flow for wrapping up the profiler: closing contexts/
+    # writing outputs, etc.  Only want to trigger this once
+    _finalized : bool
+    
+    exit_stack = ExitStack()
+    annotation_stack = AnnotationManager()
+    
 
-        self.exit_stack = ExitStack()
-        self.annotation_stack = ExitStack()
-
-        # Prevent double-finalization and initializations:
-        self.initialized = False
-        self.finalized = False
+    @property
+    def initialized(self):
+        return self._initialized
+    
+    @initialized.setter
+    def initialized(self, value : bool):
+        assert isinstance(value, bool)
+        self._initialized = value
         
-        if output_dir_top is None:
-            self._output_top = Path(".").resolve()
-        else:
-            self._output_top = Path(output_dir_top).resolve()
-        
+    @property
+    def finalized(self):
+        return self._finalized
+    
+    @finalized.setter
+    def finalized(self, value : bool):
+        assert isinstance(value, bool)
+        self._finalized = value
 
+    @property
+    def output_dir(self):
+        return self._output_top
+    
+    @output_dir.setter
+    def output_dir(self, value):
+        self._output_top = Path(value)
 
     def _standup(self):
         
         # Call _standup on all profilers, then set initialized to prevent
-        # reinit
+        # reinit of profilers and functions
         
+        if self.initialized: return
         
+        # Stand up all attached profilers.  After this, can't add more.
         for p in self._profilers:
             p._standup()
+        
+        print("Decoration registry: ", self._decoration_registry)
+        print("Annotation registry: ", self._annotation_registry)
             
         # Annotate any missed functions:
         for func, args, kwargs in self._annotation_registry:
@@ -102,19 +186,25 @@ class Profiler:
             decorated = self._decorate_function(func)
             self.replace_function(func, decorated)
 
+        self._decoration_registry.clear()
+        
         
         self.initialized = True
+        
+        
         
     def initialize(self):
         """
         Manually initialize the profiler interface
         """
+        self._standup()
 
     def finalize(self):
         """
         finalize the profiler interface.  Writes data to file
         if necessary, automatically
         """
+        
         
         for p in self._profilers:
             p.finalize(self.output_path)
@@ -143,6 +233,9 @@ class Profiler:
         is registered with the profiler manager.
         
         """
+        
+        if self.initialized:
+            raise Exception("Can not enable more profiling tools after the profiler interface is initialized")
         
         # Is it an instance of the right type? If not, find it:
         if not isinstance(profiler, _Profiler_Singleton):
@@ -211,47 +304,124 @@ class Profiler:
 
     
     
-            
-                
+    # annotate = ContextDecorator()
     
-
-    def annotate(self, *args, **kwargs):
-        """
-        This is a "annotation factory" to produce the right decorator or context
-        depending on the presence of args and kwargs.
-        
-        It also has to *defer* decoration until the profiler is actually 
-        initialized and all tools are enabled.
-        
-        Two layers of functions here to allow kwargs to the decorator
-        """
-
-
-        # Supporting only kwargs for function annotations
-        # if len(args) > 0 then this must be a context annotation
-        if len(args) > 0 and not callable(args[0]):
-            # Return the annotation _context_:
-            for p in self._profilers:
-                self.annotation_stack.enter_context(p.annotate(*args, **kwargs))
-            
-            return self.annotation_stack
-        else:
-            # This must be a function:
-            if len(args) == 1 and len(kwargs) == 0:
-                return self._deferred_or_immediate_annotation(args[0])
+    
+    @wrapt.decorator
+    def annotate(self, wrapped, instance, args, kwargs):
+        print("ENTER UNIVERSAL")
+        print(f"wrapped: {wrapped}")
+        print(f"instance: {instance}")
+        print(f"args: {args}")
+        print(f"kwargs: {kwargs}")
+        if instance is None:
+            if inspect.isclass(wrapped):
+                # Decorator was applied to a class.
+                return wrapped(*args, **kwargs)
             else:
-                # Called as function decorator `annotate(arguments, kwargs...)`
+                # Decorator was applied to a function or staticmethod.
+                return wrapped(*args, **kwargs)
+        else:
+            if inspect.isclass(instance):
+                # Decorator was applied to a classmethod.
+                return wrapped(*args, **kwargs)
+            else:
+                # Decorator was applied to an instancemethod.
+                return wrapped(*args, **kwargs)
+        print("REACHED THE END!")
+    
+    # @universal
+    # def annotate(self, *args, **kwargs):
+    #     pass
+    
+                
+    # def annotate(self, *a_args, **a_kwargs):
+    #     print(f"Enter annotate with args {a_args}, {a_kwargs}")
+        
+    #     @wrapt.decorator
+    #     def wrapper(wrapped, instance, args, kwargs):
             
-                # TODO - functools wraps here
+    #         # Before the function
+    #         print(f"Before function '{wrapped.__name__}' with param={a_args} and {a_kwargs}")
+
+    #         # Call the original function
+    #         result = wrapped(*args, **kwargs)
+
+    #         # After the function
+    #         print(f"After function '{wrapped.__name__}' with param={param}")
+    #         return result
+        
+    #     print(f"Returning {wrapper}")
+    #     return wrapper
+    
+    # def annotate(self, *args, **kwargs):
+    #     """
+    #     This is a "annotation factory" to produce the right decorator or context
+    #     depending on the presence and value of args and kwargs.
+        
+    #     It also has to *defer* decoration until the profiler is actually 
+    #     initialized and all tools are enabled.
+        
+    #     Two layers of functions here to allow kwargs to the decorator.
+        
+    #     In general, the logic is:
+    #     if len(args) > 0:
+    #         if callable(args[0]):
+    #             this is annotating a function.  
+    #         else:
+    #             this is a context
+    #     else:
+    #         this is a context (because len(args) is 0)
+           
+    #     to make this simpler, invert it:
+    #     if len(args) == 0 or not callable(args[0]):
+    #         this is a context to annotate
+    #     else;
+    #         this is a function
             
-                def decorator(func):
-                    return self._deferred_or_immediate_annotation(func,*args, **kwargs)
+    #     """
+
+    #     print("Enter annotate")
+    #     print(f"args: {args}")
+    #     print(f"kwargs: {kwargs}")
+
+    #     print(f"len(args) > 0 {len(args) > 0}")
+    #     # print(f"callable(args[0]): {callable(args[0])}")
+
+    #     if len(args) == 0 or not callable(args[0]):
+    #         print("got a context")
+    #     else:
+    #         print("Got a function")
+
+    #     # Supporting only kwargs for function annotations
+    #     # if len(args) > 0 then this must be a context annotation
+    #     if len(args) > 0 and not callable(args[0]):
+    #         print("Didn't get a function!")
+    #         # Return the annotation _context_:
+    #         for p in self._profilers:
+    #             self.annotation_stack.append(p.annotate(*args, **kwargs))
             
-                return decorator
+    #         print(f"Returning {self.annotation_stack}")
+    #         return self.annotation_stack
+    #     else:
+    #         print("Got a function!")
+    #         # This must be a function:
+    #         if len(args) == 1 and len(kwargs) == 0:
+    #             return self._deferred_or_immediate_annotation(args[0])
+    #         else:
+    #             # Called as function decorator `annotate(arguments, kwargs...)`
+            
+    #             # TODO - functools wraps here
+            
+    #             def decorator(func):
+    #                 return self._deferred_or_immediate_annotation(func,*args, **kwargs)
+            
+    #             return decorator
                 
 
 
     def _deferred_or_immediate_decoration(self, func):
+        
         
         if self.initialized:
             return self._decorate_function(func)

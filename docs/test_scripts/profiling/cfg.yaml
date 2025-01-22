@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+
+
+shape: [2048, 1024]
+batch_size: 8
+train: True
+model:
+  num_heads:  8
+  qkv_bias:  False
+  attn_drop:  0.
+  proj_drop:  0.
+
+profile:
+  torch: False
+  nvtx: False
+  line_profiler: True

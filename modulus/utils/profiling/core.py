@@ -16,7 +16,7 @@
 
 from pathlib import Path
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List
 
 
@@ -25,22 +25,6 @@ from contextlib import ContextDecorator
 from dataclasses import dataclass
 from modulus.distributed import DistributedManager
 from abc import ABC, abstractmethod
-
-@dataclass
-class CoreProfilerConfig:
-    """
-    Configuration for an abstract profiling tool.
-    Depending on the options, 
-    """
-    output:        Path = Path("")
-
-    
-    def __init__(self):
-        # If the model is distributed, control the location of the output:
-        if DistributedManager.is_initialized():
-            if DistributedManager().distributed:
-                self.config.output_dir += f"/rank_{DistributedManager().rank}/"
-
 
 
     
@@ -97,6 +81,9 @@ class ModulusProfilerWrapper(ContextDecorator):
     
     # Name is both a singleton lookup and output directory top:
     _name : str = ""
+    
+    # Default "config" - not always needed but need to have the attribute defined
+    _config = None
     
     def __init__():
         self._config = None
@@ -161,11 +148,8 @@ class ModulusProfilerWrapper(ContextDecorator):
         return self._is_annotation
     
     def enable(self):
-        
-        if self._config is None:
-            raise Exception("Can not enable un-configured profiler")
-        
         self._enabled = True
+        
     
     def __enter__(self):
         pass
@@ -174,7 +158,7 @@ class ModulusProfilerWrapper(ContextDecorator):
         pass
     
     def step(self):
-        pass
+        passp
     
     def output_dir(self, top : Path):
         
@@ -183,11 +167,10 @@ class ModulusProfilerWrapper(ContextDecorator):
         # If the model is distributed, control the location of the output:
         if DistributedManager.is_initialized():
             if DistributedManager().distributed:
-                out_dir /= Path(f"/rank_{DistributedManager().rank}/")
+                out_dir = out_dir.joinpath(Path(f"rank_{DistributedManager().rank}/"))
         
         # Make the directory, if necessary:
         out_dir.mkdir(exist_ok=True, parents=True)
-        
         return out_dir
 
     def _teardown(self, path : Path ):
@@ -206,6 +189,11 @@ class ModulusProfilerWrapper(ContextDecorator):
             print("Error in finalization")
         finally:
             self.finalized = True
+    
+    def reconfigure(self, **config_overrides):
+        if self._config is not None:
+            self._config = replace(self._config, **config_overrides)    
+    
     
 class _Profiler_Singleton(type):
     """
@@ -226,9 +214,9 @@ class _Profiler_Singleton(type):
     """
     _instances = {}
     
-    def __new__(class_, *args, **kwargs):
+    def __call__(class_, *args, **kwargs):
         if class_ not in class_._instances:
-            class_._instances[class_] = super(_Profiler_Singleton, class_).__new__(class_, *args, **kwargs)
+            class_._instances[class_] = super().__call__(*args, **kwargs)
         return class_._instances[class_]
 
 

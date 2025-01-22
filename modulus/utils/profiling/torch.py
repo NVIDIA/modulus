@@ -46,7 +46,6 @@ class TorchProfilerConfig:
     Specific configuration for the pytorch profiler.
     """
     name:             str = "torch"
-    output_dir:      Path = "./profiler_output/"
     torch_prof_activities: Optional[Tuple[int]] = None
     record_shapes :  bool = True
     profile_memory : bool = True
@@ -54,7 +53,7 @@ class TorchProfilerConfig:
     with_trace:      bool = True
     profile_memory:  bool = False
     with_flops:      bool = False
-    schedule:    Callable = torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1)
+    schedule:    Callable = None
     
 class TorchProfileWrapper(ModulusProfilerWrapper):
     __metaclass__ = _Profiler_Singleton
@@ -85,17 +84,19 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         
         # Configure pytorch profiler here:
         # Set the default profiling activities if not set:
-        if self.enabled:
-            if self._config.torch_prof_activities is None:
-                torch_prof_activities = [ProfilerActivity.CPU]
-                if torch.cuda.is_available(): 
-                    torch_prof_activities.append(ProfilerActivity.CUDA)
-                self._config.torch_prof_activities = torch_prof_activities
+        if self._config.torch_prof_activities is None:
+            torch_prof_activities = [ProfilerActivity.CPU]
+            if torch.cuda.is_available(): 
+                torch_prof_activities.append(ProfilerActivity.CUDA)
+            self._config.torch_prof_activities = torch_prof_activities
         
         
         return
         
+    
     def _standup(self):
+
+        print(f"This config is: {self._config}")
 
         self._profiler = profile(
             activities     = self._config.torch_prof_activities, 
@@ -109,11 +110,10 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
 
     def finalize(self, output_top : Path):
                 
+                
         if not self.enabled: return
-        
         # Prevent double finalization:
         if self.finalized: return
-        
         # Get the output directory:
         out_top = self.output_dir(output_top)
 
@@ -124,7 +124,7 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
             except AssertionError as e:
                 # no averages recorded!
                 averages = None
-            
+
             # Write out torch profiling results:
             if averages:
                 with open(out_top / Path("cpu_time.txt"), 'w') as cpu_times:
@@ -145,11 +145,9 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
             
     
     def __enter__(self):
-        
         self._profiler.__enter__()
         
     def __exit__(self,*exc):
-        
         self._profiler.__exit__(*exc)
     
     def step(self):
