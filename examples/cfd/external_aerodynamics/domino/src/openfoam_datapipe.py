@@ -32,6 +32,9 @@ import vtk
 from modulus.utils.domino.utils import *
 from torch.utils.data import Dataset
 
+AIR_DENSITY = 1.205
+STREAM_VELOCITY = 30.00
+
 
 class DriveSimPaths:
     @staticmethod
@@ -187,6 +190,8 @@ class OpenFoamDataset(Dataset):
             "volume_mesh_centers": np.float32(volume_coordinates),
             "surface_fields": np.float32(surface_fields),
             "filename": cfd_filename,
+            "stream_velocity": STREAM_VELOCITY,
+            "air_density": AIR_DENSITY,
         }
 
 

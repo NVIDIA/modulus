@@ -51,9 +51,6 @@ from modulus.utils.domino.utils import (
 )
 from modulus.utils.sdf import signed_distance_field
 
-AIR_DENSITY = 1.205
-STREAM_VELOCITY = 30.00
-
 
 class DoMINODataPipe(Dataset):
     """
@@ -168,6 +165,14 @@ class DoMINODataPipe(Dataset):
         stl_centers = data_dict["stl_centers"]
         mesh_indices_flattened = data_dict["stl_faces"]
         stl_sizes = data_dict["stl_areas"]
+
+        # Check if stream velocity in keys
+        if "stream_velocity" in data_dict.keys():
+            STREAM_VELOCITY = data_dict["stream_velocity"]
+            AIR_DENSITY = data_dict["air_density"]
+        else:
+            AIR_DENSITY = 1.205
+            STREAM_VELOCITY = 30.00
 
         #
         length_scale = np.amax(np.amax(stl_vertices, 0) - np.amin(stl_vertices, 0))
@@ -486,8 +491,12 @@ class DoMINODataPipe(Dataset):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": STREAM_VELOCITY,
-                "air_density": AIR_DENSITY,
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
         elif self.model_type == "surface":
             return {
@@ -504,8 +513,12 @@ class DoMINODataPipe(Dataset):
                 "surface_fields": surface_fields,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": STREAM_VELOCITY,
-                "air_density": AIR_DENSITY,
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
         elif self.model_type == "volume":
             return {
@@ -522,8 +535,12 @@ class DoMINODataPipe(Dataset):
                 "volume_min_max": vol_grid_max_min,
                 "surface_min_max": surf_grid_max_min,
                 "length_scale": length_scale,
-                "stream_velocity": STREAM_VELOCITY,
-                "air_density": AIR_DENSITY,
+                "stream_velocity": np.expand_dims(
+                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
+                ),
+                "air_density": np.expand_dims(
+                    np.array(AIR_DENSITY, dtype=np.float32), -1
+                ),
             }
 
 

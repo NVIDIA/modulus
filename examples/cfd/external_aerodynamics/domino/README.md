@@ -57,12 +57,13 @@ To train and test the DoMINO model on AWS dataset, follow these steps:
 1. The DoMINO model allows for training both volume and surface fields using a single model
  but currently the recommendation is to train the volume and surface models separately. This
   can be controlled through the config file.
-2. MSE loss for the volume model and RMSE for surface model gives the best results.
+2. MSE loss for both volume and surface model gives the best results.
 3. The surface and volume variable names can change but currently the code only
  supports the variables in that specific order. For example, Pressure, wall-shear
   and turb-visc for surface and velocity, pressure and turb-visc for volume.
 4. Bounding box is configurable and will depend on the usecase. The presets are
  suitable for the AWS DriveAer-ML dataset.
+5. Integral loss factor is currently set to 0.0 as it adversely impacts the training.
 
 The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Blueprint
 demo presented at Supercomputing' 24. Some of the results are shown below.

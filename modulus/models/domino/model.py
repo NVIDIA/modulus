@@ -347,7 +347,7 @@ class NNBasisFunctions(nn.Module):
         self.bn2 = nn.BatchNorm1d(int(base_layer))
         self.bn3 = nn.BatchNorm1d(int(base_layer))
 
-        self.activation = F.gelu
+        self.activation = F.relu
 
     def forward(self, x, padded_value=-10):
         facets = x
@@ -356,6 +356,32 @@ class NNBasisFunctions(nn.Module):
         facets = self.fc3(facets)
 
         return facets
+
+
+class ParameterModel(nn.Module):
+    """Layer to encode parameters such as inlet velocity and air density"""
+
+    def __init__(self, input_features, model_parameters=None):
+        super(ParameterModel, self).__init__()
+        self.input_features = input_features
+
+        base_layer = model_parameters.base_layer
+        self.fc1 = nn.Linear(self.input_features, base_layer)
+        self.fc2 = nn.Linear(base_layer, int(base_layer))
+        self.fc3 = nn.Linear(int(base_layer), int(base_layer))
+        self.bn1 = nn.BatchNorm1d(base_layer)
+        self.bn2 = nn.BatchNorm1d(int(base_layer))
+        self.bn3 = nn.BatchNorm1d(int(base_layer))
+
+        self.activation = F.relu
+
+    def forward(self, x, padded_value=-10):
+        params = x
+        params = self.activation(self.fc1(params))
+        params = self.activation(self.fc2(params))
+        params = self.fc3(params)
+
+        return params
 
 
 class AggregationModel(nn.Module):
@@ -370,15 +396,15 @@ class AggregationModel(nn.Module):
         self.new_change = new_change
         base_layer = model_parameters.base_layer
         self.fc1 = nn.Linear(self.input_features, base_layer)
-        self.fc2 = nn.Linear(base_layer, int(base_layer / 2))
-        self.fc3 = nn.Linear(int(base_layer / 2), int(base_layer / 4))
-        self.fc4 = nn.Linear(int(base_layer / 4), int(base_layer / 8))
-        self.fc5 = nn.Linear(int(base_layer / 8), self.output_features)
+        self.fc2 = nn.Linear(base_layer, int(base_layer))
+        self.fc3 = nn.Linear(int(base_layer), int(base_layer))
+        self.fc4 = nn.Linear(int(base_layer), int(base_layer))
+        self.fc5 = nn.Linear(int(base_layer), self.output_features)
         self.bn1 = nn.BatchNorm1d(base_layer)
-        self.bn2 = nn.BatchNorm1d(int(base_layer / 2))
-        self.bn3 = nn.BatchNorm1d(int(base_layer / 4))
-        self.bn4 = nn.BatchNorm1d(int(base_layer / 8))
-        self.activation = F.gelu
+        self.bn2 = nn.BatchNorm1d(int(base_layer))
+        self.bn3 = nn.BatchNorm1d(int(base_layer))
+        self.bn4 = nn.BatchNorm1d(int(base_layer))
+        self.activation = F.relu
 
     def forward(self, x):
         out = self.activation(self.fc1(x))
@@ -461,6 +487,8 @@ class DoMINO(nn.Module):
     >>> volume_coordinates = torch.randn(bsize, 100, 3).to(device)
     >>> vol_grid_max_min = torch.randn(bsize, 2, 3).to(device)
     >>> surf_grid_max_min = torch.randn(bsize, 2, 3).to(device)
+    >>> stream_velocity = torch.randn(bsize, 1).to(device)
+    >>> air_density = torch.randn(bsize, 1).to(device)
     >>> input_dict = {
     ...            "pos_volume_closest": pos_normals_closest_vol,
     ...            "pos_volume_center_of_mass": pos_normals_com_vol,
@@ -480,6 +508,8 @@ class DoMINO(nn.Module):
     ...            "volume_mesh_centers": volume_coordinates,
     ...            "volume_min_max": vol_grid_max_min,
     ...            "surface_min_max": surf_grid_max_min,
+    ...             "stream_velocity": stream_velocity,
+    ...             "air_density": air_density,
     ...        }
     >>> output = model(input_dict)
     Module ...
@@ -508,6 +538,8 @@ class DoMINO(nn.Module):
         self.surface_neighbors = model_parameters.surface_neighbors
         self.use_surface_normals = model_parameters.use_surface_normals
         self.use_only_normals = model_parameters.use_only_normals
+        self.encode_parameters = model_parameters.encode_parameters
+        self.param_scaling_factors = model_parameters.parameter_model.scaling_params
 
         if self.use_surface_normals:
             if self.use_only_normals:
@@ -516,6 +548,15 @@ class DoMINO(nn.Module):
                 input_features_surface = input_features + 4
         else:
             input_features_surface = input_features
+
+        if self.encode_parameters:
+            # Defining the parameter model
+            base_layer_p = model_parameters.parameter_model.base_layer
+            self.parameter_model = ParameterModel(
+                input_features=2, model_parameters=model_parameters.parameter_model
+            )
+        else:
+            base_layer_p = 0
 
         self.geo_rep = GeometryRep(
             input_features=input_features,
@@ -583,7 +624,7 @@ class DoMINO(nn.Module):
         base_layer_geo = model_parameters.geometry_local.base_layer
         self.fc_1 = nn.Linear(self.neighbors_in_radius * 3, base_layer_geo)
         self.fc_2 = nn.Linear(base_layer_geo, base_layer_geo)
-        self.activation = F.gelu
+        self.activation = F.relu
 
         # Aggregation model
         if self.output_features_surf is not None:
@@ -594,7 +635,8 @@ class DoMINO(nn.Module):
                     AggregationModel(
                         input_features=position_encoder_base_neurons
                         + base_layer_nn
-                        + base_layer_geo,
+                        + base_layer_geo
+                        + base_layer_p,
                         output_features=1,
                         model_parameters=model_parameters.aggregation_model,
                     )
@@ -608,7 +650,8 @@ class DoMINO(nn.Module):
                     AggregationModel(
                         input_features=position_encoder_base_neurons
                         + base_layer_nn
-                        + base_layer_geo,
+                        + base_layer_geo
+                        + base_layer_p,
                         output_features=1,
                         model_parameters=model_parameters.aggregation_model,
                     )
@@ -724,12 +767,34 @@ class DoMINO(nn.Module):
         surface_neighbors_normals,
         surface_areas,
         surface_neighbors_areas,
+        inlet_velocity,
+        air_density,
     ):
         """Function to approximate solution given the neighborhood information"""
         num_variables = self.num_variables_surf
         nn_basis = self.nn_basis_surf
         agg_model = self.agg_model_surf
         num_sample_points = surface_mesh_neighbors.shape[2] + 1
+
+        if self.encode_parameters:
+            inlet_velocity = torch.unsqueeze(inlet_velocity, 1)
+            inlet_velocity = inlet_velocity.expand(
+                inlet_velocity.shape[0],
+                surface_mesh_centers.shape[1],
+                inlet_velocity.shape[2],
+            )
+            inlet_velocity = inlet_velocity / self.param_scaling_factors[0]
+
+            air_density = torch.unsqueeze(air_density, 1)
+            air_density = air_density.expand(
+                air_density.shape[0],
+                surface_mesh_centers.shape[1],
+                air_density.shape[2],
+            )
+            air_density = air_density / self.param_scaling_factors[1]
+
+            params = torch.cat((inlet_velocity, air_density), axis=-1)
+            param_encoding = self.parameter_model(params)
 
         if self.use_surface_normals:
             if self.use_only_normals:
@@ -773,6 +838,8 @@ class DoMINO(nn.Module):
                     )
                 basis_f = nn_basis[f](volume_m_c)
                 output = torch.cat((basis_f, encoding_node, encoding_g), axis=-1)
+                if self.encode_parameters:
+                    output = torch.cat((output, param_encoding), axis=-1)
                 if p == 0:
                     output_center = agg_model[f](output)
                 else:
@@ -798,6 +865,8 @@ class DoMINO(nn.Module):
         volume_mesh_centers,
         encoding_g,
         encoding_node,
+        inlet_velocity,
+        air_density,
         eval_mode,
         num_sample_points=20,
         noise_intensity=50,
@@ -811,6 +880,25 @@ class DoMINO(nn.Module):
             num_variables = self.num_variables_surf
             nn_basis = self.nn_basis_surf
             agg_model = self.agg_model_surf
+
+        if self.encode_parameters:
+            inlet_velocity = torch.unsqueeze(inlet_velocity, 1)
+            inlet_velocity = inlet_velocity.expand(
+                inlet_velocity.shape[0],
+                volume_mesh_centers.shape[1],
+                inlet_velocity.shape[2],
+            )
+            inlet_velocity = inlet_velocity / self.param_scaling_factors[0]
+
+            air_density = torch.unsqueeze(air_density, 1)
+            air_density = air_density.expand(
+                air_density.shape[0], volume_mesh_centers.shape[1], air_density.shape[2]
+            )
+            air_density = air_density / self.param_scaling_factors[1]
+
+            params = torch.cat((inlet_velocity, air_density), axis=-1)
+            param_encoding = self.parameter_model(params)
+
         for f in range(num_variables):
             for p in range(num_sample_points):
                 if p == 0:
@@ -827,6 +915,8 @@ class DoMINO(nn.Module):
                     volume_m_c = volume_mesh_centers + noise
                 basis_f = nn_basis[f](volume_m_c)
                 output = torch.cat((basis_f, encoding_node, encoding_g), axis=-1)
+                if self.encode_parameters:
+                    output = torch.cat((output, param_encoding), axis=-1)
                 if p == 0:
                     output_center = agg_model[f](output)
                 else:
@@ -862,6 +952,10 @@ class DoMINO(nn.Module):
         # Scaling factors
         surf_max = data_dict["surface_min_max"][:, 1]
         surf_min = data_dict["surface_min_max"][:, 0]
+
+        # Parameters
+        stream_velocity = data_dict["stream_velocity"]
+        air_density = data_dict["air_density"]
 
         if self.output_features_vol is not None:
             # Represent geometry on computational grid
@@ -931,6 +1025,8 @@ class DoMINO(nn.Module):
                 volume_mesh_centers,
                 encoding_g_vol,
                 encoding_node_vol,
+                stream_velocity,
+                air_density,
                 eval_mode="volume",
             )
         else:
@@ -950,7 +1046,7 @@ class DoMINO(nn.Module):
             surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
             # Calculate local geometry encoding for surface
             encoding_g_surf = self.geo_encoding_local_surface(
-                encoding_g, surface_mesh_centers, s_grid
+                0.5 * encoding_g_surf, surface_mesh_centers, s_grid
             )
 
             # Approximate solution on surface cell center
@@ -959,6 +1055,8 @@ class DoMINO(nn.Module):
                     surface_mesh_centers,
                     encoding_g_surf,
                     encoding_node_surf,
+                    stream_velocity,
+                    air_density,
                     eval_mode="surface",
                     num_sample_points=1,
                     noise_intensity=500,
@@ -973,6 +1071,8 @@ class DoMINO(nn.Module):
                     surface_neighbors_normals,
                     surface_areas,
                     surface_neighbors_areas,
+                    stream_velocity,
+                    air_density,
                 )
         else:
             output_surf = None
