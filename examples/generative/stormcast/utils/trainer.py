@@ -27,7 +27,7 @@ from modulus.metrics.diffusion import EDMLoss
 from modulus.utils.generative import InfiniteSampler
 
 from modulus.launch.utils import save_checkpoint, load_checkpoint
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper, LaunchLogger
 from utils.nn import (
     regression_model_forward,
     diffusion_model_forward,
@@ -39,6 +39,7 @@ import matplotlib.pyplot as plt
 import wandb
 from utils.spectrum import ps1d_plots
 from torch.nn.utils import clip_grad_norm_
+from contextlib import nullcontext
 
 
 logger = PythonLogger("train")
@@ -58,7 +59,13 @@ def training_loop(cfg):
     use_regression_net = cfg.model.use_regression_net
     previous_step_conditioning = cfg.model.previous_step_conditioning
     resume_checkpoint = cfg.training.resume_checkpoint
-    log_to_wandb = cfg.training.log_to_wandb
+    log_to_wandb = cfg.logging.type == "wandb" and dist.rank == 0
+    log_to_mlflow = cfg.logging.type == "mlflow" and dist.rank == 0
+    if log_to_mlflow:
+        LaunchLogger.initialize(use_mlflow=True)
+        logging_context = LaunchLogger("training")
+    else:
+        logging_context = nullcontext()
 
     loss_type = cfg.training.loss
     if loss_type == "regression":
@@ -200,273 +207,285 @@ def training_loop(cfg):
     logger0.info(
         f"Training up to {total_train_steps} steps starting from step {total_steps}..."
     )
-    stats_jsonl = None
-    wandb_logs = {}
+    scalar_logs = {}
+    figure_logs = {}
     done = total_steps >= total_train_steps
 
     train_start = time.time()
     avg_train_loss = 0
     train_steps = 0
-    while not done:
-        # Accumulate gradients.
-        optimizer.zero_grad(set_to_none=True)
-        batch = next(dataset_iterator)
-        hrrr_0 = batch["hrrr"][0].to(device).to(torch.float32)
-        hrrr_1 = batch["hrrr"][1].to(device).to(torch.float32)
+    with logging_context:
+        while not done:
+            # Accumulate gradients.
+            optimizer.zero_grad(set_to_none=True)
+            batch = next(dataset_iterator)
+            hrrr_0 = batch["hrrr"][0].to(device).to(torch.float32)
+            hrrr_1 = batch["hrrr"][1].to(device).to(torch.float32)
 
-        if use_regression_net:
-            era5 = batch["era5"][0].to(device).to(torch.float32)
+            if use_regression_net:
+                era5 = batch["era5"][0].to(device).to(torch.float32)
 
-            with torch.no_grad():
-                reg_out = regression_model_forward(
-                    regression_net, hrrr_0, era5, invariant_tensor
-                )
-                hrrr_0 = torch.cat(
-                    (
-                        hrrr_0[:, input_channel_indices, :, :],
-                        reg_out[:, input_channel_indices, :, :],
-                    ),
-                    dim=1,
-                )
-                hrrr_1 = hrrr_1 - reg_out
-                del reg_out
-
-        elif train_regression_unet:
-            assert diffusion_channel_indices == input_channel_indices
-
-            era5 = batch["era5"][0].to(device).to(torch.float32)
-
-            hrrr_0 = torch.cat((hrrr_0[:, input_channel_indices, :, :], era5), dim=1)
-
-        hrrr_1 = hrrr_1[
-            :, diffusion_channel_indices, :, :
-        ]  # targets of the diffusion model
-
-        hrrr_0 = torch.cat((hrrr_0, invariant_tensor), dim=1)
-
-        loss = loss_fn(
-            net=ddp, images=hrrr_1, condition=hrrr_0, augment_pipe=augment_pipe
-        )
-        channelwise_loss = loss.mean(dim=(0, 2, 3))
-        channelwise_loss_dict = {
-            f"ChLoss/{diffusion_channels[i]}": channelwise_loss[i].item()
-            for i in range(target_channels)
-        }
-        if log_to_wandb:
-            wandb_logs["channelwise_loss"] = channelwise_loss_dict
-
-        loss_value = loss.sum() / target_channels
-        loss_value.backward()
-
-        if cfg.training.clip_grad_norm > 0:
-            clip_grad_norm_(net.parameters(), cfg.training.clip_grad_norm)
-
-        # Update weights.
-        for g in optimizer.param_groups:
-            g["lr"] = cfg.training.lr * min(
-                total_steps / max(cfg.training.lr_rampup_steps, 1e-8), 1
-            )
-            if log_to_wandb:
-                wandb_logs["lr"] = g["lr"]
-        for param in net.parameters():
-            if param.grad is not None:
-                torch.nan_to_num(
-                    param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
-                )
-
-        optimizer.step()
-
-        if dist.world_size > 1:
-            torch.distributed.barrier()
-            torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
-
-        avg_train_loss += loss.mean().cpu().item()
-        train_steps += 1
-        if log_to_wandb:
-            wandb_logs["loss"] = loss.mean().cpu().item() / train_steps
-
-        # Perform maintenance tasks once per tick.
-        total_steps += 1
-        done = total_steps >= total_train_steps
-
-        # Perform validation step
-        if total_steps % cfg.training.validation_freq == 0:
-            valid_start = time.time()
-            batch = next(valid_dataset_iterator)
-
-            with torch.no_grad():
-
-                hrrr_0, hrrr_1 = batch["hrrr"]
-                hrrr_0 = hrrr_0.to(torch.float32).to(device)
-                hrrr_1 = hrrr_1.to(torch.float32).to(device)
-
-                if use_regression_net:
-                    with torch.no_grad():
-                        era5 = batch["era5"][0].to(device).to(torch.float32)
-                        reg_out = regression_model_forward(
-                            regression_net, hrrr_0, era5, invariant_tensor
-                        )
-                        hrrr_0 = torch.cat(
-                            (
-                                hrrr_0[:, input_channel_indices, :, :],
-                                reg_out[:, input_channel_indices, :, :],
-                            ),
-                            dim=1,
-                        )
-
-                        loss_target = hrrr_1 - reg_out
-                        output_images = diffusion_model_forward(
-                            net,
-                            hrrr_0,
-                            diffusion_channel_indices,
-                            invariant_tensor,
-                            sampler_args=dict(cfg.sampler.args),
-                        )
-
-                        valid_loss = loss_fn(
-                            net=ddp,
-                            images=loss_target[:, diffusion_channel_indices],
-                            condition=torch.cat((hrrr_0, invariant_tensor), dim=1),
-                            augment_pipe=augment_pipe,
-                        )
-                        output_images += reg_out[:, diffusion_channel_indices, :, :]
-                        del reg_out
-
-                elif train_regression_unet:
-                    assert (
-                        use_regression_net == False
-                    ), "use_regression_net must be False when training regression unet"
-                    assert (
-                        input_channel_indices == diffusion_channel_indices
-                    ), "input_channel_indices must be equal to diffusion_channel_indices when training regression unet"
-                    condition = torch.cat(
+                with torch.no_grad():
+                    reg_out = regression_model_forward(
+                        regression_net, hrrr_0, era5, invariant_tensor
+                    )
+                    hrrr_0 = torch.cat(
                         (
                             hrrr_0[:, input_channel_indices, :, :],
-                            era5[:],
-                            invariant_tensor,
+                            reg_out[:, input_channel_indices, :, :],
                         ),
                         dim=1,
                     )
-                    valid_loss, output_images = loss_fn(
-                        net=ddp,
-                        images=hrrr_1[:, diffusion_channel_indices, :, :],
-                        condition=condition,
-                        augment_pipe=augment_pipe,
-                        return_model_outputs=True,
+                    hrrr_1 = hrrr_1 - reg_out
+                    del reg_out
+
+            elif train_regression_unet:
+                assert diffusion_channel_indices == input_channel_indices
+
+                era5 = batch["era5"][0].to(device).to(torch.float32)
+
+                hrrr_0 = torch.cat(
+                    (hrrr_0[:, input_channel_indices, :, :], era5), dim=1
+                )
+
+            hrrr_1 = hrrr_1[
+                :, diffusion_channel_indices, :, :
+            ]  # targets of the diffusion model
+
+            hrrr_0 = torch.cat((hrrr_0, invariant_tensor), dim=1)
+
+            loss = loss_fn(
+                net=ddp, images=hrrr_1, condition=hrrr_0, augment_pipe=augment_pipe
+            )
+            channelwise_loss = loss.mean(dim=(0, 2, 3))
+            channelwise_loss_dict = {
+                f"ChLoss/{diffusion_channels[i]}": channelwise_loss[i].item()
+                for i in range(target_channels)
+            }
+            if log_to_wandb or log_to_mlflow:
+                scalar_logs.update(channelwise_loss_dict)
+
+            loss_value = loss.sum() / target_channels
+            loss_value.backward()
+
+            if cfg.training.clip_grad_norm > 0:
+                clip_grad_norm_(net.parameters(), cfg.training.clip_grad_norm)
+
+            # Update weights.
+            for g in optimizer.param_groups:
+                g["lr"] = cfg.training.lr * min(
+                    total_steps / max(cfg.training.lr_rampup_steps, 1e-8), 1
+                )
+                if log_to_wandb or log_to_mlflow:
+                    scalar_logs["lr"] = g["lr"]
+            for param in net.parameters():
+                if param.grad is not None:
+                    torch.nan_to_num(
+                        param.grad, nan=0, posinf=1e5, neginf=-1e5, out=param.grad
                     )
+
+            optimizer.step()
+
+            if dist.world_size > 1:
+                torch.distributed.barrier()
+                torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
+
+            avg_train_loss += loss.mean().cpu().item()
+            train_steps += 1
+            if log_to_wandb or log_to_mlflow:
+                scalar_logs["loss"] = loss.mean().cpu().item() / train_steps
+
+            # Perform maintenance tasks once per tick.
+            total_steps += 1
+            done = total_steps >= total_train_steps
+
+            # Perform validation step
+            if total_steps % cfg.training.validation_freq == 0:
+                valid_start = time.time()
+                batch = next(valid_dataset_iterator)
+
+                with torch.no_grad():
+
+                    hrrr_0, hrrr_1 = batch["hrrr"]
+                    hrrr_0 = hrrr_0.to(torch.float32).to(device)
+                    hrrr_1 = hrrr_1.to(torch.float32).to(device)
+
+                    if use_regression_net:
+                        with torch.no_grad():
+                            era5 = batch["era5"][0].to(device).to(torch.float32)
+                            reg_out = regression_model_forward(
+                                regression_net, hrrr_0, era5, invariant_tensor
+                            )
+                            hrrr_0 = torch.cat(
+                                (
+                                    hrrr_0[:, input_channel_indices, :, :],
+                                    reg_out[:, input_channel_indices, :, :],
+                                ),
+                                dim=1,
+                            )
+
+                            loss_target = hrrr_1 - reg_out
+                            output_images = diffusion_model_forward(
+                                net,
+                                hrrr_0,
+                                diffusion_channel_indices,
+                                invariant_tensor,
+                                sampler_args=dict(cfg.sampler.args),
+                            )
+
+                            valid_loss = loss_fn(
+                                net=ddp,
+                                images=loss_target[:, diffusion_channel_indices],
+                                condition=torch.cat((hrrr_0, invariant_tensor), dim=1),
+                                augment_pipe=augment_pipe,
+                            )
+                            output_images += reg_out[:, diffusion_channel_indices, :, :]
+                            del reg_out
+
+                    elif train_regression_unet:
+                        assert (
+                            use_regression_net == False
+                        ), "use_regression_net must be False when training regression unet"
+                        assert (
+                            input_channel_indices == diffusion_channel_indices
+                        ), "input_channel_indices must be equal to diffusion_channel_indices when training regression unet"
+                        condition = torch.cat(
+                            (
+                                hrrr_0[:, input_channel_indices, :, :],
+                                era5[:],
+                                invariant_tensor,
+                            ),
+                            dim=1,
+                        )
+                        valid_loss, output_images = loss_fn(
+                            net=ddp,
+                            images=hrrr_1[:, diffusion_channel_indices, :, :],
+                            condition=condition,
+                            augment_pipe=augment_pipe,
+                            return_model_outputs=True,
+                        )
+
+                        if log_to_wandb or log_to_mlflow:
+                            channelwise_valid_loss = valid_loss.mean(dim=[0, 2, 3])
+                            channelwise_valid_loss_dict = {
+                                f"ChLoss_valid/{diffusion_channels[i]}": channelwise_valid_loss[
+                                    i
+                                ].item()
+                                for i in range(target_channels)
+                            }
+                            scalar_logs.update(channelwise_valid_loss_dict)
+
+                    hrrr_1 = hrrr_1[:, diffusion_channel_indices, :, :]
+
+                    if dist.world_size > 1:
+                        torch.distributed.barrier()
+                        torch.distributed.all_reduce(
+                            valid_loss, op=torch.distributed.ReduceOp.AVG
+                        )
+                    val_loss = valid_loss.mean().cpu().item()
+                    if log_to_wandb or log_to_mlflow:
+                        scalar_logs["valid_loss"] = val_loss
+
+                # Save plots locally (and optionally to wandb)
+                if dist.rank == 0:
+
+                    for i in range(output_images.shape[0]):
+                        image = output_images[i].cpu().numpy()
+                        fields = ["u10m", "v10m", "t2m", "refc", "q1", "q5", "q10"]
+
+                        # Compute spectral metrics
+                        figs, spec_ratios = ps1d_plots(
+                            output_images[i], hrrr_1[i], fields, diffusion_channels
+                        )
+
+                        for f_ in fields:
+                            f_index = diffusion_channels.index(f_)
+                            image_dir = os.path.join(cfg.training.rundir, "images", f_)
+                            generated = image[f_index]
+                            truth = hrrr_1[i, f_index].cpu().numpy()
+
+                            fig, (a, b) = plt.subplots(1, 2)
+                            im = a.imshow(generated)
+                            a.set_title("generated, {}.png".format(f_))
+                            plt.colorbar(im, fraction=0.046, pad=0.04)
+                            im = b.imshow(truth)
+                            b.set_title("truth")
+                            plt.colorbar(im, fraction=0.046, pad=0.04)
+                            os.makedirs(image_dir, exist_ok=True)
+                            plt.savefig(
+                                os.path.join(image_dir, f"{total_steps}_{i}_{f_}.png")
+                            )
+                            plt.close("all")
+
+                            specfig = "PS1D_" + f_
+                            figs[specfig].savefig(
+                                os.path.join(
+                                    image_dir, f"{total_steps}{i}{f_}_spec.png"
+                                )
+                            )
+                            plt.close(figs[specfig])
+                            if log_to_wandb or log_to_mlflow:
+                                scalar_logs.update(spec_ratios)
+
+                                for figname, plot in figs.items():
+                                    figure_logs[figname] = plot
+                                figure_logs.update({f"generated_{f_}": fig})
 
                     if log_to_wandb:
-                        channelwise_valid_loss = valid_loss.mean(dim=[0, 2, 3])
-                        channelwise_valid_loss_dict = {
-                            f"ChLoss_valid/{diffusion_channels[i]}": channelwise_valid_loss[
-                                i
-                            ].item()
-                            for i in range(target_channels)
-                        }
-                        wandb_logs[
-                            "channelwise_valid_loss"
-                        ] = channelwise_valid_loss_dict
+                        wandb.log(scalar_logs, step=total_steps)
+                        for name, fig in figure_logs.items():
+                            figure_logs[name] = wandb.Image(fig)
+                        wandb.log(scalar_logs | figure_logs, step=total_steps)
+                    elif log_to_mlflow:
+                        logging_context.log_minibatch(scalar_logs)
+                        for name, fig in figure_logs.items():
+                            logging_context.log_figure(
+                                figure=fig, artifact_file=name + ".png"
+                            )
 
-                hrrr_1 = hrrr_1[:, diffusion_channel_indices, :, :]
+                valid_time = time.time() - valid_start
 
-                if dist.world_size > 1:
-                    torch.distributed.barrier()
-                    torch.distributed.all_reduce(
-                        valid_loss, op=torch.distributed.ReduceOp.AVG
-                    )
-                val_loss = valid_loss.mean().cpu().item()
-                if log_to_wandb:
-                    wandb_logs["valid_loss"] = val_loss
+            # Print training stats
+            current_time = time.time()
+            if total_steps % cfg.training.print_progress_freq == 0:
+                fields = []
+                fields += [f"steps {total_steps:<5d}"]
+                fields += [f"samples {total_steps*batch_size}"]
+                fields += [f"tot_time {current_time - start_time: .2f}"]
+                fields += [
+                    f"step_time {(current_time - train_start - valid_time) / train_steps : .2f}"
+                ]
+                fields += [f"valid_time {valid_time: .2f}"]
+                fields += [
+                    f"cpumem {psutil.Process(os.getpid()).memory_info().rss / 2**30:<6.2f}"
+                ]
+                fields += [
+                    f"gpumem {torch.cuda.max_memory_allocated(device) / 2**30:<6.2f}"
+                ]
+                fields += [f"train_loss {avg_train_loss/train_steps:<6.3f}"]
+                fields += [f"val_loss {val_loss:<6.3f}"]
+                logger0.info(" ".join(fields))
 
-            # Save plots locally (and optionally to wandb)
-            if dist.rank == 0:
+                # Reset counters
+                train_steps = 0
+                train_start = time.time()
+                avg_train_loss = 0
+                torch.cuda.reset_peak_memory_stats()
 
-                for i in range(output_images.shape[0]):
-                    image = output_images[i].cpu().numpy()
-                    fields = ["u10m", "v10m", "t2m", "refc", "q1", "q5", "q10"]
+            # Save full dump of the training state.
+            if (
+                (done or total_steps % cfg.training.checkpoint_freq == 0)
+                and total_steps != 0
+                and dist.rank == 0
+            ):
 
-                    # Compute spectral metrics
-                    figs, spec_ratios = ps1d_plots(
-                        output_images[i], hrrr_1[i], fields, diffusion_channels
-                    )
+                save_checkpoint(
+                    path=os.path.join(cfg.training.rundir, "checkpoints"),
+                    models=net,
+                    optimizer=optimizer,
+                    epoch=total_steps,
+                )
 
-                    for f_ in fields:
-                        f_index = diffusion_channels.index(f_)
-                        image_dir = os.path.join(cfg.training.rundir, "images", f_)
-                        generated = image[f_index]
-                        truth = hrrr_1[i, f_index].cpu().numpy()
-
-                        fig, (a, b) = plt.subplots(1, 2)
-                        im = a.imshow(generated)
-                        a.set_title("generated, {}.png".format(f_))
-                        plt.colorbar(im, fraction=0.046, pad=0.04)
-                        im = b.imshow(truth)
-                        b.set_title("truth")
-                        plt.colorbar(im, fraction=0.046, pad=0.04)
-                        os.makedirs(image_dir, exist_ok=True)
-                        plt.savefig(
-                            os.path.join(image_dir, f"{total_steps}_{i}_{f_}.png")
-                        )
-                        plt.close("all")
-
-                        specfig = "PS1D_" + f_
-                        figs[specfig].savefig(
-                            os.path.join(image_dir, f"{total_steps}{i}{f_}_spec.png")
-                        )
-                        plt.close(figs[specfig])
-                        if log_to_wandb:
-                            # Save plots as wandb Images
-                            for figname, plot in figs.items():
-                                wandb_logs[figname] = wandb.Image(plot)
-                            wandb_logs.update({f"generated_{f_}": wandb.Image(fig)})
-
-                if log_to_wandb:
-                    wandb_logs.update(spec_ratios)
-                    wandb.log(wandb_logs, step=total_steps)
-
-            valid_time = time.time() - valid_start
-
-        # Print training stats
-        current_time = time.time()
-        if total_steps % cfg.training.print_progress_freq == 0:
-            fields = []
-            fields += [f"steps {total_steps:<5d}"]
-            fields += [f"samples {total_steps*batch_size}"]
-            fields += [f"tot_time {current_time - start_time: .2f}"]
-            fields += [
-                f"step_time {(current_time - train_start - valid_time) / train_steps : .2f}"
-            ]
-            fields += [f"valid_time {valid_time: .2f}"]
-            fields += [
-                f"cpumem {psutil.Process(os.getpid()).memory_info().rss / 2**30:<6.2f}"
-            ]
-            fields += [
-                f"gpumem {torch.cuda.max_memory_allocated(device) / 2**30:<6.2f}"
-            ]
-            fields += [f"train_loss {avg_train_loss/train_steps:<6.3f}"]
-            fields += [f"val_loss {val_loss:<6.3f}"]
-            logger0.info(" ".join(fields))
-
-            # Reset counters
-            train_steps = 0
-            train_start = time.time()
-            avg_train_loss = 0
-            torch.cuda.reset_peak_memory_stats()
-
-        # Save full dump of the training state.
-        if (
-            (done or total_steps % cfg.training.checkpoint_freq == 0)
-            and total_steps != 0
-            and dist.rank == 0
-        ):
-
-            save_checkpoint(
-                path=os.path.join(cfg.training.rundir, "checkpoints"),
-                models=net,
-                optimizer=optimizer,
-                epoch=total_steps,
-            )
-
-    # Done.
-    torch.distributed.barrier()
-    logger0.info("\nExiting...")
+        # Done.
+        torch.distributed.barrier()
+        logger0.info("\nExiting...")
