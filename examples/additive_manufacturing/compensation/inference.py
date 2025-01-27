@@ -1,8 +1,6 @@
 import glob
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
 import numpy as np
 import torch
 import torch_geometric
@@ -13,6 +11,7 @@ from hydra import compose, initialize
 from utils import log_string, tic, toc
 
 from modulus.models.dgcnn.dgcnn_compensation import DGCNN
+
 # from modulus.models.dgcnn.dgcnn_compensation import DGCNN_ocardo
 
 
@@ -164,12 +163,12 @@ def main():
             fmt="%.8f",
             delimiter=",",
         )
-        log_string(LOG_FOUT, f"Wrote to Compensated pointcloud: {part_name[:-4]}_comp.csv")
+        log_string(
+            LOG_FOUT, f"Wrote to Compensated pointcloud: {part_name[:-4]}_comp.csv"
+        )
 
         cad.vertices = cad_comp_res
-        cad.export(
-            os.path.join(subfolder, part_name[:-4] + "_comp.stl")
-        )
+        cad.export(os.path.join(subfolder, part_name[:-4] + "_comp.stl"))
         log_string(LOG_FOUT, f"Wrote to Compensated mesh: {part_name[:-4]}_comp.stl")
 
         if cfg.inference_options.save_extra:
@@ -186,7 +185,10 @@ def main():
                 fmt="%.8f",
                 delimiter=",",
             )
-        log_string(LOG_FOUT, "Wrote to deviation from the original CAD, and deviation from the compensated CAD")
+        log_string(
+            LOG_FOUT,
+            "Wrote to deviation from the original CAD, and deviation from the compensated CAD",
+        )
 
         toc()
 

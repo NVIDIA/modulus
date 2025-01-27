@@ -19,6 +19,8 @@
 # limitations under the License.
 
 
+from dataclasses import dataclass
+
 import torch
 import torch.nn as nn
 import torch_geometric
@@ -27,6 +29,46 @@ from torch.nn import Sequential as Seq
 from torch_geometric.nn import DynamicEdgeConv, EdgeConv, knn_graph
 
 import modulus  # noqa: F401 for docs
+
+from ..meta import ModelMetaData
+from ..module import Module
+
+
+@dataclass
+class MetaData(ModelMetaData):
+    name: str = "GraphComPNet"
+    # Optimization
+    jit: bool = False
+    cuda_graphs: bool = True
+    amp_cpu: bool = False  # Reflect padding not supported in bfloat16
+    amp_gpu: bool = False
+    # Inference
+    onnx_cpu: bool = False
+    onnx_gpu: bool = False
+    onnx_runtime: bool = False
+    # Physics informed
+    var_dim: int = 1
+    func_torch: bool = False
+    auto_grad: bool = False
+
+
+def MLP(channels, batch_norm=True):
+    """
+    Set up the MLP layer with NN.linear
+
+    :param channels:    channel[0]:in_features
+                        channel[1]:out_features
+    :param batch_norm:
+    :return: nn.Sequentially structured MLP model
+    """
+    return nn.Sequential(
+        *[
+            nn.Sequential(
+                nn.Linear(channels[i - 1], channels[i]), nn.ReLU()
+            )  # , nn.BatchNorm1d(channels[i]))
+            for i in range(1, len(channels))
+        ]
+    )
 
 
 class DynamicEdgeConv2(EdgeConv):
@@ -59,26 +101,7 @@ class DynamicEdgeConv2(EdgeConv):
         return "{}(nn={}, k={})".format(self.__class__.__name__, self.nn, self.k)
 
 
-def MLP(channels, batch_norm=True):
-    """
-    Set up the MLP layer with NN.linear
-
-    :param channels:    channel[0]:in_features
-                        channel[1]:out_features
-    :param batch_norm:
-    :return: nn.Sequentially structured MLP model
-    """
-    return nn.Sequential(
-        *[
-            nn.Sequential(
-                nn.Linear(channels[i - 1], channels[i]), nn.ReLU()
-            )  # , nn.BatchNorm1d(channels[i]))
-            for i in range(1, len(channels))
-        ]
-    )
-
-
-class DGCNN(torch.nn.Module):
+class DGCNN(Module):
     """
     A modified of EdgeConv blocks with the DGCNN backbone.
     Applies convolution to the edge features.
@@ -103,8 +126,14 @@ class DGCNN(torch.nn.Module):
     Reference of DGCNN backbone: https://arxiv.org/pdf/1801.07829
     """
 
-    def __init__(self, k=20, aggr="max"):
-        super().__init__()
+    def __init__(
+        self,
+        k: int = 20,
+        aggr: str = "max",
+    ):
+        if not (k >= 0):
+            raise ValueError("Invalid arch params")
+        super().__init__(meta=MetaData(name="dgcnn"))
 
         self.conv1 = DynamicEdgeConv2(MLP([3 * 2, 64]), k, aggr)
         self.conv2 = DynamicEdgeConv2(MLP([64 * 2, 128]), k, aggr)
@@ -124,7 +153,7 @@ class DGCNN(torch.nn.Module):
         return x + x4
 
 
-class DGCNN_ocardo(torch.nn.Module):
+class DGCNN_ocardo(Module):
     """
     Variation of EdgeConv blocks with the DGCNN backbone: https://arxiv.org/pdf/1801.07829
     Model architecture tuned for optimal performance on the Orcardo dataset
@@ -144,8 +173,14 @@ class DGCNN_ocardo(torch.nn.Module):
     Reference of DGCNN backbone: https://arxiv.org/pdf/1801.07829
     """
 
-    def __init__(self, k=5, aggr="max"):
-        super().__init__()
+    def __init__(
+        self,
+        k: int = 5,
+        aggr: str = "max",
+    ):
+        if not (k >= 0):
+            raise ValueError("Invalid arch params")
+        super().__init__(meta=MetaData(name="dgcnn_orcardo"))
 
         self.conv1 = DynamicEdgeConv2(MLP([3 * 2, 64]), k, aggr)
         self.conv2 = DynamicEdgeConv2(MLP([64 * 2, 64]), k, aggr)
@@ -176,15 +211,3 @@ class DGCNN_ocardo(torch.nn.Module):
         x6 = self.lin1(feat)
         # residual connection
         return x + x6
-
-
-# if __name__ == "__main__":
-#     from dataloader import Ocardo
-#
-#     device = torch.device("cuda")
-#     m = DGCNN_ocardo().to(device)
-#     dataset = Ocardo(num_points=50000)
-#     train_loader = torch_geometric.data.DataListLoader(dataset, batch_size=2)
-#     inputs = next(iter(train_loader))
-#     inputs = inputs  # .to(device)
-#     res = m(inputs)

@@ -22,7 +22,7 @@
 import os
 
 # test diff number of devices
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import numpy as np
 import torch
 import torch.distributed as distributed
