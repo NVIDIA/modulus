@@ -10,35 +10,12 @@ import contextlib
 
 from dataclasses import dataclass, replace
 
-from . core import _Profiler_Singleton, ModulusProfilerWrapper, annotate
+from . core import _Profiler_Singleton, ModulusProfilerWrapper
 
 import torch
 from torch.profiler import   ProfilerActivity, record_function, profile, schedule
 
 import functools
-
-class torch_annotate(annotate):
-    
-    def __call__(self, func):
-        """
-        Pytorch does not support function decoration annotation.
-        Do nothing (null decorator)
-        """
-        @functools.wraps(func)
-        def inner(*fn_args, **fn_kwargs):
-            return func(*fn_args, **fn_kwargs)
-        
-        return inner
-
-    def __init__(self, *args, **kwargs):
-        if len(args) > 0:
-            self.name = args[0]
-        else:
-            self.name = None
-
-    def __enter__(self, *args):
-        if self.name: return record_function(self.name)
-        else: return self
 
 @dataclass
 class TorchProfilerConfig:
@@ -60,21 +37,14 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
     
     _name : str = "torch"
     
-    annotate = torch_annotate
-    
     # Overload any of these:
-    _is_context    = True
-    _is_annotation = True
-    _is_decorator  = False
+    _is_context   = True
+    _is_decorator = False
     
     def __init__(self, config: Optional[TorchProfilerConfig] = None, **config_overrides):
         
         default_config = TorchProfilerConfig()
         
-        # Pytorch is a context and annotation but not a wrapper:
-        self._is_context    = True
-        self._is_annotation = False
-        self._is_decorator  = False
         
         # Replace any overrides right into the config:
         if config is None: 
@@ -89,7 +59,6 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
             if torch.cuda.is_available(): 
                 torch_prof_activities.append(ProfilerActivity.CUDA)
             self._config.torch_prof_activities = torch_prof_activities
-        
         
         return
         
@@ -112,6 +81,10 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
                 
                 
         if not self.enabled: return
+        
+        # Avoid finalizing if we never initialized:
+        if not self.initialized: return
+        
         # Prevent double finalization:
         if self.finalized: return
         # Get the output directory:

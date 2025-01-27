@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from typing import List, Tuple, Optional, Callable
 
 
-from . core import _Profiler_Singleton, ModulusProfilerWrapper, annotate
+from . core import _Profiler_Singleton, ModulusProfilerWrapper
 
 import functools
 
@@ -29,22 +29,19 @@ class nvtxWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
     
     _name : str = "nvtx"
         
-    annotate = nvtx.annotate
-        
     def __init__(self):
         
         
-        # Pytorch is a context and annotation but not a wrapper:
+        # nvtx is an annotation.  But we can use it as a context
+        # to automatically annotate every function.  This is expensive.
         self._is_context    = True
-        self._is_annotation = True
         self._is_decorator  = False
         
-
-        
     def _standup(self):
-        # Nothing to do here ... 
+        # Create a profiler instance but don't enable it yet
         if nvtx_avail:
-            pass
+            self.pr = nvtx.Profile()
+            self.enabled = True
         else:
             self.enabled = False
         self._initialized = True
@@ -59,3 +56,21 @@ class nvtxWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
         
         # Make this profiler completed:
         self.finalized = True
+        
+    def __enter__(self):
+        """
+        Using nvtx in the profiler will enable auto-annotation
+        See (https://nvtx.readthedocs.io/en/latest/auto.html) for
+        more details
+        """
+        if self.enabled:
+            self.pr.enable()
+        
+        return self
+    
+    def __exit__(self, *exc):
+        """ 
+        Disable the profiler
+        """
+        if self.enabled:
+            self.pr.disable()

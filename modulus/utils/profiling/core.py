@@ -27,32 +27,6 @@ from modulus.distributed import DistributedManager
 from abc import ABC, abstractmethod
 
 
-    
-class annotate:
-    """
-    Basic annotation class that can handle annotating with contexts 
-    as well as annotating as a decorator.
-    
-    Main role is to provide a single point of entry for `annotate`
-    and enable derived classes to sanitize arguments.
-    """
-    
-    def __init__(self, *args, **kwargs):
-        pass
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, *exc):
-        return False
-    
-    def __call__(self, func):
-    
-        @functools.wraps(func)
-        def inner(*args,**kwargs):
-            return func(*args, **kwargs)
-    
-        return inner
 
 class ModulusProfilerWrapper(ContextDecorator):
     """
@@ -73,12 +47,7 @@ class ModulusProfilerWrapper(ContextDecorator):
     
     _is_context    : bool = False
     _is_decorator  : bool = False
-    _is_annotation : bool = False
-    # _is_func_annon : bool = False # Is this a function annotation with a decorator?
-    # _is_cont_annon : bool = False # Is this a context-based annotation?
-    # Use the above to manage annotations
-    annotate = annotate
-    
+
     # Name is both a singleton lookup and output directory top:
     _name : str = ""
     
@@ -140,12 +109,6 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_context
     
-    @property
-    def is_annotation(self):
-        """
-        Flag to declare if this profiling instance supports function annotations
-        """
-        return self._is_annotation
     
     def enable(self):
         self._enabled = True
@@ -158,7 +121,7 @@ class ModulusProfilerWrapper(ContextDecorator):
         pass
     
     def step(self):
-        passp
+        pass
     
     def output_dir(self, top : Path):
         

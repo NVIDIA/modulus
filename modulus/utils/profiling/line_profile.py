@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from typing import List, Tuple, Optional, Callable
 
 
-from . core import _Profiler_Singleton, ModulusProfilerWrapper, annotate
+from . core import _Profiler_Singleton, ModulusProfilerWrapper
 
 import functools
 
@@ -28,9 +28,10 @@ class LineProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
         
         # Pytorch is a context and annotation but not a wrapper:
         self._is_context    = False
-        self._is_annotation = False
         self._is_decorator  = True
         
+    # def __repr__(self):
+    #     return "LineProfilerWrapper"
 
     def _standup(self):
         # Nothing to do here ... 
@@ -42,9 +43,14 @@ class LineProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
         self._initialized = True
 
     def finalize(self, output_top : Path):
-        
-        
+        """
+        Serialize the line_profiler output if necessary
+        """        
         if not self.enabled: return
+        
+        # Avoid finalizing if we never initialized:
+        if not self.initialized: return
+        
         # Prevent double finalization:
         if self.finalized: return
         
