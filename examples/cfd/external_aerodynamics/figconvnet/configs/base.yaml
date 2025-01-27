@@ -36,6 +36,7 @@ train:
     shuffle: true # can also specify the shuffle buffer size, e.g. shuffle_buffer_size: 100
     num_workers: 0
     pin_memory: true
+  lr_scheduler_mode: epoch # epoch or iteration.
 
 eval:
   loss: null
@@ -83,6 +84,7 @@ loggers:
     run_name: default
     entity: modulus # nvr-ai-algo
     group_name:
+    mode: online
 
 log_pointcloud: false # save pointclouds
 

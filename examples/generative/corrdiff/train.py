@@ -108,6 +108,9 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.model.name == "lt_aware_ce_regression":
         prob_channels = dataset.get_prob_channel_index()
+    else:
+        prob_channels = None
+
     # Parse the patch shape
     if (
         cfg.model.name == "patched_diffusion"
@@ -314,19 +317,20 @@ def main(cfg: DictConfig) -> None:
             img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
             img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
             labels = labels.to(dist.device).contiguous()
+            loss_fn_kwargs = {
+                "net": model,
+                "img_clean": img_clean,
+                "img_lr": img_lr,
+                "labels": labels,
+                "augment_pipe": None,
+            }
             if lead_time_label:
                 lead_time_label = lead_time_label[0].to(dist.device).contiguous()
+                loss_fn_kwargs.update({"lead_time_label": lead_time_label})
             else:
                 lead_time_label = None
             with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
-                loss = loss_fn(
-                    net=model,
-                    img_clean=img_clean,
-                    img_lr=img_lr,
-                    labels=labels,
-                    lead_time_label=lead_time_label,
-                    augment_pipe=None,
-                )
+                loss = loss_fn(**loss_fn_kwargs)
             loss = loss.sum() / batch_size_per_gpu
             loss_accum += loss / num_accumulation_rounds
             loss.backward()
