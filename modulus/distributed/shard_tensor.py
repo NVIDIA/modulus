@@ -237,11 +237,11 @@ class ShardTensor(DTensor):
         # Leverage DTensor Dispatch as much as possible, but, enable
         # the ability to operate on this output in the future:
 
-        dm = DistributedManager()
-        print(f"In op dispatch, on rank {dm.rank}, func is {func}")
-        print(f"In op dispatch, on rank {dm.rank}, types is {types}")
-        print(f"In op dispatch, on rank {dm.rank}, types is {types}")
-        print(f"In op dispatch, on rank {dm.rank}, kwargs is {kwargs}")
+        # dm = DistributedManager()
+        # print(f"In op dispatch, on rank {dm.rank}, func is {func}")
+        # print(f"In op dispatch, on rank {dm.rank}, types is {types}")
+        # print(f"In op dispatch, on rank {dm.rank}, types is {types}")
+        # print(f"In op dispatch, on rank {dm.rank}, kwargs is {kwargs}")
         
         dispatch_res =  DTensor.__torch_dispatch__(func, types, args, kwargs)
         

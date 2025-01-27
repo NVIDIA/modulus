@@ -47,7 +47,7 @@ def _to_replicate_tensor(
     # # Ensure contiguous data for the reduction:
     # print("is the local tensor contiguous?")
     # print(f"pre local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
-    # local_tensor = local_tensor.contiguous()
+    local_tensor = local_tensor.contiguous()
     # print(f"post local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
     
     # We can implement this with a straightforward allgather_v

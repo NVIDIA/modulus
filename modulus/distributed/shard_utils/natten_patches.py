@@ -12,6 +12,9 @@ from modulus.distributed.shard_utils.patch_core import (
     UndeterminedShardingError,
     MissingShardPatch,
 )
+from torch.distributed.tensor.placement_types import (
+    Shard
+)
 
 __all__ = [
     "na2d_wrapper"
