@@ -41,11 +41,8 @@ from modulus.distributed._shard_redistribute import (
 )
 from torch.distributed.device_mesh import _mesh_resources, DeviceMesh
 
-from modulus.distributed.autograd import all_gather_v
 
-# TODO
-# - Autograd function to convert torch.Tensor to ShardTensor (https://github.com/pytorch/pytorch/blob/main/torch/distributed/tensor/_api.py#L119)
-# - Autograd function to convert ShardTensor to torch.Tensor (https://github.com/pytorch/pytorch/blob/main/torch/distributed/tensor/_api.py#L71)
+from modulus.distributed import DistributedManager
 
 class _ToTorchTensor(torch.autograd.Function):
     
@@ -239,10 +236,19 @@ class ShardTensor(DTensor):
     def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
         # Leverage DTensor Dispatch as much as possible, but, enable
         # the ability to operate on this output in the future:
+
+        dm = DistributedManager()
+        print(f"In op dispatch, on rank {dm.rank}, func is {func}")
+        print(f"In op dispatch, on rank {dm.rank}, types is {types}")
+        print(f"In op dispatch, on rank {dm.rank}, types is {types}")
+        print(f"In op dispatch, on rank {dm.rank}, kwargs is {kwargs}")
+        
         dispatch_res =  DTensor.__torch_dispatch__(func, types, args, kwargs)
         
         #TODO - for ``Partial`` specs, in SOME cases, we need to include a "weight"
-        # For example, 
+        # For example, taking the average of an unevenly-sharded tensor, the weight
+        # must be proportial to _local_tensor.
+
         
         
         # Return a shard tensor instead of a dtensor.
@@ -252,16 +258,11 @@ class ShardTensor(DTensor):
         
         if isinstance(dispatch_res, Iterable):
             return type(dispatch_res)(
-                ShardTensor._from_dtensor(d) for d in dispatch_res
+                ShardTensor._from_dtensor(d) if isinstance(d, DTensor) else d for d in dispatch_res
             )
         
         return dispatch_res
         
-        # return ShardTensor._op_dispatcher.dispatch(
-        #     func,
-        #     args,
-        #     kwargs or {},
-        # )
         
     def from_local(
         local_tensor: torch.Tensor,
@@ -330,6 +331,20 @@ class ShardTensor(DTensor):
                 DTensor.from_local(local_tensor, device_mesh, placements)
             )
 
+    # def backward(
+    #     self,
+    #     gradient = None,
+    #     retain_graph = None,
+    #     create_graph = False,
+    #     inputs = None
+    # ):
+    
+    #     print(f"ST BACKWARD: shape {self.shape} and local shape {self._local_tensor.shape} with grad_fn {self.grad_fn}")
+        
+        
+        
+    #     return super().backward(gradient, retain_graph, create_graph, inputs)
+        
         
     def redistribute(
         self,

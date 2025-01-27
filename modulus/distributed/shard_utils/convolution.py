@@ -11,10 +11,6 @@ from torch.distributed.device_mesh import DeviceMesh
 from . strategies import ParallelStrategy
 from . halo       import compute_halo_size, HaloPaddingND
 
-def conv_output_shape(L_in, p, s, k, d):
-    print(f"Padding: {p}")
-    L_out = ( L_in + 2*p - d*(k-1) - 1) / s + 1
-    return int(L_out) 
 
 
 class DistributedConv1d(nn.Module):

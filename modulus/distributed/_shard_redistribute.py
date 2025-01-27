@@ -44,6 +44,12 @@ def _to_replicate_tensor(
     sizes = current_spec.sharding_sizes
     this_sizes = [s[tensor_dim] for s in sizes[mesh_dim]]
     
+    # # Ensure contiguous data for the reduction:
+    # print("is the local tensor contiguous?")
+    # print(f"pre local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
+    # local_tensor = local_tensor.contiguous()
+    # print(f"post local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
+    
     # We can implement this with a straightforward allgather_v
     local_tensor = all_gather_v(local_tensor, sizes=this_sizes, dim=tensor_dim, group=group)
     
@@ -264,12 +270,6 @@ class ShardRedistribute(torch.autograd.Function):
             # use the same local tensor if placements are the same.
             output = input._local_tensor
             target_spec = current_spec
-
-        # print("FORWARD in SHARD REDISTRIBUTE")
-        # print(f"Input shape: {input.shape} with local shape {input._local_tensor.shape}")
-        # print(f"Input placements: {input._spec.placements}")
-        # print(f"OUTPUT shape: {output.shape}")
-        # print(f"OUTPUT spec: {target_spec}")
 
         return shard_tensor.ShardTensor(
             output,

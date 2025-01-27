@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Optional
 
 import torch
 from torch import nn
@@ -9,51 +9,92 @@ from modulus.distributed.shard_tensor import ShardTensor
 
 from modulus.distributed import DistributedManager
 
+from torch.distributed.tensor.placement_types import (
+    Partial, 
+    Placement,
+    Replicate,
+    Shard
+)
 
-def compute_convolution_halo_size(stride : int, kernel: int, dilation: int, ) -> int:
+
+
+
+def halo_unpadding_1d(
+        local_tensor : torch.tensor,
+        mesh : DeviceMesh,
+        mesh_dim: int,
+        tensor_dim: int,
+        halo_t : int,
+        edge_padding_t : Optional[str] = "zeros", 
+        edge_padding_s : Optional[int] = 0,
+    ) -> torch.Tensor:
     """
-    Compute the single-dimension halo size for a convolution kernel
-
+    Backward pass of the Distributed Halo Padding in 1D
+    Can be chained to un-build a halo padding in multiple dimensions, if necessary
+    
     Parameters
     ----------
-    stride : int
-        Convolution stride (along this axis)
-    kernel : int
-        convolution kernel size (along this axis)
-    dilation : int
-        Convolution's dilation parameter    
-
+    local_tensor : dist.tensor.DTensor
+        Torch Tensor (Tensor) containing the local chunk 
+    mesh : torch.distributed.device_mesh.DeviceMesh
+        Torch DeviceMesh containing the information for the sharding of this tensor
+    mesh_dim : int
+        Mesh dimension to use for this 1D un-padding operation
+    tensor_dim : int, optional
+        Tensor dimension for the unslicing.  Mandatory
+    halo_t : int
+        halo padding size in this operation, assumed symmetrical by default
+    edge_padding_t : Optional[str]
+        What to do in the slicing on the mesh borders.  Valid options correspond to 
+        the same options as convolutions in pytorch.  Currently Unused.
+    edge_padding_s : Optional[int]
+        How much edge slicing to use, if using edge slicing.  Only valid if using 
+        zeros for the edge padding.  Currently Unused.
     Returns
     -------
-    int
-        Symmetrical Halo size on each side of a chunk of data
-
+    torch.Tensor
+        Tensor with slicing applied locally to each chunk.  For some operations,
+        like NAtten, coalescing after a sharded computation only makes sense after this
+        operation is performed
     """
-        
-    # To calculate the halo needed, we need to first determine the receptive field.
 
-    # Dilation != 1 is not handled yet
-    # TODO
-    if dilation != 1: 
-        raise NotImplementedError("Dilation different from 1 is not supported in halo computations.")
+    # assert edge_padding_t in ["zeros", "reflect", "replicate", "circular", "none"], f"Invalid edge padding detected: {edge_padding_t}"
+    
+    # if edge_padding_s != 0 and edge_padding_t != "zeros":
+    #     err_msg = f"Sharded convolution with edge_padding != 0 " \
+    #                 f"(got {edge_padding_t} is only supported " \
+    #                 f"if the edge padding type is \"zeros\" (got {edge_padding_t})."
+    #     raise NotImplementedError(err_msg)
+    
+    # If the dim is None, ensure 1D mesh:
+    if mesh_dim is None:
+        assert mesh.ndim == 1, f"Halo padding requires `dim` to be set for mesh size greater than 1 (got shape {mesh.shape})"
+        mesh_dim = 0
+        
+    # The local group can come right from the mesh.
+    local_group = mesh.get_group(mesh_dim)
+    local_rank  = mesh.get_local_rank(mesh_dim)
+    local_size  = dist.get_world_size(group=local_group)
 
-    # The receptive field is how far in the input a pixel in the output can see
-    # It's used to calculate how large the halo computation has to be
-    receptive_field = dilation * (kernel - 1)  + 1
-    # receptive_field = kernel + (kernel - 1) * (stride - 1) - 1
+    # Select off the appropriate tensor dim:
+    dim_shape = local_tensor.shape[tensor_dim]
         
+    start = halo_t
+    end = dim_shape - halo_t
         
-    # The number of halo pixels is the casting `int(receptive field/2)`
-    # Why?  Assuming a filter in the output image is centered in the input image,
-    # we have only half of it's filter to the left.
-    # Even kernels:
-    if kernel % 2 == 0:
-        halo_size =  int(receptive_field / 2 - 1) 
-    else:
-        halo_size =  int(receptive_field / 2 ) 
+    # Make corrections for edge effects:
+    if local_rank == 0:
+        start = 0
+    if local_rank == local_size -1:
+        end = dim_shape
         
+    # Do the slicing:
+    indices = torch.arange(start, end).to(local_tensor.device)
         
-    return halo_size
+    local_tensor = local_tensor.index_select(tensor_dim, indices).contiguous()
+    
+    return local_tensor
+
 
 def halo_padding_1d(
         local_tensor: torch.Tensor,
@@ -181,7 +222,7 @@ def halo_padding_1d(
         # Deal with padding on the first entry.
         # Using "halo_to_left" as base shape
         if edge_padding_t == "zeros":
-            if edge_padding_t is None:
+            if edge_padding_s is None:
                 padded_output.append(torch.zeros_like(halo_to_left))
             else:
                 shape = list(halo_to_left.shape)
@@ -208,7 +249,13 @@ def halo_padding_1d(
         # Deal with padding on the last entry.
         # Using "halo_to_right" as base shape
         if edge_padding_t == "zeros":
-            padded_output.append(torch.zeros_like(halo_to_right))
+            if edge_padding_s is None:
+                padded_output.append(torch.zeros_like(halo_to_right))
+            else:
+                shape = list(halo_to_right.shape)
+                shape[target_dim] = edge_padding_s 
+                zeros = torch.zeros(shape, device=halo_to_right.device, dtype=halo_to_right.dtype)
+                padded_output.append(zeros)
         elif edge_padding_t == "reflect":
             padded_output = halo_to_right.flip(target_dim)
         elif edge_padding_t == "replicate":
@@ -218,172 +265,8 @@ def halo_padding_1d(
             padded_output.append(all_to_all_dest[0])
         elif edge_padding_t == "none":
             pass
+    print(f"Rank {local_rank} with outputs: {[p.shape for p in padded_output]}")
             
     # Finish up:
     return torch.cat(padded_output, dim=target_dim)
     
-
-
-class HaloPaddingND(torch.autograd.Function):
-    """
-    Autograd Wrapper for a distributed HaloPadding primitive.
-    It is based on the torch DTensor concept which presents as a
-    sharded tensor + device Mesh.  In the forward pass, the adjacent regions
-    are gathered from next-door devices and concatenated into one output tensor
-    
-    In the backward pass, the gradients are distributed outward to neighboring tensors.
-    
-    This halo can accommodate multiple dimensions of halo passing, but requires the 
-    mesh and halo parameters to be compatible.  In this case, the backwards pass
-    distributes gradients in the reverse order as the forward pass.
-    """
-
-    @staticmethod
-    def forward(
-        ctx,
-        stensor: ShardTensor,
-        halo: Tuple[int],
-        edge_padding_t : str,
-        edge_padding_s : Tuple[int]
-    ) -> torch.Tensor:  # pragma: no cover
-        """forward pass of the Distributed Halo primitive"""
-        mesh = stensor.device_mesh
-
-        assert len(halo) == mesh.ndim, f"Halo size ({len(halo)} must match mesh rank ({mesh.ndim}))"
-
-        placements = stensor.placements
-        
-        
-        local_tensor = stensor.to_local()
-        for mesh_dim in range(mesh.ndim):
-            tensor_dim = placements[mesh_dim].dim
-            local_tensor = halo_padding_1d(local_tensor, mesh, mesh_dim, tensor_dim, halo[mesh_dim], edge_padding_t, edge_padding_s[0])
-        
-
-
-
-        # padded_tensor = halo_padding_1d(stensor.to_local(), mesh, halo[0], edge_padding_t, edge_padding_s[0])
-        ctx.halo = halo
-        ctx.spec = stensor._spec
-        ctx.requires_input_grad = stensor.requires_grad
-
-        return local_tensor
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):  # pragma: no cover
-        """backward pass of the of the Distributed HaloPadding primitive"""
-
-        print(f"got grad output of shape: {grad_output.shape}")
-        print(f"got grad output of type: {type(grad_output)}")
-
-        spec = ctx.spec
-        mesh = spec.mesh
-        placements = spec.placements
-        halo = ctx.halo
-        # The backwards pass is to cut off the gradients here in the halo region.
-        outputs = unslice_output_by_halo_and_mesh_fwd(grad_output, halo, mesh, placements)
-        
-        # And, wrap it into a shard tensor:
-        grad_tensor = ShardTensor(
-            outputs,
-            spec,
-            requires_grad=grad_output.requires_grad,
-        )
-
-        return grad_tensor, None, None, None
-
-
-def unslice_output_by_halo_and_mesh_fwd(x, halo, mesh, placements):
-    """
-    Natten na2d halo computations leaves the shape unchanged
-    (kind of like a "same" convolution) but we have no edge padding
-    applied on the edges of the space.
-    
-    This function determines where in the mesh this slice lives and cuts 
-    the halo off if necessary
-    """
-
-    mesh_dims = range(mesh.ndim)
-    tensor_dims = [ p.dim for p in placements]
-    
-    for mesh_dim, tensor_dim in zip(mesh_dims, tensor_dims):
-        
-        # The local group can come right from the mesh.
-        local_group = mesh.get_group(mesh_dim)
-        local_rank  = mesh.get_local_rank(mesh_dim)
-        local_size  = dist.get_world_size(group=local_group)
-        
-        # Select off the appropriate tensor dim:
-        dim_shape = x.shape[tensor_dim]
-        
-        start = halo[mesh_dim]
-        end = dim_shape - halo[mesh_dim]
-        
-        if local_rank == 0:
-            start = 0
-        if local_rank == local_size -1:
-            end = dim_shape
-        
-        indices = torch.arange(start, end).to(x.device)
-        
-        x = x.index_select(tensor_dim, indices)
-    
-    # Cast this back to a ShardTensor to return:
-    
-
-    return x
-
-class UnSliceHaloND(torch.autograd.Function):
-    
-    """
-    Class to trim off unnecessary sections of a tensor that has had a halo computation applied to it
-    Used in cases such as: neighborhood attention, when the central halos require trimming after the application
-    of the operation.
-    """
-    
-    @staticmethod
-    def forward(
-        ctx,
-        tensor : torch.Tensor,
-        halo,
-        mesh,
-        placements,
-    ) -> "ShardTensor":
-        ctx.halo = halo
-        ctx.mesh = mesh
-        ctx.placements = placements
-        
-        assert len(halo) == mesh.ndim, f"Halo size ({len(halo)} must match mesh rank ({mesh.ndim}))"
-        
-        
-        outputs = unslice_output_by_halo_and_mesh_fwd(tensor, halo, mesh, placements)
-        
-        
-        # Cast to shard tensor:
-        outputs = ShardTensor.from_local(outputs,mesh, placements)
-        
-        return outputs
-    
-    @staticmethod
-    def backward(
-        ctx,
-        grad_output
-    ) -> torch.Tensor:
-        
-        # padded_tensor = halo_padding_1d(stensor.to_local(), mesh, halo[0], edge_padding_t, edge_padding_s[0])
-        mesh = ctx.mesh
-        halo = ctx.halo
-        placements = ctx.placements
-        # the gradient of the slicing is the halo operation that inverts it
-        
-        edge_padding_s = [0,] * len(halo)
-        edge_padding_t = "none"
-        
-        local_tensor = grad_output.to_local()
-        for mesh_dim in range(mesh.ndim):
-            tensor_dim = placements[mesh_dim].dim
-            local_tensor = halo_padding_1d(local_tensor, mesh, mesh_dim, tensor_dim, halo[mesh_dim], edge_padding_t, edge_padding_s[0])
-        
-
-
-        return local_tensor, None, None, None
