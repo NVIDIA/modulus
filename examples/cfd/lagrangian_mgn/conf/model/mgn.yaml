@@ -22,6 +22,7 @@ input_dim_edges: ???
 output_dim: ???
 processor_size: 10
 aggregation: sum
+hidden_dim_processor: 128
 hidden_dim_node_encoder: 256
 hidden_dim_edge_encoder: 256
 hidden_dim_node_decoder: 256

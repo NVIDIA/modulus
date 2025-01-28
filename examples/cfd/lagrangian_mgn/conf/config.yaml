@@ -36,6 +36,7 @@ resume_dir: ${output}
 # The dataset directory must be set either in command line or config.
 data:
   data_dir: ???
+  num_node_types: 6
   train:
     split: train
   valid:
@@ -59,7 +60,7 @@ train:
   dataloader:
     batch_size: ${..batch_size}
     shuffle: true
-    num_workers: 1
+    num_workers: 8
     pin_memory: true
     drop_last: true
 
