@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 # Import the dataset:
-from dataset import RandomNoiseDataset
+from dataset_cuda import RandomNoiseDataset
 
 #  For the model code:
 # from attn_instrumented import Attention
@@ -67,7 +67,7 @@ def workload(cfg):
 
     times = torch.tensor(times)
     # Drop first and last:
-    avg_time = times[1:-1].mean()
+    avg_time = times[2:-1].mean()
     # compute throughput too:
     throughput = cfg["batch_size"] / avg_time
     print(f"Average time per iteration: {avg_time:.3f} ({throughput:.3f} examples / s)")

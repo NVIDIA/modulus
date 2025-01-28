@@ -4,9 +4,9 @@ defaults:
 
 shape: [2048, 1024]
 batch_size: 8
-train: True
+train: true
 model:
-  num_heads:  8
+  num_heads:  32
   qkv_bias:  False
   attn_drop:  0.
   proj_drop:  0.

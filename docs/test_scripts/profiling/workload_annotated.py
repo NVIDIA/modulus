@@ -5,20 +5,20 @@ import torch
 # For hydra:
 import hydra
 from omegaconf import DictConfig
+from pathlib import Path
 
 # For dataloader
 from torch.utils.data import DataLoader
 
 # Import the dataset:
-from dataset import RandomNoiseDataset
+from dataset_cuda import RandomNoiseDataset
 
 #  For the model code:
-from attn_instrumented import Attention
+from attn_instrumented import Block
 
 # Import profiling hooks from modulus:
 from modulus.utils.profiling import Profiler, profile, annotate
 
-@profile
 def loss_fn(output_data):
     # All except the first dim:
     dims = tuple(range(len(output_data.shape)))
@@ -40,22 +40,23 @@ def workload(cfg):
     
     
     # Initialize the model:
-    model = Attention(
+    model = Block(
         dim = cfg["shape"][-1],
         num_heads = cfg.model["num_heads"],
         qkv_bias  = cfg.model["qkv_bias"] ,
         attn_drop = cfg.model["attn_drop"],
         proj_drop = cfg.model["proj_drop"],
-    )
+    ).to("cuda")
     
     if cfg["train"]:
-        opt = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+        opt = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     
     times = []    
     with Profiler() as p:
         start = time.perf_counter()
         for i, batch in enumerate(loader):
             image = batch["image"]
+            image = image.to("cuda")
             with annotate(domain="forward", color="blue"):
                 output = model(image)
             if cfg["train"]:
@@ -65,14 +66,13 @@ def workload(cfg):
                 # Do the gradient calculation:
                 with annotate(domain="backward", color="green"):
                     loss.backward()
-                # Apply the gradients
-                opt.step()
-            p.step
+                    # Apply the gradients
+                    opt.step()
+            p.step()
             end = time.perf_counter()
             print(f"Finished step {i} in {end - start:.4f} seconds")
-            start = time.perf_counter()
             times.append(end - start)
-
+            start = time.perf_counter()
 
     times = torch.tensor(times)
     # Drop first and last:
@@ -94,11 +94,14 @@ def main(config: DictConfig):
         # the registered profilers.  You can do it manually
         # too such as `p.enable("torch")`
         if val: p.enable(key)
+        
+    p.get("torch").reconfigure(on_trace_ready_path=p.output_dir / Path("/torch/traces/"))
     
     # The profiler has to be initilized before use.  Using it in a context
     # will do it automatically, but to use it as a decorator we should do
     # it manually here:
     p.initialize()
+    print(p)
 
     workload(config)
 
@@ -106,4 +109,4 @@ def main(config: DictConfig):
 
 if __name__ == "__main__":
 
-    main()
+    main()  

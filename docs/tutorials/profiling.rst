@@ -132,7 +132,38 @@ without introducing additional overhead, and we've designed these tools to be "l
 In the rest of this tutororial, we'll look at how to use Modulus's profiling tools to 
 profile a simple application, as well as how to extend the tools to new profilers.
 Modulus's tools are designed to be inserted into your workload once, and generally
-provide no overhead or even do anything else until enabled.
+provide no significant overhead (or even do anything at all!) until enabled.
+
+Modulus Profiling Tools
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Modulus provides three high level tools for profiling utilities:
+
+.. code-block:: python
+    from modulus.utils.profiling import Profiler, profile, annotate
+
+We'll get more into the details of some of these tools later, but at a high level:
+
+#. The `Profiler` is the core utility of `modulus`'s profiling features.
+Similar to the `modulus` DistributedManager, this class is a singleton instance
+designed to enable easy access to profiling handles and propogate configurations.
+The Profiler is meant to be your steering wheel for driving different profiling
+techniques, without having to go into your code and change annotations or decorations.
+We'll see how to enable the profiler with different techniques below. An instance of the 
+Modulus Profiler can be used as a context for profiling.
+
+#. `profile` is a function decorator that you can use to mark specific functions
+in your code for profiling.  It is targeting tools like python's `line_profiler`
+utility, and generally most useful for python operations that aren't backed by
+an asynchronous backend like CUDA.  You can freely decorate functions with 
+`@profile` but it is not a context manager.  `@profile` takes no arguments.
+
+#. `annotate` is context-decorator and shortcut to `nvtx` annotations.
+`annotate` can also be used as a context just like `nvtx.annotate`.
+
+which will (in the modulus
+profiling tools) turn on automatic annotation for the duration of the context.
+This can be expensive, and has to be explicitly
 
 The Workload
 ^^^^^^^^^^^^
@@ -177,53 +208,374 @@ This data was captured on an H100 platform, using the 24.12 pytorch container.
     - Row 2, column 3
 
 train:
-- BS 1 - 0.11s (9.1)
-- BS 2 - 0.21s (9.3)
-- BS 4 - 0.52s (7.66)
-- BS 8 - 0.923s (8.66)
+- BS 1 - 0.030 (33.541 examples / s)
+- BS 2 - 0.056 (35.544 examples / s)
+- BS 4 - 0.117 (34.236 examples / s)
+- BS 8 - 0.235 (34.074 examples / s)
 
 inference:
-- BS 1 - 0.07s (14.3)
-- BS 2 - 0.133s (15.1)
-- BS 4 - 0.286s (14.0)
-- BS 8 - 0.568s (14.1)
+- BS 1 - 0.029 (35.013 examples / s)
+- BS 2 - 0.055 (36.545 examples / s)
+- BS 4 - 0.114 (35.132 examples / s)
+- BS 8 - 0.229 (34.881 examples / s)
+
+..note::
+    These numbers are approximate measurements and the workload, as written, 
+    has some variations in performance.  Dont' worry if your results 
+    differ - if you're following along with the example, just capture
+    your baseline measurements to compare with later!
+
+.. warning::
+    These numbers should give you pause.  Most models don't have the
+    same execution time in training vs. inference mode... 
+    We will debug this below!
 
 
-- BS 8 - 0.61s
+Python Level Profiling
+^^^^^^^^^^^^^^^^^^^^^^
 
+A great place to start when running profiles of AI code is the python level
+profilers.  They are quick, easy, and generally low overhead.  Modulus
+has support to enable `line_profiler` built in - all you might need is to
+run `pip install line_profiler` to ensure you've installed the base package too.
 
-Let's apply some hooks into both the model and the workload to do some profiling.  
-The profiling tools are imported from modulus:
+Next, take a look at the first instrumented version of the model code, 
+compared to the original:
+
+.. code-block:: diff
+    *** attn_baseline.py	2025-01-27 07:41:37.749753000 -0800
+    --- attn_instrumented.py	2025-01-27 11:27:09.162202000 -0800
+    ***************
+    *** 1,6 ****
+    --- 1,8 ----
+      import torch
+      from torch import nn
+
+    + from modulus.utils.profiling import profile, annotate
+    +
+      class Attention(nn.Module):
+          """Dummy example Attention mechanism.  Meant not for efficienct computation
+          but to show how to use the profiling tools!
+    ***************
+    *** 26,31 ****
+    --- 28,34 ----
+              self.proj = nn.Linear(dim, dim)
+              self.proj_drop = nn.Dropout(proj_drop)
+
+    +     @profile
+          def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+              B, N, C = x.shape
+    ***************
+    *** 59,64 ****
+    --- 62,68 ----
+              self.fc2 = nn.Linear(hidden_features, out_features)
+              self.drop2 = nn.Dropout(drop)
+
+    +     @profile
+          def forward(self, x):
+              x = self.fc1(x)
+              x = self.gelu(x)
+    ***************
+    *** 97,102 ****
+    --- 101,107 ----
+                  drop=proj_drop,
+              )
+
+    +     @profile
+          def forward(self, x: torch.Tensor) -> torch.Tensor:
+              x = x + self.attn(self.norm1(x))
+              x = x + self.mlp(self.norm2(x))
+
+As you can see, we added a profile decorator around each forward pass.  Note that
+this code will run just fine if you have these annotations but aren't profiling!
+
+If you replace the model code with the instrumented code, nothing
+significant will change.  To actually see changes, we have to enable the 
+profiling tools dynamically at runtime:
+
+.. note:: 
+    We're running this via a configuration file and hydra - `pip install hydra-core`
+    if it's not installed on your machine.  The config file is located in the same
+    directory as the profiler and you can edit it to switch tools.
 
 .. code-block:: python
-    from modulus.utils.profiling import Profiler, profile, annotate
 
-which enables you to use them in your code later.  `profile` is a decorator 
-and `annotate` is context-decorator.  You can mark functions for profiling
-(instrumenting them) with `@profile`.  Similarly, you can annotate functions
-for use in other profilers (like NSight) with `@annotate`, but `annotate` 
-can also be used freely as a context:
-
-.. code-block:: python
-
-    with annotate(color="blue"):
-        output = model(input)
-
-One thing to note in this workload is that the profiler configuration is done
-dynamically:
-
-.. code-block:: python
     # configure the profiling tools:
     p = Profiler()
+    
+    print(p)
     
     for key, val in config.profile.items():
         # This is not the mandatory way to enable tools
         # I've set up the config to have the keys match
         # the registered profilers.  You can do it manually
-        # too such as `p.enable("torch")`
+        # too such as `p.enable("line_profiler")`
         if val: p.enable(key)
     
     # The profiler has to be initilized before use.  Using it in a context
     # will do it automatically, but to use it as a decorator we should do
     # it manually here:
     p.initialize()
+    print(p)
+
+    workload(config)
+
+In the instrumented version of the workload, you can see we've even decorated 
+the `workload` function itself.
+
+.. note::
+    The profiler interface - and all tools it pulls in - is unintialized until
+    told otherwise.  If you don't call `p.initialize()`, the profiler will 
+    generally do nothing.
+ 
+.. warning::
+    The one time the profiler will initialize itself is if you use it as a context!
+    Upon entering the context, if the profiler interface isn't initialized
+    it will trigger automatically.
+
+Once the profiled run has completed, modulus will automatically deposit the outputs
+into a folder `modulus_profiling_ouputs`.
+
+.. note:: 
+    You can change the location of the output.  Call `Profiler.output_dir(your_path)`
+    before initialization.
+
+Looking into the results, which for line profiler are a text file, we see the `workload`
+function breakdown looks like this:
+
+.. code-block::
+    Total time: 2.41238 s
+    File: /root/modulus/docs/test_scripts/profiling/workload_annotated.py
+    Function: workload at line 30
+
+    Line #      Hits         Time  Per Hit   % Time  Line Contents
+    ==============================================================
+        30                                           @profile
+        31                                           def workload(cfg):
+        32
+        33         1     269136.0 269136.0      0.0      ds = RandomNoiseDataset(cfg["shape"])
+        34
+        35         2     172874.0  86437.0      0.0      loader = DataLoader(
+        36         1        147.0    147.0      0.0          ds,
+        37         1      30516.0  30516.0      0.0          batch_size=cfg["batch_size"],
+        38         1        150.0    150.0      0.0          shuffle = True,
+        39                                               )
+        40
+        41
+        42                                               # Initialize the model:
+        43         3   73464664.0    2e+07      3.0      model = Block(
+        44         1      62983.0  62983.0      0.0          dim = cfg["shape"][-1],
+        45         1      47585.0  47585.0      0.0          num_heads = cfg.model["num_heads"],
+        46         1      38048.0  38048.0      0.0          qkv_bias  = cfg.model["qkv_bias"] ,
+        47         1      37779.0  37779.0      0.0          attn_drop = cfg.model["attn_drop"],
+        48         1      36155.0  36155.0      0.0          proj_drop = cfg.model["proj_drop"],
+        49         1  349518830.0    3e+08     14.5      ).to("cuda")
+        50
+        51         1      57263.0  57263.0      0.0      if cfg["train"]:
+        52                                                   opt = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+        53
+        54         1        228.0    228.0      0.0      times = []
+        55         2      62432.0  31216.0      0.0      with Profiler() as p:
+        56         1       1149.0   1149.0      0.0          start = time.perf_counter()
+        57         9 1765021523.0    2e+08     73.2          for i, batch in enumerate(loader):
+        58         8      14014.0   1751.8      0.0              image = batch["image"]
+        59         8   52030436.0    7e+06      2.2              image = image.to("cuda")
+        60        16     309466.0  19341.6      0.0              with annotate(domain="forward", color="blue"):
+        61         8  169954425.0    2e+07      7.0                  output = model(image)
+        62         8     581723.0  72715.4      0.0              if cfg["train"]:
+        63                                                           opt.zero_grad()
+        64                                                           # Compute the loss:
+        65                                                           loss = loss_fn(output)
+        66                                                           # Do the gradient calculation:
+        67                                                           with annotate(domain="backward", color="green"):
+        68                                                               loss.backward()
+        69                                                               # Apply the gradients
+        70                                                               opt.step()
+        71         8      36510.0   4563.8      0.0              p.step()
+        72         8      23381.0   2922.6      0.0              end = time.perf_counter()
+        73         8     265785.0  33223.1      0.0              print(f"Finished step {i} in {end - start:.4f} seconds")
+        74         8       5595.0    699.4      0.0              times.append(end - start)
+        75         8       3939.0    492.4      0.0              start = time.perf_counter()
+        76
+        77         1      67726.0  67726.0      0.0      times = torch.tensor(times)
+        78                                               # Drop first and last:
+        79         1     139217.0 139217.0      0.0      avg_time = times[1:-1].mean()
+        80                                               # compute throughput too:
+        81         1      85639.0  85639.0      0.0      throughput = cfg["batch_size"] / avg_time
+        82         1      36396.0  36396.0      0.0      print(f"Average time per iteration: {avg_time:.3f} ({throughput:.3f} examples / s)")
+
+And of course, when presented like this, the issue is clear.  The dataloader is too slow!
+Here' what's in the dataloader:
+
+.. code-block:: python
+    class RandomNoiseDataset(Dataset):
+    """
+    Random normal distribution dataset.
+    
+    Mean AND STD of the distribution is set to the index
+    of the sample requested.
+    
+    Length is hardcoded to 64.
+    
+    (Don't use this anywhere that isn't an example of how to write non-performant python code!)
+    
+    """
+
+    def __init__(self, image_shape, ):
+        """
+        Arguments:
+            image_shape (string): Shape of a single example to generate
+        """
+        self.shape = image_shape
+
+        self.rng = np.random.default_rng()
+
+    def __len__(self):
+        return 64
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        # Generate the raw data:
+        raw = self.gen_single_image(idx)
+
+        sample = {
+            'image' : raw
+        }
+        
+        return sample
+
+    def gen_single_image(self, idx):
+        
+        return self.rng.normal(loc=idx, scale=idx, size=self.shape).astype(np.float32)
+
+We can instrument this (and we should, soon) but the obvious problem is that the 
+CPU is generating the data!  Let's convert it to GPU-driven data generation, and add
+annotations while we're at it.  Instead of 
+`return self.rng.normal(loc=idx, scale=idx, size=self.shape).astype(np.float32)`,
+we can use
+`return torch.normal(idx, idx, self.shape, device="cuda" )`
+
+
+Running again with the fixed data loader:
+
+train:
+- BS 1 - 0.003 (322.914 examples / s)
+- BS 2 - 0.004 (498.593 examples / s)
+- BS 4 - 0.002 (1710.015 examples / s)
+- BS 8 - 0.006 (1298.319 examples / s)
+
+inference:
+- BS 1 - 0.029 (35.013 examples / s)
+- BS 2 - 0.055 (36.545 examples / s)
+- BS 4 - 0.114 (35.132 examples / s)
+- BS 8 - 0.229 (34.881 examples / s)
+
+
+From the above, we can see at a python level that _most_ of our time is spent in 4 places:
+
+#. First, significant time (11%) is spent in torch.optim.SGD.  This is a one-time call, and only 
+looks expensive because our whole run only lasts 11.5s total.  Don't worry about this one.
+
+#. Second, almost 15% of the execution time is spent in `for i, batch in enumerate(loader)`.  
+We'll certainly revisit that, looks like our data load could be better.
+
+#. Third, 24.5% of the time is in `output=model(image)` - for a total of about 11.5*0.245 = 2.8s.
+Luckily, we instrumented the forward pass of the model already, we can inspect that next.
+
+#. Finally, 47.2% of the time is spent in `loss.backward()`.  From our simple python profiling, 
+we can gain no insights into the backward pass.  We'll dig deeper soon with other tools.
+
+What's happening in the Forward Pass?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because we instrumented the forward pass already, the results are already available:
+
+.. code-block :: 
+    Total time: 2.79481 s
+    File: /root/modulus/docs/test_scripts/profiling/attn_instrumented.py
+    Function: forward at line 104
+
+    Line #      Hits         Time  Per Hit   % Time  Line Contents
+    ==============================================================
+       104                                               @profile
+       105                                               def forward(self, x: torch.Tensor) -> torch.Tensor:
+       106         8 2147933917.0    3e+08     76.9          x = x + self.attn(self.norm1(x))
+       107         8  646863364.0    8e+07     23.1          x = x + self.mlp(self.norm2(x))
+       108         8      11102.0   1387.8      0.0          return x
+
+This result, from the `Block.forward` function, suggests the attn layer is 75% of the cost.
+
+Looking closer, if `Attention.forward` shows this:
+
+.. code-block :: 
+    Total time: 1.92844 s
+    File: /root/modulus/docs/test_scripts/profiling/attn_instrumented.py
+    Function: forward at line 31
+
+    Line #      Hits         Time  Per Hit   % Time  Line Contents
+    ==============================================================
+        31                                               @profile
+        32                                               def forward(self, x: torch.Tensor) -> torch.Tensor:
+        33
+        34         8      47852.0   5981.5      0.0          B, N, C = x.shape
+        35         8  167395353.0    2e+07      8.7          qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        36         8     391969.0  48996.1      0.0          q, k, v = qkv.unbind(0)
+        37
+        38
+        39                                                   # This is not optimal code right here ...
+        40         8   33681705.0    4e+06      1.7          q = q * self.scale
+        41         8  636895850.0    8e+07     33.0          attn = q @ k.transpose(-2, -1)
+        42         8  856165404.0    1e+08     44.4          attn = attn.softmax(dim=-1)
+        43         8    1215481.0 151935.1      0.1          attn = self.attn_drop(attn)
+        44         8  108034249.0    1e+07      5.6          x = attn @ v
+        45
+        46         8   61744601.0    8e+06      3.2          x = x.transpose(1, 2).reshape(B, N, C)
+        47         8   62203870.0    8e+06      3.2          x = self.proj(x)
+        48         8     645708.0  80713.5      0.0          x = self.proj_drop(x)
+        49         8      18165.0   2270.6      0.0          return x
+
+And here, the bulk of the time is spent in forming the attention matrix and taking the softmax.
+Even though we've not instrumented the backwards pass, you can suspect that these two operations
+will be important there too!
+
+.. note ::
+    If you are at all paying attention (pun intended) in the computational developments of the Flash Attention
+    mechanism, you'll know already what's going on here.  Regardless, let's try to figure it out with
+    profiling tools anyways!
+
+To look a little deeper and see what is happening in the attention steps as well as the backward pass,
+we'll need different tools that have access to under-the-python-hood profiling techniques.
+
+
+Digression: Scalene and Custom Profilers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By the way - the python `line_profiler`, while powerful, is not the only profiler available
+at a python level.  An even more powerful tool is 
+`Scalene <https://github.com/plasma-umass/scalene/tree/master>`, which we can quickly 
+enable in the modulus profiling tools.
+
+In your tutorial space, add this file:
+
+
+And, in the annotate workload, add this in the main loop to register the profiler:
+
+.. code-block:: python
+
+    from custom_profiler import CustomProfiler
+    
+    from modulus.utils.profiling import ProfileRegistry
+    ProfileRegistry.register_profiler("custom", CustomProfiler)
+    
+    p.enable("custom")
+
+Pytorch Profiler
+^^^^^^^^^^^^^^^^^
+
+A common and useful tool in AI profiling is the pytorch profiler.  Modulus wraps
+this profiler too, and we can enable it easily with a flip of a configuration switch:
+
+
