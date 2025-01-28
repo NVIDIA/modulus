@@ -36,6 +36,21 @@ from helpers.train_helpers import (
     is_time_for_periodic_task,
 )
 
+def checkpoint_list(path, suffix=".mdlus"):
+    """Helper function to return sorted list, in ascending order, of checkpoints in a path"""
+    checkpoints = []
+    for file in os.listdir(path):
+        if file.endswith(suffix):
+            # Split the filename and extract the index
+            try:
+                index = int(file.split('.')[-2])
+                checkpoints.append((index, file))
+            except ValueError:
+                continue
+
+    # Sort by index and return filenames
+    checkpoints.sort(key=lambda x: x[0])
+    return [file for _, file in checkpoints]
 
 # Train the CorrDiff model using the configurations in "conf/config_training.yaml"
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_training")
@@ -485,6 +500,14 @@ def main(cfg: DictConfig) -> None:
                 optimizer=optimizer,
                 epoch=cur_nimg,
             )
+
+            # Retain only the recent n checkpoints, if desired
+            if cfg.training.io.save_n_recent_checkpoints > 0:
+                for suffix in [".mdlus", ".pt"]:
+                    ckpts = checkpoint_list(checkpoint_dir, suffix=suffix)
+                    while len(ckpts) > cfg.training.io.save_n_recent_checkpoints:
+                        os.remove(os.path.join(checkpoint_dir, ckpts[0]))
+                        ckpts = ckpts[1:]
 
     # Done.
     logger0.info("Training Completed.")

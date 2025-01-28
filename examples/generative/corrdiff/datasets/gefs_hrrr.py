@@ -126,6 +126,8 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
     Expects data to be stored under directory specified by 'location'
         GEFS under <root_dir>/gefs/
         HRRR under <root_dir>/hrrr/
+    Within each directory, there should be one zarr file per
+    year containing the data of interest.
     """
 
     def __init__(
@@ -142,7 +144,7 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
         train_years: Iterable[int] = (2020, 2021, 2022, 2023),
         valid_years: Iterable[int] = (2024,),
         hrrr_window: Union[Tuple[Tuple[int, int], Tuple[int, int]], None] = None,
-        sample_shape: Tuple[int, int] = None,
+        sample_shape: Tuple[int, int] = [-1, -1],
         ds_factor: int = 1,
         shard: bool = False,
         overfit: bool = False,
@@ -468,7 +470,7 @@ class HrrrForecastGEFSDataset(DownscalingDataset):
         return (y_end - y_start, x_end - x_start)
 
     def _get_crop_box(self):
-        if self.sample_shape == None:
+        if self.sample_shape == [-1, -1]:
             return self.hrrr_window
 
         ((y_start, y_end), (x_start, x_end)) = self.hrrr_window
