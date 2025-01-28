@@ -200,7 +200,17 @@ class Profiler(metaclass=_Profiler_Singleton):
         # Prevent double-adds:
         if profiler not in self._profilers:
             self._profilers.append(profiler)
-            return
+        
+        return profiler
+    
+    def get(self, profiler):
+        """
+        Use the profiler registry to access a profiler
+        """
+        
+        profiler = ProfileRegistry.get_profiler(profiler)
+        
+        return profiler
     
     def __enter__(self):
         """

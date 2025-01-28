@@ -16,7 +16,7 @@ try:
 except ImportError as e:
     lp_avail = False
 
-
+import warnings
 
 class LineProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
     # __metaclass__ = _Profiler_Singleton
@@ -38,6 +38,9 @@ class LineProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
         if lp_avail:
             self._profiler = LineProfiler()
         else:
+            warnings.warn(
+                "Line Profiler was requested by the modulus profiler but " \
+                "isn't install.  Try `pip install line_profiler`.")
             self._profiler = None
             self.enabled = False
         self._initialized = True

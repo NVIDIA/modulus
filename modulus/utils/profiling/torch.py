@@ -31,6 +31,7 @@ class TorchProfilerConfig:
     profile_memory:  bool = False
     with_flops:      bool = False
     schedule:    Callable = None
+    on_trace_ready_path: Optional[Path] = None
     
 class TorchProfileWrapper(ModulusProfilerWrapper):
     __metaclass__ = _Profiler_Singleton
@@ -67,13 +68,20 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
 
         print(f"This config is: {self._config}")
 
+        # if self._config.on_trace_ready_path is not None:
+        #     on_trace_ready = torch.profiler.tensorboard_trace_handler(self._config.on_trace_ready_path)
+        # else:
+        on_trace_ready = None
+
         self._profiler = profile(
             activities     = self._config.torch_prof_activities, 
             profile_memory = self._config.profile_memory, 
             record_shapes  = self._config.record_shapes,
             with_stack     = self._config.with_stack,
             schedule       = self._config.schedule,
+            on_trace_ready = on_trace_ready
         )
+
         
         self._initialized = True
 
