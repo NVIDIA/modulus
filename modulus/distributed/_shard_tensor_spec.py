@@ -87,11 +87,9 @@ class ShardTensorSpec(DTensorSpec):
     
     @local_shape.setter
     def local_shape(self, value):
-        print(f"Calling setter ... {value}")
         if not isinstance(value, torch.Size):
             raise TypeError("Local shape must be instance of torch.Size")
         self._local_shape = value
-        print(f"Value set? {self._local_shape}")
 
     def offset(self, mesh_dim : Optional[int] = None) -> Tuple[int]:
         """

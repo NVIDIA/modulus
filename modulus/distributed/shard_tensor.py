@@ -237,12 +237,6 @@ class ShardTensor(DTensor):
         # Leverage DTensor Dispatch as much as possible, but, enable
         # the ability to operate on this output in the future:
 
-        # dm = DistributedManager()
-        # print(f"In op dispatch, on rank {dm.rank}, func is {func}")
-        # print(f"In op dispatch, on rank {dm.rank}, types is {types}")
-        # print(f"In op dispatch, on rank {dm.rank}, types is {types}")
-        # print(f"In op dispatch, on rank {dm.rank}, kwargs is {kwargs}")
-        
         dispatch_res =  DTensor.__torch_dispatch__(func, types, args, kwargs)
         
         #TODO - for ``Partial`` specs, in SOME cases, we need to include a "weight"
@@ -331,20 +325,6 @@ class ShardTensor(DTensor):
                 DTensor.from_local(local_tensor, device_mesh, placements)
             )
 
-    # def backward(
-    #     self,
-    #     gradient = None,
-    #     retain_graph = None,
-    #     create_graph = False,
-    #     inputs = None
-    # ):
-    
-    #     print(f"ST BACKWARD: shape {self.shape} and local shape {self._local_tensor.shape} with grad_fn {self.grad_fn}")
-        
-        
-        
-    #     return super().backward(gradient, retain_graph, create_graph, inputs)
-        
         
     def redistribute(
         self,
@@ -377,8 +357,6 @@ class ShardTensor(DTensor):
         RuntimeError
             _description_
         """
-        
-        print(f"Calling shard redistribute on shard of shape {self.shape} and local shape {self._local_tensor.shape}")
         
         # if device_mesh is not specified, use the current device_mesh
         device_mesh = device_mesh or self.device_mesh

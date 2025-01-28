@@ -35,7 +35,6 @@ __all__ = [
 ]
 
 def conv_output_shape(L_in, p, s, k, d):
-    print(f"Padding: {p}")
     L_out = ( L_in + 2*p - d*(k-1) - 1) / s + 1
     return int(L_out) 
 
@@ -68,9 +67,6 @@ def compute_halo_from_kernel_stride_and_dilation(kernel_size, stride, dilation):
 
     # If the kernel is even, and matches the stride, and dilation is 1, no halo:
 
-    print(f"kernel size {kernel_size}")
-    print(f"stride {stride}")
-    print(f"dilation {dilation}")
 
     if kernel_size % 2 == 0:
         if kernel_size == stride and dilation == 1:
@@ -106,7 +102,6 @@ def compute_halo_from_kernel_stride_and_dilation(kernel_size, stride, dilation):
 
 def shard_to_haloed_local_for_conv2d(input, kernel_shape, stride, padding, dilation, groups):
 
-    print(input._spec)
     mesh = input._spec.mesh
     placements = input._spec.placements
 
@@ -132,11 +127,6 @@ def shard_to_haloed_local_for_conv2d(input, kernel_shape, stride, padding, dilat
         h_stride.append(full_stride[tensor_dim - 2])
         h_padding.append(full_padding[tensor_dim - 2])
         h_dilation.append(full_dilation[tensor_dim - 2])
-        
-    print(f"Kernel size for halo dimensions: {h_kernel}")
-    print(f"stri size for halo dimensions: {h_stride}")
-    print(f"pad size for halo dimensions: {h_padding}")
-    print(f"dil size for halo dimensions: {h_dilation}")
             
     
     
@@ -147,15 +137,11 @@ def shard_to_haloed_local_for_conv2d(input, kernel_shape, stride, padding, dilat
         for k, s, d in zip(h_kernel, h_stride, h_dilation)
     )
     
-    print(halo_size)
-    
     # Padding here is pretty much always 0s.
-    
+    # TODO - check and fix any edge cases
     edge_padding_t = "none"
     
-    print(f"Calling in to halo padding with halo {halo_size}, edge padding {edge_padding_t}, and padding {padding}") 
     
-    print(f"local_input size before is {input.shape}")
     # Use the halo layer to compute halos:
     local_input = HaloPaddingND.apply(
         input,
@@ -163,7 +149,6 @@ def shard_to_haloed_local_for_conv2d(input, kernel_shape, stride, padding, dilat
         edge_padding_t,
         padding,
     ) 
-    print(f"local_input size afterwards is {local_input.shape}")
 
     
     return local_input
@@ -272,14 +257,12 @@ class PartialConv2D(torch.autograd.Function):
         ctx.weight_spec = weights._spec
         ctx.bias_spec   = bias._spec
 
+        # Converting weights and bias to local tensors.  Cast back to DTensor in the backward pass
         weights = weights.to_local()
         
         # This applies the native, underlying na2d:
         if bias is not None: 
             bias = bias.to_local()
-
-        print(f"Partial convolution with local inputs of size: {inputs.size}")
-
 
         local_chunk =  base_func(inputs, weights, bias, stride, padding, dilation, groups)
 
@@ -298,8 +281,6 @@ class PartialConv2D(torch.autograd.Function):
     def backward(ctx, grad_output: "ShardTensor") -> "ShardTensor":  # pragma: no cover
         """backward pass of the of the Distributed HaloPadding primitive"""
 
-        print(f"got grad output of type: {type(grad_output)}")
-        print(f"got grad output of shape: {grad_output.shape} and local shape {grad_output._local_tensor.shape}")
         spec = ctx.spec
         stride = ctx.stride
         padding = ctx.padding
@@ -309,33 +290,31 @@ class PartialConv2D(torch.autograd.Function):
         
         local_chunk, weight, bias = ctx.saved_tensors
     
-        print(f"Weights are: {type(weight)}")
-        print(f"bias are: {type(bias)}")
     
         local_grad_output = grad_output._local_tensor
-
-        print(f"local_chunk shape: {local_chunk.shape}")
-        print(f"local_grad_output shape: {local_grad_output.shape}")
-        print(f"Weights shape: {weight.shape}")
-        print(f"bias shape: {bias.shape}")
 
         # Rotate the weights for the grad input:
         grad_input = base_func(local_grad_output, weight.flip(-1,2))
 
+        # Cast grad_input to shard tensor for further backward pass
         grad_input = ShardTensor.from_local(
             grad_input,
             grad_output._spec.mesh,
             grad_output._spec.placements,
         )
 
-        print(f"Grad_input shape: {grad_input.shape}")
-    
-        grad_weight = base_func(local_chunk.permute(1,0,2,3), local_grad_output.permute(1,0,2,3), stride=stride, padding=padding, groups=groups, dilation=dilation)
+        # Compute weights gradient:
+        grad_weight = base_func(
+            local_chunk.permute(1,0,2,3), 
+            local_grad_output.permute(1,0,2,3), 
+            stride=stride, padding=padding, 
+            groups=groups, dilation=dilation
+        )
         grad_weight = grad_weight.permute(1,0,2,3).contiguous()
-        print(f"Grad weight shape: {grad_weight.shape}")
-        
+        # Sync weight group:
         weight_group = ctx.weight_spec.mesh.get_group()
         dist.all_reduce(grad_weight, group=weight_group)
+        # Cast back to DTensor
         grad_weight = DTensor.from_local(
             grad_weight,
             ctx.weight_spec.mesh,
@@ -344,6 +323,7 @@ class PartialConv2D(torch.autograd.Function):
         
         
         if bias is not None:
+            # Compute bias grad and cast back to DTensor
             grad_bias = local_grad_output.sum((0,2,3))
             bias_group = ctx.bias_spec.mesh.get_group()
             dist.all_reduce(grad_bias, group=bias_group)
@@ -376,19 +356,9 @@ def conv2d_wrapper(wrapped, instance, args, kwargs):
 
     input, weight, bias, stride, padding, dilation, groups, remaining_args = unpack_key_arguments(*args, **kwargs)
 
-    print(f"Remaining args: {remaining_args}")
-    print(f"KWargs: {kwargs}")
-    
 
     # mixing type and isinstance here because ShardTensor inherits DTensor inherits torch.Tensor.
 
-    print(type(input))
-    print(type(weight))
-    print(type(bias))
-
-    print(f"type(input) == ShardTensor: {type(input) == ShardTensor}")
-    print(f"isinstance(weight, ShardTensor): {isinstance(weight, (ShardTensor, DTensor))}")
-    print(f"(bias is None or isinstance(bias, ShardTensor): {(bias is None or isinstance(bias, (ShardTensor, DTensor))) }")
     # Allow bias to be None
     if type(input) == torch.Tensor and \
         type(weight) == torch.nn.parameter.Parameter and \
@@ -411,14 +381,6 @@ def conv2d_wrapper(wrapped, instance, args, kwargs):
         if bias is not None: 
             local_bias = bias.to_local()
             # local_bias = bias._local_tensor
-        # x = wrapped(local_input, local_weight, local_bias, stride, padding, dilation, groups)
-
-        # x = ShardTensor.from_local(
-        #     x,
-        #     spec.mesh,
-        #     spec.placements
-        # )
-
 
         x = PartialConv2D.apply(local_input, weight, bias, stride, padding, dilation, groups, wrapped, spec)
         

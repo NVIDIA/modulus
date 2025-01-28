@@ -45,10 +45,7 @@ def _to_replicate_tensor(
     this_sizes = [s[tensor_dim] for s in sizes[mesh_dim]]
     
     # # Ensure contiguous data for the reduction:
-    # print("is the local tensor contiguous?")
-    # print(f"pre local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
     local_tensor = local_tensor.contiguous()
-    # print(f"post local_tensor.is_contiguous(): {local_tensor.is_contiguous()}")
     
     # We can implement this with a straightforward allgather_v
     local_tensor = all_gather_v(local_tensor, sizes=this_sizes, dim=tensor_dim, group=group)

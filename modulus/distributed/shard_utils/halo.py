@@ -265,7 +265,6 @@ def halo_padding_1d(
             padded_output.append(all_to_all_dest[0])
         elif edge_padding_t == "none":
             pass
-    print(f"Rank {local_rank} with outputs: {[p.shape for p in padded_output]}")
             
     # Finish up:
     return torch.cat(padded_output, dim=target_dim)
