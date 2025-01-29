@@ -286,12 +286,7 @@ def train(config: DictConfig, signal_handler: SignalHandler):
 
             loss = 0
             for k, v in loss_dict.items():
-                weight_name = k + "_weight"
-                if (
-                    hasattr(config, weight_name)
-                    and getattr(config, weight_name) is not None
-                ):
-                    v = v * getattr(config, weight_name)
+                v = v * getattr(config, k + "_weight", 1)
                 loss = loss + v.mean()
 
             # Assert loss is valid
@@ -318,7 +313,7 @@ def train(config: DictConfig, signal_handler: SignalHandler):
             scaler.update()
 
             train_l2_meter.update(loss.item())
-            loggers.log_scalar("train/iter_lr", scheduler.get_lr()[0], tot_iter)
+            loggers.log_scalar("train/iter_lr", scheduler.get_last_lr()[0], tot_iter)
             loggers.log_scalar("train/iter_loss", loss.item(), tot_iter)
             for k, v in loss_dict.items():
                 loggers.log_scalar(f"train/{k}", v.item(), tot_iter)
@@ -328,10 +323,13 @@ def train(config: DictConfig, signal_handler: SignalHandler):
                     print_str += f"{k}: {v.item():.4f}, "  # only print the number
                 logger.info(print_str)
 
+            if config.train.lr_scheduler_mode == "iteration":
+                scheduler.step()
             tot_iter += 1
             torch.cuda.empty_cache()
 
-        scheduler.step()
+        if config.train.lr_scheduler_mode == "epoch":
+            scheduler.step()
         t2 = default_timer()
         logger.info(
             f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2 loss: {train_l2_meter.avg:.4f}"
@@ -387,7 +385,7 @@ def _slurm_setup(config: DictConfig) -> None:
     # Detect if it is running on a SLURM cluster.
     if "SLURM_JOB_ID" in os.environ:
         # The output directory is set to simply ${output}/SLURM_JOB_ID.
-        config.output = os.path.join(config.output, os.environ["SLURM_JOB_ID"])
+        # config.output = os.path.join(config.output, os.environ["SLURM_JOB_ID"])
         # Check for the checkpoints and model_*.pth files in the output directory.
         if os.path.exists(config.output) and any(
             f.startswith("model_") and f.endswith(".pth")

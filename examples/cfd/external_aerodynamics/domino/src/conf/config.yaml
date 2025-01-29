@@ -67,6 +67,7 @@ model:
   use_only_normals: true # Use only surface normals and not surface area
   integral_loss_scaling_factor: 0 # Scale integral loss by this factor
   normalization: min_max_scaling # or mean_std_scaling
+  encode_parameters: false # encode inlet velocity and air density in the model
   geometry_rep: # Hyperparameters for geometry representation network
     base_filters: 16
     geo_conv:
@@ -89,6 +90,9 @@ model:
     neighbors_in_radius: 64
     radius: 0.05 # 0.2 in expt 7
     base_layer: 512
+  parameter_model:
+    base_layer: 512
+    scaling_params: [30.0, 1.226] # [inlet_velocity, air_density]
 
 train: # Training configurable parameters
   epochs: 500
