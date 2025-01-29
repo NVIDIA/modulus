@@ -55,7 +55,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Union, List
 
 import torch
-torch.manual_seed(0) # avoid run-to-run variation
+
+torch.manual_seed(0)  # avoid run-to-run variation
 import torch.nn as nn
 from torch.nn import init
 
@@ -68,7 +69,7 @@ from ..module import Module
 Tensor = torch.Tensor
 
 
-def init_weights(net, init_type='normal', init_gain=0.02):
+def init_weights(net, init_type="normal", init_gain=0.02):
     """Initialize network weights.
 
     Parameters:
@@ -79,26 +80,33 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     We use 'normal' in the original pix2pix and CycleGAN paper. But xavier and kaiming might
     work better for some applications. Feel free to try yourself.
     """
+
     def init_func(m):  # define the initialization function
         classname = m.__class__.__name__
-        if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
-            if init_type == 'normal':
+        if hasattr(m, "weight") and (
+            classname.find("Conv") != -1 or classname.find("Linear") != -1
+        ):
+            if init_type == "normal":
                 init.normal_(m.weight.data, 0.0, init_gain)
-            elif init_type == 'xavier':
+            elif init_type == "xavier":
                 init.xavier_normal_(m.weight.data, gain=init_gain)
-            elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-            elif init_type == 'orthogonal':
+            elif init_type == "kaiming":
+                init.kaiming_normal_(m.weight.data, a=0, mode="fan_in")
+            elif init_type == "orthogonal":
                 init.orthogonal_(m.weight.data, gain=init_gain)
             else:
-                raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
-            if hasattr(m, 'bias') and m.bias is not None:
+                raise NotImplementedError(
+                    "initialization method [%s] is not implemented" % init_type
+                )
+            if hasattr(m, "bias") and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
-        elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
+        elif (
+            classname.find("BatchNorm2d") != -1
+        ):  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 
-    print('initialize network with %s' % init_type)
+    print("initialize network with %s" % init_type)
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
@@ -161,7 +169,7 @@ class Pix2PixUnet(Module):
         out_channels: int,
         n_downsampling: int,
         filter_size: int = 64,
-        norm_layer = nn.BatchNorm2d,
+        norm_layer=nn.BatchNorm2d,
         use_dropout: bool = False,
         gpu_ids: List = [],
     ):
@@ -171,42 +179,61 @@ class Pix2PixUnet(Module):
 
         # device
         self.gpu_ids = gpu_ids
-        self.model_device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
-        
+        self.model_device = (
+            torch.device("cuda:{}".format(self.gpu_ids[0]))
+            if self.gpu_ids
+            else torch.device("cpu")
+        )
+
         # generate Unet model recursively
-        net = UnetGenerator(in_channels, out_channels, n_downsampling, filter_size, norm_layer, use_dropout)
+        net = UnetGenerator(
+            in_channels,
+            out_channels,
+            n_downsampling,
+            filter_size,
+            norm_layer,
+            use_dropout,
+        )
         if len(gpu_ids) > 0:
-            assert(torch.cuda.is_available())
+            assert torch.cuda.is_available()
             net.to(gpu_ids[0])
             net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs
-        #init_weights(net)
-        
+        # init_weights(net)
+
         self.netG = net
-    
+
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0) -> None:
         key = keys[i]
         if i + 1 == len(keys):  # at the end, pointing to a parameter/buffer
-            if module.__class__.__name__.startswith('InstanceNorm') and (key == 'running_mean' or key == 'running_var'):
+            if module.__class__.__name__.startswith("InstanceNorm") and (
+                key == "running_mean" or key == "running_var"
+            ):
                 if getattr(module, key) is None:
-                    state_dict.pop('.'.join(keys))
-            if module.__class__.__name__.startswith('InstanceNorm') and (key == 'num_batches_tracked'):
-                state_dict.pop('.'.join(keys))
+                    state_dict.pop(".".join(keys))
+            if module.__class__.__name__.startswith("InstanceNorm") and (
+                key == "num_batches_tracked"
+            ):
+                state_dict.pop(".".join(keys))
         else:
-            self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
+            self.__patch_instance_norm_state_dict(
+                state_dict, getattr(module, key), keys, i + 1
+            )
 
     def load_networks(self, model_path: str) -> None:
         net = self.netG
         if isinstance(net, torch.nn.DataParallel):
             net = net.module
         state_dict = torch.load(model_path, map_location=str(self.model_device))
-        if hasattr(state_dict, '_metadata'):
+        if hasattr(state_dict, "_metadata"):
             del state_dict._metadata
-        
+
         # patch InstanceNorm checkpoints prior to 0.4
-        for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
-            self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
+        for key in list(
+            state_dict.keys()
+        ):  # need to copy keys here because we mutate in loop
+            self.__patch_instance_norm_state_dict(state_dict, net, key.split("."))
         net.load_state_dict(state_dict)
-    
+
     def test(self, input: Tensor) -> Tensor:
         with torch.no_grad():
             return self.forward(input)
@@ -235,27 +262,68 @@ class UnetGenerator(nn.Module):
     """
 
     def __init__(
-        self, 
-        in_channels: int, 
-        out_channels: int, 
-        n_downsampling: int, 
-        filter_size: int = 64, 
-        norm_layer = nn.BatchNorm2d, 
-        use_dropout: bool = False
+        self,
+        in_channels: int,
+        out_channels: int,
+        n_downsampling: int,
+        filter_size: int = 64,
+        norm_layer=nn.BatchNorm2d,
+        use_dropout: bool = False,
     ):
         super(UnetGenerator, self).__init__()
-        
+
         # construct unet structure
-        unet_block = UnetSkipConnectionBlock(filter_size * 8, filter_size * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
-        for i in range(n_downsampling - 5):          # add intermediate layers with filter_size * 8 filters
-            unet_block = UnetSkipConnectionBlock(filter_size * 8, filter_size * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
-        
+        unet_block = UnetSkipConnectionBlock(
+            filter_size * 8,
+            filter_size * 8,
+            input_nc=None,
+            submodule=None,
+            norm_layer=norm_layer,
+            innermost=True,
+        )  # add the innermost layer
+        for i in range(
+            n_downsampling - 5
+        ):  # add intermediate layers with filter_size * 8 filters
+            unet_block = UnetSkipConnectionBlock(
+                filter_size * 8,
+                filter_size * 8,
+                input_nc=None,
+                submodule=unet_block,
+                norm_layer=norm_layer,
+                use_dropout=use_dropout,
+            )
+
         # gradually reduce the number of filters from filter_size * 8 to filter_size
-        unet_block = UnetSkipConnectionBlock(filter_size * 4, filter_size * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        unet_block = UnetSkipConnectionBlock(filter_size * 2, filter_size * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        unet_block = UnetSkipConnectionBlock(filter_size, filter_size * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        
-        self.model = UnetSkipConnectionBlock(out_channels, filter_size, input_nc=in_channels, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
+        unet_block = UnetSkipConnectionBlock(
+            filter_size * 4,
+            filter_size * 8,
+            input_nc=None,
+            submodule=unet_block,
+            norm_layer=norm_layer,
+        )
+        unet_block = UnetSkipConnectionBlock(
+            filter_size * 2,
+            filter_size * 4,
+            input_nc=None,
+            submodule=unet_block,
+            norm_layer=norm_layer,
+        )
+        unet_block = UnetSkipConnectionBlock(
+            filter_size,
+            filter_size * 2,
+            input_nc=None,
+            submodule=unet_block,
+            norm_layer=norm_layer,
+        )
+
+        self.model = UnetSkipConnectionBlock(
+            out_channels,
+            filter_size,
+            input_nc=in_channels,
+            submodule=unet_block,
+            outermost=True,
+            norm_layer=norm_layer,
+        )  # add the outermost layer
 
     def forward(self, input):
         return self.model(input)
@@ -283,7 +351,7 @@ class UnetSkipConnectionBlock(nn.Module):
     use_dropout : bool, optional
         if use dropout layers, by default False
     """
-    
+
     def __init__(
         self,
         outer_nc: int,
@@ -292,7 +360,7 @@ class UnetSkipConnectionBlock(nn.Module):
         submodule: nn.Module = None,
         outermost: bool = False,
         innermost: bool = False,
-        norm_layer = nn.BatchNorm2d,
+        norm_layer=nn.BatchNorm2d,
         use_dropout: bool = False,
     ):
         super().__init__()
@@ -303,31 +371,37 @@ class UnetSkipConnectionBlock(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
         if input_nc is None:
             input_nc = outer_nc
-        downconv = nn.Conv2d(input_nc, inner_nc, kernel_size=4,
-                             stride=2, padding=1, bias=use_bias)
+        downconv = nn.Conv2d(
+            input_nc, inner_nc, kernel_size=4, stride=2, padding=1, bias=use_bias
+        )
         downrelu = nn.LeakyReLU(0.2, True)
         downnorm = norm_layer(inner_nc)
         uprelu = nn.ReLU(True)
         upnorm = norm_layer(outer_nc)
 
         if outermost:
-            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1)
+            upconv = nn.ConvTranspose2d(
+                inner_nc * 2, outer_nc, kernel_size=4, stride=2, padding=1
+            )
             down = [downconv]
             up = [uprelu, upconv, nn.Tanh()]
             model = down + [submodule] + up
         elif innermost:
-            upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1, bias=use_bias)
+            upconv = nn.ConvTranspose2d(
+                inner_nc, outer_nc, kernel_size=4, stride=2, padding=1, bias=use_bias
+            )
             down = [downrelu, downconv]
             up = [uprelu, upconv, upnorm]
             model = down + up
         else:
-            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
-                                        kernel_size=4, stride=2,
-                                        padding=1, bias=use_bias)
+            upconv = nn.ConvTranspose2d(
+                inner_nc * 2,
+                outer_nc,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                bias=use_bias,
+            )
             down = [downrelu, downconv, downnorm]
             up = [uprelu, upconv, upnorm]
 
@@ -341,6 +415,5 @@ class UnetSkipConnectionBlock(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.outermost:
             return self.model(x)
-        else:   # add skip connections
+        else:  # add skip connections
             return torch.cat([x, self.model(x)], 1)
-
