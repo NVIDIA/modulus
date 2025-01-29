@@ -5,6 +5,9 @@ MeshGraphNet presented in the paper [Learning Reduced-Order Models for Cardiovas
 Simulations with Graph Neural Networks](https://arxiv.org/abs/2303.07310)
 (Pegolotti et al, 2023).
 
+## Contributor
+- Luca Pegolotti
+
 ## Problem overview
 
 Three-dimensional simulations of the Navier-Stokes equations are the gold standard
