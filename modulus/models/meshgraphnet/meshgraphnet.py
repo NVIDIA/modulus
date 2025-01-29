@@ -40,7 +40,7 @@ from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
-
+from modulus.utils.profiling import profile
 
 @dataclass
 class MetaData(ModelMetaData):
@@ -192,6 +192,9 @@ class MeshGraphNet(Module):
             checkpoint_offloading=checkpoint_offloading,
         )
 
+
+
+    @profile
     def forward(
         self,
         node_features: Tensor,
@@ -200,7 +203,7 @@ class MeshGraphNet(Module):
         **kwargs,
     ) -> Tensor:
         edge_features = self.edge_encoder(edge_features)
-        node_features = self.node_encoder(node_features)
+        node_features = self.node_encoder(node_features)        
         x = self.processor(node_features, edge_features, graph)
         x = self.node_decoder(x)
         return x
@@ -311,6 +314,7 @@ class MeshGraphNetProcessor(nn.Module):
             self.checkpoint_fn = set_checkpoint_fn(False)
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
+    @profile
     def run_function(
         self, segment_start: int, segment_end: int
     ) -> Callable[
@@ -346,7 +350,7 @@ class MeshGraphNetProcessor(nn.Module):
 
         return custom_forward
 
-    @torch.jit.unused
+    @profile
     def forward(
         self,
         node_features: Tensor,

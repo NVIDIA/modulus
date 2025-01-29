@@ -32,6 +32,7 @@ try:
 except ImportError:
     te_imported = False
 
+from modulus.utils.profiling import profile
 
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
     """Custom SiLU + Linear autograd function"""
@@ -194,6 +195,7 @@ class MeshGraphMLP(nn.Module):
             hidden = norm(hidden)
         return hidden
 
+    @profile
     def forward(self, x: Tensor) -> Tensor:
         if self.recompute_activation:
             return self.custom_silu_linear_forward(x)
@@ -260,6 +262,7 @@ class MeshGraphEdgeMLPConcat(MeshGraphMLP):
             recompute_activation,
         )
 
+    @profile
     def forward(
         self,
         efeat: Tensor,
@@ -379,6 +382,7 @@ class MeshGraphEdgeMLPSum(nn.Module):
         else:
             self.recompute_activation = False
 
+    @profile
     def forward_truncated_sum(
         self,
         efeat: Tensor,
@@ -400,6 +404,7 @@ class MeshGraphEdgeMLPSum(nn.Module):
         mlp_sum = sum_efeat(mlp_efeat, (mlp_src, mlp_dst), graph)
         return mlp_sum
 
+    @profile
     def default_forward(
         self,
         efeat: Tensor,
@@ -414,6 +419,7 @@ class MeshGraphEdgeMLPSum(nn.Module):
         )
         return self.model(mlp_sum)
 
+    @profile
     def custom_silu_linear_forward(
         self,
         efeat: Tensor,
@@ -439,6 +445,7 @@ class MeshGraphEdgeMLPSum(nn.Module):
             hidden = norm(hidden)
         return hidden
 
+    @profile
     def forward(
         self,
         efeat: Tensor,

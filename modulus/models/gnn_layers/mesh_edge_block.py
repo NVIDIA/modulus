@@ -24,6 +24,7 @@ from torch import Tensor
 from .mesh_graph_mlp import MeshGraphEdgeMLPConcat, MeshGraphEdgeMLPSum
 from .utils import CuGraphCSC
 
+from modulus.utils.profiling import profile
 
 class MeshEdgeBlock(nn.Module):
     """Edge block used e.g. in GraphCast or MeshGraphNet
@@ -82,6 +83,7 @@ class MeshEdgeBlock(nn.Module):
         )
 
     @torch.jit.ignore()
+    @profile
     def forward(
         self,
         efeat: Tensor,
