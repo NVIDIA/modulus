@@ -325,7 +325,6 @@ class FIGConvUNet(BaseModel):
             self.drag_loss_weight = drag_loss_weight
 
     @profile
-    @annotate(message="_grid_forward")
     def _grid_forward(self, point_features: PointFeatures):
         grid_feature_group = GridFeatureGroup(
             [to_grid(point_features) for to_grid in self.point_feature_to_grids]
@@ -359,7 +358,6 @@ class FIGConvUNet(BaseModel):
         return grid_features, drag_pred
 
     @profile
-    @annotate(message="figconvunet.forward")
     def forward(
         self,
         vertices: Float[Tensor, "B N 3"],
