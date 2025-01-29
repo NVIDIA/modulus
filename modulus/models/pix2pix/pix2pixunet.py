@@ -1,3 +1,5 @@
+# ignore_header_test
+# ruff: noqa: E402
 """
 Pix2PixUnet model. This code was modified from, https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix
 
@@ -52,7 +54,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import functools
 from dataclasses import dataclass
-from typing import Any, Dict, Union, List
+from typing import List
 
 import torch
 
@@ -60,8 +62,7 @@ torch.manual_seed(0)  # avoid run-to-run variation
 import torch.nn as nn
 from torch.nn import init
 
-import modulus
-from modulus.models.layers import get_activation
+import modulus  # noqa: F401 for docs
 
 from ..meta import ModelMetaData
 from ..module import Module
@@ -195,7 +196,6 @@ class Pix2PixUnet(Module):
             use_dropout,
         )
         if len(gpu_ids) > 0:
-            assert torch.cuda.is_available()
             net.to(gpu_ids[0])
             net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs
         # init_weights(net)
