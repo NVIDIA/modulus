@@ -130,9 +130,6 @@ class HaloPaddingND(torch.autograd.Function):
     def backward(ctx, grad_output: torch.Tensor) -> "ShardTensor":  # pragma: no cover
         """backward pass of the of the Distributed HaloPadding primitive"""
 
-        print(f"got grad output of shape: {grad_output.shape}")
-        print(f"got grad output of type: {type(grad_output)}")
-
         spec = ctx.spec
         mesh = spec.mesh
         placements = spec.placements
@@ -184,7 +181,7 @@ class UnSliceHaloND(torch.autograd.Function):
         
         # Cast to shard tensor:
         stensor = ShardTensor.from_local(local_tensor, mesh, placements)
-        print(f"FORWARD: local_tensor shape and local shape {stensor.shape}, {stensor._local_tensor.shape}")
+
         return stensor
     
     @staticmethod
@@ -192,8 +189,6 @@ class UnSliceHaloND(torch.autograd.Function):
         ctx,
         grad_output
     ) -> torch.Tensor:
-        
-        print(f"Grad output shape and local shape: {grad_output.shape}, {grad_output._local_tensor.shape}")
         
         # padded_tensor = halo_padding_1d(stensor.to_local(), mesh, halo[0], edge_padding_t, edge_padding_s[0])
         mesh = ctx.mesh

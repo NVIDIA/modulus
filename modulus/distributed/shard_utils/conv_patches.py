@@ -23,15 +23,15 @@ __all__ = [
 
 
 
-
-
 from modulus.distributed.shard_utils.patch_core import (
     UndeterminedShardingError,
     MissingShardPatch,
 )
 
 __all__ = [
-    "conv2d_wrapper"
+    "conv1d_wrapper",
+    "conv2d_wrapper",
+    "conv3d_wrapper",
 ]
 
 def conv_output_shape(L_in, p, s, k, d):
@@ -307,15 +307,6 @@ class PartialConvND(torch.autograd.Function):
         ctx.spec = output_spec
         ctx.conv_kwargs = conv_kwargs
 
-        ctx.weight_spec = weights._spec
-        ctx.bias_spec   = bias._spec
-
-        # Converting weights and bias to local tensors.  Cast back to DTensor in the backward pass
-        weights = weights.to_local()
-        
-        # This applies the native, underlying na2d:
-        if bias is not None: 
-            bias = bias.to_local()
             
         # Save the local versions of weights, bias, otherwise
         # It will dispatch to the tensor parallel conv ...
@@ -361,352 +352,17 @@ class PartialConvND(torch.autograd.Function):
             )
             
        
-        # Sync weight group:
-        weight_group = ctx.weight_spec.mesh.get_group()
-        dist.all_reduce(grad_weight, group=weight_group)
-        # Cast back to DTensor
-        grad_weight = DTensor.from_local(
-            grad_weight,
-            ctx.weight_spec.mesh,
-            ctx.weight_spec.placements,
-        )
-        
-        
-        if bias is not None:
-            # Compute bias grad and cast back to DTensor
-            bias_group = ctx.bias_spec.mesh.get_group()
-            dist.all_reduce(grad_bias, group=bias_group)
-            grad_bias = DTensor.from_local(
-                grad_bias,
-                ctx.bias_spec.mesh,
-                ctx.bias_spec.placements,
-            )
-            
+        # We have to make sure the weights and biases agree on the domain (a local allreduce)
+        group = spec.mesh.get_group()
+        dist.all_reduce(grad_weight, group=group)
+        if grad_bias is not None:
+            dist.all_reduce(grad_bias, group=group)
+       
+
         return grad_input, grad_weight, grad_bias, None, None, None, None, None, None
 
     
 
-
-# class PartialConv2D(torch.autograd.Function):
-#     """
-#     This function exists to pass gradients through, properly, a 2D conv.
-#     """
-#     @staticmethod
-#     def forward(
-#         ctx,
-#         inputs: torch.Tensor,
-#         weights : torch.nn.Parameter,
-#         bias: Optional[torch.nn.Parameter],
-#         stride,
-#         padding,
-#         dilation,
-#         groups,
-#         base_func,
-#         output_spec, 
-#     ) -> "ShardTensor":  # pragma: no cover
-#         """forward pass of the Distributed Conv2d primitive"""
-#         ctx.spec = output_spec
-#         ctx.stride = stride
-#         ctx.padding = padding
-#         ctx.dilation = dilation
-#         ctx.groups = groups
-#         ctx.base_func = base_func
-
-#         ctx.weight_spec = weights._spec
-#         ctx.bias_spec   = bias._spec
-
-#         # Converting weights and bias to local tensors.  Cast back to DTensor in the backward pass
-#         weights = weights.to_local()
-        
-#         # This applies the native, underlying na2d:
-#         if bias is not None: 
-#             bias = bias.to_local()
-
-#         local_chunk =  base_func(inputs, weights, bias, stride, padding, dilation, groups)
-
-#         ctx.save_for_backward(inputs, weights, bias)
-
-#         output = ShardTensor.from_local(
-#             local_chunk,
-#             output_spec.mesh,
-#             output_spec.placements
-#         )
-        
-
-#         return output
-
-#     @staticmethod
-#     def backward(ctx, grad_output: "ShardTensor") -> "ShardTensor":  # pragma: no cover
-#         """backward pass of the of the Distributed HaloPadding primitive"""
-
-#         spec = ctx.spec
-#         stride = ctx.stride
-#         padding = ctx.padding
-#         dilation = ctx.dilation
-#         groups = ctx.groups
-#         base_func = ctx.base_func
-        
-#         local_chunk, weight, bias = ctx.saved_tensors
-    
-    
-#         local_grad_output = grad_output._local_tensor
-
-#         # Rotate the weights for the grad input:
-#         grad_input = base_func(local_grad_output, weight.flip(-1,2))
-
-#         # Cast grad_input to shard tensor for further backward pass
-#         grad_input = ShardTensor.from_local(
-#             grad_input,
-#             grad_output._spec.mesh,
-#             grad_output._spec.placements,
-#         )
-
-#         # Compute weights gradient:
-#         grad_weight = base_func(
-#             local_chunk.permute(1,0,2,3), 
-#             local_grad_output.permute(1,0,2,3), 
-#             stride=stride, padding=padding, 
-#             groups=groups, dilation=dilation
-#         )
-#         grad_weight = grad_weight.permute(1,0,2,3).contiguous()
-#         # Sync weight group:
-#         weight_group = ctx.weight_spec.mesh.get_group()
-#         dist.all_reduce(grad_weight, group=weight_group)
-#         # Cast back to DTensor
-#         grad_weight = DTensor.from_local(
-#             grad_weight,
-#             ctx.weight_spec.mesh,
-#             ctx.weight_spec.placements,
-#         )
-        
-        
-#         if bias is not None:
-#             # Compute bias grad and cast back to DTensor
-#             grad_bias = local_grad_output.sum((0,2,3))
-#             bias_group = ctx.bias_spec.mesh.get_group()
-#             dist.all_reduce(grad_bias, group=bias_group)
-#             grad_bias = DTensor.from_local(
-#                 grad_bias,
-#                 ctx.bias_spec.mesh,
-#                 ctx.bias_spec.placements,
-#             )
-            
-#         return grad_input, grad_weight, grad_bias, None, None, None, None, None, None
-
-
-
-# class PartialConv3D(torch.autograd.Function):
-#     """
-#     This function exists to pass gradients through, properly, a 2D conv.
-#     """
-#     @staticmethod
-#     def forward(
-#         ctx,
-#         inputs: torch.Tensor,
-#         weights : DTensor,
-#         bias: Optional[DTensor],
-#         stride,
-#         padding,
-#         dilation,
-#         groups,
-#         base_func,
-#         output_spec, 
-#     ) -> "ShardTensor":  # pragma: no cover
-#         """forward pass of the Distributed Conv2d primitive"""
-#         ctx.spec = output_spec
-#         ctx.stride = stride
-#         ctx.padding = padding
-#         ctx.dilation = dilation
-#         ctx.groups = groups
-#         ctx.base_func = base_func
-
-#         ctx.weight_spec = weights._spec
-#         ctx.bias_spec   = bias._spec
-
-#         # Converting weights and bias to local tensors.  Cast back to DTensor in the backward pass
-#         weights = weights.to_local()
-        
-#         # This applies the native, underlying na2d:
-#         if bias is not None: 
-#             bias = bias.to_local()
-
-#         local_chunk =  base_func(inputs, weights, bias, stride, padding, dilation, groups)
-
-#         ctx.save_for_backward(inputs, weights, bias)
-
-#         output = ShardTensor.from_local(
-#             local_chunk,
-#             output_spec.mesh,
-#             output_spec.placements
-#         )
-        
-
-#         return output
-
-#     @staticmethod
-#     def backward(ctx, grad_output: "ShardTensor") -> torch.Tensor:  # pragma: no cover
-#         """backward pass of the of the Distributed HaloPadding primitive"""
-
-#         spec = ctx.spec
-#         stride = ctx.stride
-#         padding = ctx.padding
-#         dilation = ctx.dilation
-#         groups = ctx.groups
-#         base_func = ctx.base_func
-        
-#         local_chunk, weight, bias = ctx.saved_tensors
-    
-    
-#         local_grad_output = grad_output._local_tensor
-
-#         # Rotate the weights for the grad input:
-#         grad_input = base_func(local_grad_output, weight.flip(-1,2))
-
-#         # Cast grad_input to shard tensor for further backward pass
-#         grad_input = ShardTensor.from_local(
-#             grad_input,
-#             grad_output._spec.mesh,
-#             grad_output._spec.placements,
-#         )
-
-#         # Compute weights gradient:
-#         grad_weight = base_func(
-#             local_chunk.permute(1,0,2,3,4), 
-#             local_grad_output.permute(1,0,2,3,4), 
-#             stride=stride, padding=padding, 
-#             groups=groups, dilation=dilation
-#         )
-#         grad_weight = grad_weight.permute(1,0,2,3, 4).contiguous()
-#         # Sync weight group:
-#         weight_group = ctx.weight_spec.mesh.get_group()
-#         dist.all_reduce(grad_weight, group=weight_group)
-#         # Cast back to DTensor
-#         grad_weight = DTensor.from_local(
-#             grad_weight,
-#             ctx.weight_spec.mesh,
-#             ctx.weight_spec.placements,
-#         )
-        
-        
-#         if bias is not None:
-#             # Compute bias grad and cast back to DTensor
-#             grad_bias = local_grad_output.sum((0,2,3,4))
-#             bias_group = ctx.bias_spec.mesh.get_group()
-#             dist.all_reduce(grad_bias, group=bias_group)
-#             grad_bias = DTensor.from_local(
-#                 grad_bias,
-#                 ctx.bias_spec.mesh,
-#                 ctx.bias_spec.placements,
-#             )
-            
-#         return grad_input, grad_weight, grad_bias, None, None, None, None, None, None
-
-
-
-# # Convolution patches
-# @wrapt.patch_function_wrapper('torch.nn.functional', 'conv2d')
-# def conv2d_wrapper(wrapped, instance, args, kwargs):
-#     """
-#     Perform na2d on sharded tensors.  Expected that q, k, v
-#     are sharded the same way and on the same mesh.  And that
-#     they have the same shape, locally and globally.
-#     """
-    
-#     # args[0], args[1], and args[2] should all be shard tensors to do the wrapping
-#     # If they are regular torch tensors, do nothing unusual!
-
-
-#     def unpack_key_arguments(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1, *args, **kwargs):
-#         return input, weight, bias, stride, padding, dilation, groups, args
-
-#     input, weight, bias, stride, padding, dilation, groups, remaining_args = unpack_key_arguments(*args, **kwargs)
-
-
-#     # mixing type and isinstance here because ShardTensor inherits DTensor inherits torch.Tensor.
-
-#     # Allow bias to be None
-#     if type(input) == torch.Tensor and \
-#         type(weight) == torch.nn.parameter.Parameter and \
-#         (bias is None or type(bias) == torch.nn.parameter.Parameter):
-#         return wrapped(*args, **kwargs)
-#     elif type(input) == ShardTensor and \
-#         isinstance(weight, (ShardTensor, DTensor)) and \
-#         (bias is None or isinstance(bias, (ShardTensor, DTensor))):
-        
-#         kernel = weight.shape[2:]
-        
-#         # This applies a halo layer and returns local torch tensors:
-#         local_input = shard_to_haloed_local_for_convNd(input, kernel, stride, padding, dilation, groups)
-
-#         spec = input._spec
-
-
-#         # local_weight = weight._local_tensor
-#         local_weight = weight.to_local()
-        
-#         # This applies the native, underlying na2d:
-#         if bias is not None: 
-#             local_bias = bias.to_local()
-#             # local_bias = bias._local_tensor
-
-#         x = PartialConv2D.apply(local_input, weight, bias, stride, padding, dilation, groups, wrapped, spec)
-        
-#         return x
-        
-#     else:
-#         raise UndeterminedShardingError("input, weight, bias (if not None) must all be the same types (torch.Tensor or ShardTensor)")
-    
-# @wrapt.patch_function_wrapper('torch.nn.functional', 'conv3d')
-# def conv3d_wrapper(wrapped, instance, args, kwargs):
-#     """
-#     Perform na2d on sharded tensors.  Expected that q, k, v
-#     are sharded the same way and on the same mesh.  And that
-#     they have the same shape, locally and globally.
-#     """
-    
-#     # args[0], args[1], and args[2] should all be shard tensors to do the wrapping
-#     # If they are regular torch tensors, do nothing unusual!
-
-#     input, weight, bias, conv_kwargs = repackage_conv_args(*args, **kwargs)
-
-
-#     # def unpack_tensor_arguments(input, weight, bias=None, *args, **kwargs):
-#     #     return input, weight, bias
-
-#     # input, weight, bias = unpack_tensor_arguments(*args, **kwargs)
-
-#     # mixing type and isinstance here because ShardTensor inherits DTensor inherits torch.Tensor.
-
-#     # Allow bias to be None
-#     if type(input) == torch.Tensor and \
-#         type(weight) == torch.nn.parameter.Parameter and \
-#         (bias is None or type(bias) == torch.nn.parameter.Parameter):
-#         return wrapped(*args, **kwargs)
-#     elif type(input) == ShardTensor and \
-#         isinstance(weight, (ShardTensor, DTensor)) and \
-#         (bias is None or isinstance(bias, (ShardTensor, DTensor))):
-        
-#         kernel_shape = weight.shape[2:]
-
-#         promotables = ["stride", "padding", "dilation", "output_padding"]
-#         # For the relevant args, promote to the same size as the kernel:
-#         conv_kwargs = {
-#             key : promote_to_iterable(p, kernel_shape) if key in promotables else p
-#             for key, p in conv_kwargs.items()
-#         }
-        
-#         # This applies a halo layer and returns local torch tensors:
-#         local_input = shard_to_haloed_local_for_convNd(input, kernel_shape, **conv_kwargs)
-
-#         output_spec = input._spec
-
-#         x = PartialConvND.apply(local_input, weight, bias, output_spec, conv_kwargs)
-        
-#         return x
-        
-#     else:
-#         raise UndeterminedShardingError("input, weight, bias (if not None) must all be the same types (torch.Tensor or ShardTensor)")
-    
 
 @wrapt.patch_function_wrapper('torch.nn.functional', 'conv1d')
 def conv1d_wrapper(wrapped, instance, args, kwargs):
@@ -737,10 +393,20 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
         type(weight) == torch.nn.parameter.Parameter and \
         (bias is None or type(bias) == torch.nn.parameter.Parameter):
         return wrapped(*args, **kwargs)
-    elif type(input) == ShardTensor and \
-        isinstance(weight, (ShardTensor, DTensor)) and \
-        (bias is None or isinstance(bias, (ShardTensor, DTensor))):
+    elif type(input) == ShardTensor:
+        # Dynamically collect weights as needed.
+        # If they are sharded (DTensor), gather them locally.
+        if isinstance(weight, (ShardTensor, DTensor)):
+            weight = weight.full_tensor()
         
+        if isinstance(bias, (ShardTensor, DTensor)):
+            bias = bias.full_tensor()
+
+
+        # (bias is None or isinstance(bias, (ShardTensor, DTensor))):
+        #     elif type(input) == ShardTensor and \
+        # isinstance(weight, (ShardTensor, DTensor)) and \
+        # (bias is None or isinstance(bias, (ShardTensor, DTensor))):
         kernel_shape = weight.shape[2:]
 
         promotables = ["stride", "padding", "dilation", "output_padding"]
@@ -749,6 +415,13 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
             key : promote_to_iterable(p, kernel_shape) if key in promotables else p
             for key, p in conv_kwargs.items()
         }
+        
+        #         # Converting weights and bias to local tensors.  Cast back to DTensor in the backward pass
+        # weights = weights.to_local()
+        
+        # # This applies the native, underlying na2d:
+        # if bias is not None: 
+        #     bias = bias.to_local()
         
         # This applies a halo layer and returns local torch tensors:
         local_input = shard_to_haloed_local_for_convNd(input, kernel_shape, **conv_kwargs)
@@ -760,7 +433,13 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
         return x
         
     else:
-        raise UndeterminedShardingError("input, weight, bias (if not None) must all be the same types (torch.Tensor or ShardTensor)")
+        
+        msg = "input, weight, bias (if not None) must all be the valid types " \
+            "(torch.Tensor or ShardTensor), but got " \
+            f"{type(input)}, " \
+            f"{type(weight)}, " \
+            f"{type(bias)}, "
+        raise UndeterminedShardingError(msg)
     
 
 def repackage_conv_args(
