@@ -144,10 +144,14 @@ class MeshGraphNet(Module):
         num_processor_checkpoint_segments: int = 0,
         checkpoint_offloading: bool = False,
         recompute_activation: bool = False,
+        norm_type = "TELayerNorm",
     ):
         super().__init__(meta=MetaData())
 
         activation_fn = get_activation(mlp_activation_fn)
+
+        assert norm_type in ["LayerNorm", "TELayerNorm"], \
+            "Norm type should be either 'LayerNorm' or 'TELayerNorm'"
 
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
@@ -155,7 +159,7 @@ class MeshGraphNet(Module):
             hidden_dim=hidden_dim_edge_encoder,
             hidden_layers=num_layers_edge_encoder,
             activation_fn=activation_fn,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
 
@@ -165,7 +169,7 @@ class MeshGraphNet(Module):
             hidden_dim=hidden_dim_node_encoder,
             hidden_layers=num_layers_node_encoder,
             activation_fn=activation_fn,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
 
@@ -185,7 +189,7 @@ class MeshGraphNet(Module):
             num_layers_node=num_layers_node_processor,
             num_layers_edge=num_layers_edge_processor,
             aggregation=aggregation,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             activation_fn=activation_fn,
             do_concat_trick=do_concat_trick,
             num_processor_checkpoint_segments=num_processor_checkpoint_segments,
