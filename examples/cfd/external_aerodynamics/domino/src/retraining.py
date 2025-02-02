@@ -557,6 +557,7 @@ def train_epoch(
 
     return last_loss
 
+
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     input_path = cfg.data.input_dir
@@ -821,7 +822,7 @@ def main(cfg: DictConfig) -> None:
                 scaler=scaler,
                 epoch=str(
                     best_vloss.item()
-                ), # hacky way of using epoch to store metadata
+                ),  # hacky way of using epoch to store metadata
             )
         print(
             f"Device { dist.device}, Best val loss {best_vloss}, Time taken {time.time() - start_time}"
