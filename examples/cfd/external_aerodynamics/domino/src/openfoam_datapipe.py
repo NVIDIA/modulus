@@ -142,6 +142,19 @@ class OpenFoamDataset(Dataset):
                 polydata, self.volume_variables
             )
             volume_fields = np.concatenate(volume_fields, axis=-1)
+
+            # Non-dimensionalize volume fields
+            volume_fields[:, :3] = volume_fields[:, :3] / STREAM_VELOCITY
+            volume_fields[:, 3:4] = volume_fields[:, 3:4] / (
+                AIR_DENSITY * STREAM_VELOCITY**2.0
+            )
+
+            volume_fields[:, 4:5] = volume_fields[:, 4:5] / (
+                AIR_DENSITY * STREAM_VELOCITY**2.0
+            )
+            volume_fields[:, 5:] = volume_fields[:, 5:] / (
+                STREAM_VELOCITY * length_scale
+            )
         else:
             volume_fields = None
             volume_coordinates = None
@@ -171,6 +184,9 @@ class OpenFoamDataset(Dataset):
             surface_normals = (
                 surface_normals / np.linalg.norm(surface_normals, axis=1)[:, np.newaxis]
             )
+
+            # Non-dimensionalize surface fields
+            surface_fields = surface_fields / (AIR_DENSITY * STREAM_VELOCITY**2.0)
         else:
             surface_fields = None
             surface_coordinates = None
