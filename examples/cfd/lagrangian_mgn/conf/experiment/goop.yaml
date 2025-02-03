@@ -29,13 +29,12 @@ data:
   name: Goop
   num_node_types: 9
   train:
-    num_samples: 1000
-    num_steps: 395  # 400 - ${num_history}
+    num_sequences: 1000
   valid:
-    num_samples: 30
+    num_sequences: 30
     num_steps: 100
   test:
-    num_samples: 30
+    num_sequences: 30
     num_steps: 100
 
 model:
