@@ -273,13 +273,30 @@ class HaloPaddingConvND(torch.autograd.Function):
         for mesh_dim in range(mesh.ndim):
             if isinstance(placements[mesh_dim], Shard):
                 tensor_dim = placements[mesh_dim].dim
-                grad_input, grad_halos = halo_unpadding_1d(grad_output, mesh, mesh_dim, tensor_dim, halo[mesh_dim], return_slices=True)
+                grad_input, grad_halos = halo_unpadding_1d(
+                    grad_output, 
+                    mesh, 
+                    mesh_dim, 
+                    tensor_dim, 
+                    halo[mesh_dim], 
+                    return_slices=True)
+
 
                 # The gradient halos for the backward pass with a general convolution need to be be 
                 # sent to their original locations and _added_, not concatenated
-                all_to_all_dest = perform_halo_collective(mesh, mesh_dim, *grad_halos)
-                
-                grad_input = apply_grad_halo(mesh, mesh_dim, tensor_dim, grad_input, all_to_all_dest)
+                halo_from_left, halo_from_right = perform_halo_collective(
+                    mesh, 
+                    mesh_dim, 
+                    *grad_halos
+                )
+                grad_input = apply_grad_halo(
+                    mesh,
+                    mesh_dim,
+                    tensor_dim,
+                    grad_input,
+                    halo_from_left,
+                    halo_from_right
+                )
                 
         # And, wrap it into a shard tensor:
         grad_tensor = ShardTensor(

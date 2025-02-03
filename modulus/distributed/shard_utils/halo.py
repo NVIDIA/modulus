@@ -176,8 +176,8 @@ def _deprecated_halo_padding_1d(
 
     # Initialize peer2peer buffers to be empty
     # They will be left empty unless there is a message to exchange
-    all_to_all_source = [ torch.empty(0, device=local_tensor.device, dtype=local_tensor.dtype) for _ in range(local_size)]
-    all_to_all_dest   = [ torch.empty(0, device=local_tensor.device, dtype=local_tensor.dtype) for _ in range(local_size)]
+    all_to_all_send = [ torch.empty(0, device=local_tensor.device, dtype=local_tensor.dtype) for _ in range(local_size)]
+    all_to_all_recv   = [ torch.empty(0, device=local_tensor.device, dtype=local_tensor.dtype) for _ in range(local_size)]
         
     # This is the tensor axis we'll target:    
     target_dim = tensor_dim
@@ -196,7 +196,7 @@ def _deprecated_halo_padding_1d(
     right_indices = torch.flip(right_indices, (0,))
 
     
-    all_to_all_dest = perform_halo_collective(local_rank, local_group, halo_to_left, halo_to_right)
+    all_to_all_recv = perform_halo_collective(local_rank, local_group, halo_to_left, halo_to_right)
     
     halo_to_left  = local_tensor.index_select(target_dim, left_indices).contiguous()
     halo_to_right = local_tensor.index_select(target_dim, right_indices).contiguous()
@@ -205,36 +205,36 @@ def _deprecated_halo_padding_1d(
     # These two if blocks are for non-edge ranks:
     if local_rank != 0:
         # Send one left (don't include the bias - it's already accounted for!)
-        all_to_all_source[local_rank - 1] = halo_to_left
+        all_to_all_send[local_rank - 1] = halo_to_left
         # Receive one left (need to initialize an empty buffer of the right size):
-        all_to_all_dest[local_rank - 1] = torch.zeros_like(halo_to_left).contiguous() 
+        all_to_all_recv[local_rank - 1] = torch.zeros_like(halo_to_left).contiguous() 
     if local_rank != local_size - 1: 
         # Send one right:
-        all_to_all_source[local_rank + 1] = halo_to_right
+        all_to_all_send[local_rank + 1] = halo_to_right
         # Receive one right:
-        all_to_all_dest[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
+        all_to_all_recv[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
         
     # This handles the edge rank for circular padding, which requires the halo pass:
     if edge_padding_t == "circular":
         # Then we send across the edges in a circular fashion:
         if local_rank == 0:
             # Send one left that wraps around
-            all_to_all_source[local_size - 1] = halo_to_left
-            all_to_all_dest[local_size - 1] = torch.zeros_like(halo_to_left).contiguous()
+            all_to_all_send[local_size - 1] = halo_to_left
+            all_to_all_recv[local_size - 1] = torch.zeros_like(halo_to_left).contiguous()
         if local_rank == local_size - 1:
             # Send from N-1 to 0:
-            all_to_all_source[local_rank + 1] = halo_to_right
+            all_to_all_send[local_rank + 1] = halo_to_right
             # Receive one right:
-            all_to_all_dest[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
+            all_to_all_recv[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
             
     # Do the collective: Scatter and gather the halo objects:
-    dist.all_to_all(all_to_all_dest, all_to_all_source, group=local_group)
+    dist.all_to_all(all_to_all_recv, all_to_all_send, group=local_group)
     
     # Build a list of tensors to concatenate (with care for the edge cases):
     padded_output = []
     if local_rank != 0:
         # From one left
-        padded_output.append(all_to_all_dest[local_rank - 1])
+        padded_output.append(all_to_all_recv[local_rank - 1])
     else:
         # Deal with padding on the first entry.
         # Using "halo_to_left" as base shape
@@ -252,7 +252,7 @@ def _deprecated_halo_padding_1d(
             raise NotImplementedError("Need to implement replcate padding")
             # TODO            
         elif edge_padding_t == "circular":
-            padded_output.append(all_to_all_dest[-1])
+            padded_output.append(all_to_all_recv[-1])
         elif edge_padding_t == "none":
             pass
     
@@ -261,7 +261,7 @@ def _deprecated_halo_padding_1d(
     
     if local_rank != local_size - 1: 
         # From one right:
-        padded_output.append(all_to_all_dest[local_rank + 1])
+        padded_output.append(all_to_all_recv[local_rank + 1])
     else:
         # Deal with padding on the last entry.
         # Using "halo_to_right" as base shape
@@ -279,7 +279,7 @@ def _deprecated_halo_padding_1d(
             raise NotImplementedError("Need to implement replcate padding")
             # TODO        
         elif edge_padding_t == "circular":
-            padded_output.append(all_to_all_dest[0])
+            padded_output.append(all_to_all_recv[0])
         elif edge_padding_t == "none":
             pass
             
@@ -364,10 +364,12 @@ def halo_padding_1d(
     halo_to_left  = local_tensor.index_select(target_dim, left_indices).contiguous()
     halo_to_right = local_tensor.index_select(target_dim, right_indices).contiguous()
     
-    all_to_all_dest = perform_halo_collective(mesh, mesh_dim, halo_to_left, halo_to_right) 
+    halo_from_left, halo_from_right = perform_halo_collective(mesh, mesh_dim, halo_to_left, halo_to_right) 
     
     
-    padded_output = unpack_halo_tensors(mesh, mesh_dim, all_to_all_dest, local_tensor, edge_padding_s, edge_padding_t)
+    padded_output = unpack_halo_tensors(
+        mesh, mesh_dim, halo_from_left, halo_from_right,
+        local_tensor, edge_padding_s, edge_padding_t)
     
  
             
@@ -375,93 +377,157 @@ def halo_padding_1d(
     return torch.cat(padded_output, dim=target_dim)
 
 
-def perform_halo_collective(mesh, mesh_dim, halo_to_left, halo_to_right):
+def perform_halo_collective(mesh, mesh_dim, halo_to_left, halo_to_right, method="a2a"):
 
-    assert halo_to_left is not None or halo_to_right is not None
     
-    if halo_to_left is not None:
-        device = halo_to_left.device
-        dtype  = halo_to_left.dtype
-    else:
-        device = halo_to_right.device
-        dtype  = halo_to_right.dtype
+    template_halo = next((x for x in [halo_to_left, halo_to_right] if x is not None), None)
+    assert template_halo is not None
+
     # The local group can come right from the mesh, which the tensor knows already.
     # Here's its implicit mesh is 1D so we don't pass a mesh_dim
     local_group = mesh.get_group(mesh_dim)
     local_rank  = mesh.get_local_rank(mesh_dim)
     local_size  = dist.get_world_size(group=local_group)
 
+    if method == "p2p":
 
-    # Initialize peer2peer buffers to be empty
-    # They will be left empty unless there is a message to exchange
-    all_to_all_source = [ torch.empty(0, device=device, dtype=dtype) for _ in range(local_size)]
-    all_to_all_dest   = [ torch.empty(0, device=device, dtype=dtype) for _ in range(local_size)]
-        
-    
-    # Outgoing Halo, send from this rank but index is destination rank
-    # These two if blocks are for non-edge ranks:
-    if local_rank != 0:
-        # Send one left (don't include the bias - it's already accounted for!)
-        all_to_all_source[local_rank - 1] = halo_to_left
-        # Receive one left (need to initialize an empty buffer of the right size):
-        all_to_all_dest[local_rank - 1] = torch.zeros_like(halo_to_left).contiguous() 
-    if local_rank != local_size - 1: 
-        # Send one right:
-        all_to_all_source[local_rank + 1] = halo_to_right
-        # Receive one right:
-        all_to_all_dest[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
-        
-    # Circular padding not supported
-    # # This handles the edge rank for circular padding, which requires the halo pass:
-    # if edge_padding_t == "circular":
-    #     # Then we send across the edges in a circular fashion:
-    #     if local_rank == 0:
-    #         # Send one left that wraps around
-    #         all_to_all_source[local_size - 1] = halo_to_left
-    #         all_to_all_dest[local_size - 1] = torch.zeros_like(halo_to_left).contiguous()
-    #     if local_rank == local_size - 1:
-    #         # Send from N-1 to 0:
-    #         all_to_all_source[local_rank + 1] = halo_to_right
-    #         # Receive one right:
-    #         all_to_all_dest[local_rank + 1] = torch.zeros_like(halo_to_right).contiguous()
+        # Determine neighbor ranks safely
+        id_of_right = local_rank + 1 if local_rank < local_size - 1 else None
+        id_of_left =  local_rank - 1 if local_rank > 0 else None
+
+        # Buffers for recieving
+        halo_from_right = torch.empty_like(template_halo)
+        halo_from_left  = torch.empty_like(template_halo)
+
+
+        p2p_op_list = []
+
+        torch.cuda.set_device(template_halo.device)
+
+        # Post receives first (if applicable)
+        if id_of_right is not None:
+            p2p_op_list.append(
+                dist.P2POp(
+                    op = dist.irecv, 
+                    tensor = halo_from_right,
+                    peer = id_of_right,
+                    group = local_group,
+                )
+            )
+
+        if id_of_left is not None:
+            p2p_op_list.append(
+                dist.P2POp(
+                    op = dist.irecv, 
+                    tensor = halo_from_left,
+                    peer = id_of_left,
+                    group = local_group,
+                )
+            )
+
+        if id_of_left is not None:
+            p2p_op_list.append(
+                dist.P2POp(
+                    op = dist.isend, 
+                    tensor = halo_to_left,
+                    peer = id_of_left,
+                    group = local_group,
+                )
+            )
+
+
+        if id_of_right is not None:
+            p2p_op_list.append(
+                dist.P2POp(
+                    op = dist.isend, 
+                    tensor = halo_to_right,
+                    peer = id_of_right,
+                    group = local_group,
+                )
+            )
             
-    # Do the collective: Scatter and gather the halo objects:
-    dist.all_to_all(all_to_all_dest, all_to_all_source, group=local_group)
+        # Ensure all communication completes
+        if len(p2p_op_list) > 0 :
+            reqs = dist.batch_isend_irecv(p2p_op_list)
+            for req in reqs:
+                req.wait()
+        
+    elif method == "a2a":
+        # Initialize peer2peer buffers to be empty
+        # They will be left empty unless there is a message to exchange
+        all_to_all_send = [ 
+            torch.empty(0, dtype=template_halo.dtype, device=template_halo.device) 
+            for _ in range(local_size)
+        ]
+        all_to_all_recv = [ 
+            torch.empty(0, dtype=template_halo.dtype, device=template_halo.device) 
+            for _ in range(local_size)
+        ]
+        
+
+        # Outgoing Halo, send from this rank but index is destination rank
+        # These two if blocks are for non-edge ranks:
+        if local_rank != 0:
+            # Send one left
+            all_to_all_send[local_rank - 1] = halo_to_left
+            # Receive one right (need to initialize an empty buffer of the right size):
+            all_to_all_recv[local_rank - 1] = torch.zeros_like(template_halo).contiguous() 
+            
+        if local_rank != local_size - 1: 
+            # Send one to the right:
+            all_to_all_send[local_rank + 1] = halo_to_right
+            # Receive one from the right:
+            all_to_all_recv[local_rank + 1] = torch.zeros_like(template_halo).contiguous()
+                        
+        # Do the collective: Scatter and gather the halo objects:
+        dist.all_to_all(all_to_all_recv, all_to_all_send, group=local_group)
+        
+        # Pull out the left/right:
+        if local_rank != 0:
+            halo_from_left = all_to_all_recv[local_rank - 1]
+        else:
+            halo_from_left = None
+        
+        if local_rank != local_size - 1:
+            halo_from_right = all_to_all_recv[local_rank + 1]
+        else:
+            halo_from_right = None
+        
+    return halo_from_left, halo_from_right
     
-    return all_to_all_dest
-    
-def unpack_halo_tensors(mesh, mesh_dim, all_to_all_dest, local_tensor, edge_padding_s, edge_padding_t):
+def unpack_halo_tensors(
+    mesh, mesh_dim, halo_from_left, halo_from_right, 
+    local_tensor, edge_padding_s, edge_padding_t):
     
     # The local group can come right from the mesh, which the tensor knows already.
     # Here's its implicit mesh is 1D so we don't pass a mesh_dim
     local_group = mesh.get_group(mesh_dim)
     local_rank  = mesh.get_local_rank(mesh_dim)
     local_size  = dist.get_world_size(group=local_group)
-
     
     # Build a list of tensors to concatenate (with care for the edge cases):
     padded_output = []
     if local_rank != 0:
         # From one left
-        padded_output.append(all_to_all_dest[local_rank - 1])
+        padded_output.append(halo_from_left)
     else:
         # Deal with padding on the first entry.
         # Using "halo_to_left" as base shape
         if edge_padding_t == "zeros":
             if edge_padding_s is None:
-                padded_output.append(torch.zeros_like(halo_to_left))
+                padded_output.append(torch.zeros_like(halo_from_left))
             else:
-                shape = list(halo_to_left.shape)
+                shape = list(halo_from_left.shape)
                 shape[target_dim] = edge_padding_s 
-                zeros = torch.zeros(shape, device=halo_to_left.device, dtype=halo_to_left.dtype)
+                zeros = torch.zeros(shape, device=halo_from_left.device, dtype=halo_from_left.dtype)
                 padded_output.append(zeros)
         elif edge_padding_t == "reflect":
-            padded_output.append(halo_to_left.flip(target_dim))
+            padded_output.append(halo_from_left.flip(target_dim))
         elif edge_padding_t == "replicate":
             raise NotImplementedError("Need to implement replcate padding")
             # TODO            
         elif edge_padding_t == "circular":
-            padded_output.append(all_to_all_dest[-1])
+            padded_output.append(halo_from_left)
         elif edge_padding_t == "none":
             pass
     
@@ -470,31 +536,31 @@ def unpack_halo_tensors(mesh, mesh_dim, all_to_all_dest, local_tensor, edge_padd
     
     if local_rank != local_size - 1: 
         # From one right:
-        padded_output.append(all_to_all_dest[local_rank + 1])
+        padded_output.append(halo_from_right)
     else:
         # Deal with padding on the last entry.
         # Using "halo_to_right" as base shape
         if edge_padding_t == "zeros":
             if edge_padding_s is None:
-                padded_output.append(torch.zeros_like(halo_to_right))
+                padded_output.append(torch.zeros_like(halo_from_right))
             else:
-                shape = list(halo_to_right.shape)
+                shape = list(halo_from_right.shape)
                 shape[target_dim] = edge_padding_s 
-                zeros = torch.zeros(shape, device=halo_to_right.device, dtype=halo_to_right.dtype)
+                zeros = torch.zeros(shape, device=halo_from_right.device, dtype=halo_from_right.dtype)
                 padded_output.append(zeros)
         elif edge_padding_t == "reflect":
-            padded_output = halo_to_right.flip(target_dim)
+            padded_output = halo_from_right.flip(target_dim)
         elif edge_padding_t == "replicate":
             raise NotImplementedError("Need to implement replcate padding")
             # TODO        
         elif edge_padding_t == "circular":
-            padded_output.append(all_to_all_dest[0])
+            padded_output.append(halo_from_right)
         elif edge_padding_t == "none":
             pass
         
     return padded_output
 
-def apply_grad_halo(mesh, mesh_dim, tensor_dim, grad_input, all_to_all_dest):
+def apply_grad_halo(mesh, mesh_dim, tensor_dim, grad_input, halo_from_left, halo_from_right):
     
     # The local group can come right from the mesh, which the tensor knows already.
     # Here's its implicit mesh is 1D so we don't pass a mesh_dim
@@ -502,21 +568,19 @@ def apply_grad_halo(mesh, mesh_dim, tensor_dim, grad_input, all_to_all_dest):
     local_rank  = mesh.get_local_rank(mesh_dim)
     local_size  = dist.get_world_size(group=local_group)
 
-    # Unless we're the last rank, apply the update from left:
+    # Unless we're the last rank, apply the update from right:
     if local_rank != local_size -1 :
-        halo = all_to_all_dest[local_rank + 1 ]
-        start_idx = grad_input.shape[tensor_dim] - halo.shape[tensor_dim]
-        length    = halo.shape[tensor_dim]
+        start_idx = grad_input.shape[tensor_dim] - halo_from_right.shape[tensor_dim]
+        length    = halo_from_right.shape[tensor_dim]
         
-        grad_input.narrow(tensor_dim, start_idx, length).add_(halo)
+        grad_input.narrow(tensor_dim, start_idx, length).add_(halo_from_right)
         
-    # Unless we're the first rank, apply the update from right:
+    # Unless we're the first rank, apply the update from left:
     if local_rank != 0:
-        halo = all_to_all_dest[local_rank - 1 ]
         start_idx = 0
-        length    = halo.shape[tensor_dim]
+        length    = halo_from_left.shape[tensor_dim]
 
-        grad_input.narrow(tensor_dim, start_idx, length).add_(halo)
+        grad_input.narrow(tensor_dim, start_idx, length).add_(halo_from_left)
 
     
     return grad_input
