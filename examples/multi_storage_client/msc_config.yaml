@@ -14,18 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-_target_: modulus.datapipes.gnn.lagrangian_dataset.LagrangianDataset
-_convert_: all
 
-# Note: values that are not set will be populated from dataset metadata.
-name: ${data.name}
-data_dir: ${data.data_dir}
-split: ???
-num_sequences: ???
-num_history: ${..num_history}
-num_steps:
-num_node_types: ${..num_node_types}
-noise_std: 0.0003
-radius:
-dt:
-bounds:
+# This is an example MSC configuration file for accessing the CMIP6 archive on AWS:
+# https://registry.opendata.aws/cmip6/
+profiles:
+  cmip6-pds:
+    storage_provider:
+      type: s3
+      options:
+        region_name: us-west-2
+        base_path: cmip6-pds
+        signature_version: UNSIGNED
+cache:
+  location: /tmp/.cache
+  size_mb: 5000

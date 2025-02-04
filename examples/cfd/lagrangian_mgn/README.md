@@ -55,7 +55,8 @@ as follows:
 
 - **Node features**:
   - position ($d$)
-  - historical velocity ($t \times d$)
+  - historical velocity ($t \times d$),
+    where the number of steps $t$ can be set using `data.num_history` config parameter.
   - one-hot encoding of node type (e.g. 6),
   - wall feature ($2 \times d$)
 - **Edge features**: displacement ($d$), distance (1)

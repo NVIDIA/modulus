@@ -28,6 +28,7 @@ from termcolor import colored
 
 from torch import nn
 
+import torch
 import wandb
 
 from modulus.distributed import DistributedManager
@@ -77,6 +78,27 @@ def init_python_logging(
             l.handlers = []
     # Configure logging.
     logging.config.dictConfig(OmegaConf.to_container(pylog_cfg, resolve=True))
+
+
+def get_gpu_info() -> str:
+    """Returns information about available GPUs."""
+
+    if not torch.cuda.is_available():
+        return "\nCUDA is not available."
+
+    res = f"\n\nPyTorch CUDA Version: {torch.version.cuda}\nAvailable GPUs:"
+    for i in range(torch.cuda.device_count()):
+        name = torch.cuda.get_device_name(i)
+        props = torch.cuda.get_device_properties(i)
+        total_memory = props.total_memory / (1024**3)
+        res += (
+            f"\n{torch.device(i)}: {name} ("
+            f"{total_memory:.0f} GiB, "
+            f"sm_{props.major}{props.minor})"
+        )
+
+    res += f"\nCurrent device: {torch.cuda.current_device()}\n"
+    return res
 
 
 def rank0(func):

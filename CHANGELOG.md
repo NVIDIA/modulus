@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DoMINO model architecture, datapipe and training recipe
 - Added matrix decomposition scheme to improve graph partitioning
 - DrivAerML dataset support in FIGConvNet example.
+- Retraining recipe for DoMINO from a pretrained model checkpoint
 
 ### Changed
 
 - Refactored StormCast training example
 - Enhancements and bug fixes to DoMINO model and training example
 - Enhancement to parameterize DoMINO model with inlet velocity
+- Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
 
 ### Deprecated
 
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Dependencies
 
 - Remove the numpy dependency upper bound.
+- Introduce Multi-Storage Client (MSC) as an optional dependency.
 
 ## [0.9.0] - 2024-12-04
 

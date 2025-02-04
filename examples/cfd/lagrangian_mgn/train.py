@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel
 from modulus.distributed.manager import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
-from loggers import CompositeLogger, ExperimentLogger, init_python_logging
+from loggers import CompositeLogger, ExperimentLogger, get_gpu_info, init_python_logging
 
 
 logger = logging.getLogger("lmgn")
@@ -212,6 +212,7 @@ def main(cfg: DictConfig) -> None:
 
     init_python_logging(cfg, dist.rank)
     logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
+    logger.info(get_gpu_info())
 
     # Initialize loggers.
     global elogger
