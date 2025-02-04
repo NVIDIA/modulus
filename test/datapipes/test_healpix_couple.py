@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from omegaconf import DictConfig, OmegaConf
 from pytest_utils import nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -34,6 +33,8 @@ from modulus.datapipes.healpix.data_modules import (
     CoupledTimeSeriesDataModule,
 )
 from modulus.distributed import DistributedManager
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ def scaling_dict():
         "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @pytest.fixture
@@ -92,7 +93,7 @@ def scaling_double_dict():
         "z": {"mean": 0, "std": 2},
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @nfsdata_or_fail
@@ -132,7 +133,7 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     expected = expected.astype(int)
     assert np.array_equal(expected, coupler._coupled_offsets)
 
-    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df = pd.DataFrame.from_dict(omegaconf.OmegaConf.to_object(scaling_dict)).T
     scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
     scaling_da = scaling_df.to_xarray().astype("float32")
     coupler.set_scaling(scaling_da)
@@ -190,7 +191,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     expected = expected.astype(int)
     assert np.array_equal(expected, coupler._coupled_offsets)
 
-    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df = pd.DataFrame.from_dict(omegaconf.OmegaConf.to_object(scaling_dict)).T
     scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
     scaling_da = scaling_df.to_xarray().astype("float32")
     coupler.set_scaling(scaling_da)
@@ -238,7 +239,7 @@ def test_CoupledTimeSeriesDataset_initialization(
         )
 
     # check for failure of invalid scaling variable on input
-    invalid_scaling = DictConfig(
+    invalid_scaling = omegaconf.DictConfig(
         {
             "bogosity": {"mean": 0, "std": 42},
         }
@@ -702,7 +703,7 @@ def test_CoupledTimeSeriesDataModule_initialization(
         batch_size=1,
         prebuilt_dataset=True,
         scaling=scaling_double_dict,
-        splits=DictConfig(splits),
+        splits=omegaconf.DictConfig(splits),
         couplings=constant_coupler,
     )
     assert isinstance(timeseries_dm, CoupledTimeSeriesDataModule)

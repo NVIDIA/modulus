@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
-from omegaconf import DictConfig
 from pytest_utils import nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -35,6 +34,8 @@ from modulus.datapipes.healpix.data_modules import (
 )
 from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
 from modulus.distributed import DistributedManager
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ def scaling_dict():
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
         "extra": {"mean": 1, "std": 0},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @pytest.fixture
@@ -95,7 +96,7 @@ def scaling_double_dict():
         "z": {"mean": 0, "std": 2},
         "extra": {"mean": 0, "std": 2},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @nfsdata_or_fail
@@ -213,7 +214,7 @@ def test_TimeSeriesDataset_initialization(
         )
 
     # check for failure of invalid scaling variable on input
-    invalid_scaling = DictConfig(
+    invalid_scaling = omegaconf.DictConfig(
         {
             "bogosity": {"mean": 0, "std": 42},
         }
@@ -513,7 +514,7 @@ def test_TimeSeriesDataModule_initialization(
         batch_size=1,
         prebuilt_dataset=True,
         scaling=scaling_double_dict,
-        splits=DictConfig(splits),
+        splits=omegaconf.DictConfig(splits),
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
     DistributedManager.cleanup()
