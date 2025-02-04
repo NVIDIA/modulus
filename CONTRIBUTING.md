@@ -220,7 +220,7 @@ The pipeline has following stages:
     decorators to appropriately skip your tests for developers and users not having your
     test specific datasets and dependencies respectively. The CI has these datasets and
     dependencies so your tests will get executed during CI.
-    However, this mechanism helps us provide a better developer and user experience
+    This mechanism helps us provide a better developer and user experience
     when working with the unit tests.
 
 6. `doctest`
