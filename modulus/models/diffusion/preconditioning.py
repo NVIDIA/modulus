@@ -551,7 +551,10 @@ class EDMPrecond(Module):
     img_resolution : int
         Image resolution.
     img_channels : int
-        Number of color channels.
+        Number of color channels (for both input and output). If your model
+        requires a different number of input or output chanels,
+        override this by passing either of the optional
+        img_in_channels or img_out_channels args
     label_dim : int
         Number of class labels, 0 = unconditional, by default 0.
     use_fp16 : bool
@@ -564,6 +567,13 @@ class EDMPrecond(Module):
         Expected standard deviation of the training data, by default 0.5.
     model_type :str
         Class name of the underlying model, by default "DhariwalUNet".
+    img_in_channels: int
+        Optional setting for when number of input channels =/= number of output
+        channels. If set, will override img_channels for the input
+        This is useful in the case of additional (conditional) channels
+    img_out_channels: int
+        Optional setting for when number of input channels =/= number of output
+        channels. If set, will override img_channels for the output
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 
@@ -584,11 +594,20 @@ class EDMPrecond(Module):
         sigma_max=float("inf"),
         sigma_data=0.5,
         model_type="DhariwalUNet",
+        img_in_channels=None,
+        img_out_channels=None,
         **model_kwargs,
     ):
         super().__init__(meta=EDMPrecondMetaData)
         self.img_resolution = img_resolution
-        self.img_channels = img_channels
+        if img_in_channels is not None:
+            img_in_channels = img_in_channels
+        else:
+            img_in_channels = img_channels
+        if img_out_channels is not None:
+            img_out_channels = img_out_channels
+        else:
+            img_out_channels = img_channels
 
         self.label_dim = label_dim
         self.use_fp16 = use_fp16
@@ -599,13 +618,21 @@ class EDMPrecond(Module):
         model_class = getattr(network_module, model_type)
         self.model = model_class(
             img_resolution=img_resolution,
-            in_channels=img_channels,
-            out_channels=img_channels,
+            in_channels=img_in_channels,
+            out_channels=img_out_channels,
             label_dim=label_dim,
             **model_kwargs,
         )  # TODO needs better handling
 
-    def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
+    def forward(
+        self,
+        x,
+        sigma,
+        condition=None,
+        class_labels=None,
+        force_fp32=False,
+        **model_kwargs,
+    ):
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         class_labels = (
@@ -626,8 +653,13 @@ class EDMPrecond(Module):
         c_in = 1 / (self.sigma_data**2 + sigma**2).sqrt()
         c_noise = sigma.log() / 4
 
+        arg = c_in * x
+
+        if condition is not None:
+            arg = torch.cat([arg, condition], dim=1)
+
         F_x = self.model(
-            (c_in * x).to(dtype),
+            arg.to(dtype),
             c_noise.flatten(),
             class_labels=class_labels,
             **model_kwargs,

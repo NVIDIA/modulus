@@ -6,7 +6,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0a0] - 2024-11-XX
+## [0.10.0a0] - 2025-01-XX
+
+### Added
+
+- DoMINO model architecture, datapipe and training recipe
+- Added matrix decomposition scheme to improve graph partitioning
+- DrivAerML dataset support in FIGConvNet example.
+- Retraining recipe for DoMINO from a pretrained model checkpoint
+
+### Changed
+
+- Refactored StormCast training example
+- Enhancements and bug fixes to DoMINO model and training example
+- Enhancement to parameterize DoMINO model with inlet velocity
+- Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+- Remove the numpy dependency upper bound.
+- Introduce Multi-Storage Client (MSC) as an optional dependency.
+
+## [0.9.0] - 2024-12-04
 
 ### Added
 
@@ -21,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The XAeroNet model.
 - Incoporated CorrDiff-GEFS-HRRR model into CorrDiff, with lead-time aware SongUNet and
   cross entropy loss.
+- Option to offload checkpoints to further reduce memory usage
+- Added StormCast model training and simple inference to examples
 
 ### Changed
 
@@ -29,16 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
 - Extended the checkpointing utility to store metadata.
 - Corrected missing export of loggin function used by transolver model
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-### Dependencies
 
 ## [0.8.0] - 2024-09-24
 
