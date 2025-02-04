@@ -117,7 +117,7 @@ class MGNRollout:
                 history = graph.ndata["x"][
                     ..., self.dim : self.dim + self.dim * self.num_history
                 ]
-                history = history.reshape(-1, 5, 2).permute(1, 0, 2).flip(0).permute(1, 0, 2).flatten(start_dim=1)
+                # history = history.reshape(-1, 5, 2).permute(1, 0, 2).flip(0).permute(1, 0, 2).flatten(start_dim=1)
                 node_type = graph.ndata["x"][..., -self.num_node_type :].clone()
                 # boundary_mask = mask.reshape(-1, 1).repeat(1, self.dim).to(self.device)
 
@@ -137,16 +137,16 @@ class MGNRollout:
             # update the inputs using the prediction from previous iteration
             position, velocity = self.time_integrator(
                 position=position,
-                velocity=history[..., : self.dim],
-                # velocity=history[..., -self.dim :],
+                # velocity=history[..., : self.dim],
+                velocity=history[..., -self.dim :],
                 acceleration=acceleration,
                 dt=self.dt,
             )
             position = self.boundary_clamp(position, bounds=self.bounds)
             graph.ndata["pos"] = position
             velocity = self.dataset.normalize_velocity(velocity)
-            history = torch.cat([velocity, history[..., : -self.dim]], dim=-1)
-            # history = torch.cat([history[..., self.dim : ], velocity], dim=-1)
+            # history = torch.cat([velocity, history[..., : -self.dim]], dim=-1)
+            history = torch.cat([history[..., self.dim :], velocity], dim=-1)
 
             # do not update the "wall_boundary"  nodes
             # pred_i = torch.where(boundary_mask, pred_i, 0)

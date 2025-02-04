@@ -226,17 +226,21 @@ class LagrangianDataset(DGLDataset):
         assert len(pos) == self.num_history + 2
         # Current position at t.
         pos_t = pos[-2]
+
+        # Add noise.
+        if self.split == "train":
+            pos_noise = self.random_walk_noise(*pos.shape[:2])
+            pos += pos_noise
+
         # Velocities.
         vel = self.time_diff(pos)
         # Target acceleration.
-        acc = self.time_diff(vel)
+        acc = self.time_diff(vel[-2:])
+
         # Boundary features for the current position.
         boundary_features = self.compute_boundary_feature(
             pos_t, self.radius, bounds=self.bounds
         )
-
-        # Add noise.
-        # TODO(akamenev)
 
         # Normalize velocity and acceleration.
         vel = self.normalize_velocity(vel)
@@ -250,6 +254,7 @@ class LagrangianDataset(DGLDataset):
             (pos_t, vel_history, boundary_features, self.node_type[gidx]), dim=-1
         )
 
+        # Target position and velocity are for time t + 1, acceleration - for t.
         target_pos = pos[-1]
         target_vel = vel[-1]
         target_acc = acc[-1]
@@ -339,8 +344,17 @@ class LagrangianDataset(DGLDataset):
         return acceleration
 
     def time_integrator(self, position, velocity, acceleration, dt, denormalize=True):
-        # given the position x(t), velocity v(t), and acceleration a(t)
-        # output x(t+1)
+        """Semi-implicit Euler integration.
+
+        Given the position x(t), velocity v(t), and acceleration a(t)
+        computes next step position and velocity.
+
+        Returns:
+        --------
+        Tuple
+            position, velocity for t + 1
+        """
+
         if denormalize:
             velocity = self.denormalize_velocity(velocity)
             acceleration = self.denormalize_acceleration(acceleration)
@@ -377,6 +391,29 @@ class LagrangianDataset(DGLDataset):
         vel = ndata[..., self.dim : 2 * self.dim]
         acc = ndata[..., 2 * self.dim : 3 * self.dim]
         return pos, vel, acc
+
+    def random_walk_noise(self, num_steps: int, num_particles: int):
+        """Creates random walk noise for positions."""
+
+        num_velocities = num_steps - 1
+        # See comments in get_random_walk_noise_for_position_sequence in DM code.
+        std_each_step = self.noise_std / num_velocities**0.5
+        vel_noise = std_each_step * torch.randn(num_velocities, num_particles, self.dim)
+
+        # Apply the random walk to velocities.
+        vel_noise = vel_noise.cumsum(dim=0)
+
+        # Integrate to get position noise with no noise at the first step.
+        pos_noise = torch.cat(
+            (torch.zeros(1, *vel_noise.shape[1:]), vel_noise.cumsum(dim=0))
+        )
+
+        # Set the target position noise the same as the current so it cancels out
+        # during velocity calculation.
+        # See get_predicted_and_target_normalized_accelerations in DM code.
+        pos_noise[-1] = pos_noise[-2]
+
+        return pos_noise
 
     @staticmethod
     def time_diff(x: Tensor):
