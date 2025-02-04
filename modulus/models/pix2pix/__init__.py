@@ -15,3 +15,4 @@
 # limitations under the License.
 
 from .pix2pix import Pix2Pix
+from .pix2pixunet import Pix2PixUnet
