@@ -36,7 +36,7 @@ import torch
 from modulus.datapipes.gnn.lagrangian_dataset import graph_update
 from modulus.launch.utils import load_checkpoint
 
-from loggers import init_python_logging
+from loggers import get_gpu_info, init_python_logging
 
 
 logger = logging.getLogger("lmgn")
@@ -327,6 +327,7 @@ class MGNRollout:
 def main(cfg: DictConfig) -> None:
     init_python_logging(cfg, base_filename="inference")
     logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
+    logger.info(get_gpu_info())
 
     logger.info("Rollout started...")
     rollout = MGNRollout(cfg)

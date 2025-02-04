@@ -21,7 +21,7 @@ name: ${data.name}
 data_dir: ${data.data_dir}
 split: ???
 num_samples: ???
-num_history: 5
+num_history: ${..num_history}
 num_steps: 600
 num_node_types: ${..num_node_types}
 noise_std: 0.0003
