@@ -29,7 +29,7 @@ def cgns_data_dir():
     return path
 
 
-@import_or_fail("vtk", "warp")
+@import_or_fail(["vtk", "warp"])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_mesh_datapipe(device, tmp_path, pytestconfig):
     """Tests the MeshDatapipe class with VTP and VTU files."""
