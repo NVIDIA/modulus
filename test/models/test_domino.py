@@ -20,8 +20,7 @@ from typing import Sequence
 
 import pytest
 import torch
-
-from modulus.models.domino.model import DoMINO
+from pytest_utils import import_or_fail
 
 # from . import common
 from .common.fwdaccuracy import save_output
@@ -58,9 +57,13 @@ def validate_domino(
         return compare_output(output, output_target, rtol, atol)
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("device", ["cuda:0"])
-def test_domino_forward(device):
+def test_domino_forward(device, pytestconfig):
     """Test domino forward pass"""
+
+    from modulus.models.domino.model import DoMINO
+
     torch.manual_seed(0)
 
     @dataclass
