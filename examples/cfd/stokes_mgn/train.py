@@ -36,8 +36,8 @@ from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_wandb,
 )
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.meshgraphnet import MeshGraphNet
 
