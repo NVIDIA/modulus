@@ -19,7 +19,6 @@ from typing import Literal, Optional, Tuple, Callable
 import numpy as np
 import nvtx
 import torch
-from torch import nn
 
 from modulus.models.diffusion import EDMPrecond
 
@@ -28,7 +27,7 @@ from modulus.models.diffusion import EDMPrecond
 
 @nvtx.annotate(message="deterministic_sampler", color="red")
 def deterministic_sampler(
-    net: nn.Module,
+    net: torch.nn.Module,
     latents: torch.Tensor,
     img_lr: torch.Tensor,
     img_shape: Optional[Tuple[int]] = None,
@@ -65,7 +64,7 @@ def deterministic_sampler(
     discretization method, noise schedule, and so on.
 
     Args:
-        net : nn.Module
+        net : torch.nn.Module
             The diffusion model to use in the sampling process.
         latents : torch.Tensor
             The latent random noise used as the initial condition for the
