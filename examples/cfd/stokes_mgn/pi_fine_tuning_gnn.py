@@ -43,8 +43,8 @@ from typing import Dict, Optional
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_wandb,
 )
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.models.meshgraphnet import MeshGraphNet
 from modulus.sym.eq.pde import PDE
 from modulus.sym.eq.phy_informer import PhysicsInformer
