@@ -22,19 +22,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
-from omegaconf import DictConfig
-from pytest_utils import nfsdata_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from modulus.datapipes.healpix.data_modules import (
-    TimeSeriesDataModule,
-    create_time_series_dataset_classic,
-    open_time_series_dataset_classic_on_the_fly,
-    open_time_series_dataset_classic_prebuilt,
-)
-from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
 from modulus.distributed import DistributedManager
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -77,7 +71,7 @@ def scaling_dict():
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
         "extra": {"mean": 1, "std": 0},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @pytest.fixture
@@ -95,11 +89,16 @@ def scaling_double_dict():
         "z": {"mean": 0, "std": 2},
         "extra": {"mean": 0, "std": 2},
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_open_time_series_on_the_fly(create_path, pytestconfig):
+    from modulus.datapipes.healpix.data_modules import (
+        open_time_series_dataset_classic_on_the_fly,
+    )
+
     variables = ["z500", "z1000"]
     constants = {"lsm": "lsm"}
 
@@ -118,9 +117,14 @@ def test_open_time_series_on_the_fly(create_path, pytestconfig):
     assert ds_var.equals(base[test_var])
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_open_time_series(data_dir, dataset_name, pytestconfig):
     # check for failure of non-existant dataset
+    from modulus.datapipes.healpix.data_modules import (
+        open_time_series_dataset_classic_prebuilt,
+    )
+
     with pytest.raises(FileNotFoundError, match=("Dataset doesn't appear to exist at")):
         open_time_series_dataset_classic_prebuilt("/null_path", dataset_name)
 
@@ -128,8 +132,14 @@ def test_open_time_series(data_dir, dataset_name, pytestconfig):
     assert isinstance(ds, xr.Dataset)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
+
+    from modulus.datapipes.healpix.data_modules import (
+        create_time_series_dataset_classic,
+    )
+
     variables = ["z500", "z1000"]
     constants = {"lsm": "lsm"}
     scaling = {"z500": {"log_epsilon": 2}}
@@ -181,10 +191,14 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
     delete_dataset(create_path, dataset_name)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataset_initialization(
     data_dir, dataset_name, scaling_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -213,7 +227,7 @@ def test_TimeSeriesDataset_initialization(
         )
 
     # check for failure of invalid scaling variable on input
-    invalid_scaling = DictConfig(
+    invalid_scaling = omegaconf.DictConfig(
         {
             "bogosity": {"mean": 0, "std": 42},
         }
@@ -272,10 +286,13 @@ def test_TimeSeriesDataset_initialization(
     assert isinstance(timeseries_ds, TimeSeriesDataset)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataset_get_constants(
     data_dir, dataset_name, scaling_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -294,8 +311,11 @@ def test_TimeSeriesDataset_get_constants(
     )
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfig):
+    from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -333,10 +353,13 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfi
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataset_get(
     data_dir, dataset_name, scaling_double_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.timeseries_dataset import TimeSeriesDataset
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -438,10 +461,15 @@ def test_TimeSeriesDataset_get(
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataModule_initialization(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.data_modules import (
+        TimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     splits = {
         "train_date_start": "1959-01-01",
@@ -513,16 +541,21 @@ def test_TimeSeriesDataModule_initialization(
         batch_size=1,
         prebuilt_dataset=True,
         scaling=scaling_double_dict,
-        splits=DictConfig(splits),
+        splits=omegaconf.DictConfig(splits),
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataModule_get_constants(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.data_modules import (
+        TimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     constants = {"lsm": "lsm"}
 
@@ -591,10 +624,16 @@ def test_TimeSeriesDataModule_get_constants(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TimeSeriesDataModule_get_dataloaders(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.data_modules import (
+        TimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     splits = {
         "train_date_start": "1979-01-01",

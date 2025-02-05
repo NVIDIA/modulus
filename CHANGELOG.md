@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhancements and bug fixes to DoMINO model and training example
 - Enhancement to parameterize DoMINO model with inlet velocity
 - Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
+- Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
 
 ### Deprecated
 
@@ -28,11 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Update pytests to skip when the required dependencies are not present
+
 ### Security
 
 ### Dependencies
 
-- Remove the numpy dependency upper bound.
+- Remove the numpy dependency upper bound
+- Moved pytz and nvtx to optional
+- Update the base image for the Dockerfile
 - Introduce Multi-Storage Client (MSC) as an optional dependency.
 
 ## [0.9.0] - 2024-12-04
