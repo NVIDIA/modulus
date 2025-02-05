@@ -35,7 +35,7 @@ import torch
 import numpy as np
 import torch.optim as optim
 import matplotlib.pyplot as plt
-from modulus.launch.logging import initialize_wandb
+from modulus.launch.logging.wandb import initialize_wandb
 import json
 import wandb as wb
 import hydra
