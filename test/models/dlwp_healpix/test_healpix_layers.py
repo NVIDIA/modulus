@@ -24,7 +24,13 @@ import common
 import numpy as np
 import pytest
 import torch
-from pytest_utils import import_or_fail
+
+from modulus.models.dlwp_healpix_layers import (
+    HEALPixFoldFaces,
+    HEALPixLayer,
+    HEALPixPadding,
+    HEALPixUnfoldFaces,
+)
 
 
 class MulX(torch.nn.Module):
@@ -38,26 +44,14 @@ class MulX(torch.nn.Module):
         return x * self.multiplier
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixFoldFaces,
-    )
-
+def test_HEALPixFoldFaces_initialization(device):
     fold_func = HEALPixFoldFaces()
     assert isinstance(fold_func, HEALPixFoldFaces)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces_forward(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixFoldFaces,
-    )
-
+def test_HEALPixFoldFaces_forward(device):
     fold_func = HEALPixFoldFaces()
 
     tensor_size = torch.randint(low=2, high=4, size=(5,)).tolist()
@@ -72,25 +66,14 @@ def test_HEALPixFoldFaces_forward(device, pytestconfig):
     assert fold_func(invar).stride() != outvar.stride()
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUnfoldFaces_initialization(device, pytestconfig):
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixUnfoldFaces,
-    )
-
+def test_HEALPixUnfoldFaces_initialization(device):
     unfold_func = HEALPixUnfoldFaces()
     assert isinstance(unfold_func, HEALPixUnfoldFaces)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUnfoldFaces_forward(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixUnfoldFaces,
-    )
-
+def test_HEALPixUnfoldFaces_forward(device):
     num_faces = 12
     unfold_func = HEALPixUnfoldFaces()
 
@@ -115,26 +98,14 @@ HEALPixPadding_testdata = [
 ]
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
-def test_HEALPixPadding_initialization(device, padding, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixPadding,
-    )
-
+def test_HEALPixPadding_initialization(device, padding):
     pad_func = HEALPixPadding(padding)
     assert isinstance(pad_func, HEALPixPadding)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
-def test_HEALPixPadding_forward(device, padding, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixPadding,
-    )
-
+def test_HEALPixPadding_forward(device, padding):
     num_faces = 12  # standard for healpix
     batch_size = 2
     pad_func = HEALPixPadding(padding)
@@ -173,25 +144,14 @@ HEALPixLayer_testdata = [
 ]
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
-def test_HEALPixLayer_initialization(device, multiplier, pytestconfig):
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixLayer,
-    )
-
+def test_HEALPixLayer_initialization(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
     assert isinstance(layer, HEALPixLayer)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
-def test_HEALPixLayer_forward(device, multiplier, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        HEALPixLayer,
-    )
-
+def test_HEALPixLayer_forward(device, multiplier):
     layer = HEALPixLayer(layer=MulX, multiplier=multiplier)
 
     kernel_size = 3

@@ -18,16 +18,14 @@ from functools import partial
 
 import pytest
 import torch
-from pytest_utils import import_or_fail
+
+from modulus.models.diffusion import EDMPrecondSR, UNet
+from modulus.utils.corrdiff import diffusion_step, regression_step
+from modulus.utils.generative import deterministic_sampler, stochastic_sampler
 
 
-@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_regression_step(device, pytestconfig):
-
-    from modulus.models.diffusion import UNet
-    from modulus.utils.corrdiff import regression_step
-
+def test_regression_step(device):
     # define the net
     mock_unet = UNet(
         img_channels=2,
@@ -49,14 +47,8 @@ def test_regression_step(device, pytestconfig):
     assert output.shape == (2, 2, 16, 16), "Output shape mismatch"
 
 
-@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_diffusion_step(device, pytestconfig):
-
-    from modulus.models.diffusion import EDMPrecondSR
-    from modulus.utils.corrdiff import diffusion_step
-    from modulus.utils.generative import deterministic_sampler, stochastic_sampler
-
+def test_diffusion_step(device):
     # Define the preconditioner
     mock_precond = EDMPrecondSR(
         img_resolution=[16, 16],

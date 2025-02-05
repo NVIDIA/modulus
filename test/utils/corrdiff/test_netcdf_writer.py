@@ -20,7 +20,8 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from pytest_utils import import_or_fail
+
+from modulus.utils.corrdiff import NetCDFWriter
 
 
 @pytest.fixture
@@ -42,11 +43,7 @@ def mock_ncfile():
     return mock_file
 
 
-@import_or_fail("cftime")
-def test_init(mock_ncfile, pytestconfig):
-
-    from modulus.utils.corrdiff import NetCDFWriter
-
+def test_init(mock_ncfile):
     lat = np.array([[1.0, 2.0], [3.0, 4.0]])
     lon = np.array([[5.0, 6.0], [7.0, 8.0]])
     input_channels = []
@@ -89,11 +86,7 @@ def test_init(mock_ncfile, pytestconfig):
     )
 
 
-@import_or_fail("cftime")
-def test_write_input(mock_ncfile, pytestconfig):
-
-    from modulus.utils.corrdiff import NetCDFWriter
-
+def test_write_input(mock_ncfile):
     lat = np.array([[1.0, 2.0], [3.0, 4.0]])
     lon = np.array([[5.0, 6.0], [7.0, 8.0]])
     input_channels = []
@@ -113,11 +106,7 @@ def test_write_input(mock_ncfile, pytestconfig):
     mock_ncfile["input"][channel_name].__setitem__.assert_called_with(time_index, val)
 
 
-@import_or_fail("cftime")
-def test_write_truth(mock_ncfile, pytestconfig):
-
-    from modulus.utils.corrdiff import NetCDFWriter
-
+def test_write_truth(mock_ncfile):
     lat = np.array([[1.0, 2.0], [3.0, 4.0]])
     lon = np.array([[5.0, 6.0], [7.0, 8.0]])
     input_channels = []
@@ -137,11 +126,7 @@ def test_write_truth(mock_ncfile, pytestconfig):
     mock_ncfile["truth"][channel_name].__setitem__.assert_called_with(time_index, val)
 
 
-@import_or_fail("cftime")
-def test_write_prediction(mock_ncfile, pytestconfig):
-
-    from modulus.utils.corrdiff import NetCDFWriter
-
+def test_write_prediction(mock_ncfile):
     lat = np.array([[1.0, 2.0], [3.0, 4.0]])
     lon = np.array([[5.0, 6.0], [7.0, 8.0]])
     input_channels = []
@@ -164,11 +149,7 @@ def test_write_prediction(mock_ncfile, pytestconfig):
     )
 
 
-@import_or_fail("cftime")
-def test_write_time(mock_ncfile, pytestconfig):
-
-    from modulus.utils.corrdiff import NetCDFWriter
-
+def test_write_time(mock_ncfile):
     lat = np.array([[1.0, 2.0], [3.0, 4.0]])
     lon = np.array([[5.0, 6.0], [7.0, 8.0]])
     input_channels = []

@@ -15,15 +15,11 @@
 # limitations under the License.
 
 
-from pytest_utils import import_or_fail
+from modulus.utils.generative import format_time, format_time_brief
 
 
 # Test format_time function
-@import_or_fail("cftime")
-def test_format_time(pytestconfig):
-
-    from modulus.utils.generative import format_time
-
+def test_format_time():
     assert format_time(59) == "59s"
     assert format_time(60) == "1m 00s"
     assert format_time(3599) == "59m 59s"
@@ -35,11 +31,7 @@ def test_format_time(pytestconfig):
 
 
 # Test format_time_brief function
-@import_or_fail("cftime")
-def test_format_time_brief(pytestconfig):
-
-    from modulus.utils.generative import format_time_brief
-
+def test_format_time_brief():
     assert format_time_brief(59) == "59s"
     assert format_time_brief(60) == "1m 00s"
     assert format_time_brief(3600) == "1h 00m"

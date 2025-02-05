@@ -14,15 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pytest_utils import import_or_fail
+
+from modulus.utils.generative import tuple_product
 
 
 # Test tuple_product function
-@import_or_fail("cftime")
-def test_tuple_product(pytestconfig):
-
-    from modulus.utils.generative import tuple_product
-
+def test_tuple_product():
     # Test with an empty tuple
     assert tuple_product(()) == 1
 

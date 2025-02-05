@@ -21,6 +21,7 @@ import pytest
 from pytest_utils import import_or_fail
 
 # from pytest_utils import nfsdata_or_fail
+from modulus.datapipes.cae import MeshDatapipe
 
 
 @pytest.fixture
@@ -29,14 +30,12 @@ def cgns_data_dir():
     return path
 
 
-@import_or_fail(["vtk", "warp"])
+@import_or_fail(["vtk"])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_mesh_datapipe(device, tmp_path, pytestconfig):
     """Tests the MeshDatapipe class with VTP and VTU files."""
 
     import vtk
-
-    from modulus.datapipes.cae import MeshDatapipe
 
     def _create_random_vtp_vtu_mesh(
         num_points: int, num_triangles: int, dir: str

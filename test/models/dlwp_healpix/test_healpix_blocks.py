@@ -23,7 +23,18 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 import common
 import pytest
 import torch
-from pytest_utils import import_or_fail
+
+from modulus.models.dlwp_healpix_layers import (
+    AvgPool,
+    BasicConvBlock,
+    ConvGRUBlock,
+    ConvNeXtBlock,
+    DoubleConvNeXtBlock,
+    Interpolate,
+    MaxPool,
+    SymmetricConvNeXtBlock,
+    TransposedConvUpsample,  #
+)
 
 
 @pytest.fixture
@@ -39,27 +50,15 @@ def test_data():
     return generate_test_data
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ConvGRUBlock_initialization(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        ConvGRUBlock,
-    )
-
+def test_ConvGRUBlock_initialization(device, test_data):
     in_channels = 2
     conv_gru_func = ConvGRUBlock(in_channels=in_channels).to(device)
     assert isinstance(conv_gru_func, ConvGRUBlock)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ConvGRUBlock_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        ConvGRUBlock,
-    )
-
+def test_ConvGRUBlock_forward(device, test_data):
     in_channels = 2
     tensor_size = 16
     conv_gru_func = ConvGRUBlock(in_channels=in_channels).to(device)
@@ -76,14 +75,8 @@ def test_ConvGRUBlock_forward(device, test_data, pytestconfig):
     assert not common.compare_output(outvar_hist, outvar)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ConvNeXtBlock_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        ConvNeXtBlock,
-    )
-
+def test_ConvNeXtBlock_initialization(device):
     in_channels = 2
     convnext_block = ConvNeXtBlock(in_channels=in_channels).to(device)
     assert isinstance(convnext_block, ConvNeXtBlock)
@@ -98,14 +91,8 @@ def test_ConvNeXtBlock_initialization(device, pytestconfig):
     assert isinstance(convnext_block, ConvNeXtBlock)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_ConvNeXtBlock_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        ConvNeXtBlock,
-    )
-
+def test_ConvNeXtBlock_forward(device, test_data):
     in_channels = 2
     out_channels = 1
     tensor_size = 16
@@ -127,14 +114,8 @@ def test_ConvNeXtBlock_forward(device, test_data, pytestconfig):
     assert outvar.shape == out_shape
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_DoubleConvNeXtBlock_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        DoubleConvNeXtBlock,
-    )
-
+def test_DoubleConvNeXtBlock_initialization(device):
     in_channels = 2
     out_channels = 1
     latent_channels = 1
@@ -155,14 +136,8 @@ def test_DoubleConvNeXtBlock_initialization(device, pytestconfig):
     assert isinstance(doubleconvnextblock, DoubleConvNeXtBlock)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_DoubleConvNeXtBlock_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        DoubleConvNeXtBlock,
-    )
-
+def test_DoubleConvNeXtBlock_forward(device, test_data):
     in_channels = 2
     out_channels = 1
     latent_channels = 1
@@ -191,14 +166,8 @@ def test_DoubleConvNeXtBlock_forward(device, test_data, pytestconfig):
     assert outvar.shape == out_shape
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_SymmetricConvNeXtBlock_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        SymmetricConvNeXtBlock,
-    )
-
+def test_SymmetricConvNeXtBlock_initialization(device):
     in_channels = 2
     latent_channels = 1
     symmetric_convnextblock = SymmetricConvNeXtBlock(
@@ -216,14 +185,8 @@ def test_SymmetricConvNeXtBlock_initialization(device, pytestconfig):
     assert isinstance(symmetric_convnextblock, SymmetricConvNeXtBlock)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_SymmetricConvNeXtBlock_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        SymmetricConvNeXtBlock,
-    )
-
+def test_SymmetricConvNeXtBlock_forward(device, test_data):
     in_channels = 2
     latent_channels = 1
     tensor_size = 16
@@ -244,14 +207,8 @@ def test_SymmetricConvNeXtBlock_forward(device, test_data, pytestconfig):
     assert outvar.shape == out_shape
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_BasicConvBlock_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        BasicConvBlock,
-    )
-
+def test_BasicConvBlock_initialization(device):
     in_channels = 3
     out_channels = 1
     latent_channels = 2
@@ -271,14 +228,8 @@ def test_BasicConvBlock_initialization(device, pytestconfig):
     assert isinstance(conv_block, BasicConvBlock)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_BasicConvBlock_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        BasicConvBlock,
-    )
-
+def test_BasicConvBlock_forward(device, test_data):
     in_channels = 3
     out_channels = 1
     tensor_size = 16
@@ -297,26 +248,15 @@ def test_BasicConvBlock_forward(device, test_data, pytestconfig):
     assert outvar.shape == out_shape
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_MaxPool_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        MaxPool,
-    )
-
+def test_MaxPool_initialization(device):
     pooling = 2
     maxpool_block = MaxPool(pooling=pooling).to(device)
     assert isinstance(maxpool_block, MaxPool)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_MaxPool_forward(device, test_data, pytestconfig):
-    from modulus.models.dlwp_healpix_layers import (
-        MaxPool,
-    )
-
+def test_MaxPool_forward(device, test_data):
     pooling = 2
     size = 16
     channels = 4
@@ -330,27 +270,15 @@ def test_MaxPool_forward(device, test_data, pytestconfig):
     assert common.compare_output(outvar, maxpool_block(invar))
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_AvgPool_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        AvgPool,
-    )
-
+def test_AvgPool_initialization(device):
     pooling = 2
     avgpool_block = AvgPool(pooling=pooling).to(device)
     assert isinstance(avgpool_block, AvgPool)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_AvgPool_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        AvgPool,
-    )
-
+def test_AvgPool_forward(device, test_data):
     pooling = 2
     size = 32
     channels = 4
@@ -367,13 +295,8 @@ def test_AvgPool_forward(device, test_data, pytestconfig):
     assert common.compare_output(outvar, avgpool_block(invar))
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_TransposedConvUpsample_initialization(device, pytestconfig):
-    from modulus.models.dlwp_healpix_layers import (
-        TransposedConvUpsample,  #
-    )
-
+def test_TransposedConvUpsample_initialization(device):
     transposed_conv_upsample_block = TransposedConvUpsample().to(device)
     assert isinstance(transposed_conv_upsample_block, TransposedConvUpsample)
 
@@ -383,14 +306,8 @@ def test_TransposedConvUpsample_initialization(device, pytestconfig):
     assert isinstance(transposed_conv_upsample_block, TransposedConvUpsample)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_TransposedConvUpsample_forward(device, test_data, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        TransposedConvUpsample,
-    )
-
+def test_TransposedConvUpsample_forward(device, test_data):
     in_channels = 2
     out_channels = 1
     size = 16
@@ -415,27 +332,16 @@ def test_TransposedConvUpsample_forward(device, test_data, pytestconfig):
     assert outvar.shape == outsize
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_Interpolate_initialization(device, pytestconfig):
-
-    from modulus.models.dlwp_healpix_layers import (
-        Interpolate,
-    )
-
+def test_Interpolate_initialization(device):
     scale = 2
     mode = "linear"
     interpolation_block = Interpolate(scale_factor=scale, mode=mode).to(device)
     assert isinstance(interpolation_block, Interpolate)
 
 
-@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_Interpolate_forward(device, pytestconfig):
-    from modulus.models.dlwp_healpix_layers import (
-        Interpolate,
-    )
-
+def test_Interpolate_forward(device):
     scale = 2
     mode = "linear"
     interpolation_block = Interpolate(scale_factor=scale, mode=mode).to(device)

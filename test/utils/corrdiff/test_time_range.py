@@ -14,25 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pytest_utils import import_or_fail
+from modulus.utils.corrdiff import get_time_from_range
 
 
-@import_or_fail("cftime")
-def test_default_interval(pytestconfig):
-
-    from modulus.utils.corrdiff import get_time_from_range
-
+def test_default_interval():
     times_range = ["2024-01-01T00:00:00", "2024-01-01T01:00:00"]
     expected = ["2024-01-01T00:00:00", "2024-01-01T01:00:00"]
     result = get_time_from_range(times_range)
     assert result == expected
 
 
-@import_or_fail("cftime")
-def test_hourly_interval(pytestconfig):
-
-    from modulus.utils.corrdiff import get_time_from_range
-
+def test_hourly_interval():
     times_range = ["2024-01-01T00:00:00", "2024-01-01T03:00:00", 1]
     expected = [
         "2024-01-01T00:00:00",
@@ -44,33 +36,21 @@ def test_hourly_interval(pytestconfig):
     assert result == expected
 
 
-@import_or_fail("cftime")
-def test_custom_interval(pytestconfig):
-
-    from modulus.utils.corrdiff import get_time_from_range
-
+def test_custom_interval():
     times_range = ["2024-01-01T00:00:00", "2024-01-01T03:00:00", 2]
     expected = ["2024-01-01T00:00:00", "2024-01-01T02:00:00"]
     result = get_time_from_range(times_range)
     assert result == expected
 
 
-@import_or_fail("cftime")
-def test_no_interval_provided(pytestconfig):
-
-    from modulus.utils.corrdiff import get_time_from_range
-
+def test_no_interval_provided():
     times_range = ["2024-01-01T00:00:00", "2024-01-01T02:00:00"]
     expected = ["2024-01-01T00:00:00", "2024-01-01T01:00:00", "2024-01-01T02:00:00"]
     result = get_time_from_range(times_range)
     assert result == expected
 
 
-@import_or_fail("cftime")
-def test_same_start_end_time(pytestconfig):
-
-    from modulus.utils.corrdiff import get_time_from_range
-
+def test_same_start_end_time():
     times_range = ["2024-01-01T00:00:00", "2024-01-01T00:00:00"]
     expected = ["2024-01-01T00:00:00"]
     result = get_time_from_range(times_range)

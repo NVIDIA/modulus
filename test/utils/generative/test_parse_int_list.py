@@ -14,14 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pytest_utils import import_or_fail
+from modulus.utils.generative import parse_int_list
 
 
-@import_or_fail("cftime")
-def test_parse_int_list(pytestconfig):
-
-    from modulus.utils.generative import parse_int_list
-
+def test_parse_int_list():
     # Test parsing a simple comma-separated list
     input_str = "1,2,5,7,10"
     expected_result = [1, 2, 5, 7, 10]

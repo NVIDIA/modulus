@@ -17,8 +17,9 @@
 from typing import Optional
 
 import torch
-from pytest_utils import import_or_fail
 from torch import Tensor
+
+from modulus.utils.generative import image_batching, image_fuse, stochastic_sampler
 
 
 # Mock network class
@@ -43,11 +44,7 @@ class MockNet:
 
 
 # The test function for edm_sampler
-@import_or_fail("cftime")
-def test_stochastic_sampler(pytestconfig):
-
-    from modulus.utils.generative import stochastic_sampler
-
+def test_stochastic_sampler():
     net = MockNet()
     latents = torch.randn(2, 3, 448, 448)  # Mock latents
     img_lr = torch.randn(2, 3, 112, 112)  # Mock low-res image
@@ -124,11 +121,7 @@ def test_stochastic_sampler(pytestconfig):
     ), "Churn output shape does not match expected shape"
 
 
-@import_or_fail("cftime")
-def test_image_fuse_basic(pytestconfig):
-
-    from modulus.utils.generative import image_fuse
-
+def test_image_fuse_basic():
     # Basic test: No overlap, no boundary, one patch
     batch_size = 1
     img_shape_x = img_shape_y = 4
@@ -154,11 +147,7 @@ def test_image_fuse_basic(pytestconfig):
     ), "Output does not match expected output."
 
 
-@import_or_fail("cftime")
-def test_image_fuse_with_boundary(pytestconfig):
-
-    from modulus.utils.generative import image_fuse
-
+def test_image_fuse_with_boundary():
     # Test with boundary pixels
     batch_size = 1
     img_shape_x = img_shape_y = 4
@@ -186,11 +175,7 @@ def test_image_fuse_with_boundary(pytestconfig):
     ), "Output with boundary does not match expected output."
 
 
-@import_or_fail("cftime")
-def test_image_fuse_with_multiple_batches(pytestconfig):
-
-    from modulus.utils.generative import image_fuse
-
+def test_image_fuse_with_multiple_batches():
     # Test with multiple batches
     batch_size = 2
     img_shape_x = img_shape_y = 4
@@ -235,11 +220,7 @@ def test_image_fuse_with_multiple_batches(pytestconfig):
     ), "Output for multiple batches does not match expected output."
 
 
-@import_or_fail("cftime")
-def test_image_batching_basic(pytestconfig):
-
-    from modulus.utils.generative import image_batching
-
+def test_image_batching_basic():
     # Test with no overlap, no boundary, no input_interp
     batch_size = 1
     img_shape_x = img_shape_y = 4
@@ -265,12 +246,8 @@ def test_image_batching_basic(pytestconfig):
     ), "Batched images do not match expected output."
 
 
-@import_or_fail("cftime")
-def test_image_batching_with_boundary(pytestconfig):
+def test_image_batching_with_boundary():
     # Test with boundary pixels, no overlap, no input_interp
-
-    from modulus.utils.generative import image_batching
-
     batch_size = 1
     img_shape_x = img_shape_y = 4
     patch_shape_x = patch_shape_y = 6
@@ -295,12 +272,8 @@ def test_image_batching_with_boundary(pytestconfig):
     ), "Batched images with boundary do not match expected output."
 
 
-@import_or_fail("cftime")
-def test_image_batching_with_input_interp(pytestconfig):
+def test_image_batching_with_input_interp():
     # Test with input_interp tensor
-
-    from modulus.utils.generative import image_batching
-
     batch_size = 1
     img_shape_x = img_shape_y = 4
     patch_shape_x = patch_shape_y = 4

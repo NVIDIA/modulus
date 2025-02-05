@@ -16,7 +16,13 @@
 
 import pytest
 import torch
-from pytest_utils import import_or_fail
+
+from modulus.models.gnn_layers import (
+    GraphPartition,
+    partition_graph_by_coordinate_bbox,
+    partition_graph_nodewise,
+    partition_graph_with_id_mapping,
+)
 
 
 @pytest.fixture
@@ -82,15 +88,8 @@ def assert_partitions_are_equal(a, b):
             assert torch.allclose(val_a, val_b), error_msg
 
 
-@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_gp_mapping(global_graph, device, pytestconfig):
-
-    from modulus.models.gnn_layers import (
-        GraphPartition,
-        partition_graph_with_id_mapping,
-    )
-
+def test_gp_mapping(global_graph, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph
     partition_size = 4
     partition_rank = 0
@@ -135,15 +134,8 @@ def test_gp_mapping(global_graph, device, pytestconfig):
     assert_partitions_are_equal(pg, pg_expected)
 
 
-@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_gp_nodewise(global_graph, device, pytestconfig):
-
-    from modulus.models.gnn_layers import (
-        GraphPartition,
-        partition_graph_nodewise,
-    )
-
+def test_gp_nodewise(global_graph, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph
     partition_size = 4
     partition_rank = 0
@@ -183,15 +175,8 @@ def test_gp_nodewise(global_graph, device, pytestconfig):
     assert_partitions_are_equal(pg, pg_expected)
 
 
-@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_gp_matrixdecomp(global_graph_square, device, pytestconfig):
-
-    from modulus.models.gnn_layers import (
-        GraphPartition,
-        partition_graph_nodewise,
-    )
-
+def test_gp_matrixdecomp(global_graph_square, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph_square
     partition_size = 4
     partition_rank = 0
@@ -227,15 +212,8 @@ def test_gp_matrixdecomp(global_graph_square, device, pytestconfig):
     assert_partitions_are_equal(pg, pg_expected)
 
 
-@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_gp_coordinate_bbox(global_graph, device, pytestconfig):
-
-    from modulus.models.gnn_layers import (
-        GraphPartition,
-        partition_graph_by_coordinate_bbox,
-    )
-
+def test_gp_coordinate_bbox(global_graph, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph
     partition_size = 4
     partition_rank = 0
@@ -301,15 +279,8 @@ def test_gp_coordinate_bbox(global_graph, device, pytestconfig):
     assert_partitions_are_equal(pg, pg_expected)
 
 
-@import_or_fail("dgl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_gp_coordinate_bbox_lat_long(global_graph, device, pytestconfig):
-
-    from modulus.models.gnn_layers import (
-        GraphPartition,
-        partition_graph_by_coordinate_bbox,
-    )
-
+def test_gp_coordinate_bbox_lat_long(global_graph, device):
     offsets, indices, num_src_nodes, num_dst_nodes = global_graph
     src_lat = torch.FloatTensor([-75, -60, -45, -30, 30, 45, 60, 75]).view(-1, 1)
     dst_lat = torch.FloatTensor([-60, -30, 30, 30]).view(-1, 1)

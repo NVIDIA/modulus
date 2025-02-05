@@ -23,10 +23,12 @@ from typing import Dict, Tuple, Union
 
 import torch
 import torch.cuda.profiler as profiler
+import wandb
 
 from modulus.distributed import DistributedManager, reduce_loss
 
 from .console import PythonLogger
+from .wandb import alert
 
 
 class LaunchLogger(object):
@@ -131,8 +133,6 @@ class LaunchLogger(object):
 
         # Set x axis metric to epoch for this namespace
         if self.wandb_backend:
-            import wandb
-
             wandb.define_metric(name_space + "/mini_batch_*", step_metric="iter")
             wandb.define_metric(name_space + "/*", step_metric="epoch")
 
@@ -284,10 +284,6 @@ class LaunchLogger(object):
             and self.epoch % self.epoch_alert_freq == 0
         ):
             if self.wandb_backend:
-                import wandb
-
-                from .wandb import alert
-
                 # TODO: Make this a little more informative?
                 alert(
                     title=f"{sys.argv[0]} training progress report",
@@ -325,8 +321,6 @@ class LaunchLogger(object):
 
         # WandB Logging
         if self.wandb_backend:
-            import wandb
-
             # For WandB send step in as a metric
             # Step argument in lod function does not work with multiple log calls at
             # different intervals
@@ -358,8 +352,6 @@ class LaunchLogger(object):
             return
 
         if self.wandb_backend:
-            import wandb
-
             wandb.log({artifact_file: figure})
 
         if self.mlflow_backend:
@@ -413,12 +405,9 @@ class LaunchLogger(object):
         use_mlflow : bool, optional
             Use MLFlow logging, by default False
         """
-        if use_wandb:
-            import wandb
-
-            if wandb.run is None:
-                PythonLogger().warning("WandB not initialized, turning off")
-                use_wandb = False
+        if wandb.run is None and use_wandb:
+            PythonLogger().warning("WandB not initialized, turning off")
+            use_wandb = False
 
         if use_wandb:
             LaunchLogger.toggle_wandb(True)

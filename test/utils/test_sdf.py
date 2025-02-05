@@ -19,6 +19,8 @@
 import numpy as np
 from pytest_utils import import_or_fail
 
+from modulus.utils.sdf import signed_distance_field
+
 
 def tet_verts(flip_x=1):
     tet = np.array(
@@ -68,8 +70,6 @@ def tet_verts(flip_x=1):
 
 @import_or_fail("warp")
 def test_sdf(pytestconfig):
-
-    from modulus.utils.sdf import signed_distance_field
 
     tet = tet_verts()
 

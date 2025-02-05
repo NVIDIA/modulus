@@ -14,12 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dgl
 import pytest
 import torch
 from models.common import validate_forward_accuracy
-from pytest_utils import import_or_fail, nfsdata_or_fail
+from pytest_utils import import_or_fail
 
-dgl = pytest.importorskip("dgl")
+from modulus.models.meshgraphnet.bsms_mgn import BiStrideMeshGraphNet
 
 
 @pytest.fixture
@@ -28,11 +29,10 @@ def ahmed_data_dir():
     return path
 
 
-@import_or_fail(["sparse_dot_mkl", "dgl"])
+@import_or_fail("sparse_dot_mkl")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_bsms_mgn_forward(pytestconfig, device):
     from modulus.datapipes.gnn.bsms import BistrideMultiLayerGraphDataset
-    from modulus.models.meshgraphnet.bsms_mgn import BiStrideMeshGraphNet
 
     torch.manual_seed(1)
 
@@ -89,12 +89,10 @@ def test_bsms_mgn_forward(pytestconfig, device):
     )
 
 
-@nfsdata_or_fail
-@import_or_fail(["sparse_dot_mkl", "dgl"])
+@import_or_fail("sparse_dot_mkl")
 def test_bsms_mgn_ahmed(pytestconfig, ahmed_data_dir):
     from modulus.datapipes.gnn.ahmed_body_dataset import AhmedBodyDataset
     from modulus.datapipes.gnn.bsms import BistrideMultiLayerGraphDataset
-    from modulus.models.meshgraphnet.bsms_mgn import BiStrideMeshGraphNet
 
     device = torch.device("cuda:0")
 
