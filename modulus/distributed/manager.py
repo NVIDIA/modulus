@@ -17,7 +17,8 @@
 import os
 import queue
 from typing import Optional, Tuple
-from warnings import warn
+import warnings
+warnings.simplefilter("default", DeprecationWarning)
 
 import numpy as np
 import torch
@@ -56,6 +57,7 @@ class ModulusUninitializedDistributedManagerWarning(Warning):
             + "DistributedManager.initialize() before instantiating."
         )
         super().__init__(message)
+
 
 
 class DistributedManager(object):
@@ -116,9 +118,8 @@ class DistributedManager(object):
         if not hasattr(obj, "_global_mesh"):
             obj._global_mesh = None # Lazy initialized right when it's first needed
         if not hasattr(obj, "_mesh_dims"):
-            obj._mesh_dims = dict()  # Lazy initialized right when it's first needed
-        if not hasattr(obj, "_mesh_dims"):
-            obj._mesh_dims = {}
+            obj._mesh_dims = {}  # Dictionary mapping axis names to sizes
+
 
         return obj
 
@@ -180,18 +181,6 @@ class DistributedManager(object):
 
         return self._global_mesh
 
-    def mesh_rank(self, mesh):
-        """
-        Return the rank within a group 
-
-        Parameters
-        ----------
-        group_name : _type_
-            _description_
-        """
-        #TODO
-        return mesh.get_local_rank()
-        
     def mesh_names(self):
         """
         Return mesh axis names
@@ -231,9 +220,7 @@ class DistributedManager(object):
 
         if name in self._global_mesh.axis_names:
             return self._global_mesh[name]
-        elif name is None:
-            #TODO - is this the right choice?
-            
+        elif name is None:            
             return self._global_mesh
         else:
             raise ModulusUndefinedGroupError(f"Mesh axis {name} not defined")
@@ -433,25 +420,34 @@ class DistributedManager(object):
         np.random.seed(seed=DistributedManager().rank)
 
 
-    def initialize_mesh(self, mesh_shape : Tuple[int], mesh_dim_names : Tuple[str]) -> dist.DeviceMesh:
+    def initialize_mesh(self, mesh_shape: Tuple[int, ...], mesh_dim_names: Tuple[str, ...]) -> dist.DeviceMesh:
         """
-        Initialize a global device mesh over the entire distributed job.  
-        Mesh_shape can accept one flexible dimension as -1.
+        Initialize a global device mesh over the entire distributed job.
+        
+        Creates a multi-dimensional mesh of processes that can be used for distributed 
+        operations. The mesh shape must multiply to equal the total world size, with
+        one dimension optionally being flexible (-1).
 
         Parameters
         ----------
-        mesh_shape : 
-            Tuple of ints describing the axes of this mesh.  Requires prod(mesh_shape) 
-            to be equal to the global num_process size. If one axis is -1, it will infer 
-            the size of the missing axis.
+        mesh_shape : Tuple[int, ...]
+            Tuple of ints describing the size of each mesh dimension. Product must equal 
+            world_size. One dimension can be -1 to be automatically calculated.
             
-        mesh_dim_names :
-            Tuple of axis names. Must have one axis for each name. 
-        
+        mesh_dim_names : Tuple[str, ...]
+            Names for each mesh dimension. Must match length of mesh_shape.
+            
         Returns
         -------
-        torch.distributed.DeviceMesh instance, which can also be reached by fetching the mesh after init.
-        
+        torch.distributed.DeviceMesh
+            The initialized device mesh
+            
+        Raises
+        ------
+        RuntimeError
+            If mesh dimensions are invalid or don't match world size
+        AssertionError
+            If distributed environment is not available
         """
 
         manager = DistributedManager()
@@ -473,13 +469,9 @@ class DistributedManager(object):
                 "mesh_shape and mesh_dim_names must have the same length, but found "
                 f"{len(mesh_shape)} and {len(mesh_dim_names)} respectively."
             )
-            # raise RuntimeError(
-            #     "Unknown initialization method "
-            #     f"{initialization_method}. "
-            #     "Supported values for "
-            #     "MODULUS_DISTRIBUTED_INITIALIZATION_METHOD are "
-            #     "ENV, SLURM and OPENMPI"
-            # )
+        if len(set(mesh_dim_names)) != len(mesh_dim_names):
+            raise RuntimeError("Mesh dimension names must be unique")
+
         # Check against the total mesh shape vs. world size:
         total_mesh_shape = np.prod(mesh_shape)
         
@@ -571,19 +563,6 @@ class DistributedManager(object):
 
         manager._initialization_method = method
 
-
-    @staticmethod
-    def create_dtensor_from_chunks(local_chunk, target_mesh,):
-        
-        #TODO Doc string 
-        
-        # Goal: Create a dtensor from local tensor chunks.
-        # Performs extra communication to sync strides and shapes across the mesh.
-        
-        # First, get the mesh:
-        if isinstance(str, target_mesh):
-            # Fetch the mesh itself:
-            target_mesh = DistributedManager.global_mesh[target_mesh]
 
     @staticmethod
     def create_process_subgroup(
@@ -738,6 +717,16 @@ class DistributedManager(object):
     def create_groups_from_config(
         config: ProcessGroupConfig, verbose: bool = False
     ):  # pragma: no cover
+
+        warnings.warn(
+            "DistributedManager.create_groups_from_config is no longer the most simple "
+            "way to organize process groups.  Please switch to DeviceMesh, "
+            "and DistributedManager.initialize_mesh",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+
+
         # Traverse process group tree in breadth first order
         # to create nested process groups
         q = queue.Queue()
