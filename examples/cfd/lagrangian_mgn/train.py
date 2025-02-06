@@ -152,7 +152,10 @@ class MGNTrainer:
             gt_pos, gt_vel, gt_acc = self.dataset.unpack_targets(graph)
             # Predict the acceleration using normalized inputs and targets.
             pred_acc = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            loss_acc_norm = self.criterion(pred_acc, gt_acc)
+            mask = graph.ndata["mask"].view(1, -1, 1)
+            num_particles = mask.sum()
+            loss_acc_norm = mask * self.criterion(pred_acc, gt_acc)
+            loss_acc_norm = loss_acc_norm.sum() / num_particles
 
             with torch.no_grad():
                 pos, vel = self.dataset.unpack_inputs(graph)
@@ -164,15 +167,21 @@ class MGNTrainer:
                     dt=self.dt,
                     denormalize=True,
                 )
-                loss_pos = self.criterion(pred_pos, gt_pos)
-                # loss_vel is denormalized.
-                loss_vel = self.criterion(
+
+                # Position loss.
+                loss_pos = mask * self.criterion(pred_pos, gt_pos)
+                loss_pos = loss_pos.sum() / num_particles
+                # loss_vel and loss_acc are denormalized.
+                loss_vel = mask * self.criterion(
                     pred_vel, self.dataset.denormalize_velocity(gt_vel)
                 )
-                loss_acc = self.criterion(
+                loss_vel = loss_vel.sum() / num_particles
+
+                loss_acc = mask * self.criterion(
                     self.dataset.denormalize_acceleration(pred_acc),
                     self.dataset.denormalize_acceleration(gt_acc),
                 )
+                loss_acc = loss_acc.sum() / num_particles
 
             # # predict the acceleration
             # pred_acc = self.model(graph.ndata["x"], graph.edata["x"], graph)

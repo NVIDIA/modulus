@@ -121,6 +121,8 @@ class LagrangianDataset(DGLDataset):
         verbose, by default False
     """
 
+    KINEMATIC_PARTICLE_ID = 3  # See train.py in DM code.
+
     def __init__(
         self,
         name: str = "dataset",
@@ -227,9 +229,14 @@ class LagrangianDataset(DGLDataset):
         # Current position at t.
         pos_t = pos[-2]
 
+        # Mask for material particles (i.e. non-kinematic).
+        mask = ~self.get_kinematic_mask(gidx)
         # Add noise.
         if self.split == "train":
             pos_noise = self.random_walk_noise(*pos.shape[:2])
+            # Do not apply noise to kinematic particles.
+            pos_noise *= mask.view(1, -1, 1)
+            # Add noise to positions.
             pos += pos_noise
 
         # Velocities.
@@ -265,6 +272,7 @@ class LagrangianDataset(DGLDataset):
         graph.ndata["x"] = node_features
         graph.ndata["y"] = node_targets
         graph.ndata["pos"] = pos_t
+        graph.ndata["mask"] = mask
         graph.ndata["t"] = torch.tensor([tidx]).repeat(
             node_features.shape[0]
         )  # just to track the start
@@ -469,22 +477,25 @@ class LagrangianDataset(DGLDataset):
             num_parallel_calls=8,
         ).prefetch(tf.data.AUTOTUNE)
 
-    @staticmethod
-    def _get_rollout_mask(node_type):
-        mask = torch.logical_or(
-            torch.eq(node_type, torch.zeros_like(node_type)),
-            torch.eq(
-                node_type,
-                torch.zeros_like(node_type) + 5,
-            ),
-        )
-        return mask
+    def get_kinematic_mask(self, graph_idx: int) -> Tensor:
+        return self.node_type[graph_idx][:, self.KINEMATIC_PARTICLE_ID] != 0
 
-    @staticmethod
-    def _add_noise(features, targets, noise_std, noise_mask):
-        noise = torch.normal(mean=0, std=noise_std, size=features.size())
-        noise_mask = noise_mask.expand(features.size()[0], -1, features.size()[2])
-        noise = torch.where(noise_mask, noise, torch.zeros_like(noise))
-        features += noise * features
-        targets -= noise * targets
-        return features, targets
+    # @staticmethod
+    # def _get_rollout_mask(node_type):
+    #     mask = torch.logical_or(
+    #         torch.eq(node_type, torch.zeros_like(node_type)),
+    #         torch.eq(
+    #             node_type,
+    #             torch.zeros_like(node_type) + 5,
+    #         ),
+    #     )
+    #     return mask
+
+    # @staticmethod
+    # def _add_noise(features, targets, noise_std, noise_mask):
+    #     noise = torch.normal(mean=0, std=noise_std, size=features.size())
+    #     noise_mask = noise_mask.expand(features.size()[0], -1, features.size()[2])
+    #     noise = torch.where(noise_mask, noise, torch.zeros_like(noise))
+    #     features += noise * features
+    #     targets -= noise * targets
+    #     return features, targets
