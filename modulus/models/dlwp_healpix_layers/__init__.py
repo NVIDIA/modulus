@@ -24,6 +24,7 @@ from .healpix_blocks import (
     MaxPool,
     SymmetricConvNeXtBlock,
     TransposedConvUpsample,
+    Multi_SymmetricConvNeXtBlock,
 )
 from .healpix_decoder import UNetDecoder
 from .healpix_encoder import UNetEncoder

@@ -75,7 +75,7 @@ def scaling_dict():
         "lsm": {"mean": 0, "std": 1},
         "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
-        "extra": {"mean": 1, "std": 0},
+        "extra": {"mean": 1, "std": 0}, # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 
@@ -93,7 +93,7 @@ def scaling_double_dict():
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
         "lsm": {"mean": 0, "std": 2},
         "z": {"mean": 0, "std": 2},
-        "extra": {"mean": 0, "std": 2},
+        "extra": {"mean": 0, "std": 2}, # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 

@@ -241,9 +241,9 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         # REMARK: we remove the xarray overhead from these
         try:
-            self.input_scaling = scaling_da.sel(index=self.ds.channel_in.values).rename(
-                {"index": "channel_in"}
-            )
+            self.input_scaling = scaling_da.sel(
+                index=self.ds.channel_out.values
+            ).rename({"index": "channel_in"})
             self.input_scaling = {
                 "mean": np.expand_dims(
                     self.input_scaling["mean"].to_numpy(), (0, 2, 3, 4)
@@ -471,7 +471,11 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         if self.constants is not None:
             # Add the constants as [F, C, H, W]
+<<<<<<< HEAD
             inputs_result.append(self.constants)
+=======
+            inputs_result.append(self.get_constants())
+>>>>>>> origin/dev
 
         logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
         torch.cuda.nvtx.range_pop()
