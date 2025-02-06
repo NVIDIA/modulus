@@ -16,11 +16,13 @@
 
 from typing import Sequence
 
+import logging
 import numpy as np
 import pandas as pd
 import torch as th
 import xarray as xr
 
+logger = logging.getLogger(__name__)
 
 class ConstantCoupler:
     """
@@ -87,13 +89,15 @@ class ConstantCoupler:
         self.integrated_couplings = None
 
         if not prepared_coupled_data:
-            print(
+            logger.log(
+                logging.DEBUG,
                 "Assuming coupled data is not preprocessed, averaging fields in as designed in "
                 "TrailingAverageCoupler. See docs for specifics."
             )
             self._prepare_coupled_data()
         else:
-            print(
+            logger.log(
+                logging.DEBUG,
                 '**Assuming coupled data has been prepared properly, using coupled field[s] from '
                 'dataset "as-is"**'
             )
@@ -180,7 +184,7 @@ class ConstantCoupler:
             The data to use when the dataloader requests coupled fields. Expected
             format is [B, F, T, C, H, W]
         """
-        if coupled_fields[0] != self.batch_size:
+        if coupled_fields.shape[0] != self.batch_size:
             raise ValueError(f"Batch size of coupled field {coupled_fields[0]} doesn't "
                              f" match configured batch size {self.batch_size}")
         # create buffer for coupling
@@ -321,13 +325,13 @@ class TrailingAverageCoupler:
         self.coupled_mode = False  # if forecasting with another coupled model
 
         if not prepared_coupled_data:
-            print(
+            logger.log(logging.DEBUG,
                 "Assuming coupled data is not preprocessed, averaging fields in as designed in"
                  "TrailingAverageCoupler. See docs for specifics."
             )
             self._prepare_coupled_data()
         else:
-            print(
+            logger.log(logging.DEBUG,
                 '**Assuming coupled data has been prepared properly, using coupled field[s] from'
                 'dataset "as-is"**'
             )
