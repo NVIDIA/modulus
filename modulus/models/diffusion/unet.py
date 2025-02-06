@@ -45,7 +45,7 @@ class MetaData(ModelMetaData):
 
 class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
-    U-Net Wrapper for CorrDiff.
+    U-Net Wrapper for CorrDiff deterministic regression model.
 
     Parameters
     -----------
@@ -66,10 +66,22 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     sigma_data: float, optional
         Expected standard deviation of the training data, by default 0.5.
     model_type: str, optional
-        Class name of the underlying model, by default 'DhariwalUNet'.
+        Class name of the underlying model, by default 'SongUNetPosEmbd'.
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 
+    Examples
+     -----------
+        The model forward pass can be called with `model(x, img_lr,
+        force_fp32=False, **kwargs)`, where:
+            x, img_lr: torch.Tensor
+                Passed as positional arguments to the underlying model. Refer
+                to the documentation for the class specified by `model_type`.
+            force_fp32: bool
+                If True, force conversion of inputs to torch.float32.
+            **kwargs: dict
+                Additional keyword arguments to be passed to the underlying
+                model.
 
     Reference
     ----------
@@ -118,13 +130,11 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             **model_kwargs,
         )
 
-    def forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
+    def forward(self, x, img_lr, force_fp32=False, **model_kwargs):
         # SR: concatenate input channels
         if img_lr is not None:
             x = torch.cat((x, img_lr), dim=1)
 
-        x = x.to(torch.float32)
-        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -134,7 +144,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
             torch.zeros(
-                sigma.numel(), dtype=sigma.dtype, device=sigma.device
+                x.shape[0], dtype=dtype, device=x.device
             ),  # c_noise.flatten()
             class_labels=None,
             **model_kwargs,
@@ -142,10 +152,12 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
         if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
-                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+                f"Expected the dtype to be {dtype}, "
+                f"but got {F_x.dtype} instead."
             )
 
-        # skip connection - for SR there's size mismatch bwtween input and output
+        # skip connection - for SR there's size mismatch bewtween input and
+        # output
         D_x = F_x.to(torch.float32)
         return D_x
 
@@ -189,7 +201,7 @@ class StormCastUNet(Module):
     sigma_data: float, optional
         Expected standard deviation of the training data, by default 0.5.
     model_type: str, optional
-        Class name of the underlying model, by default 'DhariwalUNet'.
+        Class name of the underlying model, by default 'SongUNet'.
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 

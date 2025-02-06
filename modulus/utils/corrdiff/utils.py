@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import datetime
+from typing import Optional
 
 import cftime
 import nvtx
@@ -32,7 +33,7 @@ def regression_step(
     net: torch.nn.Module,
     img_lr: torch.Tensor,
     latents_shape: torch.Size,
-    lead_time_label: torch.Tensor = None,
+    lead_time_label: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Given a low-res input, performs a regression step to produce ensemble mean.
@@ -51,14 +52,20 @@ def regression_step(
     """
     # Create a tensor of zeros with the given shape and move it to the appropriate device
     x_hat = torch.zeros(latents_shape, dtype=torch.float64, device=net.device)
-    t_hat = torch.tensor(1.0, dtype=torch.float64, device=net.device)
 
     # Perform regression on a single batch element
     with torch.inference_mode():
         if lead_time_label is not None:
-            x = net(x_hat[0:1], img_lr, t_hat, lead_time_label=lead_time_label)
+            x = net(
+                x=x_hat[0:1],
+                img_lr=img_lr,
+                lead_time_label=lead_time_label
+            )
         else:
-            x = net(x_hat[0:1], img_lr, t_hat)
+            x = net(
+                x=x_hat[0:1],
+                img_lr=img_lr
+            )
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:

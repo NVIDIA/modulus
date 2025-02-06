@@ -339,7 +339,7 @@ class EDMLossSR:
             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
         y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
 
         n = torch.randn_like(y) * sigma
         D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
@@ -353,12 +353,8 @@ class RegressionLoss:
 
     Parameters
     ----------
-    P_mean: float, optional
-        Mean value for `sigma` computation, by default -1.2.
-    P_std: float, optional:
-        Standard deviation for `sigma` computation, by default 1.2.
     sigma_data: float, optional
-        Standard deviation for data, by default 0.5.
+        Standard deviation for data. Depreceated and ignored. By default 0.5.
 
     Note
     ----
@@ -369,15 +365,14 @@ class RegressionLoss:
     """
 
     def __init__(
-        self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5
+        self, sigma_data: float = 0.5
     ):
-        self.P_mean = P_mean
-        self.P_std = P_std
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
-        Calculate and return the loss for the U-Net for deterministic predictions.
+        Calculate and return the regression loss for the U-Net for
+        deterministic predictions.
 
         Parameters:
         ----------
@@ -385,39 +380,48 @@ class RegressionLoss:
             The neural network model that will make predictions.
 
         img_clean: torch.Tensor
-            Input images (high resolution) to the neural network.
+            Input images (high resolution). Used as ground truth and for data
+            augmentation if 'augment_pipe' is provided.
 
         img_lr: torch.Tensor
-            Input images (low resolution) to the neural network.
+            Input images (low resolution). Used as input to the neural network.
 
         labels: torch.Tensor
-            Ground truth labels for the input images.
+            Not used. Only present for compatibility with other loss functions.
 
         augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and
-            returns augmented images. If not provided, no data augmentation is applied.
+            An optional data augmentation function that takes concatenated high
+            and low resolution images as input and returns augmented images. If
+            not provided, no data augmentation is applied.
 
         Returns:
         -------
         torch.Tensor
-            A tensor representing the loss calculated based on the network's
-            predictions.
+            A tensor representing the per-sample element-wise squared
+            difference between the network's  predictions and the (possibly
+            data-augmented by 'augment_pipe') high resolution images. This
+            tensor can then be used to compute the loss by sum, mean, or other
+            appropriate reduction function.
         """
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
             1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
         )
 
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+            augment_pipe(img_tot)
+            if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+        y = y_tot[:, :img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
 
-        input = torch.zeros_like(y, device=img_clean.device)
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
+        zero_input = torch.zeros_like(y, device=img_clean.device)
+        D_yn = net(
+            x=zero_input,
+            img_lr=y_lr,
+            force_fp32=False,
+            augment_labels=augment_labels
+        )
         loss = weight * ((D_yn - y) ** 2)
 
         return loss
@@ -792,9 +796,9 @@ class VELoss_dfsr:
 
 class RegressionLossCE:
     """
-    A regression loss function for the GEFS-HRRR model with probability channels, adapted
-    from RegressionLoss. In this version, probability channels are evaluated using
-    CrossEntropyLoss instead of MSELoss.
+    A regression loss function for the GEFS-HRRR model with probability
+    channels, adapted from RegressionLoss. In this version, probability
+    channels are evaluated using CrossEntropyLoss instead of MSELoss.
 
     Parameters
     ----------
