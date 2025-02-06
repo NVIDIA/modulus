@@ -130,6 +130,8 @@ class OpenFoamDataset(Dataset):
         stl_sizes = np.array(stl_sizes.cell_data["Area"])
         stl_centers = np.array(mesh_stl.cell_centers().points)
 
+        length_scale = np.amax(np.amax(stl_vertices, 0) - np.amin(stl_vertices, 0))
+
         if self.model_type == "volume" or self.model_type == "combined":
             filepath = self.path_getter.volume_path(car_dir)
             reader = vtk.vtkXMLUnstructuredGridReader()
@@ -149,10 +151,7 @@ class OpenFoamDataset(Dataset):
                 AIR_DENSITY * STREAM_VELOCITY**2.0
             )
 
-            volume_fields[:, 4:5] = volume_fields[:, 4:5] / (
-                AIR_DENSITY * STREAM_VELOCITY**2.0
-            )
-            volume_fields[:, 5:] = volume_fields[:, 5:] / (
+            volume_fields[:, 4:] = volume_fields[:, 4:] / (
                 STREAM_VELOCITY * length_scale
             )
         else:
