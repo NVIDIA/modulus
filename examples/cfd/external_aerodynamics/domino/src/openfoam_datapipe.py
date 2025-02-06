@@ -130,6 +130,8 @@ class OpenFoamDataset(Dataset):
         stl_sizes = np.array(stl_sizes.cell_data["Area"])
         stl_centers = np.array(mesh_stl.cell_centers().points)
 
+        length_scale = np.amax(np.amax(stl_vertices, 0) - np.amin(stl_vertices, 0))
+
         if self.model_type == "volume" or self.model_type == "combined":
             filepath = self.path_getter.volume_path(car_dir)
             reader = vtk.vtkXMLUnstructuredGridReader()
@@ -142,6 +144,16 @@ class OpenFoamDataset(Dataset):
                 polydata, self.volume_variables
             )
             volume_fields = np.concatenate(volume_fields, axis=-1)
+
+            # Non-dimensionalize volume fields
+            volume_fields[:, :3] = volume_fields[:, :3] / STREAM_VELOCITY
+            volume_fields[:, 3:4] = volume_fields[:, 3:4] / (
+                AIR_DENSITY * STREAM_VELOCITY**2.0
+            )
+
+            volume_fields[:, 4:] = volume_fields[:, 4:] / (
+                STREAM_VELOCITY * length_scale
+            )
         else:
             volume_fields = None
             volume_coordinates = None
@@ -171,6 +183,9 @@ class OpenFoamDataset(Dataset):
             surface_normals = (
                 surface_normals / np.linalg.norm(surface_normals, axis=1)[:, np.newaxis]
             )
+
+            # Non-dimensionalize surface fields
+            surface_fields = surface_fields / (AIR_DENSITY * STREAM_VELOCITY**2.0)
         else:
             surface_fields = None
             surface_coordinates = None

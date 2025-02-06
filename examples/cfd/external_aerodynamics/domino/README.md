@@ -47,9 +47,26 @@ To train and test the DoMINO model on AWS dataset, follow these steps:
 4. Run `train.py` to start the training. Modify data, train and model keys in config file.
 
 5. Run `test.py` to test on `.vtp` / `.vtu`. Predictions are written to the same file.
- Modify eval key in config file.
+ Modify eval key in config file to specify checkpoint, input and output directory.
 
 6. Download the validation results (saved in form of point clouds in `.vtp` / `.vtu` format),
+   and visualize in Paraview.
+
+## Retraining recipe for DoMINO model
+
+To enable retraining the DoMINO model from a pre-trained checkpoint, follow the steps:
+
+1. Add the pre-trained checkpoints in the resume_dir defined in `conf/config.yaml`.
+
+2. Add the volume and surface scaling factors to the output dir defined in  `conf/config.yaml`.
+
+3. Run `retraining.py` for specified number of epochs to retrain model at a small
+ learning rate starting from checkpoint.
+
+4. Run `test.py` to test on `.vtp` / `.vtu`. Predictions are written to the same file.
+ Modify eval key in config file to specify checkpoint, input and output directory.
+
+5. Download the validation results (saved in form of point clouds in `.vtp` / `.vtu` format),
    and visualize in Paraview.
 
 ## Guidelines for training DoMINO model

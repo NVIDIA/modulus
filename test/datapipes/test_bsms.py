@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dgl
 import pytest
 import torch
 from pytest_utils import import_or_fail
+
+dgl = pytest.importorskip("dgl")
 
 
 @pytest.fixture

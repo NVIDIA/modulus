@@ -263,7 +263,7 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         :, start_idx:end_idx
                     ]
                     geo_encoding_local = model.module.geo_encoding_local_surface(
-                        geo_encoding, surface_mesh_centers_batch, s_grid
+                        0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid
                     )
                     pos_encoding = pos_surface_center_of_mass_batch
                     pos_encoding = model.module.position_encoder(
@@ -324,8 +324,6 @@ def main(cfg: DictConfig):
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     if model_type == "volume" or model_type == "combined":
         volume_variable_names = list(cfg.variables.volume.solution.keys())
         num_vol_vars = 0
@@ -370,22 +368,8 @@ def main(cfg: DictConfig):
 
     model = torch.compile(model, disable=True)
 
-    model_load_path = os.path.join(cfg.resume_dir, "best_model")
-    # retrive the smallest validation loss if available
-    numbers = []
-    for filename in os.listdir(model_load_path):
-        match = re.search(r"\d+\.\d*[1-9]\d*", filename)
-        if match:
-            number = float(match.group(0))
-            if number != 0.1:
-                numbers.append(number)
-
-    numbers.sort()
-    print(f"Best validation loss: {numbers[0]}")
     checkpoint = torch.load(
-        to_absolute_path(
-            os.path.join(model_load_path, f"DoMINO.0.{str(numbers[0])}.pt")
-        ),
+        to_absolute_path(os.path.join(cfg.resume_dir, cfg.eval.checkpoint_name)),
         map_location=dist.device,
     )
 
