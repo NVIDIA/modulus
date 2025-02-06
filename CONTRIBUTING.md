@@ -214,6 +214,15 @@ The pipeline has following stages:
     test, you will have to review your changes and fix the issues.
     To run pytest locally you can simply run `pytest` inside the `test` folder.
 
+    While writing these tests, we encourage you to make use of the
+    [`@nfs_data_or_fail`](https://github.com/NVIDIA/modulus/blob/main/test/pytest_utils.py#L92)
+    and the [`@import_of_fail`](https://github.com/NVIDIA/modulus/blob/main/test/pytest_utils.py#L25)
+    decorators to appropriately skip your tests for developers and users not having your
+    test specific datasets and dependencies respectively. The CI has these datasets and
+    dependencies so your tests will get executed during CI.
+    This mechanism helps us provide a better developer and user experience
+    when working with the unit tests.
+
 6. `doctest`
     Checks if the examples in the docstrings run and produce desired outputs.
     It is highly recommended that you provide simple examples of your functions/classes

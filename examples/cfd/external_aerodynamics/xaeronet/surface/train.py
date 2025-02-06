@@ -44,7 +44,7 @@ from torch.utils.tensorboard import SummaryWriter
 from omegaconf import DictConfig
 
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import initialize_wandb
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.models.meshgraphnet import MeshGraphNet
 
 # Get the absolute path to the parent directory

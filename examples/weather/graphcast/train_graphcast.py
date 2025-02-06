@@ -39,9 +39,9 @@ from modulus.utils.graphcast.loss import (
 )
 from modulus.launch.logging import (
     PythonLogger,
-    initialize_wandb,
     RankZeroLoggingWrapper,
 )
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
 from train_utils import count_trainable_params, prepare_input

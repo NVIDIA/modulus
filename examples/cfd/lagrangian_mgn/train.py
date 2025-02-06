@@ -14,98 +14,79 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-
-import hydra
-from hydra.utils import to_absolute_path
-import torch
-import wandb
+import logging
 import time
 
 from dgl.dataloading import GraphDataLoader
 
-from omegaconf import DictConfig
+import hydra
+from hydra.utils import instantiate, to_absolute_path
+from omegaconf import DictConfig, OmegaConf
+
+import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
-from modulus.datapipes.gnn.lagrangian_dataset import LagrangianDataset
 from modulus.distributed.manager import DistributedManager
-from modulus.launch.logging import (
-    PythonLogger,
-    RankZeroLoggingWrapper,
-    initialize_wandb,
-)
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.models.meshgraphnet import MeshGraphNet
+
+from loggers import CompositeLogger, ExperimentLogger, get_gpu_info, init_python_logging
+
+
+logger = logging.getLogger("lmgn")
+
+# Experiment logger will be set later during initialization.
+elogger: ExperimentLogger = None
 
 
 class MGNTrainer:
-    def __init__(self, cfg: DictConfig, rank_zero_logger: RankZeroLoggingWrapper):
+    def __init__(self, cfg: DictConfig):
         assert DistributedManager.is_initialized()
         self.dist = DistributedManager()
-        self.amp = cfg.amp
-        self.radius = cfg.radius
-        self.dt = cfg.dt
+
+        self.dt = cfg.data.train.dt
         self.dim = cfg.dim
-        self.gravity = torch.zeros(self.dim, device=self.dist.device)
-        self.gravity[-1] = -9.8
+
+        self.amp = cfg.amp.enabled
 
         # MGN with recompute_activation currently supports only SiLU activation function.
-        mlp_act = cfg.activation
-        if cfg.recompute_activation and cfg.activation.lower() != "silu":
+        mlp_act = cfg.model.mlp_activation_fn
+        if cfg.model.recompute_activation and mlp_act.lower() != "silu":
             raise ValueError(
                 f"recompute_activation only supports SiLU activation function, "
-                f"but got {cfg.activation}. Please either set activation='silu' "
+                f"but got {mlp_act}. Please either set activation='silu' "
                 f"or disable recompute_activation."
             )
 
         # instantiate dataset
-        self.dataset = LagrangianDataset(
-            name="Water",
-            data_dir=to_absolute_path(cfg.data_dir),
-            split="train",
-            num_samples=cfg.num_training_samples,
-            num_steps=cfg.num_training_time_steps,
-            radius=cfg.radius,
-            dt=cfg.dt,
-        )
+        logger.info("Loading the training dataset...")
+        self.dataset = instantiate(cfg.data.train)
+        logger.info(f"Using {len(self.dataset)} training samples.")
         self.dataset.set_normalizer_device(device=self.dist.device)
         self.time_integrator = self.dataset.time_integrator
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=cfg.batch_size,
-            shuffle=True,
-            drop_last=True,
-            pin_memory=True,
+            **cfg.train.dataloader,
             use_ddp=self.dist.world_size > 1,
-            num_workers=cfg.num_dataloader_workers,
         )
 
         # instantiate the model
-        self.model = MeshGraphNet(
-            cfg.num_input_features,
-            cfg.num_edge_features,
-            cfg.num_output_features,
-            cfg.processor_size,
-            mlp_activation_fn=mlp_act,
-            do_concat_trick=cfg.do_concat_trick,
-            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
-            recompute_activation=cfg.recompute_activation,
-            # aggregation="mean",
-        )
-        if cfg.jit:
-            if not self.model.meta.jit:
-                raise ValueError("MeshGraphNet is not yet JIT-compatible.")
-            self.model = torch.jit.script(self.model).to(self.dist.device)
+        logger.info("Creating the model...")
+        # instantiate the model
+        self.model = instantiate(cfg.model)
+
+        if cfg.compile.enabled:
+            self.model = torch.compile(self.model, **cfg.compile.args).to(
+                self.dist.device
+            )
         else:
             self.model = self.model.to(self.dist.device)
-        if cfg.watch_model and not cfg.jit and self.dist.rank == 0:
-            wandb.watch(self.model)
+            elogger.watch_model(self.model)
 
         # distributed data parallel for multi-node training
-        if self.dist.world_size > 1:
+        if self.dist.distributed:
             self.model = DistributedDataParallel(
                 self.model,
                 device_ids=[self.dist.local_rank],
@@ -117,49 +98,37 @@ class MGNTrainer:
         # enable train mode
         self.model.train()
 
-        # instantiate loss, optimizer, and scheduler
-        # self.criterion = self.l2loss
-        self.criterion = torch.nn.MSELoss()
+        # instantiate loss
+        self.criterion = instantiate(cfg.loss)
 
-        self.optimizer = None
-        try:
-            if cfg.use_apex:
-                from apex.optimizers import FusedAdam
+        # instantiate optimizer, and scheduler
+        self.optimizer = instantiate(cfg.optimizer, self.model.parameters())
 
-                self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
-        except ImportError:
-            rank_zero_logger.warning(
-                "NVIDIA Apex (https://github.com/nvidia/apex) is not installed, "
-                "FusedAdam optimizer will not be used."
-            )
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(
-                self.model.parameters(), lr=cfg.lr, weight_decay=1e-5
-            )
-        rank_zero_logger.info(f"Using {self.optimizer.__class__.__name__} optimizer")
+        num_iterations = cfg.train.epochs * len(self.dataloader)
+        lrs_cfg = cfg.lr_scheduler
+        lrs_with_num_iter = {
+            "torch.optim.lr_scheduler.CosineAnnealingLR": "T_max",
+            "torch.optim.lr_scheduler.OneCycleLR": "total_steps",
+        }
+        if (num_iter_key := lrs_with_num_iter.get(lrs_cfg._target_)) is not None:
+            if lrs_cfg[num_iter_key] is None:
+                lrs_cfg[num_iter_key] = num_iterations
+        self.scheduler = instantiate(cfg.lr_scheduler, self.optimizer)
 
-        num_iteration = (
-            cfg.epochs
-            * cfg.num_training_samples
-            * cfg.num_training_time_steps
-            // cfg.batch_size
-        )
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=num_iteration, eta_min=cfg.lr_min
-        )
         self.scaler = GradScaler()
 
         # load checkpoint
         if self.dist.world_size > 1:
             torch.distributed.barrier()
         self.epoch_init = load_checkpoint(
-            to_absolute_path(cfg.ckpt_path),
+            to_absolute_path(cfg.resume_dir),
             models=self.model,
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             scaler=self.scaler,
             device=self.dist.device,
         )
+        self.epoch_init += 1
 
     def train(self, graph):
         graph = graph.to(self.dist.device)
@@ -202,38 +171,25 @@ class MGNTrainer:
             loss.backward()
             self.optimizer.step()
 
-    def l2loss(self, input, target, p=2, eps=1e-5):
-        input = input.flatten(start_dim=1)
-        target = target.flatten(start_dim=1)
-        l2loss = torch.norm(input - target, dim=1, p=p) / (
-            torch.norm(target, dim=1, p=p) + eps
-        )
-        l2loss = torch.mean(l2loss)
-        return l2loss
 
-
-@hydra.main(version_base="1.3", config_path="conf", config_name="config_2d")
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     # initialize distributed manager
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # Initialize loggers.
-    wandb.login(key=cfg.wandb_key)
-    initialize_wandb(
-        project=cfg.wandb_project,
-        entity=cfg.wandb_entity,
-        name=cfg.wandb_name,
-        mode=cfg.wandb_mode,
-    )  # Wandb logger
-    logger = PythonLogger("main")  # General python logger
-    rank_zero_logger = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
-    rank_zero_logger.file_logging()
+    init_python_logging(cfg, dist.rank)
+    logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
+    logger.info(get_gpu_info())
 
-    trainer = MGNTrainer(cfg, rank_zero_logger)
+    # Initialize loggers.
+    global elogger
+    elogger = CompositeLogger(cfg)
+
+    trainer = MGNTrainer(cfg)
     start = time.time()
-    rank_zero_logger.info("Training started...")
-    for epoch in range(trainer.epoch_init, cfg.epochs):
+    logger.info("Training started...")
+    for epoch in range(trainer.epoch_init, cfg.train.epochs + 1):
         loss_list = []
         loss_pos_list = []
         loss_vel_list = []
@@ -248,12 +204,14 @@ def main(cfg: DictConfig) -> None:
         mean_loss_pos = sum(loss_pos_list) / len(loss_pos_list)
         mean_loss_vel = sum(loss_vel_list) / len(loss_vel_list)
         mean_loss_acc = sum(loss_acc_list) / len(loss_acc_list)
-        rank_zero_logger.info(
-            f"epoch: {epoch}, loss: {mean_loss:10.3e}, "
+        last_lr = trainer.scheduler.get_last_lr()[0]
+        logger.info(
+            f"epoch: {epoch:5,}, loss: {mean_loss:10.3e}, "
             f"position loss: {mean_loss_pos:10.3e}, "
             f"velocity loss: {mean_loss_vel:10.3e}, "
             f"acceleration loss: {mean_loss_acc:10.3e}, "
-            f"time per epoch: {(time.time()-start):10.3e}"
+            f"lr: {last_lr:10.3e}, "
+            f"time per epoch: {(time.time() - start):10.3e}"
         )
         losses = {
             "loss": mean_loss,
@@ -261,14 +219,15 @@ def main(cfg: DictConfig) -> None:
             "loss_vel": mean_loss_vel,
             "loss_acc": mean_loss_acc,
         }
-        wandb.log(losses)
+        elogger.log(losses, epoch)
+        elogger.log_scalar("lr", last_lr, epoch)
 
         # save checkpoint
         if dist.world_size > 1:
             torch.distributed.barrier()
-        if dist.rank == 0:
+        if dist.rank == 0 and epoch % cfg.train.checkpoint_save_freq == 0:
             save_checkpoint(
-                to_absolute_path(cfg.ckpt_path),
+                cfg.output,
                 models=trainer.model,
                 optimizer=trainer.optimizer,
                 scheduler=trainer.scheduler,
@@ -277,7 +236,7 @@ def main(cfg: DictConfig) -> None:
             )
             logger.info(f"Saved model on rank {dist.rank}")
         start = time.time()
-    rank_zero_logger.info("Training completed!")
+    logger.info("Training completed!")
 
 
 if __name__ == "__main__":

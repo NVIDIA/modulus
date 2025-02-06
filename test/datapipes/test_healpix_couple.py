@@ -25,17 +25,13 @@ import pytest
 import torch as th
 import xarray as xr
 from netCDF4 import Dataset as Dataset
-from omegaconf import DictConfig, OmegaConf
-from pytest_utils import nfsdata_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from modulus.datapipes.healpix.coupledtimeseries_dataset import CoupledTimeSeriesDataset
-from modulus.datapipes.healpix.couplers import ConstantCoupler, TrailingAverageCoupler
-from modulus.datapipes.healpix.data_modules import (
-    CoupledTimeSeriesDataModule,
-)
 from modulus.distributed import DistributedManager
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -78,7 +74,7 @@ def scaling_dict():
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
         "extra": {"mean": 0, "std": 0},  # doesn't appear in test dataset
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
 @pytest.fixture
@@ -96,11 +92,17 @@ def scaling_double_dict():
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
         "extra": {"mean": 0, "std": 2},  # doesn't appear in test dataset
     }
-    return DictConfig(scaling)
+    return omegaconf.DictConfig(scaling)
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
+
+    from modulus.datapipes.healpix.couplers import (
+        ConstantCoupler,
+    )
+
     variables = ["z500", "z1000"]
     input_times = ["0h"]
     input_time_dim = 1
@@ -151,7 +153,7 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     expected = expected.astype(int)
     assert np.array_equal(expected, coupler._coupled_offsets)
 
-    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df = pd.DataFrame.from_dict(omegaconf.OmegaConf.to_object(scaling_dict)).T
     scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
     scaling_da = scaling_df.to_xarray().astype("float32")
     coupler.set_scaling(scaling_da)
@@ -202,8 +204,14 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
+
+    from modulus.datapipes.healpix.couplers import (
+        TrailingAverageCoupler,
+    )
+
     variables = ["z500", "z1000"]
     input_times = ["6h", "12h"]
     input_time_dim = 2
@@ -263,7 +271,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     expected = expected.astype(int)
     assert np.array_equal(expected, coupler._coupled_offsets)
 
-    scaling_df = pd.DataFrame.from_dict(OmegaConf.to_object(scaling_dict)).T
+    scaling_df = pd.DataFrame.from_dict(omegaconf.OmegaConf.to_object(scaling_dict)).T
     scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
     scaling_da = scaling_df.to_xarray().astype("float32")
     coupler.set_scaling(scaling_da)
@@ -326,10 +334,16 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataset_initialization(
     data_dir, dataset_name, scaling_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.coupledtimeseries_dataset import (
+        CoupledTimeSeriesDataset,
+    )
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -361,7 +375,7 @@ def test_CoupledTimeSeriesDataset_initialization(
         )
 
     # check for failure of invalid scaling variable on input
-    invalid_scaling = DictConfig(
+    invalid_scaling = omegaconf.DictConfig(
         {
             "bogosity": {"mean": 0, "std": 42},
         }
@@ -474,10 +488,16 @@ def test_CoupledTimeSeriesDataset_initialization(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataset_get_constants(
     data_dir, dataset_name, scaling_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.coupledtimeseries_dataset import (
+        CoupledTimeSeriesDataset,
+    )
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -517,10 +537,15 @@ def test_CoupledTimeSeriesDataset_get_constants(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataset_len(
     data_dir, dataset_name, scaling_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.coupledtimeseries_dataset import (
+        CoupledTimeSeriesDataset,
+    )
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -598,10 +623,15 @@ def test_CoupledTimeSeriesDataset_len(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataset_get(
     data_dir, dataset_name, scaling_double_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.coupledtimeseries_dataset import (
+        CoupledTimeSeriesDataset,
+    )
+
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
@@ -734,10 +764,16 @@ def test_CoupledTimeSeriesDataset_get(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataModule_initialization(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.data_modules import (
+        CoupledTimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     splits = {
         "train_date_start": "1959-01-01",
@@ -828,7 +864,7 @@ def test_CoupledTimeSeriesDataModule_initialization(
         batch_size=1,
         prebuilt_dataset=True,
         scaling=scaling_double_dict,
-        splits=DictConfig(splits),
+        splits=omegaconf.DictConfig(splits),
         couplings=constant_coupler,
     )
     assert isinstance(timeseries_dm, CoupledTimeSeriesDataModule)
@@ -836,10 +872,16 @@ def test_CoupledTimeSeriesDataModule_initialization(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataModule_get_constants(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.data_modules import (
+        CoupledTimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     constants = {"lsm": "lsm"}
 
@@ -927,10 +969,16 @@ def test_CoupledTimeSeriesDataModule_get_constants(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataModule_get_dataloaders(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+
+    from modulus.datapipes.healpix.data_modules import (
+        CoupledTimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     splits = {
         "train_date_start": "1979-01-01",
@@ -999,10 +1047,15 @@ def test_CoupledTimeSeriesDataModule_get_dataloaders(
     DistributedManager.cleanup()
 
 
+@import_or_fail("omegaconf")
 @nfsdata_or_fail
 def test_CoupledTimeSeriesDataModule_get_coupled_vars(
     data_dir, create_path, dataset_name, scaling_double_dict, pytestconfig
 ):
+    from modulus.datapipes.healpix.data_modules import (
+        CoupledTimeSeriesDataModule,
+    )
+
     variables = ["z500", "z1000"]
     constant_coupler = [
         {
