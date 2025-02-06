@@ -1,0 +1,125 @@
+{
+    "model_name": "WNO",
+    "model_family": "WaveletOperator",
+    "model_version": "1.0",
+    "description": "Wavelet Neural Operator for multi-scale PDE fields. Replaces global FFT with wavelet transforms to capture localized features. Typically used on uniform 2D/3D grids.",
+  
+    "implementation": {
+      "base_class": "my_project.models.wno.WaveletNeuralOperator",
+      "source_repository": "https://github.com/YourOrg/wno  // or reference any wavelet-based PDE operator repo",
+      "framework_version": "PyTorch 2.0",
+      "requirements": [
+        "torch>=2.0",
+        "pywavelets>=1.4.0"
+      ],
+      "notes": "Assumes data is in uniform grid layout so wavelet transforms can be applied along each spatial dimension."
+    },
+  
+    "accepted_formats": [
+      {
+        "dimension": [2, 3],
+        "geometry_type": ["grid"],
+        "representations": [
+          {
+            "representation_name": "uniform_grid",
+            "uniform": true,
+            "is_voxel_grid": false,
+            "is_transient_supported": true,
+            "channels_min": 1,
+            "channels_max": null,
+            "boundary_required": false,
+            "mesh_type": null,
+            "notes": "Wavelet transform performed along spatial dimensions. Data shape typically [N, H, W, C] or [N, D, H, W, C]."
+          }
+        ]
+      }
+    ],
+  
+    "hyperparams_schema": [
+      {
+        "name": "wavelet_type",
+        "type": "string",
+        "default": "haar",
+        "choices": ["haar", "db2", "db4", "sym4", "coif1"],
+        "description": "Wavelet basis for decomposition (Haar, Daubechies, Symlets, Coiflets, etc.)."
+      },
+      {
+        "name": "levels",
+        "type": "int",
+        "default": 3,
+        "min": 1,
+        "max": 6,
+        "description": "Number of wavelet decomposition levels. Higher levels capture more coarse features but increase computation/memory."
+      },
+      {
+        "name": "hidden_channels",
+        "type": "int",
+        "default": 64,
+        "min": 16,
+        "max": 512,
+        "description": "Dimension of the internal channels after wavelet transforms. Similar to 'width' in FNO contexts."
+      },
+      {
+        "name": "num_wno_layers",
+        "type": "int",
+        "default": 4,
+        "min": 1,
+        "max": 10,
+        "description": "Depth of wavelet operator layers. Each layer typically does wavelet decomposition, filtering, inverse wavelet transform."
+      },
+      {
+        "name": "drop",
+        "type": "float",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 0.5,
+        "description": "Dropout rate for wavelet operator layers, if used to reduce overfitting."
+      }
+    ],
+  
+    "default_hyperparams": {
+      "optimizer": "Adam",
+      "learning_rate": 0.0003,
+      "batch_size": 4,
+      "epochs": 300,
+      "architecture": {
+        "wavelet_type": "haar",
+        "levels": 3,
+        "hidden_channels": 64,
+        "num_wno_layers": 4,
+        "drop": 0.0
+      },
+      "regularization": {
+        "weight_decay": 1e-5
+      }
+    },
+  
+    "constraints": {
+      "max_resolution": 512,
+      "gpu_memory_requirements_gb": 8,
+      "multi_gpu_supported": false,
+      "distributed_training_supported": false,
+      "notes": "3D wavelet transforms can be memory-intensive. Typically used for 2D PDE tasks, but 3D usage possible with large GPU memory."
+    },
+  
+    "metadata": {
+      "authors": ["Research Lab X", "Your Team", "Contributors"],
+      "paper_references": [
+        "Wavelet Neural Operator (WNO) Paper/Preprint",
+        "PyTorch-based wavelet transform references"
+      ],
+      "license": "MIT or Proprietary",
+      "citation": "Please cite the WNO paper if you use this model in research."
+    },
+  
+    "usage_patterns": {
+      "best_for": "Multi-scale PDE problems with local features (shocks, boundary layers) that benefit from wavelet decomposition.",
+      "limitations": "Requires uniform grid data for straightforward wavelet transforms. Non-uniform grids need re-sampling or specialized wavelet schemes.",
+      "recommended_practices": [
+        "Choose wavelet_type carefully; Haar is simplest, Daubechies can capture smoother transitions.",
+        "Experiment with levels=3 or 4 for moderate PDE complexity; deeper wavelet stacks can slow training.",
+        "Monitor GPU memory usage if applying 3D wavelet transforms with high resolution."
+      ]
+    }
+  }
+  

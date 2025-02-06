@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=60.2.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "darcy_automl_active_learning"
+version = "0.0.1"
+description = "Darcy PDE example with FNO-based autoML and active learning"
+authors = [
+  { name = "Georg Maerz" }
+]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+
+dependencies = [
+    "optuna==4.1.0",
+    "mlflow>=2.1.1",
+    "tqdm>=4.66.5"
+]
+
+[project.urls]
+"Source Code" = "https://github.com/YGMaerz/modulus-dls-api"
+"Author GitHub" = "https://github.com/YGMaerz"
+"Author X" = "https://x.com/YGMaerz"
+
+[tool.setuptools.packages.find]
+# Tells setuptools to look under src/ for your package.
+where = ["src"]
