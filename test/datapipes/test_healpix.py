@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
+from netCDF4 import Dataset as Dataset
 from omegaconf import DictConfig
 from pytest_utils import nfsdata_or_fail
 from torch.utils.data import DataLoader
@@ -75,7 +76,7 @@ def scaling_dict():
         "lsm": {"mean": 0, "std": 1},
         "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
-        "extra": {"mean": 1, "std": 0}, # doesn't appear in test dataset
+        "extra": {"mean": 1, "std": 0},  # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 
@@ -93,7 +94,7 @@ def scaling_double_dict():
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
         "lsm": {"mean": 0, "std": 2},
         "z": {"mean": 0, "std": 2},
-        "extra": {"mean": 0, "std": 2}, # doesn't appear in test dataset
+        "extra": {"mean": 0, "std": 2},  # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 
@@ -116,6 +117,8 @@ def test_open_time_series_on_the_fly(create_path, pytestconfig):
     ds_var = ds.inputs.sel(channel_in=test_var)
 
     assert ds_var.equals(base[test_var])
+    ds.close()
+    base.close()
 
 
 @nfsdata_or_fail
@@ -126,6 +129,7 @@ def test_open_time_series(data_dir, dataset_name, pytestconfig):
 
     ds = open_time_series_dataset_classic_prebuilt(data_dir, dataset_name)
     assert isinstance(ds, xr.Dataset)
+    ds.close()
 
 
 @nfsdata_or_fail
@@ -141,6 +145,7 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
         input_variables=["null", "null"],
     )
     assert isinstance(ds, xr.Dataset)
+    ds.close()
 
     # create new dataset
     # open a base dataset to compare against
@@ -160,6 +165,8 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
     ds_var = ds.inputs.sel(channel_in=test_var)
 
     assert ds_var.equals(base[test_var])
+    ds.close()
+    base.close()
 
     # delete the created file so we have a clean test for next time
     delete_dataset(create_path, dataset_name)
@@ -176,6 +183,8 @@ def test_create_time_series(data_dir, dataset_name, create_path, pytestconfig):
         constants=constants,
     )
     assert (const_ds[const] == ds.constants[0]).any()
+    ds.close()
+    const_ds.close()
 
     # delete the created file so we have a clean test for next time
     delete_dataset(create_path, dataset_name)
@@ -270,6 +279,7 @@ def test_TimeSeriesDataset_initialization(
         time_step="6h",
     )
     assert isinstance(timeseries_ds, TimeSeriesDataset)
+    zarr_ds.close()
 
 
 @nfsdata_or_fail
@@ -292,6 +302,7 @@ def test_TimeSeriesDataset_get_constants(
         expected,
         outvar,
     )
+    zarr_ds.close()
 
 
 @nfsdata_or_fail
@@ -331,6 +342,7 @@ def test_TimeSeriesDataset_len(data_dir, dataset_name, scaling_dict, pytestconfi
         drop_last=True,
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
+    zarr_ds.close()
 
 
 @nfsdata_or_fail
@@ -436,6 +448,7 @@ def test_TimeSeriesDataset_get(
         forecast_init_times=zarr_ds.time[:init_times],
     )
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
+    zarr_ds.close()
 
 
 @nfsdata_or_fail
@@ -516,6 +529,7 @@ def test_TimeSeriesDataModule_initialization(
         splits=DictConfig(splits),
     )
     assert isinstance(timeseries_dm, TimeSeriesDataModule)
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -588,6 +602,7 @@ def test_TimeSeriesDataModule_get_constants(
         timeseries_dm.get_constants(),
         expected,
     )
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 

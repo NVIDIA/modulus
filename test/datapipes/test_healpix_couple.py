@@ -24,6 +24,7 @@ import pandas as pd
 import pytest
 import torch as th
 import xarray as xr
+from netCDF4 import Dataset as Dataset
 from omegaconf import DictConfig, OmegaConf
 from pytest_utils import nfsdata_or_fail
 from torch.utils.data import DataLoader
@@ -75,7 +76,7 @@ def scaling_dict():
         "lsm": {"mean": 0, "std": 1},
         "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
-        "extra": {"mean": 0, "std": 0}, # doesn't appear in test dataset
+        "extra": {"mean": 0, "std": 0},  # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 
@@ -93,7 +94,7 @@ def scaling_double_dict():
         "lsm": {"mean": 0, "std": 2},
         "z": {"mean": 0, "std": 2},
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
-        "extra": {"mean": 0, "std": 2}, # doesn't appear in test dataset
+        "extra": {"mean": 0, "std": 2},  # doesn't appear in test dataset
     }
     return DictConfig(scaling)
 
@@ -164,6 +165,7 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     coupler.set_coupled_fields(coupled_fields)
     assert list(coupler.preset_coupled_fields.shape) == expected_shape
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -256,6 +258,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     coupler.set_coupled_fields(coupled_fields)
     assert list(coupler.preset_coupled_fields.shape) == expected_shape
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -403,7 +406,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     #     couplings=average_coupler,
     # )
     # assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
-
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -446,6 +449,7 @@ def test_CoupledTimeSeriesDataset_get_constants(
         outvar,
     )
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -526,6 +530,7 @@ def test_CoupledTimeSeriesDataset_len(
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -661,6 +666,7 @@ def test_CoupledTimeSeriesDataset_get(
     )
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -762,6 +768,7 @@ def test_CoupledTimeSeriesDataModule_initialization(
         couplings=constant_coupler,
     )
     assert isinstance(timeseries_dm, CoupledTimeSeriesDataModule)
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -852,6 +859,7 @@ def test_CoupledTimeSeriesDataModule_get_constants(
         timeseries_dm.get_constants(),
         expected,
     )
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
