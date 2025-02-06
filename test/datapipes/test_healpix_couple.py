@@ -112,6 +112,21 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
+    # test fail initialization
+    with pytest.raises(
+        NotImplementedError, match=("Data preparation not yet implemented")
+    ):
+        coupler = ConstantCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            input_times=input_times,
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+            prepared_coupled_data=False,
+        )
+
     coupler = ConstantCoupler(
         dataset=zarr_ds,
         batch_size=batch_size,
@@ -158,9 +173,7 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
         coupler.spatial_dims[1],
         coupler.spatial_dims[2],
     )
-    with pytest.raises(
-        ValueError, match=("Batch size of coupled field 4 ")
-    ):
+    with pytest.raises(ValueError, match=("Batch size of coupled field 4 ")):
         coupler.set_coupled_fields(coupled_fields)
 
     coupled_fields_batch_size = batch_size
@@ -180,7 +193,10 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     )
     coupler.set_coupled_fields(coupled_fields)
     assert list(coupler.preset_coupled_fields.shape) == expected_shape
+    assert coupler.coupled_mode
 
+    coupler.reset_coupler()
+    assert coupler.coupled_mode is False
 
     zarr_ds.close()
     DistributedManager.cleanup()
@@ -198,6 +214,22 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     # open our test dataset
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
+
+    # test fail initialization
+    with pytest.raises(
+        NotImplementedError, match=("Data preparation not yet implemented")
+    ):
+        coupler = TrailingAverageCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            averaging_window=averaging_window,
+            input_times=input_times,
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+            prepared_coupled_data=False,
+        )
 
     coupler = TrailingAverageCoupler(
         dataset=zarr_ds,
@@ -269,9 +301,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
         coupler.spatial_dims[1],
         coupler.spatial_dims[2],
     )
-    with pytest.raises(
-        ValueError, match=("Batch size of coupled field 4 ")
-    ):
+    with pytest.raises(ValueError, match=("Batch size of coupled field 4 ")):
         coupler.set_coupled_fields(coupled_fields)
 
     coupled_fields_batch_size = batch_size

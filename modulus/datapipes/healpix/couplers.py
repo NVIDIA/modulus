@@ -14,15 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from typing import Sequence
 
-import logging
 import numpy as np
 import pandas as pd
 import torch as th
 import xarray as xr
 
 logger = logging.getLogger(__name__)
+
 
 class ConstantCoupler:
     """
@@ -92,15 +93,19 @@ class ConstantCoupler:
             logger.log(
                 logging.DEBUG,
                 "Assuming coupled data is not preprocessed, averaging fields in as designed in "
-                "TrailingAverageCoupler. See docs for specifics."
+                "TrailingAverageCoupler. See docs for specifics.",
             )
             self._prepare_coupled_data()
         else:
             logger.log(
                 logging.DEBUG,
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from '
-                'dataset "as-is"**'
+                "**Assuming coupled data has been prepared properly, using coupled field[s] from "
+                'dataset "as-is"**',
             )
+
+    def _prepare_coupled_data(self):
+        # TODO: write function to lazily compute average as spcified in time scheme
+        raise NotImplementedError("Data preparation not yet implemented")
 
     def _compute_coupled_integration_dim(self):
 
@@ -191,8 +196,10 @@ class ConstantCoupler:
             format is [B, F, T, C, H, W]
         """
         if coupled_fields.shape[0] != self.batch_size:
-            raise ValueError(f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
-                             f" match configured batch size {self.batch_size}")
+            raise ValueError(
+                f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
+                f" match configured batch size {self.batch_size}"
+            )
         # create buffer for coupling
         coupled_fields = coupled_fields[
             :, :, :, self.coupled_channel_indices, :, :
@@ -338,15 +345,17 @@ class TrailingAverageCoupler:
         self.coupled_mode = False  # if forecasting with another coupled model
 
         if not prepared_coupled_data:
-            logger.log(logging.DEBUG,
+            logger.log(
+                logging.DEBUG,
                 "Assuming coupled data is not preprocessed, averaging fields in as designed in"
-                 "TrailingAverageCoupler. See docs for specifics."
+                "TrailingAverageCoupler. See docs for specifics.",
             )
             self._prepare_coupled_data()
         else:
-            logger.log(logging.DEBUG,
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from'
-                'dataset "as-is"**'
+            logger.log(
+                logging.DEBUG,
+                "**Assuming coupled data has been prepared properly, using coupled field[s] from"
+                'dataset "as-is"**',
             )
 
     def compute_coupled_indices(self, interval, data_time_step):
@@ -465,8 +474,10 @@ class TrailingAverageCoupler:
             format is [B, F, T, C, H, W]
         """
         if coupled_fields.shape[0] != self.batch_size:
-            raise ValueError(f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
-                             f" match configured batch size {self.batch_size}")
+            raise ValueError(
+                f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
+                f" match configured batch size {self.batch_size}"
+            )
 
         coupled_fields = coupled_fields[:, :, :, self.coupled_channel_indices, :, :]
         # TODO: Now support output_time_dim =/= input_time_dim, but presteps need to be 0, will add support for presteps>0
