@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+# ruff: noqa: S101
 import functools
 import json
+import logging
 import os
 
 import torch
@@ -43,6 +44,8 @@ from .lagrangian_reading_utils import parse_serialized_simulation_example
 
 # Hide GPU from visible devices for TF
 tf.config.set_visible_devices([], "GPU")
+
+logger = logging.getLogger("lmgn")
 
 
 def compute_edge_index(mesh_pos, radius):
@@ -96,7 +99,7 @@ class LagrangianDataset(DGLDataset):
     data_dir : _type_, optional
         Specifying the directory that stores the raw data in .TFRecord format., by default None
     split : str, optional
-        Dataset split ["train", "eval", "test"], by default "train"
+        Dataset split ["train", "valid", "test"], by default "train"
     num_samples : int, optional
         Number of samples, by default 1000
     num_steps : int, optional
@@ -121,6 +124,7 @@ class LagrangianDataset(DGLDataset):
         radius=0.015,
         dt=0.0025,
         bound=[0.1, 0.9],
+        num_node_types=6,
         force_reload=False,
         verbose=False,
     ):
@@ -136,6 +140,7 @@ class LagrangianDataset(DGLDataset):
         self.num_steps = num_steps
         self.noise_std = noise_std
         self.length = num_samples * (num_steps - 1)
+        self.num_node_types = num_node_types
 
         path_metadata = os.path.join(data_dir, "metadata.json")
         with open(path_metadata, "r") as file:
@@ -150,11 +155,13 @@ class LagrangianDataset(DGLDataset):
             self.acc_std = torch.tensor(metadata["acc_std"]).reshape(1, self.dim)
 
         # override from config
+        # TODO(akamenev): this is an unconditional overwrite of values that
+        # could be potentially set from metadata.json (see above).
         self.radius = radius
         self.dt = dt
 
         # create the node features
-        print(f"Preparing the {split} dataset...")
+        logger.info(f"Preparing the {split} dataset...")
         dataset_iterator = self._load_tf_data(self.data_dir, self.split)
         self.node_type = []
         self.rollout_mask = []
@@ -162,12 +169,16 @@ class LagrangianDataset(DGLDataset):
         for i in range(self.num_samples):
             data_np = dataset_iterator.get_next()
 
+            total_steps = self.num_steps + self.num_history + 1
             position = torch.from_numpy(
-                data_np[1]["position"][: self.num_steps + self.num_history + 1].numpy()
-            )  # (600, 1515, 2), dtype=torch.float
+                data_np[1]["position"][:total_steps].numpy()
+            )  # (t, num_particles, 2)
+            assert position.shape[0] == total_steps, f"{total_steps=}, {i=}"
+
             node_type = torch.from_numpy(
                 data_np[0]["particle_type"].numpy()
-            )  # (1515,), dtype=torch.long
+            )  # (num_particles,)
+            assert node_type.shape[0] == position.shape[1], f"{i=}"
 
             # noise_mask.append(torch.eq(node_type, torch.zeros_like(node_type)))
 
@@ -184,10 +195,10 @@ class LagrangianDataset(DGLDataset):
             features["velocity"] = velocity[: self.num_steps + self.num_history]
             features["acceleration"] = acceleration[: self.num_steps + self.num_history]
 
-            self.node_type.append(F.one_hot(node_type, num_classes=6))
+            self.node_type.append(F.one_hot(node_type, num_classes=self.num_node_types))
             self.node_features.append(features)
 
-        print("dataset preparation completes")
+        logger.info("Finished dataset preparation.")
 
     def __getitem__(self, idx):
         gidx = idx // (self.num_steps - 1)  # graph index

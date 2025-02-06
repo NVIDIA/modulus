@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhancement to parameterize DoMINO model with inlet velocity
 - Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
 - Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
+- Moved to experiment-based Hydra config in Lagrangian-MGN example
 
 ### Deprecated
 
