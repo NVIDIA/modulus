@@ -240,6 +240,8 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
             )
     coupler.averaging_slices = averaging_slices
     coupler.coupled_channel_indices = [0, 1]
+
+    # test a mismatched batch size
     coupled_fields_batch_size = 4
     coupled_fields_timedim = 4
     coupled_fields = th.rand(
@@ -250,11 +252,26 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
         coupler.spatial_dims[1],
         coupler.spatial_dims[2],
     )
+    with pytest.raises(
+        ValueError, match=("Batch size of coupled field 4 ")
+    ):
+        coupler.set_coupled_fields(coupled_fields)
+
+    coupled_fields_batch_size = 4
+    coupled_fields_timedim = 4
     expected_shape = [
         coupler.coupled_integration_dim,
         coupled_fields_batch_size,
         coupler.timevar_dim,
     ] + list(coupler.spatial_dims)
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
     coupler.set_coupled_fields(coupled_fields)
     assert list(coupler.preset_coupled_fields.shape) == expected_shape
 
