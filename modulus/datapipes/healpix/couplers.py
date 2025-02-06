@@ -116,8 +116,12 @@ class ConstantCoupler:
         Called by CoupledDataset to compute static indices for training
         samples
 
-        :param interval: int ratio of dataset timestep to model dt
-        :param data_time_step: dataset timestep
+        Parameters
+        ----------
+        interval: int
+            ratio of dataset timestep to model dt
+        data_time_step:
+            dataset timestep
         """
         # create array of static coupled offstes that accompany each batch
         self._coupled_offsets = np.empty(
@@ -138,8 +142,10 @@ class ConstantCoupler:
         Called by CoupledDataset to compute static indices for training
         samples
 
-        :param interval: int ratio of dataset timestep to model dt
-        :param data_time_step: dataset timestep
+        Parameters
+        ----------
+        scaling_da: xarray.DataArray
+            values used to scale input data, uses mean and std
         """
         coupled_scaling = scaling_da.sel(index=self.variables).rename(
             {"index": "channel_in"}
@@ -212,9 +218,16 @@ class ConstantCoupler:
         Construct array of coupled inputs that includes values required for
         model integration steps.
 
-        :param batch: indices of dataset sample dimension associated with
-               current batch
-        :param bsize: int batch size
+        Parameters
+        ----------
+        batch: Sequence
+            indices of dataset sample dimension associated with current batch
+        bsize: int
+            batch size
+
+        Returns
+        -------
+        numpy.ndarray: The coupled data
         """
         if self.coupled_mode:
             return self.preset_coupled_fields
