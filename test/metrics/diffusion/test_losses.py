@@ -196,17 +196,11 @@ def test_call_method_edm():
 
 def test_regressionlossce_initialization():
     loss_func = RegressionLossCE()
-    assert loss_func.P_mean == -1.2
-    assert loss_func.P_std == 1.2
-    assert loss_func.sigma_data == 0.5
     assert loss_func.prob_channels == [4, 5, 6, 7, 8]
 
     loss_func = RegressionLossCE(
-        P_mean=-2.0, P_std=2.0, sigma_data=0.3, prob_channels=[1, 2, 3, 4]
+       prob_channels=[1, 2, 3, 4]
     )
-    assert loss_func.P_mean == -2.0
-    assert loss_func.P_std == 2.0
-    assert loss_func.sigma_data == 0.3
     assert loss_func.prob_channels == [1, 2, 3, 4]
 
 

@@ -87,8 +87,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
     See Also
     --------
-    For possible `model_types` and their accepted `model_kwargs` and
-    `forward_kwargs`, see fo example
+    For possible `model_type` and their accepted `model_kwargs` and
+    `forward_kwargs`, see fo example:
     :class:`~modulus.models.diffusion.SongUNetPosEmbd` or
     :class:`modulus.models.diffusion.SongUNetPosLtEmbd`.
 

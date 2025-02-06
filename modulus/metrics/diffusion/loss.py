@@ -350,6 +350,7 @@ class EDMLossSR:
 class RegressionLoss:
     """
     Regression loss function for the U-Net for deterministic predictions.
+    Note: this loss does not apply any reduction.
 
     Parameters
     ----------
@@ -797,8 +798,12 @@ class VELoss_dfsr:
 class RegressionLossCE:
     """
     A regression loss function for the GEFS-HRRR model with probability
-    channels, adapted from RegressionLoss. In this version, probability
-    channels are evaluated using CrossEntropyLoss instead of MSELoss.
+    channels. Adapted from
+    :class:`modulus.metrics.diffusion.loss.RegressionLoss` to train
+    deterministic regression model. In this version,
+    probability channels are evaluated using CrossEntropyLoss instead of
+    squared error.
+    Note: this loss does not apply any reduction.
 
     Parameters
     ----------
@@ -821,14 +826,8 @@ class RegressionLossCE:
 
     def __init__(
         self,
-        P_mean: float = -1.2,
-        P_std: float = 1.2,
-        sigma_data: float = 0.5,
         prob_channels: list = [4, 5, 6, 7, 8],
     ):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
         self.entropy = torch.nn.CrossEntropyLoss(reduction="none")
         self.prob_channels = prob_channels
 
@@ -842,7 +841,8 @@ class RegressionLossCE:
         augment_pipe=None,
     ):
         """
-        Calculate and return the loss for the U-Net for deterministic predictions.
+        Calculate and return the loss for the U-Net for deterministic
+        predictions.
 
         Parameters:
         ----------
@@ -850,69 +850,77 @@ class RegressionLossCE:
             The neural network model that will make predictions.
 
         img_clean: torch.Tensor
-            Input images (high resolution) to the neural network.
+            Input images (high resolution). Used as ground truth and for data
+            augmentation if 'augment_pipe' is provided.
 
         img_lr: torch.Tensor
-            Input images (low resolution) to the neural network.
+            Input images (low resolution). Used as input to the neural network.
 
         lead_time_label: torch.Tensor
             Lead time labels for input batches.
 
         labels: torch.Tensor
-            Ground truth labels for the input images.
+            Not used. Only present for compatibility with other loss functions.
 
         augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and
-            returns augmented images. If not provided, no data augmentation is applied.
+            An optional data augmentation function that takes concatenated high
+            and low resolution images as input and returns augmented images. If
+            not provided, no data augmentation is applied.
 
         Returns:
         -------
         torch.Tensor
-            A tensor representing the loss calculated based on the network's
-            predictions.
+            A tensor representing the per-sample element-wise loss between the
+            network's predictions and the (possibly
+            data-augmented by `augment_pipe`) high resolution images. Loss for
+            the probability channels is computed using cross entropy, and loss
+            for the scalar channels is computed using squared error. Both are
+            then concatenated along the channel dimension. This tensor can then
+            be used to compute the loss by sum, mean, or other appropriate
+            reduction function.
         """
         all_channels = list(range(img_clean.shape[1]))  # [0, 1, 2, ..., 10]
         scalar_channels = [
             item for item in all_channels if item not in self.prob_channels
         ]
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
             1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
         )
 
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
-            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
+            augment_pipe(img_tot)
+            if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
+        y = y_tot[:, :img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
 
         input = torch.zeros_like(y, device=img_clean.device)
 
         if lead_time_label is not None:
             D_yn = net(
-                input,
-                y_lr,
-                sigma,
-                labels,
+                x=input,
+                img_lr=y_lr,
+                force_fp32=False,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
         else:
             D_yn = net(
-                input,
-                y_lr,
-                sigma,
-                labels,
+                x=input,
+                img_lr=y_lr,
+                force_fp32=False,
+                lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
-        loss1 = weight * ((D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2)
+        loss1 = weight * (
+            D_yn[:, scalar_channels] - y[:, scalar_channels]
+        ) ** 2
         loss2 = (
             weight
-            * self.entropy(D_yn[:, self.prob_channels], y[:, self.prob_channels])[
-                :, None
-            ]
+            * self.entropy(
+                D_yn[:, self.prob_channels], y[:, self.prob_channels]
+            )[:, None]
         )
         loss = torch.cat((loss1, loss2), dim=1)
         return loss
