@@ -88,14 +88,14 @@ class ConstantCoupler:
 
         if not prepared_coupled_data:
             print(
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in\
- TrailingAverageCoupler. See docs for specifics."
+                "Assuming coupled data is not preprocessed, averaging fields in as designed in "
+                "TrailingAverageCoupler. See docs for specifics."
             )
             self._prepare_coupled_data()
         else:
             print(
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from\
- dataset "as-is"**'
+                '**Assuming coupled data has been prepared properly, using coupled field[s] from '
+                'dataset "as-is"**'
             )
 
     def _compute_coupled_integration_dim(self):
@@ -168,19 +168,33 @@ class ConstantCoupler:
         self.integrated_couplings = None
         self.preset_coupled_fields = None
 
-    def set_coupled_fields(self, coupled_fields):
+    def set_coupled_fields(self, coupled_fields: th.tensor):
+        """
+        Set the data for the coupled field for the next iteration of the dataloader.
+        Instead of loading data from the dataset the data from coupled_fields will
+        be returned instead.
 
+        Parameters
+        ----------
+        coupled_fields: th.tensor
+            The data to use when the dataloader requests coupled fields. Expected
+            format is [B, F, T, C, H, W]
+        """
+        if coupled_fields[0] != self.batch_size:
+            raise ValueError(f"Batch size of coupled field {coupled_fields[0]} doesn't "
+                             f" match configured batch size {self.batch_size}")
         # create buffer for coupling
         coupled_fields = coupled_fields[
             :, :, :, self.coupled_channel_indices, :, :
-        ].permute(0, 2, 3, 1, 4, 5)
+        ].permute(2, 0, 3, 1, 4, 5)
         self.preset_coupled_fields = th.empty(
-            [self.coupled_integration_dim, coupled_fields.shape[0], self.timevar_dim]
+            [self.coupled_integration_dim, self.batch_size, self.timevar_dim]
             + list(self.spatial_dims)
         )
+        # we use a constant set of values so we just copy time 0
         for i in range(len(self.preset_coupled_fields)):
             self.preset_coupled_fields[i, :, :, :, :, :] = coupled_fields[
-                :, -1, :, :, :, :
+                0, :, -1, :, :, :
             ]
         # flag for construct integrated coupling method to use this array
         self.coupled_mode = True
@@ -190,7 +204,6 @@ class ConstantCoupler:
         batch=None,
         bsize=None,
     ):
-
         """
         Construct array of coupled inputs that includes values required for
         model integration steps.
@@ -309,14 +322,14 @@ class TrailingAverageCoupler:
 
         if not prepared_coupled_data:
             print(
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in\
- TrailingAverageCoupler. See docs for specifics."
+                "Assuming coupled data is not preprocessed, averaging fields in as designed in"
+                 "TrailingAverageCoupler. See docs for specifics."
             )
             self._prepare_coupled_data()
         else:
             print(
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from\
- dataset "as-is"**'
+                '**Assuming coupled data has been prepared properly, using coupled field[s] from'
+                'dataset "as-is"**'
             )
 
     def compute_coupled_indices(self, interval, data_time_step):
@@ -368,8 +381,8 @@ class TrailingAverageCoupler:
         # assert that the time increments are divisible by the dt of the dataset
         if np.any([t.total_seconds() % dt != 0 for t in self.input_times]):
             raise ValueError(
-                f"Coupled input times {self.input_times} \
-({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
+                f"Coupled input times {self.input_times} "
+                f"({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
             )
         self.time_increments = [t.total_seconds() / dt for t in self.input_times]
 
@@ -423,6 +436,17 @@ class TrailingAverageCoupler:
         self.preset_coupled_fields = None
 
     def set_coupled_fields(self, coupled_fields):
+        """
+        Set the data for the coupled field for the next iteration of the dataloader.
+        Instead of loading data from the dataset the data from coupled_fields will
+        be returned instead.
+
+        Parameters
+        ----------
+        coupled_fields: th.tensor
+            The data to use when the dataloader requests coupled fields. Expected
+            format is [B, F, T, C, H, W]
+        """
 
         coupled_fields = coupled_fields[:, :, :, self.coupled_channel_indices, :, :]
         # TODO: Now support output_time_dim =/= input_time_dim, but presteps need to be 0, will add support for presteps>0

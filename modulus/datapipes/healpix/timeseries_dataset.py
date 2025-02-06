@@ -471,11 +471,7 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         if self.constants is not None:
             # Add the constants as [F, C, H, W]
-<<<<<<< HEAD
             inputs_result.append(self.constants)
-=======
-            inputs_result.append(self.get_constants())
->>>>>>> origin/dev
 
         logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
         torch.cuda.nvtx.range_pop()
