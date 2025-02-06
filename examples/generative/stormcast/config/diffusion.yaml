@@ -26,6 +26,9 @@ defaults:
   # Training
   - training/default
 
+  # Logging
+  - logging/wandb
+
   # Sampler
   - sampler/edm_deterministic
 
