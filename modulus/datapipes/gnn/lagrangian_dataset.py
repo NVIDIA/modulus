@@ -182,7 +182,7 @@ class LagrangianDataset(DGLDataset):
 
             position = torch.from_numpy(
                 data_np[1]["position"][: self.num_steps].numpy()
-            )  # (t, num_particles, 2)
+            )  # (num_steps, num_particles, 2)
             assert position.shape[0] == self.num_steps, f"{self.num_steps=}, {i=}"
 
             node_type = torch.from_numpy(
@@ -190,20 +190,8 @@ class LagrangianDataset(DGLDataset):
             )  # (num_particles,)
             assert node_type.shape[0] == position.shape[1], f"{i=}"
 
-            # noise_mask.append(torch.eq(node_type, torch.zeros_like(node_type)))
-
-            # if self.split != "train":
-            #     self.rollout_mask.append(self._get_rollout_mask(node_type))
-
             features = {}
-            # velocity = self.compute_velocity(position, dt=self.dt)
-            # acceleration = self.compute_acceleration(position, dt=self.dt)
-            # velocity = self.normalize_velocity(velocity)
-            # acceleration = self.normalize_acceleration(acceleration)
-
             features["position"] = position[: self.num_steps]
-            # features["velocity"] = velocity[: self.num_steps + self.num_history]
-            # features["acceleration"] = acceleration[: self.num_steps + self.num_history]
 
             self.node_type.append(F.one_hot(node_type, num_classes=self.num_node_types))
             self.node_features.append(features)
@@ -214,6 +202,9 @@ class LagrangianDataset(DGLDataset):
         self.length = num_sequences * self.num_samples_per_sequence
 
         logger.info("Finished dataset preparation.")
+
+    def __len__(self):
+        return self.length
 
     def __getitem__(self, idx):
         if not (0 <= idx < self.length):
@@ -235,7 +226,7 @@ class LagrangianDataset(DGLDataset):
         if self.split == "train":
             pos_noise = self.random_walk_noise(*pos.shape[:2])
             # Do not apply noise to kinematic particles.
-            pos_noise *= mask.view(1, -1, 1)
+            pos_noise *= mask.unsqueeze(-1)
             # Add noise to positions.
             pos += pos_noise
 
@@ -254,7 +245,7 @@ class LagrangianDataset(DGLDataset):
         acc = self.normalize_acceleration(acc)
 
         # Create graph node features.
-        # (t, num_particles, dimension) -> (num_particles, t * dimension)
+        # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
         vel_history = vel[:-1].permute(1, 0, 2).flatten(start_dim=1)
 
         node_features = torch.cat(
@@ -279,57 +270,6 @@ class LagrangianDataset(DGLDataset):
         graph_update(graph, radius=self.radius)
 
         return graph
-
-        # mesh_pos = self.node_features[gidx]["position"][tidx + self.num_history - 1]
-        # history = self.node_features[gidx]["velocity"][
-        #     tidx : tidx + self.num_history
-        # ].flip(0)
-        # history = torch.flatten(
-        #     history.permute(1, 0, 2), start_dim=1
-        # )  # (n_node, num_history * dimension)
-
-        # if self.split == "train":
-        #     # mesh_pos += torch.std(mesh_pos) * self.noise_std * torch.randn_like(mesh_pos)
-        #     history += torch.std(history) * self.noise_std * torch.randn_like(history)
-
-        # boundary_features = self.compute_boundary_feature(
-        #     mesh_pos, self.radius, bound=self.bound
-        # )
-        # node_features = torch.cat(
-        #     (mesh_pos, history, boundary_features, self.node_type[gidx]), dim=-1
-        # )
-        # # node_features[..., :self.dim] = 0 # position-invariance
-        # target_pos = self.node_features[gidx]["position"][tidx + self.num_history]
-        # target_vel = self.node_features[gidx]["velocity"][tidx + self.num_history]
-        # target_acc = self.node_features[gidx]["acceleration"][
-        #     tidx + self.num_history - 1
-        # ]
-        # node_targets = torch.cat((target_pos, target_vel, target_acc), dim=-1)
-
-        # graph = dgl.graph(([], []), num_nodes=node_features.shape[0])
-        # # edge_index = self.edge_index[gidx][tidx]
-        # # graph = dgl.graph((edge_index[0], edge_index[1]), num_nodes=node_features.shape[0])
-        # graph.ndata["x"] = node_features
-        # graph.ndata["y"] = node_targets
-        # graph.ndata["mesh_pos"] = mesh_pos
-        # graph.ndata["t"] = torch.tensor([tidx]).repeat(
-        #     node_features.shape[0]
-        # )  # just to track the start
-        # # compute_edge_attr(graph)
-        # graph_update(graph, radius=self.radius)
-
-        # if self.split == "train":
-        #     return graph
-        # else:
-        #     rollout_mask = self.rollout_mask[gidx]
-        #     return graph, rollout_mask
-
-    def set_normalizer_device(self, device):
-        pass
-        # self.vel_mean = self.vel_mean.to(device)
-        # self.vel_std = self.vel_std.to(device)
-        # self.acc_mean = self.acc_mean.to(device)
-        # self.acc_std = self.acc_std.to(device)
 
     def normalize_velocity(self, velocity):
         velocity = velocity - self.vel_mean.to(velocity.device)
@@ -428,23 +368,6 @@ class LagrangianDataset(DGLDataset):
         return x[1:] - x[:-1]
 
     @staticmethod
-    def compute_velocity(x, dt):
-        # compute the derivative using finite difference
-        v = torch.zeros_like(x)
-        v[1:] = x[1:] - x[:-1]  # / dt
-        v[0] = v[1]
-        return v
-
-    @staticmethod
-    def compute_acceleration(x, dt):
-        # compute the derivative using finite difference
-        a = torch.zeros_like(x)
-        a[1:-1] = x[2:] - 2 * x[1:-1] + x[:-2]  # / dt**2
-        a[0] = a[1]
-        a[-1] = a[-2]
-        return a
-
-    @staticmethod
     def compute_boundary_feature(position, radius=0.015, bounds=[0.1, 0.9]):
         distance = torch.cat([position - bounds[0], bounds[1] - position], dim=-1)
         features = torch.exp(-(distance**2) / radius**2)
@@ -454,9 +377,6 @@ class LagrangianDataset(DGLDataset):
     @staticmethod
     def boundary_clamp(position, bounds=[0.1, 0.9], eps=0.001):
         return torch.clamp(position, min=bounds[0] + eps, max=bounds[1] - eps)
-
-    def __len__(self):
-        return self.length
 
     def _load_tf_data(self, path, split):
         """
@@ -479,23 +399,3 @@ class LagrangianDataset(DGLDataset):
 
     def get_kinematic_mask(self, graph_idx: int) -> Tensor:
         return self.node_type[graph_idx][:, self.KINEMATIC_PARTICLE_ID] != 0
-
-    # @staticmethod
-    # def _get_rollout_mask(node_type):
-    #     mask = torch.logical_or(
-    #         torch.eq(node_type, torch.zeros_like(node_type)),
-    #         torch.eq(
-    #             node_type,
-    #             torch.zeros_like(node_type) + 5,
-    #         ),
-    #     )
-    #     return mask
-
-    # @staticmethod
-    # def _add_noise(features, targets, noise_std, noise_mask):
-    #     noise = torch.normal(mean=0, std=noise_std, size=features.size())
-    #     noise_mask = noise_mask.expand(features.size()[0], -1, features.size()[2])
-    #     noise = torch.where(noise_mask, noise, torch.zeros_like(noise))
-    #     features += noise * features
-    #     targets -= noise * targets
-    #     return features, targets
