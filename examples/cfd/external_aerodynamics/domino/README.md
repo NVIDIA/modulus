@@ -86,3 +86,7 @@ The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Bl
 demo presented at Supercomputing' 24. Some of the results are shown below.
 
 ![Results from DoMINO for RTWT SC demo](../../../../docs/img/domino_result_rtwt.jpg)
+
+## References
+
+1. [DoMINO: A Decomposable Multi-scale Iterative Neural Operator for Modeling Large Scale Engineering Simulations](https://arxiv.org/abs/2501.13350)
