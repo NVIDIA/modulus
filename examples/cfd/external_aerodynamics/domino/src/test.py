@@ -262,7 +262,7 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                     pos_surface_center_of_mass_batch = pos_surface_center_of_mass[
                         :, start_idx:end_idx
                     ]
-                    geo_encoding_local = model.module.geo_encoding_local_surface(
+                    geo_encoding_local = model.module.geo_encoding_local(
                         0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid
                     )
                     pos_encoding = pos_surface_center_of_mass_batch

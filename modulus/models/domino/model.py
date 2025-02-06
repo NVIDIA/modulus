@@ -257,39 +257,36 @@ class GeometryRep(nn.Module):
     def __init__(self, input_features, model_parameters=None):
         super().__init__()
         geometry_rep = model_parameters.geometry_rep
+        radii = geometry_rep.geo_conv.radii
+        num_scales = len(radii)
 
-        self.bq_warp_short = BQWarp(
-            input_features=input_features,
-            grid_resolution=model_parameters.interp_res,
-            radius=geometry_rep.geo_conv.radius_short,
-        )
-
-        self.bq_warp_long = BQWarp(
-            input_features=input_features,
-            grid_resolution=model_parameters.interp_res,
-            radius=geometry_rep.geo_conv.radius_long,
-        )
-
+        self.bq_warp = nn.ModuleList()
+        self.geo_processors = nn.ModuleList()
+        for j in range(num_scales):
+            self.bq_warp.append(
+                BQWarp(
+                    input_features=input_features,
+                    grid_resolution=model_parameters.interp_res,
+                    radius=radii[j],
+                )
+            )
+            self.geo_processors.append(
+                GeoProcessor(
+                    input_filters=geometry_rep.geo_conv.base_neurons_out,
+                    model_parameters=geometry_rep.geo_processor,
+                )
+            )
         self.geo_conv_out = GeoConvOut(
             input_features=input_features,
             model_parameters=geometry_rep.geo_conv,
             grid_resolution=model_parameters.interp_res,
         )
-
-        self.geo_processor_short_range = GeoProcessor(
-            input_filters=geometry_rep.geo_conv.base_neurons_out,
-            model_parameters=geometry_rep.geo_processor,
-        )
-        self.geo_processor_long_range = GeoProcessor(
-            input_filters=geometry_rep.geo_conv.base_neurons_out,
-            model_parameters=geometry_rep.geo_processor,
-        )
         self.geo_processor_sdf = GeoProcessor(
             input_filters=6, model_parameters=geometry_rep.geo_processor
         )
         self.activation = F.relu
-        self.radius_short = geometry_rep.geo_conv.radius_short
-        self.radius_long = geometry_rep.geo_conv.radius_long
+        self.radii = radii
+        self.num_scales = num_scales
         self.hops = geometry_rep.geo_conv.hops
 
     def forward(self, x, p_grid, sdf):
@@ -297,13 +294,16 @@ class GeometryRep(nn.Module):
         # Expand SDF
         sdf = torch.unsqueeze(sdf, 1)
 
-        # Calculate short-range geoemtry dependency
-        mapping, k_short = self.bq_warp_short(x, p_grid)
-        x_encoding_short = self.geo_conv_out(k_short)
-
-        # Calculate long-range geometry dependency
-        mapping, k_long = self.bq_warp_long(x, p_grid)
-        x_encoding_long = self.geo_conv_out(k_long)
+        # Calculate multi-scale geoemtry dependency
+        x_encoding = []
+        for j in range(self.num_scales):
+            mapping, k_short = self.bq_warp[j](x, p_grid)
+            x_encoding_inter = self.geo_conv_out(k_short)
+            # Propagate information in the geometry enclosed BBox
+            for _ in range(self.hops):
+                dx = self.geo_processors[j](x_encoding_inter) / self.hops
+                x_encoding_inter = x_encoding_inter + dx
+            x_encoding.append(x_encoding_inter)
 
         # Scaled sdf to emphasis on surface
         scaled_sdf = scale_sdf(sdf)
@@ -312,22 +312,13 @@ class GeometryRep(nn.Module):
         # Gradients of SDF
         sdf_x, sdf_y, sdf_z = calculate_gradient(sdf)
 
-        # Propagate information in the geometry enclosed BBox
-        for _ in range(self.hops):
-            dx = self.geo_processor_short_range(x_encoding_short) / self.hops
-            x_encoding_short = x_encoding_short + dx
-
-        # Propagate information in the computational domain BBox
-        for _ in range(self.hops):
-            dx = self.geo_processor_long_range(x_encoding_long) / self.hops
-            x_encoding_long = x_encoding_long + dx
-
         # Process SDF and its computed features
         sdf = torch.cat((sdf, scaled_sdf, binary_sdf, sdf_x, sdf_y, sdf_z), 1)
         sdf_encoding = self.geo_processor_sdf(sdf)
 
         # Geometry encoding comprised of short-range, long-range and SDF features
-        encoding_g = torch.cat((x_encoding_short, sdf_encoding, x_encoding_long), 1)
+        x_encoding = torch.cat(x_encoding, axis=1)
+        encoding_g = torch.cat((x_encoding, sdf_encoding), 1)
 
         return encoding_g
 
@@ -613,16 +604,26 @@ class DoMINO(nn.Module):
 
         # BQ for surface and volume
         self.neighbors_in_radius = model_parameters.geometry_local.neighbors_in_radius
-        self.radius = model_parameters.geometry_local.radius
-        self.bq_warp = BQWarp(
-            input_features=input_features,
-            grid_resolution=model_parameters.interp_res,
-            radius=self.radius,
-            neighbors_in_radius=self.neighbors_in_radius,
-        )
+        self.radius = model_parameters.geometry_local.radii
+        self.bq_warp = nn.ModuleList()
+        self.num_scales_local = len(self.radii)
+        for j in range(self.num_scales_local):
+            self.bq_warp.append(
+                BQWarp(
+                    input_features=input_features,
+                    grid_resolution=model_parameters.interp_res,
+                    radius=self.radius,
+                    neighbors_in_radius=self.neighbors_in_radius,
+                )
+            )
 
         base_layer_geo = model_parameters.geometry_local.base_layer
-        self.fc_1 = nn.Linear(self.neighbors_in_radius * 3, base_layer_geo)
+        total_neighbors_in_radius = 0
+        for j in range(self.num_scales_local):
+            total_neighbors_in_radius += self.neighbors_in_radius[j]
+        total_neighbors_in_radius = total_neighbors_in_radius * len(model_parameters.geometry_rep.geo_conv.radii)
+
+        self.fc_1 = nn.Linear(total_neighbors_in_radius, base_layer_geo)
         self.fc_2 = nn.Linear(base_layer_geo, base_layer_geo)
         self.activation = F.relu
 
@@ -671,49 +672,6 @@ class DoMINO(nn.Module):
         x = self.fc_p2(x)
         return x
 
-    def geo_encoding_local_surface(self, encoding_g, volume_mesh_centers, p_grid):
-        """Function to calculate local geometry encoding from global encoding for surface"""
-        batch_size = volume_mesh_centers.shape[0]
-        nx, ny, nz = (
-            self.grid_resolution[0],
-            self.grid_resolution[1],
-            self.grid_resolution[2],
-        )
-        p_grid = torch.reshape(p_grid, (batch_size, nx * ny * nz, 3))
-        mapping, outputs = self.bq_warp(
-            volume_mesh_centers, p_grid, reverse_mapping=False
-        )
-        mapping = mapping.type(torch.int64)
-        mask = mapping != 0
-
-        geo_encoding = torch.reshape(encoding_g[:, 0], (batch_size, 1, nx * ny * nz))
-        geo_encoding = geo_encoding.expand(
-            batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
-        )
-        sdf_encoding = torch.reshape(encoding_g[:, 1], (batch_size, 1, nx * ny * nz))
-        sdf_encoding = sdf_encoding.expand(
-            batch_size, volume_mesh_centers.shape[1], sdf_encoding.shape[2]
-        )
-        geo_encoding_long = torch.reshape(
-            encoding_g[:, 2], (batch_size, 1, nx * ny * nz)
-        )
-        geo_encoding_long = geo_encoding_long.expand(
-            batch_size, volume_mesh_centers.shape[1], geo_encoding_long.shape[2]
-        )
-
-        geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
-        sdf_encoding_sampled = torch.gather(sdf_encoding, 2, mapping) * mask
-        geo_encoding_long_sampled = torch.gather(geo_encoding_long, 2, mapping) * mask
-
-        encoding_g = torch.cat(
-            (geo_encoding_sampled, sdf_encoding_sampled, geo_encoding_long_sampled),
-            axis=2,
-        )
-        encoding_g = self.activation(self.fc_1(encoding_g))
-        encoding_g = self.fc_2(encoding_g)
-
-        return encoding_g
-
     def geo_encoding_local(self, encoding_g, volume_mesh_centers, p_grid):
         """Function to calculate local geometry encoding from global encoding"""
         batch_size = volume_mesh_centers.shape[0]
@@ -722,36 +680,29 @@ class DoMINO(nn.Module):
             self.grid_resolution[1],
             self.grid_resolution[2],
         )
-        p_grid = torch.reshape(p_grid, (batch_size, nx * ny * nz, 3))
-        mapping, outputs = self.bq_warp(
-            volume_mesh_centers, p_grid, reverse_mapping=False
-        )
-        mapping = mapping.type(torch.int64)
-        mask = mapping != 0
 
-        geo_encoding = torch.reshape(encoding_g[:, 0], (batch_size, 1, nx * ny * nz))
-        geo_encoding = geo_encoding.expand(
-            batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
-        )
-        sdf_encoding = torch.reshape(encoding_g[:, 1], (batch_size, 1, nx * ny * nz))
-        sdf_encoding = sdf_encoding.expand(
-            batch_size, volume_mesh_centers.shape[1], sdf_encoding.shape[2]
-        )
-        geo_encoding_long = torch.reshape(
-            encoding_g[:, 2], (batch_size, 1, nx * ny * nz)
-        )
-        geo_encoding_long = geo_encoding_long.expand(
-            batch_size, volume_mesh_centers.shape[1], geo_encoding_long.shape[2]
-        )
+        encoding_outer = []
+        for p in range(self.num_scales_local):
+            p_grid = torch.reshape(p_grid, (batch_size, nx * ny * nz, 3))
+            mapping, outputs = self.bq_warp(
+                volume_mesh_centers, p_grid, reverse_mapping=False
+            )
+            mapping = mapping.type(torch.int64)
+            mask = mapping != 0
 
-        geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
-        sdf_encoding_sampled = torch.gather(sdf_encoding, 2, mapping) * mask
-        geo_encoding_long_sampled = torch.gather(geo_encoding_long, 2, mapping) * mask
+            encoding_g = []
+            for j in range(encoding_g.shape[1]):
+                geo_encoding = torch.reshape(encoding_g[:, j], (batch_size, 1, nx * ny * nz))
+                geo_encoding = geo_encoding.expand(
+                    batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
+                )
+                geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
+                encoding_g.append(geo_encoding_sampled)
 
-        encoding_g = torch.cat(
-            (geo_encoding_sampled, sdf_encoding_sampled, geo_encoding_long_sampled),
-            axis=2,
-        )
+            encoding_g = torch.cat(encoding_g, axis=2)
+            encoding_outer.append(encoding_g)
+        
+        encoding_g = torch.cat(encoding_outer, axis=-1)
         encoding_g = self.activation(self.fc_1(encoding_g))
         encoding_g = self.fc_2(encoding_g)
 
@@ -1045,7 +996,7 @@ class DoMINO(nn.Module):
             surface_areas = torch.unsqueeze(surface_areas, -1)
             surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
             # Calculate local geometry encoding for surface
-            encoding_g_surf = self.geo_encoding_local_surface(
+            encoding_g_surf = self.geo_encoding_local(
                 0.5 * encoding_g_surf, surface_mesh_centers, s_grid
             )
 
