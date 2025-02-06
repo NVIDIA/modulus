@@ -68,20 +68,29 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     model_type: str, optional
         Class name of the underlying model, by default 'SongUNetPosEmbd'.
     **model_kwargs : dict
-        Keyword arguments for the underlying model.
+        Keyword arguments to create the underlying model.
 
     Examples
-     -----------
-        The model forward pass can be called with `model(x, img_lr,
-        force_fp32=False, **kwargs)`, where:
-            x, img_lr: torch.Tensor
-                Passed as positional arguments to the underlying model. Refer
-                to the documentation for the class specified by `model_type`.
-            force_fp32: bool
-                If True, force conversion of inputs to torch.float32.
-            **kwargs: dict
-                Additional keyword arguments to be passed to the underlying
-                model.
+    ---------
+    The model forward pass can be called with:
+    >>> `model(x, img_lr, force_fp32=False, **forward_kwargs)`
+    where:
+        x, img_lr: torch.Tensor
+            Passed as positional arguments to the underlying model. Refer
+            to the documentation for the class specified by `model_type`.
+        force_fp32: bool, optional
+            If True, force conversion of inputs to torch.float32. Defaults to
+            `False`.
+        **forward_kwargs: dict, optional
+            Additional keyword arguments to be passed to the underlying
+            model's forward pass.
+
+    See Also
+    --------
+    For possible `model_types` and their accepted `model_kwargs` and
+    `forward_kwargs`, see fo example
+    :class:`~modulus.models.diffusion.SongUNetPosEmbd` or
+    :class:`modulus.models.diffusion.SongUNetPosLtEmbd`.
 
     Reference
     ----------
@@ -143,17 +152,14 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
-            torch.zeros(
-                x.shape[0], dtype=dtype, device=x.device
-            ),  # c_noise.flatten()
+            torch.zeros(x.shape[0], dtype=dtype, device=x.device),  # c_noise.flatten()
             class_labels=None,
             **model_kwargs,
         )
 
         if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
-                f"Expected the dtype to be {dtype}, "
-                f"but got {F_x.dtype} instead."
+                f"Expected the dtype to be {dtype}, " f"but got {F_x.dtype} instead."
             )
 
         # skip connection - for SR there's size mismatch bewtween input and

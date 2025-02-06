@@ -63,7 +63,8 @@ def deterministic_sampler(
     design a custom sampler, including multiple integration solver,
     discretization method, noise schedule, and so on.
 
-    Args:
+    Parameters:
+    -----------
         net : torch.nn.Module
             The diffusion model to use in the sampling process.
         latents : torch.Tensor
@@ -138,8 +139,8 @@ def deterministic_sampler(
             Same as for C_1 and C_2. Only used when discretization='iddpm'.
             Defaults to 1000.
         alpha : float, optional
-            Controls (i.e. multiplies) the step size :math:`t_{i+1} - \hat{t}_i` 
-            in the stochastic sampler, where :math:`\hat{t}_i` is
+            Controls (i.e. multiplies) the step size :math:`t_{i+1} -
+            \hat{t}_i` in the stochastic sampler, where :math:`\hat{t}_i` is
             the temporarily increased noise level. Defaults to 1.0, which is
             the recommended value.
         S_churn : int, optional
@@ -161,7 +162,8 @@ def deterministic_sampler(
             :math:`\epsilon_i` where `\epsilon_i ~ N(0, S_{noise}^2)`. Defaults
             to 1.0.
 
-    Returns:
+    Returns
+    -------
         torch.Tensor:
             Generated batch of samples. Same shape is the input 'latents'.
     """
