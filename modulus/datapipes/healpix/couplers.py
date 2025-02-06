@@ -191,7 +191,7 @@ class ConstantCoupler:
             format is [B, F, T, C, H, W]
         """
         if coupled_fields.shape[0] != self.batch_size:
-            raise ValueError(f"Batch size of coupled field {coupled_fields[0]} doesn't "
+            raise ValueError(f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
                              f" match configured batch size {self.batch_size}")
         # create buffer for coupling
         coupled_fields = coupled_fields[
