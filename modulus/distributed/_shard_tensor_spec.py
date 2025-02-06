@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 import torch.distributed as dist
@@ -17,6 +17,7 @@ from torch.distributed.tensor._dtensor_spec import (
 
 from typing import NamedTuple, Optional, Tuple
 
+import numpy as np
 
 
 @dataclass(kw_only=True)
@@ -26,8 +27,9 @@ class ShardTensorSpec(DTensorSpec):
     # Information is only tracked for shards along the same axes of this particular shard!
     # Futher, it's assumed the stride layout and dtype is homogenous, so only track tensor sizes
     
-    _local_shape: Optional[torch.Size]
-    _sharding_sizes: Optional[Tuple[Tuple[torch.Size, ...]]] = None
+    _local_shape: Optional[torch.Size] = field(default_factory= lambda : None)
+    # This dict is a mapping from the mesh dimension to the shard sizes, _not_ the tensor index
+    _sharding_sizes: Optional[dict[int, Tuple[torch.Size, ...]]] = field(default_factory= lambda : None)
     
     """
     Inherit from the DTensorSpec dataclass to keep all it's goodness,
@@ -36,12 +38,6 @@ class ShardTensorSpec(DTensorSpec):
     unexpected way.
     """
     
-    def offsets(self,):
-        """
-        Compute and return the global offets of this tensor along each axis
-        """
-        raise NotImplementedError("TODO")
-
     def _hash_impl(self) -> int:
         # Extending the parent hash implementation to include
         # information about the all-shard meta
@@ -53,7 +49,7 @@ class ShardTensorSpec(DTensorSpec):
                     self.tensor_meta.shape,
                     self.tensor_meta.stride,
                     self.tensor_meta.dtype,
-                    self.sharding_sizes,
+                    tuple(sorted(self._sharding_sizes.items())),
                 )
             )
         return hash((self.mesh, self.placements))
@@ -67,14 +63,13 @@ class ShardTensorSpec(DTensorSpec):
             self._hash = self._hash_impl()
         return self._hash
     
-    @property
     def sharding_sizes(self, mesh_dim: Optional[int] =None) -> Tuple[torch.Size]:
         if self._sharding_sizes is None:
             shard_shapes_by_dim, global_shape = _all_gather_shard_shapes(self._local_shape, self.placements, self.mesh)
             self._sharding_sizes = shard_shapes_by_dim
             self.tensor_meta._replace(shape = global_shape)
         if mesh_dim is not None:
-            if mesh_dim < len(self._sharding_sizes): return self._sharding_sizes[mesh_dim]
+            if mesh_dim in self._sharding_sizes: return self._sharding_sizes[mesh_dim]
         return self._sharding_sizes
 
     @property
@@ -91,7 +86,7 @@ class ShardTensorSpec(DTensorSpec):
             raise TypeError("Local shape must be instance of torch.Size")
         self._local_shape = value
 
-    def offset(self, mesh_dim : Optional[int] = None) -> Tuple[int]:
+    def offsets(self, mesh_dim : Optional[int] = None) -> Tuple[int]:
         """
         Return the effective offset of this tensor along a sharded dim, as if it
         was all collected into one device and you wanted to slice it
@@ -101,22 +96,21 @@ class ShardTensorSpec(DTensorSpec):
         
         # if mesh_dim is not None:
         offsets = []
-        for mesh_dim in range(self.mesh.ndim):
-            coord = self.mesh.get_coordinate()[mesh_dim]
-            placement = self.placements[mesh_dim]
-            tensor_dim = placement.dim
-            shards = self.sharding_sizes[mesh_dim]
+        for loop_mesh_dim in range(self.mesh.ndim):
+            coord = self.mesh.get_coordinate()[loop_mesh_dim]
+            placement = self.placements[loop_mesh_dim]
             # If the placement is not shard, offset is 0:
             if isinstance(placement, Shard):
+                shards = self._sharding_sizes[loop_mesh_dim]
+                tensor_dim = placement.dim
                 o = sum( [s[tensor_dim] for s in shards[:coord]])
                 offsets.append(o)
             else:
                 offsets.append(0)
-            # Sum the shards along the tensor dim
-
+      
         if mesh_dim is not None:
             return offsets[mesh_dim]
-
+        
         return offsets
 
 
@@ -145,20 +139,24 @@ def _stride_from_contiguous_shape_C_style(shape : Tuple[int,]) -> Tuple[int]:
     stride = tuple(reversed(stride))
     return stride
 
-
+from modulus.distributed import DistributedManager
 def _all_gather_shard_shapes(
     local_shape : Tuple[int],
     placements : Tuple[Placement],
     target_mesh : DeviceMesh,
 ):
-    
-    shard_shapes_by_dim = []
+    dm = DistributedManager()
+
+    shard_shapes_by_dim = {}
     global_shape = [s for s in local_shape]
+
+    # We start by assuming the global shape is the local shape and fix it on sharded axes
+
     for mesh_axis, placement in enumerate(placements):
         
-        tensor_dim = placement.dim
         
         if isinstance(placement, Shard):
+            tensor_dim = placement.dim
             
             local_group = target_mesh.get_group(mesh_axis)
             
@@ -169,7 +167,7 @@ def _all_gather_shard_shapes(
             # First, allgather the dimensions of each tensor to each rank:
             # Possible collective of CPU-based objects!  Could be slow if using separate hosts!
             dist.all_gather_object(all_shapes, local_shape, local_group)
-            
+
             # Check that all shapes are the same rank:
             assert all([len(local_shape) == len(all_s) for all_s in all_shapes]), \
                 "Rank mismatch detected when attempting to infer shapes and sizes"
@@ -185,7 +183,7 @@ def _all_gather_shard_shapes(
                 all_shapes
             )
         
-            shard_shapes_by_dim.append(local_meta)
+            shard_shapes_by_dim[mesh_axis] = (local_meta)
         
             # To infer the global shape _for this axis_, 
             # we have to loop over each axis in the rank list
@@ -193,12 +191,6 @@ def _all_gather_shard_shapes(
             # This assumes full sharding:
             global_shape[tensor_dim] = sum([all_s[tensor_dim] for all_s in all_shapes])
 
-        else:
-            # We're assuming that, during creation, this is replication along this axis and 
-            # We need to use this axis shape as the global shape:
-            shard_shapes_by_dim = (local_shape,)
-            global_shape[tensor_dim] = local_shape[tensor_dim]
-    
     return shard_shapes_by_dim, global_shape
 
 def _infer_shard_tensor_spec_from_local_chunks(
@@ -257,7 +249,7 @@ def _infer_shard_tensor_spec_from_local_chunks(
     global_meta = TensorMeta(shape=tuple(global_shape), stride=stride, dtype=local_chunk.dtype)
     # all_shard_meta = local_meta
 
-    sharding_sizes = tuple(tuple(s) for s in shard_shapes_by_dim)
+    sharding_sizes = { dim : tuple(s) for dim, s in shard_shapes_by_dim.items()}
 
     return ShardTensorSpec(
         mesh           = target_mesh,
