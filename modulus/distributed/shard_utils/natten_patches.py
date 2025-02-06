@@ -1,5 +1,5 @@
 import wrapt
-from typing import Tuple
+from typing import Tuple, Any, Union
 import torch
 import torch.distributed as dist
 from modulus.distributed import ShardTensor
@@ -366,5 +366,3 @@ else:
     def na2d_wrapper(*args: Any, **kwargs: Any) -> None:
         """Placeholder wrapper when natten module is not installed."""
         raise Exception("na2d_wrapper not supported because module 'natten' not installed")
-    
-    
