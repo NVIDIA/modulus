@@ -48,6 +48,7 @@ from torch.distributed.device_mesh import _mesh_resources, DeviceMesh
 
 
 from modulus.distributed import DistributedManager
+
 class _ToTorchTensor(torch.autograd.Function):
     """Autograd function to convert a ShardTensor to a regular PyTorch tensor.
     
