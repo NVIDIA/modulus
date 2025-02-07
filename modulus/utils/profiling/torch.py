@@ -26,10 +26,9 @@ class TorchProfilerConfig:
     torch_prof_activities: Optional[Tuple[int]] = None
     record_shapes :  bool = True
     profile_memory : bool = True
-    with_stack:      bool = False
-    with_trace:      bool = True
-    profile_memory:  bool = False
-    with_flops:      bool = False
+    with_stack:      bool = True
+    profile_memory:  bool = True
+    with_flops:      bool = True
     schedule:    Callable = None
     on_trace_ready_path: Optional[Path] = None
     
@@ -66,12 +65,10 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
     
     def _standup(self):
 
-        print(f"This config is: {self._config}")
-
-        # if self._config.on_trace_ready_path is not None:
-        #     on_trace_ready = torch.profiler.tensorboard_trace_handler(self._config.on_trace_ready_path)
-        # else:
-        on_trace_ready = None
+        if self._config.on_trace_ready_path is not None:
+            on_trace_ready = torch.profiler.tensorboard_trace_handler(self._config.on_trace_ready_path)
+        else:
+            on_trace_ready = None
 
         self._profiler = profile(
             activities     = self._config.torch_prof_activities, 
@@ -79,6 +76,7 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
             record_shapes  = self._config.record_shapes,
             with_stack     = self._config.with_stack,
             schedule       = self._config.schedule,
+            with_flops     = self._config.with_flops,
             on_trace_ready = on_trace_ready
         )
 
@@ -117,6 +115,7 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
                     times = averages.table(sort_by="cuda_time_total")
                     gpu_times.write(times)
 
+            if self._config.on_trace_ready_path is None:
                 # Store the trace
                 trace_path = out_top / Path("trace.json")
                 self._profiler.export_chrome_trace(str(trace_path))

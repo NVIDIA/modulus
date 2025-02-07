@@ -10,11 +10,10 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 # Import the dataset:
-from dataset_cuda import RandomNoiseDataset
+from dataset import RandomNoiseDataset
 
 #  For the model code:
-# from attn_instrumented import Attention
-from attn_baseline import Block
+from attn import Block
 
 def loss_fn(output_data):
     # All except the first dim:
@@ -60,6 +59,7 @@ def workload(cfg):
             loss.backward()
             # Apply the gradients
             opt.step()
+        torch.cuda.synchronize()
         end = time.perf_counter()
         print(f"Finished step {i} in {end - start:.4f} seconds")
         times.append(end - start)
@@ -67,12 +67,12 @@ def workload(cfg):
 
     times = torch.tensor(times)
     # Drop first and last:
-    avg_time = times[2:-1].mean()
+    avg_time = times[1:-1].mean()
     # compute throughput too:
     throughput = cfg["batch_size"] / avg_time
     print(f"Average time per iteration: {avg_time:.3f} ({throughput:.3f} examples / s)")
 
-@hydra.main(version_base="1.3", config_path="./", config_name="cfg")
+@hydra.main(version_base="1.3", config_path="../", config_name="cfg")
 def main(config: DictConfig):
     
 

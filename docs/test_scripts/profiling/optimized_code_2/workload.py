@@ -1,6 +1,7 @@
 import time
 
 import torch
+torch.backends.cudnn.benchmark = True
 
 # For hydra:
 import hydra
@@ -11,10 +12,10 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 
 # Import the dataset:
-from dataset_cuda import RandomNoiseDataset
+from dataset import RandomNoiseDataset
 
 #  For the model code:
-from attn_instrumented import Block
+from attn import Block
 
 # Import profiling hooks from modulus:
 from modulus.utils.profiling import Profiler, profile, annotate
@@ -57,8 +58,9 @@ def workload(cfg):
         for i, batch in enumerate(loader):
             image = batch["image"]
             image = image.to("cuda")
-            with annotate(domain="forward", color="blue"):
-                output = model(image)
+            with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                with annotate(domain="forward", color="blue"):
+                    output = model(image)
             if cfg["train"]:
                 opt.zero_grad()
                 # Compute the loss:
@@ -69,6 +71,7 @@ def workload(cfg):
                     # Apply the gradients
                     opt.step()
             p.step()
+            torch.cuda.synchronize()
             end = time.perf_counter()
             print(f"Finished step {i} in {end - start:.4f} seconds")
             times.append(end - start)
@@ -82,7 +85,7 @@ def workload(cfg):
     print(f"Average time per iteration: {avg_time:.3f} ({throughput:.3f} examples / s)")
 
 
-@hydra.main(version_base="1.3", config_path="./", config_name="cfg")
+@hydra.main(version_base="1.3", config_path="../", config_name="cfg")
 def main(config: DictConfig):
     
     # configure the profiling tools:
@@ -94,12 +97,12 @@ def main(config: DictConfig):
         # the registered profilers.  You can do it manually
         # too such as `p.enable("torch")`
         if val: p.enable(key)
-        
-    p.get("torch").reconfigure(on_trace_ready_path=p.output_dir / Path("/torch/traces/"))
-    
+            
     # The profiler has to be initilized before use.  Using it in a context
     # will do it automatically, but to use it as a decorator we should do
     # it manually here:
+
+
     p.initialize()
     print(p)
 

@@ -1,6 +1,12 @@
 defaults:
   - _self_
+  - override hydra/hydra_logging: disabled  
+  - override hydra/job_logging: disabled  
 
+hydra:  
+  output_subdir: null  
+  run:  
+    dir: .
 
 shape: [2048, 1024]
 batch_size: 8
@@ -14,4 +20,4 @@ model:
 profile:
   torch: False
   nvtx: False
-  line_profiler: True
+  line_profiler: False
