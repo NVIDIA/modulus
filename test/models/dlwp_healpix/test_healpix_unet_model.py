@@ -191,7 +191,7 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             output_time_dim=3,
         ).to(device)
 
-    # test fail case for couplings with no constants or decoder input channels
+    # test fail case for couplings with no constants
     with pytest.raises(
         NotImplementedError,
         match=("support for coupled models with no constant field"),
@@ -205,6 +205,23 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             output_time_dim=3,
             decoder_input_channels=2,
             n_constants=0,
+            couplings=["t2m", "v10m"],
+        ).to(device)
+
+    # test fail case for couplings with no decoder input channels
+    with pytest.raises(
+        NotImplementedError,
+        match=("support for coupled models with no constant field"),
+    ):
+        model = HEALPixUNet(
+            encoder=unet_encoder_dict,
+            decoder=unet_decoder_dict,
+            input_channels=in_channels,
+            output_channels=out_channels,
+            input_time_dim=2,
+            output_time_dim=3,
+            decoder_input_channels=0,
+            n_constants=2,
             couplings=["t2m", "v10m"],
         ).to(device)
 

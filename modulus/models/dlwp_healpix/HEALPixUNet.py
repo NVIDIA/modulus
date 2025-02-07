@@ -195,22 +195,6 @@ class HEALPixUNet(Module):
         """
 
         if len(self.couplings) > 0:
-            if not (self.n_constants > 0 or self.decoder_input_channels > 0):
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.n_constants == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.decoder_input_channels == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-is not available at this time."
-                )
-
             result = [
                 inputs[0].flatten(
                     start_dim=self.channel_dim, end_dim=self.channel_dim + 1

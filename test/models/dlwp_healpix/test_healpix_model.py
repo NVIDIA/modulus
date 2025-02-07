@@ -220,6 +220,23 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
             couplings=["t2m", "v10m"],
         ).to(device)
 
+    # test fail case for couplings with no decoder input channels
+    with pytest.raises(
+        NotImplementedError,
+        match=("support for coupled models with no constant field"),
+    ):
+        model = HEALPixRecUNet(
+            encoder=encoder_dict,
+            decoder=decoder_dict,
+            input_channels=in_channels,
+            output_channels=out_channels,
+            input_time_dim=2,
+            output_time_dim=3,
+            decoder_input_channels=0,
+            n_constants=2,
+            couplings=["t2m", "v10m"],
+        ).to(device)
+
     with pytest.raises(
         NotImplementedError, match=("support for coupled models with no decoder")
     ):
@@ -335,14 +352,15 @@ def test_HEALPixRecUNet_forward(
     decoder_input_channels = 1
     input_time_dim = 2
     output_time_dim = 4
+    batch_size=8
     size = 16
 
     fix_random_seeds(seed=42)
     x = test_data(
-        time_dim=2 * input_time_dim, channels=in_channels, img_size=size, device=device
+        batch_size=batch_size, time_dim=2 * input_time_dim, channels=in_channels, img_size=size, device=device
     )
     decoder_inputs = insolation_data(
-        time_dim=2 * output_time_dim, img_size=size, device=device
+        batch_size=batch_size, time_dim=2 * output_time_dim, img_size=size, device=device
     )
     constants = constant_data(channels=n_constants, img_size=size, device=device)
     inputs = [x, decoder_inputs, constants]
@@ -362,7 +380,10 @@ def test_HEALPixRecUNet_forward(
     ).to(device)
 
     # one forward step to initialize recurrent states
-    model(inputs)
+    output = model(inputs)
+
+    expected_shape = [batch_size, 12, output_time_dim, out_channels, size, size]
+    assert list(output.shape) == expected_shape
 
     assert common.validate_forward_accuracy(
         model,
@@ -370,6 +391,10 @@ def test_HEALPixRecUNet_forward(
         file_name="dlwp_healpix.pth",
         rtol=1e-2,
     )
+
+    output = model(inputs, output_only_last=True)
+    expected_shape = [batch_size, 12, input_time_dim, out_channels, size, size]
+    assert list(output.shape) == expected_shape
 
     # no decoder inputs
     inputs = [x, constants]
