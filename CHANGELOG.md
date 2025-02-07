@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added matrix decomposition scheme to improve graph partitioning
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
+- Add leave-in profiling utilities to modulus, to easily enable torch/python/nsight profiling in all aspects of the codebase.
 
 ### Changed
 
