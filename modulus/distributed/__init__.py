@@ -27,3 +27,8 @@ from .utils import (
     reduce_loss,
     unmark_module_as_shared,
 )
+
+from .shard_tensor import ShardTensor, scatter_tensor
+
+# Load and register custom ops:
+from .custom_ops import *

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class GraphPartition:
     """
     Class acting as an "utility" structure to hold all relevant buffers and variables
-    to define a graph partition and faciliate exchange of necessary buffers for
+    to define a graph partition and facilitate exchange of necessary buffers for
     message passing on a distributed graph.
 
     A global graph is assumed to be defined through a global CSC structure
