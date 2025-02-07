@@ -145,7 +145,7 @@ Once the model is trained, run the following command:
 ```bash
 python inference.py +experiment=water \
     data.data_dir=/data/Water \
-    data.test.num_samples=1 \
+    data.test.num_sequences=1 \
     resume_dir=/data/models/lmgn/water \
     output=/data/models/lmgn/water/inference
 ```

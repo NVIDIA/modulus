@@ -28,11 +28,10 @@ defaults:
 data:
   name: Water
   train:
-    num_samples: 1000
-    num_steps: 995  # 1000 - ${num_history}
+    num_sequences: 1000
   valid:
-    num_samples: 30
-    num_steps: 200
+    num_sequences: 30
+    num_steps: 206
   test:
-    num_samples: 30
-    num_steps: 200
+    num_sequences: 30
+    num_steps: 206
