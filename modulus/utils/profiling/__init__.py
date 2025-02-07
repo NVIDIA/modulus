@@ -9,10 +9,13 @@ from . nvtx import nvtxWrapper
 # Last, import the registry and add built in profilers::
 from . core import ProfileRegistry
 
-ProfileRegistry.register_profiler("torch", TorchProfileWrapper)
-ProfileRegistry.register_profiler("line_profile", LineProfileWrapper)
-ProfileRegistry.register_profiler("line_profiler", LineProfileWrapper)
-ProfileRegistry.register_profiler("nvtx", nvtxWrapper)
+def _register_profilers():
+    ProfileRegistry.register_profiler("torch", TorchProfileWrapper)
+    ProfileRegistry.register_profiler("line_profile", LineProfileWrapper)
+    ProfileRegistry.register_profiler("line_profiler", LineProfileWrapper)
+    ProfileRegistry.register_profiler("nvtx", nvtxWrapper)
+
+_register_profilers()
 
 
 from pathlib import Path

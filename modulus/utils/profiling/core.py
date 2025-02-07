@@ -17,7 +17,7 @@
 from pathlib import Path
 
 from dataclasses import dataclass, replace
-from typing import List
+from typing import List, Any
 
 
 from contextlib import ContextDecorator
@@ -128,12 +128,31 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_decorator
     
+    @is_decorator.setter
+    def is_decorator(self, value: bool) -> None:
+        """Set whether the profiler supports function decoration.
+
+        Args:
+            value (bool): True to support function decoration, False otherwise
+        """
+        assert isinstance(value, bool)
+
     @property
     def is_context(self):
         """
         Flag to declare if this profiling instance supports context-based profiling
         """
         return self._is_context
+    
+    @is_context.setter
+    def is_context(self, value: bool) -> None:
+        """Set whether the profiler supports context-based profiling.
+
+        Args:
+            value (bool): True to support context-based profiling, False otherwise
+        """ 
+        assert isinstance(value, bool)
+        self._is_context = value
     
     def enable(self) -> None:
         """Enable the profiler.
@@ -238,7 +257,8 @@ class _Profiler_Singleton(type):
     """
     _instances = {}
     _lock = Lock()
-    
+
+
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             with cls._lock:
@@ -276,13 +296,17 @@ class ProfileRegistry:
         Raises:
             Exception: If no profiler is found for the given key
         """
+
         # Search by key:
         if key in cls._registry:
             return cls._registry[key]
     
         # Search by type, too (Meaning, the key can be the type itself):
         if key in cls._instances:
-            return cls._instances[key]
+            # Find instance of matching type in list
+            for instance in cls._instances:
+                if instance == key:
+                    return instance
     
         else:
             raise Exception(f"ProfilerRegistry has no profiler under the key {key}")
@@ -312,3 +336,9 @@ class ProfileRegistry:
             # If it's a reregister of the same thing, no problem:
             if profiler_cls != cls._registry[profiler_key]:
                 raise Exception("Profiler key already in use for different profiler!")
+            
+    @classmethod
+    def _clear(cls):
+        """Clear the registry and instances."""
+        cls._registry = {}
+        cls._instances = []

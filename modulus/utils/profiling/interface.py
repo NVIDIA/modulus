@@ -33,7 +33,6 @@ except ImportError as e:
     nvtx_avail = False
     nvtx_annotate = ContextDecorator
 
-
     
 class Profiler(metaclass=_Profiler_Singleton):
     """
@@ -323,10 +322,30 @@ class Profiler(metaclass=_Profiler_Singleton):
         module_name = func.__module__
         module = sys.modules[module_name]
         
+        # Future possible update: wrapt may simplify this.
+        # wrapt.wrap_function_wrapper(
+        #     func.__module__, 
+        #     func.__qualname__, 
+        #     lambda _, instance, args, kwargs: wrapped_func(*args, **kwargs)
+        # )
+
         
         if '.' in func.__qualname__:
             
             qualname_parts = func.__qualname__.split(".")
+            # If the object is local, it's annoying.
+            # Best we can do is update references in the module
+            # and in the __main__ namespace.
+            if '<locals>' in qualname_parts:
+                for name, obj in vars(module).items():
+                    if obj is func:
+                        setattr(module, name, wrapped_func)
+                            
+                __main__ = sys.modules["__main__"]
+                for name, obj in vars(__main__).items():
+                    if obj is func:
+                        setattr(__main__, name, wrapped_func)
+                return 
             
             obj = module
             for part in qualname_parts[:-1]:
@@ -348,7 +367,6 @@ class Profiler(metaclass=_Profiler_Singleton):
             if hasattr(__main__, func.__qualname__):
                 setattr(__main__, func.__qualname__, wrapped_func)
         
-
     def _decorate_function(self, func: Callable) -> Callable:
         """Decorate a function with all enabled profilers that support decoration.
         
