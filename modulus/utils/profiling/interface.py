@@ -18,17 +18,12 @@ import sys, os
 from pathlib import Path
 
 from dataclasses import dataclass
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Any, Union
 
 
 from contextlib import ExitStack, ContextDecorator
 
-from dataclasses import dataclass
-from modulus.distributed import DistributedManager
-
 from . core import _Profiler_Singleton, ProfileRegistry
-
-import wrapt
 
 
 try:
@@ -41,8 +36,6 @@ except ImportError as e:
 
     
 class Profiler(metaclass=_Profiler_Singleton):
-    
-
     """
     Profiler Class to enable easy, simple to configure profiling tools in modulus.
     
@@ -83,37 +76,75 @@ class Profiler(metaclass=_Profiler_Singleton):
     
     annotate = nvtx_annotate
     
-
     @property
-    def initialized(self):
+    def initialized(self) -> bool:
+        """Get whether the profiler has been initialized.
+        
+        Returns:
+            bool: True if the profiler has been initialized, False otherwise
+        """
         return self._initialized
     
-    @initialized.setter
-    def initialized(self, value : bool):
+    @initialized.setter 
+    def initialized(self, value: bool) -> None:
+        """Set whether the profiler has been initialized.
+        
+        Args:
+            value (bool): True to mark as initialized, False otherwise
+        
+        Raises:
+            AssertionError: If value is not a boolean
+        """
         assert isinstance(value, bool)
         self._initialized = value
         
     @property
-    def finalized(self):
+    def finalized(self) -> bool:
+        """Get whether the profiler has been finalized.
+        
+        Returns:
+            bool: True if the profiler has been finalized, False otherwise
+        """
         return self._finalized
     
     @finalized.setter
-    def finalized(self, value : bool):
+    def finalized(self, value: bool) -> None:
+        """Set whether the profiler has been finalized.
+        
+        Args:
+            value (bool): True to mark as finalized, False otherwise
+            
+        Raises:
+            AssertionError: If value is not a boolean
+        """
         assert isinstance(value, bool)
         self._finalized = value
 
     @property
-    def output_dir(self):
+    def output_dir(self) -> Path:
+        """Get the output directory path for profiling results.
+        
+        Returns:
+            Path: Path to the output directory
+        """
         return self._output_top
     
     @output_dir.setter
-    def output_dir(self, value):
-        self._output_top = Path(value)
-
-    def _standup(self):
+    def output_dir(self, value: str | Path) -> None:
+        """Set the output directory path for profiling results.
         
-        # Call _standup on all profilers, then set initialized to prevent
-        # reinit of profilers and functions
+        Args:
+            value (Union[str, Path]): Path to the output directory, as string or Path
+        """
+        self._output_top = Path(value)
+    def _standup(self) -> None:
+        """Initialize all registered profilers and decorate registered functions.
+        
+        This internal method handles the initialization of all attached profilers and 
+        decorates any functions that were registered for profiling. Once called, no 
+        additional profilers can be added.
+
+        """
         
         if self.initialized: return
         
@@ -121,25 +152,22 @@ class Profiler(metaclass=_Profiler_Singleton):
         for p in self._profilers:
             p._standup()
     
-
         for func in self._decoration_registry:
             decorated = self._decorate_function(func)
             self.replace_function(func, decorated)
 
         self._decoration_registry.clear()
         
-        
         self.initialized = True
         
         
-        
-    def initialize(self):
+    def initialize(self) -> None:
         """
         Manually initialize the profiler interface
         """
         self._standup()
 
-    def finalize(self):
+    def finalize(self) -> None:
         """
         finalize the profiler interface.  Writes data to file
         if necessary, automatically
@@ -150,7 +178,7 @@ class Profiler(metaclass=_Profiler_Singleton):
             p.finalize(self.output_path)
             
         
-    def step(self):
+    def step(self) -> None:
         """
         For all attached profiling tools, call step if it is available
         """
@@ -158,7 +186,7 @@ class Profiler(metaclass=_Profiler_Singleton):
             p.step()
         
     @property
-    def enabled(self): 
+    def enabled(self) -> bool:
         """
         Return true if profiling is enabled
         """
@@ -179,7 +207,7 @@ class Profiler(metaclass=_Profiler_Singleton):
             
         return s
     
-    def enable(self, profiler):
+    def enable(self, profiler: Any) -> Any:
         """
         Enable a profiler.  The profiler can be an instance of a class 
         that derives from the profiler wrapper, or it can be a keyword that
@@ -203,7 +231,7 @@ class Profiler(metaclass=_Profiler_Singleton):
         
         return profiler
     
-    def get(self, profiler):
+    def get(self, profiler: Any) -> Any:
         """
         Use the profiler registry to access a profiler
         """
@@ -212,7 +240,7 @@ class Profiler(metaclass=_Profiler_Singleton):
         
         return profiler
     
-    def __enter__(self):
+    def __enter__(self) -> Any:
         """
         Enter profiling contexts 
         """
@@ -242,7 +270,7 @@ class Profiler(metaclass=_Profiler_Singleton):
         
         return self
     
-    def __exit__(self, *exc):
+    def __exit__(self, *exc) -> None:
         """
         Clear out the exit stack
         """
@@ -250,7 +278,7 @@ class Profiler(metaclass=_Profiler_Singleton):
         
         self.exit_stack.close()
         
-    def __del__(self,):
+    def __del__(self) -> None:
         """
         Clean up and ensure results are output, just in case:
         """
@@ -281,9 +309,17 @@ class Profiler(metaclass=_Profiler_Singleton):
             self._decoration_registry.append(func)
             return func
         
-
-    def replace_function(self, func, wrapped_func):
+    def replace_function(self, func: Callable, wrapped_func: Callable) -> None:
+        """Replace a function with its wrapped version in all relevant namespaces.
         
+        This method handles replacing both module-level functions and class methods.
+        For module-level functions, it also updates any references in the __main__ namespace
+        that may have been created through imports.
+
+        Args:
+            func: The original function to be replaced
+            wrapped_func: The wrapped version of the function that will replace the original
+        """
         module_name = func.__module__
         module = sys.modules[module_name]
         
@@ -313,19 +349,34 @@ class Profiler(metaclass=_Profiler_Singleton):
                 setattr(__main__, func.__qualname__, wrapped_func)
         
 
-    def _decorate_function(self, func):
+    def _decorate_function(self, func: Callable) -> Callable:
+        """Decorate a function with all enabled profilers that support decoration.
+        
+        This method applies all active profilers that have the `is_decorator` property
+        set to True. It returns the decorated function that will be used in place of
+        the original function.
+        """
         for p in self._profilers:
             if p.enabled and p.is_decorator:
                 func = p(func)
         return func
 
     @property
-    def output_path(self):
+    def output_path(self) -> Path:
+        """Get the output path for profiling results.
         
+        Returns:
+            Path: Path to the output directory
+        """
         return self._output_top
     
     @output_path.setter
-    def output_path(self, path : Path):
+    def output_path(self, path : Path) -> None:
+        """Set the output path for profiling results.
+        
+        Args:
+            path (Path): Path to the output directory
+        """
         # cast if necessary:
         path = Path(path)  
         self._output_top = path

@@ -22,9 +22,7 @@ from typing import List
 
 from contextlib import ContextDecorator
 
-from dataclasses import dataclass
 from modulus.distributed import DistributedManager
-from abc import ABC, abstractmethod
 
 
 
@@ -54,11 +52,10 @@ class ModulusProfilerWrapper(ContextDecorator):
     # Default "config" - not always needed but need to have the attribute defined
     _config = None
     
-    def __init__():
+    def __init__(self):
         self._config = None
     
     
-    @abstractmethod
     def step(self):
         """
         For all attached profiling tools, call step if it is available
@@ -67,31 +64,60 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         pass
     
-    # Getters / Setter for enabled, initialized, finalized
     @property
-    def enabled(self):
+    def enabled(self) -> bool:
+        """Get whether the profiler is enabled.
+
+        Returns:
+            bool: True if profiler is enabled, False otherwise
+        """
         return self._enabled
     
     @enabled.setter
-    def enabled(self, value):
+    def enabled(self, value: bool) -> None:
+        """Set whether the profiler is enabled.
+
+        Args:
+            value (bool): True to enable profiler, False to disable
+        """
         assert isinstance(value, bool)
         self._enabled = value
     
     @property
-    def finalized(self):
+    def finalized(self) -> bool:
+        """Get whether the profiler has been finalized.
+
+        Returns:
+            bool: True if profiler is finalized, False otherwise
+        """
         return self._finalized
     
     @finalized.setter
-    def finalized(self, value : bool):
+    def finalized(self, value: bool) -> None:
+        """Set whether the profiler has been finalized.
+
+        Args:
+            value (bool): True to mark as finalized, False otherwise
+        """
         assert isinstance(value, bool)
         self._finalized = value
         
     @property
-    def initialized(self):
+    def initialized(self) -> bool:
+        """Get whether the profiler has been initialized.
+
+        Returns:
+            bool: True if profiler is initialized, False otherwise
+        """
         return self._initialized
     
     @initialized.setter
-    def initialized(self, value : bool):
+    def initialized(self, value: bool) -> None:
+        """Set whether the profiler has been initialized.
+
+        Args:
+            value (bool): True to mark as initialized, False otherwise
+        """
         assert isinstance(value, bool)
         self._initialized = value
     
@@ -109,22 +135,47 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_context
     
-    
-    def enable(self):
+    def enable(self) -> None:
+        """Enable the profiler.
+        
+        Sets the internal enabled flag to True to activate profiling.
+        """
         self._enabled = True
+    
+    def __enter__(self) -> None:
+        """Enter the profiling context.
         
-    
-    def __enter__(self):
+        Called when entering a 'with' block. Base implementation does nothing.
+        """
         pass
     
-    def __exit__(self, *exc):
-        pass
-    
-    def step(self):
-        pass
-    
-    def output_dir(self, top : Path):
+    def __exit__(self, exc_type: type[BaseException] | None, 
+                exc_val: BaseException | None, 
+                exc_tb: Any) -> None:
+        """Exit the profiling context.
         
+        Called when exiting a 'with' block. Base implementation does nothing.
+
+        Args:
+            exc_type: The type of exception that occurred, if any
+            exc_val: The exception instance that occurred, if any 
+            exc_tb: The traceback of the exception that occurred, if any
+        """
+        pass
+    
+
+    def output_dir(self, top: Path) -> Path:
+        """Creates and returns an output directory for profiling data.
+        
+        Creates a subdirectory under the given top directory using this profiler's name.
+        If running in distributed mode, further organizes output by rank.
+        
+        Args:
+            top: The root directory to create the output directory under
+            
+        Returns:
+            Path: The created output directory path
+        """
         out_dir = top / Path(self._name)
         
         # If the model is distributed, control the location of the output:
@@ -147,17 +198,27 @@ class ModulusProfilerWrapper(ContextDecorator):
         if self.finalized:
             return
         try:
-            self._teardown()
+            self.finalize()
         except:
             print("Error in finalization")
         finally:
             self.finalized = True
-    
-    def reconfigure(self, **config_overrides):
+
+    def reconfigure(self, **config_overrides: Any) -> None:
+        """Reconfigures the profiler with new configuration values.
+        
+        Updates the profiler's configuration by replacing specified values with new ones.
+        Only works if the profiler has an existing configuration.
+
+        Args:
+            **config_overrides: Keyword arguments specifying configuration values to override
+        """
         if self._config is not None:
-            self._config = replace(self._config, **config_overrides)    
-    
-    
+            self._config = replace(self._config, **config_overrides)
+
+
+from threading import Lock
+
 class _Profiler_Singleton(type):
     """
     The profiling tools, in general, need to be instantiated from 
@@ -176,13 +237,20 @@ class _Profiler_Singleton(type):
     https://stackoverflow.com/questions/6760685/what-is-the-best-way-of-implementing-singleton-in-python
     """
     _instances = {}
+    _lock = Lock()
     
-    def __call__(class_, *args, **kwargs):
-        if class_ not in class_._instances:
-            class_._instances[class_] = super().__call__(*args, **kwargs)
-        return class_._instances[class_]
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            with cls._lock:
+                # Double-checked locking pattern
+                if cls not in cls._instances:
+                    cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
 
-
+    def _clear_instance(cls):
+        """Clear the singleton instance (mainly for testing purposes)"""
+        if cls in cls._instances:
+            del cls._instances[cls]
 
 class ProfileRegistry:
     
@@ -196,8 +264,18 @@ class ProfileRegistry:
     _registry = {}
     
     @classmethod
-    def get_profiler(cls, key):
+    def get_profiler(cls, key: str | type) -> Any:
+        """Get a registered profiler instance by key or type.
 
+        Args:
+            key: The key or type used to register the profiler
+
+        Returns:
+            The registered profiler instance
+
+        Raises:
+            Exception: If no profiler is found for the given key
+        """
         # Search by key:
         if key in cls._registry:
             return cls._registry[key]
@@ -210,9 +288,16 @@ class ProfileRegistry:
             raise Exception(f"ProfilerRegistry has no profiler under the key {key}")
         
     @classmethod
-    def register_profiler(cls, profiler_key, profiler_cls):
+    def register_profiler(cls, profiler_key: str | type, profiler_cls: type) -> None:
+        """Register a profiler class with an optional key for later retrieval.
         
-        
+        Args:
+            profiler_key: String key or type to register the profiler under
+            profiler_cls: The profiler class to register
+            
+        Raises:
+            Exception: If attempting to register a different profiler under an existing key
+        """
         # assert isinstance(profiler_cls, _Profiler_Singleton), "Can only register instances of Profiler_Singleton"
         
         # If the class is already registered, just add the mapping:
@@ -227,4 +312,3 @@ class ProfileRegistry:
             # If it's a reregister of the same thing, no problem:
             if profiler_cls != cls._registry[profiler_key]:
                 raise Exception("Profiler key already in use for different profiler!")
-            

@@ -567,7 +567,12 @@ The most useful output produced is a trace of the operations in the workload.  T
 viewed by copying the file to a system that has the chrome browser, and viewing the file
 at ui.perfetto.dev:
 
-# ADD File
+.. image:: ../img/profiling/whole-application.png
+   :width: 100%
+   :align: center
+   :alt: Chrome trace view showing CPU threads and CUDA kernels for an entire application.
+   :title: Chrome trace view showing CPU threads and CUDA kernels. The top bars show CPU threads while the bottom shows CUDA kernel execution.
+
 
 The top two bars in this image represent the CPU threads: the top is the main thread (and
 captures the forward pass) and the bottom is the backward pass.  The orange blocks are the 
@@ -580,14 +585,28 @@ If you click on some of the larges kernels in the bottom, this profiler will sho
 you which CPU operations launched these kernels.  The most obvious ones are softmax,
 both forward and backward:
 
-# TODO - softmax forward
-# TODO - softmax backward
+.. image:: ../img/profiling/softmax-forward.png
+   :width: 100%
+   :align: center
+   :alt: In the forward pass, the softmax kernel is the dominant operation.
+   :title: Zoom in on the forward pass in the torch profiler.  The softmax kernel is the dominant operation.
+
+.. image:: ../img/profiling/softmax-backward.png
+   :width: 100%
+   :align: center
+   :alt: In the backward pass, the softmax gradient kernel is also a dominant operation.
+   :title: Zoom in on the backward pass in the torch profiler. The softmax gradient kernel is a dominant operation.
+
 
 Further, if you zoom in on the end of the orange `cudaDeviceSynchronize()` block,
 you can see clearly the optimizer kernels finish immediately before the synchronization
 releases.  The data loader fires up right away for the next batch.
 
-# TODO - image of end of sync
+.. image:: ../img/profiling/end-of-sync.png
+   :width: 100%
+   :align: center
+   :alt: At the end of the synchronization block, optimizer kernels complete and the data loader begins.
+   :title: End of synchronization showing optimizer kernels completing and data loader starting.
 
 Flash Attention
 ^^^^^^^^^^^^^^^
@@ -631,7 +650,11 @@ Inference:
 
 Why not?  The answer is in the profile:
 
-# TODO - add image of FA with float32
+.. image:: ../img/profiling/fa-fp32.png
+   :width: 100%
+   :align: center
+   :alt: Flash attention kernel running in float32 precision showing limited performance improvement
+   :title: Flash attention kernel in float32 precision.
 
 The flash attention kernel here is not using mixed precision, and therefore likely unoptimized on the GPU.
 Let's use autocasting in `optimized_code_2`, and enable torch cudnn benchmaring,
@@ -685,7 +708,19 @@ Inference:
 +------------+----------------------+----------------------+----------------------+
 
 
-# TODO - add image of FA with float16
+And in the profile, we can see that the total time spent in the flash attention kernel 
+is more than 10% of the original time.  Other kernels are also running significantly faster 
+in mixed precision.
+
+.. figure:: ../img/profiling/FA-fp16.png
+   :width: 800
+   :alt: Flash Attention with Mixed Precision Profile shows significant speedup.
+   :align: center
+   
+   Profile of Flash Attention with mixed precision (FP16) showing significant
+   speedup in attention computation. 
+
+
 
 Finally, in `optimized_code_3`, we'll use the `torch.compile` to see if
 we can get any performance gains. This is a newer feature in pytorch that can 
@@ -748,12 +783,25 @@ Capture the trace with:
 
 When you open the trace in the nsight visual tools, you'll see a big picture view:
 
-## TODO - overview of trace.
+.. figure:: ../img/profiling/nsys-overview.png
+   :alt: Overview of NSight Systems trace showing CPU and GPU activity.  The core training loop is on the right.
+   :align: center
+   :width: 100%
+
+   Overview of NSight Systems trace showing CPU and GPU activity.
+
 
 A lot of the time in this trace is spent in set up and compilation of the model.  Our actual 
 performance measurement is on the right side of the trace, here:
 
-## TODO - image of trace.
+.. figure:: ../img/profiling/nsys-application-zoom.png
+   :alt: Zoomed in view of NSight Systems trace showing NVTX annotations for forward and backward passes on CPU and GPU threads
+   :align: center
+   :width: 100%
+
+   Zoomed in view of the core training loop.
+
+
 
 You can see clearly here  the blue `forward` and green `backward` regions.  Note that they
 align to different regions in the CPU threads vs. the GPU threads - just like in the pytorch trace,
@@ -766,7 +814,13 @@ First, the top kernels are still flash attention.  A close second is several dif
 you can identify by the `gemm` terminonlogy in the kernel names.  We **do** see triton compiled kernels, 
 but they are a subset of the total runtime: the longest one contributes only about 2% of the backwards pass.
 
-# TODO - triton kernels image.
+.. figure:: ../img/profiling/nsys-triton-kernel.png
+   :alt: NSight Systems trace showing Triton compiled kernels in the backward pass
+   :align: center
+   :width: 100%
+
+   Triton compiled kernels in the backward pass.
+
 
 Where to go from here?
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -808,11 +862,11 @@ cases that can help guide you in the right direction:
     - If your model has a lot of small operations, `torch.compile` can be a good
       option to see if it can be fused.  Alternatively, you can try to capture the
       kernels into a single kernal replay launch with cuda graphs - Modulus provides
-      easy to use tools to do this with StaticCapture  #TODO - add link.
+      easy to use tools to do this with `StaticCapture <https://docs.nvidia.com/deeplearning/modulus/modulus-core-v030/api/modulus.utils.html>`_.
 
     - If your model is dominated by just a few large, long running kernels, you can explore
-      optimizations with custom fusion or kernel implemenatations.  Try `triton` and `warp`
-      #TODO - add links. to explore python-level kernel languages, which can provide 
+      optimizations with custom fusion or kernel implementations.  Try `triton <https://openai.com/index/triton/>`_ and `NVIDIA Warp <https://github.com/NVIDIA/warp>`_
+      to explore python-level kernel languages, which can provide 
       significant performance improvements when deployed appropriately.
 
 That's the end of the Modulus tutorial on profiling.  We hope this has been useful!  If there 
