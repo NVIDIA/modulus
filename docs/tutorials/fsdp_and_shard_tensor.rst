@@ -1,4 +1,4 @@
-ShardTensor and FSDP Tutorial
+Domain Decomposition, ShardTensor and FSDP Tutorial
 =============================
 
 This tutorial demonstrates how to use Modulus's ShardTensor functionality alongside PyTorch's FSDP (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
@@ -15,7 +15,7 @@ The preamble to the training script has an important patch to make sure that the
 
 .. code-block:: python
 
-        import torch
+    import torch
 
     # This is necessary to patch Conv2d to work with ShardTensor
     from modulus.distributed.shard_utils import patch_operations
@@ -35,6 +35,7 @@ Setting Up the Environment
 ------------------------
 
 .. code-block:: python
+
     # Initialize distributed environment
     DistributedManager.initialize()
     dm = DistributedManager()
@@ -213,7 +214,7 @@ This will train the model using both data parallelism (FSDP) and spatial decompo
 Key Points
 ---------
 
-1. The device mesh is split into two dimensions: one for data parallelism (FSDP) and one for spatial decomposition (ShardTensor)
+1. The device mesh is split into two dimensions: one for data parallelism (FSDP) and one for spatial decomposition (ShardTensor).  We get that in one line using torch DeviceMesh: `mesh = dm.initialize_mesh((-1, 2), mesh_dim_names=["data", "spatial"])`.  And in fact, for multilevel parallelism, you can extend your mesh further.  Think of DeviceMesh like a tensor of arbitrary rank, and each element is one GPU.
 2. Input data is sharded across the spatial dimension using ShardTensor
 3. FSDP handles parameter sharding and optimization across the data parallel dimension
 4. The model can process larger spatial dimensions efficiently by distributing the computation
