@@ -223,7 +223,7 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
     # test fail case for couplings with no decoder input channels
     with pytest.raises(
         NotImplementedError,
-        match=("support for coupled models with no constant field"),
+        match=("support for coupled models with no decoder inputs"),
     ):
         model = HEALPixRecUNet(
             encoder=encoder_dict,
@@ -352,15 +352,22 @@ def test_HEALPixRecUNet_forward(
     decoder_input_channels = 1
     input_time_dim = 2
     output_time_dim = 4
-    batch_size=8
+    batch_size = 8
     size = 16
 
     fix_random_seeds(seed=42)
     x = test_data(
-        batch_size=batch_size, time_dim=2 * input_time_dim, channels=in_channels, img_size=size, device=device
+        batch_size=batch_size,
+        time_dim=2 * input_time_dim,
+        channels=in_channels,
+        img_size=size,
+        device=device,
     )
     decoder_inputs = insolation_data(
-        batch_size=batch_size, time_dim=2 * output_time_dim, img_size=size, device=device
+        batch_size=batch_size,
+        time_dim=2 * output_time_dim,
+        img_size=size,
+        device=device,
     )
     constants = constant_data(channels=n_constants, img_size=size, device=device)
     inputs = [x, decoder_inputs, constants]

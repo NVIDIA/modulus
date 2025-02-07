@@ -493,24 +493,26 @@ class DoubleConvNeXtBlock(th.nn.Module):
         # return second convnext result
         return self.skip_module2(x1) + self.convblock2(x1)
 
+
 class Multi_SymmetricConvNeXtBlock(th.nn.Module):
     """
     Class for creating multi-block SymmetricConvNeXtBlock. Defaults to all SymmetricConvNeXtBlocks having same parameters
     """
+
     def __init__(
-            self,
-            geometry_layer: th.nn.Module = HEALPixLayer,
-            in_channels: int = 3,
-            latent_channels: int = 1,
-            out_channels: int = 1,
-            kernel_size: int = 3,
-            dilation: int = 1,
-            upscale_factor: int = 4,
-            n_layers: int = 1,
-            activation: th.nn.Module = None,
-            enable_nhwc: bool = False,
-            enable_healpixpad: bool = False
-            ):
+        self,
+        geometry_layer: th.nn.Module = HEALPixLayer,
+        in_channels: int = 3,
+        latent_channels: int = 1,
+        out_channels: int = 1,
+        kernel_size: int = 3,
+        dilation: int = 1,
+        upscale_factor: int = 4,
+        n_layers: int = 1,
+        activation: th.nn.Module = None,
+        enable_nhwc: bool = False,
+        enable_healpixpad: bool = False,
+    ):
         """
         Parameters
         ----------
@@ -518,26 +520,28 @@ class Multi_SymmetricConvNeXtBlock(th.nn.Module):
             The number of SymmetricConvNeXt Blocks
         """
         super().__init__()
-    
+
         # Create a ModuleList to store complete blocks
         self.blocks = th.nn.ModuleList()
-        
+
         for i in range(n_layers):
             curr_in = in_channels if i == 0 else out_channels
-            
+
             # Create a single block as a separate Module
-            self.blocks.append(SymmetricConvNeXtBlock(
-                geometry_layer=geometry_layer,
-                in_channels=curr_in,
-                latent_channels=latent_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                dilation=dilation,
-                upscale_factor=upscale_factor,
-                activation=activation,
-                enable_nhwc=enable_nhwc,
-                enable_healpixpad=enable_healpixpad
-            ))
+            self.blocks.append(
+                SymmetricConvNeXtBlock(
+                    geometry_layer=geometry_layer,
+                    in_channels=curr_in,
+                    latent_channels=latent_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    dilation=dilation,
+                    upscale_factor=upscale_factor,
+                    activation=activation,
+                    enable_nhwc=enable_nhwc,
+                    enable_healpixpad=enable_healpixpad,
+                )
+            )
 
     def forward(self, x):
         out = x

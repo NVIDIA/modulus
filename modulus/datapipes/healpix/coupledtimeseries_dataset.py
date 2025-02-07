@@ -128,8 +128,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         self.output_variables = (
             input_variables if output_variables is None else output_variables
         )
-        self.add_train_noise=add_train_noise
-        self.train_noise_params=train_noise_params
+        self.add_train_noise = add_train_noise
+        self.train_noise_params = train_noise_params
         if self.add_train_noise:
             self.rng = np.random.default_rng(train_noise_seed)
 
@@ -280,15 +280,17 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             for i in range(inputs.shape[2]):
                 inputs[:, :, i] += self.rng.normal(
                     loc=0,
-                    scale=self.train_noise_params["inputs"][self.input_variables[i]]["std"],
-                    size=inputs[:, :, i].shape
+                    scale=self.train_noise_params["inputs"][self.input_variables[i]][
+                        "std"
+                    ],
+                    size=inputs[:, :, i].shape,
                 )
             for c in self.couplings:
                 for i, v in enumerate(c.variables):
                     integrated_couplings[i, :, :] += self.rng.normal(
                         loc=0,
                         scale=self.train_noise_params["couplings"][v]["std"],
-                        size=integrated_couplings[i, :, :].shape
+                        size=integrated_couplings[i, :, :].shape,
                     )
 
         inputs_result = [inputs]

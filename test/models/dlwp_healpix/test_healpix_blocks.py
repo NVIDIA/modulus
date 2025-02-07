@@ -239,6 +239,7 @@ def test_SymmetricConvNeXtBlock_forward(device, test_data, pytestconfig):
     outvar = symmetric_convnextblock(invar)
     assert outvar.shape == out_shape
 
+
 @import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_Multi_SymmetricConvNeXtBlock_initialization(device, pytestconfig):

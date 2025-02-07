@@ -211,7 +211,7 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
     # test fail case for couplings with no decoder input channels
     with pytest.raises(
         NotImplementedError,
-        match=("support for coupled models with no constant field"),
+        match=("support for coupled models with no decoder inputs"),
     ):
         model = HEALPixUNet(
             encoder=unet_encoder_dict,
@@ -223,36 +223,6 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             decoder_input_channels=0,
             n_constants=2,
             couplings=["t2m", "v10m"],
-        ).to(device)
-
-    with pytest.raises(
-        NotImplementedError, match=("support for coupled models with no decoder")
-    ):
-        model = HEALPixUNet(
-            encoder=unet_encoder_dict,
-            decoder=unet_decoder_dict,
-            input_channels=in_channels,
-            output_channels=out_channels,
-            input_time_dim=2,
-            output_time_dim=3,
-            decoder_input_channels=0,
-            n_constants=2,
-            couplings=["t2m", "v10m"],
-        ).to(device)
-
-    with pytest.raises(
-        NotImplementedError,
-        match=("support for models with no constant fields and no decoder"),
-    ):
-        model = HEALPixUNet(
-            encoder=unet_encoder_dict,
-            decoder=unet_decoder_dict,
-            input_channels=in_channels,
-            output_channels=out_channels,
-            input_time_dim=2,
-            output_time_dim=3,
-            decoder_input_channels=0,
-            n_constants=0,
         ).to(device)
 
     del model
@@ -379,6 +349,30 @@ def test_HEALPixUNet_forward(
         model,
         (inputs,),
         file_name="dlwp_healpix_unet_decoder.pth",
+        rtol=1e-2,
+    )
+
+    # no constants and no decoder inputs
+    inputs = [x, decoder_inputs]
+    model = HEALPixUNet(
+        encoder=unet_encoder_dict,
+        decoder=unet_decoder_dict,
+        input_channels=in_channels,
+        output_channels=out_channels,
+        n_constants=0,
+        decoder_input_channels=0,
+        input_time_dim=input_time_dim,
+        output_time_dim=output_time_dim,
+        enable_healpixpad=True,
+    ).to(device)
+
+    # one forward step to initialize recurrent states
+    model(inputs)
+
+    assert common.validate_forward_accuracy(
+        model,
+        (inputs,),
+        file_name="dlwp_healpix_unet_no_decoder_no_const.pth",
         rtol=1e-2,
     )
 
