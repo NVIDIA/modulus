@@ -160,6 +160,8 @@ def main(cfg: DictConfig) -> None:
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
+    # TODO: move these parameters that are fixed to yaml configs
+    # (lots of redundancy)
     standard_model_cfgs = {  # default parameters for different network types
         "regression": {
             "img_channels": 4,

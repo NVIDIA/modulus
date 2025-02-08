@@ -14,24 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression  # choose from [regression, diffusion, patched_diffusion]
-  run:
-    dir: ./outputs/${hydra:job.name}
-
-# Get defaults
 defaults:
+    base_all
 
-  # Dataset
-  - dataset/cwb_train
+# Hyperparameters
+hp:
+    # Learning rate
+    grad_clip_threshold: 1e6
+    # no gradient clipping for default non-patch-based training
+    lr_decay: 0.7
+    # LR decay rate
+    lr_rampup: 1000000
+    # Rampup for learning rate, in number of samples
+    patch_shape_x: ???
+    patch_shape_y: ???
+    # Patch size. Patch training is used if these dimensions differ from
+    # img_shape_x and img_shape_y. Should be overridden.
+    patch_num: 4
+    # Number of patches from a single sample. Total number of patches is patch_num * batch_size_global
 
-  # Model
-  - model/corrdiff_diffusion
+# Performance
+perf:
+    songunet_checkpoint_level: 1 # 0 means no checkpointing
+    # Gradient checkpointing level, value is number of layers to checkpoint
 
-  # Training
-  - training/corrdiff_diffusion
-
-  # Validation (comment out to disable validation)
-  - validation/cwb
