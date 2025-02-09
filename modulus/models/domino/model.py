@@ -276,6 +276,7 @@ class GeometryRep(nn.Module):
                     model_parameters=geometry_rep.geo_processor,
                 )
             )
+        # Point Conv kernel can also be parameterized, next expt
         self.geo_conv_out = GeoConvOut(
             input_features=input_features,
             model_parameters=geometry_rep.geo_conv,
@@ -606,14 +607,14 @@ class DoMINO(nn.Module):
         self.neighbors_in_radius = model_parameters.geometry_local.neighbors_in_radius
         self.radius = model_parameters.geometry_local.radii
         self.bq_warp = nn.ModuleList()
-        self.num_scales_local = len(self.radii)
+        self.num_scales_local = len(self.radius)
         for j in range(self.num_scales_local):
             self.bq_warp.append(
                 BQWarp(
                     input_features=input_features,
                     grid_resolution=model_parameters.interp_res,
-                    radius=self.radius,
-                    neighbors_in_radius=self.neighbors_in_radius,
+                    radius=self.radius[j],
+                    neighbors_in_radius=self.neighbors_in_radius[j],
                 )
             )
 
@@ -621,7 +622,7 @@ class DoMINO(nn.Module):
         total_neighbors_in_radius = 0
         for j in range(self.num_scales_local):
             total_neighbors_in_radius += self.neighbors_in_radius[j]
-        total_neighbors_in_radius = total_neighbors_in_radius * len(model_parameters.geometry_rep.geo_conv.radii)
+        total_neighbors_in_radius = total_neighbors_in_radius * (len(model_parameters.geometry_rep.geo_conv.radii)+1)
 
         self.fc_1 = nn.Linear(total_neighbors_in_radius, base_layer_geo)
         self.fc_2 = nn.Linear(base_layer_geo, base_layer_geo)
@@ -684,23 +685,23 @@ class DoMINO(nn.Module):
         encoding_outer = []
         for p in range(self.num_scales_local):
             p_grid = torch.reshape(p_grid, (batch_size, nx * ny * nz, 3))
-            mapping, outputs = self.bq_warp(
+            mapping, outputs = self.bq_warp[p](
                 volume_mesh_centers, p_grid, reverse_mapping=False
             )
             mapping = mapping.type(torch.int64)
             mask = mapping != 0
 
-            encoding_g = []
+            encoding_g_inner = []
             for j in range(encoding_g.shape[1]):
                 geo_encoding = torch.reshape(encoding_g[:, j], (batch_size, 1, nx * ny * nz))
                 geo_encoding = geo_encoding.expand(
                     batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
                 )
                 geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
-                encoding_g.append(geo_encoding_sampled)
+                encoding_g_inner.append(geo_encoding_sampled)
 
-            encoding_g = torch.cat(encoding_g, axis=2)
-            encoding_outer.append(encoding_g)
+            encoding_g_inner = torch.cat(encoding_g_inner, axis=2)
+            encoding_outer.append(encoding_g_inner)
         
         encoding_g = torch.cat(encoding_outer, axis=-1)
         encoding_g = self.activation(self.fc_1(encoding_g))

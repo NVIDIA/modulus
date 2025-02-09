@@ -67,7 +67,7 @@ model:
   use_only_normals: true # Use only surface normals and not surface area
   integral_loss_scaling_factor: 0 # Scale integral loss by this factor
   normalization: min_max_scaling # or mean_std_scaling
-  encode_parameters: true # encode inlet velocity and air density in the model
+  encode_parameters: false # encode inlet velocity and air density in the model
   geometry_rep: # Hyperparameters for geometry representation network
     base_filters: 16
     geo_conv:
@@ -86,8 +86,8 @@ model:
   position_encoder: # Hyperparameters for position encoding network
     base_neurons: 512
   geometry_local: # Hyperparameters for local geometry extraction
-    neighbors_in_radius: [64, 64]
-    radii: [0.05, 0.1] # 0.2 in expt 7
+    neighbors_in_radius: [64]
+    radii: [0.05] # 0.2 in expt 7
     base_layer: 512
   parameter_model:
     base_layer: 512
