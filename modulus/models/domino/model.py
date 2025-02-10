@@ -787,7 +787,7 @@ class DoMINO(nn.Module):
                 if p == 0:
                     volume_m_c = surface_mesh_centers
                 else:
-                    volume_m_c = surface_mesh_neighbors[:, :, p - 1]
+                    volume_m_c = surface_mesh_neighbors[:, :, p - 1] + 1e-6
                     noise = surface_mesh_centers - volume_m_c
                     dist = torch.sqrt(
                         noise[:, :, 0:1] ** 2.0
