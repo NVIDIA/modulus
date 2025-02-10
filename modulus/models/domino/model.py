@@ -258,11 +258,11 @@ class GeometryRep(nn.Module):
         super().__init__()
         geometry_rep = model_parameters.geometry_rep
         radii = geometry_rep.geo_conv.radii
-        num_scales = len(radii)
+        # num_scales = len(radii)
 
         self.bq_warp = nn.ModuleList()
         self.geo_processors = nn.ModuleList()
-        for j in range(num_scales):
+        for j, p in enumerate(radii):
             self.bq_warp.append(
                 BQWarp(
                     input_features=input_features,
@@ -276,18 +276,21 @@ class GeometryRep(nn.Module):
                     model_parameters=geometry_rep.geo_processor,
                 )
             )
-        # Point Conv kernel can also be parameterized, next expt
-        self.geo_conv_out = GeoConvOut(
-            input_features=input_features,
-            model_parameters=geometry_rep.geo_conv,
-            grid_resolution=model_parameters.interp_res,
-        )
+
+        self.geo_conv_out = nn.ModuleList()
+        for j, p in enumerate(radii):
+            self.geo_conv_out.append(
+                GeoConvOut(
+                    input_features=input_features,
+                    model_parameters=geometry_rep.geo_conv,
+                    grid_resolution=model_parameters.interp_res,
+                )
+            )
         self.geo_processor_sdf = GeoProcessor(
             input_filters=6, model_parameters=geometry_rep.geo_processor
         )
         self.activation = F.relu
         self.radii = radii
-        self.num_scales = num_scales
         self.hops = geometry_rep.geo_conv.hops
 
     def forward(self, x, p_grid, sdf):
@@ -297,9 +300,9 @@ class GeometryRep(nn.Module):
 
         # Calculate multi-scale geoemtry dependency
         x_encoding = []
-        for j in range(self.num_scales):
+        for j, p in enumerate(self.radii):
             mapping, k_short = self.bq_warp[j](x, p_grid)
-            x_encoding_inter = self.geo_conv_out(k_short)
+            x_encoding_inter = self.geo_conv_out[j](k_short)
             # Propagate information in the geometry enclosed BBox
             for _ in range(self.hops):
                 dx = self.geo_processors[j](x_encoding_inter) / self.hops
@@ -607,22 +610,23 @@ class DoMINO(nn.Module):
         self.neighbors_in_radius = model_parameters.geometry_local.neighbors_in_radius
         self.radius = model_parameters.geometry_local.radii
         self.bq_warp = nn.ModuleList()
-        self.num_scales_local = len(self.radius)
-        for j in range(self.num_scales_local):
+        for ct, j in enumerate(self.radius):
             self.bq_warp.append(
                 BQWarp(
                     input_features=input_features,
                     grid_resolution=model_parameters.interp_res,
-                    radius=self.radius[j],
-                    neighbors_in_radius=self.neighbors_in_radius[j],
+                    radius=self.radius[ct],
+                    neighbors_in_radius=self.neighbors_in_radius[ct],
                 )
             )
 
         base_layer_geo = model_parameters.geometry_local.base_layer
         total_neighbors_in_radius = 0
-        for j in range(self.num_scales_local):
-            total_neighbors_in_radius += self.neighbors_in_radius[j]
-        total_neighbors_in_radius = total_neighbors_in_radius * (len(model_parameters.geometry_rep.geo_conv.radii)+1)
+        for ct, j in enumerate(self.radius):
+            total_neighbors_in_radius += self.neighbors_in_radius[ct]
+        total_neighbors_in_radius = total_neighbors_in_radius * (
+            len(model_parameters.geometry_rep.geo_conv.radii) + 1
+        )
 
         self.fc_1 = nn.Linear(total_neighbors_in_radius, base_layer_geo)
         self.fc_2 = nn.Linear(base_layer_geo, base_layer_geo)
@@ -683,7 +687,7 @@ class DoMINO(nn.Module):
         )
 
         encoding_outer = []
-        for p in range(self.num_scales_local):
+        for p, q in enumerate(self.radius):
             p_grid = torch.reshape(p_grid, (batch_size, nx * ny * nz, 3))
             mapping, outputs = self.bq_warp[p](
                 volume_mesh_centers, p_grid, reverse_mapping=False
@@ -693,7 +697,9 @@ class DoMINO(nn.Module):
 
             encoding_g_inner = []
             for j in range(encoding_g.shape[1]):
-                geo_encoding = torch.reshape(encoding_g[:, j], (batch_size, 1, nx * ny * nz))
+                geo_encoding = torch.reshape(
+                    encoding_g[:, j], (batch_size, 1, nx * ny * nz)
+                )
                 geo_encoding = geo_encoding.expand(
                     batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
                 )
@@ -702,7 +708,7 @@ class DoMINO(nn.Module):
 
             encoding_g_inner = torch.cat(encoding_g_inner, axis=2)
             encoding_outer.append(encoding_g_inner)
-        
+
         encoding_g = torch.cat(encoding_outer, axis=-1)
         encoding_g = self.activation(self.fc_1(encoding_g))
         encoding_g = self.fc_2(encoding_g)

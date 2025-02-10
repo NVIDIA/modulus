@@ -73,7 +73,7 @@ model:
     geo_conv:
       base_neurons: 32 # 256 or 64
       base_neurons_out: 1
-      radii: [0.05, 0.1, 0.5, 1.0]
+      radii: [0.1, 0.5]
       hops: 1
     geo_processor:
       base_filters: 8
