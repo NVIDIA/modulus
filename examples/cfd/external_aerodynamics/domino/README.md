@@ -20,6 +20,9 @@ by sampling random neighboring points within the same sub-region. The local-geom
 encoding and the computational stencil are aggregrated to predict the solutions on the
 discrete points.
 
+A preprint describing additional details about the model architecture can be found here 
+[paper](https://arxiv.org/abs/2501.13350).
+
 ## Dataset
 
 In this example, the DoMINO model is trained using DrivAerML dataset from the
@@ -69,17 +72,34 @@ To enable retraining the DoMINO model from a pre-trained checkpoint, follow the 
 5. Download the validation results (saved in form of point clouds in `.vtp` / `.vtu` format),
    and visualize in Paraview.
 
+## DoMINO model inference on STLs
+
+The DoMINO model can be evaluated directly on unknown STLs using the pre-trained checkpoint. 
+
+1. Run the `inference_on_stl.py` script to perform inference on an STL.
+
+2. Specify the STL paths, velocity inlets, stencil size and model checkpoint path in the script.
+
+3. The volume predictions are carried out on points sampled in a bounding box around STL.
+
+4. The surface predictions are carried out on the STL surface. The drag and lift accuracy 
+will depend on the resolution of the STL.
+
 ## Guidelines for training DoMINO model
 
 1. The DoMINO model allows for training both volume and surface fields using a single model
  but currently the recommendation is to train the volume and surface models separately. This
   can be controlled through the config file.
+
 2. MSE loss for both volume and surface model gives the best results.
+
 3. The surface and volume variable names can change but currently the code only
  supports the variables in that specific order. For example, Pressure, wall-shear
   and turb-visc for surface and velocity, pressure and turb-visc for volume.
+
 4. Bounding box is configurable and will depend on the usecase. The presets are
  suitable for the AWS DriveAer-ML dataset.
+
 5. Integral loss factor is currently set to 0.0 as it adversely impacts the training.
 
 The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Blueprint
