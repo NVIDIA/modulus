@@ -241,6 +241,9 @@ class TimeSeriesDataset(Dataset, Datapipe):
 
         # REMARK: we remove the xarray overhead from these
         try:
+            # we use channel_out instead of channel_in because
+            # the list of input channels may contain data fetched outside
+            # the datasets such as coupled fields
             self.input_scaling = scaling_da.sel(
                 index=self.ds.channel_out.values
             ).rename({"index": "channel_in"})

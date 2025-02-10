@@ -476,6 +476,14 @@ def test_CoupledTimeSeriesDataset_initialization(
         dataset=zarr_ds,
         input_variables=variables,
         scaling=scaling_dict,
+        add_train_noise=True,
+    )
+    assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
+
+    timeseries_ds = CoupledTimeSeriesDataset(
+        dataset=zarr_ds,
+        input_variables=variables,
+        scaling=scaling_dict,
     )
     assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
 
@@ -499,58 +507,6 @@ def test_CoupledTimeSeriesDataset_initialization(
     )
     assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
 
-    # constant_coupler = [
-    #     {
-    #         "coupler": "ConstantCoupler",
-    #         "params": {
-    #             "batch_size": 1,
-    #             "variables": ["z250"],
-    #             "input_times": ["0H"],
-    #             "input_time_dim": 1,
-    #             "output_time_dim": 1,
-    #             "presteps": 0,
-    #             "prepared_coupled_data": True,
-    #         },
-    #     }
-    # ]
-    # timeseries_ds = CoupledTimeSeriesDataset(
-    #     dataset=zarr_ds,
-    #     input_variables=variables,
-    #     scaling=scaling_dict,
-    #     batch_size=1,
-    #     forecast_init_times=zarr_ds.time[:2],
-    #     data_time_step="3h",
-    #     time_step="6h",
-    #     couplings=constant_coupler,
-    # )
-    # assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
-
-    # average_coupler = [
-    #     {
-    #         "coupler": "TrailingAverageCoupler",
-    #         "params": {
-    #             "batch_size": 1,
-    #             "variables": ["z250"],
-    #             "input_times": ["6H"],
-    #             "averaging_window": "6H",
-    #             "input_time_dim": 1,
-    #             "output_time_dim": 1,
-    #             "presteps": 0,
-    #             "prepared_coupled_data": True,
-    #         },
-    #     }
-    # ]
-    # timeseries_ds = CoupledTimeSeriesDataset(
-    #     dataset=zarr_ds,
-    #     input_variables=variables,
-    #     scaling=scaling_dict,
-    #     batch_size=1,
-    #     forecast_init_times=zarr_ds.time[:2],
-    #     data_time_step="3h",
-    #     time_step="6h",
-    #     couplings=average_coupler,
-    # )
-    # assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
     zarr_ds.close()
     DistributedManager.cleanup()
 
@@ -774,6 +730,39 @@ def test_CoupledTimeSeriesDataset_get(
     )
     targets_expected = targets_expected.to_numpy() / 2
     assert np.array_equal(targets[0][:, 0, :, :], targets_expected)
+
+    # without couplings
+    timeseries_ds = CoupledTimeSeriesDataset(
+        dataset=zarr_ds,
+        input_variables=variables,
+        scaling=scaling_double_dict,
+        batch_size=batch_size,
+        drop_last=True,
+        couplings=[],
+    )
+    non_perturbed_inputs = timeseries_ds
+    assert len(non_perturbed_inputs[0][0]) == 2  # just inputs and targets
+
+    # wihtout couplings but with noise
+    noise_params = {
+        "inputs": scaling_double_dict,
+        "couplings": scaling_double_dict,
+    }
+    timeseries_ds = CoupledTimeSeriesDataset(
+        dataset=zarr_ds,
+        input_variables=variables,
+        scaling=scaling_double_dict,
+        batch_size=batch_size,
+        drop_last=True,
+        add_train_noise=True,
+        train_noise_params=noise_params,
+        couplings=[],
+    )
+    perturbed_inputs = timeseries_ds
+    # The first input will be the same sample, with perturbation it should have
+    # different values
+    assert non_perturbed_inputs[0][0][0].shape == perturbed_inputs[0][0][0].shape
+    assert not np.array_equal(non_perturbed_inputs[0][0][0], perturbed_inputs[0][0][0])
 
     # With insolation we get 1 extra channel
     timeseries_ds = CoupledTimeSeriesDataset(
@@ -1192,3 +1181,118 @@ def test_CoupledTimeSeriesDataModule_get_coupled_vars(
     assert expected == outvar
 
     DistributedManager.cleanup()
+
+
+@import_or_fail("omegaconf")
+@nfsdata_or_fail
+def test_CoupledTimeSeriesDataset_next_integration(
+    data_dir, dataset_name, scaling_dict, pytestconfig
+):
+    from modulus.datapipes.healpix.coupledtimeseries_dataset import (
+        CoupledTimeSeriesDataset,
+    )
+
+    spatial_dims = [12, 32, 32]
+    input_variables = ["z500", "z1000"]
+    coupled_channel_indices = [0, 1]
+    coupled_variables = ["z250"]
+    num_variables = len(input_variables)
+    input_time_dim = 1
+    output_time_dim = 1
+    batch_size = 1
+
+    constant_coupler = [
+        {
+            "coupler": "ConstantCoupler",
+            "params": {
+                "batch_size": 1,
+                "variables": coupled_variables,
+                "input_times": ["0h"],
+                "input_time_dim": input_time_dim,
+                "output_time_dim": output_time_dim,
+                "presteps": 0,
+                "prepared_coupled_data": True,
+            },
+        }
+    ]
+
+    # open our test dataset
+    ds_path = Path(data_dir, dataset_name + ".zarr")
+    ds = xr.open_zarr(ds_path)
+    init_times = random.randint(1, len(ds.time.values))
+    # channels need to be subselected before being handed over
+    test_ds = ds.sel(
+        channel_in=input_variables + coupled_variables,
+        channel_out=input_variables,
+    )
+
+    timeseries_ds = CoupledTimeSeriesDataset(
+        dataset=test_ds,
+        input_variables=input_variables,
+        scaling=scaling_dict,
+        batch_size=batch_size,
+        couplings=constant_coupler,
+        data_time_step="6h",
+        time_step="6h",
+        drop_last=True,
+        add_insolation=True,
+        forecast_init_times=test_ds.time[:init_times],
+    )
+
+    test_model_outputs = th.rand(
+        1,
+        spatial_dims[0],
+        output_time_dim,
+        num_variables,
+        spatial_dims[1],
+        spatial_dims[2],
+    )
+    constants = np.transpose(ds.constants.values, axes=(1, 0, 2, 3))
+    coupled_fields = th.rand(
+        batch_size,
+        spatial_dims[0],
+        input_time_dim + output_time_dim,
+        len(input_variables),
+        spatial_dims[1],
+        spatial_dims[2],
+    )
+
+    expected_coupling = coupled_fields[:, :, :, coupled_channel_indices, :, :].permute(
+        2, 0, 3, 1, 4, 5
+    )
+    expected_coupling = expected_coupling[0, :, -1, :, :, :]
+    expected_coupling = expected_coupling.unsqueeze(0).unsqueeze(0)
+    expected_coupling = expected_coupling.repeat(1, batch_size, 1, 1, 1, 1)
+
+    # need to grab at least 1 sample to properly intialize everything
+    timeseries_ds[0]
+    # hacky way to setup the indices since we don't actually have any coupled fields
+    timeseries_ds.couplings[0].coupled_channel_indices = coupled_channel_indices
+
+    # set the coupled fields
+    timeseries_ds.couplings[0].set_coupled_fields(coupled_fields)
+    test_integration = timeseries_ds.next_integration(test_model_outputs, constants)
+    # test to make sure prognostics are used, constants stay the same, and couplings
+    # are what we set
+    assert np.array_equal(test_integration[0], test_model_outputs[:, :, -1:])
+    assert np.array_equal(test_integration[2], constants)
+    assert np.array_equal(test_integration[3], expected_coupling)
+
+    # I have absolutely no idea why a coupled dataset has the option for 0 couplings
+    timeseries_ds = CoupledTimeSeriesDataset(
+        dataset=test_ds,
+        input_variables=input_variables,
+        scaling=scaling_dict,
+        batch_size=batch_size,
+        couplings=[],
+        data_time_step="6h",
+        time_step="6h",
+        drop_last=True,
+        add_insolation=True,
+        forecast_init_times=test_ds.time[:init_times],
+    )
+    # need to grab at least 1 sample to properly intialize everything
+    timeseries_ds[0]
+    test_integration = timeseries_ds.next_integration(test_model_outputs, constants)
+    assert np.array_equal(test_integration[0], test_model_outputs[:, :, -1:])
+    assert np.array_equal(test_integration[2], constants)

@@ -133,16 +133,13 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         if self.add_train_noise:
             self.rng = np.random.default_rng(train_noise_seed)
 
-        if couplings is not None:
-            self.couplings = [
-                getattr(couplers, c["coupler"])(
-                    dataset,
-                    **OmegaConf.to_object(DictConfig(c))["params"],
-                )
-                for c in couplings
-            ]
-        else:
-            self.couplings = None
+        self.couplings = [
+            getattr(couplers, c["coupler"])(
+                dataset,
+                **OmegaConf.to_object(DictConfig(c))["params"],
+            )
+            for c in couplings
+        ]
         super().__init__(
             dataset=dataset,
             scaling=scaling,
@@ -309,7 +306,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             inputs_result.append(self.constants)
 
         # append integrated couplings
-        inputs_result.append(integrated_couplings)
+        if len(self.couplings) > 0:
+            inputs_result.append(integrated_couplings)
 
         torch.cuda.nvtx.range_pop()
 
