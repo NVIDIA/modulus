@@ -21,7 +21,7 @@ hydra:
     run:
           dir: ./my_output_dir/${hydra:job.name} # Change `my_output_dir`
     searchpath:
-          - pkg://conf/base # Do not modify
+          - pkg://conf/custom/base # Do not modify
 
 # Base parameters for dataset, model, training, and validation
 defaults:
@@ -51,7 +51,7 @@ dataset:
     # Path to json stats file
     input_variables: []
     # List[str], names of input channels
-    output_variables: ???
+    output_variables: []
     # List[str], names of output channels
     invariant_variables: null
     # List[str], names of invariant channels. Optional
