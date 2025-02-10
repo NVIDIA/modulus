@@ -98,10 +98,6 @@ class HEALPixUNet(Module):
         """
         super().__init__()
 
-        if n_constants == 0 and decoder_input_channels == 0:
-            raise NotImplementedError(
-                "support for models with no constant fields and no decoder inputs (TOA insolation) is not available at this time."
-            )
         if len(couplings) > 0:
             if n_constants == 0:
                 raise NotImplementedError(
@@ -195,22 +191,6 @@ class HEALPixUNet(Module):
         """
 
         if len(self.couplings) > 0:
-            if not (self.n_constants > 0 or self.decoder_input_channels > 0):
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.n_constants == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-or decoder inputs (TOA insolation) is not available at this time."
-                )
-            if self.decoder_input_channels == 0:
-                raise NotImplementedError(
-                    "support for coupled models with no constant fields \
-is not available at this time."
-                )
-
             result = [
                 inputs[0].flatten(
                     start_dim=self.channel_dim, end_dim=self.channel_dim + 1
@@ -232,9 +212,10 @@ is not available at this time."
 
         else:
             if not (self.n_constants > 0 or self.decoder_input_channels > 0):
-                return inputs[0].flatten(
+                res = inputs[0].flatten(
                     start_dim=self.channel_dim, end_dim=self.channel_dim + 1
                 )
+                return self.fold(res)
             if self.n_constants == 0:
                 result = [
                     inputs[0].flatten(
@@ -264,8 +245,7 @@ is not available at this time."
                     ),  # inputs
                     inputs[1].expand(
                         *tuple([inputs[0].shape[0]] + len(inputs[1].shape) * [-1])
-                    )  # constants
-                    # th.tile(self.constants, (inputs[0].shape[0], 1, 1, 1, 1)) # constants
+                    ),  # constants
                 ]
                 res = th.cat(result, dim=self.channel_dim)
 
@@ -288,8 +268,7 @@ is not available at this time."
                 ),  # DI
                 inputs[2].expand(
                     *tuple([inputs[0].shape[0]] + len(inputs[2].shape) * [-1])
-                )  # constants
-                # th.tile(self.constants, (inputs[0].shape[0], 1, 1, 1, 1)) # constants
+                ),  # constants
             ]
             res = th.cat(result, dim=self.channel_dim)
 
@@ -367,7 +346,6 @@ is not available at this time."
                     input_tensor = self._reshape_inputs(
                         [outputs[-1]] + list(inputs[1:]), step
                     )
-
             encodings = self.encoder(input_tensor)
             decodings = self.decoder(encodings)
 

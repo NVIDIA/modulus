@@ -17,12 +17,15 @@
 import random
 import shutil
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+import torch as th
 import xarray as xr
+from netCDF4 import Dataset as Dataset
 from pytest_utils import import_or_fail, nfsdata_or_fail
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -50,6 +53,14 @@ def create_path():
     return path
 
 
+@dataclass
+class coupler_helper:
+    """helper class for setting up the couplers"""
+
+    output_variables: list
+    time_step: str
+
+
 def delete_dataset(create_path, dataset_name):
     """Helper that deletes a requested dataset at the specified location"""
     dataset_path = f"{create_path}/{dataset_name}.zarr"
@@ -70,6 +81,7 @@ def scaling_dict():
         "lsm": {"mean": 0, "std": 1},
         "z": {"mean": 0, "std": 1},
         "tp6": {"mean": 1, "std": 0, "log_epsilon": 1e-6},
+        "extra": {"mean": 0, "std": 0},  # doesn't appear in test dataset
     }
     return omegaconf.DictConfig(scaling)
 
@@ -87,6 +99,7 @@ def scaling_double_dict():
         "lsm": {"mean": 0, "std": 2},
         "z": {"mean": 0, "std": 2},
         "tp6": {"mean": 0, "std": 2, "log_epsilon": 1e-6},
+        "extra": {"mean": 0, "std": 2},  # doesn't appear in test dataset
     }
     return omegaconf.DictConfig(scaling)
 
@@ -110,6 +123,21 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
+    # test fail initialization
+    with pytest.raises(
+        NotImplementedError, match=("Data preparation not yet implemented")
+    ):
+        coupler = ConstantCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            input_times=input_times,
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+            prepared_coupled_data=False,
+        )
+
     coupler = ConstantCoupler(
         dataset=zarr_ds,
         batch_size=batch_size,
@@ -120,6 +148,18 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
         output_time_dim=output_time_dim,
     )
     assert isinstance(coupler, ConstantCoupler)
+
+    # check setting coupled variable indices
+    mock_coupled_module = coupler_helper(
+        output_variables=["not_coupled", "z500"],
+        time_step="0h",
+    )
+    coupler.setup_coupling(mock_coupled_module)
+    assert coupler.coupled_channel_indices == [1]
+
+    mock_coupled_module.output_variables = ["z500", "z1000"]
+    coupler.setup_coupling(mock_coupled_module)
+    assert coupler.coupled_channel_indices == [0, 1]
 
     interval = 2
     data_time_step = "3h"
@@ -144,6 +184,56 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
+    # test incorrect batch size
+    coupler.coupled_channel_indices = [0, 1]
+    coupled_fields_batch_size = batch_size * 2
+    coupled_fields_timedim = 2
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    with pytest.raises(ValueError, match=("Batch size of coupled field 4 ")):
+        coupler.set_coupled_fields(coupled_fields)
+
+    coupled_fields_batch_size = batch_size
+    coupled_fields_timedim = 4
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    coupler.set_coupled_fields(coupled_fields)
+    assert coupler.coupled_mode
+    assert list(coupler.construct_integrated_couplings().shape) == expected_shape
+
+    # verify that the data is being properly transformed
+    expected = coupled_fields[:, :, :, coupler.coupled_channel_indices, :, :].permute(
+        2, 0, 3, 1, 4, 5
+    )
+    expected = expected[0, :, -1, :, :, :]
+    expected = expected.unsqueeze(0).unsqueeze(0)
+    expected = expected.repeat(
+        coupler.coupled_integration_dim, coupled_fields_batch_size, 1, 1, 1, 1
+    )
+    assert th.equal(expected, coupler.construct_integrated_couplings())
+
+    # test coupler reset
+    coupler.reset_coupler()
+    assert coupler.coupled_mode is False
+
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -166,6 +256,35 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
+    # test fail initialization when trying to prepare data
+    with pytest.raises(
+        NotImplementedError, match=("Data preparation not yet implemented")
+    ):
+        coupler = TrailingAverageCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            averaging_window=averaging_window,
+            input_times=input_times,
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+            prepared_coupled_data=False,
+        )
+
+    # test fail when input times aren't evenly divisible by dataset dt
+    with pytest.raises(ValueError, match=("Coupled input times")):
+        coupler = TrailingAverageCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            averaging_window=averaging_window,
+            input_times=["30m"],
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+        )
+
     coupler = TrailingAverageCoupler(
         dataset=zarr_ds,
         batch_size=batch_size,
@@ -177,6 +296,22 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
         output_time_dim=output_time_dim,
     )
     assert isinstance(coupler, TrailingAverageCoupler)
+
+    # veryify averaging slices computed correctly
+    mock_coupled_module = coupler_helper(
+        output_variables=["not_coupled", "z500"],
+        time_step="3h",
+    )
+    coupler.setup_coupling(mock_coupled_module)
+    averaging_window_max_indices = [
+        i // pd.Timedelta(mock_coupled_module.time_step) for i in input_times
+    ]
+    dt = averaging_window_max_indices[0]
+    # assumes only 1 integration step, otherwise would be wrong
+    expected_slices = [[]]
+    for i, window_end in enumerate(averaging_window_max_indices):
+        expected_slices[0].append(slice(i * dt, window_end))
+    assert expected_slices == coupler.averaging_slices
 
     interval = 2
     data_time_step = "3h"
@@ -208,6 +343,61 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     expected = np.expand_dims(coupled_scaling["std"].to_numpy(), (0, 2, 3, 4))
     assert np.array_equal(expected, coupler.coupled_scaling["std"])
 
+    averaging_window_max_indices = [
+        i // pd.Timedelta(data_time_step) for i in coupler.input_times
+    ]
+    di = averaging_window_max_indices[0]
+    averaging_slices = []
+    for j in range(coupler.coupled_integration_dim):
+        averaging_slices.append([])
+        for i, r in enumerate(averaging_window_max_indices):
+            averaging_slices[j].append(
+                slice(
+                    coupler.input_time_dim * j * di + i * di,
+                    coupler.input_time_dim * j * di + r,
+                )
+            )
+    coupler.averaging_slices = averaging_slices
+    coupler.coupled_channel_indices = [0, 1]
+
+    # test a mismatched batch size
+    coupled_fields_batch_size = batch_size * 2
+    coupled_fields_timedim = 4
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    with pytest.raises(ValueError, match=("Batch size of coupled field 4 ")):
+        coupler.set_coupled_fields(coupled_fields)
+
+    coupled_fields_batch_size = batch_size
+    coupled_fields_timedim = 4
+    expected_shape = [
+        coupler.coupled_integration_dim,
+        coupled_fields_batch_size,
+        coupler.timevar_dim,
+    ] + list(coupler.spatial_dims)
+    coupled_fields = th.rand(
+        coupled_fields_batch_size,
+        coupler.spatial_dims[0],
+        coupled_fields_timedim,
+        len(coupler.coupled_channel_indices),
+        coupler.spatial_dims[1],
+        coupler.spatial_dims[2],
+    )
+    coupler.set_coupled_fields(coupled_fields)
+    assert list(coupler.preset_coupled_fields.shape) == expected_shape
+
+    # check reset
+    assert coupler.coupled_mode
+    coupler.reset_coupler()
+    assert coupler.coupled_mode is False
+
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -361,7 +551,7 @@ def test_CoupledTimeSeriesDataset_initialization(
     #     couplings=average_coupler,
     # )
     # assert isinstance(timeseries_ds, CoupledTimeSeriesDataset)
-
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -410,6 +600,7 @@ def test_CoupledTimeSeriesDataset_get_constants(
         outvar,
     )
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -495,6 +686,7 @@ def test_CoupledTimeSeriesDataset_len(
     )
     assert len(timeseries_ds) == (len(zarr_ds.time.values) - 2) // 2
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -635,6 +827,7 @@ def test_CoupledTimeSeriesDataset_get(
     )
     assert len(inputs) == (len(timeseries_ds[0]) + 1)
 
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -742,6 +935,7 @@ def test_CoupledTimeSeriesDataModule_initialization(
         couplings=constant_coupler,
     )
     assert isinstance(timeseries_dm, CoupledTimeSeriesDataModule)
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 
@@ -838,6 +1032,7 @@ def test_CoupledTimeSeriesDataModule_get_constants(
         timeseries_dm.get_constants(),
         expected,
     )
+    zarr_ds.close()
     DistributedManager.cleanup()
 
 

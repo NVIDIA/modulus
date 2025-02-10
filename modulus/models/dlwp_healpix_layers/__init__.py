@@ -22,6 +22,7 @@ from .healpix_blocks import (
     DoubleConvNeXtBlock,
     Interpolate,
     MaxPool,
+    Multi_SymmetricConvNeXtBlock,
     SymmetricConvNeXtBlock,
     TransposedConvUpsample,
 )

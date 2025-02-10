@@ -239,8 +239,48 @@ def test_SymmetricConvNeXtBlock_forward(device, test_data, pytestconfig):
     outvar = symmetric_convnextblock(invar)
     assert outvar.shape == out_shape
 
-    latent_channels = 2
-    outvar = symmetric_convnextblock(invar)
+
+@import_or_fail("hydra")
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_Multi_SymmetricConvNeXtBlock_initialization(device, pytestconfig):
+
+    from modulus.models.dlwp_healpix_layers import (
+        Multi_SymmetricConvNeXtBlock,
+    )
+
+    in_channels = 2
+    latent_channels = 1
+    multi_symmetric_convnextblock = Multi_SymmetricConvNeXtBlock(
+        in_channels=in_channels,
+        latent_channels=latent_channels,
+        activation=torch.nn.ReLU(),
+    ).to(device)
+    assert isinstance(multi_symmetric_convnextblock, Multi_SymmetricConvNeXtBlock)
+
+
+@import_or_fail("hydra")
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_Multi_SymmetricConvNeXtBlock_forward(device, test_data, pytestconfig):
+
+    from modulus.models.dlwp_healpix_layers import (
+        Multi_SymmetricConvNeXtBlock,
+    )
+
+    in_channels = 2
+    latent_channels = 1
+    tensor_size = 16
+    multi_symmetric_convnextblock = Multi_SymmetricConvNeXtBlock(
+        in_channels=in_channels,
+        latent_channels=latent_channels,
+        activation=torch.nn.ReLU(),
+    ).to(device)
+    assert isinstance(multi_symmetric_convnextblock, Multi_SymmetricConvNeXtBlock)
+
+    invar = test_data(img_size=tensor_size, device=device)
+
+    out_shape = torch.Size([12, 1, tensor_size, tensor_size])
+
+    outvar = multi_symmetric_convnextblock(invar)
     assert outvar.shape == out_shape
 
 
