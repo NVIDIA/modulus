@@ -31,7 +31,7 @@ data:
     num_sequences: 1000
   valid:
     num_sequences: 30
-    num_steps: 200
+    num_steps: 206
   test:
     num_sequences: 30
-    num_steps: 200
+    num_steps: 206

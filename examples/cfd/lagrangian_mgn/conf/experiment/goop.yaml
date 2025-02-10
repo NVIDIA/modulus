@@ -32,10 +32,10 @@ data:
     num_sequences: 1000
   valid:
     num_sequences: 30
-    num_steps: 100
+    num_steps: 206
   test:
     num_sequences: 30
-    num_steps: 100
+    num_steps: 206
 
 model:
   input_dim_nodes: 25  # 9 node types instead of 6.

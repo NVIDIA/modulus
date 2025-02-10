@@ -37,11 +37,11 @@ data:
     dt: ${..dt}
   valid:
     num_sequences: 100
-    num_steps: 195
+    num_steps: 206
     radius: ${..radius}
     dt: ${..dt}
   test:
     num_sequences: 100
-    num_steps: 195
+    num_steps: 206
     radius: ${..radius}
     dt: ${..dt}

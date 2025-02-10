@@ -65,14 +65,9 @@ class MGNRollout:
         self.dt = self.dataset.dt
         self.bounds = self.dataset.bounds
 
-        self.dataset.set_normalizer_device(device=self.device)
         self.time_integrator = self.dataset.time_integrator
         self.compute_boundary_feature = self.dataset.compute_boundary_feature
         self.boundary_clamp = self.dataset.boundary_clamp
-
-        self.gravity = torch.zeros(self.dim, device=self.device)
-        self.gravity[-1] = -9.8 * self.dt**2
-        self.gravity = self.dataset.normalize_acceleration(self.gravity)
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
@@ -113,13 +108,10 @@ class MGNRollout:
                 self.exact = []
                 self.node_type = []
                 position = graph.ndata["pos"][..., : self.dim]
-                position_zero = torch.zeros_like(position)
                 history = graph.ndata["x"][
                     ..., self.dim : self.dim + self.dim * self.num_history
                 ]
-                # history = history.reshape(-1, 5, 2).permute(1, 0, 2).flip(0).permute(1, 0, 2).flatten(start_dim=1)
                 node_type = graph.ndata["x"][..., -self.num_node_type :].clone()
-                # boundary_mask = mask.reshape(-1, 1).repeat(1, self.dim).to(self.device)
 
             # inference step
             boundary_feature = self.compute_boundary_feature(
@@ -128,16 +120,13 @@ class MGNRollout:
             graph.ndata["x"] = torch.cat(
                 [position, history, boundary_feature, node_type], dim=-1
             )
-            # acceleration = graph.ndata["y"][..., -self.dim : ]
             acceleration = self.model(
                 graph.ndata["x"], graph.edata["x"], graph
-            ).detach()  # predict
-            # acceleration = acceleration + self.gravity
+            )  # predict
 
             # update the inputs using the prediction from previous iteration
             position, velocity = self.time_integrator(
                 position=position,
-                # velocity=history[..., : self.dim],
                 velocity=history[..., -self.dim :],
                 acceleration=acceleration,
                 dt=self.dt,
@@ -145,11 +134,7 @@ class MGNRollout:
             position = self.boundary_clamp(position, bounds=self.bounds)
             graph.ndata["pos"] = position
             velocity = self.dataset.normalize_velocity(velocity)
-            # history = torch.cat([velocity, history[..., : -self.dim]], dim=-1)
             history = torch.cat([history[..., self.dim :], velocity], dim=-1)
-
-            # do not update the "wall_boundary"  nodes
-            # pred_i = torch.where(boundary_mask, pred_i, 0)
 
             self.pred.append(position.cpu())
             self.exact.append(graph.ndata["y"][..., : self.dim].cpu())
@@ -322,7 +307,7 @@ class MGNRollout:
         plt.plot(loss.numpy(), marker="o", linestyle="-", color="b")
         plt.title("Lagrangian MeshGraphNet")
         plt.xlabel("time steps")
-        plt.ylabel("Acceleration MSE error")
+        plt.ylabel("Position MSE error")
         plt.grid(True)
         return plt
 
