@@ -17,6 +17,7 @@
 import random
 import shutil
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,14 @@ def dataset_name():
 def create_path():
     path = "/data/nfs/modulus-data/datasets/healpix/merge"
     return path
+
+
+@dataclass
+class coupler_helper:
+    """helper class for setting up the couplers"""
+
+    output_variables: list
+    time_step: str
 
 
 def delete_dataset(create_path, dataset_name):
@@ -140,6 +149,18 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
     )
     assert isinstance(coupler, ConstantCoupler)
 
+    # check setting coupled variable indices
+    mock_coupled_module = coupler_helper(
+        output_variables=["not_coupled", "z500"],
+        time_step="0h",
+    )
+    coupler.setup_coupling(mock_coupled_module)
+    assert coupler.coupled_channel_indices == [1]
+
+    mock_coupled_module.output_variables = ["z500", "z1000"]
+    coupler.setup_coupling(mock_coupled_module)
+    assert coupler.coupled_channel_indices == [0, 1]
+
     interval = 2
     data_time_step = "3h"
     coupler.compute_coupled_indices(interval, data_time_step)
@@ -194,9 +215,21 @@ def test_ConstantCoupler(data_dir, dataset_name, scaling_dict, pytestconfig):
         coupler.spatial_dims[2],
     )
     coupler.set_coupled_fields(coupled_fields)
-    assert list(coupler.preset_coupled_fields.shape) == expected_shape
     assert coupler.coupled_mode
+    assert list(coupler.construct_integrated_couplings().shape) == expected_shape
 
+    # verify that the data is being properly transformed
+    expected = coupled_fields[:, :, :, coupler.coupled_channel_indices, :, :].permute(
+        2, 0, 3, 1, 4, 5
+    )
+    expected = expected[0, :, -1, :, :, :]
+    expected = expected.unsqueeze(0).unsqueeze(0)
+    expected = expected.repeat(
+        coupler.coupled_integration_dim, coupled_fields_batch_size, 1, 1, 1, 1
+    )
+    assert th.equal(expected, coupler.construct_integrated_couplings())
+
+    # test coupler reset
     coupler.reset_coupler()
     assert coupler.coupled_mode is False
 
@@ -223,7 +256,7 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     ds_path = Path(data_dir, dataset_name + ".zarr")
     zarr_ds = xr.open_zarr(ds_path)
 
-    # test fail initialization
+    # test fail initialization when trying to prepare data
     with pytest.raises(
         NotImplementedError, match=("Data preparation not yet implemented")
     ):
@@ -239,6 +272,19 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
             prepared_coupled_data=False,
         )
 
+    # test fail when input times aren't evenly divisible by dataset dt
+    with pytest.raises(ValueError, match=("Coupled input times")):
+        coupler = TrailingAverageCoupler(
+            dataset=zarr_ds,
+            batch_size=batch_size,
+            variables=variables,
+            presteps=presteps,
+            averaging_window=averaging_window,
+            input_times=["30m"],
+            input_time_dim=input_time_dim,
+            output_time_dim=output_time_dim,
+        )
+
     coupler = TrailingAverageCoupler(
         dataset=zarr_ds,
         batch_size=batch_size,
@@ -250,6 +296,22 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
         output_time_dim=output_time_dim,
     )
     assert isinstance(coupler, TrailingAverageCoupler)
+
+    # veryify averaging slices computed correctly
+    mock_coupled_module = coupler_helper(
+        output_variables=["not_coupled", "z500"],
+        time_step="3h",
+    )
+    coupler.setup_coupling(mock_coupled_module)
+    averaging_window_max_indices = [
+        i // pd.Timedelta(mock_coupled_module.time_step) for i in input_times
+    ]
+    dt = averaging_window_max_indices[0]
+    # assumes only 1 integration step, otherwise would be wrong
+    expected_slices = [[]]
+    for i, window_end in enumerate(averaging_window_max_indices):
+        expected_slices[0].append(slice(i * dt, window_end))
+    assert expected_slices == coupler.averaging_slices
 
     interval = 2
     data_time_step = "3h"
@@ -329,6 +391,11 @@ def test_TrailingAverageCoupler(data_dir, dataset_name, scaling_dict, pytestconf
     )
     coupler.set_coupled_fields(coupled_fields)
     assert list(coupler.preset_coupled_fields.shape) == expected_shape
+
+    # check reset
+    assert coupler.coupled_mode
+    coupler.reset_coupler()
+    assert coupler.coupled_mode is False
 
     zarr_ds.close()
     DistributedManager.cleanup()

@@ -92,8 +92,7 @@ class ConstantCoupler:
         if not prepared_coupled_data:
             logger.log(
                 logging.DEBUG,
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in "
-                "TrailingAverageCoupler. See docs for specifics.",
+                "Assuming coupled data is not preprocessed preparing data.",
             )
             self._prepare_coupled_data()
         else:
@@ -161,7 +160,6 @@ class ConstantCoupler:
         }
 
     def setup_coupling(self, coupled_module):
-
         # To expediate the coupling process the coupled_forecast
         # get proper channels from coupled component output
         output_channels = coupled_module.output_variables
@@ -552,6 +550,4 @@ class TrailingAverageCoupler:
 
             return self.integrated_couplings.transpose((1, 0, 2, 3, 4, 5)).astype(
                 "float32"
-            )  # cast to
-            # float32 for
-            # pytroch compatibility.
+            )  # cast to float32 for pytroch compatibility.
