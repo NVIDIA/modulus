@@ -46,6 +46,7 @@ import warp as wp
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import pyvista as pv
 
 try:
     from modulus.sym.geometry.tessellation import Tessellation
@@ -781,8 +782,8 @@ class dominoInference:
         return surf_factors
 
     def read_stl(self):
-        stl_files = get_filenames(stl_path)
-        mesh_stl = combine_stls(stl_path, stl_files)
+        stl_files = get_filenames(self.stl_path)
+        mesh_stl = combine_stls(self.stl_path, stl_files)
         stl_vertices = mesh_stl.points
         length_scale = np.amax(np.amax(stl_vertices, 0) - np.amin(stl_vertices, 0))
         stl_centers = mesh_stl.cell_centers().points
