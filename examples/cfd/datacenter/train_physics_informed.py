@@ -237,7 +237,7 @@ def main(cfg: DictConfig) -> None:
         num_variables=7,
         num_samples=cfg.train_num_samples,
         batch_size=cfg.train_batch_size,
-        num_workers=8,
+        num_workers=1,
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
