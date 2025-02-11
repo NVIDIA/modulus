@@ -46,8 +46,14 @@ maximum hot aisle dimensions. This padding is removed before computing the loss.
 
 The model can be trained by executing the below commands:
 
-```python
+```bash
 python train.py
+```
+
+To train on multiple GPUs,
+
+```bash
+mpirun -np <#GPUs> python train.py
 ```
 
 Once the model is trained, you can use the inference.py script to compute the
@@ -59,7 +65,7 @@ inference, we make use of the utilities from Modulus-Sym.
 We also train a variant where we add the physics losses to the data loss.
 The physics-informed training can be executed using the below commands:
 
-```python
+```bash
 python train_physics_informed.py
 ```
 
