@@ -62,6 +62,10 @@ training:
     hp:
         total_batch_size: 256
         # Total batch size
+        batch_size_per_gpu: "auto"
+        # The batch size per GPU. If nb_GPUS * batch_size_per_gpu <
+        # total_batch_size, gradient accumulation will be used to train with an
+        # effective batch size of `total_batch_size`. Default to "auto".
         patch_shape_x: 448
         patch_shape_y: 448
         # Patch size only used for `model: patched_diffusion`.
@@ -69,7 +73,7 @@ training:
         # dataset, this should be determined based on an autocorrelation plot.
     io:
         regression_checkpoint_path: checkpoints/my_checkpoint.mdlus
-        # Path to load the regression checkpoints
+        # Path to load the regression checkpoint
         print_progress_freq: 10000
         # How often to print progress, measured in number of processed samples
         save_checkpoint_freq: 5000
