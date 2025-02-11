@@ -175,7 +175,7 @@ def _download_cached(
     # TODO watch for race condition here
     if not os.path.exists(cache_path):
         logger.debug("Downloading %s to cache: %s", path, cache_path)
-        if path.startswith("s3://"):
+        if path.startswith("s3://") or (url.scheme == "msc"):
             fs = _get_fs(path)
             fs.get(path, cache_path, recursive=recursive)
         elif path.startswith("ngc://models/"):

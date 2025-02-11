@@ -24,12 +24,14 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Union
 
+import fsspec
+import fsspec.utils
 import torch
 
 import modulus
 from modulus.models.meta import ModelMetaData
 from modulus.registry import ModelRegistry
-from modulus.utils.filesystem import _download_cached, _get_fs
+from modulus.utils.filesystem import _download_cached
 
 
 class Module(torch.nn.Module):
@@ -245,7 +247,7 @@ class Module(torch.nn.Module):
                 file_name = self.meta.name + ".mdlus"
 
             # Save files to remote destination
-            fs = _get_fs(file_name)
+            fs = fsspec.filesystem(fsspec.utils.get_protocol(file_name))
             fs.put(str(local_path / "model.tar"), file_name)
 
     @staticmethod
