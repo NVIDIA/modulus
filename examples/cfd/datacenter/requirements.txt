@@ -1,1 +1,4 @@
-mlflow>=2.19.0
+vtk
+omegaconf
+hydra-core
+nvidia-modulus.sym
