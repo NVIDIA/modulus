@@ -22,7 +22,7 @@ Prediction & compensation accuracy
 
 Compensation on Molded fiber dataset
 <p align="center">
-<img src="../../../docs/img/GraphCompNet/table1_fig-2.png" width="500" />
+<img src="../../../docs/img/GraphCompNet/table1_fig-2.png" width="900" />
 </p>
 
 ## Key requirments
