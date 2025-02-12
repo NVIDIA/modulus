@@ -17,10 +17,10 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
-from torch.utils.data import Dataset
+import torch
 
 
-class StormCastDataset(Dataset, ABC):
+class StormCastDataset(torch.utils.data.Dataset, ABC):
     """An abstract class that defines the interface for StormCast datasets."""
 
     @abstractmethod
@@ -57,3 +57,7 @@ class StormCastDataset(Dataset, ABC):
     def get_invariants(self) -> np.ndarray | None:
         """Return invariants used for training, or None if no invariants are used."""
         return None
+
+
+def worker_init(wrk_id):
+    np.random.seed(torch.utils.data.get_worker_info().seed % (2**32 - 1))

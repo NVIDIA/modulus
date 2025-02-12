@@ -18,7 +18,6 @@ import os
 import glob
 import torch
 import numpy as np
-from torch.utils.data import Dataset
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.distributed import DistributedManager
 from datetime import datetime, timedelta
@@ -28,10 +27,6 @@ import xarray as xr
 from .dataset import StormCastDataset
 
 logger = PythonLogger("dataset")
-
-
-def worker_init(wrk_id):
-    np.random.seed(torch.utils.data.get_worker_info().seed % (2**32 - 1))
 
 
 class HrrrEra5Dataset(StormCastDataset):
@@ -125,7 +120,7 @@ class HrrrEra5Dataset(StormCastDataset):
 
     def image_shape(self):
         """Get the (height, width) of the data (same for input and output)."""
-        return self.params.hrrr_img_size
+        return tuple(self.params.hrrr_img_size)
 
     def get_invariants(self):
         """Return invariants used for training, or None if no invariants are used."""
