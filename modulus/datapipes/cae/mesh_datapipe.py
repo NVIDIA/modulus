@@ -82,6 +82,8 @@ class MeshDatapipe(Datapipe):
         Rank ID of local process, by default 0
     world_size : int, optional
         Number of training processes, by default 1
+    cache_data : False, optional
+        Whether to cache the data in memory for faster access in subsequent epochs, by default False
     """
 
     def __init__(
@@ -98,6 +100,7 @@ class MeshDatapipe(Datapipe):
         device: Union[str, torch.device] = "cuda",
         process_rank: int = 0,
         world_size: int = 1,
+        cache_data: bool = False,
     ):
         super().__init__(meta=MetaData())
         self.file_format = file_format
@@ -111,9 +114,10 @@ class MeshDatapipe(Datapipe):
         self.num_samples = num_samples
         self.process_rank = process_rank
         self.world_size = world_size
+        self.cache_data = cache_data
 
-        if self.batch_size > 1:
-            raise NotImplementedError("Batch size greater than 1 is not supported yet")
+        # if self.batch_size > 1:
+        #     raise NotImplementedError("Batch size greater than 1 is not supported yet")
 
         # Set up device, needed for pipeline
         if isinstance(device, str):
@@ -231,6 +235,7 @@ class MeshDatapipe(Datapipe):
                 shuffle=self.shuffle,
                 process_rank=self.process_rank,
                 world_size=self.world_size,
+                cache_data=self.cache_data,
             )
             # Update length of dataset
             self.length = len(source) // self.batch_size
@@ -284,6 +289,8 @@ class MeshDaliExternalSource:
         Rank ID of local process, by default 0
     world_size : int, optional
         Number of training processes, by default 1
+    cache_data : False, optional
+        Whether to cache the data in memory for faster access in subsequent epochs, by default False
 
     Note
     ----
@@ -301,6 +308,7 @@ class MeshDaliExternalSource:
         shuffle: bool = True,
         process_rank: int = 0,
         world_size: int = 1,
+        cache_data: bool = False,
     ):
         self.data_paths = list(data_paths)
         self.file_format = file_format
@@ -310,6 +318,7 @@ class MeshDaliExternalSource:
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.cache_data = cache_data
 
         self.last_epoch = None
 
@@ -324,10 +333,11 @@ class MeshDaliExternalSource:
         self.mesh_reader_fn = self.mesh_reader()
         self.parse_vtk_data_fn = self.parse_vtk_data()
 
-        # Make cache for the data
-        self.data_cache = {}
-        for data_path in self.data_paths:
-            self.data_cache[data_path] = None
+        if self.cache_data:
+            # Make cache for the data
+            self.data_cache = {}
+            for data_path in self.data_paths:
+                self.data_cache[data_path] = None
 
     def __call__(self, sample_info: dali.types.SampleInfo) -> Tuple[Tensor, Tensor]:
         if sample_info.iteration >= self.num_batches:
@@ -348,11 +358,15 @@ class MeshDaliExternalSource:
         # This will be called once per worker. Workers are persistent,
         # so there is no need to explicitly close the files - this will be done
         # when corresponding pipeline/dataset is destroyed.
-        processed_data = self.data_cache.get(self.data_paths[idx])
-        if processed_data is None:
+        if self.cache_data:
+            processed_data = self.data_cache.get(self.data_paths[idx])
+            if processed_data is None:
+                data = self.mesh_reader_fn(self.data_paths[idx])
+                processed_data = self.parse_vtk_data_fn(data, self.variables)
+                self.data_cache[self.data_paths[idx]] = processed_data
+        else:
             data = self.mesh_reader_fn(self.data_paths[idx])
             processed_data = self.parse_vtk_data_fn(data, self.variables)
-            self.data_cache[self.data_paths[idx]] = processed_data
 
         return processed_data
 

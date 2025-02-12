@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from typing import Sequence
 
 import numpy as np
 import pandas as pd
 import torch as th
 import xarray as xr
+
+logger = logging.getLogger(__name__)
 
 
 class ConstantCoupler:
@@ -87,16 +90,21 @@ class ConstantCoupler:
         self.integrated_couplings = None
 
         if not prepared_coupled_data:
-            print(
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in\
- TrailingAverageCoupler. See docs for specifics."
+            logger.log(
+                logging.DEBUG,
+                "Assuming coupled data is not preprocessed preparing data.",
             )
             self._prepare_coupled_data()
         else:
-            print(
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from\
- dataset "as-is"**'
+            logger.log(
+                logging.DEBUG,
+                "**Assuming coupled data has been prepared properly, using coupled field[s] from "
+                'dataset "as-is"**',
             )
+
+    def _prepare_coupled_data(self):
+        # TODO: write function to lazily compute average as spcified in time scheme
+        raise NotImplementedError("Data preparation not yet implemented")
 
     def _compute_coupled_integration_dim(self):
 
@@ -112,8 +120,12 @@ class ConstantCoupler:
         Called by CoupledDataset to compute static indices for training
         samples
 
-        :param interval: int ratio of dataset timestep to model dt
-        :param data_time_step: dataset timestep
+        Parameters
+        ----------
+        interval: int
+            ratio of dataset timestep to model dt
+        data_time_step:
+            dataset timestep
         """
         # create array of static coupled offstes that accompany each batch
         self._coupled_offsets = np.empty(
@@ -134,8 +146,10 @@ class ConstantCoupler:
         Called by CoupledDataset to compute static indices for training
         samples
 
-        :param interval: int ratio of dataset timestep to model dt
-        :param data_time_step: dataset timestep
+        Parameters
+        ----------
+        scaling_da: xarray.DataArray
+            values used to scale input data, uses mean and std
         """
         coupled_scaling = scaling_da.sel(index=self.variables).rename(
             {"index": "channel_in"}
@@ -146,7 +160,6 @@ class ConstantCoupler:
         }
 
     def setup_coupling(self, coupled_module):
-
         # To expediate the coupling process the coupled_forecast
         # get proper channels from coupled component output
         output_channels = coupled_module.output_variables
@@ -168,19 +181,35 @@ class ConstantCoupler:
         self.integrated_couplings = None
         self.preset_coupled_fields = None
 
-    def set_coupled_fields(self, coupled_fields):
+    def set_coupled_fields(self, coupled_fields: th.tensor):
+        """
+        Set the data for the coupled field for the next iteration of the dataloader.
+        Instead of loading data from the dataset the data from coupled_fields will
+        be returned instead.
 
+        Parameters
+        ----------
+        coupled_fields: th.tensor
+            The data to use when the dataloader requests coupled fields. Expected
+            format is [B, F, T, C, H, W]
+        """
+        if coupled_fields.shape[0] != self.batch_size:
+            raise ValueError(
+                f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
+                f" match configured batch size {self.batch_size}"
+            )
         # create buffer for coupling
         coupled_fields = coupled_fields[
             :, :, :, self.coupled_channel_indices, :, :
-        ].permute(0, 2, 3, 1, 4, 5)
+        ].permute(2, 0, 3, 1, 4, 5)
         self.preset_coupled_fields = th.empty(
             [self.coupled_integration_dim, self.batch_size, self.timevar_dim]
             + list(self.spatial_dims)
         )
+        # we use a constant set of values so we just copy time 0
         for i in range(len(self.preset_coupled_fields)):
             self.preset_coupled_fields[i, :, :, :, :, :] = coupled_fields[
-                0, 0, -1, :, :, :
+                0, :, -1, :, :, :
             ]
         # flag for construct integrated coupling method to use this array
         self.coupled_mode = True
@@ -190,14 +219,20 @@ class ConstantCoupler:
         batch=None,
         bsize=None,
     ):
-
         """
         Construct array of coupled inputs that includes values required for
         model integration steps.
 
-        :param batch: indices of dataset sample dimension associated with
-               current batch
-        :param bsize: int batch size
+        Parameters
+        ----------
+        batch: Sequence
+            indices of dataset sample dimension associated with current batch
+        bsize: int
+            batch size
+
+        Returns
+        -------
+        numpy.ndarray: The coupled data
         """
         if self.coupled_mode:
             return self.preset_coupled_fields
@@ -308,15 +343,17 @@ class TrailingAverageCoupler:
         self.coupled_mode = False  # if forecasting with another coupled model
 
         if not prepared_coupled_data:
-            print(
-                "Assuming coupled data is not preprocessed, averaging fields in as designed in\
- TrailingAverageCoupler. See docs for specifics."
+            logger.log(
+                logging.DEBUG,
+                "Assuming coupled data is not preprocessed, averaging fields in as designed in"
+                "TrailingAverageCoupler. See docs for specifics.",
             )
             self._prepare_coupled_data()
         else:
-            print(
-                '**Assuming coupled data has been prepared properly, using coupled field[s] from\
- dataset "as-is"**'
+            logger.log(
+                logging.DEBUG,
+                "**Assuming coupled data has been prepared properly, using coupled field[s] from"
+                'dataset "as-is"**',
             )
 
     def compute_coupled_indices(self, interval, data_time_step):
@@ -368,8 +405,8 @@ class TrailingAverageCoupler:
         # assert that the time increments are divisible by the dt of the dataset
         if np.any([t.total_seconds() % dt != 0 for t in self.input_times]):
             raise ValueError(
-                f"Coupled input times {self.input_times} \
-({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
+                f"Coupled input times {self.input_times} "
+                f"({[t.total_seconds() for t in self.input_times]} in secs) are not divisible by dataset dt: {dt}"
             )
         self.time_increments = [t.total_seconds() / dt for t in self.input_times]
 
@@ -423,6 +460,22 @@ class TrailingAverageCoupler:
         self.preset_coupled_fields = None
 
     def set_coupled_fields(self, coupled_fields):
+        """
+        Set the data for the coupled field for the next iteration of the dataloader.
+        Instead of loading data from the dataset the data from coupled_fields will
+        be returned instead.
+
+        Parameters
+        ----------
+        coupled_fields: th.tensor
+            The data to use when the dataloader requests coupled fields. Expected
+            format is [B, F, T, C, H, W]
+        """
+        if coupled_fields.shape[0] != self.batch_size:
+            raise ValueError(
+                f"Batch size of coupled field {coupled_fields.shape[0]} doesn't "
+                f" match configured batch size {self.batch_size}"
+            )
 
         coupled_fields = coupled_fields[:, :, :, self.coupled_channel_indices, :, :]
         # TODO: Now support output_time_dim =/= input_time_dim, but presteps need to be 0, will add support for presteps>0
@@ -497,6 +550,4 @@ class TrailingAverageCoupler:
 
             return self.integrated_couplings.transpose((1, 0, 2, 3, 4, 5)).astype(
                 "float32"
-            )  # cast to
-            # float32 for
-            # pytroch compatibility.
+            )  # cast to float32 for pytroch compatibility.
