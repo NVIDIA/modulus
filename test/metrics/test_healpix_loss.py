@@ -21,10 +21,11 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-import xarray as xr
-from pytest_utils import nfsdata_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
 from modulus.metrics.climate.healpix_loss import BaseMSE, OceanMSE, WeightedMSE
+
+xr = pytest.importorskip("xarray")
 
 
 @pytest.fixture
@@ -192,6 +193,15 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
         )
 
     # test for 0 loss
+    error = weighted_mse_func(pred_tensor**2, pred_tensor**2, average_channels=True)
+    assert torch.allclose(
+        error,
+        torch.zeros(1).to(device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test for individual channel loss
     error = weighted_mse_func(
         pred_tensor**2, targ_tensor**2, average_channels=False
     )
@@ -202,7 +212,7 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
-    # test for 0 loss
+    # test with mean across channels
     error = weighted_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
     assert torch.allclose(
         error,
@@ -225,6 +235,7 @@ def dataset_name():
 
 
 @nfsdata_or_fail
+@import_or_fail("xarray")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_OceanMSE(
     data_dir,
@@ -276,6 +287,15 @@ def test_OceanMSE(
     targ_tensor = targ_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
 
     # test for 0 loss
+    error = ocean_mse_func(pred_tensor**2, pred_tensor**2, average_channels=True)
+    assert torch.allclose(
+        error,
+        torch.zeros(1).to(device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test for individual channels
     error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=False)
     assert torch.allclose(
         error,
@@ -284,7 +304,7 @@ def test_OceanMSE(
         atol=atol,
     )
 
-    # test for 0 loss
+    # test for mean across channels
     error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
     assert torch.allclose(
         error,

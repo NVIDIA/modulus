@@ -24,9 +24,11 @@ import common
 import pytest
 import torch
 from graphcast.utils import fix_random_seeds
-from omegaconf import DictConfig
+from pytest_utils import import_or_fail
 
 from modulus.models.dlwp_healpix import HEALPixRecUNet
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -85,7 +87,7 @@ def up_sampling_block_dict(in_channels=3, out_channels=1):
         "activation": activation_block,
         "upsampling": 2,
     }
-    return DictConfig(up_sampling_block)
+    return omegaconf.DictConfig(up_sampling_block)
 
 
 @pytest.fixture
@@ -98,7 +100,7 @@ def output_layer_dict(in_channels=3, out_channels=2):
         "dilation": 1,
         "n_layers": 1,
     }
-    return DictConfig(output_layer)
+    return omegaconf.DictConfig(output_layer)
 
 
 @pytest.fixture
@@ -109,7 +111,7 @@ def recurrent_block_dict(in_channels=3):
         "kernel_size": 1,
         "_recursive_": False,
     }
-    return DictConfig(recurrent_block)
+    return omegaconf.DictConfig(recurrent_block)
 
 
 @pytest.fixture
@@ -129,7 +131,7 @@ def decoder_dict(
         "n_channels": [34, 68, 136],
         "dilations": [4, 2, 1],
     }
-    return DictConfig(decoder)
+    return omegaconf.DictConfig(decoder)
 
 
 @pytest.fixture
@@ -167,8 +169,9 @@ def insolation_data():
     return generate_insolation_data
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
+def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict, pytestconfig):
     in_channels = 7
     out_channels = 7
     n_constants = 1
@@ -271,8 +274,11 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
+def test_HEALPixRecUNet_integration_steps(
+    device, encoder_dict, decoder_dict, pytestconfig
+):
     in_channels = 2
     out_channels = 2
     n_constants = 1
@@ -296,9 +302,16 @@ def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_reset(
-    device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data
+    device,
+    encoder_dict,
+    decoder_dict,
+    test_data,
+    insolation_data,
+    constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3
@@ -341,9 +354,16 @@ def test_HEALPixRecUNet_reset(
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_forward(
-    device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data
+    device,
+    encoder_dict,
+    decoder_dict,
+    test_data,
+    insolation_data,
+    constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3

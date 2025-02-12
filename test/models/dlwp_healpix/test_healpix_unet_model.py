@@ -24,9 +24,11 @@ import common
 import pytest
 import torch
 from graphcast.utils import fix_random_seeds
-from omegaconf import DictConfig
+from pytest_utils import import_or_fail
 
 from modulus.models.dlwp_healpix import HEALPixUNet
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -71,7 +73,7 @@ def up_sampling_block_dict(in_channels=3, out_channels=1):
         "activation": activation_block,
         "upsampling": 2,
     }
-    return DictConfig(up_sampling_block)
+    return omegaconf.DictConfig(up_sampling_block)
 
 
 @pytest.fixture
@@ -84,7 +86,7 @@ def output_layer_dict(in_channels=3, out_channels=2):
         "dilation": 1,
         "n_layers": 1,
     }
-    return DictConfig(output_layer)
+    return omegaconf.DictConfig(output_layer)
 
 
 @pytest.fixture
@@ -152,11 +154,14 @@ def unet_decoder_dict(
         "n_channels": [34, 68, 136],
         "dilations": [4, 2, 1],
     }
-    return DictConfig(decoder)
+    return omegaconf.DictConfig(decoder)
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
+def test_HEALPixUNet_initialize(
+    device, unet_encoder_dict, unet_decoder_dict, pytestconfig
+):
     in_channels = 7
     out_channels = 7
     n_constants = 1
@@ -229,8 +234,11 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUNet_integration_steps(device, unet_encoder_dict, unet_decoder_dict):
+def test_HEALPixUNet_integration_steps(
+    device, unet_encoder_dict, unet_decoder_dict, pytestconfig
+):
     in_channels = 2
     out_channels = 2
     n_constants = 1
@@ -254,6 +262,7 @@ def test_HEALPixUNet_integration_steps(device, unet_encoder_dict, unet_decoder_d
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUNet_forward(
     device,
@@ -262,6 +271,7 @@ def test_HEALPixUNet_forward(
     test_data,
     insolation_data,
     constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3
