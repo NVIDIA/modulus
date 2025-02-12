@@ -21,10 +21,16 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-import xarray as xr
-from pytest_utils import nfsdata_or_fail
+from pytest_utils import import_or_fail, nfsdata_or_fail
 
-from modulus.metrics.climate.healpix_loss import BaseMSE, OceanMSE, WeightedMSE
+from modulus.metrics.climate.healpix_loss import (
+    BaseMSE,
+    OceanMSE,
+    WeightedMSE,
+    WeightedOceanMSE,
+)
+
+xr = pytest.importorskip("xarray")
 
 
 @pytest.fixture
@@ -192,6 +198,15 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
         )
 
     # test for 0 loss
+    error = weighted_mse_func(pred_tensor**2, pred_tensor**2, average_channels=True)
+    assert torch.allclose(
+        error,
+        torch.zeros(1).to(device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test for individual channel loss
     error = weighted_mse_func(
         pred_tensor**2, targ_tensor**2, average_channels=False
     )
@@ -202,7 +217,7 @@ def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
         atol=atol,
     )
 
-    # test for 0 loss
+    # test with mean across channels
     error = weighted_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
     assert torch.allclose(
         error,
@@ -225,6 +240,7 @@ def dataset_name():
 
 
 @nfsdata_or_fail
+@import_or_fail("xarray")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_OceanMSE(
     data_dir,
@@ -276,6 +292,15 @@ def test_OceanMSE(
     targ_tensor = targ_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
 
     # test for 0 loss
+    error = ocean_mse_func(pred_tensor**2, pred_tensor**2, average_channels=True)
+    assert torch.allclose(
+        error,
+        torch.zeros(1).to(device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test for individual channels
     error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=False)
     assert torch.allclose(
         error,
@@ -284,11 +309,140 @@ def test_OceanMSE(
         atol=atol,
     )
 
-    # test for 0 loss
+    # test for mean across channels
     error = ocean_mse_func(pred_tensor**2, targ_tensor**2, average_channels=True)
     assert torch.allclose(
         error,
         mean_ocean_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+
+@nfsdata_or_fail
+@import_or_fail("xarray")
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_WeightedOceanMSE(
+    data_dir,
+    dataset_name,
+    device,
+    test_data,
+    pytestconfig,
+    rtol: float = 1e-3,
+    atol: float = 1e-3,
+):
+    num_channels = 3
+    identity_weights = [1, 1, 1]  # same as OceanMSE
+    test_weights = [2.0, 0.5, 1]  # Check positive and negative weighing factors
+    test_weights_tensor = torch.Tensor(test_weights).to(device)
+    channels, pred_tensor_np, targ_tensor_np = test_data(
+        channels=num_channels, img_shape=(32, 32)
+    )
+    ds_path = Path(data_dir, dataset_name + ".zarr")
+
+    lsm_ds = xr.open_dataset(ds_path, engine="zarr").constants.sel({"channel_c": "lsm"})
+
+    # setup target weights
+    atmos_channel_mse = torch.Tensor([0.2706, 0.2706, 0]).to(device)
+    mean_atmos_channel_mse = atmos_channel_mse.mean()
+    weighted_atmos_channel_mse = atmos_channel_mse * test_weights_tensor
+    mean_weighted_atmos_channel_mse = weighted_atmos_channel_mse.mean()
+
+    trainer = trainer_helper(
+        output_variables=["a", "b", "ones"],
+        device=device,
+    )
+    lsm_tensor = 1 - torch.tensor(np.expand_dims(lsm_ds.values, (0, 2, 3))).to(
+        trainer.device
+    )
+
+    # expand to 4 dims C, F, H, W
+    pred_tensor = torch.from_numpy(pred_tensor_np).to(device).expand(channels, -1, -1)
+    targ_tensor = torch.from_numpy(targ_tensor_np).to(device).expand(channels, -1, -1)
+
+    tensor_size = pred_tensor.shape[-2:]
+    ones = torch.ones(tensor_size, device=device)
+
+    # make the last channel of prediction and target the same
+    pred_tensor = pred_tensor.contiguous()
+    targ_tensor = targ_tensor.contiguous()
+    pred_tensor[-1, ...] = ones[...]
+    targ_tensor[-1, ...] = ones[...]
+
+    # expand out to 6 dimensions
+    pred_tensor = pred_tensor[(None,) * 3]
+    targ_tensor = targ_tensor[(None,) * 3]
+
+    # fit to LSM field size
+    pred_tensor = pred_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
+    targ_tensor = targ_tensor.expand(1, lsm_tensor.shape[1], 1, -1, -1, -1)
+
+    # Test mismatch between weights and number of variables
+    weighted_ocean_mse_func = WeightedOceanMSE(ds_path)
+    with pytest.raises(
+        ValueError, match="Length of outputs and loss_weights is not the same!"
+    ):
+        weighted_ocean_mse_func.setup(trainer)
+
+    # Test with identity weights, same as OceanMSE
+    weighted_ocean_mse_func = WeightedOceanMSE(ds_path, weights=identity_weights)
+    weighted_ocean_mse_func.setup(trainer)
+
+    # test for 0 loss
+    error = weighted_ocean_mse_func(
+        pred_tensor**2, pred_tensor**2, average_channels=True
+    )
+    assert torch.allclose(
+        error,
+        torch.zeros(1).to(device),
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test identity on individual channels
+    error = weighted_ocean_mse_func(
+        pred_tensor**2, targ_tensor**2, average_channels=False
+    )
+    assert torch.allclose(
+        error,
+        atmos_channel_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test identity on mean across channels
+    error = weighted_ocean_mse_func(
+        pred_tensor**2, targ_tensor**2, average_channels=True
+    )
+    assert torch.allclose(
+        error,
+        mean_atmos_channel_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # Test with different weights
+    weighted_ocean_mse_func = WeightedOceanMSE(ds_path, weights=test_weights)
+    weighted_ocean_mse_func.setup(trainer)
+
+    # test identity on individual channels
+    error = weighted_ocean_mse_func(
+        pred_tensor**2, targ_tensor**2, average_channels=False
+    )
+    assert torch.allclose(
+        error,
+        weighted_atmos_channel_mse,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    # test identity on mean across channels
+    error = weighted_ocean_mse_func(
+        pred_tensor**2, targ_tensor**2, average_channels=True
+    )
+    assert torch.allclose(
+        error,
+        mean_weighted_atmos_channel_mse,
         rtol=rtol,
         atol=atol,
     )
