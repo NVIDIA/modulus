@@ -121,7 +121,7 @@ class LagrangianDataset(DGLDataset):
         verbose, by default False
     """
 
-    KINEMATIC_PARTICLE_ID = 3  # See train.py in DM code.
+    KINEMATIC_PARTICLE_ID = 3  # See train.py in DeepMind code.
 
     def __init__(
         self,
@@ -154,7 +154,7 @@ class LagrangianDataset(DGLDataset):
         path_metadata = os.path.join(data_dir, "metadata.json")
         with open(path_metadata, "r", encoding="utf-8") as file:
             metadata = json.load(file)
-        # Note: DM datasets contain sequence_length + 1 time steps for each sequence.
+        # Note: DeepMind datasets contain sequence_length + 1 time steps for each sequence.
         self.num_steps = (
             (metadata["sequence_length"] + 1) if num_steps is None else num_steps
         )
@@ -344,7 +344,7 @@ class LagrangianDataset(DGLDataset):
         """Creates random walk noise for positions."""
 
         num_velocities = num_steps - 1
-        # See comments in get_random_walk_noise_for_position_sequence in DM code.
+        # See comments in get_random_walk_noise_for_position_sequence in DeepMind code.
         std_each_step = self.noise_std / num_velocities**0.5
         vel_noise = std_each_step * torch.randn(num_velocities, num_particles, self.dim)
 
@@ -358,7 +358,7 @@ class LagrangianDataset(DGLDataset):
 
         # Set the target position noise the same as the current so it cancels out
         # during velocity calculation.
-        # See get_predicted_and_target_normalized_accelerations in DM code.
+        # See get_predicted_and_target_normalized_accelerations in DeepMind code.
         pos_noise[-1] = pos_noise[-2]
 
         return pos_noise
