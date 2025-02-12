@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Literal, Optional, Tuple, Callable
+from typing import Literal, Optional, Callable
 
 import numpy as np
 import nvtx
@@ -30,7 +30,6 @@ def deterministic_sampler(
     net: torch.nn.Module,
     latents: torch.Tensor,
     img_lr: torch.Tensor,
-    img_shape: Optional[Tuple[int]] = None,
     class_labels: Optional[torch.Tensor] = None,
     randn_like: Callable = torch.randn_like,
     num_steps: int = 18,
@@ -73,8 +72,6 @@ def deterministic_sampler(
         img_lr : torch.Tensor
             Low-resolution input image for conditioning the diffusion process.
             Passed as a keywork argument to the model 'net'.
-        img_shape : Optional[Tuple[int]]
-            Shape of the images. Ignored. Defaults to None.
         class_labels : Optional[torch.Tensor]
             Labels of the classes used as input to a class-conditionned
             diffusion model. Passed as a keyword argument to the model 'net'.
@@ -165,7 +162,7 @@ def deterministic_sampler(
     Returns
     -------
         torch.Tensor:
-            Generated batch of samples. Same shape is the input 'latents'.
+            Generated batch of samples. Same shape as the input 'latents'.
     """
 
     # conditioning

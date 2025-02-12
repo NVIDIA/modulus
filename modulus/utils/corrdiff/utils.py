@@ -115,7 +115,6 @@ def diffusion_step(  # TODO generalize the module and add defaults
         additional_args["mean_hr"] = hr_mean
     if lead_time_label is not None:
         additional_args["lead_time_label"] = lead_time_label
-    additional_args["img_shape"] = img_shape
 
     # Loop over batches
     all_images = []

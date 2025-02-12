@@ -16,6 +16,7 @@
 
 import importlib
 from dataclasses import dataclass
+from typing import Union, Tuple, Literal
 
 import torch
 
@@ -49,8 +50,9 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
     Parameters
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[int, Tuple[int, int]]
+        The resolution of the input/output image. If a single int is provided,
+        then the image is assumed to be square.
     img_channels : int
          Number of color channels.
     img_in_channels : int
@@ -58,7 +60,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     img_out_channels : int
         Number of output color channels.
     use_fp16: bool, optional
-        Execute the underlying model at FP16 precision?, by default False.
+        Execute the underlying model at FP16 precision, by default False.
     sigma_min: float, optional
         Minimum supported noise level, by default 0.
     sigma_max: float, optional
@@ -66,7 +68,9 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     sigma_data: float, optional
         Expected standard deviation of the training data, by default 0.5.
     model_type: str, optional
-        Class name of the underlying model, by default 'SongUNetPosEmbd'.
+        Class name of the underlying model. Must be one of the following:
+        'SongUNet', 'SongUNetPosEmbd', 'SongUNetPosLtEmbd', 'DhariwalUNet'.
+        Defaults to 'SongUNetPosEmbd'.
     **model_kwargs : dict
         Keyword arguments to create the underlying model.
 
@@ -102,16 +106,18 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
     def __init__(
         self,
-        img_resolution,
-        img_channels,
-        img_in_channels,
-        img_out_channels,
-        use_fp16=False,
-        sigma_min=0,
-        sigma_max=float("inf"),
-        sigma_data=0.5,
-        model_type="SongUNetPosEmbd",
-        **model_kwargs,
+        img_resolution: Union[int, Tuple[int, int]],
+        img_channels: int,
+        img_in_channels: int,
+        img_out_channels: int,
+        use_fp16: bool = False,
+        sigma_min: float = 0,
+        sigma_max: float = float("inf"),
+        sigma_data: float = 0.5,
+        model_type: Literal[
+            "SongUNetPosEmbd", "SongUNetPosLtEmbd",
+            "SongUNet", "DhariwalUNet"] = "SongUNetPosEmbd",
+        **model_kwargs: dict,
     ):
         super().__init__(meta=MetaData)
 
