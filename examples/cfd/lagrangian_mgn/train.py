@@ -62,8 +62,6 @@ class MGNTrainer:
         logger.info("Loading the training dataset...")
         self.dataset = instantiate(cfg.data.train)
         logger.info(f"Using {len(self.dataset)} training samples.")
-        self.dataset.set_normalizer_device(device=self.dist.device)
-        self.time_integrator = self.dataset.time_integrator
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
@@ -133,33 +131,56 @@ class MGNTrainer:
     def train(self, graph):
         graph = graph.to(self.dist.device)
         self.optimizer.zero_grad()
-        loss_pos, loss_vel, loss_acc = self.forward(graph)
-        loss = loss_acc + loss_vel + loss_pos
-        self.backward(loss_acc)
+        loss_pos, loss_vel, loss_acc, loss_acc_norm = self.forward(graph)
+        self.backward(loss_acc_norm)
         self.scheduler.step()
-        return loss, [loss_pos.item(), loss_vel.item(), loss_acc.item()]
+        loss = loss_acc + loss_vel + loss_pos
+        return {
+            "loss": loss.item(),
+            "loss_pos": loss_pos.item(),
+            "loss_vel": loss_vel.item(),
+            "loss_acc": loss_acc.item(),
+            "loss_acc_norm": loss_acc_norm.item(),
+        }
 
     def forward(self, graph):
         # forward pass
         with autocast(enabled=self.amp):
-            # predict the acceleration
+            gt_pos, gt_vel, gt_acc = self.dataset.unpack_targets(graph)
+            # Predict the acceleration using normalized inputs and targets.
             pred_acc = self.model(graph.ndata["x"], graph.edata["x"], graph)
-            loss_acc = self.criterion(pred_acc, graph.ndata["y"][..., 2 * self.dim :])
+            mask = graph.ndata["mask"].unsqueeze(-1)
+            num_nz = mask.sum() * self.dim
+            loss_acc_norm = mask * self.criterion(pred_acc, gt_acc)
+            loss_acc_norm = loss_acc_norm.sum() / num_nz
 
-            # use the integrator to get the position
-            pred_pos, pred_vel = self.time_integrator(
-                position=graph.ndata["x"][..., : self.dim],
-                velocity=graph.ndata["x"][..., 1 * self.dim : 2 * self.dim],
-                acceleration=pred_acc,
-                dt=self.dt,
-            )
-            loss_pos = self.criterion(pred_pos, graph.ndata["y"][..., : self.dim])
-            pred_vel = self.dataset.normalize_velocity(pred_vel)
-            loss_vel = self.criterion(
-                pred_vel, graph.ndata["y"][..., self.dim : 2 * self.dim]
-            )
+            with torch.no_grad():
+                pos, vel = self.dataset.unpack_inputs(graph)
+                # Use the integrator to get the next position and velocity.
+                pred_pos, pred_vel = self.dataset.time_integrator(
+                    position=pos,
+                    velocity=vel[-1],
+                    acceleration=pred_acc,
+                    dt=self.dt,
+                    denormalize=True,
+                )
 
-            return loss_pos, loss_vel, loss_acc
+                # Position loss.
+                loss_pos = mask * self.criterion(pred_pos, gt_pos)
+                loss_pos = loss_pos.sum() / num_nz
+                # loss_vel and loss_acc are denormalized.
+                loss_vel = mask * self.criterion(
+                    pred_vel, self.dataset.denormalize_velocity(gt_vel)
+                )
+                loss_vel = loss_vel.sum() / num_nz
+
+                loss_acc = mask * self.criterion(
+                    self.dataset.denormalize_acceleration(pred_acc),
+                    self.dataset.denormalize_acceleration(gt_acc),
+                )
+                loss_acc = loss_acc.sum() / num_nz
+
+            return loss_pos, loss_vel, loss_acc, loss_acc_norm
 
     def backward(self, loss):
         # backward pass
@@ -190,36 +211,25 @@ def main(cfg: DictConfig) -> None:
     start = time.time()
     logger.info("Training started...")
     for epoch in range(trainer.epoch_init, cfg.train.epochs + 1):
-        loss_list = []
-        loss_pos_list = []
-        loss_vel_list = []
-        loss_acc_list = []
+        epoch_losses = {}
         for graph in trainer.dataloader:
-            loss, losses = trainer.train(graph)
-            loss_list.append(loss.item())
-            loss_pos_list.append(losses[0])
-            loss_vel_list.append(losses[1])
-            loss_acc_list.append(losses[2])
-        mean_loss = sum(loss_list) / len(loss_list)
-        mean_loss_pos = sum(loss_pos_list) / len(loss_pos_list)
-        mean_loss_vel = sum(loss_vel_list) / len(loss_vel_list)
-        mean_loss_acc = sum(loss_acc_list) / len(loss_acc_list)
+            losses = trainer.train(graph)
+            for k, l in losses.items():
+                epoch_losses.setdefault(k, []).append(l)
+
+        mean_losses = {k: sum(v) / len(v) for k, v in epoch_losses.items()}
+
         last_lr = trainer.scheduler.get_last_lr()[0]
         logger.info(
-            f"epoch: {epoch:5,}, loss: {mean_loss:10.3e}, "
-            f"position loss: {mean_loss_pos:10.3e}, "
-            f"velocity loss: {mean_loss_vel:10.3e}, "
-            f"acceleration loss: {mean_loss_acc:10.3e}, "
+            f"epoch: {epoch:5,}, loss: {mean_losses['loss']:10.3e}, "
+            f"position loss: {mean_losses['loss_pos']:10.3e}, "
+            f"velocity loss: {mean_losses['loss_vel']:10.3e}, "
+            f"accel loss: {mean_losses['loss_acc']:10.3e}, "
+            f"accel loss (norm): {mean_losses['loss_acc_norm']:10.3e}, "
             f"lr: {last_lr:10.3e}, "
             f"time per epoch: {(time.time() - start):10.3e}"
         )
-        losses = {
-            "loss": mean_loss,
-            "loss_pos": mean_loss_pos,
-            "loss_vel": mean_loss_vel,
-            "loss_acc": mean_loss_acc,
-        }
-        elogger.log(losses, epoch)
+        elogger.log(mean_losses, epoch)
         elogger.log_scalar("lr", last_lr, epoch)
 
         # save checkpoint
