@@ -32,13 +32,7 @@ defaults:
     # Accepted values:
     #     `netCFD_mini`: netCFD format, with reduced capabilities for fast experiments.
 
-    - sampler: stochastic
-    # The base sampler parameters.
-    # Accepted values:
-    #     `stochastic`: a stochastic sampler
-    #     `deterministic`: a deterministic sampler
-
-    - generate: ${model}
+    - generate: patched
     # The base generation parameters.
     # Accepted values:
     #     `patched`: base parameters for a patch-based model

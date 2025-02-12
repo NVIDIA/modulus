@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+defaults:
+  # Recommended is stochastic sampler. Change to deterministic if needed.
+  - sampler@_global_.sampler: stochastic
 
 inference_mode: all
 # Choose between "all" (regression + diffusion), "regression" or "diffusion"
