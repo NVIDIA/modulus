@@ -31,9 +31,9 @@ from generate_dataset import Bloodflow1DDataset
 
 from modulus.launch.logging import (
     PythonLogger,
-    initialize_wandb,
     RankZeroLoggingWrapper,
 )
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 import json
 from omegaconf import DictConfig

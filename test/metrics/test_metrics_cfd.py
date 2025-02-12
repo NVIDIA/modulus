@@ -16,7 +16,6 @@
 
 import numpy as np
 import pytest
-import pyvista as pv
 import torch
 from pytest_utils import import_or_fail
 
@@ -26,6 +25,8 @@ from modulus.metrics.cae.cfd import (
     compute_tke_spectrum,
     dominant_freq_calc,
 )
+
+pv = pytest.importorskip("pyvista")
 
 
 @pytest.fixture

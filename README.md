@@ -247,7 +247,7 @@ start with a reference sample and then update it for your own use case.
 - [Modulus Pretrained models](https://catalog.ngc.nvidia.com/models?filters=&orderBy=scoreDESC&query=Modulus&page=&pageSize=)
 - [Modulus Datasets and Supplementary materials](https://catalog.ngc.nvidia.com/resources?filters=&orderBy=scoreDESC&query=Modulus&page=&pageSize=)
 - [Self-paced Modulus DLI training](https://learn.nvidia.com/courses/course-detail?course_id=course-v1:DLI+S-OV-04+V1)
-- [Deep Learnning for Science and Engineering Lecture Series with Modulus](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
+- [Deep Learning for Science and Engineering Lecture Series with Modulus](https://www.nvidia.com/en-us/on-demand/deep-learning-for-science-and-engineering/)
   - [Modulus: purpose and usage](https://www.nvidia.com/en-us/on-demand/session/dliteachingkit-setk5002/)
 - [Video Tutorials](https://www.nvidia.com/en-us/on-demand/search/?facet.mimetype[]=event%20session&layout=list&page=1&q=modulus&sort=relevance&sortDir=desc)
   
