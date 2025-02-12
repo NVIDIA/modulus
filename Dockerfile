@@ -65,10 +65,10 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$VTK_ARM64_WHEEL" != "unknown
     else \
         echo "No custom wheel or wheel on PyPi found. Installing vtk for: $TARGETPLATFORM from source" && \
         apt-get update && apt-get install -y libgl1-mesa-dev && \
-        git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
+        git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.4.1 && git submodule update --init --recursive && \
         mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
         python setup.py bdist_wheel && \
-        pip install --no-cache-dir dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
+        pip install --no-cache-dir dist/vtk-*.whl && \
         cd ../../ && rm -r vtk; \
     fi
 RUN pip install --no-cache-dir "pyvista>=0.40.1"
@@ -99,23 +99,8 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown
         cd ../../ && rm -r /workspace/dgl; \
     fi
 
-# Install custom onnx
-ARG ONNX_AMD64_WHEEL
-ENV ONNX_AMD64_WHEEL=${ONNX_AMD64_WHEEL:-unknown}
-
-ARG ONNX_ARM64_WHEEL
-ENV ONNX_ARM64_WHEEL=${ONNX_ARM64_WHEEL:-unknown}
-
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ "$ONNX_AMD64_WHEEL" != "unknown" ]; then \
-        echo "Custom onnx wheel $ONNX_AMD64_WHEEL for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/${ONNX_AMD64_WHEEL}; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$ONNX_ARM64_WHEEL" != "unknown" ]; then \
-        echo "Custom onnx wheel $ONNX_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/${ONNX_ARM64_WHEEL}; \
-    else \
-        echo "No custom wheel found. Will attempt to install from PyPi index (installation/functionality might break!)" && \
-        pip install --no-cache-dir onnxruntime-gpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ ; \
-    fi
+# Install onnx
+RUN pip install "onnxruntime-gpu>1.19.0"
 
 # cleanup of stage
 RUN rm -rf /modulus/
@@ -137,7 +122,7 @@ COPY . /modulus/
 RUN cd /modulus/ && pip install -e .[makani,fignet] && pip uninstall nvidia-modulus -y
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
-        pip install --no-cache-dir "tensorflow==2.9.0" "warp-lang>=0.6.0"; \
+        pip install --no-cache-dir "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
         echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
     fi
@@ -146,30 +131,23 @@ RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==
 # TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
 RUN pip install --no-cache-dir --no-deps -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
 
-
 # Install torch-scatter, torch-cluster, and pyg
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_scatter-2.1.2-cp312-cp312-linux_x86_64.whl" ]; then \
         echo "Installing torch_scatter and for: $TARGETPLATFORM" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_scatter-2.1.2-cp310-cp310-linux_x86_64.whl; \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_scatter-2.1.2-cp312-cp312-linux_x86_64.whl; \
     else \
         echo "No custom wheel present, skipping"; \
     fi
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluster-1.6.3-cp310-cp310-linux_x86_64.whl" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluster-1.6.3-cp312-cp312-linux_x86_64.whl" ]; then \
         echo "Installing torch_cluster and for: $TARGETPLATFORM" && \
-        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_cluster-1.6.3-cp310-cp310-linux_x86_64.whl; \
+        pip install --force-reinstall --no-cache-dir /modulus/deps/torch_cluster-1.6.3-cp312-cp312-linux_x86_64.whl; \
     else \
         echo "No custom wheel present, skipping"; \
     fi
 RUN pip install --no-cache-dir "torch_geometric==2.5.3"
 
 # Install scikit-image and stl
-RUN pip install --no-cache-dir "numpy-stl" "scikit-image>=0.24.0"
-
-# Install sparse-dot-mkl
-RUN pip install --no-cache-dir "sparse-dot-mkl"
-
-# Install shapely
-RUN pip install --no-cache-dir "shapely"
+RUN pip install --no-cache-dir "numpy-stl" "scikit-image>=0.24.0" "sparse-dot-mkl" "shapely" "numpy<2.0"
 
 # cleanup of stage
 RUN rm -rf /modulus/
