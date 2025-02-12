@@ -51,6 +51,8 @@ coverage:
 		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=70 && \
 		coverage html
 
+all-ci: get-data setup-ci black interrogate lint license install pytest doctest coverage
+
 # For arch naming conventions, refer
 # https://docs.docker.com/build/building/multi-platform/
 # https://github.com/containerd/containerd/blob/v1.4.3/platforms/platforms.go#L86

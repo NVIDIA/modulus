@@ -118,20 +118,6 @@ RUN pip install --no-cache-dir "netcdf4>=1.6.3,<1.7.1"
 
 RUN pip install --no-cache-dir "mlflow>=2.1.1"
 
-COPY . /modulus/
-RUN cd /modulus/ && pip install -e .[makani,fignet] && pip uninstall nvidia-modulus -y
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
-        pip install --no-cache-dir "tensorflow==2.9.0" "warp-lang>=0.6.0"; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
-    fi
-RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
-
-# TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
-RUN pip install --no-cache-dir --no-deps -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
-
-
 # Install torch-scatter, torch-cluster, and pyg
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_scatter-2.1.2-cp312-cp312-linux_x86_64.whl" ]; then \
         echo "Installing torch_scatter and for: $TARGETPLATFORM" && \
@@ -146,6 +132,19 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ -e "/modulus/deps/torch_cluste
         echo "No custom wheel present, skipping"; \
     fi
 RUN pip install --no-cache-dir "torch_geometric==2.5.3"
+
+COPY . /modulus/
+RUN cd /modulus/ && pip install -e .[makani,fignet] && pip uninstall nvidia-modulus -y
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM" && \
+        pip install --no-cache-dir "tensorflow>=2.9.0" "warp-lang>=0.6.0"; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        echo "Installing tensorflow and warp-lang for: $TARGETPLATFORM is not supported presently"; \
+    fi
+RUN pip install --no-cache-dir "black==22.10.0" "interrogate==1.5.0" "coverage==6.5.0" "protobuf==3.20.3"
+
+# TODO(akamenev): install Makani via direct URL, see comments in pyproject.toml.
+RUN pip install --no-cache-dir --no-deps -e git+https://github.com/NVIDIA/modulus-makani.git@v0.1.0#egg=makani
 
 # Install scikit-image and stl
 RUN pip install --no-cache-dir "numpy-stl" "scikit-image>=0.24.0"
