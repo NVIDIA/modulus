@@ -38,4 +38,3 @@ lr_rampup_steps: 1000 # Number of training steps over which to perform linear LR
 total_train_steps: 20 # Number of total training steps
 clip_grad_norm: -1 # Threshold for gradient clipping, set to -1 to disable
 loss: 'regression' # Loss type; use 'regression' or 'edm' for the regression and diffusion, respectively
-

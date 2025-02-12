@@ -191,7 +191,7 @@ def training_loop(cfg):
         logger0.info(f'Resuming training state from "{resume_checkpoint}"...')
 
         total_steps = load_checkpoint(
-            path=os.path.join(cfg.training.rundir, "checkpoints"),
+            path=os.path.join(cfg.training.rundir, f"checkpoints_{net_name}"),
             models=net,
             optimizer=optimizer,
         )
@@ -208,14 +208,14 @@ def training_loop(cfg):
     avg_train_loss = 0
     train_steps = 0
     while not done:
-        # Accumulate gradients.
-        optimizer.zero_grad(set_to_none=True)
+        # Format input batch
         batch = next(dataset_iterator)
-        hrrr_0 = batch["hrrr"][0].to(device).to(torch.float32)
-        hrrr_1 = batch["hrrr"][1].to(device).to(torch.float32)
+        hrrr_0 = batch["hrrr"][0].to(device=device, dtype=torch.float32)
+        hrrr_1 = batch["hrrr"][1].to(device=device, dtype=torch.float32)
 
         if use_regression_net:
-            era5 = batch["era5"][0].to(device).to(torch.float32)
+            # Inference regression model
+            era5 = batch["era5"][0].to(device=device, dtype=torch.float32)
 
             with torch.no_grad():
                 reg_out = regression_model_forward(
@@ -234,7 +234,7 @@ def training_loop(cfg):
         elif train_regression_unet:
             assert diffusion_channel_indices == input_channel_indices
 
-            era5 = batch["era5"][0].to(device).to(torch.float32)
+            era5 = batch["era5"][0].to(device=device, dtype=torch.float32)
 
             hrrr_0 = torch.cat((hrrr_0[:, input_channel_indices, :, :], era5), dim=1)
 
@@ -244,6 +244,8 @@ def training_loop(cfg):
 
         hrrr_0 = torch.cat((hrrr_0, invariant_tensor), dim=1)
 
+        # Accumulate gradients.
+        optimizer.zero_grad(set_to_none=True)
         loss = loss_fn(
             net=ddp, images=hrrr_1, condition=hrrr_0, augment_pipe=augment_pipe
         )
@@ -297,12 +299,12 @@ def training_loop(cfg):
             with torch.no_grad():
 
                 hrrr_0, hrrr_1 = batch["hrrr"]
-                hrrr_0 = hrrr_0.to(torch.float32).to(device)
-                hrrr_1 = hrrr_1.to(torch.float32).to(device)
+                hrrr_0 = hrrr_0.to(dtype=torch.float32, device=device)
+                hrrr_1 = hrrr_1.to(dtype=torch.float32, device=device)
 
                 if use_regression_net:
                     with torch.no_grad():
-                        era5 = batch["era5"][0].to(device).to(torch.float32)
+                        era5 = batch["era5"][0].to(device=device, dtype=torch.float32)
                         reg_out = regression_model_forward(
                             regression_net, hrrr_0, era5, invariant_tensor
                         )
@@ -461,7 +463,7 @@ def training_loop(cfg):
         ):
 
             save_checkpoint(
-                path=os.path.join(cfg.training.rundir, "checkpoints"),
+                path=os.path.join(cfg.training.rundir, f"checkpoints_{net_name}"),
                 models=net,
                 optimizer=optimizer,
                 epoch=total_steps,
