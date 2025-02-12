@@ -565,11 +565,6 @@ class TimeSeriesDataModule:
                     constants=self.constants is not None,
                     batch_size=self.batch_size,
                 )
-
-                dataset = dataset.sel(
-                    channel_in=self.input_variables,
-                    channel_out=self.output_variables,
-                )
             else:
                 dataset = open_fn(
                     input_variables=self.input_variables,
@@ -611,6 +606,10 @@ class TimeSeriesDataModule:
                     batch_size=self.batch_size,
                 )
 
+        dataset = dataset.sel(
+            channel_in=self.input_variables,
+            channel_out=self.output_variables,
+        )
         if self.constants is not None:
             dataset = dataset.sel(channel_c=list(self.constants.values()))
 
@@ -833,6 +832,9 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         prebuilt_dataset: bool = True,
         forecast_init_times: Optional[Sequence] = None,
         couplings: Sequence = None,
+        add_train_noise: Optional[bool] = False,
+        train_noise_params: Optional[DictConfig] = None,
+        train_noise_seed: Optional[int] = 42,
     ):
         """
         Parameters
@@ -906,8 +908,18 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
         couplings: Sequence, optional
             a Sequence of dictionaries that define the mechanics of couplings with other earth system
             components. default None
+        add_train_noise: bool, optional
+            Add noise to the training data to inputs and integrated couplings to improve generalization, default False
+        train_noise_params: DictConfig, optional
+            Dictionary containing parameters for adding noise to the training data
+        train_noise_seed: int, optional
+            Seed for the random number generator for adding noise to the training data, default 42
         """
         self.couplings = couplings
+        self.add_train_noise = add_train_noise
+        self.train_noise_params = train_noise_params
+        self.train_noise_seed = train_noise_seed
+
         super().__init__(
             src_directory,
             dst_directory,
@@ -988,11 +1000,6 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     constants=self.constants is not None,
                     batch_size=self.batch_size,
                 )
-
-                dataset = dataset.sel(
-                    channel_in=self.input_variables + coupled_variables,
-                    channel_out=self.output_variables,
-                )
             else:
                 dataset = open_fn(
                     input_variables=self.input_variables + coupled_variables,
@@ -1034,6 +1041,10 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                     batch_size=self.batch_size,
                 )
 
+        dataset = dataset.sel(
+            channel_in=self.input_variables + coupled_variables,
+            channel_out=self.output_variables,
+        )
         if self.constants is not None:
             dataset = dataset.sel(channel_c=list(self.constants.values()))
 
@@ -1056,6 +1067,9 @@ class CoupledTimeSeriesDataModule(TimeSeriesDataModule):
                 drop_last=self.drop_last,
                 add_insolation=self.add_insolation,
                 couplings=self.couplings,
+                add_train_noise=self.add_train_noise,
+                train_noise_params=self.train_noise_params,
+                train_noise_seed=self.train_noise_seed + int(dist.rank),
             )
             self.val_dataset = CoupledTimeSeriesDataset(
                 dataset.sel(

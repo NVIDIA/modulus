@@ -69,6 +69,9 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         forecast_init_times: Optional[Sequence] = None,
         couplings: Sequence = [],
         meta: DatapipeMetaData = MetaData(),
+        add_train_noise: bool = False,
+        train_noise_params: DictConfig = None,
+        train_noise_seed: int = 42,
     ):
         """
         Parameters
@@ -114,21 +117,29 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         couplings: Sequence, optional
             a Sequence of dictionaries that define the mechanics of couplings with other earth system
             components
+        add_train_noise: bool, optional
+            Add noise to the training data to inputs and integrated couplings to improve generalization, default False
+        train_noise_params: DictConfig, optional
+            Dictionary containing parameters for adding noise to the training data
+        train_noise_seed: int, optional
+            Seed for the random number generator for adding noise to the training data, default 42
         """
         self.input_variables = input_variables
         self.output_variables = (
             input_variables if output_variables is None else output_variables
         )
-        if couplings is not None:
-            self.couplings = [
-                getattr(couplers, c["coupler"])(
-                    dataset,
-                    **OmegaConf.to_object(DictConfig(c))["params"],
-                )
-                for c in couplings
-            ]
-        else:
-            self.couplings = None
+        self.add_train_noise = add_train_noise
+        self.train_noise_params = train_noise_params
+        if self.add_train_noise:
+            self.rng = np.random.default_rng(train_noise_seed)
+
+        self.couplings = [
+            getattr(couplers, c["coupler"])(
+                dataset,
+                **OmegaConf.to_object(DictConfig(c))["params"],
+            )
+            for c in couplings
+        ]
         super().__init__(
             dataset=dataset,
             scaling=scaling,
@@ -260,6 +271,25 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
                     else sol[self._input_indices[sample] + self._output_indices[sample]]
                 )
 
+        if not self.forecast_mode and self.add_train_noise:
+            logger.log(5, "Adding gaussian noise to inputs and integrated_couplings")
+            # Iterate over C: inputs.shape = [B, T, C, F, H, W]
+            for i in range(inputs.shape[2]):
+                inputs[:, :, i] += self.rng.normal(
+                    loc=0,
+                    scale=self.train_noise_params["inputs"][self.input_variables[i]][
+                        "std"
+                    ],
+                    size=inputs[:, :, i].shape,
+                )
+            for c in self.couplings:
+                for i, v in enumerate(c.variables):
+                    integrated_couplings[i, :, :] += self.rng.normal(
+                        loc=0,
+                        scale=self.train_noise_params["couplings"][v]["std"],
+                        size=integrated_couplings[i, :, :].shape,
+                    )
+
         inputs_result = [inputs]
         if self.add_insolation:
             inputs_result.append(decoder_inputs)
@@ -276,7 +306,8 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             inputs_result.append(self.constants)
 
         # append integrated couplings
-        inputs_result.append(integrated_couplings)
+        if len(self.couplings) > 0:
+            inputs_result.append(integrated_couplings)
 
         torch.cuda.nvtx.range_pop()
 

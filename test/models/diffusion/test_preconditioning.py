@@ -16,8 +16,8 @@
 
 import pytest
 import torch
+from pytest_utils import import_or_fail
 
-from modulus.launch.utils import load_checkpoint, save_checkpoint
 from modulus.models.diffusion.preconditioning import (
     EDMPrecond,
     EDMPrecondSR,
@@ -58,7 +58,11 @@ def test_EDMPrecondSR_forward(scale_cond_input):
     assert output.shape == (b, c_target, x, y)
 
 
-def test_EDMPrecondSR_serialization(tmp_path):
+@import_or_fail("termcolor")
+def test_EDMPrecondSR_serialization(tmp_path, pytestconfig):
+
+    from modulus.launch.utils import load_checkpoint, save_checkpoint
+
     module = EDMPrecondSR(8, 1, 1, 1, scale_cond_input=False)
     model_path = tmp_path / "output.mdlus"
     module.save(model_path.as_posix())
