@@ -956,9 +956,6 @@ def main(cfg: DictConfig) -> None:
         train_sampler.set_epoch(epoch)
         val_sampler.set_epoch(epoch)
 
-        # initial_integral_factor = (epoch+1) * initial_integral_factor_orig
-        # if initial_integral_factor > 50:
-        #     initial_integral_factor = 50
         initial_integral_factor = initial_integral_factor_orig
 
         model.train(True)
