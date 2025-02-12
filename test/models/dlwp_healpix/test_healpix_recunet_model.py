@@ -24,9 +24,11 @@ import common
 import pytest
 import torch
 from graphcast.utils import fix_random_seeds
-from omegaconf import DictConfig
+from pytest_utils import import_or_fail
 
 from modulus.models.dlwp_healpix import HEALPixRecUNet
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
@@ -85,7 +87,7 @@ def up_sampling_block_dict(in_channels=3, out_channels=1):
         "activation": activation_block,
         "upsampling": 2,
     }
-    return DictConfig(up_sampling_block)
+    return omegaconf.DictConfig(up_sampling_block)
 
 
 @pytest.fixture
@@ -98,7 +100,7 @@ def output_layer_dict(in_channels=3, out_channels=2):
         "dilation": 1,
         "n_layers": 1,
     }
-    return DictConfig(output_layer)
+    return omegaconf.DictConfig(output_layer)
 
 
 @pytest.fixture
@@ -109,7 +111,7 @@ def recurrent_block_dict(in_channels=3):
         "kernel_size": 1,
         "_recursive_": False,
     }
-    return DictConfig(recurrent_block)
+    return omegaconf.DictConfig(recurrent_block)
 
 
 @pytest.fixture
@@ -129,7 +131,7 @@ def decoder_dict(
         "n_channels": [34, 68, 136],
         "dilations": [4, 2, 1],
     }
-    return DictConfig(decoder)
+    return omegaconf.DictConfig(decoder)
 
 
 @pytest.fixture
@@ -167,8 +169,9 @@ def insolation_data():
     return generate_insolation_data
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
+def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict, pytestconfig):
     in_channels = 7
     out_channels = 7
     n_constants = 1
@@ -220,6 +223,23 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
             couplings=["t2m", "v10m"],
         ).to(device)
 
+    # test fail case for couplings with no decoder input channels
+    with pytest.raises(
+        NotImplementedError,
+        match=("support for coupled models with no decoder inputs"),
+    ):
+        model = HEALPixRecUNet(
+            encoder=encoder_dict,
+            decoder=decoder_dict,
+            input_channels=in_channels,
+            output_channels=out_channels,
+            input_time_dim=2,
+            output_time_dim=3,
+            decoder_input_channels=0,
+            n_constants=2,
+            couplings=["t2m", "v10m"],
+        ).to(device)
+
     with pytest.raises(
         NotImplementedError, match=("support for coupled models with no decoder")
     ):
@@ -254,8 +274,11 @@ def test_HEALPixRecUNet_initialize(device, encoder_dict, decoder_dict):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
+def test_HEALPixRecUNet_integration_steps(
+    device, encoder_dict, decoder_dict, pytestconfig
+):
     in_channels = 2
     out_channels = 2
     n_constants = 1
@@ -279,9 +302,16 @@ def test_HEALPixRecUNet_integration_steps(device, encoder_dict, decoder_dict):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_reset(
-    device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data
+    device,
+    encoder_dict,
+    decoder_dict,
+    test_data,
+    insolation_data,
+    constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3
@@ -324,9 +354,16 @@ def test_HEALPixRecUNet_reset(
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixRecUNet_forward(
-    device, encoder_dict, decoder_dict, test_data, insolation_data, constant_data
+    device,
+    encoder_dict,
+    decoder_dict,
+    test_data,
+    insolation_data,
+    constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3
@@ -335,14 +372,22 @@ def test_HEALPixRecUNet_forward(
     decoder_input_channels = 1
     input_time_dim = 2
     output_time_dim = 4
+    batch_size = 8
     size = 16
 
     fix_random_seeds(seed=42)
     x = test_data(
-        time_dim=2 * input_time_dim, channels=in_channels, img_size=size, device=device
+        batch_size=batch_size,
+        time_dim=2 * input_time_dim,
+        channels=in_channels,
+        img_size=size,
+        device=device,
     )
     decoder_inputs = insolation_data(
-        time_dim=2 * output_time_dim, img_size=size, device=device
+        batch_size=batch_size,
+        time_dim=2 * output_time_dim,
+        img_size=size,
+        device=device,
     )
     constants = constant_data(channels=n_constants, img_size=size, device=device)
     inputs = [x, decoder_inputs, constants]
@@ -362,7 +407,10 @@ def test_HEALPixRecUNet_forward(
     ).to(device)
 
     # one forward step to initialize recurrent states
-    model(inputs)
+    output = model(inputs)
+
+    expected_shape = [batch_size, 12, output_time_dim, out_channels, size, size]
+    assert list(output.shape) == expected_shape
 
     assert common.validate_forward_accuracy(
         model,
@@ -370,6 +418,10 @@ def test_HEALPixRecUNet_forward(
         file_name="dlwp_healpix.pth",
         rtol=1e-2,
     )
+
+    output = model(inputs, output_only_last=True)
+    expected_shape = [batch_size, 12, input_time_dim, out_channels, size, size]
+    assert list(output.shape) == expected_shape
 
     # no decoder inputs
     inputs = [x, constants]
