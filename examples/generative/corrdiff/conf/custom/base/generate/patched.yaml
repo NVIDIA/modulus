@@ -19,3 +19,4 @@ defaults:
 
 gridtype: learnable
 N_grid_channels: 100
+overlap_pixels: 4

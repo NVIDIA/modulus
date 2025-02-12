@@ -70,9 +70,6 @@ generate:
     # int, patch size. Only used for `model: patched_diffusion`. 448 is
     # recommended value for hrrr dataset. For custom dataset, this should be
     # determined based on an autocorrelation plot.
-    overlap_pixels: 0
-    # int, number of overlapping pixels between adjacent patches. Only used for
-    # `model: patched_diffusion`.
     times:
         - YYYY-MM-DDThh:mm:ss # Replace with target value
     # List[str], time stamps in ISO 8601 format. Replace and list desired target
