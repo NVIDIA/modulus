@@ -75,7 +75,12 @@ def compute_edge_attr(graph, radius=0.015):
 
 
 def graph_update(graph, radius):
-    # remove all previous edges and re-construct the graph using pair-wise distance
+    """Updates the graph structure.
+
+    Removes all previous edges and re-constructs
+    the graph using pair-wise distance.
+
+    """
     # TODO: use more efficient graph construction method
     num_edges = graph.num_edges()
     if num_edges > 0:
@@ -398,4 +403,5 @@ class LagrangianDataset(DGLDataset):
         ).prefetch(tf.data.AUTOTUNE)
 
     def get_kinematic_mask(self, graph_idx: int) -> Tensor:
+        """Returns kinematic particles mask for a graph."""
         return self.node_type[graph_idx][:, self.KINEMATIC_PARTICLE_ID] != 0
