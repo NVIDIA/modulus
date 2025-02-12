@@ -2,6 +2,29 @@
 
 # PyTorch version of deformation predictor & compensation
 
+## Introduction 
+
+This work addresses shape deviation modeling and compensation in additive manufacturing (AM) to improve geometric accuracy for industrial-scale production. While traditional methods laid the groundwork, recent machine learning (ML) advancements offer better precision. However, challenges remain in generalizing across complex geometries and adapting to position-dependent variations in batch production. We introduce GraphCompNet, a novel framework combining graph-based neural networks with GAN-inspired training to model geometries and incorporate position-specific thermal and mechanical variations. Through a two-stage adversarial process, the framework refines compensated designs, improving accuracy by 35-65% across the print space. This approach enhances AM's real-time, scalable compensation capabilities, paving the way for high-precision, automated manufacturing systems.
+
+
+
+
+<p align="center">
+<img src="../../../docs/img/GraphCompNet/bar_chamber.png" width="560" />
+</p>
+
+## Sample results 
+
+Prediction & compensation accuracy 
+<p align="center">
+<img src="../../../docs/img/GraphCompNet/dl_comp_test-2.png" width="500" />
+</p>
+
+Compensation on Molded fiber dataset
+<p align="center">
+<img src="../../../docs/img/GraphCompNet/table1_fig-2.png" width="500" />
+</p>
+
 ## Key requirments
 
 1. ``Torch_Geometric 2.5.1 or above``: PyTorch based geometric/graph neural network library
@@ -45,8 +68,8 @@ Other dependencies for development:
 
 ## Dataset
 - Currently available: 
-  - Bar repository [link not working yet](https://duckduckgo.com)
-  - Molded-fiber repository [link not working yet](https://duckduckgo.com)
+  - Bar repository [link not working yet](https://drive.google.com/file/d/1inUN4KIg8NOtuwaJa2d1j3tssRGUxgAQ/view?usp=sharing)
+  - Molded-fiber repository [Download sample data](https://drive.google.com/file/d/1inUN4KIg8NOtuwaJa2d1j3tssRGUxgAQ/view?usp=sharing)
 
 - Sample input data folder format: 
   
@@ -78,8 +101,19 @@ Other dependencies for development:
 
 ## Inference
 
+[Download pre-trained model checkpoint](https://drive.google.com/file/d/1Htd7MLGgvjmidIGyYquDtLkZe0gSEqRu/view?usp=drive_link)
+
 - Supported 3D formats: 
     - Stereolitography (STL)
     - Wavefront file (OBJ)
 - How to run: 
   - ``python inference.py`` 
+
+
+## References 
+
+[GraphCompNet: A Position-Aware Model for Predicting and Compensating Shape Deviations in 3D Printing](to be added)
+
+```text
+
+```
