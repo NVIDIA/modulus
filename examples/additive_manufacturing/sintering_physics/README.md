@@ -125,6 +125,11 @@ Then run:
 python train.py
 ```
 
+### Access to the pre-trained model checkpoint: 
+
+[Download the pre-trained checkpoint in the paper](https://drive.google.com/file/d/1vxgigx0jz81EhD97uFDZWIdnwnr9IkBp/view?usp=drive_link)
+
+
 ## Visualize test result
 
 Change the params in conf/config.yaml:
@@ -157,6 +162,8 @@ python inference.py
 ```
 
 ## Data
+
+[To download the pre-processed deformation simulation data in the paper](https://drive.google.com/file/d/1vxgigx0jz81EhD97uFDZWIdnwnr9IkBp/view?usp=drive_link)
 
 - Test data
 
