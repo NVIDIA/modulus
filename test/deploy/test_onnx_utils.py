@@ -27,36 +27,13 @@ except ImportError:
 
 from pathlib import Path
 
-from packaging.version import Version
+from ort_utils import check_ort_version
 
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
 from modulus.models.mlp import FullyConnected
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
-
-
-def check_ort_version():
-    required_version = Version("1.19.0")
-
-    if ort is None:
-        return pytest.mark.skipif(
-            True,
-            reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
-        )
-
-    installed_version = Version(ort.__version__)
-
-    if installed_version < required_version:
-        return pytest.mark.skipif(
-            True,
-            reason="Must install ORT 1.19.0 or later. Other versions might work, but are not \
-        tested. If using other versions, ensure that the fix here \
-        https://github.com/microsoft/onnxruntime/pull/15662 is present. \
-        If the onnxruntime-gpu wheel is not available, please build from source.",
-        )
-
-    return pytest.mark.skipif(False, reason="")
 
 
 @pytest.fixture(params=["modulus", "pytorch"])
