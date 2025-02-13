@@ -100,7 +100,11 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown
     fi
 
 # Install onnx
-RUN pip install "onnxruntime-gpu>1.19.0"
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        pip install "onnxruntime-gpu>1.19.0"
+    else \
+        echo "Skipping!"; \
+    fi
 
 # cleanup of stage
 RUN rm -rf /modulus/
