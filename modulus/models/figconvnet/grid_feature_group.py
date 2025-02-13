@@ -40,8 +40,8 @@ from modulus.models.figconvnet.point_feature_grid_ops import (
     GridFeatureCat,
     GridFeatureToPoint,
 )
-
 from modulus.utils.profiling import profile
+
 
 class GridFeatureGroup:
     """Wrapper class for a set of GridFeatures.

@@ -53,6 +53,7 @@ from modulus.models.figconvnet.point_feature_grid_conv import (
 )
 from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
 from modulus.models.meta import ModelMetaData
+from modulus.utils.profiling import profile
 
 memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_xc_y_z: 0,
@@ -60,9 +61,6 @@ memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_zc_x_y: 2,
     GridFeaturesMemoryFormat.b_x_y_z_c: -1,
 }
-
-from modulus.utils.profiling import profile, annotate
-
 
 
 class VerticesToPointFeatures(nn.Module):

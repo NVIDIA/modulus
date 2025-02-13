@@ -37,9 +37,10 @@ from modulus.models.figconvnet.point_feature_conv import (
     PointFeatureConv,
     PointFeatureTransform,
 )
-
 from modulus.utils.profiling import Profiler
+
 prof = Profiler()
+
 
 class AABBGridFeatures(GridFeatures):
     """AABBGridFeatures."""

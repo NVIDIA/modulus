@@ -34,6 +34,7 @@ except ImportError:
 
 from modulus.utils.profiling import profile
 
+
 class CustomSiLuLinearAutogradFunction(torch.autograd.Function):
     """Custom SiLU + Linear autograd function"""
 

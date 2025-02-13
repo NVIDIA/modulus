@@ -42,6 +42,7 @@ from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
 from modulus.utils.profiling import profile
 
+
 @dataclass
 class MetaData(ModelMetaData):
     name: str = "MeshGraphNet"
@@ -144,14 +145,14 @@ class MeshGraphNet(Module):
         num_processor_checkpoint_segments: int = 0,
         checkpoint_offloading: bool = False,
         recompute_activation: bool = False,
-        norm_type = "TELayerNorm",
+        norm_type="TELayerNorm",
     ):
         super().__init__(meta=MetaData())
 
         activation_fn = get_activation(mlp_activation_fn)
 
-        assert norm_type in ["LayerNorm", "TELayerNorm"], \
-            "Norm type should be either 'LayerNorm' or 'TELayerNorm'"
+        if norm_type not in ["LayerNorm", "TELayerNorm"]:
+            raise ValueError("Norm type should be either 'LayerNorm' or 'TELayerNorm'")
 
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
@@ -196,8 +197,6 @@ class MeshGraphNet(Module):
             checkpoint_offloading=checkpoint_offloading,
         )
 
-
-
     @profile
     def forward(
         self,
@@ -207,7 +206,7 @@ class MeshGraphNet(Module):
         **kwargs,
     ) -> Tensor:
         edge_features = self.edge_encoder(edge_features)
-        node_features = self.node_encoder(node_features)        
+        node_features = self.node_encoder(node_features)
         x = self.processor(node_features, edge_features, graph)
         x = self.node_decoder(x)
         return x
