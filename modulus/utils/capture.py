@@ -26,14 +26,11 @@ import torch
 
 import modulus
 from modulus.distributed import DistributedManager
-from modulus.utils.profiling import Profiler
 
 float16 = NewType("float16", torch.float16)
 bfloat16 = NewType("bfloat16", torch.bfloat16)
 optim = NewType("optim", torch.optim)
 
-
-    
 
 class _StaticCapture(object):
     """Base class for StaticCapture decorator.
@@ -69,7 +66,6 @@ class _StaticCapture(object):
         amp_type: Union[float16, bfloat16] = torch.float16,
         gradient_clip_norm: Optional[float] = None,
         label: Optional[str] = None,
-        prof_config: Optional[Profiler] = None
     ):
         self.logger = logger if logger else self.logger
         # Checkpoint label (used for gradscaler)
@@ -84,9 +80,8 @@ class _StaticCapture(object):
             raise ValueError("Model not a Modulus Module!")
         if compile:
             model = torch.compile(model)
-            
+
         self.model = model
-            
 
         self.optim = optim
         self.eval = False
