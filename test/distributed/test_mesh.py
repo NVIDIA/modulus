@@ -22,14 +22,11 @@ import torch
 
 from modulus.distributed import (
     DistributedManager,
-    ModulusUndefinedGroupError,
-    ModulusUninitializedDistributedManagerWarning,
 )
 
 distributed_test = pytest.mark.skipif(
     not torch.distributed.is_available(), reason="PyTorch distributed not available"
 )
-
 
 
 def run_mesh_creation(rank, num_gpus, mesh_names, mesh_sizes, verbose):
@@ -38,13 +35,10 @@ def run_mesh_creation(rank, num_gpus, mesh_names, mesh_sizes, verbose):
     os.environ["WORLD_SIZE"] = f"{num_gpus}"
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(12345)
-    
 
     DistributedManager.initialize()
     dm = DistributedManager()
     assert dm.is_initialized()
-
-    
 
     # Create a mesh right from the inputs:
     global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)
@@ -57,22 +51,21 @@ def run_mesh_creation(rank, num_gpus, mesh_names, mesh_sizes, verbose):
         if size != -1:
             assert global_mesh[name].size() == size
 
-
-
     # Make sure each dimension of the mesh is orthogonal to other dimensions:
     # (but only if there are at least two names:)
     if len(mesh_names) > 1:
         for i, i_name in enumerate(mesh_names):
-            for j, j_name in enumerate(mesh_names[i+1:]):
-                
+            for j, j_name in enumerate(mesh_names[i + 1 :]):
+
                 mesh_i = global_mesh[i_name].mesh.tolist()
                 mesh_j = global_mesh[j_name].mesh.tolist()
                 intersection = list(set(mesh_i) & set(mesh_j))
-                if verbose
-                    print(f"rank {dm.rank}, i_name {i_name}, j_name {j_name}, mesh_i {mesh_i}, mesh_j {mesh_j}, int {intersection}")
+                if verbose:
+                    print(
+                        f"rank {dm.rank}, i_name {i_name}, j_name {j_name}, mesh_i {mesh_i}, mesh_j {mesh_j}, int {intersection}"
+                    )
                 assert len(intersection) == 1
                 assert intersection[0] == dm.rank
-                
 
     # Cleanup process groups
     DistributedManager.cleanup()
@@ -82,25 +75,24 @@ def run_mesh_creation(rank, num_gpus, mesh_names, mesh_sizes, verbose):
 @pytest.mark.parametrize("data_parallel_size", [-1])
 @pytest.mark.parametrize("domain_parallel_size", [2, 1])
 @pytest.mark.parametrize("model_parallel_size", [4, 2])
-def test_mesh_creation(data_parallel_size,domain_parallel_size, model_parallel_size):
+def test_mesh_creation(data_parallel_size, domain_parallel_size, model_parallel_size):
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
-    
-    
+
     remaining_gpus = num_gpus
     mesh_names = ["data_parallel"]
     mesh_sizes = [data_parallel_size]
-    
+
     if int(remaining_gpus / domain_parallel_size) != 0:
         mesh_names.append("domain_parallel")
         mesh_sizes.append(domain_parallel_size)
         remaining_gpus = int(remaining_gpus / domain_parallel_size)
-    
+
     if int(remaining_gpus / model_parallel_size) != 0:
         mesh_names.append("model_parallel")
         mesh_sizes.append(model_parallel_size)
         remaining_gpus = int(remaining_gpus / model_parallel_size)
-    
+
     verbose = False  # Change to True for debug
 
     torch.multiprocessing.set_start_method("spawn", force=True)
@@ -112,6 +104,7 @@ def test_mesh_creation(data_parallel_size,domain_parallel_size, model_parallel_s
         join=True,
         daemon=True,
     )
-    
+
+
 if __name__ == "__main__":
     test_mesh_creation(-1, 2, 2)

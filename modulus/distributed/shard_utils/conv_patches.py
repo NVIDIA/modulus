@@ -1,28 +1,43 @@
-from typing import Tuple, Optional, Union
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import Optional, Tuple, Union
+
 import torch
 import torch.distributed as dist
+import wrapt
 from torch.distributed.tensor import DTensor
 from torch.distributed.tensor.placement_types import Shard
-from modulus.distributed import ShardTensor
+
+from modulus.distributed import ShardTensor, ShardTensorSpec
+
 from .halo import (
+    apply_grad_halo,
     halo_padding_1d,
     halo_unpadding_1d,
     perform_halo_collective,
-    apply_grad_halo
 )
 from .patch_core import promote_to_iterable
-import wrapt
 
-
-__all__ = [
-    "conv2d_wrapper"
-]
-
+__all__ = ["conv2d_wrapper"]
 
 
 from modulus.distributed.shard_utils.patch_core import (
-    UndeterminedShardingError,
     MissingShardPatch,
+    UndeterminedShardingError,
 )
 
 __all__ = [
@@ -31,23 +46,25 @@ __all__ = [
     "conv3d_wrapper",
 ]
 
+
 def conv_output_shape(L_in, p, s, k, d):
-    L_out = ( L_in + 2*p - d*(k-1) - 1) / s + 1
-    return int(L_out) 
+    L_out = (L_in + 2 * p - d * (k - 1) - 1) / s + 1
+    return int(L_out)
 
 
-
-def compute_halo_from_kernel_stride_and_dilation(kernel_size: int, stride: int, dilation: int) -> int:
+def compute_halo_from_kernel_stride_and_dilation(
+    kernel_size: int, stride: int, dilation: int
+) -> int:
     """Compute the halo size needed for a convolution kernel along a single dimension.
-    
+
     Args:
         kernel_size: Size of convolution kernel along this dimension
-        stride: Convolution stride along this dimension 
+        stride: Convolution stride along this dimension
         dilation: Convolution dilation parameter
-        
+
     Returns:
         Required halo size on each side of a data chunk
-        
+
     Raises:
         MissingShardPatch: If kernel configuration is not supported for sharding
     """
@@ -56,15 +73,19 @@ def compute_halo_from_kernel_stride_and_dilation(kernel_size: int, stride: int, 
         if kernel_size == stride and dilation == 1:
             return 0
         else:
-            raise MissingShardPatch("Sharded Convolution is not implemented for even kernels without matching stride")
-    
+            raise MissingShardPatch(
+                "Sharded Convolution is not implemented for even kernels without matching stride"
+            )
+
     if dilation != 1:
-        raise MissingShardPatch("Sharded Convolution is not implemented for dilation != 1")
-    
+        raise MissingShardPatch(
+            "Sharded Convolution is not implemented for dilation != 1"
+        )
+
     # The receptive field is how far in the input a pixel in the output can see
     # It's used to calculate how large the halo computation has to be
-    receptive_field = dilation * (kernel_size - 1)  + 1
-        
+    receptive_field = dilation * (kernel_size - 1) + 1
+
     # The number of halo pixels is the casting `int(receptive field/2)`
     # Why?  Assuming a filter in the output image is centered in the input image,
     # we have only half of it's filter to the left.
@@ -73,22 +94,22 @@ def compute_halo_from_kernel_stride_and_dilation(kernel_size: int, stride: int, 
         halo_size = int(receptive_field / 2 - 1)
     else:
         halo_size = int(receptive_field / 2)
-        
+
     return halo_size
-        
+
 
 def shard_to_haloed_local_for_convNd(
-        input: ShardTensor,
-        kernel_shape: Tuple[int, ...],
-        stride: Union[int, Tuple[int, ...]],
-        padding: Union[int, Tuple[int, ...]],
-        dilation: Union[int, Tuple[int, ...]],
-        groups: int = 1,
-        **extra_kwargs
+    input: ShardTensor,
+    kernel_shape: Tuple[int, ...],
+    stride: Union[int, Tuple[int, ...]],
+    padding: Union[int, Tuple[int, ...]],
+    dilation: Union[int, Tuple[int, ...]],
+    groups: int = 1,
+    **extra_kwargs,
 ) -> torch.Tensor:
     """Converts a sharded tensor to a local tensor with halo regions for convolution.
-    
-    Takes a sharded tensor and adds appropriate halo regions based on the convolution 
+
+    Takes a sharded tensor and adds appropriate halo regions based on the convolution
     parameters, so that when the convolution is applied locally it produces the same
     result as if applied globally then sharded.
 
@@ -96,7 +117,7 @@ def shard_to_haloed_local_for_convNd(
         input: ShardTensor to add halos to
         kernel_shape: Shape of convolution kernel
         stride: Convolution stride (int or tuple matching kernel dims)
-        padding: Convolution padding (int or tuple matching kernel dims)  
+        padding: Convolution padding (int or tuple matching kernel dims)
         dilation: Convolution dilation (int or tuple matching kernel dims)
         groups: Number of convolution groups (default: 1)
 
@@ -104,31 +125,35 @@ def shard_to_haloed_local_for_convNd(
         Local torch.Tensor with added halo regions
 
     Raises:
-        AssertionError: If tensor is sharded along batch/channel dims or invalid dims
+        ValueError: If tensor is sharded along batch/channel dims or invalid dims
     """
     mesh = input._spec.mesh
     placements = input._spec.placements
 
-    assert mesh.ndim == len(placements)
+    if mesh.ndim != len(placements):
+        raise ValueError("Mesh dimensions must match number of placements")
 
     # Extract parameters for sharded dimensions only
     h_kernel = []
-    h_stride = []  
+    h_stride = []
     h_padding = []
     h_dilation = []
-    
+
     for p in placements:
         if not isinstance(p, Shard):
             continue
-            
+
         tensor_dim = p.dim
-        assert tensor_dim not in [0,1], "Cannot shard convolution along batch/channel dimensions"
-        assert tensor_dim < len(kernel_shape) + 2, "Invalid tensor dimension for kernel rank"
-        
+        if tensor_dim in [0, 1]:
+            raise ValueError("Cannot shard convolution along batch/channel dimensions")
+
+        if tensor_dim >= len(kernel_shape) + 2:
+            raise ValueError("Invalid tensor dimension for kernel rank")
+
         # Convert from NCHW indexing to kernel indexing
         kernel_idx = tensor_dim - 2
         h_kernel.append(kernel_shape[kernel_idx])
-        h_stride.append(stride[kernel_idx]) 
+        h_stride.append(stride[kernel_idx])
         h_padding.append(padding[kernel_idx])
         h_dilation.append(dilation[kernel_idx])
 
@@ -142,62 +167,63 @@ def shard_to_haloed_local_for_convNd(
     edge_padding_t = "zeros" if any(h_padding) else "none"
 
     # Add halos via collective communication
-    local_input = HaloPaddingConvND.apply(
-        input,
-        halo_size, 
-        edge_padding_t,
-        padding
-    )
+    local_input = HaloPaddingConvND.apply(input, halo_size, edge_padding_t, padding)
 
     return local_input
 
 
 class HaloPaddingConvND(torch.autograd.Function):
     """Autograd wrapper for distributed convolution-centric halo padding.
-    
-    Handles halo padding for distributed convolutions using ShardTensor concept 
-    (local tensor + device mesh + shard placements). Forward pass gathers adjacent regions 
+
+    Handles halo padding for distributed convolutions using ShardTensor concept
+    (local tensor + device mesh + shard placements). Forward pass gathers adjacent regions
     from neighboring devices. Backward pass distributes gradients outward.
-    
-    Supports multi-dimensional halo passing with compatible mesh and halo parameters.    """
+
+    Supports multi-dimensional halo passing with compatible mesh and halo parameters."""
 
     @staticmethod
     def forward(
         ctx,
         stensor: ShardTensor,
-        halo: tuple[int, ...], 
+        halo: tuple[int, ...],
         edge_padding_t: str,
-        edge_padding_s: tuple[int, ...]
+        edge_padding_s: tuple[int, ...],
     ) -> torch.Tensor:
         """Forward pass of distributed halo padding.
-        
+
         Args:
             stensor: Input ShardTensor
             halo: Halo sizes for each dimension
             edge_padding_t: Edge padding type ("zeros" or "none")
             edge_padding_s: Edge padding sizes
-            
+
         Returns:
             Padded local tensor
+
+        Raises:
+            ValueError: If halo size does not match mesh rank
         """
         mesh = stensor.device_mesh
-        assert len(halo) == mesh.ndim, f"Halo size ({len(halo)}) must match mesh rank ({mesh.ndim})"
+        if len(halo) != mesh.ndim:
+            raise ValueError(
+                f"Halo size ({len(halo)}) must match mesh rank ({mesh.ndim})"
+            )
 
         placements = stensor.placements
         local_tensor = stensor.to_local()
-        
+
         # Apply halo padding for each sharded dimension
         for mesh_dim in range(mesh.ndim):
             if isinstance(placements[mesh_dim], Shard):
                 tensor_dim = placements[mesh_dim].dim
                 local_tensor = halo_padding_1d(
-                    local_tensor, 
-                    mesh, 
-                    mesh_dim, 
-                    tensor_dim, 
-                    halo[mesh_dim], 
-                    edge_padding_t, 
-                    edge_padding_s[mesh_dim]
+                    local_tensor,
+                    mesh,
+                    mesh_dim,
+                    tensor_dim,
+                    halo[mesh_dim],
+                    edge_padding_t,
+                    edge_padding_s[mesh_dim],
                 )
 
         ctx.halo = halo
@@ -206,13 +232,15 @@ class HaloPaddingConvND(torch.autograd.Function):
 
         return local_tensor
 
-    @staticmethod 
-    def backward(ctx, grad_output: torch.Tensor) -> tuple[ShardTensor, None, None, None]:
+    @staticmethod
+    def backward(
+        ctx, grad_output: torch.Tensor
+    ) -> tuple[ShardTensor, None, None, None]:
         """Backward pass of distributed halo padding.
-        
+
         Args:
             grad_output: Gradient tensor from downstream
-            
+
         Returns:
             Tuple of (gradient ShardTensor, None, None, None)
         """
@@ -225,7 +253,7 @@ class HaloPaddingConvND(torch.autograd.Function):
         for mesh_dim in range(mesh.ndim):
             if isinstance(placements[mesh_dim], Shard):
                 tensor_dim = placements[mesh_dim].dim
-                
+
                 # Unpad gradients and get halo slices
                 grad_input, grad_halos = halo_unpadding_1d(
                     grad_output,
@@ -233,14 +261,12 @@ class HaloPaddingConvND(torch.autograd.Function):
                     mesh_dim,
                     tensor_dim,
                     halo[mesh_dim],
-                    return_slices=True
+                    return_slices=True,
                 )
 
                 # Exchange and accumulate gradient halos
                 halo_from_left, halo_from_right = perform_halo_collective(
-                    mesh, 
-                    mesh_dim, 
-                    *grad_halos
+                    mesh, mesh_dim, *grad_halos
                 )
                 grad_input = apply_grad_halo(
                     mesh,
@@ -248,7 +274,7 @@ class HaloPaddingConvND(torch.autograd.Function):
                     tensor_dim,
                     grad_input,
                     halo_from_left,
-                    halo_from_right
+                    halo_from_right,
                 )
 
         # Wrap gradient in ShardTensor
@@ -260,22 +286,24 @@ class HaloPaddingConvND(torch.autograd.Function):
 
         return grad_tensor, None, None, None
 
+
 aten = torch.ops.aten
+
 
 class PartialConvND(torch.autograd.Function):
     """Sharded convolution operation that uses halo message passing for distributed computation.
-    
+
     This class implements a distributed convolution primitive that operates on sharded tensors.
     It handles both forward and backward passes while managing communication between shards.
 
     Leverages torch.ops.aten.convolution.default for generic convolutions.
     """
-    
+
     @staticmethod
     def forward(
         ctx,
         inputs: torch.Tensor,
-        weights: torch.nn.Parameter, 
+        weights: torch.nn.Parameter,
         bias: Optional[torch.nn.Parameter],
         output_spec: "ShardTensorSpec",
         conv_kwargs: dict,
@@ -295,12 +323,12 @@ class PartialConvND(torch.autograd.Function):
         """
         # Save spec for backward pass
         ctx.spec = output_spec
-            
+
         # Save local tensors to avoid distributed dispatch in backward pass
         ctx.save_for_backward(inputs, weights, bias)
 
         # Force padding to 0 since padding is handled by halo exchange
-        conv_kwargs["padding"] = promote_to_iterable(0, conv_kwargs["stride"]) 
+        conv_kwargs["padding"] = promote_to_iterable(0, conv_kwargs["stride"])
         ctx.conv_kwargs = conv_kwargs
 
         # Perform local convolution on this shard
@@ -308,18 +336,15 @@ class PartialConvND(torch.autograd.Function):
 
         # Wrap result in ShardTensor with specified distribution
         output = ShardTensor.from_local(
-            local_chunk,
-            output_spec.mesh,
-            output_spec.placements
+            local_chunk, output_spec.mesh, output_spec.placements
         )
-        
+
         ctx.requires_input_grad = inputs.requires_grad
         return output
 
     @staticmethod
     def backward(
-        ctx, 
-        grad_output: "ShardTensor"
+        ctx, grad_output: "ShardTensor"
     ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], None, None]:
         """Backward pass for distributed convolution.
 
@@ -333,26 +358,25 @@ class PartialConvND(torch.autograd.Function):
         spec = ctx.spec
         conv_kwargs = ctx.conv_kwargs
         local_chunk, weight, bias = ctx.saved_tensors
-    
+
         # Specify which inputs need gradients
         output_mask = (
             ctx.requires_input_grad,  # input gradient
-            True,                     # weight gradient always needed  
-            bias is not None,         # bias gradient if bias exists
+            True,  # weight gradient always needed
+            bias is not None,  # bias gradient if bias exists
         )
-    
+
         # Compute local gradients
         local_grad_output = grad_output._local_tensor
-        grad_input, grad_weight, grad_bias = \
-            aten.convolution_backward(
-                local_grad_output,
-                local_chunk,
-                weight,
-                bias,
-                output_mask=output_mask,
-                **conv_kwargs,
-            )
-            
+        grad_input, grad_weight, grad_bias = aten.convolution_backward(
+            local_grad_output,
+            local_chunk,
+            weight,
+            bias,
+            output_mask=output_mask,
+            **conv_kwargs,
+        )
+
         # Synchronize weight and bias gradients across all ranks
         group = spec.mesh.get_group()
         dist.all_reduce(grad_weight, group=group)
@@ -361,29 +385,31 @@ class PartialConvND(torch.autograd.Function):
 
         return grad_input, grad_weight, grad_bias, None, None
 
-    
 
-
-@wrapt.patch_function_wrapper('torch.nn.functional', 'conv1d')
+@wrapt.patch_function_wrapper("torch.nn.functional", "conv1d")
 def conv1d_wrapper(wrapped, instance, args, kwargs):
-    
-    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)    
-    
-@wrapt.patch_function_wrapper('torch.nn.functional', 'conv2d')
-def conv2d_wrapper(wrapped, instance, args, kwargs):
-    
-    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)    
 
-@wrapt.patch_function_wrapper('torch.nn.functional', 'conv3d')
+    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
+
+
+@wrapt.patch_function_wrapper("torch.nn.functional", "conv2d")
+def conv2d_wrapper(wrapped, instance, args, kwargs):
+
+    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
+
+
+@wrapt.patch_function_wrapper("torch.nn.functional", "conv3d")
 def conv3d_wrapper(wrapped, instance, args, kwargs):
-    
-    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)    
+
+    return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
+
+
 def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
     """Generic wrapper for torch N-dimensional convolution operations.
-    
+
     Handles both regular torch.Tensor inputs and distributed ShardTensor inputs.
     For regular tensors, passes through to the wrapped convolution.
-    For ShardTensor inputs, handles gathering weights/bias and applying distributed 
+    For ShardTensor inputs, handles gathering weights/bias and applying distributed
     convolution with halo regions.
 
     Args:
@@ -401,12 +427,14 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
     input, weight, bias, conv_kwargs = repackage_conv_args(*args, **kwargs)
 
     # Handle regular torch tensor inputs
-    if type(input) == torch.Tensor and \
-        type(weight) == torch.nn.parameter.Parameter and \
-        (bias is None or type(bias) == torch.nn.parameter.Parameter):
+    if (
+        type(input) == torch.Tensor
+        and type(weight) == torch.nn.parameter.Parameter
+        and (bias is None or type(bias) == torch.nn.parameter.Parameter)
+    ):
         return wrapped(*args, **kwargs)
 
-    # Handle distributed ShardTensor inputs 
+    # Handle distributed ShardTensor inputs
     elif type(input) == ShardTensor:
         # Gather any distributed weights/bias
         if isinstance(weight, (ShardTensor, DTensor)):
@@ -419,47 +447,51 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
         # Promote scalar args to match kernel dimensions
         promotables = ["stride", "padding", "dilation", "output_padding"]
         conv_kwargs = {
-            key : promote_to_iterable(p, kernel_shape) if key in promotables else p
+            key: promote_to_iterable(p, kernel_shape) if key in promotables else p
             for key, p in conv_kwargs.items()
         }
 
         # Add halos and perform distributed convolution
-        local_input = shard_to_haloed_local_for_convNd(input, kernel_shape, **conv_kwargs)
+        local_input = shard_to_haloed_local_for_convNd(
+            input, kernel_shape, **conv_kwargs
+        )
         output_spec = input._spec
         x = PartialConvND.apply(local_input, weight, bias, output_spec, conv_kwargs)
         return x
 
     else:
-        msg = "input, weight, bias (if not None) must all be the valid types " \
-            "(torch.Tensor or ShardTensor), but got " \
-            f"{type(input)}, " \
-            f"{type(weight)}, " \
+        msg = (
+            "input, weight, bias (if not None) must all be the valid types "
+            "(torch.Tensor or ShardTensor), but got "
+            f"{type(input)}, "
+            f"{type(weight)}, "
             f"{type(bias)}, "
+        )
         raise UndeterminedShardingError(msg)
 
-        
+
 def repackage_conv_args(
-        input:          Union[torch.Tensor, ShardTensor],
-        weight:         Union[torch.Tensor, DTensor],
-        bias:           Union[torch.Tensor, DTensor, None],
-        stride:         Union[int, Tuple[int, ...]] = 1,
-        padding:        Union[int, Tuple[int, ...]] = 0,
-        dilation:       Union[int, Tuple[int, ...]] = 1,
-        groups:         int = 1,
-        transposed:     bool = False,
-        output_padding: Union[int, Tuple[int, ...]] = 0,
-        *args,
-        **kwargs,
+    input: Union[torch.Tensor, ShardTensor],
+    weight: Union[torch.Tensor, DTensor],
+    bias: Union[torch.Tensor, DTensor, None],
+    stride: Union[int, Tuple[int, ...]] = 1,
+    padding: Union[int, Tuple[int, ...]] = 0,
+    dilation: Union[int, Tuple[int, ...]] = 1,
+    groups: int = 1,
+    transposed: bool = False,
+    output_padding: Union[int, Tuple[int, ...]] = 0,
+    *args,
+    **kwargs,
 ) -> Tuple[
     Union[torch.Tensor, ShardTensor],
     Union[torch.Tensor, DTensor],
     Union[torch.Tensor, DTensor, None],
-    dict
+    dict,
 ]:
     """Repackages convolution arguments into standard format.
 
     Takes the full set of arguments that could be passed to a convolution operation
-    and separates them into core tensor inputs (input, weight, bias) and 
+    and separates them into core tensor inputs (input, weight, bias) and
     configuration parameters packaged as a kwargs dict.
 
     Args:
@@ -478,18 +510,18 @@ def repackage_conv_args(
     Returns:
         Tuple containing:
         - Input tensor
-        - Weight tensor  
+        - Weight tensor
         - Bias tensor (or None)
         - Dict of convolution configuration parameters
     """
     # Package all non-tensor parameters into a kwargs dictionary
     return_kwargs = {
-        "stride":         stride,
-        "padding":        padding, 
-        "dilation":       dilation,
-        "transposed":     transposed,
+        "stride": stride,
+        "padding": padding,
+        "dilation": dilation,
+        "transposed": transposed,
         "output_padding": output_padding,
-        "groups":         groups,
+        "groups": groups,
     }
-    
+
     return input, weight, bias, return_kwargs

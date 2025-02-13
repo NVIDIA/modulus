@@ -47,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved pytz and nvtx to optional
 - Update the base image for the Dockerfile
 - Introduce Multi-Storage Client (MSC) as an optional dependency.
-- Introduce `wrapt` as an optional dependency, needed when using ShardTensor's automatic domain parallelism
+- Introduce `wrapt` as an optional dependency, needed when using
+  ShardTensor's automatic domain parallelism
 
 ## [0.9.0] - 2024-12-04
 

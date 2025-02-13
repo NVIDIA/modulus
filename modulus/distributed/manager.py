@@ -14,19 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import atexit
 import os
 import queue
-from typing import Optional, Tuple
 import warnings
+from typing import Optional, Tuple
 from warnings import warn
-warnings.simplefilter("default", DeprecationWarning)
 
 import numpy as np
 import torch
 import torch.distributed as dist
 
 from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
-import atexit
+
+warnings.simplefilter("default", DeprecationWarning)
+
 
 class ModulusUndefinedGroupError(Exception):
     """Exception for querying an undefined process group using the Modulus DistributedManager"""
@@ -58,7 +60,6 @@ class ModulusUninitializedDistributedManagerWarning(Warning):
             + "DistributedManager.initialize() before instantiating."
         )
         super().__init__(message)
-
 
 
 class DistributedManager(object):
@@ -117,10 +118,9 @@ class DistributedManager(object):
         if not hasattr(obj, "_is_initialized"):
             obj._is_initialized = False
         if not hasattr(obj, "_global_mesh"):
-            obj._global_mesh = None # Lazy initialized right when it's first needed
+            obj._global_mesh = None  # Lazy initialized right when it's first needed
         if not hasattr(obj, "_mesh_dims"):
             obj._mesh_dims = {}  # Dictionary mapping axis names to sizes
-
 
         return obj
 
@@ -187,13 +187,13 @@ class DistributedManager(object):
         Return mesh axis names
         """
         return self._mesh_dims.keys()
-    
+
     def mesh_sizes(self):
         """
         Return mesh axis sizes
         """
         return self._mesh_dims.values()
-    
+
     def group(self, name=None):
         """
         Returns a process group with the given name
@@ -210,7 +210,7 @@ class DistributedManager(object):
     def mesh(self, name=None):
         """
         Return a device_mesh with the given name.
-        Does not initialize.  If the mesh is not created 
+        Does not initialize.  If the mesh is not created
         already, will raise and error
 
         Parameters
@@ -221,7 +221,7 @@ class DistributedManager(object):
 
         if name in self._global_mesh.axis_names:
             return self._global_mesh[name]
-        elif name is None:            
+        elif name is None:
             return self._global_mesh
         else:
             raise ModulusUndefinedGroupError(f"Mesh axis {name} not defined")
@@ -311,7 +311,7 @@ class DistributedManager(object):
 
         else:
             local_rank = rank % torch.cuda.device_count()
-        
+
         # Read env variables
         addr = os.environ.get("MASTER_ADDR")
         port = os.environ.get("MASTER_PORT")
@@ -420,29 +420,30 @@ class DistributedManager(object):
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)
 
-
-    def initialize_mesh(self, mesh_shape: Tuple[int, ...], mesh_dim_names: Tuple[str, ...]) -> dist.DeviceMesh:
+    def initialize_mesh(
+        self, mesh_shape: Tuple[int, ...], mesh_dim_names: Tuple[str, ...]
+    ) -> dist.DeviceMesh:
         """
         Initialize a global device mesh over the entire distributed job.
-        
-        Creates a multi-dimensional mesh of processes that can be used for distributed 
+
+        Creates a multi-dimensional mesh of processes that can be used for distributed
         operations. The mesh shape must multiply to equal the total world size, with
         one dimension optionally being flexible (-1).
 
         Parameters
         ----------
         mesh_shape : Tuple[int, ...]
-            Tuple of ints describing the size of each mesh dimension. Product must equal 
+            Tuple of ints describing the size of each mesh dimension. Product must equal
             world_size. One dimension can be -1 to be automatically calculated.
-            
+
         mesh_dim_names : Tuple[str, ...]
             Names for each mesh dimension. Must match length of mesh_shape.
-            
+
         Returns
         -------
         torch.distributed.DeviceMesh
             The initialized device mesh
-            
+
         Raises
         ------
         RuntimeError
@@ -475,17 +476,16 @@ class DistributedManager(object):
 
         # Check against the total mesh shape vs. world size:
         total_mesh_shape = np.prod(mesh_shape)
-        
-        
+
         # Allow one shape to be -1
         if -1 in mesh_shape:
             residual_shape = int(self.world_size / (-1 * total_mesh_shape))
-            
+
             # Replace -1 with the computed size:
-            mesh_shape = [ residual_shape if m == -1 else m for m in mesh_shape ]
+            mesh_shape = [residual_shape if m == -1 else m for m in mesh_shape]
             # Recompute total shape:
             total_mesh_shape = np.prod(mesh_shape)
-            
+
         if total_mesh_shape != self.world_size:
             raise RuntimeError(
                 "Device Mesh num elements must equal world size of "
@@ -499,12 +499,10 @@ class DistributedManager(object):
             mesh_shape,
             mesh_dim_names=mesh_dim_names,
         )
-        
+
         # Finally, upon success, cache the mesh dimensions:
-        self._mesh_dims = {
-            key : val for key, val in zip(mesh_dim_names, mesh_shape)
-        }
-        
+        self._mesh_dims = {key: val for key, val in zip(mesh_dim_names, mesh_shape)}
+
         return self._global_mesh
 
     @staticmethod
@@ -534,7 +532,6 @@ class DistributedManager(object):
             else:
                 manager._local_rank = local_rank
 
-
         manager._device = torch.device(
             f"cuda:{manager.local_rank}" if torch.cuda.is_available() else "cpu"
         )
@@ -563,7 +560,6 @@ class DistributedManager(object):
             torch.cuda.empty_cache()
 
         manager._initialization_method = method
-
 
     @staticmethod
     def create_process_subgroup(
@@ -727,7 +723,6 @@ class DistributedManager(object):
             stacklevel=2,
         )
 
-
         # Traverse process group tree in breadth first order
         # to create nested process groups
         q = queue.Queue()
@@ -772,5 +767,3 @@ class DistributedManager(object):
                 dist.barrier()
             dist.destroy_process_group()
         DistributedManager._shared_state = {}
-
-

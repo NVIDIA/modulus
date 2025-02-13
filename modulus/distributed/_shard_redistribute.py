@@ -1,54 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from typing import Tuple, cast, List
+from typing import List, Tuple, cast
 
 import torch
-from torch.distributed.device_mesh import DeviceMesh
 import torch.distributed._functional_collectives as funcol
+from torch.distributed.device_mesh import DeviceMesh
 from torch.distributed.tensor._dtensor_spec import (
     TensorMeta,
 )
+from torch.distributed.tensor._redistribute import (
+    _gen_transform_infos,
+)
 from torch.distributed.tensor.placement_types import (
-    Partial, 
+    Partial,
     Placement,
     Replicate,
     Shard,
 )
 
-from torch.distributed.tensor._redistribute import (
-    _gen_transform_infos,
-    # _gen_transform_infos_non_cached,
-    _TransformInfo,
-)
-
 import modulus.distributed.shard_tensor as shard_tensor
 from modulus.distributed import (
     all_gather_v,
-    DistributedManager,
 )
 from modulus.distributed._shard_tensor_spec import ShardTensorSpec
 
+
 # Worker functions for the collectives specific to uneven shaped tensors:
 def _to_replicate_tensor(
-    local_tensor: torch.Tensor, 
-    device_mesh: DeviceMesh, 
-    mesh_dim: int, 
+    local_tensor: torch.Tensor,
+    device_mesh: DeviceMesh,
+    mesh_dim: int,
     tensor_dim: int,
-    # current_logical_shape: List[int],
     current_spec: ShardTensorSpec,
 ) -> torch.Tensor:
     """
     Converts a sharded tensor to a replicated tensor by gathering all shards.
-    
+
     Args:
         local_tensor (torch.Tensor): The local shard of the tensor to replicate
         device_mesh (DeviceMesh): The device mesh containing process groups
         mesh_dim (int): The mesh dimension along which to gather
         tensor_dim (int): The tensor dimension along which data is sharded
         current_spec (ShardTensorSpec): Specification of current sharding scheme
-        
+
     Returns:
         torch.Tensor: The fully replicated tensor on this rank
-        
+
     Note:
         This function handles uneven sharding by using all_gather_v instead of regular all_gather
     """
@@ -61,59 +72,61 @@ def _to_replicate_tensor(
     sizes = current_spec.sharding_sizes()
 
     this_sizes = [s[tensor_dim] for s in sizes[mesh_dim]]
-    
+
     # # Ensure contiguous data for the reduction:
     local_tensor = local_tensor.contiguous()
     # We can implement this with a straightforward allgather_v
-    local_tensor = all_gather_v(local_tensor, sizes=this_sizes, dim=tensor_dim, group=group)
+    local_tensor = all_gather_v(
+        local_tensor, sizes=this_sizes, dim=tensor_dim, group=group
+    )
 
     return local_tensor
-    
+
+
 def _select_slice_from_replicate(
     local_tensor: torch.Tensor,
     target_spec: ShardTensorSpec,
-    mesh_dim : int,
-    mesh_coord : int,
+    mesh_dim: int,
+    mesh_coord: int,
 ) -> torch.Tensor:
     """
     Selects the appropriate slice from a replicated tensor to create a shard.
-    
+
     Args:
         local_tensor (torch.Tensor): The replicated tensor to slice from
         target_spec (ShardTensorSpec): Specification of target sharding scheme
         mesh_dim (int): The mesh dimension along which to shard
         mesh_coord (int): The coordinate of this rank in the mesh dimension
-        
+
     Returns:
         torch.Tensor: The selected slice that will become this rank's shard
-        
+
     Note:
         This function handles uneven sharding by using the sharding sizes from the target spec
         to split the tensor into potentially uneven chunks
     """
-    dm = DistributedManager()
+
+    # TODO - This needs a rework to enable caching of shapes for a grad pass.
 
     # We really only need the sizes from this dimension:
-    sizes = target_spec.sharding_sizes()
     tensor_dim = target_spec.placements[mesh_dim].dim
-    mesh_size  = target_spec.mesh.size(mesh_dim=mesh_dim)
-    this_sizes = [s[tensor_dim] for s in sizes[mesh_dim]]
-    
-    
+    mesh_size = target_spec.mesh.size(mesh_dim=mesh_dim)
+
     # Split the tensor:
     chunks = torch.tensor_split(local_tensor, mesh_size, dim=tensor_dim)
-    # chunks = torch.split(local_tensor, this_sizes, dim=tensor_dim)
-    
+
     return chunks[mesh_coord]
-    
+
+
 def _shard_reduce(
     local_tensor: torch.Tensor,
     target_spec: ShardTensorSpec,
-    mesh_dim : int,
-    mesh_coord : int,
+    mesh_dim: int,
+    mesh_coord: int,
 ):
     pass
-    
+
+
 def redistribute_local_shard_tensor(
     local_tensor: torch.Tensor,
     current_spec: ShardTensorSpec,
@@ -126,12 +139,12 @@ def redistribute_local_shard_tensor(
     This redistribute the local tensor (torch.Tensor) from the current ShardTensorSpec to
     the target ShardTensorSpec, which involves the necessary collective calls to transform
     the local shard of the ShardTensor from its current spec to the target spec.
-    
+
     The collective operations are implemented in the Placement classes, which we avoid
     modifying.  To get around that, we mimic the logic from pytorch's original redistribute.
     But, in cases where a tensor is Sharded and the shards are uneven (spec.is_uneven)
     we intercept and replace the collectives:
-    
+
     ``Shard(dim)`` -> ``Replicate()``: ``all_gather_v`` instead of ``all_gather``
     ``Shard(src_dim)`` -> ``Shard(dst_dim)``: remains all_to_all but reimplemented to handle sizes correctly
     ``Replicate()`` -> ``Shard(dim)``: local chunking is **unchanged** but return value is ShardTensorSpec instead.
@@ -153,7 +166,6 @@ def redistribute_local_shard_tensor(
         # which should be an empty tensor
         return local_tensor
 
-
     # if has_symints:
     #     transform_infos = _gen_transform_infos_non_cached(current_spec, target_spec)
     # else:
@@ -163,7 +175,6 @@ def redistribute_local_shard_tensor(
         i = transform_info.mesh_dim
         current, target = transform_info.src_dst_placements
         device_mesh.size(mesh_dim=i)
-
 
         if current == target:
             # short cut, just use the original local tensor
@@ -181,11 +192,11 @@ def redistribute_local_shard_tensor(
             elif current.is_shard():
                 current_placement = cast(Shard, current)
                 new_local_tensor = _to_replicate_tensor(
-                    local_tensor, 
-                    device_mesh,  
-                    mesh_dim = i,
-                    tensor_dim = current_placement.dim,
-                    current_spec = current_spec,
+                    local_tensor,
+                    device_mesh,
+                    mesh_dim=i,
+                    tensor_dim=current_placement.dim,
+                    current_spec=current_spec,
                 )
             else:
                 raise RuntimeError(
@@ -208,9 +219,10 @@ def redistribute_local_shard_tensor(
                     local_tensor, target_spec, i, my_coordinate[i]
                 )
             else:
-                assert (
-                    current.is_shard()
-                ), f"Current placement should be shard but found {current}"
+                if not current.is_shard():
+                    raise RuntimeError(
+                        f"Current placement should be shard but found {current}"
+                    )
                 shard_spec = cast(Shard, current)
                 if shard_spec.dim != target_placement.dim:
                     new_local_tensor = shard_spec._to_new_shard_dim(
@@ -250,10 +262,14 @@ def redistribute_local_shard_tensor(
                 # partial -> partial no op, should never hit
                 new_local_tensor = local_tensor
 
-        assert new_local_tensor is not None
+        if new_local_tensor is None:
+            raise RuntimeError(
+                "Failed to create new local tensor during redistribution"
+            )
         local_tensor = new_local_tensor
 
-    assert new_local_tensor is not None, "redistribute failed!"
+    if new_local_tensor is None:
+        raise RuntimeError("redistribute failed!")
 
     if not async_op and isinstance(new_local_tensor, funcol.AsyncCollectiveTensor):
         new_local_tensor = new_local_tensor.wait()
@@ -296,13 +312,13 @@ class ShardRedistribute(torch.autograd.Function):
         ctx.current_spec = current_spec
         ctx.async_op = async_op
 
-
         if current_spec.placements != placements:
 
-            
-
             target_spec = ShardTensorSpec(
-                device_mesh, placements, tensor_meta=input._spec.tensor_meta, _local_shape=input._spec.local_shape
+                device_mesh,
+                placements,
+                tensor_meta=input._spec.tensor_meta,
+                _local_shape=input._spec.local_shape,
             )
 
             local_tensor = input._local_tensor
@@ -323,7 +339,7 @@ class ShardRedistribute(torch.autograd.Function):
     @staticmethod
     def backward(
         ctx: torch.autograd.function.FunctionCtx,
-        grad_output: "shard_tensor.ShardTensor"
+        grad_output: "shard_tensor.ShardTensor",
     ) -> Tuple["shard_tensor.ShardTensor", None, None, None]:
         """
         Backward pass for redistributing a sharded tensor.
@@ -336,7 +352,7 @@ class ShardRedistribute(torch.autograd.Function):
             Tuple containing:
             - Redistributed gradient tensor
             - None for device_mesh gradient (not needed)
-            - None for placements gradient (not needed) 
+            - None for placements gradient (not needed)
             - None for async_op gradient (not needed)
         """
         previous_spec = ctx.current_spec
@@ -345,7 +361,7 @@ class ShardRedistribute(torch.autograd.Function):
         async_op = ctx.async_op
 
         local_tensor = grad_output._local_tensor
-        
+
         output = redistribute_local_shard_tensor(
             local_tensor,
             current_spec,
@@ -371,7 +387,7 @@ class ShardRedistribute(torch.autograd.Function):
                 stride=grad_output.stride(),
                 dtype=grad_output.dtype,
             ),
-            _local_shape = output.shape
+            _local_shape=output.shape,
         )
         output_shard_tensor = shard_tensor.ShardTensor(
             output,
