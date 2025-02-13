@@ -31,6 +31,7 @@ except ImportError:
 from dataclasses import dataclass
 from itertools import chain
 from typing import Callable, List, Tuple, Union
+from warnings import warn
 
 import modulus  # noqa: F401 for docs
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
@@ -153,6 +154,10 @@ class MeshGraphNet(Module):
 
         if norm_type not in ["LayerNorm", "TELayerNorm"]:
             raise ValueError("Norm type should be either 'LayerNorm' or 'TELayerNorm'")
+
+        if not torch.cuda.is_available() and norm_type == "TELayerNorm":
+            warn("TELayerNorm is not supported on CPU. Switching to LayerNorm.")
+            norm_type = "LayerNorm"
 
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
