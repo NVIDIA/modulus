@@ -146,7 +146,7 @@ class MeshGraphNet(Module):
         num_processor_checkpoint_segments: int = 0,
         checkpoint_offloading: bool = False,
         recompute_activation: bool = False,
-        norm_type="TELayerNorm",
+        norm_type="LayerNorm",
     ):
         super().__init__(meta=MetaData())
 
