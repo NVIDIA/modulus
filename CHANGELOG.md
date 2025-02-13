@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added matrix decomposition scheme to improve graph partitioning
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
-- Add leave-in profiling utilities to modulus, to easily enable torch/python/nsight profiling in all aspects of the codebase.
+- Added Datacenter CFD use case.
+- Add leave-in profiling utilities to modulus, to easily enable torch/python/nsight
+  profiling in all aspects of the codebase.
 
 ### Changed
 
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
 - Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
 - Moved to experiment-based Hydra config in Lagrangian-MGN example
+- Make data caching optional in `MeshDatapipe`
 
 ### Deprecated
 

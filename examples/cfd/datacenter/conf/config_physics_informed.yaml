@@ -14,24 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .healpix_blocks import (
-    AvgPool,
-    BasicConvBlock,
-    ConvGRUBlock,
-    ConvNeXtBlock,
-    DoubleConvNeXtBlock,
-    Interpolate,
-    MaxPool,
-    Multi_SymmetricConvNeXtBlock,
-    SymmetricConvNeXtBlock,
-    TransposedConvUpsample,
-)
-from .healpix_decoder import UNetDecoder
-from .healpix_encoder import UNetEncoder
-from .healpix_layers import (
-    HEALPixFoldFaces,
-    HEALPixLayer,
-    HEALPixPadding,
-    HEALPixPaddingv2,
-    HEALPixUnfoldFaces,
-)
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ./outputs
+
+start_epoch: 1
+max_epochs: 260
+
+start_lr: 1e-3
+lr_scheduler_gamma: 0.99975
+
+phy_wt: 0.001
+
+train_batch_size: 2
+val_batch_size: 2
+
+train_num_samples: 64
+val_num_samples: 192
