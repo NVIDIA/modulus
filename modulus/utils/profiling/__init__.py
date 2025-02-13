@@ -27,6 +27,7 @@ def _register_profilers():
     ProfileRegistry.register_profiler("line_profile", LineProfileWrapper)
     ProfileRegistry.register_profiler("line_profiler", LineProfileWrapper)
 
+
 _register_profilers()
 
 
