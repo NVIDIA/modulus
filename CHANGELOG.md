@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added matrix decomposition scheme to improve graph partitioning
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
+- Prototype support for domain parallelism of using ShardTensor (new).
+- Enable DeviceMesh initialization via DistributedManager.
 - Added Datacenter CFD use case.
 
 ### Changed
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make data caching optional in `MeshDatapipe`
 
 ### Deprecated
+
+- ProcessGroupConfig is tagged for future deprecation in favor of DeviceMesh.
 
 ### Removed
 
@@ -43,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved pytz and nvtx to optional
 - Update the base image for the Dockerfile
 - Introduce Multi-Storage Client (MSC) as an optional dependency.
+- Introduce `wrapt` as an optional dependency, needed when using
+  ShardTensor's automatic domain parallelism
 
 ## [0.9.0] - 2024-12-04
 
