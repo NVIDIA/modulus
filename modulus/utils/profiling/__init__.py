@@ -19,7 +19,6 @@ import atexit
 from .core import ProfileRegistry
 from .interface import Profiler
 from .line_profile import LineProfileWrapper
-from .nvtx import nvtxWrapper
 from .torch import TorchProfilerConfig, TorchProfileWrapper
 
 
@@ -27,8 +26,6 @@ def _register_profilers():
     ProfileRegistry.register_profiler("torch", TorchProfileWrapper)
     ProfileRegistry.register_profiler("line_profile", LineProfileWrapper)
     ProfileRegistry.register_profiler("line_profiler", LineProfileWrapper)
-    ProfileRegistry.register_profiler("nvtx", nvtxWrapper)
-
 
 _register_profilers()
 
