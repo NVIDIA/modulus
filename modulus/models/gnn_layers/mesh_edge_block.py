@@ -21,6 +21,8 @@ import torch.nn as nn
 from dgl import DGLGraph
 from torch import Tensor
 
+from modulus.utils.profiling import profile
+
 from .mesh_graph_mlp import MeshGraphEdgeMLPConcat, MeshGraphEdgeMLPSum
 from .utils import CuGraphCSC
 
@@ -82,6 +84,7 @@ class MeshEdgeBlock(nn.Module):
         )
 
     @torch.jit.ignore()
+    @profile
     def forward(
         self,
         efeat: Tensor,

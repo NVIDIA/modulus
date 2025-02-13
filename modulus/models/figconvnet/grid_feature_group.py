@@ -40,6 +40,7 @@ from modulus.models.figconvnet.point_feature_grid_ops import (
     GridFeatureCat,
     GridFeatureToPoint,
 )
+from modulus.utils.profiling import profile
 
 
 class GridFeatureGroup:
@@ -117,6 +118,7 @@ class GridFeaturesGroupIntraCommunication(nn.Module):
         super().__init__()
         self.communication_type = communication_type
 
+    @profile
     def forward(self, grid_features_group: GridFeatureGroup) -> GridFeatureGroup:
         # convert grid_features in grid_features_group to cxyz format
         orig_memory_formats = []
@@ -446,6 +448,7 @@ class AttentionPool(nn.Module):
         self.out = nn.Linear(out_channels, out_channels)
         self.dropout = nn.Dropout(dropout)
 
+    @profile
     def forward(
         self,
         x: Float[Tensor, "B N C"],

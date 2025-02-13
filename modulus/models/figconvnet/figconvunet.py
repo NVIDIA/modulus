@@ -53,6 +53,7 @@ from modulus.models.figconvnet.point_feature_grid_conv import (
 )
 from modulus.models.figconvnet.point_feature_grid_ops import PointFeatureToGrid
 from modulus.models.meta import ModelMetaData
+from modulus.utils.profiling import profile
 
 memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_xc_y_z: 0,
@@ -321,6 +322,7 @@ class FIGConvUNet(BaseModel):
         if drag_loss_weight is not None:
             self.drag_loss_weight = drag_loss_weight
 
+    @profile
     def _grid_forward(self, point_features: PointFeatures):
         grid_feature_group = GridFeatureGroup(
             [to_grid(point_features) for to_grid in self.point_feature_to_grids]
@@ -353,6 +355,7 @@ class FIGConvUNet(BaseModel):
         grid_features = self.convert_to_orig(down_grid_feature_groups[0])
         return grid_features, drag_pred
 
+    @profile
     def forward(
         self,
         vertices: Float[Tensor, "B N 3"],
