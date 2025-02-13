@@ -54,7 +54,6 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        img_shape=448,
         patch_shape=448,
         overlap_pix=4,
         boundary_pix=2,
@@ -77,7 +76,6 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        img_shape=448,
         patch_shape=448,
         overlap_pix=4,
         boundary_pix=2,
@@ -101,7 +99,6 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        img_shape=448,
         patch_shape=448,
         overlap_pix=4,
         boundary_pix=2,
@@ -125,17 +122,14 @@ def test_image_fuse_basic():
     # Basic test: No overlap, no boundary, one patch
     batch_size = 1
     img_shape_x = img_shape_y = 4
-    patch_shape_x = patch_shape_y = 4
     overlap_pix = 0
     boundary_pix = 0
 
     input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).cuda().float()
     fused_image = image_fuse(
         input_tensor,
-        img_shape_x,
         img_shape_y,
-        patch_shape_x,
-        patch_shape_y,
+        img_shape_x,
         batch_size,
         overlap_pix,
         boundary_pix,
@@ -151,17 +145,14 @@ def test_image_fuse_with_boundary():
     # Test with boundary pixels
     batch_size = 1
     img_shape_x = img_shape_y = 4
-    patch_shape_x = patch_shape_y = 6
     overlap_pix = 0
     boundary_pix = 1
 
     input_tensor = torch.ones(1, 1, 6, 6).cuda().float()  # All ones for easy validation
     fused_image = image_fuse(
         input_tensor,
-        img_shape_x,
         img_shape_y,
-        patch_shape_x,
-        patch_shape_y,
+        img_shape_x,
         batch_size,
         overlap_pix,
         boundary_pix,
@@ -179,7 +170,6 @@ def test_image_fuse_with_multiple_batches():
     # Test with multiple batches
     batch_size = 2
     img_shape_x = img_shape_y = 4
-    patch_shape_x = patch_shape_y = 4
     overlap_pix = 0
     boundary_pix = 0
 
@@ -196,10 +186,8 @@ def test_image_fuse_with_multiple_batches():
     input_tensor = input_tensor.repeat(2, 1, 1, 1)
     fused_image = image_fuse(
         input_tensor,
-        img_shape_x,
         img_shape_y,
-        patch_shape_x,
-        patch_shape_y,
+        img_shape_x,
         batch_size,
         overlap_pix,
         boundary_pix,
@@ -223,7 +211,6 @@ def test_image_fuse_with_multiple_batches():
 def test_image_batching_basic():
     # Test with no overlap, no boundary, no input_interp
     batch_size = 1
-    img_shape_x = img_shape_y = 4
     patch_shape_x = patch_shape_y = 4
     overlap_pix = 0
     boundary_pix = 0
@@ -231,11 +218,8 @@ def test_image_batching_basic():
     input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).cuda().float()
     batched_images = image_batching(
         input_tensor,
-        img_shape_x,
-        img_shape_y,
-        patch_shape_x,
         patch_shape_y,
-        batch_size,
+        patch_shape_x,
         overlap_pix,
         boundary_pix,
     )
@@ -248,8 +232,6 @@ def test_image_batching_basic():
 
 def test_image_batching_with_boundary():
     # Test with boundary pixels, no overlap, no input_interp
-    batch_size = 1
-    img_shape_x = img_shape_y = 4
     patch_shape_x = patch_shape_y = 6
     overlap_pix = 0
     boundary_pix = 1
@@ -257,11 +239,8 @@ def test_image_batching_with_boundary():
     input_tensor = torch.ones(1, 1, 4, 4).cuda().float()  # All ones for easy validation
     batched_images = image_batching(
         input_tensor,
-        img_shape_x,
-        img_shape_y,
-        patch_shape_x,
         patch_shape_y,
-        batch_size,
+        patch_shape_x,
         overlap_pix,
         boundary_pix,
     )
@@ -275,7 +254,6 @@ def test_image_batching_with_boundary():
 def test_image_batching_with_input_interp():
     # Test with input_interp tensor
     batch_size = 1
-    img_shape_x = img_shape_y = 4
     patch_shape_x = patch_shape_y = 4
     overlap_pix = 0
     boundary_pix = 0
@@ -284,11 +262,8 @@ def test_image_batching_with_input_interp():
     input_interp = torch.ones(1, 1, 4, 4).cuda().float()  # All ones for easy validation
     batched_images = image_batching(
         input_tensor,
-        img_shape_x,
-        img_shape_y,
-        patch_shape_x,
         patch_shape_y,
-        batch_size,
+        patch_shape_x,
         overlap_pix,
         boundary_pix,
         input_interp=input_interp,

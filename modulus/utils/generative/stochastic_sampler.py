@@ -24,11 +24,8 @@ from torch import Tensor
 
 def image_batching(
     input: Tensor,
-    img_shape_y: int,
-    img_shape_x: int,
     patch_shape_y: int,
     patch_shape_x: int,
-    batch_size: int,
     overlap_pix: int,
     boundary_pix: int,
     input_interp: Optional[Tensor] = None,
@@ -42,23 +39,17 @@ def image_batching(
     Parameters
     ----------
     input : Tensor
-        The input tensor representing the full image with shape (batch_size, channels, img_shape_x, img_shape_y).
-    img_shape_x : int
-        The width (x-dimension) of the original full image.
-    img_shape_y : int
-        The height (y-dimension) of the original full image.
-    patch_shape_x : int
-        The width (x-dimension) of each image patch.
+        The input tensor representing the full image with shape (batch_size, channels, img_shape_y, img_shape_x).
     patch_shape_y : int
         The height (y-dimension) of each image patch.
-    batch_size : int
-        The original batch size before patching.
+    patch_shape_x : int
+        The width (x-dimension) of each image patch.
     overlap_pix : int
         The number of overlapping pixels between adjacent patches.
     boundary_pix : int
         The number of pixels to crop as a boundary from each patch.
     input_interp : Optional[Tensor], optional
-        Optional additional data to concatenate to each patch with shape (batch_size, interp_channels, patch_shape_x, patch_shape_y).
+        Optional additional data to concatenate to each patch with shape (batch_size, interp_channels, patch_shape_y, patch_shape_x).
         By default None.
 
     Returns
@@ -66,6 +57,9 @@ def image_batching(
     Tensor
         A tensor containing the image patches, with shape (total_patches * batch_size, channels [+ interp_channels], patch_shape_x, patch_shape_y).
     """
+    # Infer sizes from input image
+    batch_size, _, img_shape_y, img_shape_x = input.shape
+
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
@@ -140,8 +134,6 @@ def image_fuse(
     input: Tensor,
     img_shape_y: int,
     img_shape_x: int,
-    patch_shape_y: int,
-    patch_shape_x: int,
     batch_size: int,
     overlap_pix: int,
     boundary_pix: int,
@@ -156,15 +148,11 @@ def image_fuse(
     Parameters
     ----------
     input : Tensor
-        The input tensor containing the image patches with shape (total_patches * batch_size, channels, patch_shape_x, patch_shape_y).
+        The input tensor containing the image patches with shape (total_patches * batch_size, channels, patch_shape_y, patch_shape_x).
     img_shape_x : int
         The width (x-dimension) of the original full image.
     img_shape_y : int
         The height (y-dimension) of the original full image.
-    patch_shape_x : int
-        The width (x-dimension) of each image patch.
-    patch_shape_y : int
-        The height (y-dimension) of each image patch.
     batch_size : int
         The original batch size before patching.
     overlap_pix : int
@@ -175,9 +163,12 @@ def image_fuse(
     Returns
     -------
     Tensor
-        The reconstructed full image tensor with shape (batch_size, channels, img_shape_x, img_shape_y).
+        The reconstructed full image tensor with shape (batch_size, channels, img_shape_y, img_shape_x).
 
     """
+    # Infer sizes from input image shape
+    patch_shape_y, patch_shape_x = input.shape[2], input.shape[3]
+
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
@@ -292,8 +283,7 @@ def stochastic_sampler(
     img_lr: Tensor,
     class_labels: Optional[Tensor] = None,
     randn_like: Callable[[Tensor], Tensor] = torch.randn_like,
-    img_shape: Union[int, Tuple[int, int]] = 448,
-    patch_shape: int = 448,
+    patch_shape: Union[int, Tuple[int, int]] = 448,
     overlap_pix: int = 4,
     boundary_pix: int = 2,
     mean_hr: Optional[Tensor] = None,
@@ -329,9 +319,6 @@ def stochastic_sampler(
         Function to generate random noise with the same shape as the input
         tensor.
         By default torch.randn_like.
-    img_shape : Union[int, Tuple[int, int]]
-        The height and width of the full image. If a single int is provided,
-        then the image is assumed to be square. By default 448.
     patch_shape : Union[int, Tuple[int, int]]
         The height and width of each patch. If a single int is provided, then
         the patch is assumed square. By default 448.
@@ -366,6 +353,8 @@ def stochastic_sampler(
     Tensor
         The final denoised image produced by the sampler.
     """
+    # Infer image shape from input latents
+    img_shape = latents.shape[-2:]
 
     # Adjust noise levels based on what's supported by the network.
     # Proposed EDM sampler (Algorithm 2) with minor changes to enable
@@ -398,15 +387,14 @@ def stochastic_sampler(
         [net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])]
     )  # t_N = 0
 
-    b = latents.shape[0]
+    batch_size = img_lr.shape[0]
     Nx = torch.arange(img_shape_x)
     Ny = torch.arange(img_shape_y)
     grid = torch.stack(torch.meshgrid(Ny, Nx, indexing="ij"), dim=0)[
         None,
-    ].expand(b, -1, -1, -1)
+    ].expand(batch_size, -1, -1, -1)
 
     # conditioning = [mean_hr, img_lr, global_lr, pos_embd]
-    batch_size = img_lr.shape[0]
     x_lr = img_lr
     if mean_hr is not None:
         x_lr = torch.cat(
@@ -424,22 +412,16 @@ def stochastic_sampler(
         )
         x_lr = image_batching(
             x_lr,
-            img_shape_y,
-            img_shape_x,
             patch_shape_y,
             patch_shape_x,
-            batch_size,
             overlap_pix,
             boundary_pix,
             input_interp,
         )
         global_index = image_batching(
             grid.float(),
-            img_shape_y,
-            img_shape_x,
             patch_shape_y,
             patch_shape_x,
-            batch_size,
             overlap_pix,
             boundary_pix,
         ).int()
@@ -464,11 +446,8 @@ def stochastic_sampler(
         if use_patching:
             x_hat_batch = image_batching(
                 x_hat,
-                img_shape_y,
-                img_shape_x,
                 patch_shape_y,
                 patch_shape_x,
-                batch_size,
                 overlap_pix,
                 boundary_pix,
             )
@@ -502,8 +481,6 @@ def stochastic_sampler(
                 denoised,
                 img_shape_y,
                 img_shape_x,
-                patch_shape_y,
-                patch_shape_x,
                 batch_size,
                 overlap_pix,
                 boundary_pix,
@@ -516,11 +493,8 @@ def stochastic_sampler(
             if use_patching:
                 x_next_batch = image_batching(
                     x_next,
-                    img_shape_y,
-                    img_shape_x,
                     patch_shape_y,
                     patch_shape_x,
-                    batch_size,
                     overlap_pix,
                     boundary_pix,
                 )
@@ -550,8 +524,6 @@ def stochastic_sampler(
                     denoised,
                     img_shape_y,
                     img_shape_x,
-                    patch_shape_y,
-                    patch_shape_x,
                     batch_size,
                     overlap_pix,
                     boundary_pix,

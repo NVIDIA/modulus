@@ -127,8 +127,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         if isinstance(img_resolution, int):
             self.img_shape_x = self.img_shape_y = img_resolution
         else:
-            self.img_shape_x = img_resolution[0]
-            self.img_shape_y = img_resolution[1]
+            self.img_shape_y = img_resolution[0]
+            self.img_shape_x = img_resolution[1]
 
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
