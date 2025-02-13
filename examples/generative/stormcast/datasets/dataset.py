@@ -24,34 +24,34 @@ class StormCastDataset(torch.utils.data.Dataset, ABC):
     """An abstract class that defines the interface for StormCast datasets."""
 
     @abstractmethod
-    def input_channels(self) -> list[str]:
-        """Metadata for the input channels. A list of channel names, one for each channel"""
+    def background_channels(self) -> list[str]:
+        """Metadata for the background channels. A list of channel names, one for each channel"""
         pass
 
     @abstractmethod
-    def output_channels(self) -> list[str]:
-        """Metadata for the output channels. A list of channel names, one for each channel"""
+    def state_channels(self) -> list[str]:
+        """Metadata for the state channels. A list of channel names, one for each channel"""
         pass
 
     @abstractmethod
     def image_shape(self) -> tuple[int, int]:
-        """Get the (height, width) of the data (same for input and output)."""
+        """Get the (height, width) of the data."""
         pass
 
-    def normalize_input(self, x: np.ndarray) -> np.ndarray:
-        """Convert input from physical units to normalized data."""
+    def normalize_background(self, x: np.ndarray) -> np.ndarray:
+        """Convert background from physical units to normalized data."""
         return x
 
-    def denormalize_input(self, x: np.ndarray) -> np.ndarray:
-        """Convert input from normalized data to physical units."""
+    def denormalize_background(self, x: np.ndarray) -> np.ndarray:
+        """Convert background from normalized data to physical units."""
         return x
 
-    def normalize_output(self, x: np.ndarray) -> np.ndarray:
-        """Convert output from physical units to normalized data."""
+    def normalize_state(self, x: np.ndarray) -> np.ndarray:
+        """Convert state from physical units to normalized data."""
         return x
 
-    def denormalize_output(self, x: np.ndarray) -> np.ndarray:
-        """Convert output from normalized data to physical units."""
+    def denormalize_state(self, x: np.ndarray) -> np.ndarray:
+        """Convert state from normalized data to physical units."""
         return x
 
     def get_invariants(self) -> np.ndarray | None:

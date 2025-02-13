@@ -29,10 +29,10 @@ from modulus.utils.generative import InfiniteSampler
 from modulus.launch.utils import save_checkpoint, load_checkpoint
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from utils.nn import (
-    regression_model_forward,
     diffusion_model_forward,
     regression_loss_fn,
     get_preconditioned_architecture,
+    build_network_condition_and_target,
 )
 from datasets import dataset_classes
 from datasets.dataset import worker_init
@@ -86,23 +86,8 @@ def training_loop(cfg):
     dataset_train = dataset_cls(cfg.dataset, train=True)
     dataset_valid = dataset_cls(cfg.dataset, train=False)
 
-    output_channels = dataset_train.output_channels()
-    diffusion_channels = (
-        output_channels
-        if cfg.dataset.diffusion_channels == "all"
-        else cfg.dataset.diffusion_channels
-    )
-    input_channels = (
-        output_channels
-        if cfg.dataset.input_channels == "all"
-        else cfg.dataset.input_channels
-    )
-    input_channel_indices = [
-        output_channels.index(channel) for channel in input_channels
-    ]
-    diffusion_channel_indices = [
-        output_channels.index(channel) for channel in diffusion_channels
-    ]
+    background_channels = dataset_train.background_channels()
+    state_channels = dataset_train.state_channels()
 
     sampler = InfiniteSampler(
         dataset=dataset_train,
@@ -142,36 +127,36 @@ def training_loop(cfg):
     if use_regression_net:
         regression_net = Module.from_checkpoint(cfg.model.regression_weights)
         regression_net = regression_net.to(device)
+    else:
+        regression_net = None
 
     # Construct network
     logger0.info("Constructing network...")
-    target_channels = len(diffusion_channels)
     if train_regression_unet:
-        conditional_channels = len(input_channels) + len(
-            dataset_train.input_channels()
-        )  # 26 is the number of era5 channels
+        num_condition_channels = len(background_channels) + len(state_channels)
     else:
-        conditional_channels = (
-            len(input_channels)
+        num_condition_channels = (
+            len(state_channels)
             if not previous_step_conditioning
-            else 2 * len(input_channels)
+            else 2 * len(state_channels)
         )
 
     invariant_array = dataset_train.get_invariants()
-    conditional_channels += invariant_array.shape[0]
-    invariant_tensor = torch.from_numpy(invariant_array).to(device)
-    invariant_tensor = invariant_tensor.unsqueeze(0)
-    invariant_tensor = invariant_tensor.repeat(local_batch_size, 1, 1, 1)
+    if invariant_array is not None:
+        num_condition_channels += invariant_array.shape[0]
+        invariant_tensor = torch.from_numpy(invariant_array).to(device)
+        invariant_tensor = invariant_tensor.unsqueeze(0)
+        invariant_tensor = invariant_tensor.repeat(local_batch_size, 1, 1, 1)
 
-    logger0.info(f"output_channels {output_channels}")
-    logger0.info(f"target_channels for diffusion {target_channels}")
-    logger0.info(f"conditional_channels for diffusion {conditional_channels}")
+    logger0.info(f"background_channels {background_channels}")
+    logger0.info(f"state_channels {state_channels}")
+    logger0.info(f"num_condition_channels {num_condition_channels}")
 
     net = get_preconditioned_architecture(
         name=net_name,
         img_resolution=dataset_train.image_shape(),
-        target_channels=target_channels,
-        conditional_channels=conditional_channels,
+        target_channels=len(state_channels),
+        conditional_channels=num_condition_channels,
         spatial_embedding=cfg.model.spatial_pos_embed,
         attn_resolutions=list(cfg.model.attn_resolutions),
     )
@@ -214,56 +199,30 @@ def training_loop(cfg):
     while not done:
         # Format input batch
         batch = next(dataset_iterator)
-        output_0 = batch["output"][0].to(device=device, dtype=torch.float32)
-        output_1 = batch["output"][1].to(device=device, dtype=torch.float32)
-
-        if use_regression_net:
-            # Inference regression model
-            input = batch["input"].to(device=device, dtype=torch.float32)
-
-            with torch.no_grad():
-                reg_out = regression_model_forward(
-                    regression_net, output_0, input, invariant_tensor
-                )
-                output_0 = torch.cat(
-                    (
-                        output_0[:, input_channel_indices, :, :],
-                        reg_out[:, input_channel_indices, :, :],
-                    ),
-                    dim=1,
-                )
-                output_1 = output_1 - reg_out
-                del reg_out
-
-        elif train_regression_unet:
-            assert diffusion_channel_indices == input_channel_indices
-
-            input = batch["input"].to(device=device, dtype=torch.float32)
-
-            output_0 = torch.cat(
-                (output_0[:, input_channel_indices, :, :], input), dim=1
-            )
-
-        output_1 = output_1[
-            :, diffusion_channel_indices, :, :
-        ]  # targets of the diffusion model
-
-        output_0 = torch.cat((output_0, invariant_tensor), dim=1)
+        background = batch["background"].to(device=device, dtype=torch.float32)
+        state = [s.to(device=device, dtype=torch.float32) for s in batch["state"]]
+        (condition, target, reg_out) = build_network_condition_and_target(
+            background,
+            state,
+            invariant_tensor,
+            regression_net=regression_net,
+            train_regression_unet=train_regression_unet,
+        )
 
         # Accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
         loss = loss_fn(
-            net=ddp, images=output_1, condition=output_0, augment_pipe=augment_pipe
+            net=ddp, images=target, condition=condition, augment_pipe=augment_pipe
         )
-        channelwise_loss = loss.mean(dim=(0, 2, 3))
-        channelwise_loss_dict = {
-            f"ChLoss/{diffusion_channels[i]}": channelwise_loss[i].item()
-            for i in range(target_channels)
-        }
         if log_to_wandb:
+            channelwise_loss = loss.mean(dim=(0, 2, 3))
+            channelwise_loss_dict = {
+                f"ChLoss/{ch}": channelwise_loss[i].item()
+                for (i, ch) in enumerate(state_channels)
+            }
             wandb_logs["channelwise_loss"] = channelwise_loss_dict
 
-        loss_value = loss.sum() / target_channels
+        loss_value = loss.sum() / len(state_channels)
         loss_value.backward()
 
         if cfg.training.clip_grad_norm > 0:
@@ -303,61 +262,40 @@ def training_loop(cfg):
             batch = next(valid_dataset_iterator)
 
             with torch.no_grad():
-
-                output_0, output_1 = batch["output"]
-                output_0 = output_0.to(dtype=torch.float32, device=device)
-                output_1 = output_1.to(dtype=torch.float32, device=device)
+                background = batch["background"].to(device=device, dtype=torch.float32)
+                state = [
+                    s.to(device=device, dtype=torch.float32) for s in batch["state"]
+                ]
+                (condition, target, reg_out) = build_network_condition_and_target(
+                    background,
+                    state,
+                    invariant_tensor,
+                    regression_net=regression_net,
+                    train_regression_unet=train_regression_unet,
+                )
 
                 if use_regression_net:
-                    with torch.no_grad():
-                        input = batch["input"].to(device=device, dtype=torch.float32)
-                        reg_out = regression_model_forward(
-                            regression_net, output_0, input, invariant_tensor
-                        )
-                        output_0 = torch.cat(
-                            (
-                                output_0[:, input_channel_indices, :, :],
-                                reg_out[:, input_channel_indices, :, :],
-                            ),
-                            dim=1,
-                        )
-
-                        loss_target = output_1 - reg_out
-                        output_images = diffusion_model_forward(
+                    output_images = (
+                        diffusion_model_forward(
                             net,
-                            output_0,
-                            diffusion_channel_indices,
-                            invariant_tensor,
+                            condition,
+                            state[1].shape,
                             sampler_args=dict(cfg.sampler.args),
                         )
-
-                        valid_loss = loss_fn(
-                            net=ddp,
-                            images=loss_target[:, diffusion_channel_indices],
-                            condition=torch.cat((output_0, invariant_tensor), dim=1),
-                            augment_pipe=augment_pipe,
-                        )
-                        output_images += reg_out[:, diffusion_channel_indices, :, :]
-                        del reg_out
-
-                elif train_regression_unet:
-                    assert (
-                        use_regression_net == False
-                    ), "use_regression_net must be False when training regression unet"
-                    assert (
-                        input_channel_indices == diffusion_channel_indices
-                    ), "input_channel_indices must be equal to diffusion_channel_indices when training regression unet"
-                    condition = torch.cat(
-                        (
-                            output_0[:, input_channel_indices, :, :],
-                            input[:],
-                            invariant_tensor,
-                        ),
-                        dim=1,
+                        + reg_out
                     )
+                    del reg_out
+
+                    valid_loss = loss_fn(
+                        net=net,
+                        images=target,
+                        condition=condition,
+                        augment_pipe=augment_pipe,
+                    )
+                elif train_regression_unet:
                     valid_loss, output_images = loss_fn(
-                        net=ddp,
-                        images=output_1[:, diffusion_channel_indices, :, :],
+                        net=net,
+                        images=target,
                         condition=condition,
                         augment_pipe=augment_pipe,
                         return_model_outputs=True,
@@ -366,16 +304,14 @@ def training_loop(cfg):
                     if log_to_wandb:
                         channelwise_valid_loss = valid_loss.mean(dim=[0, 2, 3])
                         channelwise_valid_loss_dict = {
-                            f"ChLoss_valid/{diffusion_channels[i]}": channelwise_valid_loss[
+                            f"ChLoss_valid/{state_channels[i]}": channelwise_valid_loss[
                                 i
                             ].item()
-                            for i in range(target_channels)
+                            for i in range(state_channels)
                         }
                         wandb_logs[
                             "channelwise_valid_loss"
                         ] = channelwise_valid_loss_dict
-
-                output_1 = output_1[:, diffusion_channel_indices, :, :]
 
                 if dist.world_size > 1:
                     torch.distributed.barrier()
@@ -395,14 +331,14 @@ def training_loop(cfg):
 
                     # Compute spectral metrics
                     figs, spec_ratios = ps1d_plots(
-                        output_images[i], output_1[i], fields, diffusion_channels
+                        output_images[i], state[1][i], fields, state_channels
                     )
 
                     for f_ in fields:
-                        f_index = diffusion_channels.index(f_)
+                        f_index = state_channels.index(f_)
                         image_dir = os.path.join(cfg.training.rundir, "images", f_)
                         generated = image[f_index]
-                        truth = output_1[i, f_index].cpu().numpy()
+                        truth = state[1][i, f_index].cpu().numpy()
 
                         fig, (a, b) = plt.subplots(1, 2)
                         im = a.imshow(generated)

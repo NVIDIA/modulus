@@ -110,12 +110,12 @@ class HrrrEra5Dataset(StormCastDataset):
         )[kept_era5_idx, None, None]
         self.invariants = params.invariants
 
-    def input_channels(self):
-        """Metadata for the input channels. A list of channel names, one for each channel"""
+    def background_channels(self):
+        """Metadata for the background channels. A list of channel names, one for each channel"""
         return self.kept_era5_channels
 
-    def output_channels(self):
-        """Metadata for the output channels. A list of channel names, one for each channel"""
+    def state_channels(self):
+        """Metadata for the state channels. A list of channel names, one for each channel"""
         return self.kept_hrrr_channels
 
     def image_shape(self):
@@ -327,29 +327,29 @@ class HrrrEra5Dataset(StormCastDataset):
 
         return len(self.valid_samples)
 
-    def normalize_input(self, x):
-        """Convert input from physical units to normalized data."""
+    def normalize_background(self, x: np.ndarray) -> np.ndarray:
+        """Convert background from physical units to normalized data."""
         if self.normalize:
             x -= self.means_era5
             x /= self.stds_era5
         return x
 
-    def denormalize_input(self, x):
-        """Convert input from normalized data to physical units."""
+    def denormalize_background(self, x: np.ndarray) -> np.ndarray:
+        """Convert background from normalized data to physical units."""
         if self.normalize:
             x *= self.stds_era5
             x += self.means_era5
         return x
 
-    def normalize_output(self, x):
-        """Convert output from physical units to normalized data."""
+    def normalize_state(self, x: np.ndarray) -> np.ndarray:
+        """Convert state from physical units to normalized data."""
         if self.normalize:
             x -= self.means_hrrr
             x /= self.stds_hrrr
         return x
 
-    def denormalize_output(self, x):
-        """Convert output from normalized data to physical units."""
+    def denormalize_state(self, x: np.ndarray) -> np.ndarray:
+        """Convert state from normalized data to physical units."""
         if self.normalize:
             x *= self.stds_hrrr
             x += self.means_hrrr
@@ -370,7 +370,7 @@ class HrrrEra5Dataset(StormCastDataset):
             .data.values
         )
 
-        inp = self.normalize_input(inp_field)
+        inp = self.normalize_background(inp_field)
         return torch.as_tensor(inp)
 
     def _get_hrrr(self, ts_inp, ts_tar):
@@ -384,7 +384,7 @@ class HrrrEra5Dataset(StormCastDataset):
         inp_field = ds_inp.sel(time=ts_inp, channel=self.kept_hrrr_channels).HRRR.values
         tar_field = ds_tar.sel(time=ts_tar, channel=self.kept_hrrr_channels).HRRR.values
 
-        inp, tar = self.normalize_output(inp_field), self.normalize_output(tar_field)
+        inp, tar = self.normalize_state(inp_field), self.normalize_state(tar_field)
 
         return torch.as_tensor(inp), torch.as_tensor(tar)
 
@@ -396,8 +396,8 @@ class HrrrEra5Dataset(StormCastDataset):
         era5_pair = self._get_era5(*time_pair)
         hrrr_pair = self._get_hrrr(*time_pair)
         return {
-            "input": era5_pair,
-            "output": hrrr_pair,
+            "background": era5_pair,
+            "state": hrrr_pair,
         }
 
     def _global_idx_to_datetime(self, global_idx):
