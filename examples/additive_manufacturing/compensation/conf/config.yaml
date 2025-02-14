@@ -1,0 +1,64 @@
+# ignore_header_test
+# ruff: noqa: E402
+
+# © Copyright 2023 HP Development Company, L.P.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+general:
+  seed: 1234
+  random_sample: True
+  cuda: True
+  use_distributed: False
+  sync_batch: True
+  use_multigpu: False # Default: False for D, True for G
+
+train_dis_options:
+  model_path: './pretrained/11parts_lr-3/pred_model_0000.pth'
+  log_dir: './pretrained/11parts_lr-3/'
+  save_path: './pretrained/11parts_lr-3/'
+  num_epoch: 15001
+  num_batch: 2
+  learning_rate: 0.0001
+  pretrain: False
+  num_points: 190000
+
+train_gen_options:
+  num_points: 190000
+  pred_model_path: "./pretrained/ocardo_iso_p500k/pred_model_3000.pth"   # For D
+  gen_model_path: "./pretrained/ocardo_iso_p500k/pred_model_3000.pth"    # For G
+  log_dir: './pretrained/ocardo_iso_p500k/'
+  save_path: './pretrained/ocardo_iso_p500k/'
+  num_epoch: 50001
+  num_batch: 1
+  learning_rate: 0.001
+
+inference_options:
+  seed: 1234
+  num_points: 20000   # 'Num of points to use'
+  data_path: '/home/chenle/codes/DL_prediction_compensation-master/data/molded_fiber/10/cad' # for other dataset: 'input_data_bar_sample','molded_fiber'
+  discriminator_path: './pretrained/pretrained_os/pred_model_3000.pth'   # 'discriminator model path'
+  generator_path: './pretrained/pretrained_os/gen_model_46500.pth'  # 'generator model path'
+  save_path: './output/test'  # 'save output path'
+  save_extra: True  # 'exports prediction and additional data csv'
+
+
+data_options:
+  dataset_name: "Ocardo" # choices=['Ocardo', 'Bar']
+  data_path: '/home/chenle/codes/DL_prediction_compensation-master/data/molded_fiber' # for other dataset: 'input_data_bar_sample','molded_fiber'
+  cad_format: 'txt'
+  scan_format: 'csv'
