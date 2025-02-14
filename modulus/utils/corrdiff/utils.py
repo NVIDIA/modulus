@@ -42,7 +42,8 @@ def regression_step(
 
     Args:
         net (torch.nn.Module): U-Net model for regression.
-        img_lr (torch.Tensor): Low-resolution input.
+        img_lr (torch.Tensor): Low-resolution input to `net`. Must have a batch
+        dimension  of 1.
         latents_shape (torch.Size): Shape of the latent representation. Typically
         (batch_size, out_channels, image_shape_y, image_shape_x).
 
@@ -52,6 +53,13 @@ def regression_step(
     """
     # Create a tensor of zeros with the given shape and move it to the appropriate device
     x_hat = torch.zeros(latents_shape, dtype=torch.float64, device=net.device)
+
+    # Safety check: avoid silently ignoring batch elements in img_lr
+    if img_lr.shape[0] > 1:
+        raise ValueError(
+            f"Expected img_lr to have a batch size of 1, "
+            f"but found {img_lr.shape[0]}."
+        )
 
     # Perform regression on a single batch element
     with torch.inference_mode():

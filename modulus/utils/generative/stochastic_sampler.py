@@ -60,6 +60,19 @@ def image_batching(
     # Infer sizes from input image
     batch_size, _, img_shape_y, img_shape_x = input.shape
 
+    # Safety check: make sure patch_shapes are large enough to accomodate
+    # overlaps and boundaries pixels
+    if (patch_shape_x - overlap_pix - boundary_pix) < 1:
+        raise ValueError(
+            f"patch_shape_x must verify patch_shape_x ({patch_shape_x}) >= "
+            f"1 + overlap_pix ({overlap_pix}) + boundary_pix ({boundary_pix})"
+        )
+    if (patch_shape_y - overlap_pix - boundary_pix) < 1:
+        raise ValueError(
+            f"patch_shape_y must verify patch_shape_y ({patch_shape_y}) >= "
+            f"1 + overlap_pix ({overlap_pix}) + boundary_pix ({boundary_pix})"
+        )
+
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
@@ -390,7 +403,7 @@ def stochastic_sampler(
     patch_shape_y = min(patch_shape_y, img_shape_y)
     use_patching = patch_shape_x != img_shape_x or patch_shape_y != img_shape_y
     # Safety check: if patching is used then img_lr and latents must have same
-    # batch_size, height and width, otherwise there is mismatch in the number
+    # height and width, otherwise there is mismatch in the number
     # of patches exctracted to form the final batch_size.
     if use_patching:
         if (img_lr.shape[-2:] != latents.shape[-2:]):
@@ -398,11 +411,13 @@ def stochastic_sampler(
                 f"img_lr and latents must have the same height and width, "
                 f"but found {img_lr.shape[-2:]} vs {latents.shape[-2:]}. "
             )
-        if img_lr.shape[0] != latents.shape[0]:
-            raise ValueError(
-                f"img_lr and latents must have the same batch size, but found "
-                f"{img_lr.shape[0]} vs {latents.shape[0]}."
-            )
+    # img_lr and latents must also have the same batch_size, otherwise mismatch
+    # when processed by the network
+    if img_lr.shape[0] != latents.shape[0]:
+        raise ValueError(
+            f"img_lr and latents must have the same batch size, but found "
+            f"{img_lr.shape[0]} vs {latents.shape[0]}."
+        )
 
     # Time step discretization.
     step_indices = torch.arange(

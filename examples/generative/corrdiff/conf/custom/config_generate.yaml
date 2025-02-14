@@ -58,7 +58,6 @@ generate:
     # int, number of ensembles to generate per input
     seed_batch_size: 4
     # int, size of the batched inference
-    patch_size: 448
     patch_shape_x: 448
     patch_shape_y: 448
     # int, patch size. Only used for `model: patched_diffusion`. 448 is

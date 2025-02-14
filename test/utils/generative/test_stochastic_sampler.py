@@ -43,7 +43,7 @@ class MockNet:
         return x * 0.9
 
 
-# The test function for edm_sampler
+# The test function for edm_sampler without patching
 def test_stochastic_sampler():
     net = MockNet()
     latents = torch.randn(2, 3, 448, 448)  # Mock latents
@@ -54,7 +54,7 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        patch_shape=448,
+        patch_shape=None,
         overlap_pix=4,
         boundary_pix=2,
         mean_hr=None,
@@ -76,7 +76,7 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        patch_shape=448,
+        patch_shape=None,
         overlap_pix=4,
         boundary_pix=2,
         mean_hr=mean_hr,
@@ -99,7 +99,7 @@ def test_stochastic_sampler():
         net=net,
         latents=latents,
         img_lr=img_lr,
-        patch_shape=448,
+        patch_shape=None,
         overlap_pix=4,
         boundary_pix=2,
         mean_hr=None,
@@ -118,27 +118,63 @@ def test_stochastic_sampler():
     ), "Churn output shape does not match expected shape"
 
 
+# The test function for edm_sampler with rectangular domain and patching
+def test_stochastic_sampler_rectangle_patching():
+    net = MockNet()
+
+    img_shape_y, img_shape_x = 256, 64
+    patch_shape_y, patch_shape_x = 16, 8
+
+    latents = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock latents
+    img_lr = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock low-res image
+
+    # Test with mean_hr conditioning
+    mean_hr = torch.randn(2, 3, img_shape_y, img_shape_x)
+    result_mean_hr = stochastic_sampler(
+        net=net,
+        latents=latents,
+        img_lr=img_lr,
+        patch_shape=(patch_shape_y, patch_shape_x),
+        overlap_pix=4,
+        boundary_pix=2,
+        mean_hr=mean_hr,
+        num_steps=2,
+        sigma_min=0.002,
+        sigma_max=800,
+        rho=7,
+        S_churn=0,
+        S_min=0,
+        S_max=float("inf"),
+        S_noise=1,
+    )
+
+    assert (
+        result_mean_hr.shape == latents.shape
+    ), "Mean HR conditioned output shape does not match expected shape"
+
+
 def test_image_fuse_basic():
     # Basic test: No overlap, no boundary, one patch
     batch_size = 1
-    img_shape_x = img_shape_y = 4
-    overlap_pix = 0
-    boundary_pix = 0
+    for img_shape_y, img_shape_x in ((4, 4), (8, 4)):
+        overlap_pix = 0
+        boundary_pix = 0
 
-    input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).cuda().float()
-    fused_image = image_fuse(
-        input_tensor,
-        img_shape_y,
-        img_shape_x,
-        batch_size,
-        overlap_pix,
-        boundary_pix,
-    )
-    assert fused_image.shape == (batch_size, 1, img_shape_x, img_shape_y)
-    expected_output = input_tensor
-    assert torch.allclose(
-        fused_image, expected_output, atol=1e-5
-    ), "Output does not match expected output."
+        input_tensor = torch.arange(1, 17).view(
+            1, 1, img_shape_y, img_shape_x).cuda().float()
+        fused_image = image_fuse(
+            input_tensor,
+            img_shape_y,
+            img_shape_x,
+            batch_size,
+            overlap_pix,
+            boundary_pix,
+        )
+        assert fused_image.shape == (batch_size, 1, img_shape_y, img_shape_x)
+        expected_output = input_tensor
+        assert torch.allclose(
+            fused_image, expected_output, atol=1e-5
+        ), "Output does not match expected output."
 
 
 def test_image_fuse_with_boundary():
@@ -157,7 +193,7 @@ def test_image_fuse_with_boundary():
         overlap_pix,
         boundary_pix,
     )
-    assert fused_image.shape == (batch_size, 1, img_shape_x, img_shape_y)
+    assert fused_image.shape == (batch_size, 1, img_shape_y, img_shape_x)
     expected_output = (
         torch.ones(1, 1, 4, 4).cuda().float()
     )  # Expected output is just the inner 4x4 part
@@ -169,43 +205,44 @@ def test_image_fuse_with_boundary():
 def test_image_fuse_with_multiple_batches():
     # Test with multiple batches
     batch_size = 2
-    img_shape_x = img_shape_y = 4
-    overlap_pix = 0
-    boundary_pix = 0
+    for img_shape_y, img_shape_x in ((4, 4), (8, 4)):
+        overlap_pix = 0
+        boundary_pix = 0
 
-    input_tensor = (
-        torch.cat(
-            [
-                torch.arange(1, 17).view(1, 1, 4, 4),
-                torch.arange(17, 33).view(1, 1, 4, 4),
-            ]
+        input_tensor = (
+            torch.cat(
+                [
+                    torch.arange(1, 17).view(1, 1, 4, 4),
+                    torch.arange(17, 33).view(1, 1, 4, 4),
+                ]
+            )
+            .cuda()
+            .float()
         )
-        .cuda()
-        .float()
-    )
-    input_tensor = input_tensor.repeat(2, 1, 1, 1)
-    fused_image = image_fuse(
-        input_tensor,
-        img_shape_y,
-        img_shape_x,
-        batch_size,
-        overlap_pix,
-        boundary_pix,
-    )
-    assert fused_image.shape == (batch_size, 1, img_shape_x, img_shape_y)
-    expected_output = (
-        torch.cat(
-            [
-                torch.arange(1, 17).view(1, 1, 4, 4),
-                torch.arange(17, 33).view(1, 1, 4, 4),
-            ]
+        input_tensor = input_tensor.repeat(2, 1, 1, 1)
+        fused_image = image_fuse(
+            input_tensor,
+            img_shape_y,
+            img_shape_x,
+            batch_size,
+            overlap_pix,
+            boundary_pix,
         )
-        .cuda()
-        .float()
-    )
-    assert torch.allclose(
-        fused_image, expected_output, atol=1e-5
-    ), "Output for multiple batches does not match expected output."
+        assert fused_image.shape == (batch_size, 1, img_shape_y, img_shape_x)
+        expected_output = (
+            torch.cat(
+                [
+                    torch.arange(1, 17).view(1, 1, img_shape_y, img_shape_x),
+                    torch.arange(17, 33).view(1, 1, img_shape_y, img_shape_x),
+                ]
+            )
+            .cuda()
+            .float()
+        )
+        assert torch.allclose(
+            fused_image, expected_output, atol=1e-5
+        ), "Output for multiple batches does not match expected output."
+
 
 
 def test_image_batching_basic():
@@ -223,7 +260,7 @@ def test_image_batching_basic():
         overlap_pix,
         boundary_pix,
     )
-    assert batched_images.shape == (batch_size, 1, patch_shape_x, patch_shape_y)
+    assert batched_images.shape == (batch_size, 1, patch_shape_y, patch_shape_x)
     expected_output = input_tensor
     assert torch.allclose(
         batched_images, expected_output, atol=1e-5
@@ -253,23 +290,28 @@ def test_image_batching_with_boundary():
 
 def test_image_batching_with_input_interp():
     # Test with input_interp tensor
-    batch_size = 1
     patch_shape_x = patch_shape_y = 4
     overlap_pix = 0
     boundary_pix = 0
 
-    input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).cuda().float()
-    input_interp = torch.ones(1, 1, 4, 4).cuda().float()  # All ones for easy validation
-    batched_images = image_batching(
-        input_tensor,
-        patch_shape_y,
-        patch_shape_x,
-        overlap_pix,
-        boundary_pix,
-        input_interp=input_interp,
-    )
-    assert batched_images.shape == (batch_size, 2, patch_shape_x, patch_shape_y)
-    expected_output = torch.cat((input_tensor, input_interp), dim=1)
-    assert torch.allclose(
-        batched_images, expected_output, atol=1e-5
-    ), "Batched images with input_interp do not match expected output."
+    for img_shape_y, img_shape_x in ((4, 4), (16, 8)):
+        batch_size = (img_shape_y // patch_shape_y) * \
+            (img_shape_x // patch_shape_x)
+        input_tensor = torch.arange(1, 17).view(
+            1, 1, img_shape_y, img_shape_x).cuda().float()
+        input_interp = torch.ones(
+            1, 1, img_shape_y, img_shape_x).cuda().float()  # All ones for easy validation
+        batched_images = image_batching(
+            input_tensor,
+            patch_shape_y,
+            patch_shape_x,
+            overlap_pix,
+            boundary_pix,
+            input_interp=input_interp,
+        )
+        assert batched_images.shape == (
+            batch_size, 2, patch_shape_x, patch_shape_y)
+        expected_output = torch.cat((input_tensor, input_interp), dim=1)
+        assert torch.allclose(
+            batched_images, expected_output, atol=1e-5
+        ), "Batched images with input_interp do not match expected output."

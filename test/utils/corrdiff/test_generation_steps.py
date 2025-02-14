@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from functools import partial
+from typing import Optional
 
 import pytest
 import torch
@@ -22,6 +23,27 @@ import torch
 from modulus.models.diffusion import EDMPrecondSR, UNet
 from modulus.utils.corrdiff import diffusion_step, regression_step
 from modulus.utils.generative import deterministic_sampler, stochastic_sampler
+
+
+# Mock network class
+class MockNet:
+    def __init__(self, sigma_min=0.1, sigma_max=1000):
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+
+    def round_sigma(self, t: torch.Tensor) -> torch.Tensor:
+        return t
+
+    def __call__(
+        self,
+        x: torch.Tensor,
+        x_lr: torch.Tensor,
+        t: torch.Tensor,
+        class_labels: Optional[torch.Tensor],
+        global_index: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        # Mock behavior: return input tensor for testing purposes
+        return x * 0.9
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
@@ -104,3 +126,109 @@ def test_diffusion_step(device):
 
     # Assertions
     assert output.shape == (1, 2, 16, 16), "Output shape mismatch"
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_diffusion_step_rectangle(device):
+
+    img_shape_y, img_shape_x = 32, 16
+    seed_batch_size = 4
+
+    mock_precond = MockNet()
+
+    # Define the input parameters
+    img_lr = torch.randn(
+        1, 4, img_shape_y, img_shape_x
+    ).expand(seed_batch_size, -1, -1, -1).to(device)
+
+    # Stochastic sampler without patching
+    sampler_fn = partial(
+        stochastic_sampler,
+        num_steps=2,
+    )
+
+    # Call the function
+    output = diffusion_step(
+        net=mock_precond,
+        sampler_fn=sampler_fn,
+        seed_batch_size=seed_batch_size,
+        img_shape=(img_shape_y, img_shape_x),
+        img_out_channels=2,
+        rank_batches=[list(range(seed_batch_size))],
+        img_lr=img_lr,
+        mean_hr=None,
+        rank=0,
+        device=device,
+    )
+
+    # Assertions
+    assert output.shape == (
+        seed_batch_size, 2, img_shape_y, img_shape_x
+    ), "Output shape mismatch"
+
+    # Test with mean_hr conditioning
+
+    # Define the input parameters
+    mean_hr = torch.randn(1, 2, img_shape_y, img_shape_x).to(device)
+    img_lr = torch.randn(
+        1, 4, img_shape_y, img_shape_x
+    ).expand(seed_batch_size, -1, -1, -1).to(device)
+
+    # Stochastic sampler without patching
+    sampler_fn = partial(
+        stochastic_sampler,
+        num_steps=2,
+    )
+
+    # Call the function
+    output = diffusion_step(
+        net=mock_precond,
+        sampler_fn=sampler_fn,
+        seed_batch_size=seed_batch_size,
+        img_shape=(img_shape_y, img_shape_x),
+        img_out_channels=2,
+        rank_batches=[list(range(seed_batch_size))],
+        img_lr=img_lr,
+        mean_hr=mean_hr,
+        rank=0,
+        device=device,
+    )
+
+    # Assertions
+    assert output.shape == (
+        seed_batch_size, 2, img_shape_y, img_shape_x
+    ), "Output shape mismatch"
+
+    # Test with mean_hr conditioning and rectangular patching
+
+    # Define the input parameters
+    mean_hr = torch.randn(1, 2, img_shape_y, img_shape_x).to(device)
+    img_lr = torch.randn(
+        1, 4, img_shape_y, img_shape_x
+    ).expand(seed_batch_size, -1, -1, -1).to(device)
+
+    # Stochastic sampler with ractangular patching
+    sampler_fn = partial(
+        stochastic_sampler,
+        num_steps=2,
+        patch_shape=(16, 8)
+    )
+
+    # Call the function
+    output = diffusion_step(
+        net=mock_precond,
+        sampler_fn=sampler_fn,
+        seed_batch_size=seed_batch_size,
+        img_shape=(img_shape_y, img_shape_x),
+        img_out_channels=2,
+        rank_batches=[list(range(seed_batch_size))],
+        img_lr=img_lr,
+        mean_hr=mean_hr,
+        rank=0,
+        device=device,
+    )
+
+    # Assertions
+    assert output.shape == (
+        seed_batch_size, 2, img_shape_y, img_shape_x
+    ), "Output shape mismatch"
