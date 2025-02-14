@@ -65,10 +65,17 @@ def main(cfg: DictConfig) -> None:
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
-    logger.info(f"Saving the outputs in {os.getcwd()}")
-    checkpoint_dir = os.path.join(
-        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
-    )
+
+    checkpoint_dir = str(cfg.training.io.get("checkpoint_dir", "."))
+    url = urllib.parse.urlparse(checkpoint_dir)
+    if url.scheme == "msc":
+        if not checkpoint_dir.endswith("/"):
+            checkpoint_dir += "/"
+        checkpoint_dir += f"checkpoints_{cfg.model.name}"
+    else:
+        checkpoint_dir = os.path.join(
+            cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
+        )
     if cfg.training.hp.batch_size_per_gpu == "auto":
         cfg.training.hp.batch_size_per_gpu = (
             cfg.training.hp.total_batch_size // dist.world_size
@@ -281,6 +288,9 @@ def main(cfg: DictConfig) -> None:
     )
     batch_size_per_gpu = cfg.training.hp.batch_size_per_gpu
     logger0.info(f"Using {num_accumulation_rounds} gradient accumulation rounds")
+
+    # CNH Temp - remove
+    os.environ["MSC_CONFIG"] = "/code/e2_storage_client_config.json"
 
     ## Resume training from previous checkpoints if exists
     if dist.world_size > 1:
