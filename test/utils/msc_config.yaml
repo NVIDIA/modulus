@@ -28,6 +28,3 @@ profiles:
       options:
         access_key: "access-key-id"
         secret_key: "secret-access-key"
-cache:
-  location: /tmp/.cache
-  size_mb: 5000

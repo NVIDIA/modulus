@@ -18,6 +18,7 @@ import shutil
 from typing import Callable
 
 import boto3
+import fsspec
 import pytest
 import torch
 import torch.nn as nn
@@ -26,35 +27,15 @@ from pytest_utils import import_or_fail
 
 from modulus.distributed import DistributedManager
 from modulus.models.mlp import FullyConnected
+from modulus.models import Module 
 
-# @pytest.fixture(scope="function")
-# def aws_credentials():
-#     """Mocked AWS Credentials for moto."""
-#     os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-#     os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-#     os.environ["AWS_SECURITY_TOKEN"] = "testing"
-#     os.environ["AWS_SESSION_TOKEN"] = "testing"
-#     os.environ["AWS_DEFAULT_REGION"] = "us-west-1"
-#
-#
-# @pytest.fixture(scope="function")
-# def s3(aws_credentials):
-#     """
-#     Return a mocked S3 client
-#     """
-#     with mock_aws():
-#         yield boto3.client("s3", region_name="us-west-1")
-
-
-# "./checkpoints",
-# ["./checkpoints", "msc://checkpoint-test/checkpoints"]
+# "./checkpoints", "msc://checkpoint-test/checkpoints" 
 @pytest.fixture(params=["./checkpoints", "msc://checkpoint-test/checkpoints"])
 def checkpoint_folder(request) -> str:
     return request.param
 
-
-# , "pytorch"
-@pytest.fixture(params=["modulus"])
+# "modulus", "pytorch"
+@pytest.fixture(params=["modulus", "pytorch"])
 def model_generator(request) -> Callable:
     # Create fully-connected NN generator function
     if request.param == "modulus":
@@ -96,12 +77,13 @@ def test_model_checkpointing(
 
     os.environ["AWS_ACCESS_KEY_ID"] = "access-key-id"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "secret-access-key"
-    # os.environ["AWS_SECURITY_TOKEN"] = "testing"
-    # os.environ["AWS_SESSION_TOKEN"] = "testing"
-    # os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
     os.environ["MSC_CONFIG"] = "./msc_config.yaml"
     conn = boto3.resource("s3", region_name="us-east-1")
     conn.create_bucket(Bucket="checkpoint-test-bucket")
+
+    mys3 = boto3.client("s3")
+    buckets = mys3.list_buckets()["Buckets"]
+    print(f"buckets = {buckets}")
 
     from modulus.launch.utils import load_checkpoint, save_checkpoint
 
@@ -111,26 +93,21 @@ def test_model_checkpointing(
     mlp_model_1 = model_generator(8).to(device)
     mlp_model_2 = model_generator(4).to(device)
 
+    print(f"mlp_model_1 = {mlp_model_1}")
+    print(f"mlp_model_2 = {mlp_model_2}")
+
     input_1 = torch.randn(4, 8).to(device)
     input_2 = torch.randn(4, 4).to(device)
 
     output_1 = mlp_model_1(input_1)
     output_2 = mlp_model_2(input_2)
     # Save model weights to checkpoint
-    print("About to save")
     save_checkpoint(
         checkpoint_folder,
         models=[mlp_model_1, mlp_model_2],
         metadata={"model_type": "MLP"},
     )
 
-    print("saved")
-
-    import fsspec
-
-    fs = fsspec.filesystem("msc")
-    files = fs.glob("msc://checkpoint-test/checkpoints/*")
-    print(f"files: {files}")
 
     # Load twin set of models for importing weights
     mlp_model_1 = model_generator(8).to(device)
@@ -178,7 +155,8 @@ def test_model_checkpointing(
     # Clean up if writing to local file system - object storage files will disappear along with the mock.
     if fsspec.utils.get_protocol(checkpoint_folder) == "file":
         shutil.rmtree(checkpoint_folder)
-    else:
+    elif isinstance(mlp_model_1, Module):
         # For non-file systems, the local cache must be cleared to allow multiple test runs
         local_cache = os.environ["HOME"] + "/.cache/modulus"
         shutil.rmtree(local_cache)
+
