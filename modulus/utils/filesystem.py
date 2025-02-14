@@ -176,7 +176,6 @@ def _download_cached(
     if not os.path.exists(cache_path):
         logger.debug("Downloading %s to cache: %s", path, cache_path)
         if path.startswith("s3://") or (url.scheme == "msc"):
-            print(f"path1 in filesystem.py = {path}")
             fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
             fs.get(path, cache_path, recursive=recursive)
         elif path.startswith("ngc://models/"):
@@ -199,7 +198,6 @@ def _download_cached(
     else:
         logger.debug("Opening from cache: %s", cache_path)
 
-    print(f"cache_path: {cache_path}")
     return cache_path
 
 
