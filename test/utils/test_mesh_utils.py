@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 import os
 import random
 import urllib
@@ -23,6 +24,63 @@ import pytest
 from pytest_utils import import_or_fail
 
 stl = pytest.importorskip("stl")
+
+
+def compute_checksum(file_path):
+    """Compute the SHA256 checksum of a given file."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+
+def write_multi_body_stl(filename, center=(0, 0, 0), side_length=1.0):
+    """Creates a multi-body ASCII STL cube."""
+
+    half = side_length / 2
+    cx, cy, cz = center
+
+    # Define vertices
+    vertices = np.array(
+        [
+            [cx - half, cy - half, cz - half],  # 0
+            [cx + half, cy - half, cz - half],  # 1
+            [cx + half, cy + half, cz - half],  # 2
+            [cx - half, cy + half, cz - half],  # 3
+            [cx - half, cy - half, cz + half],  # 4
+            [cx + half, cy - half, cz + half],  # 5
+            [cx + half, cy + half, cz + half],  # 6
+            [cx - half, cy + half, cz + half],  # 7
+        ]
+    )
+
+    # Define faces
+    faces = [
+        ([0, 1, 2], [0, 2, 3]),  # Bottom
+        ([4, 5, 6], [4, 6, 7]),  # Top
+        ([0, 1, 5], [0, 5, 4]),  # Front
+        ([2, 3, 7], [2, 7, 6]),  # Back
+        ([0, 3, 7], [0, 7, 4]),  # Left
+        ([1, 2, 6], [1, 6, 5]),  # Right
+    ]
+
+    with open(filename, "w") as f:
+        for i, (tri1, tri2) in enumerate(faces):
+            f.write(f"solid body_{i}\n")
+            for tri in [tri1, tri2]:
+                v1, v2, v3 = vertices[tri]
+                normal = np.cross(v2 - v1, v3 - v1)
+                normal /= np.linalg.norm(normal)  # Normalize the normal vector
+
+                f.write(f"  facet normal {normal[0]} {normal[1]} {normal[2]}\n")
+                f.write("    outer loop\n")
+                f.write(f"      vertex {v1[0]} {v1[1]} {v1[2]}\n")
+                f.write(f"      vertex {v2[0]} {v2[1]} {v2[2]}\n")
+                f.write(f"      vertex {v3[0]} {v3[1]} {v3[2]}\n")
+                f.write("    endloop\n")
+                f.write("  endfacet\n")
+            f.write(f"endsolid body_{i}\n")
 
 
 @pytest.fixture
@@ -226,3 +284,49 @@ def test_stl_gen(pytestconfig, backend, download_stl, tmp_path):
     saved_stl = mesh.Mesh.from_file(str(output_filename))
 
     assert saved_stl.vectors is not None
+
+
+@pytest.fixture
+def generate_test_stls(tmp_path):
+    """Fixture to generate STL files in a temporary directory before running tests."""
+
+    from modulus.utils.mesh.combine_stl_files import combine_stls
+
+    cube_1_path = tmp_path / "cube_1.stl"
+    cube_2_path = tmp_path / "cube_2.stl"
+    cube_1_combined_path = tmp_path / "cube_1_combined.stl"
+    all_cubes_combined_path = tmp_path / "all_cubes_combined.stl"
+
+    # Generate STL files in tmp directory
+    write_multi_body_stl(cube_1_path, center=(0, 0, 0), side_length=1.0)
+    write_multi_body_stl(cube_2_path, center=(2, 2, 2), side_length=1.0)
+
+    # Combine STL files
+    combine_stls(
+        input_files=str(cube_1_path),
+        output_file=str(cube_1_combined_path),
+    )
+
+    combine_stls(
+        input_files=[str(cube_1_path), str(cube_2_path)],
+        output_file=str(all_cubes_combined_path),
+    )
+
+    return {
+        "cube_1_combined": cube_1_combined_path,
+        "all_cubes_combined": all_cubes_combined_path,
+    }
+
+
+@import_or_fail(["pyvista"])
+def test_combined_stl(generate_test_stls, pytestconfig):
+    """Test to check combining stls."""
+
+    EXPECTED_CHECKSUMS = {
+        "cube_1_combined": "b5be925cbdfe6867a782c94321a4702cef397b4d17139dab2453d9ee8cbe0998",
+        "all_cubes_combined": "c2830f65700dfa66b3e65d16a982d76cd9841c4b7fbd37e2597c5b409acd1fee",
+    }
+
+    for key, expected_checksum in EXPECTED_CHECKSUMS.items():
+        computed_checksum = compute_checksum(generate_test_stls[key])
+        assert computed_checksum == expected_checksum, f"Checksum mismatch for {key}"
