@@ -95,9 +95,6 @@ def _get_checkpoint_filename(
         path = str(Path(path).resolve())
     checkpoint_filename = f"{path}/{base_name}.{model_parallel_rank}"
 
-    if not saving:
-        print(f"path1 = {path}")
-
     # File extension for Modulus models or PyTorch models
     file_extension = ".mdlus" if model_type == "mdlus" else ".pt"
 
@@ -115,10 +112,9 @@ def _get_checkpoint_filename(
             # If checkpoint from a null index save exists load that
             # This is the most likely line to error since it will fail with
             # invalid checkpoint names
-            print(f"saving: {saving}")
+            
+            # Remove msc prefix if present to allow generic matching
             path_no_prefix = path.removeprefix("msc://")
-            if not saving:
-                print(f"path2 = {path}")
             file_idx = [
                 int(
                     re.sub(
@@ -140,8 +136,6 @@ def _get_checkpoint_filename(
         else:
             checkpoint_filename += ".0" + file_extension
 
-    if not saving:
-        print(f"path3 = {checkpoint_filename}")
     return checkpoint_filename
 
 
@@ -364,7 +358,6 @@ def load_checkpoint(
                     f"Could not find valid model file {file_name}, skipping load"
                 )
                 continue
-            print(f"file_name = {file_name}")
             # Load state dictionary
             if isinstance(model, modulus.models.Module):
                 model.load(file_name)
