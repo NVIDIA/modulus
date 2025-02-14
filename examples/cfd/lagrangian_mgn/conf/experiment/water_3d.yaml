@@ -32,17 +32,16 @@ data:
   dt: 0.005
   radius: 0.035
   train:
-    num_samples: 1000
-    num_steps: 795  # 800 - ${num_history}
+    num_sequences: 1000
     radius: ${..radius}
     dt: ${..dt}
   valid:
-    num_samples: 100
-    num_steps: 195
+    num_sequences: 100
+    num_steps: 206
     radius: ${..radius}
     dt: ${..dt}
   test:
-    num_samples: 100
-    num_steps: 195
+    num_sequences: 100
+    num_steps: 206
     radius: ${..radius}
     dt: ${..dt}

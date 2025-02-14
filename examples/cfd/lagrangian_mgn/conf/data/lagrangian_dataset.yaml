@@ -17,13 +17,15 @@
 _target_: modulus.datapipes.gnn.lagrangian_dataset.LagrangianDataset
 _convert_: all
 
+# Note: values that are not set will be populated from dataset metadata.
 name: ${data.name}
 data_dir: ${data.data_dir}
 split: ???
-num_samples: ???
+num_sequences: ???
 num_history: ${..num_history}
-num_steps: 600
+num_steps:
 num_node_types: ${..num_node_types}
 noise_std: 0.0003
-radius: 0.015
-dt: 0.0025
+radius:
+dt:
+bounds:
