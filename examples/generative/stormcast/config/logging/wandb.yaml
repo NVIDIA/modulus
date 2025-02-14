@@ -14,25 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Defaults
-defaults:
 
-  # Dataset
-  - dataset/hrrr_era5
-
-  # Model
-  - model/stormcast
-
-  # Training
-  - training/default
-
-  # Logging
-  - logging/wandb
-
-  # Sampler
-  - sampler/edm_deterministic
-
-  # Hydra
-  - hydra/default
-
-  - _self_
+type: wandb
+entity: "modulus"
+project: "mlops-modulus-testing"

@@ -25,6 +25,7 @@ import glob
 from omegaconf import DictConfig, OmegaConf
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.logging.mlflow import initialize_mlflow
 
 from utils.trainer import training_loop
 
@@ -71,18 +72,30 @@ def main(cfg: DictConfig) -> None:
             )
             wandb_resume = True
 
-    # Setup wandb, if enabled
-    if dist.rank == 0 and cfg.training.log_to_wandb:
-        entity, project = "wandb_entity", "wandb_project"
-        wandb.init(
-            dir=cfg.training.rundir,
-            config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
-            name=os.path.basename(cfg.training.rundir),
-            project=project,
-            entity=entity,
-            resume=wandb_resume,
-            mode="online",
-        )
+    # Setup MLOps logging, if enabled
+    if dist.rank == 0:
+        if cfg.logging.type == "wandb":
+            wandb.init(
+                dir=cfg.training.rundir,
+                config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
+                name=f"{cfg.training.experiment_name}-{cfg.training.run_id}",
+                project=cfg.logging.project,
+                entity=cfg.logging.entity,
+                resume=wandb_resume,
+                mode="online",
+            )
+        elif cfg.logging.type == "mlflow":
+            print(cfg.training.rundir)
+            initialize_mlflow(
+                experiment_name=cfg.logging.project,
+                experiment_desc=cfg.logging.experiment_desc,
+                run_name=f"{cfg.training.experiment_name}-{cfg.training.run_id}",
+                user_name=cfg.logging.user,
+                tracking_location=os.path.join(
+                    os.path.abspath(cfg.training.rundir), "mlflow"
+                ),
+                mode="offline",
+            )
 
     # Train.
     training_loop(cfg)
