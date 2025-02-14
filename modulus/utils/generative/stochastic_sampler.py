@@ -277,13 +277,15 @@ def image_fuse(
     return output / count_map
 
 
+# TODO: move patching logic out of there, it has nothing to do with the sampler
+# itself, which should be more generic anyways.
 def stochastic_sampler(
     net: Any,
     latents: Tensor,
     img_lr: Tensor,
     class_labels: Optional[Tensor] = None,
     randn_like: Callable[[Tensor], Tensor] = torch.randn_like,
-    patch_shape: Union[int, Tuple[int, int]] = 448,
+    patch_shape: Union[int, Tuple[int, int], None] = None,
     overlap_pix: int = 4,
     boundary_pix: int = 2,
     mean_hr: Optional[Tensor] = None,
@@ -308,10 +310,10 @@ def stochastic_sampler(
         inputs.
     latents : Tensor
         The latent variables (e.g., noise) used as the initial input for the
-        sampler.
+        sampler. Has shape (batch_size, C_out, img_shape_y, img_shape_x).
     img_lr : Tensor
         Low-resolution input image for conditioning the super-resolution
-        process.
+        process. Must have shape (batch_size, C_lr, img_lr_ shape_y, img_lr_shape_x).
     class_labels : Optional[Tensor], optional
         Class labels for conditional generation, if required by the model. By
         default None.
@@ -319,17 +321,25 @@ def stochastic_sampler(
         Function to generate random noise with the same shape as the input
         tensor.
         By default torch.randn_like.
-    patch_shape : Union[int, Tuple[int, int]]
-        The height and width of each patch. If a single int is provided, then
-        the patch is assumed square. By default 448.
+    patch_shape : Union[int, Tuple[int, int], None]
+        The height and width of each patch from `latents`. If a single int is
+        provided, then the patch is assumed square. If None or if
+        `patch_shape=(img_shape_y, img_shape_x)`, then patching is not applied.
+        If patching is applied, then `img_lr` and must have same height and
+        width as `latents`. By default None.
     overlap_pix : int
-        Number of overlapping pixels between adjacent patches. By default 4.
+        Number of overlapping pixels between adjacent patches. Only used if
+        patching is applied. By default 4.
     boundary_pix : int
-        Number of pixels to be cropped as a boundary from each patch. By
-        default 2.
+        Number of pixels to be cropped as a boundary from each patch. Only used
+        if patching is applied. By default 2.
     mean_hr : Optional[Tensor], optional
         Optional tensor containing mean high-resolution images for
-        conditioning. By default None.
+        conditioning. Must have same height and width as `img_lr`, with shape
+        (B_hr, C_hr, img_lr_shape_y, img_lr_shape_x)  where the batch dimension
+        B_hr can be either 1, either equal to batch_size, or can be omitted. If
+        B_hr = 1 or is omitted, `mean_hr` will be expanded to match the shape
+        of `img_lr`. By default None.
     num_steps : int
         Number of time steps for the sampler. By default 18.
     sigma_min : float
@@ -351,7 +361,8 @@ def stochastic_sampler(
     Returns
     -------
     Tensor
-        The final denoised image produced by the sampler.
+        The final denoised image produced by the sampler. Same shape as
+        `latents`: (batch_size, C_out, img_shape_y, img_shape_x).
     """
     # Infer image shape from input latents
     img_shape = latents.shape[-2:]
@@ -365,14 +376,33 @@ def stochastic_sampler(
         img_shape_y, img_shape_x = img_shape
     else:
         img_shape_x = img_shape_y = img_shape
-    if isinstance(patch_shape, tuple):
+    # Determine if patching is used an size of patches
+    if not patch_shape:
+        patch_shape_x, patch_shape_y = img_shape_x, img_shape_y
+    elif isinstance(patch_shape, tuple):
         patch_shape_y, patch_shape_x = patch_shape
-    else:
+    elif isinstance(patch_shape, int):
         patch_shape_x = patch_shape_y = patch_shape
+    else:
+        raise ValueError("patch_shape must be an int or Tuple[int, int]")
     # Make sure patches fit within the image.
     patch_shape_x = min(patch_shape_x, img_shape_x)
     patch_shape_y = min(patch_shape_y, img_shape_y)
     use_patching = patch_shape_x != img_shape_x or patch_shape_y != img_shape_y
+    # Safety check: if patching is used then img_lr and latents must have same
+    # batch_size, height and width, otherwise there is mismatch in the number
+    # of patches exctracted to form the final batch_size.
+    if use_patching:
+        if (img_lr.shape[-2:] != latents.shape[-2:]):
+            raise ValueError(
+                f"img_lr and latents must have the same height and width, "
+                f"but found {img_lr.shape[-2:]} vs {latents.shape[-2:]}. "
+            )
+        if img_lr.shape[0] != latents.shape[0]:
+            raise ValueError(
+                f"img_lr and latents must have the same batch size, but found "
+                f"{img_lr.shape[0]} vs {latents.shape[0]}."
+            )
 
     # Time step discretization.
     step_indices = torch.arange(
@@ -397,6 +427,11 @@ def stochastic_sampler(
     # conditioning = [mean_hr, img_lr, global_lr, pos_embd]
     x_lr = img_lr
     if mean_hr is not None:
+        if mean_hr.shape[-2:] != img_lr.shape[-2:]:
+            raise ValueError(
+                f"mean_hr and img_lr must have the same height and width, "
+                f"but found {mean_hr.shape[-2:]} vs {img_lr.shape[-2:]}."
+            )
         x_lr = torch.cat(
             (mean_hr.expand(x_lr.shape[0], -1, -1, -1), x_lr),
             dim=1

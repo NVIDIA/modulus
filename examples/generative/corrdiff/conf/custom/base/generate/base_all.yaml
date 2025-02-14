@@ -24,7 +24,6 @@ boundary_pixels: 2
 # Number of boundary pixels to be cropped out. 2 is recommanded to address the boundary
 # artifact.
 hr_mean_conditioning: true
-sample_res: full
 # Sampling resolution
 times_range: null
 

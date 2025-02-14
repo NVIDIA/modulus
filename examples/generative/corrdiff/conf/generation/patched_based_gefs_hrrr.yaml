@@ -33,7 +33,6 @@ boundary_pixels: 2
 hr_mean_conditioning: true
 gridtype: learnable
 N_grid_channels: 100
-sample_res: full
   # Sampling resolution
 times_range: null
 times:

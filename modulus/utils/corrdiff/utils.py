@@ -44,7 +44,7 @@ def regression_step(
         net (torch.nn.Module): U-Net model for regression.
         img_lr (torch.Tensor): Low-resolution input.
         latents_shape (torch.Size): Shape of the latent representation. Typically
-        (batch_size, out_channels, image_shape_x, image_shape_y).
+        (batch_size, out_channels, image_shape_y, image_shape_x).
 
 
     Returns:
@@ -84,7 +84,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
     img_lr: torch.Tensor,
     rank: int,
     device: torch.device,
-    hr_mean: torch.Tensor = None,
+    mean_hr: torch.Tensor = None,
     lead_time_label: torch.Tensor = None,
 ) -> torch.Tensor:
 
@@ -111,8 +111,8 @@ def diffusion_step(  # TODO generalize the module and add defaults
 
     # Handling of the high-res mean
     additional_args = {}
-    if hr_mean is not None:
-        additional_args["mean_hr"] = hr_mean
+    if mean_hr is not None:
+        additional_args["mean_hr"] = mean_hr
     if lead_time_label is not None:
         additional_args["lead_time_label"] = lead_time_label
 

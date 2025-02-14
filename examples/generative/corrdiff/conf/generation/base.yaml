@@ -33,7 +33,6 @@ boundary_pixels: 0
 hr_mean_conditioning: false
 gridtype: "sinusoidal"
 N_grid_channels: 4
-sample_res: full
   # Sampling resolution
 times_range: null
 times:
