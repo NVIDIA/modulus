@@ -240,22 +240,12 @@ class LagrangianDataset(DGLDataset):
         # Target acceleration.
         acc = self.time_diff(vel[-2:])
 
-        # Boundary features for the current position.
-        boundary_features = self.compute_boundary_feature(
-            pos_t, self.radius, bounds=self.bounds
-        )
-
         # Normalize velocity and acceleration.
         vel = self.normalize_velocity(vel)
         acc = self.normalize_acceleration(acc)
 
         # Create graph node features.
-        # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
-        vel_history = vel[:-1].permute(1, 0, 2).flatten(start_dim=1)
-
-        node_features = torch.cat(
-            (pos_t, vel_history, boundary_features, self.node_type[gidx]), dim=-1
-        )
+        node_features = self.pack_inputs(pos_t, vel[:-1], self.node_type[gidx])
 
         # Target position and velocity are for time t + 1, acceleration - for t.
         target_pos = pos[-1]
@@ -316,20 +306,37 @@ class LagrangianDataset(DGLDataset):
         position_next = position + velocity_next  # * dt
         return position_next, velocity_next
 
+    def pack_inputs(
+        self, position: Tensor, vel_history: Tensor, node_type: Tensor
+    ):
+        # Boundary features for the current position.
+        boundary_features = self.compute_boundary_feature(
+            position, self.radius, bounds=self.bounds
+        )
+
+        # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
+        vel_history = vel_history.permute(1, 0, 2).flatten(start_dim=1)
+
+        return torch.cat(
+            (position, vel_history, boundary_features, node_type), dim=-1
+        )
+
     def unpack_inputs(self, graph: dgl.DGLGraph):
-        """Unpacks the graph inputs into position and velocity.
+        """Unpacks the graph inputs into position, velocity and node type.
 
         Returns:
         --------
         Tuple
-            position, velocity inputs. Velocity is normalized.
+            position, velocity and node type inputs. Velocity is normalized.
         """
         ndata = graph.ndata["x"]
         pos = ndata[..., : self.dim]
         vel = ndata[..., self.dim : self.dim + self.dim * self.num_history]
         # (num_particles, t * dimension) -> (t, num_particles, dimension)
         vel = vel.reshape(-1, self.num_history, self.dim).permute(1, 0, 2)
-        return pos, vel
+        # (num_particles, num_node_types)
+        node_type = ndata[..., -self.num_node_types :]
+        return pos, vel, node_type
 
     def unpack_targets(self, graph: dgl.DGLGraph):
         """Unpacks the graph targets into position, velocity and acceleration.
