@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import os
+from datetime import timedelta
 
 import pytest
 import torch
@@ -38,6 +39,29 @@ def test_manager():
     os.environ["RANK"] = "0"
     os.environ["WORLD_SIZE"] = "1"
     DistributedManager.initialize()
+    print(DistributedManager())
+
+    manager = DistributedManager()
+
+    assert manager.is_initialized()
+    assert (
+        manager.distributed == torch.distributed.is_available()
+    ), "Manager should be in serial mode"
+    assert manager.rank == 0
+    assert manager.world_size == 1
+    assert manager.local_rank == 0
+
+    DistributedManager.cleanup()
+    del os.environ["RANK"]
+    del os.environ["WORLD_SIZE"]
+
+
+def test_manager_timeout():
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    os.environ["RANK"] = "0"
+    os.environ["WORLD_SIZE"] = "1"
+    DistributedManager.initialize(timeout=timedelta(minutes=60))
     print(DistributedManager())
 
     manager = DistributedManager()
