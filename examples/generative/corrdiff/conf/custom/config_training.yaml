@@ -83,4 +83,20 @@ training:
         validation_freq: 5000
         # how often to record the validation loss, measured in number of processed samples
         validation_steps: 10
-        # how many loss evaluations are used to compute the validation loss per checkpoint 
+        # how many loss evaluations are used to compute the validation loss per
+        # checkpoint 
+
+# Parameters for wandb logging
+wanbd:
+    key: <your_api_key>
+    # You wandb API key
+    project: <your_project_name>
+    # Your wanb project name
+    entity: <your_entity_name>
+    # Name of your wandb enity
+    name: <your_experiment_name>
+    # Name of your experiment
+    mode: online
+    # Logging mode. Accepted values: "offline", "online" or "disabled"
+    watch_model: true
+    # Bool: if true, then wandb logs statistics about your model parameters

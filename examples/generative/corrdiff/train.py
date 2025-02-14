@@ -22,9 +22,10 @@ from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.launch.logging import (
+    PythonLogger, RankZeroLoggingWrapper, initialize_wandb)
+import wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 from datasets.dataset import init_train_valid_datasets_from_config
 from helpers.train_helpers import (
@@ -35,6 +36,7 @@ from helpers.train_helpers import (
     handle_and_clip_gradients,
     is_time_for_periodic_task,
 )
+
 
 def checkpoint_list(path, suffix=".mdlus"):
     """Helper function to return sorted list, in ascending order, of checkpoints in a path"""
@@ -65,6 +67,13 @@ def main(cfg: DictConfig) -> None:
         writer = SummaryWriter(log_dir="tensorboard")
     logger = PythonLogger("main")  # General python logger
     logger0 = RankZeroLoggingWrapper(logger, dist)  # Rank 0 logger
+    wandb.login(key=cfg.wandb.key)
+    initialize_wandb(
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        name=cfg.wandb.name,
+        mode=cfg.wandb.mode,
+    )
 
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
@@ -247,6 +256,8 @@ def main(cfg: DictConfig) -> None:
             output_device=dist.device,
             find_unused_parameters=dist.find_unused_parameters,
         )
+    if cfg.wandb.watch_model and dist.rank == 0:
+        wandb.watch(model)
 
     # Load the regression checkpoint if applicable
     if hasattr(cfg.training.io, "regression_checkpoint_path"):
@@ -370,6 +381,10 @@ def main(cfg: DictConfig) -> None:
             writer.add_scalar(
                 "training_loss_running_mean", average_loss_running_mean, cur_nimg
             )
+            wandb.log({
+                "training_loss": average_loss,
+                "training_loss_running_mean": average_loss_running_mean,
+            })
 
         ptt = is_time_for_periodic_task(
             cur_nimg,
@@ -453,6 +468,9 @@ def main(cfg: DictConfig) -> None:
                         writer.add_scalar(
                             "validation_loss", average_valid_loss, cur_nimg
                         )
+                        wandb.log({
+                            "validation_loss": average_valid_loss,
+                        })
 
         if is_time_for_periodic_task(
             cur_nimg,

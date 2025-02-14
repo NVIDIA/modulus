@@ -32,3 +32,18 @@ defaults:
 
   # Training
   - training/corrdiff_regression_mini
+
+# Parameters for wandb logging
+wanbd:
+  key: <your_api_key>
+  # You wandb API key
+  project: <your_project_name>
+  # Your wanb project name
+  entity: <your_entity_name>
+  # Name of your wandb enity
+  name: <your_experiment_name>
+  # Name of your experiment
+  mode: online
+  # Logging mode. Accepted values: "offline", "online" or "disabled"
+  watch_model: true
+  # Bool: if true, then wandb logs statistics about your model parameters
