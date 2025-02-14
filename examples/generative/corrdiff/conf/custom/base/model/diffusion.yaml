@@ -14,28 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression  # choose from [regression, diffusion, patched_diffusion]
-  run:
-    dir: ./outputs/${hydra:job.name}
+name: diffusion
+# Model type. Do not modify.
+hr_mean_conditioning: True
+# Always use high-res conditionning for regression. Do not modify.
+scale_cond_input: False
+# If true, also scales the input conditioning. Recommended to False. Do not modify.
 
-# Get defaults
-defaults:
-
-  # Dataset
-  - dataset/cwb_train
-
-  # Model
-  - model/corrdiff_regression
-  #- model/corrdiff_diffusion
-  #- model/corrdiff_patched_diffusion
-
-  # Training
-  - training/corrdiff_regression
-  #- training/corrdiff_diffusion
-  #- training/corrdiff_patched_diffusion
-
-  # Validation (comment out to disable validation)
-  - validation/cwb
+# Standard model parameters. Do not modify.
+model_args:
+  gridtype: "sinusoidal"
+  N_grid_channels: 4

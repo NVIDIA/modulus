@@ -166,8 +166,8 @@ def main(cfg: DictConfig) -> None:
     elif cfg.sampler.type == "stochastic":
         sampler_fn = partial(
             stochastic_sampler,
-            img_shape=img_shape[1],
-            patch_shape=patch_shape[1],
+            img_shape=img_shape,
+            patch_shape=patch_shape,
             boundary_pix=cfg.sampler.boundary_pix,
             overlap_pix=cfg.sampler.overlap_pix,
         )
@@ -176,7 +176,6 @@ def main(cfg: DictConfig) -> None:
 
     # Main generation definition
     def generate_fn():
-        img_shape_y, img_shape_x = img_shape
         with nvtx.annotate("generate_fn", color="green"):
             if cfg.generation.sample_res == "full":
                 image_lr_patch = image_lr
@@ -185,8 +184,8 @@ def main(cfg: DictConfig) -> None:
                 image_lr_patch = rearrange(
                     image_lr,
                     "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                    h1=img_shape_y // patch_shape[0],
-                    w1=img_shape_x // patch_shape[1],
+                    h1=img_shape[0] // patch_shape[0],
+                    w1=img_shape[1] // patch_shape[1],
                 )
                 torch.cuda.nvtx.range_pop()
             image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
@@ -236,8 +235,8 @@ def main(cfg: DictConfig) -> None:
                 image_out = rearrange(
                     image_out,
                     "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                    h1=img_shape_y // patch_shape[0],
-                    w1=img_shape_x // patch_shape[1],
+                    h1=img_shape[0] // patch_shape[0],
+                    w1=img_shape[1] // patch_shape[1],
                 )
             # Gather tensors on rank 0
             if dist.world_size > 1:

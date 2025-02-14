@@ -44,3 +44,5 @@ io:
     # How often to print progress
     save_checkpoint_freq: 5
     # How often to save the checkpoints, measured in number of processed samples
+    save_n_recent_checkpoints: -1
+    # Set to a positive integer to only keep the most recent n checkpoints

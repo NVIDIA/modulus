@@ -23,4 +23,11 @@ input_surface_variables: ["u10m", "v10m", "t2m", "q2m", "sp", "msl", "precipitab
 input_isobaric_variables: ['u1000', 'u925', 'u850', 'u700', 'u500', 'u250', 'v1000', 'v925', 'v850', 'v700', 'v500', 'v250', 'z1000', 'z925', 'z850', 'z700', 'z500', 'z200', 't1000', 't925', 't850', 't700', 't500', 't100',  'r1000', 'r925', 'r850', 'r700', 'r500', 'r100']
 ds_factor: 4
 train: False
+train_years: [2020, 2021, 2022, 2023]
+valid_years: [2024]
+normalize: True
+shard: False
+overfit: False
+use_all: False
+sample_shape: [-1, -1]
 hrrr_window: [[1,1057], [4,1796]] # need dims to be divisible by 16 [[0,1024], [0,1024]]

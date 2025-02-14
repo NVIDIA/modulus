@@ -16,7 +16,7 @@
 
 
 import math
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union, Tuple
 
 import torch
 from torch import Tensor
@@ -292,7 +292,7 @@ def stochastic_sampler(
     img_lr: Tensor,
     class_labels: Optional[Tensor] = None,
     randn_like: Callable[[Tensor], Tensor] = torch.randn_like,
-    img_shape: int = 448,
+    img_shape: Union[int, Tuple[int, int]] = 448,
     patch_shape: int = 448,
     overlap_pix: int = 4,
     boundary_pix: int = 2,
@@ -308,31 +308,41 @@ def stochastic_sampler(
     S_noise: float = 1,
 ) -> Tensor:
     """
-    Proposed EDM sampler (Algorithm 2) with minor changes to enable super-resolution and patch-based diffusion.
+    Proposed EDM sampler (Algorithm 2) with minor changes to enable
+    super-resolution and patch-based diffusion.
 
     Parameters
     ----------
     net : Any
-        The neural network model that generates denoised images from noisy inputs.
+        The neural network model that generates denoised images from noisy
+        inputs.
     latents : Tensor
-        The latent variables (e.g., noise) used as the initial input for the sampler.
+        The latent variables (e.g., noise) used as the initial input for the
+        sampler.
     img_lr : Tensor
-        Low-resolution input image for conditioning the super-resolution process.
+        Low-resolution input image for conditioning the super-resolution
+        process.
     class_labels : Optional[Tensor], optional
-        Class labels for conditional generation, if required by the model. By default None.
+        Class labels for conditional generation, if required by the model. By
+        default None.
     randn_like : Callable[[Tensor], Tensor]
-        Function to generate random noise with the same shape as the input tensor.
+        Function to generate random noise with the same shape as the input
+        tensor.
         By default torch.randn_like.
-    img_shape : int
-        The height and width of the full image (assumed to be square). By default 448.
-    patch_shape : int
-        The height and width of each patch (assumed to be square). By default 448.
+    img_shape : Union[int, Tuple[int, int]]
+        The height and width of the full image. If a single int is provided,
+        then the image is assumed to be square. By default 448.
+    patch_shape : Union[int, Tuple[int, int]]
+        The height and width of each patch. If a single int is provided, then
+        the patch is assumed square. By default 448.
     overlap_pix : int
         Number of overlapping pixels between adjacent patches. By default 4.
     boundary_pix : int
-        Number of pixels to be cropped as a boundary from each patch. By default 2.
+        Number of pixels to be cropped as a boundary from each patch. By
+        default 2.
     mean_hr : Optional[Tensor], optional
-        Optional tensor containing mean high-resolution images for conditioning. By default None.
+        Optional tensor containing mean high-resolution images for
+        conditioning. By default None.
     num_steps : int
         Number of time steps for the sampler. By default 18.
     sigma_min : float
@@ -342,7 +352,8 @@ def stochastic_sampler(
     rho : float
         Exponent used in the time step discretization. By default 7.
     S_churn : float
-        Churn parameter controlling the level of noise added in each step. By default 0.
+        Churn parameter controlling the level of noise added in each step. By
+        default 0.
     S_min : float
         Minimum time step for applying churn. By default 0.
     S_max : float
@@ -357,18 +368,26 @@ def stochastic_sampler(
     """
 
     # Adjust noise levels based on what's supported by the network.
-    "Proposed EDM sampler (Algorithm 2) with minor changes to enable super-resolution."
+    # Proposed EDM sampler (Algorithm 2) with minor changes to enable
+    # super-resolution/
     sigma_min = max(sigma_min, net.sigma_min)
     sigma_max = min(sigma_max, net.sigma_max)
     if isinstance(img_shape, tuple):
         img_shape_y, img_shape_x = img_shape
     else:
         img_shape_x = img_shape_y = img_shape
-    if patch_shape > img_shape_x or patch_shape > img_shape_y:
-        patch_shape = min(img_shape_x, img_shape_y)
+    if isinstance(patch_shape, tuple):
+        patch_shape_y, patch_shape_x = patch_shape
+    else:
+        patch_shape_x = patch_shape_y = patch_shape
+    # Make sure patches fit within the image.
+    patch_shape_x = min(patch_shape_x, img_shape_x)
+    patch_shape_y = min(patch_shape_y, img_shape_y)
+    use_patching = patch_shape_x != img_shape_x or patch_shape_y != img_shape_y
 
     # Time step discretization.
-    step_indices = torch.arange(num_steps, dtype=torch.float64, device=latents.device)
+    step_indices = torch.arange(
+        num_steps, dtype=torch.float64, device=latents.device)
     t_steps = (
         sigma_max ** (1 / rho)
         + step_indices
@@ -390,20 +409,25 @@ def stochastic_sampler(
     batch_size = img_lr.shape[0]
     x_lr = img_lr
     if mean_hr is not None:
-        x_lr = torch.cat((mean_hr.expand(x_lr.shape[0], -1, -1, -1), x_lr), dim=1)
+        x_lr = torch.cat(
+            (mean_hr.expand(x_lr.shape[0], -1, -1, -1), x_lr),
+            dim=1
+        )
     global_index = None
 
     # input and position padding + patching
-    if patch_shape != img_shape_x or patch_shape != img_shape_y:
+    if use_patching:
         input_interp = torch.nn.functional.interpolate(
-            img_lr, (patch_shape, patch_shape), mode="bilinear"
+            input=img_lr,
+            size=(patch_shape_y, patch_shape_x),
+            mode="bilinear"
         )
         x_lr = image_batching(
             x_lr,
             img_shape_y,
             img_shape_x,
-            patch_shape,
-            patch_shape,
+            patch_shape_y,
+            patch_shape_x,
             batch_size,
             overlap_pix,
             boundary_pix,
@@ -413,8 +437,8 @@ def stochastic_sampler(
             grid.float(),
             img_shape_y,
             img_shape_x,
-            patch_shape,
-            patch_shape,
+            patch_shape_y,
+            patch_shape_x,
             batch_size,
             overlap_pix,
             boundary_pix,
@@ -422,24 +446,28 @@ def stochastic_sampler(
 
     # Main sampling loop.
     x_next = latents.to(torch.float64) * t_steps[0]
-    for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):  # 0, ..., N-1
+    for i, (t_cur, t_next) in enumerate(
+        zip(t_steps[:-1], t_steps[1:])
+    ):  # 0, ..., N-1
         x_cur = x_next
         # Increase noise temporarily.
         gamma = S_churn / num_steps if S_min <= t_cur <= S_max else 0
         t_hat = net.round_sigma(t_cur + gamma * t_cur)
 
-        x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * randn_like(x_cur)
+        x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() \
+            * S_noise * randn_like(x_cur)
 
-        # Euler step. Perform patching operation on score tensor if patch-based generation is used
-        # denoised = net(x_hat, t_hat, class_labels,lead_time_label=lead_time_label).to(torch.float64)    #x_lr
+        # Euler step. Perform patching operation on score tensor if patch-based
+        # generation is used denoised = net(x_hat, t_hat,
+        # class_labels,lead_time_label=lead_time_label).to(torch.float64)
 
-        if patch_shape != img_shape_x or patch_shape != img_shape_y:
+        if use_patching:
             x_hat_batch = image_batching(
                 x_hat,
                 img_shape_y,
                 img_shape_x,
-                patch_shape,
-                patch_shape,
+                patch_shape_y,
+                patch_shape_x,
                 batch_size,
                 overlap_pix,
                 boundary_pix,
@@ -468,14 +496,14 @@ def stochastic_sampler(
                 class_labels,
                 global_index=global_index,
             ).to(torch.float64)
-        if patch_shape != img_shape_x or patch_shape != img_shape_y:
+        if use_patching:
 
             denoised = image_fuse(
                 denoised,
                 img_shape_y,
                 img_shape_x,
-                patch_shape,
-                patch_shape,
+                patch_shape_y,
+                patch_shape_x,
                 batch_size,
                 overlap_pix,
                 boundary_pix,
@@ -485,13 +513,13 @@ def stochastic_sampler(
 
         # Apply 2nd order correction.
         if i < num_steps - 1:
-            if patch_shape != img_shape_x or patch_shape != img_shape_y:
+            if use_patching:
                 x_next_batch = image_batching(
                     x_next,
                     img_shape_y,
                     img_shape_x,
-                    patch_shape,
-                    patch_shape,
+                    patch_shape_y,
+                    patch_shape_x,
                     batch_size,
                     overlap_pix,
                     boundary_pix,
@@ -517,13 +545,13 @@ def stochastic_sampler(
                     class_labels,
                     global_index=global_index,
                 ).to(torch.float64)
-            if patch_shape != img_shape_x or patch_shape != img_shape_y:
+            if use_patching:
                 denoised = image_fuse(
                     denoised,
                     img_shape_y,
                     img_shape_x,
-                    patch_shape,
-                    patch_shape,
+                    patch_shape_y,
+                    patch_shape_x,
                     batch_size,
                     overlap_pix,
                     boundary_pix,
