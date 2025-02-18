@@ -93,9 +93,6 @@ def test_model_checkpointing(
     mlp_model_1 = model_generator(8).to(device)
     mlp_model_2 = model_generator(4).to(device)
 
-    print(f"mlp_model_1 = {mlp_model_1}")
-    print(f"mlp_model_2 = {mlp_model_2}")
-
     input_1 = torch.randn(4, 8).to(device)
     input_2 = torch.randn(4, 4).to(device)
 
