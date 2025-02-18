@@ -80,7 +80,7 @@ def test_model_checkpointing(
 
     current_file = Path(__file__).resolve()
     current_dir = current_file.parent
-    os.environ["MSC_CONFIG"] = f"{current_dir}/msc_config.yaml"
+    os.environ["MSC_CONFIG"] = f"{current_dir}/msc_config_checkpoint.yaml"
 
     conn = boto3.resource("s3", region_name="us-east-1")
     conn.create_bucket(Bucket="checkpoint-test-bucket")
