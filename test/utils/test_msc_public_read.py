@@ -20,7 +20,8 @@ import zarr
 from pathlib import Path
 
 
-# Verifies that a Zarr file in a publicly accessible S3 bucket can be read from using MSC (Multi-Storage Client).
+# Verifies that a Zarr file in a publicly accessible S3 bucket can be read using MSC (Multi-Storage Client).
+# See the [Multi-storage Client README](/examples/multi_storage_client/README.md) for further information.
 def test_msc_read():
 
     # Point at the MSC config file which specifies access information for the S3 bucket
