@@ -1,17 +1,17 @@
 
-Modulus Shard Tensor
+Modulus ``ShardTensor``
 ===========
 
 In scientific AI applications, the parallelization techniques to enable state of the art 
 models are different from those used in training large language models.  Modulus 
-introduces a new parallelization primitive called a `ShardTensor` that is designed for 
+introduces a new parallelization primitive called a ``ShardTensor`` that is designed for 
 large-input AI applications to enable domain parallelization.
 
-`ShardTensor` provides a distributed tensor implementation that supports uneven sharding across devices. 
+``ShardTensor`` provides a distributed tensor implementation that supports uneven sharding across devices. 
 It builds on PyTorch's DTensor while adding flexibility for cases where different ranks may have 
 different local tensor sizes.
 
-The example below shows how to create and work with `ShardTensor`:
+The example below shows how to create and work with ``ShardTensor``:
 
 .. code:: python
 
@@ -56,11 +56,11 @@ The example below shows how to create and work with `ShardTensor`:
 How does this work?
 """"""""""""""""""
 
-`ShardTensor` extends PyTorch's `DTensor` to support uneven sharding where different ranks can have different 
+``ShardTensor`` extends PyTorch's ``DTensor`` to support uneven sharding where different ranks can have different 
 local tensor sizes. It tracks shard size information and handles redistribution between different 
 sharding schemes while maintaining gradient flow.
 
-Key differences from `DTensor` include:
+Key differences from ``DTensor`` include:
 - Support for uneven sharding where ranks have different local sizes
 - Tracking and propagation of shard size information
 - Custom collective operations optimized for uneven sharding
@@ -69,13 +69,13 @@ Key differences from `DTensor` include:
 Operations work by:
 1. Converting inputs to local tensors
 2. Performing operations locally 
-3. Constructing new `ShardTensor` with appropriate sharding
+3. Constructing new ``ShardTensor`` with appropriate sharding
 4. Handling any needed communication between ranks
 
 .. autosummary::
    :toctree: generated
 
-`ShardTensor`
+``ShardTensor``
 -----------
 
 .. autoclass:: modulus.distributed.shard_tensor.ShardTensor
@@ -97,22 +97,21 @@ For example, consider a 2D convolution operation on a high-resolution image. If 
 
 For high resolution images, this can easily lead to out of memory errors as model depth grows, even if the number of parameters is small - this is a significant contrast from LLM model training, where the memory usage is dominated by the number of parameters and the corresponding optimizer states.  In software solutions like DeepSpeed and ZeRO, this is handled by partitioning the model across GPUs, but this is not a solution for large-input applications.
 
-`ShardTensor` helps address this by:
+``ShardTensor`` helps address this by:
 - Distributing the input data across multiple devices
 - Performing operations on smaller local portions
 - Coordinating the necessary communication between devices in the forward and backward passes
 
-`ShardTensor` is built as an extension of PyTorch's DTensor, and gains substantial functionality by leveraging the utilities already implemented in the PyTorch distributed package.  However, some operations on sharded input data are not trivial to implement correctly, nor relevant to the model sharding problem.  In Modulus, we have implemented parallelized versions of several key operations, including (so far):
+``ShardTensor`` is built as an extension of PyTorch's DTensor, and gains substantial functionality by leveraging the utilities already implemented in the PyTorch distributed package.  However, some operations on sharded input data are not trivial to implement correctly, nor relevant to the model sharding problem.  In Modulus, we have implemented parallelized versions of several key operations, including (so far):
 
 - Convolution (1D, 2D, 3D)
 - Neighborhood Attention (2D)
 
 These operations are implemented in the ``modulus.distributed.shard_utils`` module, and are enabled by dynamically intercepting calls to (for example) ``torch.nn.functional.conv2d``.  When the function is called with ShardTensor inputs, the operation is automatically parallelized across the mesh associated with the input.  When the function is called with non-ShardTensor inputs, the operation is executed in a non-parallelized manner, exactly as expected.
 
-To enable these operations, you must import `patch_operations` from `modulus.distributed.shard_utils`.  This will patch the relevant functions in the distributed package to support `ShardTensor` inputs.
+To enable these operations, you must import ``patch_operations`` from ``modulus.distributed.shard_utils``.  This will patch the relevant functions in the distributed package to support ``ShardTensor`` inputs.
 
 We are continuing to add more operations, and contributions are welcome!
-
 
 
 

@@ -1,7 +1,7 @@
-Domain Decomposition, `ShardTensor` and `FSDP` Tutorial
+Domain Decomposition, ``ShardTensor`` and ``FSDP`` Tutorial
 =============================
 
-This tutorial demonstrates how to use Modulus's `ShardTensor` functionality alongside PyTorch's `FSDP`   (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
+This tutorial demonstrates how to use Modulus's ``ShardTensor`` functionality alongside PyTorch's ``FSDP``   (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
 
 1. Create a simple CNN model
 2. Set up input data sharding across multiple GPUs
@@ -11,7 +11,7 @@ This tutorial demonstrates how to use Modulus's `ShardTensor` functionality alon
 Simple CNN Model
 ---------------
 
-The preamble to the training script has an important patch to make sure that the conv2d operation works with `ShardTensor`:
+The preamble to the training script has an important patch to make sure that the conv2d operation works with ``ShardTensor``:
 
 .. code-block:: python
 
@@ -81,7 +81,7 @@ First, let's create a simple one-layer CNN model:
             return x
     
 
-Preparing Data with `ShardTensor`
+Preparing Data with ``ShardTensor``
 -----------------------------
 
 Create a simple dataset and shard it across devices:
@@ -209,14 +209,14 @@ To run this example with 4 GPUs (2x2 mesh):
 
     torchrun --nproc_per_node=4 train_cnn.py
 
-This will train the model using both data parallelism (`FSDP`) and spatial decomposition (`ShardTensor`) across 4 GPUs in a 2x2 configuration.
+This will train the model using both data parallelism (``FSDP``) and spatial decomposition (``ShardTensor``) across 4 GPUs in a 2x2 configuration.
 
 Key Points
 ---------
 
-1. The device mesh is split into two dimensions: one for data parallelism (`FSDP`) and one for spatial decomposition (`ShardTensor`).  We get that in one line using torch DeviceMesh: `mesh = dm.initialize_mesh((-1, 2), mesh_dim_names=["data", "spatial"])`.  And in fact, for multilevel parallelism, you can extend your mesh further.  Think of DeviceMesh like a tensor of arbitrary rank, and each element is one GPU.
-2. Input data is sharded across the spatial dimension using `ShardTensor`
-3. `FSDP` handles parameter sharding and optimization across the data parallel dimension
+1. The device mesh is split into two dimensions: one for data parallelism (``FSDP``) and one for spatial decomposition (``ShardTensor``).  We get that in one line using torch DeviceMesh: ``mesh = dm.initialize_mesh((-1, 2), mesh_dim_names=["data", "spatial"])``.  And in fact, for multilevel parallelism, you can extend your mesh further.  Think of DeviceMesh like a tensor of arbitrary rank, and each element is one GPU.
+2. Input data is sharded across the spatial dimension using ``ShardTensor``
+3. ``FSDP`` handles parameter sharding and optimization across the data parallel dimension
 4. The model can process larger spatial dimensions efficiently by distributing the computation
 
 This example demonstrates basic usage - for production use cases, you'll want to add:
@@ -228,4 +228,4 @@ This example demonstrates basic usage - for production use cases, you'll want to
 - Error handling
 - Logging and metrics
 
-For more advanced usage and configuration options, refer to the Modulus documentation on `ShardTensor` and the PyTorch FSDP documentation.
+For more advanced usage and configuration options, refer to the Modulus documentation on ``ShardTensor`` and the PyTorch FSDP documentation.
