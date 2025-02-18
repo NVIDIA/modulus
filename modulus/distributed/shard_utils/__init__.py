@@ -13,3 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
+def register_shard_wrappers():
+
+    from .conv_patches import generic_conv_nd_wrapper
+    from .natten_patches import na2d_wrapper

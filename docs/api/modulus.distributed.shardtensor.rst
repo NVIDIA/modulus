@@ -7,7 +7,7 @@ models are different from those used in training large language models.  Modulus
 introduces a new parallelization primitive called a ShardTensor that is designed for 
 large-input AI applications to enable domain parallelization.
 
-ShardTensor provides a distributed tensor implementation that supports uneven sharding across devices. 
+`ShardTensor` provides a distributed tensor implementation that supports uneven sharding across devices. 
 It builds on PyTorch's DTensor while adding flexibility for cases where different ranks may have 
 different local tensor sizes.
 
@@ -24,10 +24,11 @@ The example below shows how to create and work with ShardTensor:
     def main():
         # Initialize distributed environment
         DistributedManager.initialize()
-        dist = DistributedManager()
+        dm = DistributedManager()
 
-        # Create a 1D device mesh
-        mesh = DeviceMesh(device_type="cuda", mesh=[0, 1, 2, 3])
+        # Create a 1D device mesh - by default, a -1 will use all devices
+        # (For a 2D mesh, -1 will work to infer a single dimension in a mesh tensor)
+        mesh = dm.initialize_mesh((-1,), mesh_dim_names=["spatial"])
 
         # Create a tensor on rank 0
         if dist.rank == 0:

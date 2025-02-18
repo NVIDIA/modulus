@@ -209,7 +209,7 @@ def redistribute_local_shard_tensor(
     *,
     async_op: bool = False,
     is_backward: bool = False,
-    target_sharding_sizes: Optional[dict[int, Tuple[torch.Size, ...]]] = None,
+    target_sharding_sizes: Optional[dict[int, Tuple[torch.Size, ...]]] = {},
 ) -> torch.Tensor:
     """
     This redistribute the local tensor (torch.Tensor) from the current ShardTensorSpec to
@@ -476,7 +476,7 @@ class ShardRedistribute(torch.autograd.Function):
             target_sharding_sizes = get_tensor_sharding_shapes_by_dim(
                 current_spec, placements
             )
-
+            ctx.target_sharding_sizes = target_sharding_sizes
             local_tensor = input._local_tensor
             output = redistribute_local_shard_tensor(
                 local_tensor,
@@ -524,12 +524,15 @@ class ShardRedistribute(torch.autograd.Function):
 
         local_tensor = grad_output._local_tensor
 
+        target_sharding_sizes = ctx.target_sharding_sizes
+
         output = redistribute_local_shard_tensor(
             local_tensor,
             current_spec,
             previous_spec,
             async_op=async_op,
             is_backward=True,
+            target_sharding_sizes=target_sharding_sizes,
         )
 
         # normalize the target placement to replicate if it is partial

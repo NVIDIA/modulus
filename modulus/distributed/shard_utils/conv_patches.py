@@ -327,10 +327,31 @@ class PartialConvND(torch.autograd.Function):
         # Save local tensors to avoid distributed dispatch in backward pass
         ctx.save_for_backward(inputs, weights, bias)
 
-        # Force padding to 0 since padding is handled by halo exchange
-        conv_kwargs["padding"] = promote_to_iterable(0, conv_kwargs["stride"])
-        ctx.conv_kwargs = conv_kwargs
+        # Get sharded output dimensions by checking placements
+        sharded_output_dims = []
+        for i, placement in enumerate(output_spec.placements):
+            if isinstance(placement, Shard):
+                sharded_output_dims.append(placement.dim)
 
+        # Force padding to 0 _along sharded dims only_ since padding is
+        # handled by halo exchange
+        # Check if input is channels first (NCHW) or channels last (NHWC)
+        if inputs.is_contiguous(memory_format=torch.contiguous_format):
+            offset = 2
+        elif inputs.is_contiguous(memory_format=torch.channels_last):
+            offset = 1
+        else:
+            raise ValueError("Input tensor must be channels first or channels last")
+
+        padding = list(conv_kwargs["padding"])
+
+        # Update padding arguments.  Set to 0 on sharded dims only:
+        for i, p in enumerate(padding):
+            if i + offset in sharded_output_dims:
+                padding[i] = 0
+
+        conv_kwargs["padding"] = tuple(padding)
+        ctx.conv_kwargs = conv_kwargs
         # Perform local convolution on this shard
         local_chunk = aten.convolution.default(inputs, weights, bias, **conv_kwargs)
 
@@ -525,3 +546,10 @@ def repackage_conv_args(
     }
 
     return input, weight, bias, return_kwargs
+
+
+# This will become the future implementation, or similar.
+# Why not today?  Because the backwards pass in DTensor has an explicit (and insufficient)
+# hard coded implementation for the backwards pass.
+# When that switch happens, the order in the arg repackaging will need to be updated.
+# ShardTensor.register_function_handler(aten.convolution.default, generic_conv_nd_wrapper)

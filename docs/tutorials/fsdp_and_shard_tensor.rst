@@ -90,8 +90,8 @@ Create a simple dataset and shard it across devices:
 
     def create_sample_data(batch_size=32, height=32, width=64):
         # Create random data
-        data = torch.randn(batch_size, 3, height, width, device=f"cuda:{dm.local_rank}")
-        labels = torch.randint(0, 10, (batch_size,), device=f"cuda:{dm.local_rank}")
+        data = torch.randn(batch_size, 3, height, width, device=f"cuda:{dm.device}")
+        labels = torch.randint(0, 10, (batch_size,), device=f"cuda:{dm.device}")
         
         # Convert to ShardTensor for spatial decomposition
         placements = (Shard(2),)  # Shard H dimensions
@@ -120,7 +120,7 @@ Set up the model with both FSDP and spatial decomposition:
 
     def setup_model():
         # Create base model
-        model = SimpleCNN().to(f"cuda:{dm.local_rank}")
+        model = SimpleCNN().to(f"cuda:{dm.device}")
         
         # Take the module and distributed it over the spatial mesh
         # This will replicate the model over the spatial mesh
