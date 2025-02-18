@@ -9,24 +9,33 @@ This work addresses shape deviation modeling and compensation in additive manufa
 
 
 
-<p align="center">
-<img src="../../../docs/img/GraphCompNet/bar_chamber.png" width="560" />
-</p>
+[//]: # (<p align="center">)
+
+[//]: # (<img src="../../../docs/img/GraphCompNet/bar_chamber.png" width="560" />)
+
+[//]: # (</p>)
 
 ## Sample results 
 
-Prediction & compensation accuracy  (mm)
-<p align="center">
-<img src="../../../docs/img/GraphCompNet/dl_comp_test-2.png" width="500" />
-</p>
+Prediction & compensation accuracy  (mm) to be updated
 
-Compensation on Molded fiber dataset:
+[//]: # (<p align="center">)
 
-Comparison of four sample parts in one print run, the top row illustrates the difference between the design CAD file and the scanned printed part geometry before applying compensation, the bottom row shows the difference between the design CAD file and the scanned printed part geometry after applying compensation using our trained prediction and compensation engine.
+[//]: # (<img src="../../../docs/img/GraphCompNet/dl_comp_test-2.png" width="500" />)
 
-<p align="center">
-<img src="../../../docs/img/GraphCompNet/table1_fig-2.png" width="900" />
-</p>
+[//]: # (</p>)
+
+[//]: # (Compensation on Molded fiber dataset:)
+
+[//]: # ()
+[//]: # (Comparison of four sample parts in one print run, the top row illustrates the difference between the design CAD file and the scanned printed part geometry before applying compensation, the bottom row shows the difference between the design CAD file and the scanned printed part geometry after applying compensation using our trained prediction and compensation engine.)
+
+[//]: # ()
+[//]: # (<p align="center">)
+
+[//]: # (<img src="../../../docs/img/GraphCompNet/table1_fig-2.png" width="900" />)
+
+[//]: # (</p>)
 
 ## Key requirments
 
@@ -84,9 +93,10 @@ Other dependencies for development:
 
          - scan_red<part_id>.csv: contains 3 columns for point location 
 
-- Post-processing: 
-  
-    - https://github.azc.ext.hp.com/Shape-Compensation/Shape_compensator
+[//]: # (- Post-processing: )
+
+[//]: # (  )
+[//]: # (    - https://github.azc.ext.hp.com/Shape-Compensation/Shape_compensator)
 
 
 ## Training
