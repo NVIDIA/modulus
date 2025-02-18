@@ -64,7 +64,7 @@ def model_generator(request) -> Callable:
 
 @mock_aws
 @import_or_fail(["wandb", "mlflow"])
-@pytest.mark.parametrize("device", [("cpu")])
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_model_checkpointing(
     device,
     model_generator,
