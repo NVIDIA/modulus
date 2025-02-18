@@ -24,6 +24,7 @@ import pytest
 import torch
 import torch.nn as nn
 from moto import mock_aws
+from pathlib import Path
 from pytest_utils import import_or_fail
 
 from modulus.distributed import DistributedManager
@@ -76,7 +77,11 @@ def test_model_checkpointing(
 
     os.environ["AWS_ACCESS_KEY_ID"] = "access-key-id"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "secret-access-key"
-    os.environ["MSC_CONFIG"] = "./msc_config.yaml"
+
+    current_file = Path(__file__).resolve()
+    current_dir = current_file.parent
+    os.environ["MSC_CONFIG"] = f"{current_dir}/msc_config.yaml"
+
     conn = boto3.resource("s3", region_name="us-east-1")
     conn.create_bucket(Bucket="checkpoint-test-bucket")
 
