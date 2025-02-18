@@ -213,6 +213,19 @@ class ShardTensor(DTensor):
     _spec: ShardTensorSpec
     __slots__ = ["_local_tensor", "_spec"]
 
+    _function_registry: Dict[torch._ops.OpOverload, callable] = {}
+
+    @classmethod
+    def register_function_handler(cls, func: torch._ops.OpOverload, handler: callable):
+        """
+        Register a custom handler for a specific function.
+
+        Args:
+            func: The function to intercept.
+            handler: The custom handler to call instead of the default dispatch.
+        """
+        cls._function_registry[func] = handler
+
     @staticmethod
     def __new__(
         cls,
@@ -278,13 +291,60 @@ class ShardTensor(DTensor):
         Returns:
             Equivalent ShardTensor
         """
+
+        # DTensor is locked to sharding a tensor according to chunk format.
+        # We can use that to infer sharding sizes with no communication.
+
+        mesh = dtensor._spec.mesh
+        placements = dtensor._spec.placements
+
+        temp_sharding_sizes = {}
+        for i in range(mesh.ndim):
+            if isinstance(placements[i], Shard):
+                # Compute the chunk size for this dimension:
+                input_dim = dtensor.shape[placements[i].dim]
+                chunked_shapes = compute_split_shapes(input_dim, mesh.size(i))
+                # This needs to be a tuple of torch.Size
+
+                temp_sharding_sizes[i] = chunked_shapes
+
+        # To create the full, final sharding shapes, we update the global shape with
+        sharding_sizes = {}
+        # Initialize sharding_sizes with same keys as temp_sharding_sizes
+        # Each value is a list of torch.Size equal to mesh size for that dimension
+        for mesh_dim in temp_sharding_sizes.keys():
+            placement = placements[mesh_dim]
+            # We should not have the mesh dim in this dict if it wasn't sharded above:
+            tensor_dim = placement.dim
+
+            sharding_sizes[mesh_dim] = [
+                torch.Size(dtensor.shape) for _ in temp_sharding_sizes[mesh_dim]
+            ]
+            # For each shard along this mesh dimension
+            for i, shard_size in enumerate(temp_sharding_sizes[mesh_dim]):
+                # Replace size at sharded dim with actual shard size
+                updated_shard_size = torch.Size(
+                    tuple(
+                        (
+                            shard_size if j == tensor_dim else s
+                            for j, s in enumerate(sharding_sizes[mesh_dim][i])
+                        )
+                    )
+                )
+                sharding_sizes[mesh_dim][i] = updated_shard_size
+
+        # Cast to tuples:
+        for mesh_dim in temp_sharding_sizes.keys():
+            sharding_sizes[mesh_dim] = tuple(sharding_sizes[mesh_dim])
+
         spec = ShardTensorSpec(
             mesh=dtensor._spec.mesh,
             placements=dtensor._spec.placements,
             tensor_meta=dtensor._spec.tensor_meta,
-            _sharding_sizes=None,  # Leave this to none for a lazy init and assume it's not breaking to make this cast.
+            _sharding_sizes=sharding_sizes,  # Leave this to none for a lazy init and assume it's not breaking to make this cast.
             _local_shape=dtensor._local_tensor.shape,
         )
+
         return ShardTensor.__new__(
             cls,
             local_tensor=dtensor._local_tensor,
@@ -304,11 +364,10 @@ class ShardTensor(DTensor):
         # Leverage DTensor Dispatch as much as possible, but, enable
         # the ability to operate on this output in the future:
 
-        dispatch_res = DTensor.__torch_dispatch__(func, types, args, kwargs)
+        if func in cls._function_registry:
+            return cls._function_registry[func](*args, **kwargs)
 
-        # TODO - for ``Partial`` specs, in SOME cases, we need to include a "weight"
-        # For example, taking the average of an unevenly-sharded tensor, the weight
-        # must be proportial to _local_tensor.
+        dispatch_res = DTensor.__torch_dispatch__(func, types, args, kwargs)
 
         # Return a shard tensor instead of a dtensor.
         # ShardTensor inherits from DTensor and can lazy-init from for efficiency

@@ -63,18 +63,28 @@ class ShardTensorSpec(DTensorSpec):
         int
             Hash value incorporating mesh, placements, tensor metadata and sharding sizes
         """
-        if self.tensor_meta is not None and self._sharding_sizes is not None:
-            return hash(
-                (
-                    self.mesh,
-                    self.placements,
-                    self.tensor_meta.shape,
-                    self.tensor_meta.stride,
-                    self.tensor_meta.dtype,
-                    tuple(sorted(self._sharding_sizes.items())),
-                )
-            )
-        return hash((self.mesh, self.placements))
+
+        hash_items = []
+        hash_items.append(self.mesh)
+        hash_items.append(self.placements)
+
+        if self.tensor_meta is not None:
+            hash_items.append(self.tensor_meta.shape)
+            hash_items.append(self.tensor_meta.stride)
+            hash_items.append(self.tensor_meta.dtype)
+        if self._sharding_sizes is not None:
+            hash_items.append(tuple(sorted(self._sharding_sizes.items())))
+        hash_tuple = tuple(hash_items)
+        return hash(hash_tuple)
+
+    def __hash__(self) -> int:
+        """
+        Just like the parent class: compute the hash lazily.
+        See torch.distributed.tensor._dtensor_spec.py for more information.
+        """
+        if self._hash is None:
+            self._hash = self._hash_impl()
+        return self._hash
 
     def sharding_sizes(
         self, mesh_dim: Optional[int] = None
@@ -101,6 +111,22 @@ class ShardTensorSpec(DTensorSpec):
             if mesh_dim in self._sharding_sizes:
                 return self._sharding_sizes[mesh_dim]
         return self._sharding_sizes
+
+    def __eq__(self, other: object) -> bool:
+        """Check if two ShardTensorSpecs are equal.
+
+        Parameters
+        ----------
+        other : object
+            The other object to compare to
+        """
+        if not isinstance(other, ShardTensorSpec):
+            return False
+        if not super().__eq__(other):
+            return False
+        if self._sharding_sizes != other._sharding_sizes:
+            return False
+        return True
 
     @property
     def local_shape(self) -> torch.Size:
@@ -193,6 +219,12 @@ def _stride_from_contiguous_shape_C_style(
     Tuple[int]
         list of strides of same length as input
     """
+
+    # For scalars, stride is empty:
+    if len(shape) == 0:
+        return ()
+
+    # Implicitly, assume sharding only happens over specified placements
     # To compute strides, we make the assumption that the tensors are in the "C" style layout (default)
     # So, all strides at the deepest level are 1.
     stride = [
@@ -214,9 +246,7 @@ def _all_gather_shard_shapes(
 
     shard_shapes_by_dim = {}
     global_shape = [s for s in local_shape]
-
     # We start by assuming the global shape is the local shape and fix it on sharded axes
-
     for mesh_axis, placement in enumerate(placements):
 
         if isinstance(placement, Shard):
@@ -262,7 +292,7 @@ def _all_gather_shard_shapes(
             # This assumes full sharding:
             global_shape[tensor_dim] = sum([all_s[tensor_dim] for all_s in all_shapes])
 
-    return shard_shapes_by_dim, global_shape
+    return shard_shapes_by_dim, tuple(global_shape)
 
 
 def _infer_shard_tensor_spec_from_local_chunks(
@@ -307,12 +337,6 @@ def _infer_shard_tensor_spec_from_local_chunks(
         raise ValueError("Mesh dimension must match placements length")
 
     local_shape = local_chunk.shape
-    # Implicitly, assume sharding only happens over specified placements
-    # We need all placements, however, to be less than or equal to the local rank:
-    if len(placements) > len(local_shape):
-        raise ValueError(
-            f"Too many placements detected ({len(placements)}) for tensor of rank {len(local_shape)}"
-        )
 
     shard_shapes_by_dim, global_shape = _all_gather_shard_shapes(
         local_shape,

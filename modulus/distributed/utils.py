@@ -249,7 +249,7 @@ def all_gather_v_wrapper(
     comm_size = dist.get_world_size(group=group)
 
     if (sizes is not None) and (len(sizes) != comm_size):
-        raise ValueError()
+        raise ValueError(f"Mismatch in sizes {len(sizes)} and comm_size {comm_size}")
     if dim >= tensor.dim():
         raise ValueError()
 

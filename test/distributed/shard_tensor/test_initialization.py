@@ -32,7 +32,7 @@ def init_dist(rank, num_gpus):
     os.environ["LOCAL_RANK"] = f"{rank % torch.cuda.device_count()}"
     os.environ["WORLD_SIZE"] = f"{num_gpus}"
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = str(12345)
+    os.environ["MASTER_PORT"] = str(13245)
 
     DistributedManager.initialize()
     dm = DistributedManager()
@@ -47,9 +47,9 @@ def init_global_shape_and_placements(mesh_names):
 
     # Sharding in up to two dimensions (domain_H, domain_W)
     domain_names = mesh_names[1:]
-    domain_mesh = global_mesh[*domain_names]
+    domain_mesh = global_mesh[tuple(domain_names)]
 
-    global_shape = [10, 64, 64, 10]
+    global_shape = (10, 64, 64, 10)
 
     placements = [Shard(1)]
     # 2D placements if mesh is 2D
@@ -129,8 +129,12 @@ def run_shard_tensor_initialization_from_all_dtensor(
     raw_data = torch.randn(global_shape, device=torch.device(f"cuda:{dm.local_rank}"))
 
     dt = distribute_tensor(raw_data, device_mesh=domain_mesh, placements=placements)
+    print(dt._spec)
+    print(domain_mesh)
 
     st = ShardTensor.from_dtensor(dt)
+
+    print(hash(st._spec))
 
     assert torch.allclose(dt.full_tensor(), st.full_tensor())
 
@@ -371,4 +375,4 @@ def test_shard_tensor_initialization_from_all_dtensor(
 
 if __name__ == "__main__":
 
-    test_shard_tensor_initialization_from_local_chunks(-1, 4, 1)
+    test_shard_tensor_initialization_from_all_dtensor(-1, 2, 1)

@@ -18,9 +18,12 @@
 from ._shard_tensor_spec import ShardTensorSpec
 from .autograd import all_gather_v, gather_v, indexed_all_to_all_v, scatter_v
 from .config import ProcessGroupConfig, ProcessGroupNode
+from .custom_ops import (
+    sharded_mean_wrapper,
+    unbind_rules,
+)
 
 # Load and register custom ops:
-from .custom_ops import unbind_rules
 from .manager import (
     DistributedManager,
     ModulusUndefinedGroupError,

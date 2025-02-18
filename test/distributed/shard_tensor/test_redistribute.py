@@ -49,7 +49,7 @@ def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False):
     # Using the same size per rank in mesh dimension
     for dim in range(domain_mesh.ndim):
         dim_rank = dist.get_group_rank(domain_mesh.get_group(dim), dm.rank)
-        local_shape.append(min_size + dim_rank * index_stride)
+        local_shape.append((dim_rank + dim + 1) * min_size + dim_rank * index_stride)
 
     local_shape.append(100)
 
@@ -65,13 +65,15 @@ def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False):
     return st
 
 
-def run_shard_tensor_global_reduction(
-    rank, num_gpus, mesh_names, mesh_sizes, op, verbose
-):
+def run_shard_tensor_reduction(rank, num_gpus, mesh_names, mesh_sizes, op, verbose):
 
     init_dist(rank, num_gpus)
 
     shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
+    if verbose:
+        print(
+            f"Shard tensor global shape: {shard_tensor.shape} and local shape: {shard_tensor._local_tensor.shape}"
+        )
 
     # For this test, we're testing that the reduction of the tensor works correctly
 
@@ -81,17 +83,44 @@ def run_shard_tensor_global_reduction(
     # Note that calling `full_tensor` is already checked in the initialize file but that's
     # also, technically, a reduction.
 
+    # Check the global reduction:
     # Perform the operation partially then reduce:
     partial_result = op(shard_tensor).full_tensor()
-
     # Replicate, then perform the operation
     full_result = op(shard_tensor.full_tensor())
 
-    # We should have agreement on every rank
     if verbose:
         print(f"Partial first: {partial_result}")
         print(f"All gather first: {full_result}")
+
     assert torch.allclose(partial_result, full_result)
+
+    # TODO - this needs to be supported, but currently I believe the reductions
+    # are incorrect.  Upstream pytorch might be correct for DTensor
+    # but it isn't working for ShardTensor.
+
+    # # Also check by reducing over sharded and not-sharded dimensions:
+    # dim_options = range(len(shard_tensor.shape))
+    # for dim in dim_options:
+    #     # Perform the operation partially then reduce:
+    #     partial_result = op(shard_tensor, dim=dim)
+    #     # Replicate, then perform the operation
+    #     full_result = op(shard_tensor.full_tensor(), dim=dim)
+
+    #     print(f"partial shape: {partial_result.shape} and local shape: {partial_result._local_tensor.shape}")
+    #     print(f"full shape: {full_result.shape}")
+    #     print(f"Partial placements: {partial_result._spec.placements}")
+    #     partial_result = partial_result.full_tensor()
+
+    #     print(f"difference: {partial_result - full_result}")
+
+    #     if verbose:
+    #         print(f"Partial first: {partial_result}")
+    #         print(f"All gather first: {full_result}")
+
+    #     assert torch.allclose(partial_result, full_result)
+
+    # We should have agreement on every rank
 
 
 @pytest.mark.multigpu
@@ -99,7 +128,7 @@ def run_shard_tensor_global_reduction(
 @pytest.mark.parametrize("domain_H", [2, 4])
 @pytest.mark.parametrize("domain_W", [1, 2])
 @pytest.mark.parametrize("op", [torch.sum, torch.min, torch.max, torch.mean])
-def test_shard_tensor_global_reduction(data_parallel_size, domain_H, domain_W, op):
+def test_shard_tensor_reduction(data_parallel_size, domain_H, domain_W, op):
     """
     This test is meant to ensure ShardTensor can be initialized correctly
     from local data. Checks that reduction operations work correctly.
@@ -113,8 +142,8 @@ def test_shard_tensor_global_reduction(data_parallel_size, domain_H, domain_W, o
     if domain_H == 1 and domain_W == 1:
         pytest.skip("No point testing this without parallelism in the domain axes")
 
-    if op == torch.mean:
-        pytest.xfail("Mean reduction not yet supported for uneven tensor shapes")
+    # if op == torch.mean:
+    # pytest.xfail("Mean reduction not yet supported for uneven tensor shapes")
 
     remaining_gpus = num_gpus
     mesh_names = ["data_parallel"]
@@ -135,7 +164,7 @@ def test_shard_tensor_global_reduction(data_parallel_size, domain_H, domain_W, o
     torch.multiprocessing.set_start_method("spawn", force=True)
 
     torch.multiprocessing.spawn(
-        run_shard_tensor_global_reduction,
+        run_shard_tensor_reduction,
         args=(num_gpus, mesh_names, mesh_sizes, op, verbose),
         nprocs=num_gpus,
         join=True,
@@ -143,7 +172,7 @@ def test_shard_tensor_global_reduction(data_parallel_size, domain_H, domain_W, o
     )
 
 
-def run_shard_tensor_to_replicate(
+def run_shard_tensor_redistribute(
     rank, num_gpus, mesh_names, mesh_sizes, dst_placements, verbose
 ):
     """Test redistribution between different sharding schemes"""
@@ -153,10 +182,18 @@ def run_shard_tensor_to_replicate(
     # Create initial sharded tensor
     shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
     if verbose:
+        print(f"Shard mesh is {shard_tensor._spec.mesh}")
         print(f"shard_tensor placements: {shard_tensor._spec.placements}")
+        print(f"Target placements: {dst_placements}")
+        print(f"shard_tensor shape: {shard_tensor.shape}")
 
     # Redistribute to new placement
     redistributed = shard_tensor.redistribute(placements=dst_placements)
+
+    # assert False
+    if verbose:
+        print(f"redistributed placements: {redistributed._spec.placements}")
+        dist.barrier()
 
     # Verify data is preserved after redistribution
     redistributed_data = redistributed.full_tensor()
@@ -164,32 +201,109 @@ def run_shard_tensor_to_replicate(
     # Store original data for validation
     original_data = shard_tensor.full_tensor()
 
-    if verbose:
-        print(
-            f"Original shape: {shard_tensor.shape} vs Redistributed shape: {redistributed.shape}"
-        )
-        print(f"Original data: {original_data}")
-        print(f"Redistributed data: {redistributed_data}")
-
     assert torch.allclose(original_data, redistributed_data)
+
+
+pytest.mark.multigpu
+
+
+@pytest.mark.parametrize("data_parallel_size", [-1])
+@pytest.mark.parametrize("domain_H", [2, 4, 8])
+@pytest.mark.parametrize(
+    "redistribution_case",
+    [
+        ("S1", [Shard(1)]),  # This ought to be a no op!
+        (
+            "R",
+            [
+                Replicate(),
+            ],
+        ),  # Only triggers redistribution on first tensor dim.  gather_v
+        (
+            "S2",
+            [
+                Shard(2),
+            ],
+        ),  # Trigger sharding on to a *new* dimension all_to_all_v
+    ],
+)
+def test_shard_tensor_redistribute1d(data_parallel_size, domain_H, redistribution_case):
+    """Test different redistribution scenarios for ShardTensor"""
+
+    num_gpus = torch.cuda.device_count()
+    assert num_gpus >= 2, "Not enough GPUs available for test"
+
+    if domain_H == 1:
+        pytest.skip("No point testing this without parallelism in the domain axes")
+
+    if domain_H > num_gpus:
+        pytest.skip("Not enough GPUs available for test")
+
+    case_name, dst_placements = redistribution_case
+
+    remaining_gpus = num_gpus
+    mesh_names = ["data_parallel"]
+    mesh_sizes = [data_parallel_size]
+
+    if int(remaining_gpus / domain_H) != 0:
+        mesh_names.append("domain_H")
+        mesh_sizes.append(domain_H)
+        remaining_gpus = int(remaining_gpus / domain_H)
+
+    # To perform the shard-to-shard test, the mesh needs to have more than 2 dimensions
+    if case_name == "shard_to_shard" and len(mesh_sizes) <= 2:
+        pytest.skip("Not enough dimensions for shard-to-shard test")
+
+    verbose = False  # Change to True for debug
+
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
+    torch.multiprocessing.spawn(
+        run_shard_tensor_redistribute,
+        args=(num_gpus, mesh_names, mesh_sizes, dst_placements, verbose),
+        nprocs=num_gpus,
+        join=True,
+        daemon=True,
+    )
 
 
 @pytest.mark.multigpu
 @pytest.mark.parametrize("data_parallel_size", [-1])
-@pytest.mark.parametrize("domain_H", [2, 4])
+@pytest.mark.parametrize("domain_H", [2, 4, 8])
 @pytest.mark.parametrize("domain_W", [1, 2])
 @pytest.mark.parametrize(
     "redistribution_case",
     [
         # Test cases for different redistribution scenarios
-        ("S1+R", [Shard(1), Replicate()]),
-        ("R+S1", [Replicate(), Shard(1)]),
-        # ("S2+R", [Shard(2), Replicate()]),
-        ("R+S2", [Replicate(), Shard(2)]),
-        ("R+R", [Replicate(), Replicate()]),
+        ("S1+S2", [Shard(1), Shard(2)]),  # Should be a no op!
+        (
+            "R+S2",
+            [Replicate(), Shard(2)],
+        ),  # Only triggers redistribution on first tensor dim.  gather_v
+        (
+            "S1+R",
+            [Shard(1), Replicate()],
+        ),  # triggers S2-R on second tensor dim, gather_v
+        (
+            "R+R",
+            [Replicate(), Replicate()],
+        ),  # Triggers S2->R, S1-R.  gather_v then gather_v
+        (
+            "R+S1",
+            [Replicate(), Shard(1)],
+        ),  # triggers S2->R, S1->R, R->S2.  gather_v then gather_v then scatter_v
+        (
+            "S2+R",
+            [Shard(2), Replicate()],
+        ),  # Triggers S2->R, S2/S1 transpose.  gather_v then all_to_all_v
+        (
+            "S2+S1",
+            [Shard(2), Shard(1)],
+        ),  # Goes S2 -> R, S1 -> S2, R -> S1.  gather_v, all_to_all_v, scatter_v
+        ("S3+R", [Shard(3), Replicate()]),  # Put the sharding on a new axis
     ],
 )
-def test_shard_tensor_to_replicate(
+def test_shard_tensor_redistribute2d(
     data_parallel_size, domain_H, domain_W, redistribution_case
 ):
     """Test different redistribution scenarios for ShardTensor"""
@@ -199,6 +313,9 @@ def test_shard_tensor_to_replicate(
 
     if domain_H == 1 and domain_W == 1:
         pytest.skip("No point testing this without parallelism in the domain axes")
+
+    if domain_H * domain_W > num_gpus:
+        pytest.skip("Not enough GPUs available for test")
 
     case_name, dst_placements = redistribution_case
 
@@ -225,7 +342,7 @@ def test_shard_tensor_to_replicate(
     torch.multiprocessing.set_start_method("spawn", force=True)
 
     torch.multiprocessing.spawn(
-        run_shard_tensor_to_replicate,
+        run_shard_tensor_redistribute,
         args=(num_gpus, mesh_names, mesh_sizes, dst_placements, verbose),
         nprocs=num_gpus,
         join=True,
@@ -235,12 +352,4 @@ def test_shard_tensor_to_replicate(
 
 if __name__ == "__main__":
 
-    cases = [
-        ("S1+R", [Shard(1), Replicate()]),
-        ("R+S1", [Replicate(), Shard(1)]),
-        ("R+S2", [Replicate(), Shard(2)]),
-        ("R+R", [Replicate(), Replicate()]),
-    ]
-
-    case = cases[2]
-    test_shard_tensor_to_replicate(-1, 4, 1, case)
+    test_shard_tensor_reduction(-1, 2, 2, torch.sum)
