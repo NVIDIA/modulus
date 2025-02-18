@@ -32,31 +32,12 @@ except ImportError:
 
 from typing import Tuple
 
+from ort_utils import check_ort_version
+
 from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
-
-
-# TODO(akamenev): remove once the bug below is fixed.
-# Version "1.14.0" is the custom local build where the bug is fixed.
-def check_ort_version():
-    if ort is None:
-        return pytest.mark.skipif(
-            True,
-            reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
-        )
-    elif ort.__version__ != "1.18.0":
-        return pytest.mark.skipif(
-            True,
-            reason="Must install ORT 1.18.0. Other versions might work, but are not \
-        tested. If using other versions, ensure that the fix here \
-        https://github.com/microsoft/onnxruntime/pull/15662 is present. \
-        If the onnxruntime-gpu wheel is not available, please build from source. \
-        For 1.18.0, one can use https://github.com/microsoft/onnxruntime/commit/4ea54b82f9debd70e46ea0a789e7aafe05d5b983",
-        )
-    else:
-        return pytest.mark.skipif(False, reason="")
 
 
 @pytest.fixture
