@@ -289,9 +289,6 @@ def main(cfg: DictConfig) -> None:
     batch_size_per_gpu = cfg.training.hp.batch_size_per_gpu
     logger0.info(f"Using {num_accumulation_rounds} gradient accumulation rounds")
 
-    # CNH Temp - remove
-    os.environ["MSC_CONFIG"] = "/code/e2_storage_client_config.json"
-
     ## Resume training from previous checkpoints if exists
     if dist.world_size > 1:
         torch.distributed.barrier()
