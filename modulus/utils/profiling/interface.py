@@ -67,8 +67,6 @@ class Profiler(metaclass=_Profiler_Singleton):
     # writing outputs, etc.  Only want to trigger this once
     _finalized: bool
 
-    exit_stack = ExitStack()
-
     annotate = nvtx_annotate
 
     @property
@@ -163,6 +161,7 @@ class Profiler(metaclass=_Profiler_Singleton):
         """
         Manually initialize the profiler interface
         """
+        self.exit_stack = ExitStack()
         self._standup()
 
     def finalize(self) -> None:

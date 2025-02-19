@@ -243,11 +243,10 @@ class _Profiler_Singleton(type):
     _lock = Lock()
 
     def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            with cls._lock:
-                # Double-checked locking pattern
-                if cls not in cls._instances:
-                    cls._instances[cls] = super().__call__(*args, **kwargs)
+        with cls._lock:
+            # Double-checked locking pattern
+            if cls not in cls._instances:
+                cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
 
     def _clear_instance(cls):
