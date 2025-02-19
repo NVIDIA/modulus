@@ -17,6 +17,7 @@
 from functools import partial
 import logging
 import os
+from typing import Any
 
 import hydra
 from hydra.utils import instantiate, to_absolute_path
@@ -164,132 +165,61 @@ class MGNRollout:
         # Last sequence.
         yield torch.stack(pred_pos), torch.stack(gt_pos), node_type
 
-        # self.pred = []
-        # self.exact = []
-        # self.node_type = []
 
-        # for i, graph in enumerate(self.dataloader):
-        #     graph = graph.to(self.device)
-        #     if graph.ndata["t"][0].item() == 0:
-        #         # initialize
-        #         self.pred = []
-        #         self.exact = []
-        #         self.node_type = []
-        #         position = graph.ndata["pos"][..., : self.dim]
-        #         history = graph.ndata["x"][
-        #             ..., self.dim : self.dim + self.dim * self.num_history
-        #         ]
-        #         node_type = graph.ndata["x"][..., -self.num_node_type :].clone()
+def init_animation(subplot_kw: dict[str, Any] = None):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 9), subplot_kw=subplot_kw)
+    return fig, ax1, ax2
 
-        #     # inference step
-        #     boundary_feature = self.compute_boundary_feature(
-        #         position, radius=self.radius, bounds=self.bounds
-        #     )
-        #     graph.ndata["x"] = torch.cat(
-        #         [position, history, boundary_feature, node_type], dim=-1
-        #     )
-        #     graph.ndata["pos"] = position
-        #     # graph_update(graph, self.radius)
 
-        #     acceleration = self.model(
-        #         graph.ndata["x"], graph.edata["x"], graph
-        #     )  # predict
+def plot_particles_2d(ax, title, position, node_color, bounds):
+    ax.cla()
+    ax.set_aspect("equal")
+    ax.scatter(position[:, 0], position[:, 1], c=node_color)
+    ax.set_xlim(bounds[0], bounds[1])
+    ax.set_ylim(bounds[0], bounds[1])
+    ax.set_title(title, color="black")
 
-        #     # update the inputs using the prediction from previous iteration
-        #     position, velocity = self.time_integrator(
-        #         position=position,
-        #         velocity=history[..., -self.dim :],
-        #         acceleration=acceleration,
-        #         dt=self.dt,
-        #     )
-        #     position = self.boundary_clamp(position, bounds=self.bounds)
-        #     velocity = self.dataset.normalize_velocity(velocity)
-        #     history = torch.cat([history[..., self.dim :], velocity], dim=-1)
 
-        #     self.pred.append(position.cpu())
-        #     self.exact.append(graph.ndata["y"][..., : self.dim].cpu())
-        #     self.node_type.append(node_type.cpu())
+def plot_particles_3d(ax, title, position, node_color, bounds):
+    ax.cla()
+    ax.set_aspect("equal")
+    # ZXY to match axis order in the dataset.
+    ax.scatter(position[:, 2], position[:, 0], position[:, 1], c=node_color)
+    ax.set_xlim(bounds[0], bounds[1])
+    ax.set_ylim(bounds[0], bounds[1])
+    ax.set_zlim(bounds[0], bounds[1])
+    ax.set_title(title, color="black")
 
-    def animate2d(self, num: int, fig, ax1, ax2, pred, gt, node_color):
-        def plot_particles(ax, title, position):
-            ax.cla()
-            ax.set_aspect("equal")
-            ax.scatter(position[:, 0], position[:, 1], c=node_color)
-            ax.set_xlim(self.bounds[0], self.bounds[1])
-            ax.set_ylim(self.bounds[0], self.bounds[1])
-            ax.set_title(title, color="black")
 
-        num *= self.frame_skip
-        plot_particles(ax1, "Modulus MeshGraphNet Prediction", pred[num])
-        plot_particles(ax2, "Ground Truth", gt[num])
+def animate(num, plotter, fig, ax1, ax2, pred, gt, node_color, bounds, frame_skip):
+    num *= frame_skip
+    plotter(ax1, "Modulus MeshGraphNet Prediction", pred[num], node_color, bounds)
+    plotter(ax2, "Ground Truth", gt[num], node_color, bounds)
 
-        fig.subplots_adjust(
-            left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.1, hspace=0.2
-        )
+    fig.subplots_adjust(
+        left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.1, hspace=0.2
+    )
 
-    def init_animation3d(self, index=0):
-        # fig configs
-        self.plotting_index = index
-        plt.rcParams["image.cmap"] = "inferno"
-        self.fig = plt.figure(figsize=(16, 9))
-        ax0 = self.fig.add_subplot(121, projection="3d")
-        ax1 = self.fig.add_subplot(122, projection="3d")
-        self.ax = [ax0, ax1]
 
-        # make animations dir
-        if not os.path.exists("./animations"):
-            os.makedirs("./animations")
+def plot_error(mse, out_dir):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    colors = plt.cm.rainbow(np.linspace(0, 1, len(mse) + 1))
+    for i, (err, color) in enumerate(zip(mse, colors)):
+        ax.plot(err, marker=".", linestyle="-", color=color, label=f"{i}", alpha=0.6)
+        ax.axhline(err.mean(), linestyle="--", color=color)
+    # Global mean.
+    m = np.array(mse).mean()
+    ax.axhline(m, linestyle="--", color=colors[-1], label="All")
+    ax.text(-0.1, m, f"{m:.3f}", color=colors[-1], verticalalignment="bottom")
 
-    def animate3d(self, num):
-        num *= self.frame_skip
-        num = num + self.plotting_index * self.num_steps
-        node_type = self.node_type[num]
-        node_type = (
-            torch.argmax(node_type, dim=1).numpy() / self.num_node_type
-        )  # from one-hot to index
-        y_pred = self.pred[num].numpy()
-        y_exact = self.exact[num].numpy()
+    ax.set_title("Lagrangian MeshGraphNet")
+    ax.set_xlabel("time steps")
+    ax.set_ylabel("Position MSE error")
+    ax.grid(True)
+    ax.legend()
 
-        self.ax[0].cla()
-        self.ax[0].set_aspect("equal")
-        self.ax[0].scatter(y_pred[:, 2], y_pred[:, 0], y_pred[:, 1], c=node_type)
-        self.ax[0].set_xlim(self.bounds[0], self.bounds[1])
-        self.ax[0].set_ylim(self.bounds[0], self.bounds[1])
-        self.ax[0].set_zlim(self.bounds[0], self.bounds[1])
-        self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="black")
-
-        self.ax[1].cla()
-        self.ax[1].set_aspect("equal")
-        self.ax[1].scatter(y_exact[:, 2], y_exact[:, 0], y_exact[:, 1], c=node_type)
-        self.ax[1].set_xlim(self.bounds[0], self.bounds[1])
-        self.ax[1].set_ylim(self.bounds[0], self.bounds[1])
-        self.ax[1].set_zlim(self.bounds[0], self.bounds[1])
-        self.ax[1].set_title("Ground Truth", color="black")
-
-        self.fig.subplots_adjust(
-            left=0.05, bottom=0.05, right=0.95, top=0.95, wspace=0.1, hspace=0.2
-        )
-        return self.fig
-
-    def plot_error(self, pred, target):
-        # pred, target (time, num_nodes, 2)
-        time_step = pred.shape[0]
-        loss = torch.nn.functional.mse_loss(
-            pred.reshape(time_step, -1), target.reshape(time_step, -1), reduction="none"
-        )
-        loss = torch.mean(loss, dim=1)
-        plt.figure(figsize=(10, 6))
-        plt.plot(loss.numpy(), marker="o", linestyle="-", color="b")
-        plt.title("Lagrangian MeshGraphNet")
-        plt.xlabel("time steps")
-        plt.ylabel("Position MSE error")
-        plt.grid(True)
-        return plt
-
-    @staticmethod
-    def init_animation():
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 9))
-        return fig, ax1, ax2
+    fig.savefig(os.path.join(out_dir, "error.png"))
+    plt.close(fig)
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -314,35 +244,27 @@ def main(cfg: DictConfig) -> None:
         node_type = node_type.cpu().numpy()
         node_color = [TYPE_TO_COLOR[idx] for idx in np.argmax(node_type, axis=1)]
 
-        # compute the roll out loss
-        # pred = torch.stack([tensor.reshape(-1) for tensor in rollout.pred], dim=0)
-        # target = torch.stack([tensor.reshape(-1) for tensor in rollout.exact], dim=0)
-        # loss = torch.nn.functional.mse_loss(pred, target)
-        # logger.info(f"The rollout loss is {loss:.5f}")
-
-        # # plot the roll out loss
-        # error_plt = rollout.plot_error(pred, target)
-        # out_dir = os.path.join(cfg.output, "animations")
-        # os.makedirs(out_dir, exist_ok=True)
-        # error_plt.savefig(os.path.join(out_dir, "error.png"))
-
         # plot
         if cfg.dim == 2:
-            fig, ax1, ax2 = rollout.init_animation()
-            func = rollout.animate2d
+            fig, ax1, ax2 = init_animation()
+            plotter = plot_particles_2d
         elif cfg.dim == 3:
-            pass
+            fig, ax1, ax2 = init_animation(subplot_kw={"projection": "3d"})
+            plotter = plot_particles_3d
         else:
             assert False, f"{cfg.dim=}"
 
         ani_func = partial(
-            func,
+            animate,
+            plotter=plotter,
             fig=fig,
             ax1=ax1,
             ax2=ax2,
             pred=pred,
             gt=gt,
             node_color=node_color,
+            bounds=rollout.bounds,
+            frame_skip=rollout.frame_skip,
         )
 
         ani = animation.FuncAnimation(
@@ -352,43 +274,15 @@ def main(cfg: DictConfig) -> None:
             interval=cfg.inference.frame_interval,
         )
         ani.save(os.path.join(ani_dir, f"animation_{i}.gif"))
-
-        # if cfg.dim == 2:
-        #     rollout.init_animation2d(index=0)
-        #     ani = animation.FuncAnimation(
-        #         rollout.fig,
-        #         rollout.animate2d,
-        #         frames=(rollout.num_steps - rollout.num_history - 1) // rollout.frame_skip,
-        #         interval=cfg.inference.frame_interval,
-        #     )
-        # elif cfg.dim == 3:
-        #     rollout.init_animation3d(index=0)
-        #     ani = animation.FuncAnimation(
-        #         rollout.fig,
-        #         rollout.animate3d,
-        #         frames=(rollout.num_steps - rollout.num_history - 1) // rollout.frame_skip,
-        #         interval=cfg.inference.frame_interval,
-        #     )
+        plt.close(fig)
         logger.info(f"Created animation_{i}.gif")
 
-        mse.append(np.mean((pred - gt)**2, axis=(1, 2)))
+        # Rollout MSE.
+        mse.append(np.mean((pred - gt) ** 2, axis=(1, 2)))
 
-    colors = plt.cm.rainbow(np.linspace(0, 1, len(mse) + 1))
-    plt.figure(figsize=(10, 6))
-    for i, (err, color) in enumerate(zip(mse, colors)):
-        plt.plot(err, marker=".", linestyle="-", color=color, label=f"{i}", alpha=0.6)
-        plt.axhline(err.mean(), linestyle="--", color=color)
-    # Global mean.
-    m = np.array(mse).mean()
-    plt.axhline(m, linestyle="--", color=colors[-1], label="All")
-    plt.text(-0.1, m, f"{m:.3f}", color=colors[-1], verticalalignment="bottom")
+    # Create error plot.
+    plot_error(mse, ani_dir)
 
-    plt.title("Lagrangian MeshGraphNet")
-    plt.xlabel("time steps")
-    plt.ylabel("Position MSE error")
-    plt.grid(True)
-    plt.legend()
-    plt.savefig(os.path.join(ani_dir, "error.png"))
 
 if __name__ == "__main__":
     main()

@@ -306,9 +306,7 @@ class LagrangianDataset(DGLDataset):
         position_next = position + velocity_next  # * dt
         return position_next, velocity_next
 
-    def pack_inputs(
-        self, position: Tensor, vel_history: Tensor, node_type: Tensor
-    ):
+    def pack_inputs(self, position: Tensor, vel_history: Tensor, node_type: Tensor):
         # Boundary features for the current position.
         boundary_features = self.compute_boundary_feature(
             position, self.radius, bounds=self.bounds
@@ -317,9 +315,7 @@ class LagrangianDataset(DGLDataset):
         # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
         vel_history = vel_history.permute(1, 0, 2).flatten(start_dim=1)
 
-        return torch.cat(
-            (position, vel_history, boundary_features, node_type), dim=-1
-        )
+        return torch.cat((position, vel_history, boundary_features, node_type), dim=-1)
 
     def unpack_inputs(self, graph: dgl.DGLGraph):
         """Unpacks the graph inputs into position, velocity and node type.
