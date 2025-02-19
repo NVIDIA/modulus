@@ -16,6 +16,7 @@
 
 from contextlib import ContextDecorator
 from dataclasses import replace
+from enum import Enum
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -37,10 +38,14 @@ class ModulusProfilerWrapper(ContextDecorator):
     and modulus will automatically handle the details.
     """
 
-    _enabled: bool = False
-    _initialized: bool = False
-    _finalized: bool = False
+    # This private state class is used to ensure only one state is active at a time.
+    class State(Enum):
+        DISABLED = "disabled"
+        ENABLED = "enabled"
+        INITIALIZED = "initialized"
+        FINALIZED = "finalized"
 
+    _state = State.DISABLED
     _is_context: bool = False
     _is_decorator: bool = False
 
@@ -62,53 +67,13 @@ class ModulusProfilerWrapper(ContextDecorator):
         pass
 
     @property
-    def enabled(self) -> bool:
-        """Get whether the profiler is enabled.
-
-        Returns:
-            bool: True if profiler is enabled, False otherwise
-        """
-        return self._enabled
-
-    @enabled.setter
-    def enabled(self, value: bool) -> None:
-        """Set whether the profiler is enabled.
-
-        Args:
-            value (bool): True to enable profiler, False to disable
-        """
-        if not isinstance(value, bool):
-            raise TypeError("enabled must be a boolean value")
-        self._enabled = value
-
-    @property
-    def finalized(self) -> bool:
-        """Get whether the profiler has been finalized.
-
-        Returns:
-            bool: True if profiler is finalized, False otherwise
-        """
-        return self._finalized
-
-    @finalized.setter
-    def finalized(self, value: bool) -> None:
-        """Set whether the profiler has been finalized.
-
-        Args:
-            value (bool): True to mark as finalized, False otherwise
-        """
-        if not isinstance(value, bool):
-            raise TypeError("finalized must be a boolean value")
-        self._finalized = value
-
-    @property
     def initialized(self) -> bool:
         """Get whether the profiler has been initialized.
 
         Returns:
             bool: True if profiler is initialized, False otherwise
         """
-        return self._initialized
+        return self._state == self.State.INITIALIZED
 
     @initialized.setter
     def initialized(self, value: bool) -> None:
@@ -119,7 +84,52 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         if not isinstance(value, bool):
             raise TypeError("initialized must be a boolean value")
-        self._initialized = value
+        if value:
+            self._state = self.State.INITIALIZED
+
+    @property
+    def enabled(self) -> bool:
+        """Get whether the profiler is enabled.
+
+        Returns:
+            bool: True if profiler is enabled, False otherwise
+        """
+        return self._state == self.State.ENABLED
+
+    @enabled.setter
+    def enabled(self, value: bool) -> None:
+        """Set whether the profiler is enabled.
+
+        Args:
+            value (bool): True to enable profiler, False to disable
+        """
+        if not isinstance(value, bool):
+            raise TypeError("enabled must be a boolean value")
+        if value:
+            self._state = self.State.ENABLED
+        else:
+            self._state = self.State.DISABLED
+
+    @property
+    def finalized(self) -> bool:
+        """Get whether the profiler has been finalized.
+
+        Returns:
+            bool: True if profiler is finalized, False otherwise
+        """
+        return self._state == self.State.FINALIZED
+
+    @finalized.setter
+    def finalized(self, value: bool) -> None:
+        """Set whether the profiler has been finalized.
+
+        Args:
+            value (bool): True to mark as finalized, False otherwise
+        """
+        if not isinstance(value, bool):
+            raise TypeError("finalized must be a boolean value")
+        if value:
+            self._state = self.State.FINALIZED
 
     @property
     def is_decorator(self):
@@ -128,33 +138,12 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_decorator
 
-    # @is_decorator.setter
-    # def is_decorator(self, value: bool) -> None:
-    #     """Set whether the profiler supports function decoration.
-
-    #     Args:
-    #         value (bool): True to support function decoration, False otherwise
-    #     """
-    #     if not isinstance(value, bool):
-    #         raise TypeError("is_decorator must be a boolean value")
-
     @property
     def is_context(self):
         """
         Flag to declare if this profiling instance supports context-based profiling
         """
         return self._is_context
-
-    # @is_context.setter
-    # def is_context(self, value: bool) -> None:
-    #     """Set whether the profiler supports context-based profiling.
-
-    #     Args:
-    #         value (bool): True to support context-based profiling, False otherwise
-    #     """
-    #     if not isinstance(value, bool):
-    #         raise TypeError("is_context must be a boolean value")
-    #     self._is_context = value
 
     def __enter__(self) -> None:
         """Enter the profiling context.
