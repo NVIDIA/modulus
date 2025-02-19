@@ -126,13 +126,10 @@ class TorchProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton)
         if not self.enabled:
             return
 
-        # Avoid finalizing if we never initialized:
-        if not self.initialized:
+        # Avoid finalizing if we never initialized or already finalized:
+        if not self.initialized or self.finalized:
             return
 
-        # Prevent double finalization:
-        if self.finalized:
-            return
         # Get the output directory:
         out_top = self.output_dir(output_top)
 

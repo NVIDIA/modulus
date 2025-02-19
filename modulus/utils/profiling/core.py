@@ -128,15 +128,15 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_decorator
 
-    @is_decorator.setter
-    def is_decorator(self, value: bool) -> None:
-        """Set whether the profiler supports function decoration.
+    # @is_decorator.setter
+    # def is_decorator(self, value: bool) -> None:
+    #     """Set whether the profiler supports function decoration.
 
-        Args:
-            value (bool): True to support function decoration, False otherwise
-        """
-        if not isinstance(value, bool):
-            raise TypeError("is_decorator must be a boolean value")
+    #     Args:
+    #         value (bool): True to support function decoration, False otherwise
+    #     """
+    #     if not isinstance(value, bool):
+    #         raise TypeError("is_decorator must be a boolean value")
 
     @property
     def is_context(self):
@@ -145,16 +145,16 @@ class ModulusProfilerWrapper(ContextDecorator):
         """
         return self._is_context
 
-    @is_context.setter
-    def is_context(self, value: bool) -> None:
-        """Set whether the profiler supports context-based profiling.
+    # @is_context.setter
+    # def is_context(self, value: bool) -> None:
+    #     """Set whether the profiler supports context-based profiling.
 
-        Args:
-            value (bool): True to support context-based profiling, False otherwise
-        """
-        if not isinstance(value, bool):
-            raise TypeError("is_context must be a boolean value")
-        self._is_context = value
+    #     Args:
+    #         value (bool): True to support context-based profiling, False otherwise
+    #     """
+    #     if not isinstance(value, bool):
+    #         raise TypeError("is_context must be a boolean value")
+    #     self._is_context = value
 
     def __enter__(self) -> None:
         """Enter the profiling context.
@@ -264,8 +264,8 @@ class _Profiler_Singleton(type):
     def _clear_instance(cls):
         """Clear the singleton instance (mainly for testing purposes)"""
         with cls._lock:
-        if cls in cls._instances:
-            del cls._instances[cls]
+            if cls in cls._instances:
+                del cls._instances[cls]
 
 
 class ProfileRegistry:

@@ -45,6 +45,10 @@ class MockProfilerConfig:
 
 # Mock profiler class for testing
 class MockProfiler(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
+
+    _is_context = True
+    _is_decorator = True
+
     def __init__(self, config: Optional[MockProfilerConfig] = None, **config_overrides):
 
         default_config = MockProfilerConfig()
@@ -54,9 +58,6 @@ class MockProfiler(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
             self._config = replace(default_config, **config_overrides)
         else:
             self._config = replace(config, **config_overrides)
-
-        self.is_context = True
-        self.is_decorator = True
 
     def enable(self):
         self.enabled = True
