@@ -69,6 +69,9 @@ class Profiler(metaclass=_Profiler_Singleton):
 
     annotate = nvtx_annotate
 
+    def __init__(self):
+        self.exit_stack = ExitStack()
+
     @property
     def initialized(self) -> bool:
         """Get whether the profiler has been initialized.
@@ -161,7 +164,6 @@ class Profiler(metaclass=_Profiler_Singleton):
         """
         Manually initialize the profiler interface
         """
-        self.exit_stack = ExitStack()
         self._standup()
 
     def finalize(self) -> None:
