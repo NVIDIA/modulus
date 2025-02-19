@@ -156,13 +156,6 @@ class ModulusProfilerWrapper(ContextDecorator):
             raise TypeError("is_context must be a boolean value")
         self._is_context = value
 
-    def enable(self) -> None:
-        """Enable the profiler.
-
-        Sets the internal enabled flag to True to activate profiling.
-        """
-        self._enabled = True
-
     def __enter__(self) -> None:
         """Enter the profiling context.
 
@@ -270,6 +263,7 @@ class _Profiler_Singleton(type):
 
     def _clear_instance(cls):
         """Clear the singleton instance (mainly for testing purposes)"""
+        with cls._lock:
         if cls in cls._instances:
             del cls._instances[cls]
 
@@ -332,11 +326,11 @@ class ProfileRegistry:
         if key in cls._instances:
             # Find instance of matching type in list
             for instance in cls._instances:
-                if instance == key:
+                if instance is key:
                     return instance
 
         else:
-            raise Exception(f"ProfilerRegistry has no profiler under the key {key}")
+            raise KeyError(f"ProfilerRegistry has no profiler under the key {key}")
 
     @classmethod
     def register_profiler(cls, profiler_key: str | type, profiler_cls: type) -> None:
@@ -367,7 +361,7 @@ class ProfileRegistry:
         else:
             # If it's a reregister of the same thing, no problem:
             if profiler_cls != cls._registry[profiler_key]:
-                raise Exception("Profiler key already in use for different profiler!")
+                raise KeyError("Profiler key already in use for different profiler!")
 
     @classmethod
     def _clear(cls):

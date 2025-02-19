@@ -221,7 +221,7 @@ class Profiler(metaclass=_Profiler_Singleton):
             profiler = ProfileRegistry.get_profiler(profiler)
 
         # make sure the summoned profiler is enabled:
-        profiler.enable()
+        profiler.enabled = True
 
         # Prevent double-adds:
         if profiler not in self._profilers:

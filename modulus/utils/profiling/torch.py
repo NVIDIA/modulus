@@ -51,7 +51,7 @@ class TorchProfilerConfig:
     on_trace_ready_path: Optional[Path] = None
 
 
-class TorchProfileWrapper(ModulusProfilerWrapper):
+class TorchProfileWrapper(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
     """Wrapper class for PyTorch profiler functionality.
 
     This class wraps PyTorch's built-in profiler to integrate with Modulus's profiling system.
@@ -62,8 +62,6 @@ class TorchProfileWrapper(ModulusProfilerWrapper):
         _is_context: Whether this profiler supports context manager usage
         _is_decorator: Whether this profiler supports decorator usage
     """
-
-    __metaclass__ = _Profiler_Singleton
 
     _name: str = "torch"
 
