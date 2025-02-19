@@ -60,20 +60,20 @@ model:
   positional_encoding: false # calculate positional encoding?
   volume_points_sample: 8192 # Number of points to sample in volume per epoch
   surface_points_sample: 8192 # Number of points to sample on surface per epoch
-  geom_points_sample: 200_000 # Number of points to sample on STL per epoch
+  geom_points_sample: 300_000 # Number of points to sample on STL per epoch
   surface_neighbors: true # Pre-compute surface neighborhood from input data
   num_surface_neighbors: 7 # How many neighbors?
   use_surface_normals: true # Use surface normals and surface areas for surface computation?
   use_only_normals: true # Use only surface normals and not surface area
-  integral_loss_scaling_factor: 0 # Scale integral loss by this factor
+  integral_loss_scaling_factor: 1 # Scale integral loss by this factor
   normalization: min_max_scaling # or mean_std_scaling
   encode_parameters: false # encode inlet velocity and air density in the model
   geometry_rep: # Hyperparameters for geometry representation network
-    base_filters: 16
     geo_conv:
       base_neurons: 32 # 256 or 64
       base_neurons_out: 1
-      radii: [0.05, 0.1, 0.5, 1.0]
+      volume_radii: [0.1, 0.5]
+      surface_radii: [0.05]
       hops: 1
     geo_processor:
       base_filters: 8
@@ -86,8 +86,10 @@ model:
   position_encoder: # Hyperparameters for position encoding network
     base_neurons: 512
   geometry_local: # Hyperparameters for local geometry extraction
-    neighbors_in_radius: [64]
-    radii: [0.05] # 0.2 in expt 7
+    volume_neighbors_in_radius: [64, 128]
+    surface_neighbors_in_radius: [64]
+    volume_radii: [0.05, 0.1] #
+    surface_radii: [0.05]
     base_layer: 512
   parameter_model:
     base_layer: 512

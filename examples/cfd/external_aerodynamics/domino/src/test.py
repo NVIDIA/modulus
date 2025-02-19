@@ -111,29 +111,29 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             # Normalize based on computational domain
             geo_centers_vol = 2.0 * (geo_centers - vol_min) / (vol_max - vol_min) - 1
-            encoding_g_vol = model.module.geo_rep(geo_centers_vol, p_grid, sdf_grid)
+            encoding_g_vol = model.module.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
 
             # Normalize based on BBox around surface (car)
-            geo_centers_surf = (
-                2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
-            )
-            encoding_g_surf = model.module.geo_rep(
-                geo_centers_surf, s_grid, sdf_surf_grid
-            )
+            # geo_centers_surf = (
+            #     2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
+            # )
+            # encoding_g_surf = model.module.geo_rep(
+            #     geo_centers_surf, s_grid, sdf_surf_grid
+            # )
 
         if output_features_surf is not None:
             # Represent geometry on bounding box
             geo_centers_surf = (
                 2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
             )
-            encoding_g_surf = model.module.geo_rep(
+            encoding_g_surf = model.module.geo_rep_surface(
                 geo_centers_surf, s_grid, sdf_surf_grid
             )
 
-        geo_encoding = 0.5 * encoding_g_surf
-        # Average the encodings
-        if output_features_vol is not None:
-            geo_encoding += 0.5 * encoding_g_vol
+        # geo_encoding = 0.5 * encoding_g_surf
+        # # Average the encodings
+        # if output_features_vol is not None:
+        #     geo_encoding += 0.5 * encoding_g_vol
 
         if output_features_vol is not None:
             # First calculate volume predictions if required
@@ -167,7 +167,7 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         :, start_idx:end_idx
                     ]
                     geo_encoding_local = model.module.geo_encoding_local(
-                        geo_encoding, volume_mesh_centers_batch, p_grid
+                        0.5 * encoding_g_vol, volume_mesh_centers_batch, p_grid, mode="volume"
                     )
                     if cfg.model.use_sdf_in_basis_func:
                         pos_encoding = torch.cat(
@@ -207,11 +207,11 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                 * stream_velocity[0, 0].cpu().numpy() ** 2.0
                 * air_density[0, 0].cpu().numpy()
             )
-            prediction_vol[:, :, 4] = (
-                prediction_vol[:, :, 4]
-                * stream_velocity[0, 0].cpu().numpy()
-                * length_scale[0].cpu().numpy()
-            )
+            # prediction_vol[:, :, 4] = (
+            #     prediction_vol[:, :, 4]
+            #     * stream_velocity[0, 0].cpu().numpy()
+            #     * length_scale[0].cpu().numpy()
+            # )
         else:
             prediction_vol = None
 
@@ -263,7 +263,7 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         :, start_idx:end_idx
                     ]
                     geo_encoding_local = model.module.geo_encoding_local(
-                        0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid
+                        0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid, mode="surface"
                     )
                     pos_encoding = pos_surface_center_of_mass_batch
                     pos_encoding = model.module.position_encoder(
@@ -734,8 +734,6 @@ def main(cfg: DictConfig):
             print(
                 "L-2 norm:",
                 dirname,
-                np.sqrt(l2_error),
-                np.sqrt(l2_gt),
                 np.sqrt(l2_error) / np.sqrt(l2_gt),
             )
 
@@ -748,7 +746,7 @@ def main(cfg: DictConfig):
             surfParam_vtk.SetName(f"{surface_variable_names[1]}Pred")
             celldata_all.GetCellData().AddArray(surfParam_vtk)
 
-            write_to_vtp(celldata_all, vtp_pred_save_path)
+            # write_to_vtp(celldata_all, vtp_pred_save_path)
 
         if prediction_vol is not None:
 
@@ -760,11 +758,11 @@ def main(cfg: DictConfig):
             volParam_vtk.SetName(f"{volume_variable_names[1]}Pred")
             polydata_vol.GetPointData().AddArray(volParam_vtk)
 
-            volParam_vtk = numpy_support.numpy_to_vtk(prediction_vol[:, 4:5])
-            volParam_vtk.SetName(f"{volume_variable_names[2]}Pred")
-            polydata_vol.GetPointData().AddArray(volParam_vtk)
+            # volParam_vtk = numpy_support.numpy_to_vtk(prediction_vol[:, 4:5])
+            # volParam_vtk.SetName(f"{volume_variable_names[2]}Pred")
+            # polydata_vol.GetPointData().AddArray(volParam_vtk)
 
-            write_to_vtu(polydata_vol, vtu_pred_save_path)
+            # write_to_vtu(polydata_vol, vtu_pred_save_path)
 
 
 if __name__ == "__main__":
