@@ -61,6 +61,7 @@ class _StaticCapture(object):
         use_graphs: bool = True,
         use_autocast: bool = True,
         use_gradscaler: bool = True,
+        compile: bool = False,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
         gradient_clip_norm: Optional[float] = None,
@@ -77,6 +78,9 @@ class _StaticCapture(object):
         if not isinstance(model, modulus.models.Module):
             self.logger.error("Model not a Modulus Module!")
             raise ValueError("Model not a Modulus Module!")
+        if compile:
+            model = torch.compile(model)
+
         self.model = model
 
         self.optim = optim
@@ -407,6 +411,7 @@ class StaticCaptureTraining(_StaticCapture):
         logger: Optional[Logger] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
+        compile: bool = False,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
         gradient_clip_norm: Optional[float] = None,
@@ -419,6 +424,7 @@ class StaticCaptureTraining(_StaticCapture):
             use_graphs,
             use_amp,
             use_amp,
+            compile,
             cuda_graph_warmup,
             amp_type,
             gradient_clip_norm,
@@ -484,6 +490,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
         logger: Optional[Logger] = None,
         use_graphs: bool = True,
         use_amp: bool = True,
+        compile: bool = False,
         cuda_graph_warmup: int = 11,
         amp_type: Union[float16, bfloat16] = torch.float16,
         label: Optional[str] = None,
@@ -494,6 +501,7 @@ class StaticCaptureEvaluateNoGrad(_StaticCapture):
             logger,
             use_graphs,
             use_amp,
+            compile,
             False,
             cuda_graph_warmup,
             amp_type,
