@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
 - Added Datacenter CFD use case.
+- Add leave-in profiling utilities to modulus, to easily enable torch/python/nsight
+  profiling in all aspects of the codebase.
 
 ### Changed
 
