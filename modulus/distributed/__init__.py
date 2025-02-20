@@ -45,4 +45,5 @@ def register_custom_ops():
     register_shard_wrappers()
 
 
-register_custom_ops()
+# Custom ops are not ready to be enabled yet:
+# register_custom_ops()
