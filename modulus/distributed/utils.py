@@ -232,7 +232,9 @@ def all_gather_v_wrapper(
         local tensor on each rank
     sizes : List[int], optional
         list of the sizes of each chunk on each rank along distributed dimension,
-        valid and set on each rank, by default None
+        valid and set on each rank, by default None.  Can be single integer
+        per rank (assuming all other dimensions except `dim` below are equal)
+        or can be full
     dim : int, optional
         dimension along which global tensor is distributed, by default 0
     group : Optional[dist.ProcessGroup], optional
@@ -247,21 +249,37 @@ def all_gather_v_wrapper(
     comm_size = dist.get_world_size(group=group)
 
     if (sizes is not None) and (len(sizes) != comm_size):
-        raise ValueError()
+        raise ValueError(f"Mismatch in sizes {len(sizes)} and comm_size {comm_size}")
     if dim >= tensor.dim():
         raise ValueError()
 
     if comm_size == 1:
         return tensor
 
-    tensor_shape = list(tensor.shape)
+    # This is valid if the the shape is a list of ints, but not if full tensor
+    # shapes are passed on each rank.  Check if each element of sizes itself is iterable:
+
     tensor_format = get_memory_format(tensor)
 
     if sizes is not None:
+        full_shapes = False
+        try:
+            iterator = iter(sizes[0])  # noqa: F841
+        except TypeError:
+            # Not iterable, use base tensor shape:
+            tensor_shape = list(tensor.shape)
+        else:
+            # it is iterable, use shapes directly
+            full_shapes = True
+            tensor_shape = None  # Catch and replace below
+
         tensor_list = [None] * comm_size
 
         for src in range(comm_size):
-            tensor_shape[dim] = sizes[src]
+            if full_shapes:
+                tensor_shape = sizes[src]
+            else:
+                tensor_shape[dim] = sizes[src]
             tensor_list[src] = torch.empty(
                 tensor_shape,
                 dtype=tensor.dtype,

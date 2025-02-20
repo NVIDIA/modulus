@@ -79,6 +79,10 @@ storage = [
     "multi-storage-client>=0.14.0",
 ]
 
+shardtensor = [
+    "wrapt>=1.15.0",
+]
+
 all = [
     "h5py>=3.7.0",
     "netcdf4>=1.6.3",
