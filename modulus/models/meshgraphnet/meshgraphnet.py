@@ -31,6 +31,7 @@ except ImportError:
 from dataclasses import dataclass
 from itertools import chain
 from typing import Callable, List, Tuple, Union
+from warnings import warn
 
 import modulus  # noqa: F401 for docs
 from modulus.models.gnn_layers.mesh_edge_block import MeshEdgeBlock
@@ -40,6 +41,7 @@ from modulus.models.gnn_layers.utils import CuGraphCSC, set_checkpoint_fn
 from modulus.models.layers import get_activation
 from modulus.models.meta import ModelMetaData
 from modulus.models.module import Module
+from modulus.utils.profiling import profile
 
 
 @dataclass
@@ -144,10 +146,18 @@ class MeshGraphNet(Module):
         num_processor_checkpoint_segments: int = 0,
         checkpoint_offloading: bool = False,
         recompute_activation: bool = False,
+        norm_type="LayerNorm",
     ):
         super().__init__(meta=MetaData())
 
         activation_fn = get_activation(mlp_activation_fn)
+
+        if norm_type not in ["LayerNorm", "TELayerNorm"]:
+            raise ValueError("Norm type should be either 'LayerNorm' or 'TELayerNorm'")
+
+        if not torch.cuda.is_available() and norm_type == "TELayerNorm":
+            warn("TELayerNorm is not supported on CPU. Switching to LayerNorm.")
+            norm_type = "LayerNorm"
 
         self.edge_encoder = MeshGraphMLP(
             input_dim_edges,
@@ -155,7 +165,7 @@ class MeshGraphNet(Module):
             hidden_dim=hidden_dim_edge_encoder,
             hidden_layers=num_layers_edge_encoder,
             activation_fn=activation_fn,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
 
@@ -165,7 +175,7 @@ class MeshGraphNet(Module):
             hidden_dim=hidden_dim_node_encoder,
             hidden_layers=num_layers_node_encoder,
             activation_fn=activation_fn,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             recompute_activation=recompute_activation,
         )
 
@@ -185,13 +195,14 @@ class MeshGraphNet(Module):
             num_layers_node=num_layers_node_processor,
             num_layers_edge=num_layers_edge_processor,
             aggregation=aggregation,
-            norm_type="LayerNorm",
+            norm_type=norm_type,
             activation_fn=activation_fn,
             do_concat_trick=do_concat_trick,
             num_processor_checkpoint_segments=num_processor_checkpoint_segments,
             checkpoint_offloading=checkpoint_offloading,
         )
 
+    @profile
     def forward(
         self,
         node_features: Tensor,
@@ -311,6 +322,7 @@ class MeshGraphNetProcessor(nn.Module):
             self.checkpoint_fn = set_checkpoint_fn(False)
             self.checkpoint_segments = [(0, self.num_processor_layers)]
 
+    @profile
     def run_function(
         self, segment_start: int, segment_end: int
     ) -> Callable[
@@ -346,7 +358,7 @@ class MeshGraphNetProcessor(nn.Module):
 
         return custom_forward
 
-    @torch.jit.unused
+    @profile
     def forward(
         self,
         node_features: Tensor,

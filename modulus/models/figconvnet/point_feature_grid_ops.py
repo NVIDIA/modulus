@@ -37,6 +37,9 @@ from modulus.models.figconvnet.point_feature_conv import (
     PointFeatureConv,
     PointFeatureTransform,
 )
+from modulus.utils.profiling import Profiler
+
+prof = Profiler()
 
 
 class AABBGridFeatures(GridFeatures):
@@ -116,6 +119,7 @@ class PointFeatureToGrid(nn.Module):
             knn_k=knn_k,
         )
 
+    @prof
     def forward(self, point_features: PointFeatures) -> GridFeatures:
         # match the batch size of points
         self.grid_features.to(device=point_features.vertices.device)

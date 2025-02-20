@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prototype support for domain parallelism of using ShardTensor (new).
 - Enable DeviceMesh initialization via DistributedManager.
 - Added Datacenter CFD use case.
+- Add leave-in profiling utilities to modulus, to easily enable torch/python/nsight
+  profiling in all aspects of the codebase.
 
 ### Changed
 
