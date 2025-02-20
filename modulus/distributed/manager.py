@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import atexit
 import os
 import queue
-from typing import Optional
+import warnings
+from typing import Optional, Tuple
 from warnings import warn
 
 import numpy as np
@@ -24,6 +26,8 @@ import torch
 import torch.distributed as dist
 
 from modulus.distributed.config import ProcessGroupConfig, ProcessGroupNode
+
+warnings.simplefilter("default", DeprecationWarning)
 
 
 class ModulusUndefinedGroupError(Exception):
@@ -113,6 +117,10 @@ class DistributedManager(object):
             obj._group_names = {}
         if not hasattr(obj, "_is_initialized"):
             obj._is_initialized = False
+        if not hasattr(obj, "_global_mesh"):
+            obj._global_mesh = None  # Lazy initialized right when it's first needed
+        if not hasattr(obj, "_mesh_dims"):
+            obj._mesh_dims = {}  # Dictionary mapping axis names to sizes
 
         return obj
 
@@ -133,7 +141,7 @@ class DistributedManager(object):
 
     @property
     def world_size(self):
-        """Number of processes in distributed enviroment"""
+        """Number of processes in distributed environment"""
         return self._world_size
 
     @property
@@ -143,7 +151,7 @@ class DistributedManager(object):
 
     @property
     def distributed(self):
-        """Distributed enviroment"""
+        """Distributed environment"""
         return self._distributed
 
     @property
@@ -152,11 +160,39 @@ class DistributedManager(object):
         return self._cuda
 
     @property
+    def mesh_dims(self):
+        """Mesh Dimensions as dictionary (axis name : size)"""
+        return self._mesh_dims
+
+    @property
     def group_names(self):
         """
         Returns a list of all named process groups created
         """
         return self._groups.keys()
+
+    @property
+    def global_mesh(self):
+        """
+        Returns the global mesh.  If it's not initialized, it will be created when this is called.
+        """
+        if self._global_mesh is None:
+            # Fully flat mesh (1D) by default:
+            self.initialize_mesh(mesh_shape=(-1,), mesh_dim_names=("world",))
+
+        return self._global_mesh
+
+    def mesh_names(self):
+        """
+        Return mesh axis names
+        """
+        return self._mesh_dims.keys()
+
+    def mesh_sizes(self):
+        """
+        Return mesh axis sizes
+        """
+        return self._mesh_dims.values()
 
     def group(self, name=None):
         """
@@ -170,6 +206,25 @@ class DistributedManager(object):
             return None
         else:
             raise ModulusUndefinedGroupError(name)
+
+    def mesh(self, name=None):
+        """
+        Return a device_mesh with the given name.
+        Does not initialize.  If the mesh is not created
+        already, will raise and error
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of desired mesh, by default None
+        """
+
+        if name in self._global_mesh.axis_names:
+            return self._global_mesh[name]
+        elif name is None:
+            return self._global_mesh
+        else:
+            raise ModulusUndefinedGroupError(f"Mesh axis {name} not defined")
 
     def group_size(self, name=None):
         """
@@ -312,13 +367,13 @@ class DistributedManager(object):
 
         Current supported initialization methods are:
             `ENV`: PyTorch environment variable initialization
-                 https://pytorch.org/docs/stable/distributed.html#environment-variable-initialization
+                https://pytorch.org/docs/stable/distributed.html#environment-variable-initialization
             `SLURM`: Initialization on SLURM systems.
-                   Uses `SLURM_PROCID`, `SLURM_NPROCS`, `SLURM_LOCALID` and
-                   `SLURM_LAUNCH_NODE_IPADDR` environment variables.
+                Uses `SLURM_PROCID`, `SLURM_NPROCS`, `SLURM_LOCALID` and
+                `SLURM_LAUNCH_NODE_IPADDR` environment variables.
             `OPENMPI`: Initialization for OpenMPI launchers.
-                     Uses `OMPI_COMM_WORLD_RANK`, `OMPI_COMM_WORLD_SIZE` and
-                     `OMPI_COMM_WORLD_LOCAL_RANK` environment variables.
+                Uses `OMPI_COMM_WORLD_RANK`, `OMPI_COMM_WORLD_SIZE` and
+                `OMPI_COMM_WORLD_LOCAL_RANK` environment variables.
 
         Initialization by default is done using the first valid method in the order
         listed above. Initialization method can also be explicitly controlled using the
@@ -368,6 +423,91 @@ class DistributedManager(object):
 
         # Set per rank numpy random seed for data sampling
         np.random.seed(seed=DistributedManager().rank)
+
+    def initialize_mesh(
+        self, mesh_shape: Tuple[int, ...], mesh_dim_names: Tuple[str, ...]
+    ) -> dist.DeviceMesh:
+        """
+        Initialize a global device mesh over the entire distributed job.
+
+        Creates a multi-dimensional mesh of processes that can be used for distributed
+        operations. The mesh shape must multiply to equal the total world size, with
+        one dimension optionally being flexible (-1).
+
+        Parameters
+        ----------
+        mesh_shape : Tuple[int, ...]
+            Tuple of ints describing the size of each mesh dimension. Product must equal
+            world_size. One dimension can be -1 to be automatically calculated.
+
+        mesh_dim_names : Tuple[str, ...]
+            Names for each mesh dimension. Must match length of mesh_shape.
+
+        Returns
+        -------
+        torch.distributed.DeviceMesh
+            The initialized device mesh
+
+        Raises
+        ------
+        RuntimeError
+            If mesh dimensions are invalid or don't match world size
+        AssertionError
+            If distributed environment is not available
+        """
+
+        manager = DistributedManager()
+        if not manager.distributed:
+            raise AssertionError(
+                "torch.distributed is unavailable. "
+                "Check pytorch build to ensure the distributed package is available. "
+                "If building PyTorch from source, set `USE_DISTRIBUTED=1` "
+                "to enable the distributed package"
+            )
+
+        # Assert basic properties:
+        if len(mesh_shape) == 0:
+            raise RuntimeError(
+                "Device Mesh requires at least one mesh dimension in `mesh_shape`"
+            )
+        if len(mesh_shape) != len(mesh_dim_names):
+            raise RuntimeError(
+                "mesh_shape and mesh_dim_names must have the same length, but found "
+                f"{len(mesh_shape)} and {len(mesh_dim_names)} respectively."
+            )
+        if len(set(mesh_dim_names)) != len(mesh_dim_names):
+            raise RuntimeError("Mesh dimension names must be unique")
+
+        # Check against the total mesh shape vs. world size:
+        total_mesh_shape = np.prod(mesh_shape)
+
+        # Allow one shape to be -1
+        if -1 in mesh_shape:
+            residual_shape = int(self.world_size / (-1 * total_mesh_shape))
+
+            # Replace -1 with the computed size:
+            mesh_shape = [residual_shape if m == -1 else m for m in mesh_shape]
+            # Recompute total shape:
+            total_mesh_shape = np.prod(mesh_shape)
+
+        if total_mesh_shape != self.world_size:
+            raise RuntimeError(
+                "Device Mesh num elements must equal world size of "
+                f"{total_mesh_shape} but was configured by user with "
+                f"global size of {self.world_size}."
+            )
+
+        # Actually create the mesh:
+        self._global_mesh = dist.init_device_mesh(
+            "cuda" if self.cuda else "cpu",
+            mesh_shape,
+            mesh_dim_names=mesh_dim_names,
+        )
+
+        # Finally, upon success, cache the mesh dimensions:
+        self._mesh_dims = {key: val for key, val in zip(mesh_dim_names, mesh_shape)}
+
+        return self._global_mesh
 
     @staticmethod
     def setup(
@@ -578,6 +718,15 @@ class DistributedManager(object):
     def create_groups_from_config(
         config: ProcessGroupConfig, verbose: bool = False
     ):  # pragma: no cover
+
+        warnings.warn(
+            "DistributedManager.create_groups_from_config is no longer the most simple "
+            "way to organize process groups.  Please switch to DeviceMesh, "
+            "and DistributedManager.initialize_mesh",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Traverse process group tree in breadth first order
         # to create nested process groups
         q = queue.Queue()
@@ -605,6 +754,7 @@ class DistributedManager(object):
                 # Add child ids to the queue
                 q.put(child.identifier)
 
+    @atexit.register
     @staticmethod
     def cleanup():
         """Clean up distributed group and singleton"""
