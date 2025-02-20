@@ -23,6 +23,7 @@ import torch
 from modulus.models.diffusion import EDMPrecondSR, UNet
 from modulus.utils.corrdiff import diffusion_step, regression_step
 from modulus.utils.generative import deterministic_sampler, stochastic_sampler
+from modulus.utils.patching import DeterministicPatching
 
 
 # Mock network class
@@ -207,11 +208,19 @@ def test_diffusion_step_rectangle(device):
         1, 4, img_shape_y, img_shape_x
     ).expand(seed_batch_size, -1, -1, -1).to(device)
 
-    # Stochastic sampler with ractangular patching
+    # Define patching utility
+    patching = DeterministicPatching(
+        img_shape=(img_shape_y, img_shape_x),
+        patch_shape=(16, 8),
+        overlap_pix=4,
+        boundary_pix=2
+    )
+
+    # Stochastic sampler with rectangular patching
     sampler_fn = partial(
         stochastic_sampler,
         num_steps=2,
-        patch_shape=(16, 8)
+        patching=patching
     )
 
     # Call the function

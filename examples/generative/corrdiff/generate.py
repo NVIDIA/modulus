@@ -23,6 +23,7 @@ import numpy as np
 import netCDF4 as nc
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.utils.patching import DeterministicPatching
 from modulus import Module
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -107,8 +108,15 @@ def main(cfg: DictConfig) -> None:
     use_patching, img_shape, patch_shape = set_patch_shape(
         img_shape, patch_shape)
     if use_patching:
+        patching = DeterministicPatching(
+            img_shape=img_shape,
+            patch_shape=patch_shape,
+            boundary_pix=cfg.sampler.boundary_pix,
+            overlap_pix=cfg.sampler.overlap_pix
+        )
         logger0.info("Patch-based training enabled")
     else:
+        patching = None
         logger0.info("Patch-based training disabled")
 
     # Parse the inference mode
@@ -166,9 +174,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg.sampler.type == "stochastic":
         sampler_fn = partial(
             stochastic_sampler,
-            patch_shape=(patch_shape if use_patching else None),
-            boundary_pix=cfg.sampler.boundary_pix,
-            overlap_pix=cfg.sampler.overlap_pix,
+            patching=patching
         )
     else:
         raise ValueError(f"Unknown sampling method {cfg.sampling.type}")

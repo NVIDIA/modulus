@@ -22,7 +22,8 @@ from torch.utils.tensorboard import SummaryWriter
 from modulus import Module
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
-from modulus.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
+from modulus.metrics.diffusion import RegressionLoss, ResidualLoss, RegressionLossCE
+from modulus.utils.patching import RandomPatching
 from modulus.launch.logging import (
     PythonLogger, RankZeroLoggingWrapper, initialize_wandb)
 import wandb
@@ -149,11 +150,18 @@ def main(cfg: DictConfig) -> None:
     use_patching, img_shape, patch_shape = set_patch_shape(
         img_shape, patch_shape)
     if use_patching:
+        # Utility to perform patches extraction and batching
+        patching = RandomPatching(
+            img_shape=img_shape,
+            patch_shape=patch_shape,
+            patch_num=getattr(cfg.training.hp, "patch_num", 1)
+        )
         logger0.info("Patch-based training enabled")
     else:
+        patching = None
         logger0.info("Patch-based training disabled")
     # interpolate global channel if patch-based model is used
-    if img_shape[1] != patch_shape[1]:
+    if use_patching:
         img_in_channels += dataset_channels
 
     # Instantiate the model and move to device.
@@ -273,19 +281,15 @@ def main(cfg: DictConfig) -> None:
         logger0.success("Loaded the pre-trained regression model")
 
     # Instantiate the loss function
-    patch_num = getattr(cfg.training.hp, "patch_num", 1)
     if cfg.model.name in (
         "diffusion",
         "patched_diffusion",
         "lt_aware_patched_diffusion",
     ):
-        loss_fn = ResLoss(
+        loss_fn = ResidualLoss(
             regression_net=regression_net,
-            img_shape_x=img_shape[1],
             img_shape_y=img_shape[0],
-            patch_shape_x=patch_shape[1],
-            patch_shape_y=patch_shape[0],
-            patch_num=patch_num,
+            img_shape_x=img_shape[1],
             hr_mean_conditioning=cfg.model.hr_mean_conditioning,
         )
     elif cfg.model.name == "regression":
@@ -346,12 +350,15 @@ def main(cfg: DictConfig) -> None:
             img_clean = img_clean.to(dist.device).to(torch.float32).contiguous()
             img_lr = img_lr.to(dist.device).to(torch.float32).contiguous()
             labels = labels.to(dist.device).contiguous()
+            # Sample new random patches for this iteration
+            patching.reset_patch_indices()
             loss_fn_kwargs = {
                 "net": model,
                 "img_clean": img_clean,
                 "img_lr": img_lr,
                 "labels": labels,
                 "augment_pipe": None,
+                "patching": patching
             }
             if lead_time_label:
                 lead_time_label = lead_time_label[0].to(dist.device).contiguous()
