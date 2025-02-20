@@ -16,11 +16,11 @@
 
 import pytest
 import torch
+from distributed_utils_for_testing import modify_environment
 from test_shard_tensor_initialization import (
     init_dist,
 )
 from test_shard_tensor_redistribute import shard_tensor_factory
-from utils import modify_environment
 
 from modulus.distributed import DistributedManager, ShardTensor
 

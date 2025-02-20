@@ -19,9 +19,9 @@ import random
 import pytest
 import torch
 import torch.distributed as dist
+from distributed_utils_for_testing import modify_environment
 from torch.distributed.tensor import distribute_tensor
 from torch.distributed.tensor.placement_types import Shard
-from utils import modify_environment
 
 from modulus.distributed import DistributedManager
 from modulus.distributed.shard_tensor import ShardTensor, scatter_tensor

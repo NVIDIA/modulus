@@ -334,7 +334,9 @@ class UnSliceHaloND(torch.autograd.Function):
 natten_spec = importlib.util.find_spec("natten")
 if natten_spec is not None:
 
-    @wrapt.patch_function_wrapper("natten.functional", "na2d")
+    @wrapt.patch_function_wrapper(
+        "natten.functional", "na2d", enabled=ShardTensor.patches_enabled
+    )
     def na2d_wrapper(
         wrapped: Any, instance: Any, args: tuple, kwargs: dict
     ) -> Union[torch.Tensor, ShardTensor]:

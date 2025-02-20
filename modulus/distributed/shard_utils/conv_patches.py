@@ -403,19 +403,25 @@ class PartialConvND(torch.autograd.Function):
         return grad_input, grad_weight, grad_bias, None, None
 
 
-@wrapt.patch_function_wrapper("torch.nn.functional", "conv1d")
+@wrapt.patch_function_wrapper(
+    "torch.nn.functional", "conv1d", enabled=ShardTensor.patches_enabled
+)
 def conv1d_wrapper(wrapped, instance, args, kwargs):
 
     return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
 
 
-@wrapt.patch_function_wrapper("torch.nn.functional", "conv2d")
+@wrapt.patch_function_wrapper(
+    "torch.nn.functional", "conv2d", enabled=ShardTensor.patches_enabled
+)
 def conv2d_wrapper(wrapped, instance, args, kwargs):
 
     return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
 
 
-@wrapt.patch_function_wrapper("torch.nn.functional", "conv3d")
+@wrapt.patch_function_wrapper(
+    "torch.nn.functional", "conv3d", enabled=ShardTensor.patches_enabled
+)
 def conv3d_wrapper(wrapped, instance, args, kwargs):
 
     return generic_conv_nd_wrapper(wrapped, instance, args, kwargs)
@@ -490,7 +496,7 @@ def generic_conv_nd_wrapper(wrapped, instance, args, kwargs):
 def repackage_conv_args(
     input: Union[torch.Tensor, ShardTensor],
     weight: Union[torch.Tensor, DTensor],
-    bias: Union[torch.Tensor, DTensor, None],
+    bias: Union[torch.Tensor, DTensor, None] = None,
     stride: Union[int, Tuple[int, ...]] = 1,
     padding: Union[int, Tuple[int, ...]] = 0,
     dilation: Union[int, Tuple[int, ...]] = 1,

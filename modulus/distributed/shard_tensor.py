@@ -217,6 +217,20 @@ class ShardTensor(DTensor):
 
     _function_registry: Dict[torch._ops.OpOverload, callable] = {}
 
+    # Upon construction of any ShardTensor objects, this will be set to true.
+    # Wrappers are triggered dynamically, so the wrapping will be pass-through
+    # exclusively until true.
+    _enable_shard_patches: bool = False
+
+    @classmethod
+    def patches_enabled(cls) -> bool:
+        """
+        Whether to enable patches for this class.
+
+        Default is False, but can be changed by the user.
+        """
+        return cls._enable_shard_patches
+
     @classmethod
     def register_function_handler(cls, func: torch._ops.OpOverload, handler: callable):
         """
@@ -276,6 +290,8 @@ class ShardTensor(DTensor):
 
         ret._spec = spec
         ret._local_tensor = local_tensor
+
+        cls._enable_shard_patches = True
 
         return ret
 
@@ -359,6 +375,8 @@ class ShardTensor(DTensor):
                 _sharding_sizes=sharding_sizes,  # Leave this to none for a lazy init and assume it's not breaking to make this cast.
                 _local_shape=dtensor._local_tensor.shape,
             )
+
+            cls._enable_shard_patches = True
 
             return ShardTensor.__new__(
                 cls,
@@ -452,12 +470,14 @@ class ShardTensor(DTensor):
             # `from_local` is differentiable, and the gradient of the dist tensor this function
             # created should flow back the gradients to the local_tensor, so we call an autograd
             # function to construct the dist tensor instead.
+            ShardTensor._enable_shard_patches = True
             return _FromTorchTensor.apply(  # pyre-ignore[16]: autograd func
                 local_tensor,
                 device_mesh,
                 tuple(placements),
             )
         else:
+            ShardTensor._enable_shard_patches = True
             return ShardTensor.from_dtensor(
                 DTensor.from_local(local_tensor, device_mesh, placements)
             )

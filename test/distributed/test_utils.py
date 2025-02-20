@@ -19,7 +19,7 @@ import os
 import pytest
 import torch
 import torch.nn as nn
-from utils import modify_environment
+from distributed_utils_for_testing import modify_environment
 
 from modulus.distributed import (
     DistributedManager,

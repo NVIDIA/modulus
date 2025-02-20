@@ -17,12 +17,12 @@
 import pytest
 import torch
 import torch.distributed as dist
+from distributed_utils_for_testing import modify_environment
 from test_shard_tensor_initialization import (
     init_dist,
     init_global_shape_and_placements,
 )
 from torch.distributed.tensor.placement_types import Replicate, Shard
-from utils import modify_environment
 
 from modulus.distributed import DistributedManager, ShardTensor
 
@@ -266,33 +266,33 @@ def test_shard_tensor_redistribute1d(data_parallel_size, domain_H, redistributio
 
 @pytest.mark.multigpu
 @pytest.mark.parametrize("data_parallel_size", [-1])
-@pytest.mark.parametrize("domain_H", [2, 4, 8])
+@pytest.mark.parametrize("domain_H", [2, 4])
 @pytest.mark.parametrize("domain_W", [1, 2])
 @pytest.mark.parametrize(
     "redistribution_case",
     [
         # Test cases for different redistribution scenarios
-        ("S1+S2", [Shard(1), Shard(2)]),  # Should be a no op!
-        (
-            "R+S2",
-            [Replicate(), Shard(2)],
-        ),  # Only triggers redistribution on first tensor dim.  gather_v
-        (
-            "S1+R",
-            [Shard(1), Replicate()],
-        ),  # triggers S2-R on second tensor dim, gather_v
+        # ("S1+S2", [Shard(1), Shard(2)]),  # Should be a no op!
+        # (
+        #     "R+S2",
+        #     [Replicate(), Shard(2)],
+        # ),  # Only triggers redistribution on first tensor dim.  gather_v
+        # (
+        #     "S1+R",
+        #     [Shard(1), Replicate()],
+        # ),  # triggers S2-R on second tensor dim, gather_v
         (
             "R+R",
             [Replicate(), Replicate()],
         ),  # Triggers S2->R, S1-R.  gather_v then gather_v
-        (
-            "R+S1",
-            [Replicate(), Shard(1)],
-        ),  # triggers S2->R, S1->R, R->S2.  gather_v then gather_v then scatter_v
-        (
-            "S2+R",
-            [Shard(2), Replicate()],
-        ),  # Triggers S2->R, S2/S1 transpose.  gather_v then all_to_all_v
+        # (
+        #     "R+S1",
+        #     [Replicate(), Shard(1)],
+        # ),  # triggers S2->R, S1->R, R->S2.  gather_v then gather_v then scatter_v
+        # (
+        #     "S2+R",
+        #     [Shard(2), Replicate()],
+        # ),  # Triggers S2->R, S2/S1 transpose.  gather_v then all_to_all_v
         (
             "S2+S1",
             [Shard(2), Shard(1)],

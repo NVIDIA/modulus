@@ -17,7 +17,7 @@
 import pytest
 import torch
 import torch.distributed as dist
-from utils import modify_environment
+from distributed_utils_for_testing import modify_environment
 
 from modulus.distributed import DistributedManager
 from modulus.distributed.fft import DistributedRFFT2
