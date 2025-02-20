@@ -28,7 +28,10 @@ from modulus.launch.logging import (
     PythonLogger, RankZeroLoggingWrapper, initialize_wandb)
 import wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from datasets.dataset import init_train_valid_datasets_from_config
+from datasets.dataset import (
+    init_train_valid_datasets_from_config,
+    register_dataset
+)
 from helpers.train_helpers import (
     set_patch_shape,
     set_seed,
@@ -79,6 +82,11 @@ def main(cfg: DictConfig) -> None:
     # Resolve and parse configs
     OmegaConf.resolve(cfg)
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
+
+    # Register custom dataset if specified in config
+    register_dataset(dataset_cfg.dataset_name)
+    logger0.info(f"Using dataset: {dataset_cfg.dataset_name}")
+
     if hasattr(cfg, "validation"):
         train_test_split = True
         validation_dataset_cfg = OmegaConf.to_container(cfg.validation)

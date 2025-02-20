@@ -45,6 +45,7 @@ from helpers.generate_helpers import (
     save_images,
 )
 from helpers.train_helpers import set_patch_shape
+from datasets.dataset import register_dataset
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
@@ -85,6 +86,11 @@ def main(cfg: DictConfig) -> None:
 
     # Create dataset object
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
+
+    # Register dataset (if custom dataset)
+    register_dataset(dataset_cfg.dataset_name)
+    logger0.info(f"Using dataset: {dataset_cfg.dataset_name}")
+
     if "has_lead_time" in cfg.generation:
         has_lead_time = cfg.generation["has_lead_time"]
     else:
