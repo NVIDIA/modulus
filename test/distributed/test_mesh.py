@@ -15,10 +15,9 @@
 # limitations under the License.
 
 
-import os
-
 import pytest
 import torch
+from utils import modify_environment
 
 from modulus.distributed import (
     DistributedManager,
@@ -30,45 +29,48 @@ distributed_test = pytest.mark.skipif(
 
 
 def run_mesh_creation(rank, num_gpus, mesh_names, mesh_sizes, verbose):
-    os.environ["RANK"] = f"{rank}"
-    os.environ["LOCAL_RANK"] = f"{rank % torch.cuda.device_count()}"
-    os.environ["WORLD_SIZE"] = f"{num_gpus}"
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = str(12345)
 
-    DistributedManager.initialize()
-    dm = DistributedManager()
-    assert dm.is_initialized()
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(12355),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
 
-    # Create a mesh right from the inputs:
-    global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)
+        DistributedManager.initialize()
+        dm = DistributedManager()
+        assert dm.is_initialized()
 
-    # Check the dimension matches:
-    assert global_mesh.ndim == len(mesh_names)
+        # Create a mesh right from the inputs:
+        global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)
 
-    # Make sure the number of devices matches the world size:
-    for size, name in zip(reversed(mesh_sizes), reversed(mesh_names)):
-        if size != -1:
-            assert global_mesh[name].size() == size
+        # Check the dimension matches:
+        assert global_mesh.ndim == len(mesh_names)
 
-    # Make sure each dimension of the mesh is orthogonal to other dimensions:
-    # (but only if there are at least two names:)
-    if len(mesh_names) > 1:
-        for i, i_name in enumerate(mesh_names):
-            for j, j_name in enumerate(mesh_names[i + 1 :]):
+        # Make sure the number of devices matches the world size:
+        for size, name in zip(reversed(mesh_sizes), reversed(mesh_names)):
+            if size != -1:
+                assert global_mesh[name].size() == size
 
-                mesh_i = global_mesh[i_name].mesh.tolist()
-                mesh_j = global_mesh[j_name].mesh.tolist()
-                intersection = list(set(mesh_i) & set(mesh_j))
-                if verbose:
-                    print(
-                        f"rank {dm.rank}, i_name {i_name}, j_name {j_name}, mesh_i {mesh_i}, mesh_j {mesh_j}, int {intersection}"
-                    )
-                assert len(intersection) == 1
-                assert intersection[0] == dm.rank
+        # Make sure each dimension of the mesh is orthogonal to other dimensions:
+        # (but only if there are at least two names:)
+        if len(mesh_names) > 1:
+            for i, i_name in enumerate(mesh_names):
+                for j, j_name in enumerate(mesh_names[i + 1 :]):
 
-    # Cleanup process groups
-    DistributedManager.cleanup()
+                    mesh_i = global_mesh[i_name].mesh.tolist()
+                    mesh_j = global_mesh[j_name].mesh.tolist()
+                    intersection = list(set(mesh_i) & set(mesh_j))
+                    if verbose:
+                        print(
+                            f"rank {dm.rank}, i_name {i_name}, j_name {j_name}, mesh_i {mesh_i}, mesh_j {mesh_j}, int {intersection}"
+                        )
+                    assert len(intersection) == 1
+                    assert intersection[0] == dm.rank
+
+        # Cleanup process groups
+        DistributedManager.cleanup()
 
 
 @pytest.mark.multigpu

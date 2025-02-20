@@ -17,16 +17,17 @@
 import pytest
 import torch
 import torch.distributed as dist
-from test_initialization import (
+from test_shard_tensor_initialization import (
     init_dist,
     init_global_shape_and_placements,
 )
 from torch.distributed.tensor.placement_types import Replicate, Shard
+from utils import modify_environment
 
 from modulus.distributed import DistributedManager, ShardTensor
 
 
-def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False):
+def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False, uneven=True):
     """
     Generate a shard tensor on the mesh
     """
@@ -43,15 +44,22 @@ def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False):
         10,
     ]
 
-    min_size = 64
-    index_stride = 16
+    min_size = 4
 
-    # Using the same size per rank in mesh dimension
-    for dim in range(domain_mesh.ndim):
-        dim_rank = dist.get_group_rank(domain_mesh.get_group(dim), dm.rank)
-        local_shape.append((dim_rank + dim + 1) * min_size + dim_rank * index_stride)
+    if uneven:
+        index_stride = 2
 
-    local_shape.append(100)
+        # Using the same size per rank in mesh dimension
+        for dim in range(domain_mesh.ndim):
+            dim_rank = dist.get_group_rank(domain_mesh.get_group(dim), dm.rank)
+            local_shape.append(
+                (dim_rank + dim + 1) * min_size + dim_rank * index_stride
+            )
+    else:
+        for dim in range(domain_mesh.ndim):
+            local_shape.append(min_size)  # noqa: PERF401
+
+    local_shape.append(10)
 
     raw_data = torch.randn(
         local_shape,
@@ -67,60 +75,42 @@ def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False):
 
 def run_shard_tensor_reduction(rank, num_gpus, mesh_names, mesh_sizes, op, verbose):
 
-    init_dist(rank, num_gpus)
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(13245),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
+        init_dist(rank, num_gpus)
 
-    shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
-    if verbose:
-        print(
-            f"Shard tensor global shape: {shard_tensor.shape} and local shape: {shard_tensor._local_tensor.shape}"
-        )
+        shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
+        if verbose:
+            print(
+                f"Shard tensor global shape: {shard_tensor.shape} and local shape: {shard_tensor._local_tensor.shape}"
+            )
 
-    # For this test, we're testing that the reduction of the tensor works correctly
+        # For this test, we're testing that the reduction of the tensor works correctly
 
-    # This means we're calling things like `shard_tensor.max()` or `shard_tensor.mean()`
-    # and looking to get the right answers
+        # This means we're calling things like `shard_tensor.max()` or `shard_tensor.mean()`
+        # and looking to get the right answers
 
-    # Note that calling `full_tensor` is already checked in the initialize file but that's
-    # also, technically, a reduction.
+        # Note that calling `full_tensor` is already checked in the initialize file but that's
+        # also, technically, a reduction.
 
-    # Check the global reduction:
-    # Perform the operation partially then reduce:
-    partial_result = op(shard_tensor).full_tensor()
-    # Replicate, then perform the operation
-    full_result = op(shard_tensor.full_tensor())
+        # Check the global reduction:
+        # Perform the operation partially then reduce:
+        partial_result = op(shard_tensor).full_tensor()
+        # Replicate, then perform the operation
+        full_result = op(shard_tensor.full_tensor())
 
-    if verbose:
-        print(f"Partial first: {partial_result}")
-        print(f"All gather first: {full_result}")
+        if verbose:
+            print(f"Partial first: {partial_result}")
+            print(f"All gather first: {full_result}")
 
-    assert torch.allclose(partial_result, full_result)
+        assert torch.allclose(partial_result, full_result)
 
-    # TODO - this needs to be supported, but currently I believe the reductions
-    # are incorrect.  Upstream pytorch might be correct for DTensor
-    # but it isn't working for ShardTensor.
-
-    # # Also check by reducing over sharded and not-sharded dimensions:
-    # dim_options = range(len(shard_tensor.shape))
-    # for dim in dim_options:
-    #     # Perform the operation partially then reduce:
-    #     partial_result = op(shard_tensor, dim=dim)
-    #     # Replicate, then perform the operation
-    #     full_result = op(shard_tensor.full_tensor(), dim=dim)
-
-    #     print(f"partial shape: {partial_result.shape} and local shape: {partial_result._local_tensor.shape}")
-    #     print(f"full shape: {full_result.shape}")
-    #     print(f"Partial placements: {partial_result._spec.placements}")
-    #     partial_result = partial_result.full_tensor()
-
-    #     print(f"difference: {partial_result - full_result}")
-
-    #     if verbose:
-    #         print(f"Partial first: {partial_result}")
-    #         print(f"All gather first: {full_result}")
-
-    #     assert torch.allclose(partial_result, full_result)
-
-    # We should have agreement on every rank
+        DistributedManager().cleanup()
 
 
 @pytest.mark.multigpu
@@ -177,36 +167,43 @@ def run_shard_tensor_redistribute(
 ):
     """Test redistribution between different sharding schemes"""
 
-    init_dist(rank, num_gpus)
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(13245),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
+        init_dist(rank, num_gpus)
 
-    # Create initial sharded tensor
-    shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
-    if verbose:
-        print(f"Shard mesh is {shard_tensor._spec.mesh}")
-        print(f"shard_tensor placements: {shard_tensor._spec.placements}")
-        print(f"Target placements: {dst_placements}")
-        print(f"shard_tensor shape: {shard_tensor.shape}")
+        # Create initial sharded tensor
+        shard_tensor = shard_tensor_factory(mesh_names, mesh_sizes)
+        if verbose:
+            print(f"Shard mesh is {shard_tensor._spec.mesh}")
+            print(f"shard_tensor placements: {shard_tensor._spec.placements}")
+            print(f"Target placements: {dst_placements}")
+            print(f"shard_tensor shape: {shard_tensor.shape}")
 
-    # Redistribute to new placement
-    redistributed = shard_tensor.redistribute(placements=dst_placements)
+        # Redistribute to new placement
+        redistributed = shard_tensor.redistribute(placements=dst_placements)
 
-    # assert False
-    if verbose:
-        print(f"redistributed placements: {redistributed._spec.placements}")
-        dist.barrier()
+        # assert False
+        if verbose:
+            print(f"redistributed placements: {redistributed._spec.placements}")
+            dist.barrier()
 
-    # Verify data is preserved after redistribution
-    redistributed_data = redistributed.full_tensor()
+        # Verify data is preserved after redistribution
+        redistributed_data = redistributed.full_tensor()
 
-    # Store original data for validation
-    original_data = shard_tensor.full_tensor()
+        # Store original data for validation
+        original_data = shard_tensor.full_tensor()
 
-    assert torch.allclose(original_data, redistributed_data)
+        assert torch.allclose(original_data, redistributed_data)
+
+        DistributedManager().cleanup()
 
 
-pytest.mark.multigpu
-
-
+@pytest.mark.multigpu
 @pytest.mark.parametrize("data_parallel_size", [-1])
 @pytest.mark.parametrize("domain_H", [2, 4, 8])
 @pytest.mark.parametrize(

@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import random
 
 import pytest
@@ -22,17 +21,13 @@ import torch
 import torch.distributed as dist
 from torch.distributed.tensor import distribute_tensor
 from torch.distributed.tensor.placement_types import Shard
+from utils import modify_environment
 
 from modulus.distributed import DistributedManager
 from modulus.distributed.shard_tensor import ShardTensor, scatter_tensor
 
 
 def init_dist(rank, num_gpus):
-    os.environ["RANK"] = f"{rank}"
-    os.environ["LOCAL_RANK"] = f"{rank % torch.cuda.device_count()}"
-    os.environ["WORLD_SIZE"] = f"{num_gpus}"
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = str(13245)
 
     DistributedManager.initialize()
     dm = DistributedManager()
@@ -62,91 +57,107 @@ def init_global_shape_and_placements(mesh_names):
 def run_shard_tensor_initialization_from_data_rank(
     rank, num_gpus, mesh_names, mesh_sizes, verbose
 ):
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(13245),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
+        init_dist(rank, num_gpus)
 
-    init_dist(rank, num_gpus)
+        dm = DistributedManager()
 
-    dm = DistributedManager()
+        # Create a mesh right from the inputs:
+        global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
 
-    # Create a mesh right from the inputs:
-    global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
-
-    domain_mesh, global_shape, placements = init_global_shape_and_placements(
-        mesh_names,
-    )
-
-    # Create the raw data on the first rank of the first dimension of the domain mesh:
-    source = dist.get_global_rank(domain_mesh.get_group(0), 0)
-    source = int(domain_mesh.mesh.min())
-
-    if rank == source:
-        raw_data = torch.randn(
-            global_shape, device=torch.device(f"cuda:{dm.local_rank}")
+        domain_mesh, global_shape, placements = init_global_shape_and_placements(
+            mesh_names,
         )
-    else:
-        raw_data = torch.empty(0)
 
-    st = scatter_tensor(raw_data, source, domain_mesh, placements)
+        # Create the raw data on the first rank of the first dimension of the domain mesh:
+        source = dist.get_global_rank(domain_mesh.get_group(0), 0)
+        source = int(domain_mesh.mesh.min())
 
-    # Check that the local shape matches the expected shape:
-    local_data = st.to_local()
-    print(f"local shape: {local_data.shape}")
-    # Check the dimensions on the sharded mesh:
-    checked_dims = []
-    for mesh_dim, placement in enumerate(placements):
-        if isinstance(placement, Shard):
-            tensor_dim = placement.dim
-            axis_size = dist.get_world_size(group=domain_mesh.get_group(mesh_dim))
-            assert global_shape[tensor_dim] == local_data.shape[tensor_dim] * axis_size
-            checked_dims.append(tensor_dim)
+        if rank == source:
+            raw_data = torch.randn(
+                global_shape, device=torch.device(f"cuda:{dm.local_rank}")
+            )
+        else:
+            raw_data = torch.empty(0)
 
-    # Check the dimensions NOT on the mesh:
-    for i, dim in enumerate(global_shape):
-        if i in checked_dims:
-            continue
-        assert dim == local_data.shape[i]
+        st = scatter_tensor(raw_data, source, domain_mesh, placements)
+
+        # Check that the local shape matches the expected shape:
+        local_data = st.to_local()
+        print(f"local shape: {local_data.shape}")
+        # Check the dimensions on the sharded mesh:
+        checked_dims = []
+        for mesh_dim, placement in enumerate(placements):
+            if isinstance(placement, Shard):
+                tensor_dim = placement.dim
+                axis_size = dist.get_world_size(group=domain_mesh.get_group(mesh_dim))
+                assert (
+                    global_shape[tensor_dim] == local_data.shape[tensor_dim] * axis_size
+                )
+                checked_dims.append(tensor_dim)
+
+        # Check the dimensions NOT on the mesh:
+        for i, dim in enumerate(global_shape):
+            if i in checked_dims:
+                continue
+            assert dim == local_data.shape[i]
+
+        dm.cleanup()
 
 
 def run_shard_tensor_initialization_from_all_dtensor(
     rank, num_gpus, mesh_names, mesh_sizes, verbose
 ):
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(13245),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
+        # Here, we manually create a dtensor and convert it to shard tensor.
 
-    # Here, we manually create a dtensor and convert it to shard tensor.
+        # The check is that there are no errors, and basic reductions agree.
 
-    # The check is that there are no errors, and basic reductions agree.
+        init_dist(rank, num_gpus)
 
-    init_dist(rank, num_gpus)
+        dm = DistributedManager()
 
-    dm = DistributedManager()
+        # Create a mesh right from the inputs:
+        global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
+        domain_mesh, global_shape, placements = init_global_shape_and_placements(
+            mesh_names,
+        )
 
-    # Create a mesh right from the inputs:
-    global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
-    domain_mesh, global_shape, placements = init_global_shape_and_placements(
-        mesh_names,
-    )
+        # Create the raw data everywhere, but it will mostly get thrown away
+        # only the rank-0 chunks survive
+        raw_data = torch.randn(
+            global_shape, device=torch.device(f"cuda:{dm.local_rank}")
+        )
 
-    # Create the raw data everywhere, but it will mostly get thrown away
-    # only the rank-0 chunks survive
-    raw_data = torch.randn(global_shape, device=torch.device(f"cuda:{dm.local_rank}"))
+        dt = distribute_tensor(raw_data, device_mesh=domain_mesh, placements=placements)
 
-    dt = distribute_tensor(raw_data, device_mesh=domain_mesh, placements=placements)
-    print(dt._spec)
-    print(domain_mesh)
+        st = ShardTensor.from_dtensor(dt)
 
-    st = ShardTensor.from_dtensor(dt)
+        assert torch.allclose(dt.full_tensor(), st.full_tensor())
 
-    print(hash(st._spec))
+        # on the "source" rank of the mesh, we should have agreement with raw data.
+        # on the "not-source" rank of the mesh, we shouldn't
 
-    assert torch.allclose(dt.full_tensor(), st.full_tensor())
+        agreement_with_original_data = torch.allclose(st.full_tensor(), raw_data)
 
-    # on the "source" rank of the mesh, we should have agreement with raw data.
-    # on the "not-source" rank of the mesh, we shouldn't
+        if dm.rank == int(domain_mesh.mesh.min()):
+            assert agreement_with_original_data
+        else:
+            assert not agreement_with_original_data
 
-    agreement_with_original_data = torch.allclose(st.full_tensor(), raw_data)
-
-    if dm.rank == int(domain_mesh.mesh.min()):
-        assert agreement_with_original_data
-    else:
-        assert not agreement_with_original_data
+        dm.cleanup()
 
 
 def run_shard_tensor_initialization_from_local_chunks(
@@ -158,61 +169,70 @@ def run_shard_tensor_initialization_from_local_chunks(
     # are allowed to be randomly generated along the first shard axis.
 
     # 2D sharding would break if we did that, so it's set to a fixed size
+    with modify_environment(
+        RANK=f"{rank}",
+        WORLD_SIZE=f"{num_gpus}",
+        MASTER_ADDR="localhost",
+        MASTER_PORT=str(13245),
+        LOCAL_RANK=f"{rank % torch.cuda.device_count()}",
+    ):
+        init_dist(rank, num_gpus)
 
-    init_dist(rank, num_gpus)
+        dm = DistributedManager()
 
-    dm = DistributedManager()
+        # Create a mesh right from the inputs:
+        global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
+        domain_mesh, global_shape, placements = init_global_shape_and_placements(
+            mesh_names,
+        )
 
-    # Create a mesh right from the inputs:
-    global_mesh = dm.initialize_mesh(mesh_sizes, mesh_names)  # noqa: F841
-    domain_mesh, global_shape, placements = init_global_shape_and_placements(
-        mesh_names,
-    )
+        local_shape = list(global_shape)
+        first_shard_dim = placements[0].dim
+        replacement_size = int(random.uniform(0.5, 1.5) * local_shape[first_shard_dim])
 
-    local_shape = list(global_shape)
-    first_shard_dim = placements[0].dim
-    replacement_size = int(random.uniform(0.5, 1.5) * local_shape[first_shard_dim])
+        local_shape[first_shard_dim] = replacement_size
 
-    local_shape[first_shard_dim] = replacement_size
+        # replace the dimension with a new one
 
-    # replace the dimension with a new one
+        # Create the raw data everywhere, but it will mostly get thrown away
+        # only the rank-0 chunks survive
+        raw_data = torch.randn(
+            local_shape, device=torch.device(f"cuda:{dm.local_rank}")
+        )
+        st = ShardTensor.from_local(
+            raw_data, device_mesh=domain_mesh, placements=placements, infer_shape=True
+        )
 
-    # Create the raw data everywhere, but it will mostly get thrown away
-    # only the rank-0 chunks survive
-    raw_data = torch.randn(local_shape, device=torch.device(f"cuda:{dm.local_rank}"))
-    st = ShardTensor.from_local(
-        raw_data, device_mesh=domain_mesh, placements=placements, infer_shape=True
-    )
+        # Data comes back ok:
+        assert torch.allclose(st.to_local(), raw_data)
 
-    # Data comes back ok:
-    assert torch.allclose(st.to_local(), raw_data)
+        # Gather the shapes along the random placement and make sure they agree:
+        dim_size = domain_mesh.mesh.shape[0]
+        shard_dim_sizes = [
+            0,
+        ] * dim_size
+        dist.all_gather_object(
+            shard_dim_sizes, replacement_size, group=domain_mesh.get_group(0)
+        )
 
-    # Gather the shapes along the random placement and make sure they agree:
-    dim_size = domain_mesh.mesh.shape[0]
-    shard_dim_sizes = [
-        0,
-    ] * dim_size
-    dist.all_gather_object(
-        shard_dim_sizes, replacement_size, group=domain_mesh.get_group(0)
-    )
+        shard_dim_size_total = sum(shard_dim_sizes)
+        assert st.shape[placements[0].dim] == shard_dim_size_total
 
-    shard_dim_size_total = sum(shard_dim_sizes)
-    assert st.shape[placements[0].dim] == shard_dim_size_total
+        # From the full tensor, use the offset+length to slice it and compare against original:
+        offset = st.offsets(mesh_dim=0)
+        L = replacement_size
 
-    # From the full tensor, use the offset+length to slice it and compare against original:
-    offset = st.offsets(mesh_dim=0)
-    L = replacement_size
+        index = torch.arange(L) + offset
+        index = index.to(raw_data.device)
 
-    index = torch.arange(L) + offset
-    index = index.to(raw_data.device)
+        local_slice = st.full_tensor().index_select(placements[0].dim, index)
 
-    local_slice = st.full_tensor().index_select(placements[0].dim, index)
+        # Slice out what should be the original tensor
 
-    # Slice out what should be the original tensor
+        agreement_with_original_data = torch.allclose(local_slice, raw_data)
 
-    agreement_with_original_data = torch.allclose(local_slice, raw_data)
-
-    assert agreement_with_original_data
+        assert agreement_with_original_data
+        dm.cleanup()
 
 
 @pytest.mark.multigpu
@@ -371,8 +391,3 @@ def test_shard_tensor_initialization_from_all_dtensor(
         join=True,
         daemon=True,
     )
-
-
-if __name__ == "__main__":
-
-    test_shard_tensor_initialization_from_all_dtensor(-1, 2, 1)
