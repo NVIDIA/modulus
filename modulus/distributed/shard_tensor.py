@@ -32,7 +32,9 @@ from torch.distributed.tensor.placement_types import (
 )
 
 from modulus.distributed import DistributedManager
-from modulus.distributed._shard_redistribute import ShardRedistribute
+from modulus.distributed._shard_redistribute import (
+    ShardRedistribute,
+)
 from modulus.distributed._shard_tensor_spec import (
     ShardTensorSpec,
     _infer_shard_tensor_spec_from_local_chunks,
@@ -145,7 +147,7 @@ class _FromTorchTensor(torch.autograd.Function):
         )
 
         shard_tensor = ShardTensor(
-            local_input.view_as(local_input),
+            local_input,
             shard_tensor_spec,
             requires_grad=local_input.requires_grad,
         )
@@ -281,7 +283,9 @@ class ShardTensor(DTensor):
         return f"ShardTensor(local_tensor={self._local_tensor}, device_mesh={self._spec.mesh}, placements={self._spec.placements})"
 
     @classmethod
-    def from_dtensor(cls, dtensor: DTensor) -> "ShardTensor":
+    def from_dtensor(
+        cls, dtensor: DTensor, force_sharding_inference: bool = False
+    ) -> "ShardTensor":
         """
         Convert a DTensor to a ShardTensor.
 
@@ -298,59 +302,70 @@ class ShardTensor(DTensor):
         mesh = dtensor._spec.mesh
         placements = dtensor._spec.placements
 
-        temp_sharding_sizes = {}
-        for i in range(mesh.ndim):
-            if isinstance(placements[i], Shard):
-                # Compute the chunk size for this dimension:
-                input_dim = dtensor.shape[placements[i].dim]
-                chunked_shapes = compute_split_shapes(input_dim, mesh.size(i))
-                # This needs to be a tuple of torch.Size
+        if force_sharding_inference:
+            shard_tensor_spec = _infer_shard_tensor_spec_from_local_chunks(
+                dtensor._local_tensor, dtensor._spec.mesh, dtensor._spec.placements
+            )
+            return ShardTensor.__new__(
+                cls,
+                local_tensor=dtensor._local_tensor,
+                spec=shard_tensor_spec,
+                requires_grad=dtensor.requires_grad,
+            )
+        else:
+            temp_sharding_sizes = {}
+            for i in range(mesh.ndim):
+                if isinstance(placements[i], Shard):
+                    # Compute the chunk size for this dimension:
+                    input_dim = dtensor.shape[placements[i].dim]
+                    chunked_shapes = compute_split_shapes(input_dim, mesh.size(i))
+                    # This needs to be a tuple of torch.Size
 
-                temp_sharding_sizes[i] = chunked_shapes
+                    temp_sharding_sizes[i] = chunked_shapes
 
-        # To create the full, final sharding shapes, we update the global shape with
-        sharding_sizes = {}
-        # Initialize sharding_sizes with same keys as temp_sharding_sizes
-        # Each value is a list of torch.Size equal to mesh size for that dimension
-        for mesh_dim in temp_sharding_sizes.keys():
-            placement = placements[mesh_dim]
-            # We should not have the mesh dim in this dict if it wasn't sharded above:
-            tensor_dim = placement.dim
+            # To create the full, final sharding shapes, we update the global shape with
+            sharding_sizes = {}
+            # Initialize sharding_sizes with same keys as temp_sharding_sizes
+            # Each value is a list of torch.Size equal to mesh size for that dimension
+            for mesh_dim in temp_sharding_sizes.keys():
+                placement = placements[mesh_dim]
+                # We should not have the mesh dim in this dict if it wasn't sharded above:
+                tensor_dim = placement.dim
 
-            sharding_sizes[mesh_dim] = [
-                torch.Size(dtensor.shape) for _ in temp_sharding_sizes[mesh_dim]
-            ]
-            # For each shard along this mesh dimension
-            for i, shard_size in enumerate(temp_sharding_sizes[mesh_dim]):
-                # Replace size at sharded dim with actual shard size
-                updated_shard_size = torch.Size(
-                    tuple(
-                        (
-                            shard_size if j == tensor_dim else s
-                            for j, s in enumerate(sharding_sizes[mesh_dim][i])
+                sharding_sizes[mesh_dim] = [
+                    torch.Size(dtensor.shape) for _ in temp_sharding_sizes[mesh_dim]
+                ]
+                # For each shard along this mesh dimension
+                for i, shard_size in enumerate(temp_sharding_sizes[mesh_dim]):
+                    # Replace size at sharded dim with actual shard size
+                    updated_shard_size = torch.Size(
+                        tuple(
+                            (
+                                shard_size if j == tensor_dim else s
+                                for j, s in enumerate(sharding_sizes[mesh_dim][i])
+                            )
                         )
                     )
-                )
-                sharding_sizes[mesh_dim][i] = updated_shard_size
+                    sharding_sizes[mesh_dim][i] = updated_shard_size
 
-        # Cast to tuples:
-        for mesh_dim in temp_sharding_sizes.keys():
-            sharding_sizes[mesh_dim] = tuple(sharding_sizes[mesh_dim])
+            # Cast to tuples:
+            for mesh_dim in temp_sharding_sizes.keys():
+                sharding_sizes[mesh_dim] = tuple(sharding_sizes[mesh_dim])
 
-        spec = ShardTensorSpec(
-            mesh=dtensor._spec.mesh,
-            placements=dtensor._spec.placements,
-            tensor_meta=dtensor._spec.tensor_meta,
-            _sharding_sizes=sharding_sizes,  # Leave this to none for a lazy init and assume it's not breaking to make this cast.
-            _local_shape=dtensor._local_tensor.shape,
-        )
+            spec = ShardTensorSpec(
+                mesh=dtensor._spec.mesh,
+                placements=dtensor._spec.placements,
+                tensor_meta=dtensor._spec.tensor_meta,
+                _sharding_sizes=sharding_sizes,  # Leave this to none for a lazy init and assume it's not breaking to make this cast.
+                _local_shape=dtensor._local_tensor.shape,
+            )
 
-        return ShardTensor.__new__(
-            cls,
-            local_tensor=dtensor._local_tensor,
-            spec=spec,
-            requires_grad=dtensor.requires_grad,
-        )
+            return ShardTensor.__new__(
+                cls,
+                local_tensor=dtensor._local_tensor,
+                spec=spec,
+                requires_grad=dtensor.requires_grad,
+            )
 
     @classmethod
     @torch._disable_dynamo
@@ -367,16 +382,20 @@ class ShardTensor(DTensor):
         if func in cls._function_registry:
             return cls._function_registry[func](*args, **kwargs)
 
-        dispatch_res = DTensor.__torch_dispatch__(func, types, args, kwargs)
+        dispatch_res = DTensor._op_dispatcher.dispatch(func, args, kwargs or {})
+
+        # dispatch_res = ShardTensor._op_dispatcher.dispatch(func, args, kwargs or {})
 
         # Return a shard tensor instead of a dtensor.
         # ShardTensor inherits from DTensor and can lazy-init from for efficiency
         if isinstance(dispatch_res, DTensor):
-            return ShardTensor.from_dtensor(dispatch_res)
+            return ShardTensor.from_dtensor(dispatch_res, force_sharding_inference=True)
 
         if isinstance(dispatch_res, Iterable):
             return type(dispatch_res)(
-                ShardTensor.from_dtensor(d) if isinstance(d, DTensor) else d
+                ShardTensor.from_dtensor(d, force_sharding_inference=True)
+                if isinstance(d, DTensor)
+                else d
                 for d in dispatch_res
             )
 
@@ -517,6 +536,19 @@ class ShardTensor(DTensor):
             grad_placements = tuple(grad_placements)
 
         return _ToTorchTensor.apply(self, grad_placements)
+
+    def full_tensor(
+        self, *, grad_placements: Optional[Sequence[Placement]] = None
+    ) -> torch.Tensor:
+        """
+        Need to re-implement here to ensure a ShardTensor is used as the output
+        of redistribute.
+        """
+
+        redist_res = self.redistribute(
+            placements=[Replicate()] * self.device_mesh.ndim, async_op=False
+        )
+        return _ToTorchTensor.apply(redist_res, grad_placements)
 
 
 def scatter_tensor(

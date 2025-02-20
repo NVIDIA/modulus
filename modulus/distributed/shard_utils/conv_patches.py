@@ -23,6 +23,10 @@ from torch.distributed.tensor import DTensor
 from torch.distributed.tensor.placement_types import Shard
 
 from modulus.distributed import ShardTensor, ShardTensorSpec
+from modulus.distributed.shard_utils.patch_core import (
+    MissingShardPatch,
+    UndeterminedShardingError,
+)
 
 from .halo import (
     apply_grad_halo,
@@ -31,14 +35,6 @@ from .halo import (
     perform_halo_collective,
 )
 from .patch_core import promote_to_iterable
-
-__all__ = ["conv2d_wrapper"]
-
-
-from modulus.distributed.shard_utils.patch_core import (
-    MissingShardPatch,
-    UndeterminedShardingError,
-)
 
 __all__ = [
     "conv1d_wrapper",

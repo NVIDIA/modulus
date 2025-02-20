@@ -80,7 +80,6 @@ def _to_replicate_tensor(
     # Get all sizes:
     sizes = current_spec.sharding_sizes()
     this_sizes = tuple(s[tensor_dim] for s in sizes[mesh_dim])
-
     # # Ensure contiguous data for the reduction:
     local_tensor = local_tensor.contiguous()
     # We can implement this with a straightforward allgather_v
@@ -242,13 +241,24 @@ def redistribute_local_shard_tensor(
         # which should be an empty tensor
         return local_tensor
 
+    # This is an internal-focused step.  If the target_spec has the same placements and mesh
+    # as the current, but is missing sharding sizes, we can use the current spec's sharding sizes.
+    # if target_spec._sharding_sizes is None:
+    #     if target_spec.placements == current_spec.placements and target_spec.mesh == current_spec.mesh:
+    #         target_spec._sharding_sizes = current_spec.sharding_sizes()
+
     # For sharded tensors, we use the same order of transformation as DTensor.
     # However, often we need to ignore the provided logical shape and substitute
     # a sharded shape instead.
     # This is done by providing a target_sharding_sizes dict above.
+
     transform_infos = _gen_transform_infos(current_spec, target_spec)
 
+    if len(transform_infos) == 0:
+        return local_tensor
+
     for transform_info in transform_infos:
+        dist.barrier()
         i = transform_info.mesh_dim
         current, target = transform_info.src_dst_placements
         device_mesh.size(mesh_dim=i)
@@ -476,7 +486,7 @@ class ShardRedistribute(torch.autograd.Function):
             target_sharding_sizes = get_tensor_sharding_shapes_by_dim(
                 current_spec, placements
             )
-            ctx.target_sharding_sizes = target_sharding_sizes
+            # ctx.target_sharding_sizes = target_sharding_sizes
             local_tensor = input._local_tensor
             output = redistribute_local_shard_tensor(
                 local_tensor,
@@ -523,8 +533,9 @@ class ShardRedistribute(torch.autograd.Function):
         async_op = ctx.async_op
 
         local_tensor = grad_output._local_tensor
-
-        target_sharding_sizes = ctx.target_sharding_sizes
+        target_sharding_sizes = get_tensor_sharding_shapes_by_dim(
+            previous_spec, previous_spec.placements
+        )
 
         output = redistribute_local_shard_tensor(
             local_tensor,

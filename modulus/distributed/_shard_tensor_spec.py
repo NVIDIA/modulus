@@ -321,10 +321,6 @@ def _infer_shard_tensor_spec_from_local_chunks(
         other shards, and can compute global offsets and reductions properly
     """
 
-    # Only accept contiguous local_chunk:
-    if not local_chunk.is_contiguous():
-        raise ValueError("ShardTensor can only be constructed from contiguous tensors")
-
     # # Only accept sharding placements (not replications or partial (aka pending))
     # if not all([p.is_shard() for p in placements]):
     #     raise ValueError(
