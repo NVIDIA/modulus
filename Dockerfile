@@ -100,7 +100,17 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown
     fi
 
 # Install onnx
-RUN pip install "onnxruntime-gpu>1.19.0"
+# Need to install Onnx from custom wheel as Onnx does not support ARM wheels
+ARG ONNXRUNTIME_ARM64_WHEEL
+ENV ONNXRUNTIME_ARM64_WHEEL=${ONNXRUNTIME_ARM64_WHEEL:-unknown}
+
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        pip install "onnxruntime-gpu>1.19.0"; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$ONNXRUNTIME_ARM64_WHEEL" != "unknown" ]; then \
+	pip install --no-cache-dir --no-deps /modulus/deps/${ONNXRUNTIME_ARM64_WHEEL}; \
+    else \
+        echo "Skipping onnxruntime_gpu install."; \
+    fi
 
 # cleanup of stage
 RUN rm -rf /modulus/
