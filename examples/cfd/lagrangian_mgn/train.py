@@ -27,8 +27,8 @@ import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
-from modulus.distributed.manager import DistributedManager
-from modulus.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.distributed.manager import DistributedManager
+from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
 
 from loggers import CompositeLogger, ExperimentLogger, get_gpu_info, init_python_logging
 

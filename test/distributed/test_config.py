@@ -18,8 +18,12 @@ import pytest
 import torch
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import DistributedManager, ProcessGroupConfig, ProcessGroupNode
-from modulus.distributed.mappings import reduce_from_parallel_region
+from physicsnemo.distributed import (
+    DistributedManager,
+    ProcessGroupConfig,
+    ProcessGroupNode,
+)
+from physicsnemo.distributed.mappings import reduce_from_parallel_region
 
 
 def test_config():

@@ -19,7 +19,7 @@ import pytest
 import torch
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import (
+from physicsnemo.distributed import (
     DistributedManager,
 )
 

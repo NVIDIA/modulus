@@ -87,7 +87,7 @@ loggers:
   wandb:
     _target_: loggers.WandBLogger
     project: meshgraphnet
-    entity: modulus
+    entity: physicsnemo
     name: l-mgn
     group: l-mgn
     mode: disabled

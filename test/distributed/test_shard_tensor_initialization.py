@@ -23,8 +23,8 @@ from distributed_utils_for_testing import modify_environment
 from torch.distributed.tensor import distribute_tensor
 from torch.distributed.tensor.placement_types import Shard
 
-from modulus.distributed import DistributedManager
-from modulus.distributed.shard_tensor import ShardTensor, scatter_tensor
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.distributed.shard_tensor import ShardTensor, scatter_tensor
 
 
 def init_dist(rank, num_gpus):

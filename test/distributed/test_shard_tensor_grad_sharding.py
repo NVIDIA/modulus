@@ -22,7 +22,7 @@ from test_shard_tensor_initialization import (
 )
 from test_shard_tensor_redistribute import shard_tensor_factory
 
-from modulus.distributed import DistributedManager, ShardTensor
+from physicsnemo.distributed import DistributedManager, ShardTensor
 
 
 def run_shard_tensor_detach(rank, num_gpus, mesh_names, mesh_sizes, uneven, verbose):

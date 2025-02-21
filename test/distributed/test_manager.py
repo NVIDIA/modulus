@@ -18,10 +18,10 @@ import pytest
 import torch
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import (
+from physicsnemo.distributed import (
     DistributedManager,
-    ModulusUndefinedGroupError,
-    ModulusUninitializedDistributedManagerWarning,
+    PhysicsNeMoUndefinedGroupError,
+    PhysicsNeMoUninitializedDistributedManagerWarning,
     ProcessGroupConfig,
     ProcessGroupNode,
 )
@@ -114,7 +114,7 @@ def test_manager_specified_initialization():
             SLURM_NPROCS="1",
             SLURM_LOCALID="0",
             SLURM_LAUNCH_NODE_IPADDR="localhost",
-            MODULUS_DISTRIBUTED_INITIALIZATION_METHOD="SLURM",
+            PHYSICSNEMO_DISTRIBUTED_INITIALIZATION_METHOD="SLURM",
         ):
             DistributedManager.initialize()
 
@@ -138,7 +138,7 @@ def test_manager_specified_initialization():
             OMPI_COMM_WORLD_RANK="0",
             OMPI_COMM_WORLD_SIZE="1",
             OMPI_COMM_WORLD_LOCAL_RANK="0",
-            MODULUS_DISTRIBUTED_INITIALIZATION_METHOD="OPENMPI",
+            PHYSICSNEMO_DISTRIBUTED_INITIALIZATION_METHOD="OPENMPI",
         ):
             DistributedManager.initialize()
             manager = DistributedManager()
@@ -198,7 +198,7 @@ def test_manager_uninitialized_instantiation():
 
         assert not DistributedManager.is_initialized()
 
-        with pytest.raises(ModulusUninitializedDistributedManagerWarning):
+        with pytest.raises(PhysicsNeMoUninitializedDistributedManagerWarning):
             DistributedManager()
 
         DistributedManager._shared_state = {}
@@ -219,11 +219,11 @@ def test_manager_undefined_group_query():
 
         assert manager.is_initialized()
 
-        with pytest.raises(ModulusUndefinedGroupError):
+        with pytest.raises(PhysicsNeMoUndefinedGroupError):
             manager.group("undefined_group")
-        with pytest.raises(ModulusUndefinedGroupError):
+        with pytest.raises(PhysicsNeMoUndefinedGroupError):
             manager.group_size("undefined_group")
-        with pytest.raises(ModulusUndefinedGroupError):
+        with pytest.raises(PhysicsNeMoUndefinedGroupError):
             manager.group_rank("undefined_group")
 
         DistributedManager.cleanup()

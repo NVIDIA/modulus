@@ -21,7 +21,7 @@ weather forecasts.
 To build custom CorrDiff versions, you can get started by training the "Mini" version of CorrDiff, which uses smaller training samples and a smaller network to reduce training costs from thousands of GPU hours to around 10 hours on A100 GPUs while still producing reasonable results. It also includes a simple data loader that can be used as a baseline for training CorrDiff on custom datasets.
 
 ### Preliminaries
-Start by installing Modulus (if not already installed) and copying this folder (`examples/generative/corrdiff`) to a system with a GPU available. Also download the CorrDiff-Mini dataset from [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets-hrrr_mini).
+Start by installing PhysicsNeMo (if not already installed) and copying this folder (`examples/generative/corrdiff`) to a system with a GPU available. Also download the CorrDiff-Mini dataset from [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/physicsnemo/resources/modulus_datasets-hrrr_mini).
 
 ### Configuration basics
 
@@ -87,8 +87,8 @@ In this example, CorrDiff training is demonstrated on the Taiwan dataset,
 conditioned on the [ERA5 dataset](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5).
 We have made this dataset available for non-commercial use under the
 [CC BY-NC-ND 4.0 license](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.en)
-and can be downloaded from [https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets_cwa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/resources/modulus_datasets_cwa)
-by `ngc registry resource download-version "nvidia/modulus/modulus_datasets_cwa:v1"`.
+and can be downloaded from [https://catalog.ngc.nvidia.com/orgs/nvidia/teams/physicsnemo/resources/physicsnemo_datasets_cwa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/physicsnemo/resources/modulus_datasets_cwa)
+by `ngc registry resource download-version "nvidia/physicsnemo/physicsnemo_datasets_cwa:v1"`.
 The datapipe in this example is tailored specifically for the Taiwan dataset.
 A light-weight datapipe for the HRRR dataset is also available and can be used
 with the CorrDiff-mini model.

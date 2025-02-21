@@ -31,7 +31,7 @@ from torch import nn
 import torch
 import wandb
 
-from modulus.distributed import DistributedManager
+from physicsnemo.distributed import DistributedManager
 
 logger = logging.getLogger("lmgn")
 
