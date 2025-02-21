@@ -34,6 +34,7 @@ from utils.nn import (
     get_preconditioned_architecture,
     build_network_condition_and_target,
 )
+from utils.plots import validation_plot
 from datasets import dataset_classes
 from datasets.dataset import worker_init
 import matplotlib.pyplot as plt
@@ -327,7 +328,7 @@ def training_loop(cfg):
 
                 for i in range(output_images.shape[0]):
                     image = output_images[i].cpu().numpy()
-                    fields = ["u10m", "v10m", "t2m", "refc", "q1", "q5", "q10"]
+                    fields = cfg.training.validation_plot_variables
 
                     # Compute spectral metrics
                     figs, spec_ratios = ps1d_plots(
@@ -337,32 +338,27 @@ def training_loop(cfg):
                     for f_ in fields:
                         f_index = state_channels.index(f_)
                         image_dir = os.path.join(cfg.training.rundir, "images", f_)
+                        os.makedirs(image_dir, exist_ok=True)
+
                         generated = image[f_index]
                         truth = state[1][i, f_index].cpu().numpy()
 
-                        fig, (a, b) = plt.subplots(1, 2)
-                        im = a.imshow(generated)
-                        a.set_title("generated, {}.png".format(f_))
-                        plt.colorbar(im, fraction=0.046, pad=0.04)
-                        im = b.imshow(truth)
-                        b.set_title("truth")
-                        plt.colorbar(im, fraction=0.046, pad=0.04)
-                        os.makedirs(image_dir, exist_ok=True)
-                        plt.savefig(
+                        fig = validation_plot(generated, truth, f_)
+                        fig.savefig(
                             os.path.join(image_dir, f"{total_steps}_{i}_{f_}.png")
                         )
-                        plt.close("all")
 
                         specfig = "PS1D_" + f_
                         figs[specfig].savefig(
-                            os.path.join(image_dir, f"{total_steps}{i}{f_}_spec.png")
+                            os.path.join(image_dir, f"{total_steps}_{i}_{f_}_spec.png")
                         )
-                        plt.close(figs[specfig])
                         if log_to_wandb:
                             # Save plots as wandb Images
                             for figname, plot in figs.items():
                                 wandb_logs[figname] = wandb.Image(plot)
                             wandb_logs.update({f"generated_{f_}": wandb.Image(fig)})
+
+                    plt.close("all")
 
                 if log_to_wandb:
                     wandb_logs.update(spec_ratios)

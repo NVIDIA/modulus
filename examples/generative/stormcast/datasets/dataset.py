@@ -38,6 +38,12 @@ class StormCastDataset(torch.utils.data.Dataset, ABC):
         """Get the (height, width) of the data."""
         pass
 
+    def latitude(self) -> np.ndarray:
+        return np.full(self.image_shape(), np.nan)
+
+    def longitude(self) -> np.ndarray:
+        return np.full(self.image_shape(), np.nan)
+
     def normalize_background(self, x: np.ndarray) -> np.ndarray:
         """Convert background from physical units to normalized data."""
         return x
